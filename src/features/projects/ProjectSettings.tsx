@@ -9,17 +9,20 @@ import {
   type ProjectSettings,
 } from "../../../shared/projects";
 import { ComposerSelect } from "../../ui/ComposerSelect";
-import { ProjectBadge } from "./ProjectBadge";
 import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
 
-/** The projects Settings can pick from: every real one, scratch chats aside. */
-export function useSettingsProjects(accountId: string | undefined) {
+/** Project settings are scoped to the project their entry point asked for. */
+export function useSettingsProject(
+  accountId: string | undefined,
+  projectId: string | undefined,
+) {
   const projects = useQuery({
     queryKey: ["projects", accountId],
     queryFn: () => api.projects(),
+    enabled: !!projectId,
   });
-  return projects.data?.filter((p) => !p.scratch);
+  return projects.data?.find((p) => p.id === projectId && !p.scratch);
 }
 
 /**
@@ -77,32 +80,6 @@ export function useProjectSetting<K extends keyof ProjectSettings>(
     },
     error: save.isError ? save.error : undefined,
   };
-}
-
-export function ProjectPicker({
-  projects,
-  value,
-  onChange,
-}: {
-  projects: Project[];
-  value: Project;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <div className="composer-tools model-field">
-      <ComposerSelect
-        label="Project"
-        value={value.id}
-        icon={<ProjectBadge id={value.id} name={value.name} />}
-        options={projects.map((p) => ({
-          value: p.id,
-          label: p.name,
-          ...(p.folder ? { description: p.folder } : {}),
-        }))}
-        onChange={onChange}
-      />
-    </div>
-  );
 }
 
 export function ProjectNameField({ project }: { project: Project }) {

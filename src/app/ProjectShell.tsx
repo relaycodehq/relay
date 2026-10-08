@@ -130,7 +130,7 @@ export default function ProjectShell() {
     setError,
   );
   useOpenedFolders(boot.data, projects, lock, starts.open);
-  useShortcut("settings", true, () => settings.setOpen(true));
+  useShortcut("settings", true, () => settings.show());
   useShortcut("new-thread", !!project && !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
   function runCommand(command: RelayCommand) {
@@ -241,10 +241,7 @@ export default function ProjectShell() {
             </div>
           )}
           {sidebar.hidden && !settings.open && (
-            <IconButton
-              label="Open settings"
-              onClick={() => settings.setOpen(true)}
-            >
+            <IconButton label="Open settings" onClick={() => settings.show()}>
               <Settings2 size={16} />
             </IconButton>
           )}
@@ -424,7 +421,7 @@ export default function ProjectShell() {
                     onSwitchProject={(next) => navigate(next, undefined, true)}
                     onAddProject={() => starts.addProject()}
                     onProjectSettings={() =>
-                      settings.show("projects", project.id)
+                      settings.show("project", project.id)
                     }
                   />
                 </StartedThreadsContext.Provider>
@@ -486,13 +483,14 @@ export default function ProjectShell() {
           <Settings
             account={account ?? null}
             initialCategory={settings.category}
-            initialProject={settings.project ?? project?.id}
+            key={settings.project ?? "app"}
+            projectId={settings.project}
             initialQuery={settings.query}
             onQueryChange={settings.setQuery}
             onWhere={settings.setWhere}
             onClose={settings.close}
             onConnect={() => {
-              settings.setOpen(false);
+              settings.close();
               void signIn.withAccount();
             }}
             onOpenChat={(projectId, chatId) => {
@@ -507,13 +505,13 @@ export default function ProjectShell() {
                   const next = list.find((c) => c.id === chatId);
                   if (!next) return;
                   navigate(p, next);
-                  settings.setOpen(false);
+                  settings.close();
                 })
                 .catch(setError);
             }}
             onDisconnect={async () => {
               await signIn.signOut();
-              settings.setOpen(false);
+              settings.close();
               nav.setInbox(false);
             }}
           />

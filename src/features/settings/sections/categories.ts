@@ -27,8 +27,8 @@ export const categories: {
     icon: Palette,
   },
   {
-    id: "projects",
-    label: "Projects",
+    id: "project",
+    label: "Project settings",
     description:
       "What one project does its own way. Anything left alone follows the rest of Settings.",
     icon: FolderGit2,

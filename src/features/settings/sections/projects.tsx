@@ -1,4 +1,4 @@
-import { useState } from "react";
+import type { Project } from "../../../../shared/projects";
 import { LinkedFoldersSetting } from "../../linked-folders/LinkedFoldersSetting";
 import type { SettingEntry } from "../settings-search";
 import {
@@ -6,41 +6,18 @@ import {
   ProjectCommitSettleSwitch,
   ProjectFolderRow,
   ProjectNameField,
-  ProjectPicker,
   ProjectWorkspaceSelect,
   ProjectWorktreeCleanupSelect,
   ProjectWorktreeCommandField,
-  useSettingsProjects,
 } from "../../projects/ProjectSettings";
 
-/** What one project does its own way, on the project picked at the top. */
-export function useProjectEntries(
-  accountId: string | undefined,
-  /** The project it opens on; the first one otherwise. */
-  initialProject: string | undefined,
-): SettingEntry[] {
-  const projects = useSettingsProjects(accountId);
-  const [projectId, setProjectId] = useState(initialProject);
-  const project = projects?.find((p) => p.id === projectId) ?? projects?.[0];
-  if (!project || !projects) return [];
+/** What the project opened from its own menu does its own way. */
+export function projectEntries(project: Project | undefined): SettingEntry[] {
+  if (!project) return [];
   return [
     {
-      id: "project",
-      category: "projects",
-      title: "Project",
-      description: "The project the settings below are for.",
-      keywords: "pick choose which repository folder",
-      render: () => (
-        <ProjectPicker
-          projects={projects}
-          value={project}
-          onChange={setProjectId}
-        />
-      ),
-    },
-    {
       id: "project-name",
-      category: "projects",
+      category: "project",
       title: "Name",
       description:
         "Its name in the sidebar and thread lists. The folder on disk keeps its own.",
@@ -49,14 +26,14 @@ export function useProjectEntries(
     },
     {
       id: "project-folder",
-      category: "projects",
+      category: "project",
       title: "Folder",
       keywords: "path location finder reveal disk",
       render: () => <ProjectFolderRow project={project} />,
     },
     {
       id: "project-links",
-      category: "projects",
+      category: "project",
       section: "Linked folders",
       title: "Folders every thread reaches",
       description:
@@ -71,7 +48,7 @@ export function useProjectEntries(
       : [
           {
             id: "project-workspace",
-            category: "projects",
+            category: "project",
             section: "New threads",
             title: "Where new threads start",
             description:
@@ -82,7 +59,7 @@ export function useProjectEntries(
         ]),
     {
       id: "project-auto-settle",
-      category: "projects",
+      category: "project",
       section: "Auto-settle",
       title: "Settle quiet threads",
       description:
@@ -93,7 +70,7 @@ export function useProjectEntries(
     },
     {
       id: "project-commit-settle",
-      category: "projects",
+      category: "project",
       section: "Auto-settle",
       title: "Settle after the agent commits",
       description:
@@ -106,7 +83,7 @@ export function useProjectEntries(
       : [
           {
             id: "project-worktree-cleanup",
-            category: "projects",
+            category: "project",
             section: "Worktrees",
             title: "Remove settled threads' worktrees",
             description:
@@ -117,7 +94,7 @@ export function useProjectEntries(
           } satisfies SettingEntry,
           {
             id: "project-worktree-setup",
-            category: "projects",
+            category: "project",
             section: "Worktrees",
             title: "Setup command",
             description:
@@ -135,7 +112,7 @@ export function useProjectEntries(
           } satisfies SettingEntry,
           {
             id: "project-worktree-teardown",
-            category: "projects",
+            category: "project",
             section: "Worktrees",
             title: "Teardown command",
             description:

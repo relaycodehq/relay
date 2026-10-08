@@ -119,7 +119,7 @@ export function ProjectChat({
   scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
-  /** Opens Settings → Projects on this project. */
+  /** Opens this project's settings. */
   onProjectSettings: () => void;
   opens: ThreadOpens;
   /** Where the unsent thread will work, as the picker changes. */

@@ -98,17 +98,54 @@ test("a project's settings change where its threads start and settle them after 
     // Twenty quiet minutes after a commit, but the app doesn't settle on one.
     expect(await settled()).toBe(false);
 
-    await page
-      .getByRole("button", { name: "Project actions for Relay App" })
-      .click();
-    await page.getByRole("menuitem", { name: "Project settings" }).click();
+    await expect(
+      page.getByRole("button", { name: "Project actions for Relay App" }),
+    ).toBeVisible();
+
+    // Global settings stays global, even with projects available.
+    const openSettings = () =>
+      page.keyboard.press(
+        process.platform === "darwin" ? "Meta+Comma" : "Control+Comma",
+      );
     const settings = page.getByRole("region", {
       name: "Settings",
       exact: true,
     });
+    const categories = settings.getByRole("navigation", {
+      name: "Settings categories",
+    });
+    await openSettings();
+    await expect(settings).toBeVisible();
+    await expect(
+      categories.getByRole("button", { name: /^Projects?$/ }),
+    ).toHaveCount(0);
+    await expect(
+      categories.getByRole("button", { name: "Project settings" }),
+    ).toHaveCount(0);
+    const search = settings.getByRole("textbox", { name: "Search settings" });
+    await search.fill("worktree");
+    await expect(
+      settings.locator('.settings-result[aria-label$="in Project settings"]'),
+    ).toHaveCount(0);
+    await screenshot(page, {
+      path: "test-results/screenshots/global-settings-no-projects.png",
+    });
+    await settings.getByRole("button", { name: "Back to app" }).click();
+
+    await page
+      .getByRole("button", { name: "Project actions for Relay App" })
+      .click();
+    await page.getByRole("menuitem", { name: "Project settings" }).click();
+    await expect(
+      settings.getByRole("heading", { name: "Relay App settings" }),
+    ).toBeVisible();
+    await expect(
+      settings.getByRole("textbox", { name: "Project name" }),
+    ).toHaveValue("Relay App");
     await expect(
       settings.getByRole("combobox", { name: "Project", exact: true }),
-    ).toHaveText(/Relay App/);
+    ).toHaveCount(0);
+    await search.fill("");
     await expect(
       settings.getByRole("combobox", { name: "Settle quiet threads" }),
     ).toHaveText(/Like the app \(after 3 days\)/);
@@ -131,11 +168,28 @@ test("a project's settings change where its threads start and settle them after 
     );
     expect(saved).toEqual({ workspace: "worktree", settleOnCommit: true });
 
-    // The other project keeps following the app.
-    await settings
-      .getByRole("combobox", { name: "Project", exact: true })
+    // Reopening general settings must drop the project context.
+    await settings.getByRole("button", { name: "Back to app" }).click();
+    await openSettings();
+    await expect(
+      settings.getByRole("heading", { name: "Appearance", exact: true }),
+    ).toBeVisible();
+    await expect(
+      categories.getByRole("button", { name: "Project settings" }),
+    ).toHaveCount(0);
+    await settings.getByRole("button", { name: "Back to app" }).click();
+
+    // The other project is reached through its own existing entry point.
+    await page
+      .getByRole("button", { name: "Project actions for Other" })
       .click();
-    await page.getByRole("option", { name: "Other" }).click();
+    await page.getByRole("menuitem", { name: "Project settings" }).click();
+    await expect(
+      settings.getByRole("heading", { name: "Other settings" }),
+    ).toBeVisible();
+    await expect(
+      settings.getByRole("combobox", { name: "Project", exact: true }),
+    ).toHaveCount(0);
     await expect(
       settings.getByRole("switch", {
         name: "Settle threads after the agent commits",

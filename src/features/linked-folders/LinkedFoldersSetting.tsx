@@ -1,4 +1,4 @@
-// Linked folders in Settings → Projects: what every thread in the project
+// Linked folders in project settings: what every thread in the project
 // may reach beyond it, with a note the agent is told, and how far it may go.
 import { useEffect, useState } from "react";
 import { Popover } from "@base-ui/react/popover";

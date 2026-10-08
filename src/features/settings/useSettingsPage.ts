@@ -18,14 +18,13 @@ export function useSettingsPage(
   useEffect(() => {
     setOpen(false);
     setCategory(undefined);
+    setProject(undefined);
   }, [projectId, chatId, surface]);
   return {
     open,
-    /** Opens or leaves the page, keeping the category it was last opened at. */
-    setOpen,
     /** The category it opens at. */
     category,
-    /** The project its Projects category opens on, when one was asked for. */
+    /** The project explicitly opened from a project entry point. */
     project,
     /** Search survives closing the page for the lifetime of this window. */
     query,
@@ -35,12 +34,13 @@ export function useSettingsPage(
     setWhere,
     show(at?: SettingsCategory, projectId?: string) {
       setCategory(at);
-      setProject(projectId);
+      setProject(at === "project" ? projectId : undefined);
       setOpen(true);
     },
     close() {
       setOpen(false);
       setCategory(undefined);
+      setProject(undefined);
     },
   };
 }

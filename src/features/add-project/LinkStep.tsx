@@ -45,7 +45,8 @@ export function LinkStep({
         <strong>{project.name} is in Relay.</strong>
         <p>
           Link the repos beside it? Its agents read linked folders without
-          asking, and you can change them in Settings → Projects.
+          asking, and you can change them in Project settings from the project's
+          menu.
         </p>
       </div>
       <ul className="add-link-list">

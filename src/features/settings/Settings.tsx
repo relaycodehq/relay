@@ -11,7 +11,8 @@ import { SearchHighlight } from "./sections/SearchHighlight";
 import { Setting } from "./sections/Setting";
 import { SettingsNav } from "./sections/SettingsNav";
 import { useAppearanceEntries } from "./sections/appearance";
-import { useProjectEntries } from "./sections/projects";
+import { projectEntries } from "./sections/projects";
+import { useSettingsProject } from "../projects/ProjectSettings";
 import { accountEntries } from "./sections/account";
 import { useModelEntries } from "./sections/models";
 import { integrationEntries } from "./sections/integrations";
@@ -33,14 +34,14 @@ export function Settings({
   onConnect,
   onOpenChat,
   initialCategory,
-  initialProject,
+  projectId,
   initialQuery = "",
   onQueryChange,
   onWhere,
 }: {
   initialCategory?: SettingsCategory;
-  /** The project Projects opens on; the first one otherwise. */
-  initialProject?: string;
+  /** Only provided when opening settings from a project entry point. */
+  projectId?: string;
   /** Kept by the shell while the settings page is closed. */
   initialQuery?: string;
   onQueryChange?: (query: string) => void;
@@ -72,8 +73,8 @@ export function Settings({
   // Escape clears the search, then leaves.
   useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
   const [error, setError] = useState<unknown>();
+  const project = useSettingsProject(account?.id, projectId);
   const appearance = useAppearanceEntries(),
-    projects = useProjectEntries(account?.id, initialProject),
     models = useModelEntries(setError),
     dictation = useDictationEntries(),
     readAloud = useReadAloudEntries(),
@@ -81,7 +82,7 @@ export function Settings({
     about = useAboutEntries();
   const entries = [
     ...appearance,
-    ...projects,
+    ...projectEntries(project),
     ...accountEntries({ account, onConnect, onDisconnect, setError }),
     ...models,
     ...integrationEntries(onConnect),
@@ -102,7 +103,11 @@ export function Settings({
   const showResults = !!words.length && searching;
   const categoryResults = results.filter((e) => e.category === category);
   const targetId = destination.entryId ?? categoryResults[0]?.id;
-  const where = showResults ? "Search results" : current.label;
+  const where = showResults
+    ? "Search results"
+    : category === "project" && project
+      ? `${project.name} settings`
+      : current.label;
   useEffect(() => onWhere?.(where), [where, onWhere]);
   useLayoutEffect(() => {
     const pane = content.current;
@@ -137,6 +142,7 @@ export function Settings({
         query={query}
         setQuery={setQuery}
         category={category}
+        projectId={projectId}
         results={words.length ? results : null}
         showResults={showResults}
         onShowResults={() => setSearching(true)}

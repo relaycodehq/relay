@@ -72,7 +72,7 @@ export function ProjectSidebar({
   onAdd: () => void;
   onInbox: () => void;
   onUsage?: () => void;
-  /** Opens Settings, at `category` when given, on `projectId` under Projects. */
+  /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   onAccount: () => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -116,7 +116,7 @@ export function ProjectSidebar({
     scratch: scratchIds,
     open: openChat,
     onNew: newThread,
-    onProjectSettings: (id) => onSettings("projects", id),
+    onProjectSettings: (id) => onSettings("project", id),
     setError,
   });
   const activity = view === "activity" && !search.query;
@@ -223,7 +223,7 @@ export function ProjectSidebar({
                 threads: all,
                 current: projectId,
                 onNew: newThread,
-                onProjectSettings: (p) => onSettings("projects", p.id),
+                onProjectSettings: (p) => onSettings("project", p.id),
               }}
               error={error}
               empty={!realProjects.length}

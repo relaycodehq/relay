@@ -1,5 +1,5 @@
 // Linked folders, built: the thread's control and /add-dir run on the real
-// hook and components, Settings → Projects on the real entries. The bridge
+// hook and components, project settings on the real entries. The bridge
 // is stubbed with sample folders. Sample data throughout.
 // Open http://127.0.0.1:5177/previews/linked-folders/ (?view=settings)
 import "../_shared/desktop-stub";
@@ -20,7 +20,8 @@ import "../../src/features/changes/worktrees.css";
 import { initAppearance } from "../../src/lib/appearance";
 import { SettingsNav } from "../../src/features/settings/sections/SettingsNav";
 import { Setting } from "../../src/features/settings/sections/Setting";
-import { useProjectEntries } from "../../src/features/settings/sections/projects";
+import { projectEntries } from "../../src/features/settings/sections/projects";
+import { useSettingsProject } from "../../src/features/projects/ProjectSettings";
 import { sections } from "../../src/features/settings/settings-search";
 import { Message } from "../../src/features/thread/ProjectMessage";
 import { ProjectComposer } from "../../src/features/composer/ProjectComposer";
@@ -217,7 +218,8 @@ function Thread({
 function SettingsView({ onClose }: { onClose: () => void }) {
   const search = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const entries = useProjectEntries("you", "acme-web");
+  const project = useSettingsProject("you", "acme-web");
+  const entries = projectEntries(project);
   return (
     <section className="settings-screen" aria-labelledby="settings-heading">
       <SettingsNav
@@ -225,7 +227,8 @@ function SettingsView({ onClose }: { onClose: () => void }) {
         inputRef={search}
         query={query}
         setQuery={setQuery}
-        category="projects"
+        category="project"
+        projectId="acme-web"
         results={null}
         showResults={false}
         onShowResults={() => {}}
@@ -234,8 +237,8 @@ function SettingsView({ onClose }: { onClose: () => void }) {
       />
       <main className="settings-pane">
         <header>
-          <h3>Projects</h3>
-          <p>What each project does its own way.</p>
+          <h3>{project?.name} settings</h3>
+          <p>What this project does its own way.</p>
         </header>
         <div className="settings-content">
           {sections(entries).map(({ section, list }, i) => (
@@ -273,7 +276,7 @@ function Preview() {
             {(
               [
                 ["thread", "In a thread"],
-                ["settings", "Settings → Projects"],
+                ["settings", "Project settings"],
               ] as const
             ).map(([v, label]) => (
               <button

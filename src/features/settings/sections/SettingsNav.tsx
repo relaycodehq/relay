@@ -15,6 +15,7 @@ export function SettingsNav({
   query,
   setQuery,
   category,
+  projectId,
   results,
   showResults,
   onShowResults,
@@ -26,6 +27,8 @@ export function SettingsNav({
   query: string;
   setQuery: (query: string) => void;
   category: SettingsCategory;
+  /** A project category exists only after a project entry point opened it. */
+  projectId?: string;
   /** What the search finds, while searching; each category counts its own. */
   results: SettingEntry[] | null;
   showResults: boolean;
@@ -74,25 +77,27 @@ export function SettingsNav({
             <small>{results.length}</small>
           </button>
         )}
-        {categories.map(({ id, label, icon: Icon }) => {
-          const count = results
-            ? results.filter((e) => e.category === id).length
-            : null;
-          return (
-            <button
-              key={id}
-              className={!showResults && category === id ? "active" : ""}
-              aria-current={
-                !showResults && category === id ? "page" : undefined
-              }
-              onClick={() => onPick(id)}
-            >
-              <Icon size={15} />
-              <span>{label}</span>
-              {count != null && count > 0 && <small>{count}</small>}
-            </button>
-          );
-        })}
+        {categories
+          .filter((c) => c.id !== "project" || projectId)
+          .map(({ id, label, icon: Icon }) => {
+            const count = results
+              ? results.filter((e) => e.category === id).length
+              : null;
+            return (
+              <button
+                key={id}
+                className={!showResults && category === id ? "active" : ""}
+                aria-current={
+                  !showResults && category === id ? "page" : undefined
+                }
+                onClick={() => onPick(id)}
+              >
+                <Icon size={15} />
+                <span>{label}</span>
+                {count != null && count > 0 && <small>{count}</small>}
+              </button>
+            );
+          })}
       </nav>
     </aside>
   );

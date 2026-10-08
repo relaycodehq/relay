@@ -199,7 +199,7 @@ export function useAppearanceEntries(): SettingEntry[] {
       category: "appearance",
       title: "Auto-settle quiet threads",
       description:
-        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. A project can set its own under Projects, and one thread can opt out from its right-click menu.",
+        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. Each project can override this through Project settings in its menu, and one thread can opt out from its right-click menu.",
       keywords:
         "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
       render: () => <AutoSettleSelect />,
@@ -209,7 +209,7 @@ export function useAppearanceEntries(): SettingEntry[] {
       category: "appearance",
       title: "Remove settled threads' worktrees",
       description:
-        "Free the disk a settled thread's worktree takes, once it has been settled this long. Its branch stays, and writing in the thread again checks the branch out in a new worktree. A worktree with uncommitted changes, or with something running in it, stays. A project can set its own under Projects.",
+        "Free the disk a settled thread's worktree takes, once it has been settled this long. Its branch stays, and writing in the thread again checks the branch out in a new worktree. A worktree with uncommitted changes, or with something running in it, stays. Each project can override this through Project settings in its menu.",
       keywords:
         "worktree cleanup clean remove delete disk space settled branch folder prune",
       render: () => <WorktreeCleanupSelect />,
