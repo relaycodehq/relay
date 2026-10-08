@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -83,16 +84,30 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     "dev-home.mjs",
     "dev-switch.mjs",
     "dev-supervisor.mjs",
+    "dev-supervisor-probe.mjs",
     "dev-process.mjs",
   ])
     cpSync(join(scripts, name), join(repo, "scripts", name));
+  const fixtureHome = join(repo, "scripts/dev-home.mjs");
+  writeFileSync(
+    fixtureHome,
+    readFileSync(fixtureHome, "utf8").replace(
+      "const items = readdirSync(userData).filter(kept);",
+      `if (process.env.RELAY_FIXTURE_SLOW_COPY) {
+      delete process.env.RELAY_FIXTURE_SLOW_COPY;
+      process.send?.({ type: "fixture:copying" });
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+    }
+    const items = readdirSync(userData).filter(kept);`,
+    ),
+  );
   writeFileSync(
     join(repo, "scripts/build-electron.mjs"),
     "await new Promise(r => setTimeout(r, process.env.RELAY_FIXTURE_SLOW_BUILD ? 1000 : 50));",
   );
   writeFileSync(
     join(repo, "scripts/electron-bundles.mjs"),
-    "export const bundles = process.env.RELAY_FIXTURE_BAD_BUNDLE ? [{name:'main',options:{outfile:'missing-bundle'}}] : [];",
+    "export const bundles = process.env.RELAY_FIXTURE_BAD_BUNDLE ? [{name:'main',options:{outfile:'missing-bundle'}}] : process.env.RELAY_FIXTURE_SLOW_CONTEXT ? [{name:'main',options:{outfile:'bundle'}}] : [];",
   );
   writeFileSync(
     join(repo, "package.json"),
@@ -103,9 +118,10 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     `
     const {existsSync,writeFileSync}=require('node:fs');
     writeFileSync('app-pid', String(process.pid));
-    process.send({type:'relay:dev-ready'});
+    process.send({type:'relay:dev-ready',restore:!process.env.RELAY_FIXTURE_NO_RESTORE});
     process.on('message', m => {
       if(m.type!=='relay:dev-stop') return;
+      writeFileSync('stop-mode', String(m.detach));
       if(existsSync('cancel-quit')) process.send({type:'relay:dev-cancelled'});
       else process.exit(0);
     });
@@ -135,7 +151,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     );
     writeFileSync(
       join(root, "node_modules/esbuild/index.js"),
-      "export function context() { throw Error('No bundles in this fixture'); }",
+      "import {writeFileSync} from 'node:fs'; export async function context() { if(!process.env.RELAY_FIXTURE_SLOW_CONTEXT) throw Error('No bundles in this fixture'); writeFileSync('context-started',''); await new Promise(r=>setTimeout(r,10000)); return {rebuild:async()=>{}}; }",
     );
     writeFileSync(
       join(root, "node_modules/electron/package.json"),
@@ -146,21 +162,29 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
       "module.exports=process.execPath",
     );
     writeFileSync(join(root, "node_modules/electron/cli.js"), "");
+    writeFileSync(join(root, "bundle"), "fixture");
     writeFileSync(
       join(root, "node_modules/vite/bin/vite.js"),
-      `const {createServer}=require('node:http');const {writeFileSync}=require('node:fs');writeFileSync('vite-pid',String(process.pid));createServer((_,res)=>res.end('fixture')).listen(${port},'127.0.0.1');`,
+      `const {createServer}=require('node:http');const {writeFileSync}=require('node:fs');writeFileSync('vite-pid',String(process.pid));createServer((_,res)=>{writeFileSync('vite-request','');if(!process.env.RELAY_FIXTURE_HANG_VITE)res.end('fixture');}).listen(${port},'127.0.0.1');`,
     );
   }
   const child = spawn(process.execPath, ["scripts/dev-supervisor.mjs"], {
     cwd: repo,
-    env,
+    env: { ...env, RELAY_FIXTURE_SLOW_COPY: "1" },
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   const extraChildren = [];
   let output = "";
   child.stdout.on("data", (b) => (output += b));
   child.stderr.on("data", (b) => (output += b));
-  const record = join(temp, "relay-dev.json");
+  const control = join(
+    data,
+    ...(process.platform === "darwin"
+      ? ["Library", "Application Support"]
+      : []),
+    "Relay dev",
+  );
+  const record = join(control, "supervisor.json");
   const ask = (...args) =>
     exec(process.execPath, ["scripts/dev-switch.mjs", ...args], {
       cwd: repo,
@@ -179,7 +203,42 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     expect(alive(vitePid)).toBe(true);
     expect(read(record).running).toBe(repo);
     rmSync(join(repo, "cancel-quit"));
-    await ask("away");
+    const requestFile = join(control, "request.json");
+    writeFileSync(
+      requestFile,
+      JSON.stringify({ to: repo, id: "same-target" }),
+      { mode: 0o600 },
+    );
+    await waitFor(() => read(record).completed === "same-target");
+    expect(alive(appPid)).toBe(true);
+    for (const restore of ["../../../outside", "missing"]) {
+      writeFileSync(requestFile, JSON.stringify({ restore, id: "invalid" }), {
+        mode: 0o600,
+      });
+      await waitFor(() => read(record).rejected === "invalid");
+      expect(read(record).error).toContain("Not a snapshot");
+      expect(alive(appPid)).toBe(true);
+    }
+    writeFileSync(
+      requestFile,
+      JSON.stringify({ to: away, restore: "../../../outside", id: "mixed" }),
+      { mode: 0o600 },
+    );
+    await waitFor(() => read(record).rejected === "mixed");
+    expect(read(record).error).toContain("exactly one");
+    expect(alive(appPid)).toBe(true);
+    const copying = new Promise((resolve) => {
+      child.on("message", (message) => {
+        if (message?.type === "fixture:copying") resolve();
+      });
+    });
+    const switching = ask("away");
+    switching.catch(() => {});
+    await copying;
+    const status = await ask("--json");
+    expect(JSON.parse(status.stdout).running).toBe(repo);
+    await switching;
+    expect(readFileSync(join(repo, "stop-mode"), "utf8")).toBe("true");
     await waitFor(() => existsSync(join(away, "app-pid")));
     expect(read(record).running).toBe(away);
     expect(alive(appPid)).toBe(false);
@@ -191,6 +250,8 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
       () => existsSync(join(repo, "app-pid")) && read(record).running === repo,
     );
     await ask("--restore");
+    expect(readFileSync(join(repo, "stop-mode"), "utf8")).toBe("false");
+    await waitFor(() => alive(Number(readFileSync(join(repo, "app-pid")))));
     const exited = new Promise((resolve) => child.once("exit", resolve));
     child.send({ type: "relay:dev-stop" });
     await exited;
@@ -213,6 +274,75 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     await startupExited;
     expect(existsSync(join(repo, "app-pid"))).toBe(false);
     expect(existsSync(join(repo, "vite-pid"))).toBe(false);
+    for (const [flag, marker] of [
+      ["RELAY_FIXTURE_HANG_VITE", "vite-request"],
+      ["RELAY_FIXTURE_SLOW_CONTEXT", "context-started"],
+    ]) {
+      for (const file of [
+        "app-pid",
+        "vite-pid",
+        "vite-request",
+        "context-started",
+      ])
+        rmSync(join(repo, file), { force: true });
+      const duringSetup = spawn(
+        process.execPath,
+        ["scripts/dev-supervisor.mjs"],
+        {
+          cwd: repo,
+          env: { ...env, [flag]: "1" },
+          stdio: ["ignore", "ignore", "ignore", "ipc"],
+        },
+      );
+      extraChildren.push(duringSetup);
+      await waitFor(() => existsSync(join(repo, marker)));
+      const setupExited = new Promise((resolve) =>
+        duringSetup.once("exit", resolve),
+      );
+      const start = Date.now();
+      duringSetup.send({ type: "relay:dev-stop" });
+      await setupExited;
+      expect(Date.now() - start).toBeLessThan(3000);
+      expect(existsSync(join(repo, "app-pid"))).toBe(false);
+      expect(alive(Number(readFileSync(join(repo, "vite-pid"))))).toBe(false);
+      expect(existsSync(record)).toBe(false);
+    }
+    // Older worktrees and apps still building cannot safely close detached hosts.
+    for (const flag of [
+      "RELAY_FIXTURE_SLOW_BUILD",
+      "RELAY_FIXTURE_NO_RESTORE",
+    ]) {
+      rmSync(join(repo, "app-pid"), { force: true });
+      const unsupported = spawn(
+        process.execPath,
+        ["scripts/dev-supervisor.mjs"],
+        {
+          cwd: repo,
+          env: { ...env, [flag]: "1" },
+          stdio: ["ignore", "ignore", "ignore", "ipc"],
+        },
+      );
+      extraChildren.push(unsupported);
+      await waitFor(() => existsSync(record));
+      if (flag === "RELAY_FIXTURE_NO_RESTORE")
+        await waitFor(() => existsSync(join(repo, "app-pid")));
+      const restore = readdirSync(join(userData, "Dev snapshots"))[0];
+      writeFileSync(
+        join(control, "request.json"),
+        JSON.stringify({ restore, id: "unsupported-restore" }),
+        { mode: 0o600 },
+      );
+      await waitFor(() => read(record).rejected === "unsupported-restore");
+      expect(read(record).error).toContain("not ready to restore");
+      const unsupportedExited = new Promise((resolve) =>
+        unsupported.once("exit", resolve),
+      );
+      unsupported.send({ type: "relay:dev-stop" });
+      await unsupportedExited;
+      expect(existsSync(record)).toBe(false);
+    }
+    for (const file of ["app-pid", "vite-pid"])
+      rmSync(join(repo, file), { force: true });
     const failed = spawn(process.execPath, ["scripts/dev-supervisor.mjs"], {
       cwd: repo,
       env: { ...env, RELAY_FIXTURE_BAD_BUNDLE: "1" },

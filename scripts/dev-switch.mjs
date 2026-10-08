@@ -24,7 +24,7 @@ import {
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const [name] = args.filter((a) => !a.startsWith("--"));
-const running = supervisor();
+const running = await supervisor();
 const list = checkouts(running?.home ?? realpathSync("."));
 const fail = (text) => {
   console.error(text);
@@ -37,7 +37,7 @@ async function request(ask) {
   if (flag("--no-wait")) return;
   for (let i = 0; i < 600; i++) {
     await new Promise((r) => setTimeout(r, 100));
-    const record = supervisor();
+    const record = await supervisor();
     if (!record)
       fail("The dev supervisor stopped; see the `npm run dev` terminal.");
     if (record.rejected === id) fail(record.error);
@@ -54,7 +54,12 @@ if (flag("--json")) {
   );
 } else if (flag("--restore")) {
   if (!running) fail("No `npm run dev` is running to restore under.");
-  const snapshot = findSnapshot(name);
+  let snapshot;
+  try {
+    snapshot = findSnapshot(name);
+  } catch (error) {
+    fail(error.message);
+  }
   if (!snapshot)
     fail(name ? `No snapshot matches ${name}.` : "No snapshots yet.");
   await request({ restore: snapshot });

@@ -10,6 +10,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  writeFile,
   readdir,
   rename,
   rm,
@@ -69,9 +70,17 @@ async function restartable(
       join(bin, name),
       await readFile(resolve("tests/fixtures", fixture), "utf8"),
     );
+  let entry = "tests/fixtures/launch.cjs";
+  if (extra.RELAY_DEV_STALE) {
+    entry = join(root, "dev-ipc-launch.cjs");
+    await writeFile(
+      entry,
+      `process.send = () => {}; require(${JSON.stringify(resolve("tests/fixtures/launch.cjs"))});`,
+    );
+  }
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
+      args: [entry],
       env: { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data, ...extra },
     });
   let app: ElectronApplication = await launch();
@@ -264,6 +273,50 @@ test("Keep open after a failed save preserves the live host, then a retry detach
       await rm(path, { recursive: true, force: true });
       await rename(backup, path);
     }
+    await relay.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("restore stop closes live sessions before saved data can be replaced", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-restore-stop-")),
+  );
+  const starts = join(root, "claude-starts.log");
+  const relay = await restartable(
+    { claude: "slow-claude.cjs" },
+    {
+      SLOW_CLAUDE_LOG: starts,
+      SLOW_CLAUDE_MS: "700",
+      RELAY_DEV_STALE: join(root, "stale.json"),
+    },
+  );
+  try {
+    await relay.send({ body: "@claude Count to twenty", provider: "claude" });
+    await expect
+      .poll(async () => (await relay.answers())[0]?.body ?? "", {
+        timeout: 20_000,
+      })
+      .toContain("three");
+    const agentPid = Number((await readFile(starts, "utf8")).trim());
+    const hosts = await relay.hosts();
+    expect(hosts).toHaveLength(1);
+    expect(alive(agentPid)).toBe(true);
+    const exited = new Promise((resolve) =>
+      relay.app.process().once("exit", resolve),
+    );
+    await relay.app.evaluate(() =>
+      process.emit(
+        "message",
+        { type: "relay:dev-stop", detach: false },
+        undefined,
+      ),
+    );
+    await exited;
+    await expect.poll(() => alive(agentPid), { timeout: 10_000 }).toBe(false);
+    for (const host of hosts)
+      await expect.poll(() => alive(host), { timeout: 10_000 }).toBe(false);
+  } finally {
     await relay.dispose();
     await rm(root, { recursive: true, force: true });
   }

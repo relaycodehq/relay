@@ -10,9 +10,12 @@
 //
 // Anywhere else (a worktree, which has its own port), beside a supervisor
 // already running, or with RELAY_TEST_DATA, it is plain dev.mjs.
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { realpathSync, rmSync, unwatchFile, watchFile } from "node:fs";
 import { createConnection } from "node:net";
+import { Worker } from "node:worker_threads";
+import { once } from "node:events";
 import { basename } from "node:path";
 import {
   checkouts,
@@ -22,6 +25,7 @@ import {
   requestFile,
   restore,
   snapshot,
+  snapshotPath,
   supervisor,
   writeJson,
 } from "./dev-home.mjs";
@@ -33,11 +37,25 @@ try {
 } catch {
   // Not a git checkout: nothing to switch between.
 }
-if (process.env.RELAY_TEST_DATA || list[0]?.path !== here || supervisor())
+if (
+  process.env.RELAY_TEST_DATA ||
+  list[0]?.path !== here ||
+  (await supervisor())
+)
   await import("./dev.mjs");
-else supervise(here);
+else await supervise(here);
 
-function supervise(home) {
+async function supervise(home) {
+  const token = randomUUID();
+  // Snapshot copies and git queries block this thread. Identity checks must
+  // keep answering, or another launcher can mistake this supervisor for dead.
+  const probe = new Worker(
+    new URL("./dev-supervisor-probe.mjs", import.meta.url),
+    {
+      workerData: token,
+    },
+  );
+  const [port] = await once(probe, "message");
   const log = (text) => console.log(`\x1b[36m[relay dev]\x1b[0m ${text}`);
   const nameOf = (path) => {
     const c = checkouts(home).find((c) => c.path === path);
@@ -47,11 +65,20 @@ function supervise(home) {
   let running = home;
   let next = null;
   let quitting = false;
+  let canRestore = false;
 
   const record = (result = {}) =>
-    writeJson(recordFile, { pid: process.pid, home, running, ...result });
+    writeJson(recordFile, {
+      pid: process.pid,
+      home,
+      running,
+      port,
+      token,
+      ...result,
+    });
   const run = (root, completed) => {
     running = root;
+    canRestore = false;
     record(completed ? { completed } : {});
     if (root !== home) log(`Running Relay from ${nameOf(root)} (${root}).`);
     // The runner asks Electron over IPC to quit, and cleans up Vite only
@@ -64,7 +91,10 @@ function supervise(home) {
       env: { ...process.env, RELAY_DEV_HOME: home, RELAY_DEV_RUNNING: root },
     });
     child.on("message", (message) => {
-      if (message?.type === "relay:dev-ready" && (next || quitting)) stop();
+      if (message?.type === "relay:dev-ready") {
+        canRestore = message.restore === true;
+        if (next || quitting) stop();
+      }
       if (message?.type !== "relay:dev-cancelled") return;
       record({ rejected: next?.id, error: "Relay's quit was cancelled." });
       next = null;
@@ -84,6 +114,10 @@ function supervise(home) {
       next = null;
       try {
         if (ask?.restore) {
+          if (code !== 0)
+            throw new Error(
+              "Relay did not shut down cleanly; snapshot restore was aborted.",
+            );
           restore(ask.restore);
           log(`Restored the data from ${ask.restore}.`);
           return run(home, ask.id);
@@ -106,7 +140,8 @@ function supervise(home) {
   };
 
   const stop = () => {
-    if (child?.connected) child.send({ type: "relay:dev-stop" });
+    if (child?.connected)
+      child.send({ type: "relay:dev-stop", detach: !next?.restore });
   };
 
   const done = (code) => {
@@ -116,6 +151,13 @@ function supervise(home) {
     process.exit(code);
   };
 
+  probe.on("error", (error) => {
+    log(`Supervisor identity listener failed: ${error.message}`);
+    quitting = true;
+    if (child) stop();
+    else done(1);
+  });
+
   rmSync(requestFile, { force: true });
   watchFile(requestFile, { interval: 500 }, () => {
     const ask = readJson(requestFile);
@@ -123,6 +165,13 @@ function supervise(home) {
     rmSync(requestFile, { force: true });
     if (next || quitting) {
       record({ rejected: ask.id, error: "Relay is already stopping." });
+      return;
+    }
+    if (Boolean(ask.to) === Boolean(ask.restore)) {
+      record({
+        rejected: ask.id,
+        error: "Request must choose exactly one checkout or snapshot.",
+      });
       return;
     }
     if (ask.to) {
@@ -136,8 +185,19 @@ function supervise(home) {
           `Can't run Relay from ${ask.to}: ${target?.problem ?? "not a checkout of this repository"}.`,
         );
       }
-      if (ask.to === running && !next) return;
-    } else if (!ask.restore) return;
+      if (ask.to === running) return record({ completed: ask.id });
+    } else if (ask.restore) {
+      try {
+        snapshotPath(ask.restore);
+        if (!canRestore)
+          throw new Error(
+            "Relay is not ready to restore. Wait for startup, or rebase this checkout to include current dev-switch support.",
+          );
+      } catch (error) {
+        record({ rejected: ask.id, error: error.message });
+        return;
+      }
+    } else return;
     next = ask;
     record();
     log(

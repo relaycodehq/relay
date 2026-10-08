@@ -16,6 +16,8 @@ import { stopDevServer } from "./dev-process.mjs";
 const url = `http://127.0.0.1:${5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0)}`;
 let vite, electron;
 let stopping = false;
+let detach = true;
+const startup = new AbortController();
 let ready = false;
 let finishing = false;
 const finish = async (code = 0) => {
@@ -29,21 +31,28 @@ const finish = async (code = 0) => {
   }
   process.exit(code);
 };
-const stop = () => {
+const stop = (keepSessions = detach) => {
+  detach = keepSessions;
   stopping = true;
-  // Before Electron is ready, launch() or its ready message handles this.
+  if (!electron) {
+    startup.abort();
+    void finish();
+    return;
+  }
+  // Before Electron is ready, its ready message handles this.
   // Leave Vite up if the app's unsaved-edits prompt cancels the request.
-  if (ready && electron?.connected) electron.send({ type: "relay:dev-stop" });
+  if (ready && electron?.connected)
+    electron.send({ type: "relay:dev-stop", detach });
 };
 // Relay exits with this to be built and started again (electron/app/dev-build.ts).
 const RESTART = 75;
 // Where the bundles behind their sources are named for the running Relay.
 const staleFile = join(tmpdir(), `relay-dev-stale-${process.pid}.json`);
 process.on("exit", () => rmSync(staleFile, { force: true }));
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
 process.on("message", (message) => {
-  if (message?.type === "relay:dev-stop") stop();
+  if (message?.type === "relay:dev-stop") stop(message.detach !== false);
 });
 process.send?.({ type: "relay:dev-ready" });
 async function run() {
@@ -70,13 +79,16 @@ async function run() {
     else void finish(1);
   });
   for (let i = 0; i < 100; i++) {
+    if (stopping) return finish();
     try {
-      await fetch(url);
+      await fetch(url, { signal: startup.signal });
       break;
     } catch {
+      if (stopping) return finish();
       await new Promise((r) => setTimeout(r, 100));
     }
   }
+  if (stopping) return finish();
   // npm run puts every ancestor's node_modules/.bin first on PATH; a stray
   // ~/node_modules/.bin/claude would then win over the user's real CLI.
   const PATH = (process.env.PATH ?? "")
@@ -105,6 +117,7 @@ async function run() {
   readLoaded();
   const builds = [];
   for (const { name, options } of bundles) {
+    if (stopping) return finish();
     const outfile = resolve(options.outfile);
     const entry = { inputs: new Set(), queue: Promise.resolve() };
     entry.ctx = await context({
@@ -132,6 +145,7 @@ async function run() {
       ],
     });
     builds.push(entry);
+    if (stopping) return finish();
   }
   // esbuild's own watch polls, about a fifth of a core for these bundles; one
   // recursive watch of the checkout costs nothing while idle. A file a bundle
@@ -169,7 +183,8 @@ async function run() {
     electron.on("message", (message) => {
       if (message?.type === "relay:dev-ready") {
         ready = true;
-        if (stopping) stop();
+        process.send?.(message);
+        if (stopping) stop(detach);
       } else if (message?.type === "relay:dev-cancelled") {
         stopping = false;
         process.send?.(message);
