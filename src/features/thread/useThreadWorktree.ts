@@ -135,6 +135,8 @@ export function useThreadWorktree({
     newBranch,
     setNewBranch,
     status,
+    /** The workspace its file calls go to, `@` mentions among them. */
+    where,
     // Where this thread's files are: links in its answers resolve against it.
     folder: live?.path ?? agentWorktree?.path ?? project.path,
     branch:

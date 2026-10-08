@@ -17,7 +17,7 @@ export function promptContent(
   const nodes: JSONContent[] = [];
   const plain = (chunk: string) => {
     const pattern =
-      /(\n|\[Image #\d+\]|`(?:\/|[A-Za-z]:\\)[^`\n]*`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
+      /(\n|\[Image #\d+\]|`[^`\n]+`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
     let last = 0;
     for (const m of chunk.matchAll(pattern)) {
       if (m.index! > last)

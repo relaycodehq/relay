@@ -1,0 +1,199 @@
+/* The @ menu: the command menu's surface, rows of files. */
+.mention-menu {
+  position: fixed;
+  z-index: 350;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow:
+    0 12px 32px #0003,
+    0 1px 3px #0001;
+  font-size: 12px;
+  overflow: hidden;
+  animation: mention-in 120ms ease-out;
+}
+@keyframes mention-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.mention-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 5px;
+}
+.mention-section {
+  padding: 8px 9px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.mention-section:first-child {
+  padding-top: 3px;
+}
+.mention-row {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+}
+.mention-row.selected {
+  background: var(--hover);
+}
+.mention-name {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-folder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.mention-hit {
+  color: var(--accent);
+  font-weight: 600;
+}
+.mention-folder .mention-hit {
+  font-weight: 500;
+}
+.mention-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.mention-change {
+  font: 600 10px var(--font-mono);
+  color: var(--accent);
+}
+.mention-change.added {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.mention-change.deleted,
+.mention-change.conflict {
+  color: light-dark(#c4323f, #f0707a);
+}
+.mention-empty {
+  margin: 10px 10px;
+  color: var(--muted);
+}
+.mention-hints {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.mention-hints kbd {
+  font: inherit;
+  color: var(--text);
+  margin-right: 3px;
+}
+.mention-total {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The list with the selected file or folder beside it. */
+.mention-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 42%) 1fr;
+}
+.mention-split > .mention-list {
+  border-right: 1px solid var(--border);
+}
+.mention-peek-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+}
+.mention-peek-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.mention-peek-head > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.mention-peek-head .mention-change {
+  font: 11px var(--font-sans, inherit);
+}
+.mention-peek-code {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 12px 8px 0;
+  overflow: hidden;
+  font: 11px/1.55 var(--font-mono);
+  color: var(--text);
+  mask-image: linear-gradient(#000 75%, transparent);
+}
+.mention-peek-code > div {
+  white-space: pre;
+}
+.mention-peek-n {
+  display: inline-block;
+  width: 3.4em;
+  padding-right: 1em;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.6;
+  user-select: none;
+}
+.mention-peek-foot {
+  padding: 5px 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.mention-peek-folder {
+  list-style: none;
+  margin: 0;
+  padding: 2px 8px;
+  overflow: hidden;
+}
+.mention-peek-folder li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 4px;
+}
+.mention-peek-folder small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}

@@ -33,6 +33,8 @@ import { useSettingCommands } from "./useSettingCommands";
 import { useStopKeys } from "./useStopKeys";
 import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
 import { useComposerCommands } from "./ComposerCommands";
+import { FileMentionMenu } from "../file-mentions/FileMentionMenu";
+import { useFileMentions } from "../file-mentions/useFileMentions";
 import { ComposerEffortControl } from "./ComposerEffortControl";
 import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
 import { ComposerModelPicker } from "../agents/ComposerModelPicker";
@@ -93,6 +95,7 @@ export interface ComposerConversation {
 export function ProjectComposer({
   ref,
   projectId,
+  files = projectId,
   keys,
   conversation,
   context,
@@ -111,6 +114,8 @@ export function ProjectComposer({
 }: {
   ref?: Ref<ComposerHandle>;
   projectId: string;
+  /** Whose files `@` offers: the project, or the thread's own worktree. */
+  files?: string;
   /**
    * Where its draft and its settings are kept; see features/composer/drafts
    * and features/agents/composer-settings.
@@ -242,6 +247,15 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
+  const mentions = useFileMentions({
+    draft: draft.text,
+    where: files,
+    disabled: busy,
+    onPick: (path, range) => promptInput.current?.insertMention(path, range),
+    onFill: (range) => promptInput.current?.insertText(range),
+  });
+  // One menu at a time; the files' wins where both could open.
+  const menu = mentions.visible ? mentions : commands;
   const sending = useComposerSend({
     draft,
     state: composer,
@@ -270,7 +284,11 @@ export function ProjectComposer({
           </button>
         </div>
       )}
-      {commands.menu}
+      {mentions.visible ? (
+        <FileMentionMenu mentions={mentions} input={input} />
+      ) : (
+        commands.menu
+      )}
       {commands.error && (
         <p role="alert" className="composer-image-error">
           {commands.error}
@@ -323,13 +341,14 @@ export function ProjectComposer({
           draftKey={keys.draft}
           key={keys.draft}
           aria-label="Message project"
-          aria-expanded={commands.visible || undefined}
-          aria-controls={commands.visible ? commands.id : undefined}
-          aria-activedescendant={
-            commands.visible ? commands.activeId : undefined
-          }
-          aria-autocomplete={commands.visible ? "list" : undefined}
-          onBlur={commands.dismiss}
+          aria-expanded={menu.visible || undefined}
+          aria-controls={menu.visible ? menu.id : undefined}
+          aria-activedescendant={menu.visible ? menu.activeId : undefined}
+          aria-autocomplete={menu.visible ? "list" : undefined}
+          onBlur={() => {
+            commands.dismiss();
+            mentions.dismiss();
+          }}
           value={draft.text}
           onChange={(value) => {
             draft.set(value);
@@ -337,6 +356,7 @@ export function ProjectComposer({
           }}
           onCursor={(at) => {
             commands.setCursor(at);
+            mentions.setCursor(at);
             recall.moved(at);
           }}
           onOpenPaste={setViewingPaste}
@@ -355,7 +375,7 @@ export function ProjectComposer({
           onKeyDownCapture={(e) => {
             // A recalled message takes ↑/↓ even from a menu it opened.
             if (recall.keyDown(e, draft.text)) return;
-            if (commands.onKeyDown(e)) return;
+            if (mentions.onKeyDown(e) || commands.onKeyDown(e)) return;
             if (e.nativeEvent.isComposing) return;
             if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
               const at = promptInput.current?.caret();

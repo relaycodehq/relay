@@ -116,8 +116,13 @@ export const FileTag = pill({
     title: path,
   }),
   inside: ({ path }) => [
-    icon("composer-file-icon"),
-    plain(path.split(/[\\/]/).filter(Boolean).pop() ?? path),
+    icon(
+      path.endsWith("/") ? "composer-file-icon folder" : "composer-file-icon",
+    ),
+    plain(
+      (path.split(/[\\/]/).filter(Boolean).pop() ?? path) +
+        (path.endsWith("/") ? "/" : ""),
+    ),
   ],
   text: ({ path }) => fileMarkdown(path),
 });

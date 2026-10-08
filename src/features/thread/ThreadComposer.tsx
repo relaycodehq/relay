@@ -248,6 +248,7 @@ export function ThreadComposer({
     <ProjectComposer
       ref={ref}
       projectId={project.id}
+      files={worktree.where}
       keys={{
         draft: draftKey,
         // A side conversation keeps its own agent and opens on the one that wrote its message.

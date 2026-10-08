@@ -45,6 +45,25 @@ export function insertSkill(editor: Editor, pick: SkillPick) {
   );
 }
 
+/** Puts a file pill in place of `start`–`end` of the draft's text, e.g. a typed `@query`. */
+export function insertMention(
+  editor: Editor,
+  { path, start, end }: { path: string; start: number; end: number },
+) {
+  const from = positionAt(editor.state.doc, start),
+    to = positionAt(editor.state.doc, end);
+  asOneStep(editor, () =>
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from, to }, [
+        { type: "relayFile", attrs: { path } },
+        { type: "text", text: " " },
+      ])
+      .run(),
+  );
+}
+
 /** Replaces `start`–`end` of the draft's text with plain text, or removes it. */
 export function replaceText(
   editor: Editor,

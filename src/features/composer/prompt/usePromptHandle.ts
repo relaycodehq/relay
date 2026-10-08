@@ -9,6 +9,7 @@ import {
   caretOffsets,
   inlinePaste,
   insertPaste,
+  insertMention,
   insertQuote,
   insertSkill,
   insertTags,
@@ -21,6 +22,8 @@ import {
 
 export interface PromptInputHandle extends DraftEditor {
   insertSkill: (skill: SkillPick) => void;
+  /** Puts a file in, by its path in the project, in place of `start`–`end`. */
+  insertMention: (path: string, range: { start: number; end: number }) => void;
   /** Puts a quoted passage at the caret as a pill. */
   insertQuote: (text: string) => void;
   /** Focuses the draft with the caret at its end. */
@@ -51,6 +54,11 @@ export function usePromptHandle(
         if (!editor) return;
         pills.addSkill(pick.token, pick.label);
         insertSkill(editor, pick);
+      },
+      insertMention(path, range) {
+        if (!editor) return;
+        pills.addFiles([path]);
+        insertMention(editor, { path, ...range });
       },
       insertText(range) {
         if (editor) replaceText(editor, range);
