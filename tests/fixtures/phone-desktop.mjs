@@ -2,10 +2,12 @@
 // fixture agent as `codex`, phone access on. Prints the pairing link as JSON
 // and runs until interrupted. Build first (vite build + build-electron).
 //
-//   node tests/fixtures/phone-desktop.mjs [--host 10.0.2.2] [--port 47900] [--seed]
+//   node tests/fixtures/phone-desktop.mjs [--host 10.0.2.2] [--port 47900] [--seed] [--claude]
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
+// --claude puts a stand-in Claude on the PATH, listing models as the CLI does,
+// and starts a thread last sent on "opus[1m]".
 // --images starts one whose answer embeds two screenshots, a missing file and a web image.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
@@ -34,6 +36,7 @@ const arg = (name) => {
 const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
+const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
 const theme = arg("--theme");
 const name = arg("--name");
@@ -69,6 +72,37 @@ await writeFile(
     (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
   { mode: 0o700 },
 );
+
+if (claude)
+  await writeFile(
+    join(bin, "claude"),
+    `#!${process.execPath}\n` +
+      (await readFile(resolve("tests/fixtures/slow-claude.cjs"), "utf8")),
+    { mode: 0o700 },
+  );
+// What Claude Code lists: aliases standing for full ids, no `[1m]` rows.
+const claudeModels = [
+  [
+    "opus",
+    "Opus 5.5",
+    "claude-opus-5-5",
+    "For complex work and everyday tasks",
+  ],
+  [
+    "sonnet",
+    "Sonnet 5.5",
+    "claude-sonnet-5-5",
+    "Most efficient for simpler tasks",
+  ],
+  ["haiku", "Haiku 5.5", "claude-haiku-5-5", "Fastest for quick answers"],
+].map(([value, displayName, resolvedModel, description]) => ({
+  value,
+  displayName,
+  resolvedModel,
+  description,
+  supportsEffort: true,
+  supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+}));
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
 if (modelDir) {
@@ -110,6 +144,8 @@ const app = await electron.launch({
     // reaches it as 10.0.2.2.
     RELAY_REMOTE_TAILNET: "127.0.0.1",
     RELAY_AGENT_TURN_MS: process.env.RELAY_AGENT_TURN_MS ?? "1500",
+    SLOW_CLAUDE_MS: "20",
+    SLOW_CLAUDE_MODELS: JSON.stringify(claudeModels),
   },
 });
 const stop = async () => {
@@ -155,8 +191,22 @@ if (images) {
   );
 }
 const pairing = await page.evaluate(
-  async ({ seed, images }) => {
+  async ({ seed, images, claude }) => {
     const project = await window.relay.addProject();
+    if (claude) {
+      // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
+      const chat = await window.relay.createProjectChat(project.id, {
+        kind: "project",
+      });
+      await window.relay.sendProjectChat(chat.id, {
+        id: crypto.randomUUID(),
+        body: "@claude Count to twenty",
+        provider: "claude",
+        choice: { model: "opus[1m]", reasoningEffort: "", fast: false },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      });
+    }
     if (seed || images) {
       const settings = await window.relay.aiSettings();
       const start = async (body) => {
@@ -189,7 +239,7 @@ const pairing = await page.evaluate(
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed, images },
+  { seed, images, claude },
 );
 let url = pairing.url;
 if (host) {

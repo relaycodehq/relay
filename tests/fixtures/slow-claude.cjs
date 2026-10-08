@@ -73,7 +73,8 @@ require("node:readline")
           request_id: m.request_id,
           response: {
             commands: [],
-            models: [],
+            // A list shaped like the real CLI's, for specs that need one.
+            models: JSON.parse(process.env.SLOW_CLAUDE_MODELS ?? "[]"),
             output_style: "default",
             available_output_styles: [],
           },
