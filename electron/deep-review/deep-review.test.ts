@@ -384,6 +384,49 @@ it("won't review a clean checkout", async () => {
   );
 });
 
+it("counts five reviewers as one working thread alongside two ordinary threads", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  expect(chats.working()).toBe(0);
+  for (let i = 0; i < 2; i++) {
+    const chat = await chats.create(projectId, { kind: "project" });
+    await chats.send(chat.id, {
+      id: randomUUID(),
+      body: "@codex fixture wait for cancellation",
+      provider: "codex",
+      choice,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+    });
+  }
+  expect(chats.working()).toBe(2);
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const review = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    review.id,
+    config({
+      reviewers: Array.from({ length: 5 }, () => ({
+        provider: "claude" as const,
+        choice: { ...choice, model: "" },
+      })),
+    }),
+  );
+  expect(chats.working()).toBe(3);
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(review.id)).deepReview?.status).toBe("leading");
+      expect(chats.working()).toBe(3);
+    },
+    { timeout: 15000 },
+  );
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(review.id)).deepReview?.status).toBe("done");
+      expect(chats.working()).toBe(2);
+    },
+    { timeout: 15000 },
+  );
+}, 30000);
+
 it("runs each reviewer in a hidden thread, then the lead, and lists its findings", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "review" });

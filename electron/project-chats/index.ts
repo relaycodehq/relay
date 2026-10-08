@@ -566,9 +566,15 @@ export class ProjectChats {
   async reconcileSummaries() {
     await this.storage.reconcile(this.store.savedAtLoad);
   }
-  /** Threads with an answer running now. */
+  /** Threads with an answer running now; council members count under their parent. */
   working() {
-    return this.active.size;
+    const chats = new Map((this.store.get().chats ?? []).map((c) => [c.id, c]));
+    return new Set(
+      this.active.ids().map((id) => {
+        const chat = chats.get(id);
+        return (chat?.reviewer ?? chat?.thinker)?.parent ?? id;
+      }),
+    ).size;
   }
   /** Asked for by the window showing the thread, every few seconds while it does. */
   worktreeStatus(id: string) {

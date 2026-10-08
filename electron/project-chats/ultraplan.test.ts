@@ -141,10 +141,15 @@ afterEach(async () => {
 });
 
 it("briefs a council of hidden read-only thinkers, then plans in Plan mode", async () => {
+  const counts: number[] = [];
+  const unsubscribe = chats.onSummaries(() => counts.push(chats.working()));
   const chat = await chats.create(projectId, { kind: "project" });
   const request = ask("@claude Plan retries for the queue.", "angles");
   await chats.send(chat.id, request);
   await settled(chat.id, request.id);
+  unsubscribe();
+  expect(Math.max(...counts)).toBe(1);
+  expect(chats.working()).toBe(0);
 
   const done = await chats.get(chat.id);
   const state = done.ultraplans![request.id]!;
