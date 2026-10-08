@@ -4,6 +4,7 @@ import {
   type AgentModel,
   type AgentProvider,
 } from "../../../shared/agents";
+import { modelName } from "../../../shared/model-fit";
 import { useAgentDefaults } from "./useAgentDefaults";
 import { useAgentPicks } from "../agents/useAgentPicks";
 import { useClaudeModels } from "../agents/useClaudeModels";
@@ -33,9 +34,7 @@ export function useModelCatalogs(projectId: string) {
       Object.fromEntries(
         agentProviders.flatMap((p, i) => {
           const runs = defaultModels[i];
-          return runs
-            ? [[p, of(p)?.find((m) => m.id === runs)?.name ?? runs]]
-            : [];
+          return runs ? [[p, modelName(p, of(p), runs)]] : [];
         }),
       ),
     [defaultModels.join("\0"), codex, claude, agentPicks.catalogs],

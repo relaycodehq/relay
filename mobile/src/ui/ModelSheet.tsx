@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Check } from "lucide-react-native";
 import { agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
 import { modelEfforts } from "../../../shared/composer-commands";
+import { listedModel, onWindow } from "../../../shared/model-fit";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ReasoningEffort } from "../../../shared/settings";
 import type { ModelCatalogs } from "../../../shared/composer-commands";
@@ -55,18 +56,18 @@ export function ModelSheet({
       });
   }, [open, provider, projectId, models, remote]);
   const list = models[provider] ?? known?.[provider];
-  const model = list?.find((m) => m.id === settings.choice.model);
+  const model = listedModel(provider, list, settings.choice.model);
   const fallback = defaults[provider];
-  const fallbackName = fallback?.model
-    ? (list?.find((m) => m.id === fallback.model)?.name ?? fallback.model)
-    : undefined;
+  const fallbackModel = fallback?.model ? listedModel(provider, list, fallback.model) : undefined;
+  const fallbackName = fallback?.model ? (fallbackModel?.name ?? fallback.model) : undefined;
   // On Default, the effort applies to whichever model the agent falls back to.
-  const effortModel = model ?? (settings.choice.model ? undefined : list?.find((m) => m.id === fallback?.model));
+  const effortModel = model ?? (settings.choice.model ? undefined : fallbackModel);
   const efforts = effortModel?.efforts ?? [];
   // What Default runs, as the agent's own settings say, like the desktop's label.
   const defaultEffort =
-    (settings.choice.model ? fallback?.efforts?.[settings.choice.model] : fallback?.effort) ||
-    effortModel?.defaultEffort;
+    (settings.choice.model
+      ? fallback?.efforts?.[model?.id ?? settings.choice.model]
+      : fallback?.effort) || effortModel?.defaultEffort;
   const pick = (id: string) =>
     onChange({
       ...settings,
@@ -152,7 +153,7 @@ export function ModelSheet({
               provider={provider}
               label={m.name}
               hint={m.group ? `${m.group} · ${m.description}` : m.description}
-              checked={m.id === settings.choice.model}
+              checked={m === model}
               onPress={() => pick(m.id)}
             />
           ))}
@@ -165,7 +166,7 @@ export function ModelSheet({
               provider={provider}
               label={m.name}
               hint={m.description}
-              checked={m.id === settings.choice.model}
+              checked={m === model}
               onPress={() => pick(m.id)}
             />
           ))}
@@ -184,10 +185,7 @@ export function ModelSheet({
           label="200k context window"
           hint="Off leaves Claude on its default window, 1M on most models."
           value={settings.contextWindow === "200k"}
-          onChange={(on) => {
-            const { contextWindow: _, ...rest } = settings;
-            onChange(on ? { ...rest, contextWindow: "200k" } : rest);
-          }}
+          onChange={(on) => onChange(onWindow(settings, on ? "200k" : "1m"))}
         />
       )}
     </Sheet>

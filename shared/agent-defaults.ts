@@ -79,17 +79,6 @@ export function claudeDefaultEffort(
   const effort = settingsEffort(defaults, listed?.resolved ?? model);
   return !listed || listed.efforts.includes(effort) ? effort : "";
 }
-/** The listed model Claude's Default runs. */
-function claudeDefaultModel(
-  defaults: ClaudeDefaults | undefined,
-  models: ClaudeModel[] | undefined,
-): ClaudeModel | undefined {
-  if (!defaults?.appliedModel) return undefined;
-  const id = withClaudeContextWindow(defaults.appliedModel, "200k");
-  return models?.find(
-    (m) => withClaudeContextWindow(m.resolved ?? m.id, "200k") === id,
-  );
-}
 
 /** What Codex runs where Relay leaves the model or effort on Default, as its config decides. */
 export type CodexDefaults = {
@@ -137,7 +126,7 @@ export function claudeAgentDefaults(
   models: ClaudeModel[],
 ): AgentDefaults {
   return {
-    model: claudeDefaultModel(defaults, models)?.id ?? "",
+    model: findClaudeModel(models, defaults.appliedModel)?.id ?? "",
     effort: claudeDefaultEffort(defaults, "", models),
     efforts: Object.fromEntries(
       models.map((m) => [m.id, claudeDefaultEffort(defaults, m.id, models)]),
