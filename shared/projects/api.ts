@@ -329,6 +329,11 @@ export interface ProjectWorktreeApi {
   revealProjectWorktree(chatId: string): Promise<void>;
   /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
   revealAgentWorktree(chatId: string, path: string): Promise<void>;
+  /** Selects a worktree owned by this chat, or the project folder with null. */
+  selectAgentWorktree(
+    chatId: string,
+    path: string | null,
+  ): Promise<ChatSummary>;
 }
 
 export interface ProjectFilesApi {

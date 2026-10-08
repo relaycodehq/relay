@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChatWorkspace, Project } from "../../../shared/projects";
-import { threadWorktree } from "../../../shared/projects";
+import type {
+  ChatSummary,
+  ChatWorkspace,
+  Project,
+  ProjectChat,
+} from "../../../shared/projects";
+import {
+  agentWorktreeKey,
+  agentWorktreeUnavailable,
+  threadWorktree,
+} from "../../../shared/projects";
 import { api } from "../../lib/api";
 import {
   loadDraftWorkspace,
@@ -12,12 +21,14 @@ import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { threadStorage } from "../../lib/thread-storage";
 import { workspaceId } from "../../../shared/workspaces";
+import { chatKey } from "../../lib/chat-events";
+import { useNavigationLock } from "../../lib/navigation-lock";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
-/** Where a thread works: picked before its first message, then the worktree it made, if any. */
+/** Where a thread works: its managed worktree, or an explicitly selected agent worktree. */
 export function useThreadWorktree({
-  handle: { chat, id, setError, listChanged },
+  handle: { chat, id, setError, listChanged, run },
   project,
   running,
   onDraftWorkspace,
@@ -28,6 +39,7 @@ export function useThreadWorktree({
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
 }) {
   const qc = useQueryClient();
+  const lock = useNavigationLock();
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
     chat ? "checkout" : loadDraftWorkspace(id, project),
@@ -58,11 +70,19 @@ export function useThreadWorktree({
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
   const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;
+  const unavailable = agentWorktreeUnavailable(chat);
+  const where = workspaceId(
+    project.id,
+    chat?.id,
+    chat?.activeAgentWorktree
+      ? agentWorktreeKey(chat.activeAgentWorktree)
+      : undefined,
+  );
   // Read the shell's poll so external branch switches and detached HEAD stay honest.
   const agentTree = useQuery({
-    queryKey: workingTreeKey(workspaceId(project.id, chat?.id)),
-    queryFn: () => api.projectWorkingTree(workspaceId(project.id, chat!.id)),
-    enabled: !!agentWorktree,
+    queryKey: workingTreeKey(where),
+    queryFn: () => api.projectWorkingTree(where),
+    enabled: !!agentWorktree && !unavailable,
   });
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<"remove" | "move">();
@@ -87,6 +107,28 @@ export function useThreadWorktree({
       void listChanged();
     }
   }
+  async function select(path: string | null) {
+    if (!chat || lock.blocked() || running) return;
+    await run(async () => {
+      const summary = await api.selectAgentWorktree(chat.id, path);
+      qc.setQueriesData<ChatSummary[]>(
+        { queryKey: ["project-chats", project.id] },
+        (list) => list?.map((c) => (c.id === chat.id ? summary : c)),
+      );
+      qc.setQueryData<ProjectChat>(
+        chatKey(chat.id),
+        (previous) =>
+          previous && {
+            ...previous,
+            ...summary,
+            activeAgentWorktree: summary.activeAgentWorktree,
+            agentWorktrees: summary.agentWorktrees,
+          },
+      );
+      void qc.invalidateQueries({ queryKey: workingTreeKey() });
+      void listChanged();
+    });
+  }
   return {
     workspace,
     setWorkspace,
@@ -101,6 +143,9 @@ export function useThreadWorktree({
         ? (agentTree.data.branch ?? undefined)
         : agentWorktree?.branch),
     inWorktree: !!live || !!agentWorktree,
+    unavailable,
+    select,
+    selectionDisabled: running || lock.locked,
     busy,
     /** The Remove or Move dialog, while one is open. */
     dialog,

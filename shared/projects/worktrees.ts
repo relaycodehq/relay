@@ -57,21 +57,42 @@ export interface AgentWorktree {
   at: number;
 }
 
+/** The user's chosen worktree; retained if it disappears so actions cannot fall back to the checkout. */
+export type ActiveAgentWorktree = Pick<
+  AgentWorktree,
+  "path" | "gitdir" | "branch"
+>;
+type ThreadWorkspace = {
+  worktree?: ChatWorktree;
+  agentWorktrees?: AgentWorktree[];
+  activeAgentWorktree?: ActiveAgentWorktree;
+};
+
+export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
+  worktree.gitdir ?? worktree.path;
+
+export function selectedAgentWorktree(chat: ThreadWorkspace | undefined) {
+  const selected = chat?.activeAgentWorktree;
+  return (
+    selected &&
+    chat?.agentWorktrees?.find((w) =>
+      selected.gitdir ? w.gitdir === selected.gitdir : w.path === selected.path,
+    )
+  );
+}
+
+export const agentWorktreeUnavailable = (chat: ThreadWorkspace | undefined) =>
+  !chat?.worktree &&
+  !!chat?.activeAgentWorktree &&
+  !selectedAgentWorktree(chat);
+
 /** The folder a thread's Git, files, terminal and agent follow. */
-export function threadWorktree(
-  chat:
-    | {
-        worktree?: ChatWorktree;
-        agentWorktrees?: AgentWorktree[];
-      }
-    | undefined,
-) {
+export function threadWorktree(chat: ThreadWorkspace | undefined) {
   if (chat?.worktree)
     return chat.worktree.path && !chat.worktree.removedAt
       ? chat.worktree
       : undefined;
-  // An agent can make several; the newest is the thread's working folder.
-  return chat?.agentWorktrees?.at(-1);
+  return selectedAgentWorktree(chat) ?? chat?.activeAgentWorktree;
 }
 export interface WorktreeStatus {
   branch?: string;

@@ -36,7 +36,13 @@ export interface ProjectChat extends ChatSummary {
    * sessions not yet told. `copied` when the worktree got a copy of the
    * folder's edits and the folder kept its own.
    */
-  movedIn?: { from: string; to: string; owed: string[]; copied?: true };
+  movedIn?: {
+    from: string;
+    to: string;
+    owed: string[];
+    copied?: true;
+    selected?: true;
+  };
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
   deepReview?: DeepReviewState;

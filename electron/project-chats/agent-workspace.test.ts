@@ -7,6 +7,7 @@ import type { ProjectChat } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { ThreadWorktrees } from "./worktrees";
 import { TurnFiles } from "./turn-files";
+import { threadControl } from "./control";
 
 let temp: string,
   root: string,
@@ -46,6 +47,11 @@ beforeEach(async () => {
     scope: { kind: "project" },
     created: 1,
     updated: 1,
+    activeAgentWorktree: {
+      path: original,
+      gitdir: "original",
+      branch: "feature",
+    },
     messages: [
       {
         id: "answer",
@@ -75,7 +81,13 @@ beforeEach(async () => {
     projects: { root: vi.fn(async () => root) },
     storage: { load: vi.fn(async () => chat), save },
     store: { get: () => ({ chats: [chat] }) },
-    active: { has: () => true },
+    active: {
+      has: vi.fn(() => true),
+      hasSide: vi.fn(() => false),
+      finished: vi.fn(async () => {}),
+    },
+    sessions: { pending: vi.fn(() => []), close: vi.fn() },
+    control: threadControl(),
   } as unknown as ChatCore;
   worktrees = new ThreadWorktrees(core, join(temp, "relay-worktrees"), {
     busy: () => false,
@@ -128,8 +140,113 @@ it("rejects another project's thread and a removed folder instead of running wor
   );
   await worktrees.refreshAgentWorktrees(chat);
   git("worktree", "remove", recovered);
-  await expect(worktrees.rootFor("project", "chat")).rejects.toThrow("removed");
+  await expect(worktrees.rootFor("project", "chat")).rejects.toThrow(
+    "unavailable",
+  );
   await expect(worktrees.terminalFolder("project", "chat")).rejects.toThrow(
-    "removed",
+    "unavailable",
+  );
+});
+
+it("keeps discovered worktrees inactive until selected, and keeps that selection when another is discovered", async () => {
+  delete chat.activeAgentWorktree;
+  vi.mocked(core.active.has).mockReturnValue(false);
+  expect(await worktrees.root(chat)).toBe(root);
+  expect(await worktrees.terminalFolder("project", "chat")).toBe(root);
+  expect(chat.agentWorktrees).toHaveLength(1);
+  expect(chat.activeAgentWorktree).toBeUndefined();
+  await worktrees.selectAgentWorktree("chat", recovered);
+  expect(chat.activeAgentWorktree).toMatchObject({
+    path: recovered,
+    gitdir: "original",
+  });
+  expect(await worktrees.rootFor("project", "chat", "original")).toBe(
+    recovered,
+  );
+  const newer = join(temp, "newer");
+  git("worktree", "add", "-q", "-b", "newer", newer);
+  chat.messages.push({
+    ...chat.messages[0],
+    id: "newer-answer",
+    created: 2,
+    trace: [
+      {
+        kind: "activity",
+        id: "newer-add",
+        activity: {
+          id: "newer-add",
+          kind: "command",
+          status: "complete",
+          label: `git worktree add -b newer ${newer}`,
+        },
+      },
+    ],
+  });
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(chat.agentWorktrees).toHaveLength(2);
+  expect(await worktrees.root(chat)).toBe(recovered);
+  await worktrees.selectAgentWorktree("chat", newer);
+  expect(await worktrees.root(chat)).toBe(newer);
+  await expect(
+    worktrees.rootFor("project", "chat", "original"),
+  ).rejects.toThrow("workspace changed");
+  await worktrees.selectAgentWorktree("chat", null);
+  expect(await worktrees.root(chat)).toBe(root);
+  expect(chat.agentWorktrees).toHaveLength(2);
+  await expect(worktrees.rootFor("project", "chat", "newer")).rejects.toThrow(
+    "workspace changed",
+  );
+  expect(core.sessions.close).toHaveBeenCalledTimes(3);
+  expect(chat.movedIn).toMatchObject({ from: newer, to: root, selected: true });
+});
+
+it("keeps the selected identity after a repaired move, and blocks on removal until another explicit choice", async () => {
+  vi.mocked(core.active.has).mockReturnValue(false);
+  await worktrees.refreshAgentWorktrees(chat);
+  const moved = join(temp, "moved-again");
+  await rename(recovered, moved);
+  git("worktree", "repair", moved);
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(chat.activeAgentWorktree).toMatchObject({
+    path: moved,
+    gitdir: "original",
+  });
+  expect(await worktrees.rootFor("project", "chat", "original")).toBe(moved);
+  git("worktree", "remove", moved);
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(chat.agentWorktrees).toBeUndefined();
+  expect(chat.activeAgentWorktree?.path).toBe(moved);
+  await expect(worktrees.root(chat)).rejects.toThrow("unavailable");
+  await expect(
+    worktrees.rootFor("project", "chat", "original"),
+  ).rejects.toThrow("unavailable");
+  await expect(worktrees.terminalFolder("project", "chat")).rejects.toThrow(
+    "unavailable",
+  );
+  await worktrees.selectAgentWorktree("chat", null);
+  expect(await worktrees.root(chat)).toBe(root);
+});
+
+it("rejects unowned paths, running or background turns, and managed worktrees", async () => {
+  await expect(
+    worktrees.selectAgentWorktree("chat", recovered),
+  ).rejects.toThrow("Wait for the answer");
+  vi.mocked(core.active.has).mockReturnValue(false);
+  vi.mocked(core.active.hasSide).mockReturnValue(true);
+  await expect(
+    worktrees.selectAgentWorktree("chat", recovered),
+  ).rejects.toThrow("Wait for the answer");
+  vi.mocked(core.active.hasSide).mockReturnValue(false);
+  chat.heldWakeups = [{ id: "wake", prompt: "continue", at: 123 }];
+  await expect(
+    worktrees.selectAgentWorktree("chat", recovered),
+  ).rejects.toThrow("background work");
+  delete chat.heldWakeups;
+  await expect(
+    worktrees.selectAgentWorktree("chat", join(temp, "unrelated")),
+  ).rejects.toThrow("didn't make");
+  chat.worktree = { path: recovered };
+  await expect(worktrees.selectAgentWorktree("chat", null)).rejects.toThrow(
+    "Only project-folder threads",
   );
 });

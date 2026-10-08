@@ -114,6 +114,7 @@ const methods = [
   "moveProjectChatToWorktree",
   "revealProjectWorktree",
   "revealAgentWorktree",
+  "selectAgentWorktree",
   "projectChat",
   "projectChatImage",
   "projectChatQueuedImages",

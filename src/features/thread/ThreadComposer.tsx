@@ -220,7 +220,11 @@ export function ThreadComposer({
   const { selection, workItem, codeRefs } = attachments;
   // A side thread doesn't wait for the main answer, nor queue behind it.
   const waiting = root?.side ? false : running || reviewing || planning;
-  const held = busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt;
+  const held =
+    busy ||
+    worktree.unavailable ||
+    !!chat?.sentTo ||
+    !!chat?.cameFrom?.returnedAt;
   // Read on ↑ only, so streaming answers don't rebuild it.
   const shownNow = useRef(shown);
   shownNow.current = shown;

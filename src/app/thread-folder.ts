@@ -4,7 +4,10 @@ import type {
   ChatSummary,
   ChatWorkspace,
 } from "../../shared/projects";
-import { threadWorktree } from "../../shared/projects";
+import {
+  agentWorktreeUnavailable,
+  threadWorktree,
+} from "../../shared/projects";
 
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
@@ -37,6 +40,8 @@ export function terminalBlocked(
   scope: ChatScope,
   draftWorkspace: ChatWorkspace,
 ) {
+  if (agentWorktreeUnavailable(chat))
+    return "The selected worktree is unavailable. Choose another workspace.";
   return chat?.worktree
     ? chat.worktree.removedAt
       ? "This thread's worktree was removed. Its next message makes a new one"

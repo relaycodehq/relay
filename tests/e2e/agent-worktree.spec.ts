@@ -16,8 +16,9 @@ import type { ProjectChat } from "../../shared/projects";
 import { screenshot } from "../fixtures/screenshot";
 import { openInFileTree } from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { workspaceId } from "../../shared/workspaces";
 
-test("recovers an agent's repaired worktree after restart and routes branch, Git, files and terminal there", async () => {
+test("explicitly selects a recovered worktree, persists the choice, and never switches to the newest or a removed folder's replacement", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-agent-worktree-")),
   );
@@ -27,6 +28,7 @@ test("recovers an agent's repaired worktree after restart and routes branch, Git
     capture = join(root, "capture.jsonl");
   const original = join(root, "old-temp-folder"),
     worktree = join(root, "local-urls");
+  const newer = join(root, "newer");
   const gitIn = (path: string, ...args: string[]) =>
     execFileSync("git", ["-C", path, ...args], { encoding: "utf8" }).trim();
   await mkdir(repo);
@@ -46,6 +48,8 @@ test("recovers an agent's repaired worktree after restart and routes branch, Git
   await rename(original, worktree);
   gitIn(repo, "worktree", "repair", worktree);
   await writeFile(join(worktree, "feature.txt"), "Only in the worktree\n");
+  gitIn(repo, "worktree", "add", "-q", "-b", "newer", newer);
+  await writeFile(join(newer, "newer.txt"), "Newer worktree\n");
   await writeFile(join(repo, "main-only.txt"), "Another thread's work\n");
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -109,6 +113,24 @@ test("recovers an agent's repaired worktree after restart and routes branch, Git
         ],
       },
     ];
+    saved.messages.push({
+      ...saved.messages[0],
+      id: randomUUID(),
+      body: "Also made another worktree.",
+      created: saved.messages[0].created + 1,
+      trace: [
+        {
+          kind: "activity",
+          id: "create-newer",
+          activity: {
+            id: "create-newer",
+            kind: "command",
+            status: "complete",
+            label: `git worktree add -b newer ${newer}`,
+          },
+        },
+      ],
+    });
     await writeFile(file, JSON.stringify(saved));
     app = await launch();
     page = await app.firstWindow();
@@ -116,15 +138,43 @@ test("recovers an agent's repaired worktree after restart and routes branch, Git
       .getByRole("button", { name: /Recovered worktree/ })
       .first()
       .click();
-    const footer = page.locator(
+    let footer = page.locator(
       ".composer-branch-trigger.workspace-trigger.static",
     );
+    await expect(page.locator(".agent-worktree-trigger")).toHaveText(
+      "Project folder",
+    );
+    await expect(page.getByRole("button", { name: /^main$/ })).toBeVisible();
+    await page.locator(".agent-worktree-trigger").click();
+    await expect(
+      page.getByRole("menuitemradio", { name: "Project folder", exact: true }),
+    ).toHaveAttribute("aria-checked", "true");
+    await screenshot(page, { path: "test-results/agent-worktree-picker.png" });
+    await page.getByRole("menuitemradio", { name: /^local-urls/ }).click();
     await expect(page.locator(".agent-worktree-trigger")).toHaveText(
       "local-urls",
     );
     await expect(footer).toHaveText("local-urls");
     await expect(page.getByRole("button", { name: /^main$/ })).toHaveCount(0);
-    const where = `${chat.projectId}/${chat.id}`;
+    await app.close();
+    app = await launch();
+    page = await app.firstWindow();
+    footer = page.locator(".composer-branch-trigger.workspace-trigger.static");
+    await expect(page.locator(".agent-worktree-trigger")).toHaveText(
+      "local-urls",
+    );
+    await page.locator(".agent-worktree-trigger").click();
+    await expect(
+      page.getByRole("menuitemradio", { name: /^local-urls/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByRole("menuitemradio", { name: /^newer/ }),
+    ).toHaveAttribute("aria-checked", "false");
+    await screenshot(page, {
+      path: "test-results/agent-worktree-selected.png",
+    });
+    await page.keyboard.press("Escape");
+    const where = workspaceId(chat.projectId, chat.id, "old-temp-folder");
     expect(
       await page.evaluate(
         (where) => window.relay.projectWorkingTree(where),
@@ -188,7 +238,49 @@ test("recovers an agent's repaired worktree after restart and routes branch, Git
       path: "test-results/agent-worktree-detached.png",
     });
     gitIn(worktree, "checkout", "-q", "local-urls");
+    await page.locator(".agent-worktree-trigger").click();
+    await page.getByRole("menuitemradio", { name: /^newer/ }).click();
+    await expect(
+      page.locator(".composer-branch-trigger.workspace-trigger.static"),
+    ).toHaveText("newer");
+    await expect(changes).toContainText("newer.txt");
+    await expect(page.locator(".project-history")).not.toContainText(
+      "Worktree change",
+    );
+    expect(
+      await page.evaluate(async (where) => {
+        try {
+          await window.relay.projectWorkingTree(where);
+          return "accepted";
+        } catch (e) {
+          return String(e);
+        }
+      }, where),
+    ).toContain("workspace changed");
+    await page.locator(".agent-worktree-trigger").click();
+    await page.getByRole("menuitemradio", { name: /^local-urls/ }).click();
+    await expect(
+      page.locator(".composer-branch-trigger.workspace-trigger.static"),
+    ).toHaveText("local-urls");
     gitIn(repo, "worktree", "remove", worktree);
+    await expect(page.locator(".agent-worktree-trigger")).toHaveText(
+      "Worktree unavailable",
+    );
+    await expect(page.getByRole("button", { name: /^main$/ })).toHaveCount(0);
+    await page.getByLabel("Message project").fill("must not edit main");
+    await expect(
+      page.getByRole("button", { name: "Send message", exact: true }),
+    ).toBeDisabled();
+    await page.locator(".agent-worktree-trigger").click();
+    await expect(
+      page.getByRole("menuitemradio", { name: /local-urls \(unavailable\)/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    await screenshot(page, {
+      path: "test-results/agent-worktree-unavailable.png",
+    });
+    await page
+      .getByRole("menuitemradio", { name: "Project folder", exact: true })
+      .click();
     await expect(
       page.getByRole("button", { name: /Project folder/ }),
     ).toBeVisible();

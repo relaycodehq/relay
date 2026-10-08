@@ -279,6 +279,10 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, z.string().max(4096)],
       (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
     ),
+    selectAgentWorktree: takes(
+      [idSchema, z.string().min(1).max(4096).nullable()],
+      (chatId, path) => projectChats.selectAgentWorktree(chatId, path),
+    ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],
       async (id, config) => {
