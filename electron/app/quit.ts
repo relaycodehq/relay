@@ -7,9 +7,13 @@ interface QuitSteps {
   started(): boolean;
   /** Claude's background work that quitting would end. */
   runningTasks(): { description: string }[];
-  /** Runs on every attempt that gets past the window, before the one shutdown. */
+  /** Stops auxiliary work once the quit has been committed. */
   stopping(): void;
-  /** Stops services and saves everything; a rejection keeps Relay open. */
+  /** Saves before services or hosts are torn down; a rejection keeps Relay open. */
+  prepare(): Promise<unknown>;
+  /** Resumes prepared services when the user keeps Relay open. */
+  cancelled(): void | Promise<void>;
+  /** Stops services once saving succeeded, or the user chose to discard. */
   shutDown(): Promise<unknown>;
   /** The last step, once nothing is left to save. */
   release(): void;
@@ -28,8 +32,57 @@ export class Quit {
   detaching = false;
   private flushing = false;
   private asking = false;
+  private cancellations = new Set<() => void>();
+  private requested = false;
+  private cancelling = false;
 
   constructor(private steps: QuitSteps) {}
+
+  /** A restart still lets the window and failed saves cancel the quit. */
+  restart(cancelled?: () => void) {
+    this.request(true, cancelled);
+  }
+
+  /** Restore ends the live sessions instead of carrying them into older data. */
+  stop(cancelled?: () => void) {
+    this.request(false, cancelled);
+  }
+
+  private request(detach: boolean, cancelled?: () => void) {
+    if (this.cancelling) {
+      cancelled?.();
+      return;
+    }
+    // A quit already preparing must keep its original teardown mode.
+    if (
+      (this.requested || this.flushing || this.asking) &&
+      this.detaching !== detach
+    ) {
+      cancelled?.();
+      return;
+    }
+    if (cancelled) this.cancellations.add(cancelled);
+    if (this.requested) return;
+    this.requested = true;
+    this.detaching = detach;
+    app.quit();
+  }
+
+  async cancel() {
+    if (this.cancelling) return;
+    this.cancelling = true;
+    this.detaching = false;
+    this.confirmed = false;
+    this.requested = false;
+    const cancelled = [...this.cancellations];
+    this.cancellations.clear();
+    try {
+      await this.steps.cancelled();
+    } finally {
+      this.cancelling = false;
+      for (const callback of cancelled) callback();
+    }
+  }
 
   listen() {
     app.on("window-all-closed", () => {
@@ -46,10 +99,7 @@ export class Quit {
     // Electron turns these signals into a plain quit of its own; a handler
     // added once it's ready runs instead of it.
     for (const signal of ["SIGTERM", "SIGINT"] as const)
-      process.on(signal, () => {
-        this.detaching = true;
-        app.quit();
-      });
+      process.on(signal, () => this.restart());
   }
 
   private beforeQuit(event: Electron.Event) {
@@ -59,6 +109,7 @@ export class Quit {
       return;
     }
     event.preventDefault();
+    if (this.cancelling) return;
     // Quitting ends Claude's sessions, and the background work they run.
     const tasks = this.confirmed || this.detaching ? [] : steps.runningTasks();
     if (tasks.length) {
@@ -86,23 +137,18 @@ export class Quit {
             this.confirmed = true;
             return app.quit();
           }
+          this.cancel();
         });
       return;
     }
     // Its unsaved-edits prompt can still cancel the quit, so the window closes
     // before anything shuts down; closing it asks to quit again.
     if (steps.window.closeToQuit()) return;
-    steps.stopping();
     if (this.flushing) return;
     this.flushing = true;
-    void steps
-      .shutDown()
-      .then(() => {
-        this.ready = true;
-        app.quit();
-      })
-      .catch(async () => {
-        this.flushing = false;
+    void steps.prepare().then(
+      () => this.finish(),
+      async () => {
         const choice = await dialog.showMessageBox({
           type: "error",
           title: "Review data could not be saved",
@@ -113,10 +159,28 @@ export class Quit {
           defaultId: 0,
           cancelId: 0,
         });
+        this.flushing = false;
         if (choice.response === 1) {
-          this.ready = true;
-          app.quit();
+          await this.finish();
+        } else {
+          this.cancel();
+          steps.window.open();
         }
-      });
+      },
+    );
+  }
+
+  private async finish() {
+    this.flushing = true;
+    this.steps.stopping();
+    // Preparation is the only cancellable phase. Once teardown starts,
+    // reporting Keep open would leave a partially disposed app behind.
+    await this.steps
+      .shutDown()
+      .catch((error) =>
+        console.warn("Could not finish shutting down Relay:", error),
+      );
+    this.ready = true;
+    app.quit();
   }
 }

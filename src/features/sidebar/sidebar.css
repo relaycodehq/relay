@@ -1296,6 +1296,18 @@
   background: none;
   font-variant-numeric: tabular-nums;
 }
+/* A worktree's name, in dev: the one footer label that gives way. */
+.sb .sb-update.sb-dev-switch {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.sb-dev-switch > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-dev-switch > svg {
+  flex: none;
+}
 .sb .sb-update:hover:not(:disabled) {
   background: var(--hover);
 }

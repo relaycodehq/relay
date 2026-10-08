@@ -16,7 +16,7 @@ export class DevBuild {
 
   constructor(
     private changed: (stale: string[]) => void,
-    private hooks: { beforeQuit: () => void },
+    private hooks: { quit: (cancelled: () => void) => void },
   ) {}
 
   start() {
@@ -35,12 +35,12 @@ export class DevBuild {
   /** Quits like a restart for an update: the agents' sessions carry on. */
   restart() {
     if (!this.file) return;
-    this.hooks.beforeQuit();
-    app.once("will-quit", (event) => {
+    const exit = (event: Electron.Event) => {
       event.preventDefault();
       app.exit(RESTART);
-    });
-    app.quit();
+    };
+    app.once("will-quit", exit);
+    this.hooks.quit(() => app.removeListener("will-quit", exit));
   }
 }
 

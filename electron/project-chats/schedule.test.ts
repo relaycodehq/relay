@@ -21,7 +21,11 @@ it("sends a message held for later that fell due while the computer slept once i
   } as unknown as ProjectChat;
   const core = {
     store: { get: () => ({ chats: [chat] }) },
-    storage: { load: async () => chat, save: async () => {} },
+    storage: {
+      load: async () => chat,
+      cached: () => chat,
+      save: async () => {},
+    },
     control: threadControl(),
     closing: () => false,
   } as unknown as ChatCore;
@@ -34,4 +38,26 @@ it("sends a message held for later that fell due while the computer slept once i
   schedule.armAll();
   await vi.advanceTimersByTimeAsync(0);
   expect(send).toHaveBeenCalledWith("chat", { id: "m", body: "Check" });
+});
+
+it("does not arm cancelled wake-up copies from a stale sidebar summary", async () => {
+  const cached = { id: "chat", messages: [] } as unknown as ProjectChat;
+  const stale = {
+    ...cached,
+    heldWakeups: [{ id: "copied", prompt: "Compare", at: Date.now() + 15_000 }],
+  };
+  const core = {
+    store: { get: () => ({ chats: [stale] }) },
+    storage: {
+      cached: () => cached,
+      load: async () => cached,
+      save: async () => {},
+    },
+    closing: () => false,
+  } as unknown as ChatCore;
+  const send = vi.fn(async () => {});
+  const schedule = new ChatSchedule(core, { send });
+  schedule.armAll();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(send).not.toHaveBeenCalled();
 });

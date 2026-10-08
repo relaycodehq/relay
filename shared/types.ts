@@ -204,6 +204,20 @@ export interface LocalFolder {
   remoteMatches: boolean;
 }
 export type SidebarView = "threads" | "activity";
+
+/** A checkout of Relay's own repository that `npm run dev` can run Relay from. */
+export interface DevCheckout {
+  path: string;
+  branch?: string;
+  main: boolean;
+  /** Why Relay can't run from it, when it can't. */
+  problem?: string;
+}
+export interface DevSwitchState {
+  /** The checkout this Relay runs from. */
+  running: string;
+  checkouts: DevCheckout[];
+}
 export interface Bootstrap {
   account: Account | null;
   platform: string;
@@ -462,6 +476,10 @@ export interface Api
   /** Quits so `npm run dev` writes the new bundles and starts Relay again. */
   restartDevBuild(): Promise<void>;
   onDevBuild(callback: (stale: string[]) => void): () => void;
+  /** Under the `npm run dev` supervisor, the checkouts Relay can run from; null otherwise. */
+  devSwitchState(): Promise<DevSwitchState | null>;
+  /** Stops this Relay and starts the one in the checkout at `path`, on the same data. */
+  devSwitch(path: string): Promise<void>;
   dictationState(): Promise<DictationModelState>;
   downloadDictationModel(): Promise<DictationModelState>;
   cancelDictationDownload(): Promise<void>;

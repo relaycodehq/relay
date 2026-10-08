@@ -44,6 +44,7 @@ export class AppWindow {
   constructor(
     private hooks: {
       closed(): void;
+      quitCancelled(): void;
       rendererGone(details: Electron.RenderProcessGoneDetails): void;
     },
   ) {}
@@ -203,7 +204,10 @@ export class AppWindow {
         cancelId: 0,
       });
       if (choice === 1) event.preventDefault();
-      else this.closingToQuit = false;
+      else {
+        this.closingToQuit = false;
+        this.hooks.quitCancelled();
+      }
     });
     win.webContents.on("render-process-gone", (_event, details) =>
       this.hooks.rendererGone(details),

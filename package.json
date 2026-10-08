@@ -17,7 +17,8 @@
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "node scripts/dev-supervisor.mjs",
+    "dev:switch": "node scripts/dev-switch.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "typecheck": "node scripts/typecheck.mjs",
     "build": "npm run typecheck && vite build && node scripts/build-electron.mjs",

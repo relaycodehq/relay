@@ -230,6 +230,17 @@ export class ChatStorage {
     return { writes: this.writes.pending(), loads: [...this.loading.values()] };
   }
 
+  /** Retry cached data too: a failed write may already have left the queue. */
+  async flush() {
+    await Promise.all(this.busy().loads);
+    const saved = await Promise.allSettled(
+      [...this.cache.values()].map((chat) => this.save(chat)),
+    );
+    const failed = saved.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+    await Promise.all(this.busy().writes);
+  }
+
   onSummaries(listener: (projectId: string) => void) {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);

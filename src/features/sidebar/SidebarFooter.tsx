@@ -1,6 +1,7 @@
 import { ChartColumn, Settings2 } from "lucide-react";
 import { AgentUpdateButton } from "../updates/AgentUpdates";
 import { DevRestartButton } from "../updates/DevRestartButton";
+import { DevSwitchMenu } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
 import type { SettingsCategory } from "../settings/Settings";
 import { IconButton } from "../../ui/ui";
@@ -44,6 +45,7 @@ export function SidebarFooter({
           </span>
         </button>
       )}
+      <DevSwitchMenu />
       <DevRestartButton />
       <UpdateButton />
       <CheckUpdatesButton />

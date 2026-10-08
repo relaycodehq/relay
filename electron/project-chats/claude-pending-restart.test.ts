@@ -179,3 +179,67 @@ it("won't archive a thread with work still to run in it", async () => {
     archivedAt: expect.any(Number),
   });
 });
+
+it("rolls back copied wake-ups and stopped work when an ordinary quit is cancelled", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  leave(chat.id, [
+    task,
+    loop,
+    {
+      kind: "wakeup",
+      id: "later",
+      prompt: "Compare",
+      recurring: false,
+      at: Date.now() + 60_000,
+    },
+  ]);
+  const saved = await (
+    chats as unknown as {
+      storage: {
+        load(id: string): Promise<import("../../shared/projects").ProjectChat>;
+      };
+    }
+  ).storage.load(chat.id);
+  saved.heldWakeups = [
+    { id: "existing", prompt: "Earlier", at: Date.now() + 120_000 },
+  ];
+  const original = structuredClone(saved.heldWakeups);
+  await chats.prepareToQuit();
+  expect(saved.heldWakeups).toHaveLength(2);
+  await chats.resumeAfterCancelledQuit();
+  expect(saved.heldWakeups).toEqual(original);
+  expect(saved.stopped).toBeUndefined();
+  expect(
+    chats.list(projectId)[0].pending?.filter((p) => p.id === "later"),
+  ).toHaveLength(1);
+  const internals = chats as unknown as {
+    schedule: { timers: Map<string, unknown> };
+  };
+  expect(
+    [...internals.schedule.timers.keys()].filter((k) => k.includes("later")),
+  ).toHaveLength(0);
+  await chats.prepareToQuit();
+  expect(saved.heldWakeups).toHaveLength(2);
+  await chats.resumeAfterCancelledQuit();
+  expect(saved.heldWakeups).toEqual(original);
+});
+
+it("rolls back pending copies when saving fails during quit preparation", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  leave(chat.id, [
+    {
+      kind: "wakeup",
+      id: "later",
+      prompt: "Compare",
+      recurring: false,
+      at: Date.now() + 60_000,
+    },
+  ]);
+  const fail = vi
+    .spyOn(store, "flush")
+    .mockRejectedValueOnce(Error("disk full"));
+  await expect(chats.prepareToQuit()).rejects.toThrow("disk full");
+  expect((await chats.get(chat.id)).heldWakeups).toBeUndefined();
+  expect(chats.list(projectId)[0].pending).toHaveLength(1);
+  fail.mockRestore();
+});
