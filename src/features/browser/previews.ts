@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { PreviewState } from "../../../shared/preview";
+import type { PickedElement, PreviewState } from "../../../shared/preview";
 import { api } from "../../lib/api";
 
 /** The previews' last pushed states, by thread key. */
@@ -35,4 +35,23 @@ export async function openPreview(projectId: string, chatId: string | null) {
 export function closePreview(key: string) {
   states.delete(key);
   void api.closePreview(key);
+}
+
+/** What a picked element puts in the composer: where it is, and its picture. */
+export function pickedContext(picked: PickedElement) {
+  const lines = [
+    `This element in the preview at ${picked.url}:`,
+    "```html",
+    picked.tag,
+    "```",
+  ];
+  if (picked.selector) lines.push(`Selector: \`${picked.selector}\``);
+  if (picked.text) lines.push(`Its text: "${picked.text}"`);
+  const bytes = Uint8Array.from(atob(picked.image.split(",")[1] ?? ""), (c) =>
+    c.charCodeAt(0),
+  );
+  return {
+    text: lines.join("\n"),
+    images: [new File([bytes], "element.png", { type: "image/png" })],
+  };
 }

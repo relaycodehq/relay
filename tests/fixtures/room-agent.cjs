@@ -78,7 +78,15 @@ async function callRelayTool(tool, input) {
     }),
   });
   const { result, error } = await response.json();
-  return error ? `Error: ${error.message}` : result.content[0].text;
+  if (error) return `Error: ${error.message}`;
+  // A picture says what it is: a PNG's size sits in its header.
+  return result.content
+    .map((part) => {
+      if (part.type === "text") return part.text;
+      const png = Buffer.from(part.data, "base64");
+      return `[${part.mimeType} ${png.readUInt32BE(16)}x${png.readUInt32BE(20)}]`;
+    })
+    .join("\n");
 }
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,

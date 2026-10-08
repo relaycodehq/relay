@@ -17,6 +17,7 @@ import type {
   StartedBy,
 } from "../../shared/projects";
 import { localTime, StartedThreads, type AgentProjects } from ".";
+import { resultText, type ToolResult } from "../relay-mcp";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -135,8 +136,7 @@ const call = (
   name: string,
   args: unknown,
 ) => threads.handle(chatId, name, args, new AbortController().signal);
-const parse = (result: { content: { text: string }[] }) =>
-  JSON.parse(result.content[0]!.text);
+const parse = (result: ToolResult) => JSON.parse(resultText(result));
 
 test("starts threads on the lead's agent and settings, each saying who sent it", async () => {
   const { lead, sent, chats, api } = fakeChats();
@@ -282,7 +282,7 @@ test("no more than six of a lead's threads work at once", async () => {
     threads: [{ prompt: "Six" }, { prompt: "Seven" }],
   });
   expect(refused).toMatchObject({ isError: true });
-  expect(refused.content[0]!.text).toMatch(/5 of your threads are working/);
+  expect(resultText(refused)).toMatch(/5 of your threads are working/);
 });
 
 test("waiting ends once every thread is done or needs the user", async () => {
@@ -663,7 +663,7 @@ test("refused folders never reach the user", async () => {
   const refusal = async (folder: string) => {
     const result = await call(threads, lead.id, "add_project", { folder });
     expect(result).toMatchObject({ isError: true });
-    return result.content[0]!.text;
+    return resultText(result);
   };
   expect(await refusal(home)).toMatch(/home folder/);
   expect(await refusal("/")).toMatch(/whole disk/);
@@ -809,7 +809,7 @@ test("a folder swapped for a link while the card waits isn't added", async () =>
   );
   const result = await call(threads, lead.id, "add_project", { folder });
   expect(result).toMatchObject({ isError: true });
-  expect(result.content[0]!.text).toBe(
+  expect(resultText(result)).toBe(
     `${folder} changed while the user was asked; nothing was added.`,
   );
   expect(added).toBe(false);
@@ -833,7 +833,7 @@ test("a folder that became a project's parent while the card waits isn't added",
     { projects },
   );
   const result = await call(threads, lead.id, "add_project", { folder });
-  expect(result.content[0]!.text).toMatch(/holds the project “site”/);
+  expect(resultText(result)).toMatch(/holds the project “site”/);
   expect(list.map((p) => p.path)).not.toContain(folder);
 });
 

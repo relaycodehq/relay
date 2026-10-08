@@ -16,6 +16,7 @@ export {
   startedToolList,
   STARTED_PATH,
   toolText,
+  resultText,
   STARTED_LIMIT,
   startedTools,
   WAIT_LIMIT_SECONDS,

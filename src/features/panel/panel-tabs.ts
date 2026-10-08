@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { api } from "../../lib/api";
 import { legacyTabs } from "../../lib/workspace-panes";
 import { newTerminalSlot } from "../terminal/terminal-dock";
 
@@ -89,6 +90,31 @@ function recall(thread: string): Omit<PanelState, "thread"> | undefined {
   return { tabs, front: tabs[tabs.length - 1]!.key };
 }
 
+/** A Browser tab for the thread, in front only when nothing else is. */
+function withBrowser(s: Omit<PanelState, "thread">) {
+  const had = s.tabs.find((t) => t.surface === "browser");
+  const tab = had ?? tabFor("browser");
+  return {
+    tabs: had ? s.tabs : [...s.tabs, tab],
+    front: s.front ?? tab.key,
+  };
+}
+
+/** The mounted panels, by thread, so a reveal reaches the one on screen. */
+const mounted = new Map<string, () => void>();
+let revealing = false;
+/** An agent opened its thread's preview: the thread gets a Browser tab. */
+function followReveals() {
+  if (revealing) return;
+  revealing = true;
+  api.onPreviewReveal(({ chatId }) => {
+    const live = mounted.get(chatId);
+    if (live) return live();
+    const saved = recall(chatId) ?? { tabs: [], front: null };
+    remember({ thread: chatId, ...withBrowser(saved) });
+  });
+}
+
 export type PanelTabs = ReturnType<typeof usePanelTabs>;
 
 /**
@@ -108,6 +134,14 @@ export function usePanelTabs(thread: string) {
     [thread],
   );
   useEffect(() => remember(state), [state]);
+  useEffect(() => {
+    followReveals();
+    const reveal = () => setState((s) => ({ ...s, ...withBrowser(s) }));
+    mounted.set(thread, reveal);
+    return () => {
+      if (mounted.get(thread) === reveal) mounted.delete(thread);
+    };
+  }, [thread]);
   /** Brings the surface's tab to the front, opening it; a terminal always opens a new one. */
   const show = useCallback(
     (surface: Surface) =>

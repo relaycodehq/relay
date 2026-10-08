@@ -62,6 +62,8 @@ export interface ComposerHandle {
   /** The agent picked here and its settings; none while it only messages people. */
   agentSettings: () => ResumeSettings | undefined;
   focus: () => void;
+  /** Adds screenshots at the end of the draft, as pills after its words. */
+  attachImages: (files: File[]) => void;
   /** Sends the draft, exactly as the send button does. */
   submit: () => void;
 }
@@ -183,17 +185,23 @@ export function ProjectComposer({
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
   );
+  const addFiles = useRef(draft.addFiles);
   useImperativeHandle(
     ref,
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
       agentSettings: () => agentSettings.current(),
       focus: () => input.current?.focus(),
+      attachImages(files) {
+        promptInput.current?.focusEnd();
+        addFiles.current(files);
+      },
       submit: () => form.current?.requestSubmit(),
     }),
     [],
   );
   agentSettings.current = runs.resumeSettings;
+  addFiles.current = draft.addFiles;
   const filePick = useRef<HTMLInputElement>(null);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const target = sendTarget(draft.text, composer, ultraplanOffered);

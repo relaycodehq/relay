@@ -27,6 +27,8 @@ export interface PreviewState {
   error?: string;
   /** Shown in a window of its own instead of the panel. */
   poppedOut: boolean;
+  /** Waiting for the user to click an element on the page. */
+  picking: boolean;
   server: DevServerState;
   /** The last frame before something covered it, as a JPEG data URL; the panel shows it meanwhile. */
   snapshot?: string;
@@ -48,7 +50,27 @@ export type PreviewAction =
   | "stop"
   | "devtools"
   | "popOut"
-  | "bringBack";
+  | "bringBack"
+  | "stopPicking";
+
+/** An element the user picked on the page, to ask the agent about. */
+export interface PickedElement {
+  url: string;
+  /** A CSS selector that matches only it, when one was found. */
+  selector: string;
+  /** Its opening tag, cut short. */
+  tag: string;
+  /** The start of its text. */
+  text: string;
+  /** It and a little around it, as a PNG data URL. */
+  image: string;
+}
+
+/** Tells the window an agent opened a thread's preview. */
+export interface PreviewReveal {
+  projectId: string;
+  chatId: string;
+}
 
 export interface ConsoleEntry {
   level: "error" | "warning";
@@ -67,9 +89,12 @@ export interface PreviewApi {
   placePreview(key: string, bounds: PreviewBounds | null): Promise<void>;
   navigatePreview(key: string, url: string): Promise<void>;
   previewAction(key: string, action: PreviewAction): Promise<void>;
+  /** Waits for the user to click an element on the page; null when they don't. */
+  pickPreviewElement(key: string): Promise<PickedElement | null>;
   /** Ends the preview: its tab was closed. Its cookies stay. */
   closePreview(key: string): Promise<void>;
   onPreview(callback: (state: PreviewState) => void): () => void;
+  onPreviewReveal(callback: (reveal: PreviewReveal) => void): () => void;
 }
 
 /** What someone typed in the address bar, as a URL the preview may load; null when it can't. */

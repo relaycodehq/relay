@@ -515,6 +515,7 @@ app
         chats,
         agentHosts,
         agentProjects(projects, () => login.client, app.getPath("userData")),
+        previews,
       );
     chats.armWakeups();
     void chats

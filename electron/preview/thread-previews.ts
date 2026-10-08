@@ -2,6 +2,7 @@ import {
   BrowserWindow,
   session,
   WebContentsView,
+  type NativeImage,
   type NavigationEntry,
   type Session,
 } from "electron";
@@ -9,12 +10,14 @@ import type {
   ConsoleEntry,
   DevServerState,
   PreviewAction,
+  PickedElement,
   PreviewBounds,
   PreviewState,
 } from "../../shared/preview";
 import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
+import { pickElement } from "./element-pick";
 
 /** Where a thread's preview runs and what it loads. */
 export interface PreviewTarget {
@@ -40,6 +43,10 @@ interface Preview {
   /** A parked history is loading back in; the dev server's home must not replace it. */
   restoring?: boolean;
   shown: boolean;
+  /** Its view was in a window once, so it can be captured off screen. */
+  drawn?: boolean;
+  /** Ends an element pick under way. */
+  stopPick?: () => void;
   /** When it last left the panel. */
   hiddenAt: number;
   popOut?: BrowserWindow;
@@ -52,6 +59,9 @@ interface Preview {
 }
 
 const KEPT_CONSOLE = 200;
+/** What an agent's screenshot of a preview never shown is taken at. */
+const UNSHOWN_SIZE = { width: 1280, height: 800 };
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** A preview out of sight this long gives its page's memory back. */
 const UNLOAD_MS =
   (process.env.RELAY_TEST_DATA &&
@@ -173,6 +183,7 @@ export class ThreadPreviews {
     });
     view.setBackgroundColor("#ffffff");
     preview.view = view;
+    preview.drawn = false;
     const wc = view.webContents;
     // An unloaded page's last events mustn't speak for the next one.
     const current = () => preview.view?.webContents === wc;
@@ -208,6 +219,8 @@ export class ThreadPreviews {
     });
     wc.on("console-message", ({ level, message, sourceId, lineNumber }) => {
       if (level !== "error" && level !== "warning") return;
+      // Electron's own warnings (an unpackaged build's CSP nag) aren't the page's.
+      if (sourceId.startsWith("node:electron/")) return;
       preview.console.push({
         level,
         message,
@@ -264,6 +277,12 @@ export class ThreadPreviews {
     }
   }
 
+  /** The dev server's page, when the project names its port. */
+  home(key: string) {
+    const dev = this.previews.get(key)?.target.dev;
+    return dev && `http://localhost:${dev.port}/`;
+  }
+
   private loadDefault(preview: Preview) {
     const dev = preview.target.dev;
     const wc = preview.view?.webContents;
@@ -297,7 +316,7 @@ export class ThreadPreviews {
     for (const other of this.previews.values())
       if (other !== preview) this.hide(other);
     win.contentView.addChildView(view);
-    preview.shown = true;
+    preview.shown = preview.drawn = true;
     if (preview.snapshot) {
       preview.snapshot = undefined;
       this.emit(preview);
@@ -326,6 +345,7 @@ export class ThreadPreviews {
     if (!preview.shown) return;
     preview.shown = false;
     preview.hiddenAt = this.now();
+    preview.stopPick?.();
     this.servers.watch(preview.target.folder, false);
     const win = this.window.win;
     if (win && !win.isDestroyed() && preview.view)
@@ -375,6 +395,9 @@ export class ThreadPreviews {
       case "bringBack":
         preview.popOut?.close();
         return;
+      case "stopPicking":
+        preview.stopPick?.();
+        return;
     }
   }
 
@@ -394,6 +417,7 @@ export class ThreadPreviews {
       view.setBounds({ x: 0, y: 0, width, height });
     };
     win.contentView.addChildView(view);
+    preview.drawn = true;
     fit();
     win.on("resize", fit);
     preview.popOut = win;
@@ -428,16 +452,106 @@ export class ThreadPreviews {
     if (wc && !wc.isDestroyed()) wc.close();
   }
 
-  /** The page as a PNG, as the panel shows it; null without one. */
-  async screenshot(key: string) {
+  /** Where the preview is now; undefined before it was opened. */
+  current(key: string) {
     const preview = this.previews.get(key);
-    const wc = preview?.view?.webContents;
-    if (!wc || wc.isDestroyed() || !wc.getURL()) return null;
-    return (await wc.capturePage()).toPNG();
+    return preview && this.state(preview);
   }
 
-  consoleErrors(key: string) {
-    return this.previews.get(key)?.console ?? null;
+  /** Tells the window a thread's preview was opened for it, to give it a tab. */
+  reveal(projectId: string, chatId: string) {
+    this.window.send("relay:preview-reveal", { projectId, chatId });
+  }
+
+  /** Resolves once the server started (or gave up) and the page stopped loading. */
+  async settled(key: string, timeoutMs: number, signal?: AbortSignal) {
+    const end = this.now() + timeoutMs;
+    // A load just asked for may not have begun yet.
+    await wait(150);
+    while (!signal?.aborted && this.now() < end) {
+      const preview = this.previews.get(key);
+      if (!preview) return;
+      const wc = preview.view?.webContents;
+      if (
+        preview.server.state !== "starting" &&
+        !preview.restoring &&
+        !(wc && !wc.isDestroyed() && wc.isLoading())
+      )
+        return;
+      await wait(150);
+    }
+  }
+
+  /**
+   * The page as it looks now, also while it's off screen: then at the size
+   * the panel last gave it. Null without a page.
+   */
+  async capture(key: string): Promise<NativeImage | null> {
+    const preview = this.previews.get(key);
+    if (!preview) return null;
+    const wc = this.revive(preview);
+    if (!wc.getURL()) return null;
+    const view = preview.view!;
+    if (!preview.shown && !preview.popOut) {
+      const { width, height } = view.getBounds();
+      if (!width || !height) view.setBounds({ x: 0, y: 0, ...UNSHOWN_SIZE });
+      if (!preview.drawn) await this.prime(preview);
+    }
+    // Chromium has no frame for a view just taken off a window at first.
+    for (let attempt = 1; ; attempt++) {
+      const image = await wc.capturePage().catch(() => null);
+      if (image && !image.isEmpty()) return image;
+      if (attempt === 10) throw new Error("The preview could not be drawn.");
+      if (attempt === 4 && !preview.shown && !preview.popOut)
+        await this.prime(preview);
+      await wait(100);
+    }
+  }
+
+  /** Gives a view never shown a surface: a moment in the window, outside what it shows. */
+  private async prime(preview: Preview) {
+    const win = this.window.win;
+    const view = preview.view;
+    if (!win || win.isDestroyed() || !view)
+      throw new Error("Relay's window is closed, so the preview can't be drawn.");
+    const bounds = view.getBounds();
+    view.setBounds({ ...bounds, x: 100_000, y: 0 });
+    win.contentView.addChildView(view, 0);
+    await wait(50);
+    // The panel may have asked for it meanwhile.
+    if (preview.view !== view || preview.shown || preview.popOut) return;
+    win.contentView.removeChildView(view);
+    view.setBounds(bounds);
+    preview.drawn = true;
+  }
+
+  /** The page's errors and warnings, oldest first; `clear` empties the list after. */
+  consoleErrors(key: string, clear = false) {
+    const preview = this.previews.get(key);
+    if (!preview) return null;
+    const entries = [...preview.console];
+    if (clear) preview.console = [];
+    return entries;
+  }
+
+  /**
+   * Lets the user pick an element on the page with Chromium's inspect
+   * highlight; null when they cancel or the preview goes away.
+   */
+  async pick(key: string): Promise<PickedElement | null> {
+    const preview = this.previews.get(key);
+    const wc = preview?.view?.webContents;
+    if (!preview || !wc || wc.isDestroyed() || !wc.getURL()) return null;
+    preview.stopPick?.();
+    const picking = pickElement(wc);
+    preview.stopPick = picking.cancel;
+    this.emit(preview);
+    try {
+      return await picking.result;
+    } finally {
+      if (preview.stopPick === picking.cancel) preview.stopPick = undefined;
+      this.emit(preview);
+    }
   }
 
   dispose() {
@@ -474,6 +588,7 @@ export class ThreadPreviews {
       ...(preview.error ? { error: preview.error } : {}),
       ...(preview.snapshot ? { snapshot: preview.snapshot } : {}),
       poppedOut: !!preview.popOut,
+      picking: !!preview.stopPick,
       server: preview.server,
       ...(preview.target.worktree ? { worktree: preview.target.worktree } : {}),
     };

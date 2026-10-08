@@ -31,10 +31,20 @@ export function previewHandlers(ctx: ApiContext) {
     previewAction: takes(
       [
         previewKeySchema,
-        z.enum(["back", "forward", "reload", "stop", "devtools", "popOut", "bringBack"]),
+        z.enum([
+          "back",
+          "forward",
+          "reload",
+          "stop",
+          "devtools",
+          "popOut",
+          "bringBack",
+          "stopPicking",
+        ]),
       ],
       (key, action) => previews.act(key, action),
     ),
+    pickPreviewElement: takes([previewKeySchema], (key) => previews.pick(key)),
     closePreview: takes([previewKeySchema], (key) => previews.close(key)),
   };
 }

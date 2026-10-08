@@ -7,6 +7,7 @@ import {
   Globe,
   PictureInPicture2,
   RotateCw,
+  SquareDashedMousePointer,
   X,
 } from "lucide-react";
 import {
@@ -17,7 +18,12 @@ import {
 } from "../../../shared/preview";
 import { api } from "../../lib/api";
 import { IconButton } from "../../ui/ui";
-import { openPreview, previewKey, usePreviewState } from "./previews";
+import {
+  openPreview,
+  pickedContext,
+  previewKey,
+  usePreviewState,
+} from "./previews";
 import { useNativeView } from "./useNativeView";
 import "./browser.css";
 
@@ -29,11 +35,14 @@ export function BrowserSurface({
   projectId,
   chatId,
   front,
+  onPick,
 }: {
   projectId: string;
   chatId: string | null;
   /** Its tab is in front, in an open panel. */
   front: boolean;
+  /** Hands a clicked element to the composer. */
+  onPick: (context: ReturnType<typeof pickedContext>) => void;
 }) {
   const key = previewKey(projectId, chatId);
   const state = usePreviewState(key);
@@ -64,6 +73,10 @@ export function BrowserSurface({
         state={state}
         onAct={act}
         onGo={(url) => void api.navigatePreview(key, url)}
+        onPick={async () => {
+          const picked = await api.pickPreviewElement(key);
+          if (picked) onPick(pickedContext(picked));
+        }}
       />
       <div className="browser-viewport" ref={viewport}>
         {showPage && state.snapshot && (
@@ -85,10 +98,12 @@ function AddressBar({
   state,
   onAct,
   onGo,
+  onPick,
 }: {
   state?: PreviewState;
   onAct: (action: PreviewAction) => void;
   onGo: (url: string) => void;
+  onPick: () => void;
 }) {
   const [typed, setTyped] = useState<string | null>(null);
   const shown = typed ?? state?.url ?? "";
@@ -145,6 +160,18 @@ function AddressBar({
           }
         }}
       />
+      <IconButton
+        label={
+          state?.picking
+            ? "Stop picking (Esc)"
+            : "Pick an element to ask about"
+        }
+        disabled={!state?.url || state.poppedOut}
+        active={state?.picking}
+        onClick={() => (state?.picking ? onAct("stopPicking") : onPick())}
+      >
+        <SquareDashedMousePointer size={14} />
+      </IconButton>
       <IconButton
         label="Developer tools"
         disabled={!state?.url}

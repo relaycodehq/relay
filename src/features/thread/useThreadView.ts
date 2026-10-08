@@ -13,6 +13,8 @@ export interface ChatContext {
   text: string;
   selection?: LineQuestion;
   code?: CodeReference;
+  /** Screenshots to attach after the text. */
+  images?: File[];
 }
 
 export type ThreadView = ReturnType<typeof useThreadView>;
