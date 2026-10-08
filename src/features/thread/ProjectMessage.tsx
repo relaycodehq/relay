@@ -22,6 +22,7 @@ import {
 import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
+import { AgentError } from "../agents/AgentError";
 import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
@@ -425,9 +426,7 @@ export const Message = memo(function Message({
         </p>
       )}
       {m.error && m.status !== "cancelled" && (
-        <p role="status" className="chat-message-error">
-          {m.error}
-        </p>
+        <AgentError error={m.error} />
       )}
       {onSignIn && m.signIn && (
         <SignIn provider={m.signIn} onSignIn={onSignIn} />
