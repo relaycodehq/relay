@@ -26,8 +26,8 @@ works() {
 }
 find_node() {
   if [ -n "${RELAY_NODE:-}" ]; then
-    works "$RELAY_NODE" && say "$RELAY_NODE"
-    return
+    if works "$RELAY_NODE"; then say "$RELAY_NODE"; fi
+    return 0
   fi
   for candidate in "$(command -v node 2>/dev/null || true)" \
     /opt/homebrew/opt/node@26/bin/node /opt/homebrew/opt/node@24/bin/node \
@@ -48,6 +48,9 @@ find_node() {
 }
 node=$(find_node)
 if [ -z "$node" ]; then
+  if [ -n "${RELAY_NODE:-}" ]; then
+    fail "RELAY_NODE does not point to a working Node.js 22 or newer: $RELAY_NODE"
+  fi
   if command -v node >/dev/null 2>&1; then
     fail "Relay needs Node.js 22 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
   fi
@@ -63,7 +66,15 @@ else
 fi
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+new=
+cleanup() {
+  relay_install_status=$?
+  rm -rf "$tmp" || true
+  if [ -n "$new" ]; then rm -rf "$new" || true; fi
+  exit "$relay_install_status"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 if [ -n "${RELAY_UPDATE_FEED:-}" ]; then
   feed=$RELAY_UPDATE_FEED
 elif [ -n "${RELAY_VERSION:-}" ]; then
@@ -73,16 +84,18 @@ else
 fi
 fetch "$feed" "$tmp/latest.json" || fail "Couldn't reach $feed."
 # The feed names the headless download and its SHA-512.
-eval "$("$node" -e '
+metadata=$("$node" -e '
   const feed = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  if (!/^\d+\.\d+\.\d+$/.test(feed.version)) { console.error("Invalid Relay version."); process.exit(1); }
   const file = feed.headless;
   if (!file) { console.log("missing=1"); process.exit(); }
   const q = (s) => "\x27" + String(s).replace(/\x27/g, "") + "\x27";
   console.log(`version=${q(feed.version)} url=${q(file.url)} sha512=${q(file.sha512)} name=${q(file.name)}`);
-' "$tmp/latest.json")"
+' "$tmp/latest.json") || fail "Couldn't read the release feed."
+eval "$metadata"
 [ -z "${missing:-}" ] || fail "That release has no headless Relay yet."
 
-say "Downloading Relay $version…"
+say "Downloading Relay ${version}…"
 fetch "$url" "$tmp/$name" || fail "Couldn't download $url."
 "$node" -e '
   const [file, want] = process.argv.slice(1);
@@ -92,9 +105,11 @@ fetch "$url" "$tmp/$name" || fail "Couldn't download $url."
 tar -xzf "$tmp/$name" -C "$tmp"
 
 mkdir -p "$(dirname "$dest")" "$bindir"
-rm -rf "$dest.new" && mv "$tmp/relay-$version" "$dest.new"
-[ ! -e "$dest" ] || mv "$dest" "$dest.old"
-mv "$dest.new" "$dest" && rm -rf "$dest.old"
+# Stage on the install's filesystem before the shared, locked swap.
+new=$(mktemp -d "$dest.new-XXXXXX")
+rmdir "$new"
+mv "$tmp/relay-$version" "$new"
+"$node" "$new/lib/install-files.cjs" "$dest" "$new" "$version"
 
 # bin/relay runs with this Node from now on, through updates too.
 (umask 077 && mkdir -p "$home")

@@ -286,7 +286,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   }, 5 * 60_000).unref();
   setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
   const updater = new HeadlessUpdater(installRoot(__dirname), headlessVersion, {
-    restart: () => void shutDown(true, { restart: true }),
+    restart: () => {
+      setTimeout(() => void shutDown(true, { restart: true }), 50);
+    },
   });
   const handoffDir = join(home, "handoffs");
   const computers = new Computers(store, seal, unseal);
@@ -462,6 +464,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       const pairing = await remote.pairing();
       return { ...pairing, remote: await remote.state() };
     },
+    update: (check) => (check ? updater.check() : updater.install()),
     remote: (enabled) => remote.setEnabled(enabled),
     removeDevice: (id) => remote.revoke(id),
     projects: () => projects.list(login.client),

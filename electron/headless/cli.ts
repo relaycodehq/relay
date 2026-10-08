@@ -1037,28 +1037,35 @@ async function update(home: string, flags: Flags) {
     throw new Error(
       `This Relay runs from a build in ${resolve(__dirname, "..")}; update it with git pull and npm run build:headless.`,
     );
-  const updater = new HeadlessUpdater(root, headlessVersion);
-  const found = await updater.check();
-  if (found.status === "error") throw new Error(found.message);
-  if (found.status !== "available") {
-    if (flags.json) return printJson(found);
-    return console.log(ok(`Relay ${headlessVersion} is the newest.`));
-  }
-  if (flags.check) {
-    if (flags.json) return printJson(found);
-    return console.log(
-      `Relay ${bold(found.version)} is out (this is ${headlessVersion}); ${bold("relay update")} installs it.`,
+  // A running daemon owns its update and restart. Standalone installs use
+  // the same installation lock as the daemon (including other Relay homes).
+  const daemon = await running(home);
+  const updater = daemon
+    ? undefined
+    : new HeadlessUpdater(root, headlessVersion);
+  const result = daemon
+    ? await callControl(headlessPaths(home).control, "update", flags.check)
+    : flags.check
+      ? await updater!.check()
+      : await updater!.install();
+  if (result.status === "error") throw new Error(result.message);
+  if (flags.json) return printJson(result);
+  if (result.status === "available" || result.status === "ready") {
+    console.log(
+      `Relay ${bold(result.version)} is out; ${bold("relay update")} installs it.`,
     );
-  }
-  console.log(dim(`Downloading Relay ${found.version}…`));
-  const installed = await updater.install();
-  if (installed.status === "error") throw new Error(installed.message);
-  console.log(ok(`Relay ${found.version} is installed in ${root}.`));
-  if (await running(home)) {
-    await callControl(headlessPaths(home).control, "stop", { detach: true });
-    await stopped(home);
-    const { status } = await startDetached(home, script);
-    console.log(ok(`Restarted on ${status.version}.`));
+  } else if (result.status === "installing") {
+    console.log(
+      ok(
+        `Relay ${result.version} is installed in ${root}.${daemon ? " Restarting Relay; agents carry on." : ""}`,
+      ),
+    );
+  } else if (result.status === "idle") {
+    console.log(ok(`Relay ${result.current} is the newest.`));
+  } else {
+    throw new Error(
+      `Relay update did not finish (${result.status}); try again.`,
+    );
   }
 }
 

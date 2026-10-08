@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import {
@@ -10,7 +10,8 @@ import {
   type UpdateState,
 } from "../../shared/updates";
 import { signedByAny } from "../app/update-signature";
-import { download, extract, renameSoon } from "./archive";
+import { replaceInstallation } from "./install";
+import { download, extract } from "./archive";
 
 /**
  * latest.json as a headless Relay reads it: its own download sits beside
@@ -47,6 +48,9 @@ export class HeadlessUpdater {
   private state: UpdateState;
   private found?: Feed & { headless: NonNullable<Feed["headless"]> };
   private staged?: string;
+  private checking?: Promise<UpdateState>;
+  private downloading?: Promise<UpdateState>;
+  private installing?: Promise<UpdateState>;
   constructor(
     private root: string | null,
     private current: string,
@@ -68,7 +72,13 @@ export class HeadlessUpdater {
     return this.state;
   }
 
-  async check(): Promise<UpdateState> {
+  check(): Promise<UpdateState> {
+    return (this.checking ??= this.checkRelease().finally(() => {
+      this.checking = undefined;
+    }));
+  }
+
+  private async checkRelease(): Promise<UpdateState> {
     const busy = ["checking", "downloading", "ready", "installing"];
     if (!this.root || busy.includes(this.state.status)) return this.state;
     const current = this.current;
@@ -124,8 +134,18 @@ export class HeadlessUpdater {
     return this.state;
   }
 
-  async download(): Promise<UpdateState> {
-    if (this.state.status === "idle" || this.state.status === "error")
+  download(): Promise<UpdateState> {
+    return (this.downloading ??= this.downloadRelease().finally(() => {
+      this.downloading = undefined;
+    }));
+  }
+
+  private async downloadRelease(): Promise<UpdateState> {
+    if (
+      this.state.status === "idle" ||
+      this.state.status === "error" ||
+      this.state.status === "checking"
+    )
       await this.check();
     const found = this.found,
       root = this.root;
@@ -134,10 +154,9 @@ export class HeadlessUpdater {
       current = this.current;
     this.state = { status: "downloading", current, version, progress: 0 };
     // Beside the install, so the swap is a rename on one disk.
-    const staging = `${root}.update-${version}`;
+    let staging: string | undefined;
     try {
-      await rm(staging, { recursive: true, force: true });
-      await mkdir(staging, { recursive: true });
+      staging = await mkdtemp(`${root}.update-${version}-`);
       const archive = join(staging, found.headless.name);
       const received = await download(
         found.headless.url,
@@ -176,32 +195,41 @@ export class HeadlessUpdater {
       this.staged = unpacked;
       this.state = { status: "ready", current, version };
     } catch (e) {
-      await rm(staging, { recursive: true, force: true });
+      if (staging) await rm(staging, { recursive: true, force: true });
       this.state = { status: "error", current, version, message: message(e) };
     }
     return this.state;
   }
 
-  async install(): Promise<UpdateState> {
+  install(): Promise<UpdateState> {
+    return (this.installing ??= this.installRelease().finally(() => {
+      this.installing = undefined;
+    }));
+  }
+
+  private async installRelease(): Promise<UpdateState> {
     if (this.state.status !== "ready") await this.download();
     const root = this.root,
       staged = this.staged;
     if (this.state.status !== "ready" || !root || !staged) return this.state;
     const { version } = this.state;
     this.state = { status: "installing", current: this.current, version };
-    const old = `${root}.old-${this.current}`;
+    let changed: boolean;
     try {
-      await rm(old, { recursive: true, force: true });
-      await renameSoon(root, old);
-      try {
-        await renameSoon(staged, root);
-      } catch (e) {
-        await renameSoon(old, root);
-        throw e;
-      }
-      await rm(dirname(staged), { recursive: true, force: true });
-      await rm(old, { recursive: true, force: true });
+      changed = await replaceInstallation(root, staged, version, this.current);
+      await rm(dirname(staged), { recursive: true, force: true }).catch((e) =>
+        console.warn("Couldn't remove Relay's update staging:", e),
+      );
+      this.staged = undefined;
     } catch (e) {
+      await rm(dirname(staged), { recursive: true, force: true }).catch(
+        (cleanup) =>
+          console.warn(
+            "Couldn't remove Relay's failed update staging:",
+            cleanup,
+          ),
+      );
+      this.staged = undefined;
       this.state = {
         status: "error",
         current: this.current,
@@ -209,6 +237,13 @@ export class HeadlessUpdater {
         message: message(e),
       };
       return this.state;
+    }
+    if (!changed) {
+      this.current = version;
+      // Another Relay home installed this release; this daemon still needs
+      // to reload its code even though the filesystem swap is already done.
+      this.options.restart?.();
+      return (this.state = { status: "idle", current: version });
     }
     this.options.restart?.();
     return this.state;

@@ -102,6 +102,12 @@ export async function buildHeadless(given) {
   chmodSync(`${headlessOut}/relay.cjs`, 0o755);
   await build({
     ...shared,
+    entryPoints: ["electron/headless/install-command.ts"],
+    format: "cjs",
+    outfile: `${headlessOut}/install-files.cjs`,
+  });
+  await build({
+    ...shared,
     entryPoints: ["electron/headless/daemon.ts"],
     format: "cjs",
     outfile: `${headlessOut}/relay-daemon.cjs`,

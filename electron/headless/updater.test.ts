@@ -5,11 +5,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { lockPath } from "./lock";
 import { HeadlessUpdater, installRoot } from "./updater";
 
 let dir: string;
@@ -112,5 +114,83 @@ it("refuses a feed nobody signed, or someone else did", async () => {
     expect((await updater.install()).status).toBe("error");
     expect(readFileSync(join(root, "VERSION"), "utf8").trim()).toBe("1.0.0");
     rmSync(root, { recursive: true });
+  }
+});
+
+it("joins concurrent check, download and install calls on one updater", async () => {
+  const key = keyPair();
+  const root = installed();
+  const served = release(key);
+  let downloads = 0,
+    restarts = 0;
+  const updater = new HeadlessUpdater(root, "1.0.0", {
+    ...served,
+    keys: [key.key],
+    fetch: (async (...args: Parameters<typeof fetch>) => {
+      if (String(args[0]).endsWith(".tar.gz")) downloads++;
+      return served.fetch(...args);
+    }) as typeof fetch,
+    restart: () => {
+      restarts++;
+    },
+  });
+  const check = updater.check();
+  const downloading = updater.download();
+  const first = updater.install();
+  const second = updater.install();
+  expect(first).toBe(second);
+  await Promise.all([check, downloading, first, second]);
+  expect(downloads).toBe(1);
+  expect(restarts).toBe(1);
+  expect(readFileSync(join(root, "VERSION"), "utf8").trim()).toBe("2.0.0");
+});
+
+it("independent updater staging survives another updater's install", async () => {
+  const key = keyPair();
+  const root = installed();
+  const options = { ...release(key), keys: [key.key] };
+  const first = new HeadlessUpdater(root, "1.0.0", options);
+  let secondRestarted = false;
+  const second = new HeadlessUpdater(root, "1.0.0", {
+    ...options,
+    restart: () => {
+      secondRestarted = true;
+    },
+  });
+  expect(
+    (await Promise.all([first.download(), second.download()])).map(
+      (s) => s.status,
+    ),
+  ).toEqual(["ready", "ready"]);
+  expect((await first.install()).status).toBe("installing");
+  // The second stage still exists and can validate that the version is installed.
+  expect(await second.install()).toMatchObject({
+    status: "idle",
+    current: "2.0.0",
+  });
+  expect(secondRestarted).toBe(true);
+  expect(readFileSync(join(root, "VERSION"), "utf8").trim()).toBe("2.0.0");
+});
+
+it("refuses to swap while another process holds the installation lock", async () => {
+  const key = keyPair();
+  const root = installed();
+  const updater = new HeadlessUpdater(root, "1.0.0", {
+    ...release(key),
+    keys: [key.key],
+  });
+  await updater.download();
+  const unlock = await lockPath(`${root}.update`);
+  try {
+    expect(await updater.install()).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("holds"),
+    });
+    expect(readFileSync(join(root, "VERSION"), "utf8").trim()).toBe("1.0.0");
+    expect(
+      readdirSync(dir).filter((name) => name.startsWith("relay.update-")),
+    ).toEqual([]);
+  } finally {
+    await unlock();
   }
 });

@@ -21,6 +21,7 @@ if ($env:RELAY_UPDATE_FEED) { $feed = $env:RELAY_UPDATE_FEED }
 elseif ($env:RELAY_VERSION) { $feed = "https://github.com/$repo/releases/download/v$($env:RELAY_VERSION.TrimStart('v'))/latest.json" }
 else { $feed = "https://github.com/$repo/releases/latest/download/latest.json" }
 $release = Invoke-RestMethod -Uri $feed
+if ($release.version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid Relay version." }
 if (-not $release.headless) { throw "That release has no headless Relay yet." }
 $file = $release.headless
 
@@ -39,10 +40,9 @@ try {
   # Windows' own tar: a GNU tar from Git earlier on PATH reads C: as a host.
   & (Join-Path $env:SystemRoot "System32\tar.exe") -xzf $archive -C $tmp
   if ($LASTEXITCODE) { throw "Couldn't unpack $archive." }
-  if (Test-Path "$dest.old") { Remove-Item "$dest.old" -Recurse -Force }
-  if (Test-Path $dest) { Move-Item -Path $dest -Destination "$dest.old" }
-  Move-Item -Path (Join-Path $tmp "relay-$($release.version)") -Destination $dest
-  Remove-Item "$dest.old" -Recurse -Force -ErrorAction SilentlyContinue
+  $staged = Join-Path $tmp "relay-$($release.version)"
+  & node (Join-Path $staged "lib\install-files.cjs") $dest $staged $release.version
+  if ($LASTEXITCODE) { throw "Couldn't install Relay; the previous install was preserved." }
 } finally {
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }

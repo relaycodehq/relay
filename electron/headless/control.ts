@@ -20,6 +20,7 @@ import type { PhonePairing, PhoneRemoteState } from "../../shared/remote";
  */
 export interface ControlApi {
   status(): Promise<DaemonStatus>;
+  update(check: boolean): Promise<UpdateState>;
   /** Turns phone access on if needed, then opens a fresh pairing code. */
   pair(): Promise<PhonePairing & { remote: PhoneRemoteState }>;
   remote(enabled: boolean): Promise<PhoneRemoteState>;
