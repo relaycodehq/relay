@@ -8,6 +8,7 @@ import {
   ownAgentWorktrees,
   watchAgentWorktrees,
   recoverAgentWorktrees,
+  turnWorkspace,
 } from "./agent-worktrees";
 import { gitExecutable } from "../git/git";
 import type {
@@ -233,4 +234,87 @@ it("drops worktrees older saves credited to the wrong thread", () => {
   expect(ownAgentWorktrees(chat).map((w) => w.path)).toEqual([
     "/private/tmp/relay-audit",
   ]);
+});
+
+/** A project-folder thread's turn, wired as the turn runner wires it. */
+function projectTurn(chat = { scope: { kind: "project" }, messages: [] }) {
+  const thread = chat as unknown as ProjectChat;
+  const watch = watchAgentWorktrees(
+    root,
+    join(temp, "relay-worktrees"),
+    () => thread.agentWorktrees ?? [],
+    turnWorkspace(thread),
+  );
+  return { thread, run: (label: string) => watch(ran(label)) };
+}
+
+it("moves the thread into the first worktree its agent makes, not later ones", async () => {
+  const { thread, run } = projectTurn();
+  const made = join(temp, "file-mentions");
+  const later = join(temp, "later");
+  git("worktree", "add", "-q", "-b", "file-mentions", made);
+  await run(`git worktree add -b file-mentions ${made}`);
+  expect(thread.activeAgentWorktree?.path).toBe(made);
+  git("worktree", "add", "-q", "-b", "later", later);
+  await run(`git worktree add -b later ${later}`);
+  expect(thread.agentWorktrees).toHaveLength(2);
+  expect(thread.activeAgentWorktree?.path).toBe(made);
+});
+
+it("leaves the project folder alone once the user went back to it", async () => {
+  const { thread, run } = projectTurn();
+  const made = join(temp, "file-mentions");
+  git("worktree", "add", "-q", "-b", "file-mentions", made);
+  await run(`git worktree add -b file-mentions ${made}`);
+  delete thread.activeAgentWorktree;
+  const later = join(temp, "later");
+  git("worktree", "add", "-q", "-b", "later", later);
+  await run(`git worktree add -b later ${later}`);
+  expect(thread.agentWorktrees).toHaveLength(2);
+  expect(thread.activeAgentWorktree).toBeUndefined();
+});
+
+it("goes back to the project folder when the turn removes the worktree it moved into", async () => {
+  const { thread, run } = projectTurn();
+  const made = join(temp, "scratch");
+  git("worktree", "add", "-q", "-b", "scratch", made);
+  await run(`git worktree add -b scratch ${made}`);
+  expect(thread.activeAgentWorktree?.path).toBe(made);
+  git("worktree", "remove", made);
+  await run(`git worktree remove ${made}`);
+  expect(thread.agentWorktrees).toBeUndefined();
+  expect(thread.activeAgentWorktree).toBeUndefined();
+});
+
+it("keeps a worktree the user chose selected, as unavailable, when a turn removes it", async () => {
+  const chosen = join(temp, "chosen");
+  git("worktree", "add", "-q", "-b", "chosen", chosen);
+  const [recorded] = await recoverAgentWorktrees(
+    root,
+    join(temp, "relay-worktrees"),
+    {
+      messages: [
+        {
+          trace: [
+            {
+              kind: "activity",
+              id: "1",
+              activity: ran(`git worktree add -b chosen ${chosen}`),
+            },
+          ],
+        },
+      ],
+    } as unknown as ProjectChat,
+  );
+  const active = { path: chosen, gitdir: recorded.gitdir, branch: "chosen" };
+  const { thread, run } = projectTurn({
+    scope: { kind: "project" },
+    messages: [],
+    agentWorktrees: [recorded],
+    activeAgentWorktree: active,
+  } as never);
+  git("worktree", "remove", chosen);
+  await run(`git worktree remove ${chosen}`);
+  expect(thread.agentWorktrees).toBeUndefined();
+  expect(thread.activeAgentWorktree).toEqual(active);
 });

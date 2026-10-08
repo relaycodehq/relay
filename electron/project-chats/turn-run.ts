@@ -8,13 +8,9 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
-import {
-  linksInstructions,
-  selectedAgentWorktree,
-  threadLinks,
-} from "../../shared/projects";
+import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged, type ThreadGoal } from "../../shared/goal";
-import { watchAgentWorktrees } from "./agent-worktrees";
+import { turnWorkspace, watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
 import { accountFor, accountLabel } from "../agents/accounts";
 import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
@@ -173,20 +169,13 @@ export class TurnRunner {
     const edited = new Set<string>(),
       commands = new Map<string, string>();
     let commits: Awaited<ReturnType<typeof commitWatch>> | undefined;
+    const workspace = turnWorkspace(chat);
     const watchWorktrees = watchAgentWorktrees(
       await this.core.projects.root(chat.projectId),
       this.worktreesFolder,
       () => chat.agentWorktrees ?? [],
       async (worktrees) => {
-        if (worktrees.length) chat.agentWorktrees = worktrees;
-        else delete chat.agentWorktrees;
-        const selected = selectedAgentWorktree(chat);
-        if (selected)
-          chat.activeAgentWorktree = {
-            path: selected.path,
-            gitdir: selected.gitdir,
-            branch: selected.branch,
-          };
+        workspace(worktrees);
         await this.core.storage.save(chat);
       },
     );

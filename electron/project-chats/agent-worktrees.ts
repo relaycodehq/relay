@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { basename, join, relative, isAbsolute } from "node:path";
 import { git } from "../git/git";
-import type {
-  AgentActivity,
-  AgentWorktree,
-  ProjectChat,
+import {
+  agentWorktreeKey,
+  selectedAgentWorktree,
+  type AgentActivity,
+  type AgentWorktree,
+  type ProjectChat,
 } from "../../shared/projects";
 
 // Agents sometimes make their own git worktree from a shell command and work
@@ -64,6 +66,54 @@ export function ownAgentWorktrees(chat: ProjectChat) {
       (c) => addsWorktree(c, w.path) || (w.gitdir && addsWorktree(c, w.gitdir)),
     ),
   );
+}
+
+/**
+ * The worktree a project-folder thread moves to without being asked: the
+ * first one its own agent makes during a turn. Once one is recorded only the
+ * user moves the thread, so going back to the project folder sticks.
+ */
+function firstAgentWorktree(chat: ProjectChat, next: AgentWorktree[]) {
+  if (
+    chat.worktree ||
+    chat.scope.kind !== "project" ||
+    chat.reviewer ||
+    chat.thinker ||
+    chat.activeAgentWorktree ||
+    chat.agentWorktrees?.length
+  )
+    return undefined;
+  return next.at(-1);
+}
+
+/**
+ * Applies one turn's worktree changes to its thread. A worktree the turn
+ * moved the thread into and then removed sends it back to the project
+ * folder; one the user chose stays selected, shown as unavailable.
+ */
+export function turnWorkspace(chat: ProjectChat) {
+  let followed: string | undefined;
+  return (worktrees: AgentWorktree[]) => {
+    const first = firstAgentWorktree(chat, worktrees);
+    if (first) followed = agentWorktreeKey(first);
+    if (worktrees.length) chat.agentWorktrees = worktrees;
+    else delete chat.agentWorktrees;
+    const selected = first ?? selectedAgentWorktree(chat);
+    if (selected)
+      chat.activeAgentWorktree = {
+        path: selected.path,
+        gitdir: selected.gitdir,
+        branch: selected.branch,
+      };
+    else if (
+      followed &&
+      chat.activeAgentWorktree &&
+      agentWorktreeKey(chat.activeAgentWorktree) === followed
+    ) {
+      delete chat.activeAgentWorktree;
+      followed = undefined;
+    }
+  };
 }
 
 type Live = Map<string, { branch?: string; gitdir?: string }>;
