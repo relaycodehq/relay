@@ -481,6 +481,8 @@ export default function ProjectShell() {
             account={account ?? null}
             initialCategory={settings.category}
             initialProject={settings.project ?? project?.id}
+            initialQuery={settings.query}
+            onQueryChange={settings.setQuery}
             onWhere={settings.setWhere}
             onClose={settings.close}
             onConnect={() => {

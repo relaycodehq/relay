@@ -16,6 +16,8 @@ export function SettingsNav({
   setQuery,
   category,
   results,
+  showResults,
+  onShowResults,
   onPick,
   onClose,
 }: {
@@ -26,6 +28,8 @@ export function SettingsNav({
   category: SettingsCategory;
   /** What the search finds, while searching; each category counts its own. */
   results: SettingEntry[] | null;
+  showResults: boolean;
+  onShowResults: () => void;
   onPick: (category: SettingsCategory) => void;
   onClose: () => void;
 }) {
@@ -47,12 +51,29 @@ export function SettingsNav({
           onChange={(e) => setQuery(e.target.value)}
         />
         {query && (
-          <button aria-label="Clear search" onClick={() => setQuery("")}>
+          <button
+            aria-label="Clear search"
+            onClick={() => {
+              setQuery("");
+              inputRef.current?.focus();
+            }}
+          >
             <X size={12} />
           </button>
         )}
       </div>
       <nav aria-label="Settings categories">
+        {results && (
+          <button
+            className={showResults ? "active" : ""}
+            aria-current={showResults ? "page" : undefined}
+            onClick={onShowResults}
+          >
+            <Search size={15} />
+            <span>Search results</span>
+            <small>{results.length}</small>
+          </button>
+        )}
         {categories.map(({ id, label, icon: Icon }) => {
           const count = results
             ? results.filter((e) => e.category === id).length
@@ -60,9 +81,10 @@ export function SettingsNav({
           return (
             <button
               key={id}
-              className={!results && category === id ? "active" : ""}
-              aria-current={!results && category === id}
-              disabled={count === 0}
+              className={!showResults && category === id ? "active" : ""}
+              aria-current={
+                !showResults && category === id ? "page" : undefined
+              }
               onClick={() => onPick(id)}
             >
               <Icon size={15} />
