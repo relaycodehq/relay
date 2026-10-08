@@ -83,6 +83,24 @@ else
   feed="https://github.com/$repo/releases/latest/download/latest.json"
 fi
 fetch "$feed" "$tmp/latest.json" || fail "Couldn't reach $feed."
+fetch "$feed.sig" "$tmp/latest.json.sig" || fail "Couldn't fetch the release feed signature."
+# Authenticate the exact feed bytes before accepting any metadata or archive.
+"$node" -e '
+  const fs = require("node:fs");
+  const { createPublicKey, verify } = require("node:crypto");
+  // Keep these raw Ed25519 public keys in sync with shared/updates.ts.
+  const keys = ["83EmHV/Q5V1spYrUP+1S8Kuke5rUt2gAPVQJ1r45YL4="];
+  const [feedPath, signaturePath] = process.argv.slice(process.argv[1] === "-" ? 2 : 1);
+  const bytes = fs.readFileSync(feedPath);
+  const signatures = fs.readFileSync(signaturePath, "utf8").split(/\s+/)
+    .filter(s => /^[A-Za-z0-9+/]{86}==$/.test(s)).slice(0, 8);
+  const prefix = Buffer.from("302a300506032b6570032100", "hex");
+  const valid = keys.some(raw => {
+    const key = createPublicKey({ key: Buffer.concat([prefix, Buffer.from(raw, "base64")]), format: "der", type: "spki" });
+    return signatures.some(s => verify(null, bytes, key, Buffer.from(s, "base64")));
+  });
+  if (!valid) throw new Error("The release feed signature does not match a trusted Relay key.");
+' "$tmp/latest.json" "$tmp/latest.json.sig" || fail "Couldn't verify the release feed."
 # The feed names the headless download and its SHA-512.
 metadata=$("$node" -e '
   const feed = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));

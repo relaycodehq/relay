@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
@@ -10,14 +10,26 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import { updateKeys } from "../../shared/updates";
 
 const run = promisify(execFile);
 const cleanup: (() => Promise<unknown>)[] = [];
 let bundled: string;
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const testKey = Buffer.from(
+  publicKey.export({ format: "jwk" }).x!,
+  "base64url",
+).toString("base64");
+async function signFeed(path: string) {
+  await writeFile(
+    `${path}.sig`,
+    sign(null, await readFile(path), privateKey).toString("base64"),
+  );
+}
 beforeAll(async () => {
   const result = await build({
     entryPoints: ["electron/headless/install-command.ts"],
@@ -79,6 +91,11 @@ it("installs and replaces an archive end to end using the shared swap helper", a
       },
     }),
   );
+  await signFeed(feed);
+  // Test fixtures get their own key without adding a production trust override.
+  const installer = join(dir, "install.sh");
+  const source = await readFile("packaging/headless/install.sh", "utf8");
+  await writeFile(installer, source.replace(updateKeys[0]!, testKey));
   const env = {
     ...process.env,
     RELAY_NODE: process.execPath,
@@ -89,7 +106,7 @@ it("installs and replaces an archive end to end using the shared swap helper", a
     RELAY_NO_SETUP: "1",
     RELAY_NO_MODIFY_PATH: "1",
   };
-  const result = await run("sh", [resolve("packaging/headless/install.sh")], {
+  const result = await run("sh", [installer], {
     env,
   });
   expect(result.stdout).toContain("Relay 2.0.0 is installed");
@@ -97,8 +114,25 @@ it("installs and replaces an archive end to end using the shared swap helper", a
   expect((await readFile(join(env.RELAY_HOME, "node"), "utf8")).trim()).toBe(
     process.execPath,
   );
+  // A missing or invalid signature fails before unpacking or replacing anything.
+  const signature = await readFile(`${feed}.sig`, "utf8");
+  for (const value of [
+    null,
+    "invalid",
+    sign(null, Buffer.from("different bytes"), privateKey).toString("base64"),
+  ]) {
+    if (value === null) await rm(`${feed}.sig`);
+    else await writeFile(`${feed}.sig`, value);
+    await expect(run("sh", [installer], { env })).rejects.toMatchObject({
+      code: 1,
+    });
+    expect((await readFile(join(root, "VERSION"), "utf8")).trim()).toBe(
+      "2.0.0",
+    );
+  }
+  await writeFile(`${feed}.sig`, signature);
   // Re-running the same installer remains a complete replacement, not .old nesting.
-  await run("sh", [resolve("packaging/headless/install.sh")], { env });
+  await run("sh", [installer], { env });
   expect((await readFile(join(root, "VERSION"), "utf8")).trim()).toBe("2.0.0");
   // A malformed replacement must fail visibly and leave the working install.
   await writeFile(join(staged, "VERSION"), "unexpected-version");
@@ -115,11 +149,69 @@ it("installs and replaces an archive end to end using the shared swap helper", a
       },
     }),
   );
-  await expect(
-    run("sh", [resolve("packaging/headless/install.sh")], { env }),
-  ).rejects.toMatchObject({
+  await signFeed(feed);
+  await expect(run("sh", [installer], { env })).rejects.toMatchObject({
     code: 1,
     stderr: expect.stringContaining("isn't a headless Relay"),
   });
   expect((await readFile(join(root, "VERSION"), "utf8")).trim()).toBe("2.0.0");
+});
+
+it("ships matching pinned-key verifiers in both self-contained installers", async () => {
+  const dir = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-feed-verification-")),
+  );
+  cleanup.push(() => rm(dir, { recursive: true, force: true }));
+  const feed = join(dir, "latest.json");
+  const signature = `${feed}.sig`;
+  const other = generateKeyPairSync("ed25519");
+  const scripts = await Promise.all([
+    readFile("packaging/headless/install.sh", "utf8"),
+    readFile("packaging/headless/install-relay.ps1", "utf8"),
+  ]);
+  const verifiers = scripts.map((source) =>
+    source
+      .match(
+        /  const fs = require\("node:fs"\);[\s\S]*?if \(!valid\) throw new Error\([^\n]*\);/,
+      )![0]
+      .replace(/\r\n/g, "\n"),
+  );
+  expect(verifiers[0]).toBe(verifiers[1]);
+  for (const verifier of verifiers) {
+    expect(
+      JSON.parse(verifier.match(/const keys = (\[[^;]+\]);/)![1]!),
+    ).toEqual(updateKeys);
+    const code = verifier.replace(updateKeys[0]!, testKey);
+    const bytes = Buffer.from('{"version":"2.0.0"}\n');
+    await writeFile(feed, bytes);
+    await writeFile(
+      signature,
+      sign(null, bytes, privateKey).toString("base64"),
+    );
+    await run(process.execPath, ["-e", code, feed, signature]);
+    // PowerShell pipes the verifier through stdin to avoid legacy argument quoting.
+    const piped = run(process.execPath, ["-", feed, signature]);
+    piped.child.stdin!.end(code);
+    await piped;
+    await writeFile(feed, Buffer.concat([bytes, Buffer.from(" ")]));
+    await expect(
+      run(process.execPath, ["-e", code, feed, signature]),
+    ).rejects.toMatchObject({ code: 1 });
+    await writeFile(feed, bytes);
+    await writeFile(
+      signature,
+      sign(null, bytes, other.privateKey).toString("base64"),
+    );
+    await expect(
+      run(process.execPath, ["-e", code, feed, signature]),
+    ).rejects.toMatchObject({ code: 1 });
+    // Key rotations may contain both obsolete and trusted signatures.
+    await writeFile(
+      signature,
+      (await readFile(signature, "utf8")) +
+        "\n" +
+        sign(null, bytes, privateKey).toString("base64"),
+    );
+    await run(process.execPath, ["-e", code, feed, signature]);
+  }
 });

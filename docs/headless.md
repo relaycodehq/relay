@@ -18,7 +18,7 @@ On Windows, in PowerShell:
 irm https://relaycode.io/install.ps1 | iex
 ```
 
-That's the whole setup: the installer puts the newest release in `~/.local/share/relay` and `relay` in `~/.local/bin`, adds that to your shell's PATH, and runs `relay setup`. On Windows it goes to `%LOCALAPPDATA%\Programs\Relay Headless`, with its `bin` on your PATH, beside the desktop app rather than over it. The download is checked against the release's SHA-512, and updates Relay installs later only come from a feed signed with Relay's release key.
+That's the whole setup: the installer puts the newest release in `~/.local/share/relay` and `relay` in `~/.local/bin`, adds that to your shell's PATH, and runs `relay setup`. On Windows it goes to `%LOCALAPPDATA%\Programs\Relay Headless`, with its `bin` on your PATH, beside the desktop app rather than over it. The installer and updater verify the feed's signature with Relay's release key before accepting its download URL and SHA-512, then check the archive against that hash.
 
 It looks for a Node.js that actually runs, so a Homebrew `node` broken by an upgrade doesn't stop it while a `node@22` beside it works, and Relay keeps using the one it found. `RELAY_NODE` picks one yourself, `RELAY_INSTALL` and `RELAY_BIN` move the install, `RELAY_VERSION=0.9.1` installs that release instead, `RELAY_NO_SETUP=1` leaves `relay setup` for later and `RELAY_NO_MODIFY_PATH=1` leaves your shell's startup file alone. Run it again to reinstall. One archive serves macOS, Linux and Windows: nothing in it is native.
 
