@@ -118,7 +118,10 @@ function kept(name) {
 export function snapshot(label, { prune = true } = {}) {
   if (!existsSync(userData)) return;
   const stamp = new Date().toISOString().slice(0, 23).replace(/[:.]/g, "-");
-  const dir = join(snapshots, `${stamp} ${label.replace(/[\\/:]/g, "-")}`);
+  const dir = join(
+    snapshots,
+    `${stamp} ${label.replace(/[\\/:*?"<>|]/g, "-")}`,
+  );
   mkdirSync(dir, { recursive: true });
   for (const name of readdirSync(userData))
     if (kept(name))
@@ -152,9 +155,13 @@ export function findSnapshot(name) {
 /** Puts a snapshot back, after taking one of what it replaces. Relay must not be running. */
 export function restore(name) {
   const from = join(snapshots, name);
+  // Read before touching live data, so a missing snapshot cannot erase it.
+  const items = readdirSync(from);
   snapshot("before restore", { prune: false });
-  for (const item of readdirSync(from)) {
-    rmSync(join(userData, item), { recursive: true, force: true });
+  for (const item of readdirSync(userData))
+    if (kept(item))
+      rmSync(join(userData, item), { recursive: true, force: true });
+  for (const item of items) {
     cpSync(join(from, item), join(userData, item), {
       recursive: true,
       mode: constants.COPYFILE_FICLONE,
