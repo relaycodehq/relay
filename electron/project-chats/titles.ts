@@ -10,6 +10,7 @@ import {
   namesItself,
   promptTitle,
   regenerateThreadTitle,
+  titleModel,
 } from "../agents/thread-titles";
 import type { ChatCore } from "./core";
 import { sessionInput } from "./sessions";
@@ -70,17 +71,25 @@ export class ThreadTitles {
     // A title can come back as the excerpt; asking again would never end.
     this.asked.add(chat.id);
     const titleAbort = new AbortController();
+    // The other provider cannot use this provider's model id.
+    const attempts = helperFallbacks(provider).flatMap((by) => {
+      const own = by === provider ? choice : { ...choice, model: "" };
+      const small = titleModel(by);
+      // A sign-in that can't reach the small model still names the thread.
+      return small && small !== own.model
+        ? [{ by, choice: { ...own, model: small } }, { by, choice: own }]
+        : [{ by, choice: own }];
+    });
     const job = (async () => {
       // One exhausted or unavailable CLI must not leave every thread named
       // after its prompt, so try the helper agents next.
-      for (const by of helperFallbacks(provider)) {
+      for (const { by, choice } of attempts) {
         try {
           const title = await generateThreadTitle({
             user: firstUser.body,
             answer: answer?.body,
             provider: by,
-            // The other provider cannot use this provider's model id.
-            choice: by === provider ? choice : { ...choice, model: "" },
+            choice,
             signal: titleAbort.signal,
           });
           if (titleAbort.signal.aborted) return;

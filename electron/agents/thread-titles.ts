@@ -41,6 +41,17 @@ function generatedTitle(output: string): string | null {
   }
 }
 
+/**
+ * A first title is a few words, so it runs on the agent's small model. Measured
+ * 2026-10-08: Haiku 5.5 at low effort doesn't think and costs ~1/35 of Opus 5.5
+ * per title, about a second sooner. Agents left out use the thread's model.
+ */
+const titleModels: Partial<Record<AgentProvider, string>> = {
+  claude: "claude-haiku-5-5",
+  codex: "gpt-6-luna",
+};
+export const titleModel = (provider: AgentProvider) => titleModels[provider];
+
 /** Whether the first message says enough to name the thread before any answer. */
 export function namesItself(body: string): boolean {
   return !!replacePastedTexts(body, (paste) => paste.text)

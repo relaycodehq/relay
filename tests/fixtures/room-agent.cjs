@@ -413,6 +413,18 @@ if (args.includes("--permission-prompt-tool")) {
   process.stdin.on("data", (d) => (prompt += d));
   process.stdin.on("end", () => {
     record({ provider: "claude", prompt });
+    // As an account that can't use the model it was asked for.
+    if (args[args.indexOf("--model") + 1] === process.env.RELAY_AGENT_REJECT_MODEL) {
+      process.stdout.write(
+        JSON.stringify({
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          result: "model not available",
+        }) + "\n",
+      );
+      process.exit(1);
+    }
     const text = args.includes("--input-format")
       ? JSON.parse(prompt).message.content.find((part) => part.type === "text")
           .text
