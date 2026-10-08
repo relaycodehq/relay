@@ -17,12 +17,14 @@ export interface PromptCache {
   at: number;
   ttlMs: number;
 }
-/** Local marker: the outgoing agent wrote this note for the one taking over. */
+/** Local marker: the outgoing agent's note for the one taking over, or Relay's when it couldn't write one. */
 interface AgentHandoff {
   from: AgentProvider;
   to: AgentProvider;
   /** The note is for another computer, where `to` carries on. */
   computer?: string;
+  /** `from` couldn't write the note, so Relay made it from the thread's record. */
+  byRelay?: boolean;
 }
 /** What a reloaded session's agent loaded that its old process hadn't, and what it no longer has. */
 export interface NameChanges {

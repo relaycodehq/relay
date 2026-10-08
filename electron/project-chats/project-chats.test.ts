@@ -373,6 +373,75 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
 }, 20000);
+/** Sends `body` to Claude after Codex's turn, and returns the thread and Claude's prompt. */
+async function switchToClaude(chatId: string, body: string) {
+  await chats.send(chatId, { ...input(body), provider: "claude" });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chatId)).messages.at(-1)).toMatchObject({
+        provider: "claude",
+        status: "complete",
+      }),
+    { timeout: 10000 },
+  );
+  const prompt = JSON.parse(
+    (await agentCalls())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .find((c) => c.provider === "claude").prompt,
+  ).message.content.find((p: { type: string }) => p.type === "text")
+    .text as string;
+  return { chat: await chats.get(chatId), prompt };
+}
+it("briefs the new agent itself when a usage limit cut off the outgoing agent's turn", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture usage limit"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed"),
+    { timeout: 6000 },
+  );
+  const { chat: after, prompt } = await switchToClaude(
+    chat.id,
+    "@claude Carry on",
+  );
+  expect(after.messages.at(-2)).toMatchObject({
+    provider: "codex",
+    status: "complete",
+    handoff: { from: "codex", to: "claude", byRelay: true },
+  });
+  expect(prompt).toContain("Handoff note Relay wrote from the thread's record");
+  expect(prompt).toContain(
+    "didn't finish (failed: You've hit your usage limit.)",
+  );
+}, 20000);
+it("writes the note itself when the outgoing agent runs out while writing it", async () => {
+  vi.stubEnv("RELAY_AGENT_NOTE_LIMIT", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const { chat: after, prompt } = await switchToClaude(
+    chat.id,
+    "@claude Now fix it",
+  );
+  // Codex's failed note became Relay's, not a second marker beside it.
+  const notes = after.messages.filter((m) => m.handoff);
+  expect(notes).toHaveLength(1);
+  expect(notes[0]).toMatchObject({
+    status: "complete",
+    handoff: { byRelay: true },
+  });
+  expect(notes[0]!.error).toBeUndefined();
+  expect(prompt).toContain("Handoff note Relay wrote");
+  expect(prompt).toContain("Explain the cache guard");
+}, 20000);
 it("accepts a message for another agent without waiting for the handoff note", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
   const chat = await chats.create(projectId, { kind: "project" });

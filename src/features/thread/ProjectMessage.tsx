@@ -80,10 +80,10 @@ function HandoffRow({
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { from, to, computer } = m.handoff!;
+  const { from, to, computer, byRelay } = m.handoff!;
   const switched = computer
     ? `Handoff note for ${computer}`
-    : `Switched from ${agentName(from)} to ${agentName(to)}`;
+    : `Switched from ${agentName(from)} to ${agentName(to)}${byRelay ? ` · ${agentName(from)} couldn't write a note, Relay did` : ""}`;
   const note = m.status === "complete" && m.body.trim();
   return (
     <div

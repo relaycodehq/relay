@@ -711,6 +711,18 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         }, turnMs);
+      // The plan ran out between the last answer and the handoff note.
+      if (
+        process.env.RELAY_AGENT_NOTE_LIMIT &&
+        asked.includes("is taking over this conversation")
+      ) {
+        failTurn({
+          message: "You've hit your usage limit.",
+          codexErrorInfo: "usageLimitExceeded",
+          additionalDetails: null,
+        });
+        return;
+      }
       if (asked.includes("fixture usage limit")) {
         failTurn(
           {
