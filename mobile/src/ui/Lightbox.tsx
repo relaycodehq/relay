@@ -366,6 +366,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 7,
   },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.35)" },
+  // The outline keeps them visible over a white screenshot.
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(255,255,255,0.4)",
+  },
   current: { backgroundColor: "#fff" },
 });
