@@ -19,11 +19,7 @@ export const androidAppDownload = `https://github.com/${releasesRepo}/releases/l
 
 /** How the running copy was installed decides which download replaces it. */
 export type UpdateTarget =
-  | "mac-arm64"
-  | "mac-x64"
-  | "win-x64"
-  | "linux-x64-appimage"
-  | "linux-x64-omarchy";
+  "mac-arm64" | "win-x64" | "linux-x64-appimage" | "linux-x64-omarchy";
 
 const file = z.object({
   name: z.string().regex(/^[\w.-]+$/),
@@ -40,13 +36,7 @@ export const manifestSchema = z.object({
   published: z.string().optional(),
   notes: z.string().max(4000).optional(),
   files: z.partialRecord(
-    z.enum([
-      "mac-arm64",
-      "mac-x64",
-      "win-x64",
-      "linux-x64-appimage",
-      "linux-x64-omarchy",
-    ]),
+    z.enum(["mac-arm64", "win-x64", "linux-x64-appimage", "linux-x64-omarchy"]),
     file,
   ),
 });

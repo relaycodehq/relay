@@ -145,7 +145,7 @@ export const platforms: Build[] = [
   },
 ];
 
-/** Builds outside the desktop list: the phone app and the Macs without a package. */
+/** Builds outside the desktop list: the phone app. */
 export const otherBuilds: Build[] = [
   {
     os: "android",
@@ -153,12 +153,6 @@ export const otherBuilds: Build[] = [
     file: "Relay-Android.apk",
     href: download("Relay-Android.apk"),
     status: "Follow and answer threads from your phone.",
-  },
-  {
-    system: "Intel Mac",
-    file: "Build from source",
-    href: BUILD_GUIDE,
-    status: "No package yet. Node.js 22 and npm.",
   },
 ];
 
@@ -246,7 +240,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms does Relay support?",
-    a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use. For an Intel Mac, build Relay from source.",
+    a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use.",
   },
   {
     q: "Is Relay open source?",

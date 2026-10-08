@@ -46,7 +46,8 @@ interface Install {
 async function detectInstall(): Promise<Install | null> {
   const arch = process.arch;
   if (process.platform === "darwin") {
-    const target = arch === "arm64" ? "mac-arm64" : "mac-x64";
+    if (arch !== "arm64") return null;
+    const target = "mac-arm64";
     const bundle = resolve(process.execPath, "../../..");
     if (!app.isPackaged || !bundle.endsWith(".app"))
       return { target, manual: "Development build" };
@@ -411,7 +412,7 @@ export class Updater {
 
 /** Unpacks what needs unpacking while the app is still running normally. */
 async function prepare(target: UpdateTarget, path: string, dir: string) {
-  if (target === "mac-arm64" || target === "mac-x64") {
+  if (target === "mac-arm64") {
     const out = join(dir, "unpacked");
     await run("/usr/bin/ditto", ["-x", "-k", path, out]);
     const bundle = (await readdir(out)).find((n) => n.endsWith(".app"));
@@ -440,8 +441,7 @@ async function prepare(target: UpdateTarget, path: string, dir: string) {
 
 async function apply(target: UpdateTarget, staged: string) {
   switch (target) {
-    case "mac-arm64":
-    case "mac-x64": {
+    case "mac-arm64": {
       // Swap the bundle once this process has exited, then open the new copy.
       const bundle = resolve(process.execPath, "../../..");
       const script = join(dirname(dirname(staged)), "swap.sh");

@@ -13,7 +13,6 @@ if (!dir || !/^\d+\.\d+\.\d+$/.test(version ?? "") || !repo)
 // Keep in step with UpdateTarget in shared/updates.ts.
 const targets = {
   "mac-arm64": `Relay-${version}-mac-arm64.zip`,
-  "mac-x64": `Relay-${version}-mac-x64.zip`,
   "win-x64": `Relay-${version}-win-x64.exe`,
   "linux-x64-appimage": `Relay-${version}-linux-x86_64.AppImage`,
   "linux-x64-omarchy": `Relay-${version}-omarchy-x86_64.tar.gz`,

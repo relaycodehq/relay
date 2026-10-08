@@ -22,7 +22,6 @@ Grab the file for your system from the [latest release](https://github.com/relay
 | Windows 10/11 (x64) | `Relay-<version>-win-x64.exe` installer |
 | Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` |
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then run `python3 install.py` inside it (no sudo) |
-| Intel Mac | No package yet, so [build from source](#for-contributors) |
 
 Then:
 
