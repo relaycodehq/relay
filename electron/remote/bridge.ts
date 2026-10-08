@@ -34,6 +34,7 @@ import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
+import type { SubagentDetail } from "../../shared/subagents";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
 
@@ -254,7 +255,9 @@ export class RemoteBridge {
       );
     },
     desktop: async (method, args) => {
-      const value = await this.host.dispatch(method, args);
+      let value = await this.host.dispatch(method, args);
+      if (method === "projectChatAgent" && value)
+        value = forPhoneRun(value as SubagentDetail);
       // Sends, stops and triage move thread states; phones hear before the call returns.
       this.refresh();
       return value;
@@ -435,6 +438,18 @@ export function forPhone(m: ChatMessage): ChatMessage {
     };
   if (m.activity) return { ...m, activity: m.activity.map(cutDetail) };
   return m;
+}
+
+/** An agent's run, its tool output cut as a thread's; the phone has no `activityDetail` for it. */
+function forPhoneRun(run: SubagentDetail): SubagentDetail {
+  return {
+    ...run,
+    trace: run.trace.map((e) => {
+      if (e.kind !== "activity") return e;
+      const { detailCut: _, ...activity } = cutDetail(e.activity);
+      return { ...e, activity };
+    }),
+  };
 }
 
 function summary(c: ChatSummary): RemoteChatSummary {

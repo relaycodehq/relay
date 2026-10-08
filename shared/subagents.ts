@@ -2,6 +2,7 @@
 // and an agent's side thread show them. The main process follows them from
 // the SDK's task events while the session lives; none of this is saved.
 import type { AgentActivity, AgentTrace, ChatPending } from "./projects";
+import { liveLabel } from "./activity-labels";
 
 export type SubagentStatus = "running" | "completed" | "failed" | "stopped";
 
@@ -86,4 +87,36 @@ export function modelName(model: string) {
     /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(?:\[1m\])?$/.exec(model);
   if (id) return `${cap(id[1]!)} ${id[2]}${id[3] ? `.${id[3]}` : ""}`;
   return /^[a-z]+$/.test(model) ? cap(model) : model;
+}
+
+/** "26s", "4m 05s", "1h 03m". */
+export function took(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+/** "Explore agent", or just "Agent" for the default kind. */
+export function agentKind(run: SubagentRun) {
+  return run.type && run.type !== "general-purpose"
+    ? `${run.type} agent`
+    : "Agent";
+}
+
+/** What it's on now, from its ~30s summary, or how it ended. */
+export function subagentNow(
+  run: SubagentRun,
+  display: (text: string) => string = (text) => text,
+) {
+  if (run.status === "running") {
+    const current = [...run.recent]
+      .reverse()
+      .find((c) => c.status === "running");
+    return run.summary ?? (current ? display(liveLabel(current)) : "Starting…");
+  }
+  const outcome = run.outcome?.split(/(?<=\.)\s/)[0];
+  if (run.status === "completed") return outcome ?? "Done";
+  return run.status === "failed" ? "Failed" : "Stopped";
 }

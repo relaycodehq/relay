@@ -7,6 +7,8 @@
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
 // --images starts one whose answer embeds two screenshots, a missing file and a web image.
+// --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` and starts a
+// thread where it sends three agents off; each message there sends three more.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -35,6 +37,7 @@ const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
 const images = process.argv.includes("--images");
+const subagents = process.argv.includes("--subagents");
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
@@ -69,6 +72,15 @@ await writeFile(
     (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
   { mode: 0o700 },
 );
+if (subagents)
+  await writeFile(
+    join(bin, "claude"),
+    `#!${process.execPath}\n` +
+      // Relay only takes a CLI that says its version.
+      `if (process.argv.includes("--version")) { console.log("1.0.0"); process.exit(0); }\n` +
+      (await readFile(resolve("tests/fixtures/subagent-claude.cjs"), "utf8")),
+    { mode: 0o700 },
+  );
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
 if (modelDir) {
@@ -155,18 +167,18 @@ if (images) {
   );
 }
 const pairing = await page.evaluate(
-  async ({ seed, images }) => {
+  async ({ seed, images, subagents }) => {
     const project = await window.relay.addProject();
-    if (seed || images) {
+    if (seed || images || subagents) {
       const settings = await window.relay.aiSettings();
-      const start = async (body) => {
+      const start = async (body, provider = "codex") => {
         const chat = await window.relay.createProjectChat(project.id, {
           kind: "project",
         });
         await window.relay.sendProjectChat(chat.id, {
           id: crypto.randomUUID(),
-          body: "@codex " + body,
-          provider: "codex",
+          body: `@${provider} ${body}`,
+          provider,
           choice: settings.questions,
           runtimeMode: "full-access",
           interactionMode: "default",
@@ -180,6 +192,7 @@ const pairing = await page.evaluate(
             "![the sidebar](docs/sidebar.png)\n\n" +
             "And a web one, ![logo](https://example.com/logo.png), stays a link.",
         );
+      if (subagents) await start("Fan out", "claude");
       if (seed) {
         await start("fixture edit files in the cache");
         await new Promise((r) => setTimeout(r, 2500));
@@ -189,7 +202,7 @@ const pairing = await page.evaluate(
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed, images },
+  { seed, images, subagents },
 );
 let url = pairing.url;
 if (host) {

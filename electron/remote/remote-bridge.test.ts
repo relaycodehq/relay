@@ -340,6 +340,46 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
   ).toBeNull();
 });
 
+it("lets a phone read a subagent's run with its tool output cut, as a thread's", async () => {
+  const run = {
+    id: "toolu_a",
+    description: "Map the SDK",
+    status: "running",
+    started: 1,
+    calls: 1,
+    recent: [],
+    trace: [
+      {
+        kind: "activity",
+        id: "t1",
+        activity: {
+          id: "t1",
+          kind: "read",
+          label: "Read sdk.d.ts",
+          status: "complete",
+          detail: "x".repeat(5000),
+        },
+      },
+    ],
+  };
+  const host = {
+    projects: async () => [],
+    chats: () => [],
+    dispatch: async () => run,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const b = new RemoteBridge(host, () => {});
+  const sent = (await b.handle("desktop", [
+    "projectChatAgent",
+    [chatId, "toolu_a"],
+  ])) as typeof run;
+  const activity = sent.trace[0]!.activity as Record<string, unknown>;
+  expect(activity.detail).toBe(`${"x".repeat(300)}\n…\n${"x".repeat(300)}`);
+  // There's no message to fetch the rest from.
+  expect(activity).not.toHaveProperty("detailCut");
+  expect(run.trace[0]!.activity.detail).toHaveLength(5000);
+});
+
 it("tells a phone what a queued message needs to be taken back, but leaves its screenshots on the desktop", async () => {
   const input = (id: string, over = {}) => ({
     id,

@@ -5,9 +5,9 @@ import type { HandoffView } from "../../../shared/handoff";
 import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
 import { agentName } from "../../../shared/agents";
-import { modelName } from "../../../shared/subagents";
+import { modelName, took } from "../../../shared/subagents";
 import { useNow } from "../../lib/useNow";
-import { activityIcons, took } from "../agent-turn/Subagents";
+import { activityIcons } from "../agent-turn/Subagents";
 import "./handoff.css";
 
 /** The call its agent is on, while it works. */
