@@ -45,6 +45,7 @@ test("async Codex questions allow explicit choices and free text during and afte
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
+      RELAY_FIXTURE_STEER_DELAY: "3000",
     },
   });
   try {
@@ -98,9 +99,18 @@ test("async Codex questions allow explicit choices and free text during and afte
     await expect(
       page.getByText("Answered questions", { exact: true }),
     ).toHaveCount(1);
+    const awaiting = page.getByRole("status").filter({
+      hasText: "Sent · awaiting Codex",
+    });
+    await expect(awaiting).toBeVisible();
+    await expect(awaiting.locator(".spinner")).toHaveCount(0);
+    await page.screenshot({
+      path: testInfo.outputPath("async-question-awaiting.png"),
+    });
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
+    await expect(awaiting).toHaveCount(0);
     const calls = (await readFile(capture, "utf8"))
       .split("\n")
       .filter(Boolean)

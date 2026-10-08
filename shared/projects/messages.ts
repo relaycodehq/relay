@@ -80,6 +80,8 @@ export interface ChatMessage {
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
+  /** Local: a reply to an async question sent into the running turn. */
+  asyncQuestionAnswer?: boolean;
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**

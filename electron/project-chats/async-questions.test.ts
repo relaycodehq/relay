@@ -106,6 +106,11 @@ it("rolls back a refused steer and leaves the question answerable on retry", asy
   expect(f.message.questions![0].answers).toBeUndefined();
   await f.questions.answer("chat", "message", "item", answer);
   expect(f.chat.messages).toHaveLength(2);
+  expect(f.chat.messages[1]).toMatchObject({
+    asyncQuestionAnswer: true,
+    unread: true,
+    status: "complete",
+  });
   expect(f.message.questions![0].answers).toEqual(answer.answers);
 });
 

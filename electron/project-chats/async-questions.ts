@@ -70,6 +70,7 @@ export class AsyncQuestions {
           created: Date.now(),
           version: 1,
           steered: true,
+          asyncQuestionAnswer: true,
           unread: true,
           ...(message.parentId ? { parentId: message.parentId } : {}),
         };
