@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,62 +11,9 @@ import {
 } from "react-native";
 import { answerImagePaths } from "../../../shared/answer-images";
 import { turnImages, type ChatMessage } from "../../../shared/projects";
-import { imageBridge } from "../../../shared/remote";
-import { outgoingImage } from "../remote/outbox";
-import { useRemote } from "../remote/RemoteProvider";
 import type { LightboxImage } from "./Lightbox";
 import { useTheme } from "./theme";
-
-export type Source =
-  | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string }
-  /** Pasted into a message still on its way; the outbox holds it. */
-  | { kind: "pending"; messageId: string; index: number };
-
-// Data URLs by source and size, so scrolling back doesn't fetch them again.
-const cache = new Map<string, string>();
-// Ones the desktop refused, so the lightbox skips them as the desktop's does.
-const failed = new Set<string>();
-export const keyOf = (s: Source) => JSON.stringify(s);
-export const imageFailed = (s: Source) => failed.has(keyOf(s));
-
-/**
- * The image as a data URL; with `max`, at most that many pixels on its longer
- * side, which the desktop shrinks it to from `imageBridge` on. Older desktops
- * send it whole.
- */
-export function useImage(source: Source, max?: number) {
-  const remote = useRemote();
-  const bridge = remote.overview?.bridge;
-  const shrunk = !!max && (bridge ?? 1) >= imageBridge;
-  const key = keyOf(source) + (shrunk ? `@${max}` : "");
-  const [uri, setUri] = useState(() =>
-    source.kind === "pending" ? outgoingImage(source.messageId, source.index) : cache.get(key),
-  );
-  const [error, setError] = useState(
-    failed.has(keyOf(source)) || (source.kind === "pending" && !uri),
-  );
-  useEffect(() => {
-    if (uri || error || source.kind === "pending" || remote.status !== "online") return;
-    // Until the overview says which bridge it is, a thumbnail could come whole.
-    if (max && bridge === undefined) return;
-    const load = shrunk
-      ? remote.call("image", source, max)
-      : source.kind === "attached"
-        ? remote.desktop("projectChatImage", source.chatId, source.imageId)
-        : remote.desktop("projectChatReadImage", source.chatId, source.messageId, source.path);
-    void load
-      .then((data) => {
-        cache.set(key, data);
-        setUri(data);
-      })
-      .catch(() => {
-        failed.add(keyOf(source));
-        setError(true);
-      });
-  }, [key, uri, error, remote.status, bridge]);
-  return { uri, failed: error };
-}
+import { keyOf, useImage, type Source } from "./useImage";
 
 const thumbSize = 88;
 const answerHeight = 420;

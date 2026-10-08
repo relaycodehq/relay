@@ -19,7 +19,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
-import { keyOf, useImage, type Source } from "./Images";
+import { keyOf, useImage, type Source } from "./useImage";
 
 export interface LightboxImage {
   source: Source;

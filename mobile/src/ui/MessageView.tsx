@@ -13,16 +13,11 @@ import {
   worktreeCommandNote,
 } from "../../../shared/worktree-command";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
+import { useRemote } from "../remote/RemoteProvider";
 import { AgentRun } from "./AgentRun";
 import { localImagePath } from "../../../shared/answer-images";
-import {
-  AnswerImage,
-  MessageImages,
-  imageFailed,
-  keyOf,
-  messageImages,
-  type Source,
-} from "./Images";
+import { AnswerImage, MessageImages, messageImages } from "./Images";
+import { imageFailed, keyOf, type Source } from "./useImage";
 import { Lightbox, type LightboxImage } from "./Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
@@ -78,6 +73,7 @@ export const MessageView = memo(function MessageView({
   onSteer?: (text: string) => void;
 }) {
   const t = useTheme();
+  const { active } = useRemote();
   const changes = m.changes;
   const openLink = useCallback<OpenLink>(
     (value, inline) => {
@@ -95,10 +91,11 @@ export const MessageView = memo(function MessageView({
     // The list is fixed while it's open; ones that failed to load are left out.
     const key = keyOf(source);
     const shown = among.filter(
-      (image) => keyOf(image.source) === key || !imageFailed(image.source),
+      (image) => keyOf(image.source) === key || !imageFailed(image.source, active),
     );
-    setViewing({ images: shown, index: shown.findIndex((image) => keyOf(image.source) === key) });
-  }, []);
+    const index = shown.findIndex((image) => keyOf(image.source) === key);
+    if (index >= 0) setViewing({ images: shown, index });
+  }, [active]);
   const openImage = useCallback((source: Source) => view(images.all, source), [view, images]);
   const openLooked = useCallback(
     (path: string) => view(images.looked, { kind: "read", chatId, messageId: m.id, path }),
