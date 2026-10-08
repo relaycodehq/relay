@@ -24,7 +24,7 @@ export function openCodeActivity(part: ToolPart): AgentActivity | undefined {
   const call = (
     kind: AgentActivity["kind"],
     label: string,
-    detail?: string,
+    detail: string | undefined = state.error ?? undefined,
   ): AgentActivity => ({
     id: part.callID.slice(0, 180),
     status,
