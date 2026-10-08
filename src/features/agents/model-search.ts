@@ -9,7 +9,7 @@ export type ModelPickerSearchable = {
   shortName?: string;
   /** Extra searchable text: a grouped agent's section name plus the description. */
   subProvider?: string;
-  /** Raised for rows the user starred when the picker opened. */
+  /** Raised for rows the user has starred. */
   isFavorite?: boolean;
 };
 
