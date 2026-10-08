@@ -128,10 +128,19 @@
   white-space: normal;
   line-height: 1.4;
 }
-.agent-worktree-item > span {
+.agent-worktree-menu {
+  width: 380px;
+  max-width: calc(100vw - 24px);
+}
+.agent-worktree-label {
   display: flex;
+  flex: 1;
   min-width: 0;
   flex-direction: column;
+}
+.agent-worktree-selected {
+  flex: none;
+  margin-left: auto;
 }
 .agent-worktree-item small {
   overflow: hidden;

@@ -386,6 +386,9 @@
 .context-compaction[data-status="failed"] {
   color: var(--danger);
 }
+.resume-divider {
+  margin: 8px 0;
+}
 /* Where the messages you haven't seen start: the compaction row's shape in
    the unread dot's colour, so it doesn't read as another compaction. Read, it
    fades and keeps its height until the thread is opened again; under reduced

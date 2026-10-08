@@ -75,6 +75,8 @@ export interface ChatSummary {
   links?: LinkedFolder[];
   /** Worktrees the agent made itself with git, still on disk when last checked. */
   agentWorktrees?: AgentWorktree[];
+  /** Explicit workspace choice; unset means the project folder, regardless of discovered worktrees. */
+  activeAgentWorktree?: Pick<AgentWorktree, "path" | "gitdir" | "branch">;
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */

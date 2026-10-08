@@ -160,6 +160,55 @@ describe("what OpenCode sends", () => {
     const { run } = quirky("newer");
     expect(await run).toBe("Wrote notes.md.");
   });
+
+  it.each(["missing-final-message", "missing-final-part"])(
+    "recovers the stored final answer when %s events were lost",
+    async (quirk) => {
+      const { seen, run } = quirky(quirk);
+      expect(await run).toBe("Wrote notes.md.");
+      expect(seen.texts.at(-1)).toBe("Wrote notes.md.");
+      expect([...seen.commentary.values()]).toContain("Let me check.");
+      expect(seen.cost).toBeCloseTo(0.037);
+    },
+  );
+
+  it("fails an empty reviewer turn, retaining its trace and naming rejected permissions", async () => {
+    vi.stubEnv("RELAY_OPENCODE_QUIRK", "empty-after-tool");
+    const { seen, run } = turn("Review this project", { readOnly: true });
+    await expect(run).rejects.toThrow(
+      /without a final answer.*Permission was denied for: edit/,
+    );
+    expect(seen.requests).toEqual([]);
+    expect(seen.activity).toContain(`file:failed:${root}/notes.md`);
+    expect([...seen.commentary.values()]).toContain("Let me check.");
+    const prompt = (await captured()).find((c) =>
+      c.path.endsWith("/prompt_async"),
+    );
+    expect(prompt.body.system).toContain("cannot delegate to subagents");
+    expect(prompt.body.system).toContain("return a final written answer");
+  });
+
+  it("never substitutes an earlier turn's answer for an empty resumed turn", async () => {
+    const first = turn("Write notes.md");
+    await first.run;
+    const resumed = turn("fixture empty after tool", {
+      session: { key: "k", id: first.seen.session, onId: async () => {} },
+    });
+    await expect(resumed.run).rejects.toThrow("without a final answer");
+    expect(resumed.seen.texts).not.toContain("Wrote notes.md.");
+  });
+
+  it("keeps side-conversation instructions in a read-only turn", async () => {
+    await turn("Explain this project", {
+      readOnly: true,
+      job: { kind: "side" },
+    }).run;
+    const prompt = (await captured()).find((c) =>
+      c.path.endsWith("/prompt_async"),
+    );
+    expect(prompt.body.system).toContain("You are in a side conversation");
+    expect(prompt.body.system).toContain("don't continue its task");
+  });
 });
 
 it("rejects the ask when the user declines", async () => {

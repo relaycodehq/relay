@@ -127,9 +127,11 @@ export function turnPrompt({
   const movedIn = chat.movedIn;
   const moved =
     !command && movedIn?.owed.includes(heardKey)
-      ? movedIn.copied
-        ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
-        : `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
+      ? movedIn.selected
+        ? `\n\nThe user selected ${JSON.stringify(movedIn.to)} as this thread's active workspace, previously ${JSON.stringify(movedIn.from)}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`
+        : movedIn.copied
+          ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
+          : `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
       : "";
   const setupNote = !command && !parent ? chat.setupNote : undefined;
   const setup = setupNote ? `\n\n${setupNote}` : "";

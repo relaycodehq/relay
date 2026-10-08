@@ -1217,37 +1217,42 @@ if (args.includes("--permission-prompt-tool")) {
       if (awaitingSteer) {
         awaitingSteer = false;
         const text = m.params.input[0].text;
-        send({
-          method: "item/started",
-          params: {
-            threadId: "fixture-thread",
-            item: {
-              id: "fixture-steer",
-              type: "userMessage",
-              clientId: m.params.clientUserMessageId ?? null,
-              content: m.params.input,
-            },
+        setTimeout(
+          () => {
+            send({
+              method: "item/started",
+              params: {
+                threadId: "fixture-thread",
+                item: {
+                  id: "fixture-steer",
+                  type: "userMessage",
+                  clientId: m.params.clientUserMessageId ?? null,
+                  content: m.params.input,
+                },
+              },
+            });
+            send({
+              method: "item/completed",
+              params: {
+                threadId: "fixture-thread",
+                item: {
+                  id: "fixture-steered-answer",
+                  type: "agentMessage",
+                  phase: "final_answer",
+                  text: "Noted: " + text,
+                },
+              },
+            });
+            send({
+              method: "turn/completed",
+              params: {
+                threadId: "fixture-thread",
+                turn: { id: "fixture-turn", status: "completed" },
+              },
+            });
           },
-        });
-        send({
-          method: "item/completed",
-          params: {
-            threadId: "fixture-thread",
-            item: {
-              id: "fixture-steered-answer",
-              type: "agentMessage",
-              phase: "final_answer",
-              text: "Noted: " + text,
-            },
-          },
-        });
-        send({
-          method: "turn/completed",
-          params: {
-            threadId: "fixture-thread",
-            turn: { id: "fixture-turn", status: "completed" },
-          },
-        });
+          Number(process.env.RELAY_FIXTURE_STEER_DELAY ?? 0),
+        );
       }
     } else if (m.method === "turn/interrupt") {
       record({ interrupt: m.params });

@@ -2,6 +2,7 @@
 // a hidden read-only thread of its own, then the lead's plan in Plan mode.
 import { agentMentionPattern } from "../../shared/agents";
 import { randomUUID } from "node:crypto";
+import { hasCouncilReport } from "../../shared/council";
 import {
   councilTurn,
   halted,
@@ -320,10 +321,9 @@ export function leadPrompt(
         thinker: n.number,
         ...(n.thinker.job ? { job: thinkerJobs[n.thinker.job].label } : {}),
         agent: memberLabel(n.thinker),
-        status:
-          n.answer?.status === "complete"
-            ? "finished"
-            : "didn't finish; use what it has, if anything",
+        status: hasCouncilReport(n.answer)
+          ? "finished"
+          : "didn't finish; use what it has, if anything",
         notes: (n.answer?.body ?? "").slice(-MAX_NOTES),
       })),
     )}`,

@@ -8,7 +8,11 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
-import { linksInstructions, threadLinks } from "../../shared/projects";
+import {
+  linksInstructions,
+  selectedAgentWorktree,
+  threadLinks,
+} from "../../shared/projects";
 import { goalChanged, type ThreadGoal } from "../../shared/goal";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
@@ -167,12 +171,19 @@ export class TurnRunner {
       commands = new Map<string, string>();
     let commits: Awaited<ReturnType<typeof commitWatch>> | undefined;
     const watchWorktrees = watchAgentWorktrees(
-      root,
+      await this.core.projects.root(chat.projectId),
       this.worktreesFolder,
       () => chat.agentWorktrees ?? [],
       async (worktrees) => {
         if (worktrees.length) chat.agentWorktrees = worktrees;
         else delete chat.agentWorktrees;
+        const selected = selectedAgentWorktree(chat);
+        if (selected)
+          chat.activeAgentWorktree = {
+            path: selected.path,
+            gitdir: selected.gitdir,
+            branch: selected.branch,
+          };
         await this.core.storage.save(chat);
       },
     );

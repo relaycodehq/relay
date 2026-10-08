@@ -1,4 +1,5 @@
-import { basename, relative, isAbsolute } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, join, relative, isAbsolute } from "node:path";
 import { git } from "../git/git";
 import type {
   AgentActivity,
@@ -18,10 +19,35 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Whether a command is a `git worktree add` naming `path`, by its folder name since agents write it relative or without macOS's /private. */
 export function addsWorktree(command: string, path: string) {
-  if (!/\bworktree\s+add\b/.test(command)) return false;
-  return new RegExp(
+  const target = new RegExp(
     `(^|[\\s/'"=])${escape(basename(path))}($|[\\s/'";&|)])`,
-  ).test(command);
+  );
+  // Search output and other statements mentioning a path aren't creation evidence.
+  const adds =
+    /\bgit(?:\s+(?:(?:-C|-c|--git-dir|--work-tree)\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)|--(?:git-dir|work-tree)=[^\s;&|]+))*\s+worktree\s+add\s+/g;
+  return [...command.matchAll(adds)].some((match) => {
+    const args =
+      command
+        .slice(match.index! + match[0].length)
+        .match(/"[^"]*"|'[^']*'|[^\s"';&|]+|[;&|]/g) ?? [];
+    let options = true;
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (/^[;&|]$/.test(arg)) return false;
+      if (options && arg === "--") {
+        options = false;
+        continue;
+      }
+      if (options && ["-b", "-B", "--reason"].includes(arg)) {
+        i++;
+        continue;
+      }
+      if (options && arg.startsWith("-")) continue;
+      // The first positional argument is the folder; branch names aren't ownership evidence.
+      return target.test(arg.replace(/^(['"])(.*)\1$/, "$2"));
+    }
+    return false;
+  });
 }
 
 /** The recorded worktrees one of the thread's own commands made; older saves credited any that appeared meanwhile. */
@@ -34,11 +60,13 @@ export function ownAgentWorktrees(chat: ProjectChat) {
     ),
   );
   return (chat.agentWorktrees ?? []).filter((w) =>
-    commands.some((c) => addsWorktree(c, w.path)),
+    commands.some(
+      (c) => addsWorktree(c, w.path) || (w.gitdir && addsWorktree(c, w.gitdir)),
+    ),
   );
 }
 
-type Live = Map<string, { branch?: string }>;
+type Live = Map<string, { branch?: string; gitdir?: string }>;
 
 /** The repository's worktrees still on disk, other than `root` and those under `skip`. */
 async function liveWorktrees(root: string, skip: string): Promise<Live> {
@@ -62,7 +90,63 @@ async function liveWorktrees(root: string, skip: string): Promise<Live> {
   const main = out.match(/^worktree (.+)$/m)?.[1];
   if (main) live.delete(main);
   live.delete(root);
+  // `worktree repair` keeps this identity even when the folder was renamed.
+  await Promise.all(
+    [...live].map(async ([path, value]) => {
+      const file = await readFile(join(path, ".git"), "utf8").catch(() => "");
+      const dir = file.match(/^gitdir: (.+)$/m)?.[1];
+      if (dir) value.gitdir = basename(dir.trim());
+    }),
+  );
   return live;
+}
+
+function reconcile(
+  live: Live,
+  recorded: AgentWorktree[],
+  commands: { label: string; at: number }[],
+  before?: Live,
+) {
+  const next: AgentWorktree[] = [];
+  for (const [path, value] of live) {
+    const old = recorded.find(
+      (w) => w.path === path || (value.gitdir && w.gitdir === value.gitdir),
+    );
+    if (!old && before?.has(path)) continue;
+    const made = commands.find(
+      (c) =>
+        addsWorktree(c.label, path) ||
+        (value.gitdir && addsWorktree(c.label, value.gitdir)),
+    );
+    if (!old && !made) continue;
+    const { branch: _branch, ...kept } = old ?? {};
+    next.push({ ...kept, path, ...value, at: old?.at ?? made!.at });
+  }
+  return next.sort((a, b) => a.at - b.at);
+}
+
+/** Backfills missed creation events, including a worktree recovered at another path. */
+export async function recoverAgentWorktrees(
+  root: string,
+  relayWorktrees: string,
+  chat: ProjectChat,
+) {
+  const commands = chat.messages.flatMap((m) =>
+    (m.trace ?? []).flatMap((e) =>
+      e.kind === "activity" &&
+      e.activity.kind === "command" &&
+      e.activity.status === "complete" &&
+      /\bworktree\s+add\b/.test(e.activity.label)
+        ? [{ label: e.activity.label, at: m.created }]
+        : [],
+    ),
+  );
+  if (!commands.length && !chat.agentWorktrees?.length) return [];
+  return reconcile(
+    await liveWorktrees(root, relayWorktrees),
+    chat.agentWorktrees ?? [],
+    commands,
+  );
 }
 
 /**
@@ -82,27 +166,12 @@ export function watchAgentWorktrees(
     const known = await before;
     if (!known) return;
     const live = await liveWorktrees(root, relayWorktrees);
-    // A branch switched or detached since shows as it is now.
-    const kept = recorded().flatMap(({ path, at }) => {
-      const branch = live.get(path)?.branch;
-      return live.has(path)
-        ? [{ path, ...(branch ? { branch } : {}), at }]
-        : [];
-    });
-    const made = [...live]
-      .filter(
-        ([path]) =>
-          !known.has(path) &&
-          !kept.some((w) => w.path === path) &&
-          addsWorktree(command, path),
-      )
-      .map(([path, { branch }]) => ({
-        path,
-        ...(branch ? { branch } : {}),
-        at: Date.now(),
-      }));
-    for (const [path, value] of live) known.set(path, value);
-    const next = [...kept, ...made];
+    const next = reconcile(
+      live,
+      recorded(),
+      [{ label: command, at: Date.now() }],
+      known,
+    );
     if (JSON.stringify(next) !== JSON.stringify(recorded()))
       await onChange(next);
   };

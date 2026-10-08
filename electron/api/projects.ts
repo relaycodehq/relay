@@ -10,6 +10,7 @@ import {
   linkedFoldersSchema,
   projectNameSchema,
   projectSettingsSchema,
+  threadWorktree,
 } from "../../shared/projects";
 import {
   checkNewLinks,
@@ -301,12 +302,11 @@ export function projectHandlers(ctx: ApiContext) {
         if (chat && chat.projectId !== id)
           throw new Error("That thread belongs to another project.");
         // A worktree thread reports its own branch; a removed one, the checkout's.
-        const root =
-          chat?.worktree?.path && !chat.worktree.removedAt
-            ? await projectChats
-                .worktreePath(chatId!)
-                .catch(() => projects.root(id))
-            : await projects.root(id);
+        const root = threadWorktree(chat ?? undefined)
+          ? await projectChats
+              .worktreeRoot(id, chatId!)
+              .catch(() => projects.root(id))
+          : await projects.root(id);
         const settings = store.get().sourceControl;
         return ci.status(root, ctx.login.client, (kind) =>
           isSourceControlOn(settings, kind),

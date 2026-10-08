@@ -24,14 +24,23 @@ const summaries: Record<AgentActivity["kind"], (count: number) => string> = {
 /** "Read 3 files, ran 2 commands, and edited 1 file" */
 export function summarizeActivity(activity: AgentActivity[]) {
   const groups = new Map<AgentActivity["kind"], Set<string>>();
+  const failed = new Set<string>();
+  const running = new Set<string>();
   for (const a of activity) {
+    if (a.status !== "complete") {
+      (a.status === "failed" ? failed : running).add(a.id);
+      continue;
+    }
     const seen = groups.get(a.kind) ?? new Set();
     // Repeated reads or edits of one file count once; commands and tools count every call.
     seen.add(a.kind === "read" || a.kind === "file" ? a.label : a.id);
     groups.set(a.kind, seen);
   }
-  const parts = [...groups].map(([kind, seen], index) => {
-    const text = summaries[kind](seen.size);
+  const labels = [...groups].map(([kind, seen]) => summaries[kind](seen.size));
+  if (failed.size) labels.push(`${plural(failed.size, "tool call")} failed`);
+  if (running.size)
+    labels.push(`${plural(running.size, "tool call")} still running`);
+  const parts = labels.map((text, index) => {
     return index === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
   });
   if (parts.length < 3) return parts.join(" and ");
@@ -87,9 +96,27 @@ export function programName(command: string): string | undefined {
 
 /** The past-tense line for a finished call, e.g. "Ran rg" or "Read AgentTurn.tsx". */
 export function doneLabel(a: AgentActivity) {
+  if (a.status === "failed") {
+    switch (a.kind) {
+      case "command":
+        return `Failed ${programName(a.label) ?? "command"}`;
+      case "read":
+        return `Failed to read ${baseName(a.label)}`;
+      case "file":
+        return `Failed to edit ${baseName(a.label)}`;
+      case "search":
+        return `Search failed: ${a.label}`;
+      case "web":
+        return "Web search failed";
+      case "agent":
+        return `Agent failed: ${a.label}`;
+      case "tool":
+        return `Tool failed: ${a.label}`;
+    }
+  }
   switch (a.kind) {
     case "command":
-      return `${a.status === "failed" ? "Failed" : "Ran"} ${programName(a.label) ?? "command"}`;
+      return `Ran ${programName(a.label) ?? "command"}`;
     case "read":
       return `Read ${baseName(a.label)}`;
     case "file":

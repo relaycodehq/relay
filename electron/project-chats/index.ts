@@ -444,11 +444,14 @@ export class ProjectChats {
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
+    await this.worktrees.refreshAgentWorktrees(chat);
     return { ...structuredClone(chat), requests: this.active.requests(id) };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
-    const { messages, ...chat } = await this.storage.load(id);
+    const saved = await this.storage.load(id);
+    await this.worktrees.refreshAgentWorktrees(saved);
+    const { messages, ...chat } = saved;
     return {
       ...structuredClone(chat),
       messages: messages.map((m) =>
@@ -566,9 +569,15 @@ export class ProjectChats {
   async reconcileSummaries() {
     await this.storage.reconcile(this.store.savedAtLoad);
   }
-  /** Threads with an answer running now. */
+  /** Threads with an answer running now; council members count under their parent. */
   working() {
-    return this.active.size;
+    const chats = new Map((this.store.get().chats ?? []).map((c) => [c.id, c]));
+    return new Set(
+      this.active.ids().map((id) => {
+        const chat = chats.get(id);
+        return (chat?.reviewer ?? chat?.thinker)?.parent ?? id;
+      }),
+    ).size;
   }
   /** Asked for by the window showing the thread, every few seconds while it does. */
   worktreeStatus(id: string) {
@@ -612,8 +621,11 @@ export class ProjectChats {
   agentWorktreePath(id: string, path: string) {
     return this.worktrees.agentWorktreePath(id, path);
   }
-  worktreeRoot(projectId: string, id: string) {
-    return this.worktrees.rootFor(projectId, id);
+  selectAgentWorktree(id: string, path: string | null) {
+    return this.worktrees.selectAgentWorktree(id, path);
+  }
+  worktreeRoot(projectId: string, id: string, expectedWorktree?: string) {
+    return this.worktrees.rootFor(projectId, id, expectedWorktree);
   }
   worktreePath(id: string) {
     return this.worktrees.path(id);
@@ -677,6 +689,14 @@ export class ProjectChats {
     response: AgentResponse,
   ) {
     return this.questions.answer(id, messageId, itemId, response);
+  }
+  setQuestionDismissed(
+    id: string,
+    messageId: string,
+    itemId: string,
+    dismissed: boolean,
+  ) {
+    return this.questions.setDismissed(id, messageId, itemId, dismissed);
   }
   async cancel(id: string) {
     const chat = this.storage.cached(id);

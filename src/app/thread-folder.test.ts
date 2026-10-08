@@ -18,6 +18,34 @@ const thread = (worktree?: ChatWorktree): ChatSummary => ({
 const made = { path: "/tmp/wt", branch: "relay/wt" };
 
 describe("worktreeThread", () => {
+  it("keeps unselected worktrees in the checkout, and retains an unavailable selection instead of choosing another", () => {
+    const chat = {
+      ...thread(),
+      agentWorktrees: [{ path: "/tmp/other", branch: "other", at: 2 }],
+    };
+    expect(worktreeThread(chat)).toBeUndefined();
+    const missing = {
+      ...chat,
+      activeAgentWorktree: { path: "/tmp/removed", branch: "mine" },
+    };
+    expect(worktreeThread(missing)).toBe(missing);
+    expect(terminalBlocked(missing, { kind: "project" }, "checkout")).toContain(
+      "unavailable",
+    );
+  });
+  it("follows the selected agent-created worktree, while a managed worktree takes priority", () => {
+    const agent = {
+      ...thread(),
+      agentWorktrees: [{ path: "/tmp/agent", branch: "feature", at: 1 }],
+      activeAgentWorktree: { path: "/tmp/agent", branch: "feature" },
+    };
+    expect(worktreeThread(agent)).toBe(agent);
+    const managed = { ...agent, worktree: made };
+    expect(worktreeThread(managed)).toBe(managed);
+    expect(
+      worktreeThread({ ...agent, worktree: { ...made, removedAt: 1 } }),
+    ).toBeUndefined();
+  });
   it("works in the checkout until the worktree is on disk, and again once it's removed", () => {
     expect(worktreeThread(undefined)).toBeUndefined();
     expect(worktreeThread(thread())).toBeUndefined();
@@ -82,6 +110,17 @@ describe("agentWorkingIn", () => {
     expect(agentWorkingIn(chats, own)).toBe(true);
     expect(agentWorkingIn(chats, other)).toBe(false);
     expect(agentWorkingIn(chats, undefined)).toBe(false);
+  });
+
+  it("doesn't count an agent-created worktree's running thread against the main checkout", () => {
+    const agent = {
+      ...thread(),
+      id: "agent",
+      agentWorktrees: [{ path: "/tmp/agent", branch: "feature", at: 1 }],
+      activeAgentWorktree: { path: "/tmp/agent", branch: "feature" },
+    };
+    expect(agentWorkingIn([running(agent)], undefined)).toBe(false);
+    expect(agentWorkingIn([running(agent)], agent)).toBe(true);
   });
 
   it("counts background agents, and a removed worktree's thread as the checkout's", () => {

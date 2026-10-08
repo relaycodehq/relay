@@ -182,6 +182,11 @@ export function chatHandlers(ctx: ApiContext) {
       (id, messageId, itemId, response) =>
         projectChats.answerQuestion(id, messageId, itemId, response),
     ),
+    setProjectChatQuestionDismissed: takes(
+      [idSchema, idSchema, agentIdSchema, z.boolean()],
+      (id, messageId, itemId, dismissed) =>
+        projectChats.setQuestionDismissed(id, messageId, itemId, dismissed),
+    ),
     cancelProjectChat: takes([idSchema], (id) => projectChats.cancel(id)),
     resolveStoppedWork: takes(
       [idSchema, z.enum(["resume", "dismiss"])],
@@ -273,6 +278,10 @@ export function chatHandlers(ctx: ApiContext) {
     revealAgentWorktree: takes(
       [idSchema, z.string().max(4096)],
       (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
+    ),
+    selectAgentWorktree: takes(
+      [idSchema, z.string().min(1).max(4096).nullable()],
+      (chatId, path) => projectChats.selectAgentWorktree(chatId, path),
     ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],

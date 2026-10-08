@@ -1,4 +1,8 @@
-import type { ChatMessage } from "../../../shared/projects";
+import { useState } from "react";
+import type {
+  AsyncAgentQuestions,
+  ChatMessage,
+} from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { AgentRequestCard } from "./AgentRequestCard";
 
@@ -28,26 +32,92 @@ export function AsyncQuestionCards({
             ))}
           </details>
         ) : (
-          <AgentRequestCard
+          <AsyncQuestionCard
             key={group.id}
-            deferred
-            request={{
-              id: group.id,
-              kind: "question",
-              title: "Codex has a question",
-              questions: group.questions,
-            }}
-            onRespond={(response) =>
-              api.answerProjectChatQuestion(
-                chatId,
-                message.id,
-                group.id,
-                response,
-              )
-            }
+            group={group}
+            messageId={message.id}
+            chatId={chatId}
           />
         ),
       )}
     </div>
+  );
+}
+
+function AsyncQuestionCard({
+  group,
+  messageId,
+  chatId,
+}: {
+  group: AsyncAgentQuestions;
+  messageId: string;
+  chatId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  async function reopen() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.setProjectChatQuestionDismissed(
+        chatId,
+        messageId,
+        group.id,
+        false,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      {/* Keep a partly written answer when the user dismisses and reopens. */}
+      <div hidden={!!group.dismissed}>
+        <AgentRequestCard
+          deferred
+          request={{
+            id: group.id,
+            kind: "question",
+            title: "Codex has a question",
+            questions: group.questions,
+          }}
+          onRespond={(response) =>
+            api.answerProjectChatQuestion(chatId, messageId, group.id, response)
+          }
+          onDismiss={() =>
+            api.setProjectChatQuestionDismissed(
+              chatId,
+              messageId,
+              group.id,
+              true,
+            )
+          }
+        />
+      </div>
+      {group.dismissed && (
+        <div className="async-question-dismissed">
+          <details className="async-question-answered">
+            <summary>
+              Dismissed{" "}
+              {group.questions.length === 1 ? "question" : "questions"}
+            </summary>
+            {group.questions.map((q) => (
+              <p key={q.id}>{q.question}</p>
+            ))}
+          </details>
+          <button
+            type="button"
+            className="text-button"
+            disabled={busy}
+            onClick={() => void reopen()}
+          >
+            Reopen
+          </button>
+        </div>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </>
   );
 }

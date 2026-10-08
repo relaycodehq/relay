@@ -4,13 +4,17 @@ import type {
   ChatSummary,
   ChatWorkspace,
 } from "../../shared/projects";
+import {
+  agentWorktreeUnavailable,
+  threadWorktree,
+} from "../../shared/projects";
 
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
 
 /** The thread while it works in a worktree on disk; otherwise its folder is the project's checkout. */
 export const worktreeThread = (chat: ChatSummary | undefined) =>
-  !!chat?.worktree?.path && !chat.worktree.removedAt ? chat : undefined;
+  threadWorktree(chat) ? chat : undefined;
 
 /**
  * Whether an agent is at work in the folder `inWorktree` (a worktree thread,
@@ -36,6 +40,8 @@ export function terminalBlocked(
   scope: ChatScope,
   draftWorkspace: ChatWorkspace,
 ) {
+  if (agentWorktreeUnavailable(chat))
+    return "The selected worktree is unavailable. Choose another workspace.";
   return chat?.worktree
     ? chat.worktree.removedAt
       ? "This thread's worktree was removed. Its next message makes a new one"

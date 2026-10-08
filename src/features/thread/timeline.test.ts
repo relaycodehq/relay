@@ -80,6 +80,28 @@ it("shows a prompt's opening @mention as the agent, not as text", () => {
   });
 });
 
+it("labels resume turns without showing the generated prompt in the timeline", () => {
+  const { turns, turnOf } = timelineTurns([
+    message(
+      "resume",
+      "user",
+      "@codex Continue from where the previous response was stopped.",
+      { resumed: true },
+    ),
+    message("answer", "assistant", "Checked the remaining changes."),
+  ]);
+  expect(turns).toEqual([
+    {
+      id: "resume",
+      agent: "codex",
+      prompt: "Resumed",
+      answer: "Checked the remaining changes.",
+      answering: false,
+    },
+  ]);
+  expect(turnOf.get("answer")).toBe(0);
+});
+
 it("says what an answer that wrote nothing did instead of no answer", () => {
   const call = (id: string, kind: "command" | "file", label: string) => ({
     kind: "activity" as const,

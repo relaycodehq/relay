@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
+import { threadWorktree } from "../../shared/projects";
 import { api } from "../lib/api";
 import { fitHeader } from "./header-fit";
 import {
@@ -473,7 +474,7 @@ export default function ProjectShell() {
               <TerminalDrawer
                 projectId={project.id}
                 chatId={chat?.id ?? null}
-                worktree={!!chat?.worktree}
+                worktree={!!threadWorktree(chat)}
                 onClose={() => terminal.close()}
               />
             )}

@@ -19,12 +19,15 @@ export function AgentRequestCard({
   onRespond,
   pendingCount = 1,
   deferred = false,
+  onDismiss,
 }: {
   request: AgentRequest;
   pendingCount?: number;
   /** The agent keeps working; answering requires an explicit Send. */
   deferred?: boolean;
   onRespond: (response: AgentResponse) => Promise<void>;
+  /** Only message-based async questions can be hidden without responding. */
+  onDismiss?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string>();
@@ -39,6 +42,18 @@ export function AgentRequestCard({
       setBusy(false);
     }
   }
+  async function dismiss() {
+    if (!onDismiss) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onDismiss();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section className="agent-request" aria-label={request.title}>
       <header>
@@ -49,6 +64,17 @@ export function AgentRequestCard({
         )}
         <strong>{request.title}</strong>
         {pendingCount > 1 && <small>1/{pendingCount}</small>}
+        {deferred && onDismiss && (
+          <button
+            type="button"
+            className="text-button agent-question-dismiss"
+            disabled={busy}
+            title="Hide this question. You can reopen it later."
+            onClick={() => void dismiss()}
+          >
+            Dismiss
+          </button>
+        )}
       </header>
       {deferred && (
         <p className="agent-question-timing">Answer whenever you're ready.</p>

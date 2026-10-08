@@ -1,6 +1,7 @@
 import { agentName, type AgentProvider } from "../../shared/agents";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type { ModelChoice } from "../../shared/settings";
+import { hasCouncilReport } from "../../shared/council";
 
 /** Council members read and reason but never change files, and none of them stops to ask. */
 export const councilTurn = {
@@ -26,8 +27,7 @@ export async function unfinishedSlots(
 ) {
   const slots: number[] = [];
   for (const [slot, m] of members.entries())
-    if ((await lastAnswer(host, m.chatId))?.status !== "complete")
-      slots.push(slot);
+    if (!hasCouncilReport(await lastAnswer(host, m.chatId))) slots.push(slot);
   return slots;
 }
 
@@ -37,7 +37,7 @@ export async function unfinishedSlots(
  */
 export function halted(answers: (ChatMessage | undefined)[]) {
   if (answers.some((a) => a?.status === "cancelled")) return "stopped";
-  if (!answers.some((a) => a?.status === "complete")) return "failed";
+  if (!answers.some(hasCouncilReport)) return "failed";
 }
 
 /** How a member reads to the lead. */

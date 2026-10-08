@@ -12,6 +12,7 @@ import {
 } from "../../shared/deep-review";
 import { agentName, agents } from "../../shared/agents";
 import { memberLabel } from "./council";
+import { hasCouncilReport } from "../../shared/council";
 
 const MAX_REPORT = 20000;
 
@@ -212,10 +213,9 @@ export function leadPrompt(
       reports.map((r) => ({
         reviewer: r.number,
         agent: agentLabel(r.reviewer),
-        status:
-          r.answer?.status === "complete"
-            ? "finished"
-            : "didn't finish; use what it has, if anything",
+        status: hasCouncilReport(r.answer)
+          ? "finished"
+          : "didn't finish; use what it has, if anything",
         report: (r.answer?.body ?? "").slice(-MAX_REPORT),
       })),
     )}`,

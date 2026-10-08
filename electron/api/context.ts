@@ -156,12 +156,12 @@ export function apiContext(services: Services) {
   async function place(
     where: unknown,
   ): Promise<Place & { projectId: string; chatId?: string }> {
-    const { projectId, chatId } = parseWorkspaceId(
+    const { projectId, chatId, worktree } = parseWorkspaceId(
       workspaceIdSchema.parse(where),
     );
     if (!chatId) return { ...(await projects.inspect(projectId)), projectId };
     return {
-      root: await projectChats.worktreeRoot(projectId, chatId),
+      root: await projectChats.worktreeRoot(projectId, chatId, worktree),
       plain: false,
       projectId,
       chatId,

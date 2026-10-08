@@ -50,8 +50,49 @@ export const DEFAULT_WORKTREE_CLEANUP_DAYS: number | null = null;
 export interface AgentWorktree {
   path: string;
   branch?: string;
+  /** Git's stable worktree metadata name, retained when the folder moves. */
+  gitdir?: string;
+  pr?: { number: number; url: string };
   /** When Relay first saw it. */
   at: number;
+}
+
+/** The user's chosen worktree; retained if it disappears so actions cannot fall back to the checkout. */
+export type ActiveAgentWorktree = Pick<
+  AgentWorktree,
+  "path" | "gitdir" | "branch"
+>;
+type ThreadWorkspace = {
+  worktree?: ChatWorktree;
+  agentWorktrees?: AgentWorktree[];
+  activeAgentWorktree?: ActiveAgentWorktree;
+};
+
+export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
+  worktree.gitdir ?? worktree.path;
+
+export function selectedAgentWorktree(chat: ThreadWorkspace | undefined) {
+  const selected = chat?.activeAgentWorktree;
+  return (
+    selected &&
+    chat?.agentWorktrees?.find((w) =>
+      selected.gitdir ? w.gitdir === selected.gitdir : w.path === selected.path,
+    )
+  );
+}
+
+export const agentWorktreeUnavailable = (chat: ThreadWorkspace | undefined) =>
+  !chat?.worktree &&
+  !!chat?.activeAgentWorktree &&
+  !selectedAgentWorktree(chat);
+
+/** The folder a thread's Git, files, terminal and agent follow. */
+export function threadWorktree(chat: ThreadWorkspace | undefined) {
+  if (chat?.worktree)
+    return chat.worktree.path && !chat.worktree.removedAt
+      ? chat.worktree
+      : undefined;
+  return selectedAgentWorktree(chat) ?? chat?.activeAgentWorktree;
 }
 export interface WorktreeStatus {
   branch?: string;

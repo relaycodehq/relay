@@ -1,0 +1,102 @@
+.resumed-preview {
+  height: 100%;
+  overflow: auto;
+  padding: 36px 24px;
+  background: var(--inbox);
+}
+.resume-preview-controls,
+.resume-preview-chat {
+  max-width: 940px;
+  margin: 0 auto;
+}
+.resume-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.resume-preview-heading h1 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  margin: 0 0 18px;
+}
+.resume-preview-heading > span,
+.resume-preview-controls p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.resume-preview-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.resume-preview-switcher button {
+  font-size: 12px;
+}
+.resume-preview-switcher button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.resume-preview-controls p {
+  margin: 14px 0 22px;
+  line-height: 1.5;
+}
+.resume-preview-chat {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.resume-preview-thread-title {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+}
+.resume-preview-thread-title span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.resume-preview-chat .project-message {
+  content-visibility: visible;
+}
+.resume-marker {
+  margin: 8px 0;
+}
+.resume-marker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.resume-marker time {
+  font-size: inherit;
+}
+.resume-marker-pill .resume-marker-label {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--toolbar);
+}
+.resume-preview-footer {
+  padding: 14px 28px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .resumed-preview {
+    padding: 20px 12px;
+  }
+  .resume-preview-heading {
+    align-items: flex-start;
+  }
+  .resume-preview-heading > span {
+    white-space: nowrap;
+  }
+}

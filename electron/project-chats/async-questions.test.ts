@@ -72,6 +72,68 @@ const answer = {
   answers: { "0": ["Private"], "1": ["Owner"] },
 };
 
+it("dismisses and reopens a saved question without answering, steering or stopping the turn", async () => {
+  const f = fixture();
+  const version = f.message.version;
+  await f.questions.setDismissed("chat", "message", "item", true);
+  expect(f.message.questions![0]).toMatchObject({ dismissed: true });
+  expect(f.message.questions![0].answers).toBeUndefined();
+  expect(f.message.version).toBeGreaterThan(version);
+  expect(f.save).toHaveBeenCalledWith(f.chat);
+  expect(f.emit).toHaveBeenCalledWith({
+    chatId: "chat",
+    message: f.message,
+  });
+  expect(f.message.status).toBe("streaming");
+  expect(f.run.stopping).toBeFalsy();
+  expect(f.run.steer).not.toHaveBeenCalled();
+  expect(f.send).not.toHaveBeenCalled();
+  expect(f.chat.messages).toHaveLength(1);
+
+  await f.questions.setDismissed("chat", "message", "item", false);
+  expect(f.message.questions![0].dismissed).toBeUndefined();
+  await f.questions.answer("chat", "message", "item", answer);
+  expect(f.message.questions![0].answers).toEqual(answer.answers);
+});
+
+it("serializes dismissal with an answer and rejects dismissing an answered or missing question", async () => {
+  const f = fixture();
+  const results = await Promise.allSettled([
+    f.questions.setDismissed("chat", "message", "item", true),
+    f.questions.answer("chat", "message", "item", answer),
+    f.questions.setDismissed("chat", "message", "item", true),
+  ]);
+  expect(results.map((r) => r.status)).toEqual([
+    "fulfilled",
+    "fulfilled",
+    "rejected",
+  ]);
+  expect(f.message.questions![0].answers).toEqual(answer.answers);
+  expect(f.message.questions![0].dismissed).toBeUndefined();
+  await expect(
+    f.questions.setDismissed("chat", "missing", "item", true),
+  ).rejects.toThrow("no longer available");
+  await expect(
+    f.questions.setDismissed("chat", "message", "missing", true),
+  ).rejects.toThrow("no longer available");
+});
+
+it("keeps dismissal retryable if saving fails", async () => {
+  const f = fixture();
+  f.save.mockRejectedValueOnce(new Error("Disk full"));
+  await expect(
+    f.questions.setDismissed("chat", "message", "item", true),
+  ).rejects.toThrow("Disk full");
+  expect(f.message.questions![0].dismissed).toBeUndefined();
+  expect(f.emit).not.toHaveBeenCalled();
+  await f.questions.setDismissed("chat", "message", "item", true);
+  f.save.mockRejectedValueOnce(new Error("Disk full"));
+  await expect(
+    f.questions.setDismissed("chat", "message", "item", false),
+  ).rejects.toThrow("Disk full");
+  expect(f.message.questions![0].dismissed).toBe(true);
+});
+
 it("rejects missing, partial, unknown and malformed answers without sending or consuming the question", async () => {
   const f = fixture();
   for (const value of [
@@ -106,6 +168,11 @@ it("rolls back a refused steer and leaves the question answerable on retry", asy
   expect(f.message.questions![0].answers).toBeUndefined();
   await f.questions.answer("chat", "message", "item", answer);
   expect(f.chat.messages).toHaveLength(2);
+  expect(f.chat.messages[1]).toMatchObject({
+    asyncQuestionAnswer: true,
+    unread: true,
+    status: "complete",
+  });
   expect(f.message.questions![0].answers).toEqual(answer.answers);
 });
 

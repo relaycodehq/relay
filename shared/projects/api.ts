@@ -157,6 +157,12 @@ export interface ProjectChatApi {
     itemId: string,
     response: AgentResponse,
   ): Promise<void>;
+  setProjectChatQuestionDismissed(
+    id: string,
+    messageId: string,
+    itemId: string,
+    dismissed: boolean,
+  ): Promise<void>;
   /** `move` puts the message at `index` in the queue. Scheduled messages take `remove` and `steer`, which sends them now. */
   projectChatQueueAction(
     id: string,
@@ -323,6 +329,11 @@ export interface ProjectWorktreeApi {
   revealProjectWorktree(chatId: string): Promise<void>;
   /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
   revealAgentWorktree(chatId: string, path: string): Promise<void>;
+  /** Selects a worktree owned by this chat, or the project folder with null. */
+  selectAgentWorktree(
+    chatId: string,
+    path: string | null,
+  ): Promise<ChatSummary>;
 }
 
 export interface ProjectFilesApi {

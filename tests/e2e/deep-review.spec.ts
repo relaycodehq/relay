@@ -20,7 +20,11 @@ import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 /** Relay with fake Codex and Claude on its PATH. */
-async function launch(root: string, withOpenRouter = false) {
+async function launch(
+  root: string,
+  withOpenRouter = false,
+  openCodeQuirk?: string,
+) {
   const bin = join(root, "bin");
   await mkdir(bin);
   const agent = await readFile(
@@ -28,7 +32,7 @@ async function launch(root: string, withOpenRouter = false) {
     "utf8",
   );
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
-  if (withOpenRouter)
+  if (withOpenRouter || openCodeQuirk)
     await fakeCli(
       join(bin, "opencode"),
       (await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"))
@@ -51,12 +55,13 @@ async function launch(root: string, withOpenRouter = false) {
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: join(root, "agent.jsonl"),
       RELAY_AGENT_NO_TITLE: "1",
+      ...(openCodeQuirk ? { RELAY_OPENCODE_QUIRK: openCodeQuirk } : {}),
     },
   });
 }
 
 /** Relay on a new project whose src/queue.ts has an uncommitted change. */
-async function openProject(withOpenRouter = false) {
+async function openProject(withOpenRouter = false, openCodeQuirk?: string) {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-deep-review-")),
   );
@@ -71,7 +76,7 @@ async function openProject(withOpenRouter = false) {
   git("add", ".");
   git("commit", "-qm", "Start");
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
-  const app = await launch(root, withOpenRouter);
+  const app = await launch(root, withOpenRouter, openCodeQuirk);
   const page = await app.firstWindow();
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = async () => ({
@@ -88,6 +93,68 @@ async function openProject(withOpenRouter = false) {
     },
   };
 }
+
+test("empty OpenCode reviews show failure and retry instead of Done", async () => {
+  const { page, close } = await openProject(false, "empty-after-tool");
+  try {
+    await page.evaluate(async () => {
+      const [project] = await window.relay.projects();
+      const reviewer = {
+        provider: "opencode",
+        choice: {
+          model: "openrouter/pickle",
+          reasoningEffort: "",
+          fast: false,
+        },
+        prompt: "",
+      };
+      localStorage.setItem(
+        `deep-review-setup:${project!.id}`,
+        JSON.stringify({
+          kind: "uncommitted",
+          base: "",
+          reviewers: [reviewer, reviewer],
+          lead: {
+            provider: "codex",
+            choice: {
+              model: "gpt-5.6-sol",
+              reasoningEffort: "medium",
+              fast: false,
+            },
+          },
+          runChecks: false,
+        }),
+      );
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+    const panes = page.locator(".deep-review-pane");
+    await expect(panes).toHaveCount(2);
+    await expect(panes.locator(".deep-review-pane-status")).toHaveText([
+      "Didn't finish",
+      "Didn't finish",
+    ]);
+    await expect(panes.locator(".agent-error-message")).toHaveCount(2);
+    await expect(panes.first()).toContainText(
+      "OpenCode stopped without a final answer",
+    );
+    await expect(panes.first()).toContainText("1 tool call failed");
+    await expect(panes.locator(".deep-review-pane-status.done")).toHaveCount(0);
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await expect(panes.locator(".agent-error-message")).toHaveCount(4);
+    await expect(
+      page.getByRole("button", { name: "Try again", exact: true }),
+    ).toBeEnabled();
+    await screenshot(page, { path: "test-results/opencode-empty-review.png" });
+  } finally {
+    await close();
+  }
+});
 
 test("shares OpenRouter favorites between deep review reviewers and the lead", async () => {
   const { page, close } = await openProject(true);

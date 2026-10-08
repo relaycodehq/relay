@@ -6,7 +6,7 @@ import type {
   ProjectChatSend,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot, sentBy } from "../../shared/projects";
+import { replyRoot, sentBy, threadWorktree } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agents, helperProviders } from "../../shared/agents";
@@ -121,26 +121,31 @@ export class ChatTurns {
       );
     // Picking another agent before resuming hands the work to it.
     const provider = settings?.provider ?? sentAgent(chat.lastInput);
-    await this.sendNow(id, {
-      ...chat.lastInput,
-      ...(settings && { contextWindow: undefined }),
-      ...settings,
-      id: randomUUID(),
-      to: provider,
-      body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
-      images: undefined,
-      selection: undefined,
-      delivery: undefined,
-      // Carrying on doesn't call another council.
-      ultraplan: undefined,
-    });
+    await this.sendNow(
+      id,
+      {
+        ...chat.lastInput,
+        ...(settings && { contextWindow: undefined }),
+        ...settings,
+        id: randomUUID(),
+        to: provider,
+        body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
+        images: undefined,
+        selection: undefined,
+        delivery: undefined,
+        // Carrying on doesn't call another council.
+        ultraplan: undefined,
+      },
+      true,
+    );
   }
-  async sendNow(id: string, input: ProjectChatSend) {
+  async sendNow(id: string, input: ProjectChatSend, resumed = false) {
     const active = this.core.active.claim(id, input);
     try {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
-      if (!chat.worktree && !chat.thinker)
+      await this.worktrees.refreshAgentWorktrees(chat);
+      if (!chat.worktree && !threadWorktree(chat) && !chat.thinker)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.worktrees.root(chat, input.body);
       if (chat.messages.some((m) => m.id === input.id)) {
@@ -226,6 +231,7 @@ export class ChatTurns {
         created: Date.now(),
         provider: asked?.provider ?? input.provider,
         version: 1,
+        ...(resumed && { resumed: true }),
         ...(input.images?.length
           ? { images: await this.core.storage.saveImages(id, input.images) }
           : {}),

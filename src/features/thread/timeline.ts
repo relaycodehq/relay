@@ -58,7 +58,9 @@ function textOf(m: ChatMessage): MessageText {
     const mention = agentMention(m.body);
     text = {
       ...(mention && { agent: mention.provider }),
-      said: plainText(mention ? mention.question : m.body, 160),
+      said: m.resumed
+        ? "Resumed"
+        : plainText(mention ? mention.question : m.body, 160),
       note: "",
       activity: [],
     };

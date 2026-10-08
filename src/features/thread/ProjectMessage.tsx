@@ -265,6 +265,22 @@ export const Message = memo(function Message({
       image={m.status === "streaming" ? hiddenImage : answerImage}
     />
   );
+  if (m.resumed)
+    return (
+      <div
+        className="context-compaction resume-divider"
+        data-message-id={m.id}
+        role="separator"
+        aria-label={`Resumed at ${clock(m.created)}`}
+      >
+        <span>
+          Resumed ·{" "}
+          <time dateTime={new Date(m.created).toISOString()}>
+            {clock(m.created)}
+          </time>
+        </span>
+      </div>
+    );
   if (m.handoff)
     return (
       <HandoffRow
@@ -302,7 +318,11 @@ export const Message = memo(function Message({
           <MessageAgentName provider={m.provider} model={m.model} />
         )}
         {m.role === "user" && <time>{clock(m.created)}</time>}
-        {m.unread && (
+        {m.unread && m.asyncQuestionAnswer ? (
+          <span className="muted" role="status">
+            Sent · awaiting {agentName(m.provider)}
+          </span>
+        ) : m.unread ? (
           <span
             className="steer-unread muted"
             role="status"
@@ -311,7 +331,7 @@ export const Message = memo(function Message({
           >
             <Spinner size={11} steady />
           </span>
-        )}
+        ) : null}
         {m.author && m.role === "assistant" && (
           <span className="muted">via {m.author}</span>
         )}

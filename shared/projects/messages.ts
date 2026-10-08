@@ -9,6 +9,8 @@ export interface AsyncAgentQuestions {
   id: string;
   questions: AgentQuestion[];
   answers?: Record<string, string[]>;
+  /** Hidden by the user; can be reopened without answering or stopping the agent. */
+  dismissed?: boolean;
 }
 
 /** How full the provider session's context window was after this answer. */
@@ -58,6 +60,8 @@ export interface WorktreeCommandRun {
   stopped?: "timeout" | "cancelled";
 }
 export interface ChatMessage {
+  /** Local marker: Relay sent this prompt to resume a stopped answer; shown as a divider. */
+  resumed?: boolean;
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
   /** Local: what a compaction left the agent with, when the provider hands it back readable. */
@@ -78,6 +82,8 @@ export interface ChatMessage {
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
+  /** Local: a reply to an async question sent into the running turn. */
+  asyncQuestionAnswer?: boolean;
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**
