@@ -1,9 +1,40 @@
 import { useRef, useState, type RefObject } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, Search } from "lucide-react";
 import { ProjectBadge } from "./ProjectBadge";
-import type { Project } from "../../../shared/projects";
+import type { ChatSummary, Project } from "../../../shared/projects";
 import "./projects.css";
+
+/**
+ * The project in view first, then the rest by their latest thread activity.
+ * Ordered once on mount: running threads keep bumping `updated`, and rows
+ * moving under the pointer would pick the wrong project.
+ */
+function useOpenOrder(projects: Project[], current: string | null) {
+  const qc = useQueryClient();
+  const [order] = useState(() => {
+    const lastActive = (id: string) =>
+      Math.max(
+        0,
+        ...(qc.getQueryData<ChatSummary[]>(["project-chats", id]) ?? []).map(
+          (c) => c.updated,
+        ),
+      );
+    return [...projects]
+      .sort(
+        (a, b) =>
+          Number(b.id === current) - Number(a.id === current) ||
+          lastActive(b.id) - lastActive(a.id),
+      )
+      .map((p) => p.id);
+  });
+  const rank = (p: Project) => {
+    const i = order.indexOf(p.id);
+    return i < 0 ? order.length : i;
+  };
+  return [...projects].sort((a, b) => rank(a) - rank(b));
+}
 
 export function ProjectSearch({
   projects,
@@ -22,7 +53,7 @@ export function ProjectSearch({
   const [search, setSearch] = useState("");
   const highlighted = useRef<string | null>(null);
   const query = search.trim().toLocaleLowerCase();
-  const matches = projects.filter((item) =>
+  const matches = useOpenOrder(projects, current).filter((item) =>
     `${item.name} ${item.path}`.toLocaleLowerCase().includes(query),
   );
 
