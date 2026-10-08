@@ -283,7 +283,9 @@ export async function installService(spec: ServiceSpec) {
   }
   await writeFile(file, systemdService(spec));
   await systemctl(["daemon-reload"]);
-  await systemctl(["enable", "--now", systemdUnit]);
+  // Enabling an active unit does not apply a changed home or executable.
+  await systemctl(["enable", systemdUnit]);
+  await systemctl(["restart", systemdUnit]);
   // Without lingering, a user's services stop when their last session ends.
   const note = await run("loginctl", ["enable-linger", userInfo().username])
     .then(() => undefined)
