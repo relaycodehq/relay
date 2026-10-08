@@ -2,6 +2,14 @@ import type { AgentProvider } from "../agents";
 import { isImagePath } from "../answer-images";
 import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
+import type { AgentQuestion } from "../agent-modes";
+
+/** A question the agent leaves open while it keeps working. */
+export interface AsyncAgentQuestions {
+  id: string;
+  questions: AgentQuestion[];
+  answers?: Record<string, string[]>;
+}
 
 /** How full the provider session's context window was after this answer. */
 export interface ContextUsage {
@@ -17,12 +25,14 @@ export interface PromptCache {
   at: number;
   ttlMs: number;
 }
-/** Local marker: the outgoing agent wrote this note for the one taking over. */
+/** Local marker: the outgoing agent's note for the one taking over, or Relay's when it couldn't write one. */
 interface AgentHandoff {
   from: AgentProvider;
   to: AgentProvider;
   /** The note is for another computer, where `to` carries on. */
   computer?: string;
+  /** `from` couldn't write the note, so Relay made it from the thread's record. */
+  byRelay?: boolean;
 }
 /** What a reloaded session's agent loaded that its old process hadn't, and what it no longer has. */
 export interface NameChanges {
@@ -79,6 +89,8 @@ export interface ChatMessage {
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
+  /** Questions stay answerable after the turn ends or Relay restarts. */
+  questions?: AsyncAgentQuestions[];
   /** Local: what the side check flagged during this turn; see shared/watch. */
   notes?: WatchNote[];
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */

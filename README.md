@@ -22,7 +22,6 @@ Grab the file for your system from the [latest release](https://github.com/relay
 | Windows 10/11 (x64) | `Relay-<version>-win-x64.exe` installer |
 | Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` |
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then run `python3 install.py` inside it (no sudo) |
-| Intel Mac | No package yet, so [build from source](#for-contributors) |
 | A server or a computer you only reach remotely | `relay`, the [headless Relay](docs/headless.md): see below, any OS with Node.js 22 |
 
 For a server or a computer you only reach remotely, like a Mac mini in a cupboard, install the [headless Relay](docs/headless.md) with one command. It sets itself up, starts with the computer and pairs with your phone:
@@ -85,12 +84,8 @@ Automated tests do not cover real agent accounts, OS credential prompts, signing
 - Threads, drafts and settings stay local. Data lives in `~/Library/Application Support/Relay Experimental` on macOS, `%APPDATA%\Relay Experimental` on Windows and `~/.config/Relay Experimental` on Linux.
 - Saved tokens are encrypted with the OS credential store (Keychain on macOS). Chat history and folder paths are not encrypted.
 - Relay never checks out, resets, pulls, force-pushes or stages files on its own. Git actions that change your checkout or remote happen only when you click them.
-- Pull request review and its shared rooms currently need a Gitea server. Everything else works with any local folder, Git or not.
+- Pull request review works with GitHub through your `gh` CLI login, or with a Gitea server. Everything else works with any local folder, Git or not.
 - Relay is an independent project and is not affiliated with OpenAI, Anthropic, OpenCode or Cursor (Anysphere). Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
-
-## Pull request rooms
-
-A pull request can have a room: a conversation with coworkers beside the review, where everyone runs their own agent in their own clone. Rooms need a Gitea server and a room server you trust. Setup is in the [room server guide](server/README.md).
 
 ## More documentation
 

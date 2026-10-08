@@ -301,7 +301,7 @@ test("keeps remembered reviews separate for each account and restores them after
       .getByRole("complementary", { name: "Projects" })
       .getByRole("button", { name: "Open settings", exact: true })
       .click();
-    await page.getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("button", { name: "Gitea", exact: true }).click();
     await page
       .getByRole("button", { name: "Disconnect account", exact: true })
       .click();

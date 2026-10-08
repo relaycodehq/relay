@@ -253,52 +253,6 @@
 .outgoing-commits code {
   color: var(--muted);
 }
-.live-sync-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-}
-.live-sync-button.active {
-  color: var(--accent);
-}
-.modal.sync-modal {
-  max-width: min(1100px, 94vw);
-  width: min(980px, 92vw);
-}
-.sync-modal p {
-  font-size: 13px;
-  line-height: 1.6;
-}
-.sync-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin: 20px 0;
-}
-.sync-issues {
-  max-height: 230px;
-  overflow: auto;
-  font-size: 12px;
-}
-.sync-issues > button {
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  width: 100%;
-  text-align: left;
-  margin: 5px 0;
-}
-.sync-issues small {
-  color: var(--muted);
-}
-.sync-conflict-diff {
-  height: 45vh;
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
 .working-diff-frame {
   position: relative;
   display: flex;

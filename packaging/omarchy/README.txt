@@ -67,9 +67,3 @@ TROUBLESHOOTING
 Source and third-party licenses are included with the release/source tree.
 Electron and Chromium licenses are in app/. Relay's license and
 third-party notices are alongside this file and within app/resources/app.asar.
-
-PROJECT INVITATIONS
-
-The installer registers relay-room links. Open your colleague's HTTPS
-invitation and choose Open Relay. Sign into your own Gitea account,
-then choose Join and open PR. Hosting access is not required to join.

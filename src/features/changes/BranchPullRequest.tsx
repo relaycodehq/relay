@@ -197,7 +197,7 @@ export function CreatePullSheet({
                   )}
                   {!p.remote && (
                     <p role="alert">
-                      No push remote matches this Gitea repository. Configure a
+                      No push remote matches this repository. Configure a
                       matching remote first.
                     </p>
                   )}

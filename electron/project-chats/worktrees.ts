@@ -71,7 +71,12 @@ export class ThreadWorktrees {
     prompt: string,
     branch?: string,
   ) {
-    const { worktree, copied } = await this.copyFor(chat, source, prompt, branch);
+    const { worktree, copied } = await this.copyFor(
+      chat,
+      source,
+      prompt,
+      branch,
+    );
     chat.worktree = worktree;
     await this.core.storage.save(chat);
     return copied;

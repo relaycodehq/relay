@@ -1,5 +1,5 @@
-import { afterEach, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterEach, expect, it, vi } from "vitest";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git, gitInfo, gitVersion, setGitPath } from "./git";
@@ -32,3 +32,79 @@ it("won't take a program that isn't Git", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it.skipIf(process.platform === "win32")(
+  "waits for an aborted Git process before callers can clean up its folder",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "relay-git-abort-"));
+    try {
+      const file = join(dir, "git"),
+        ready = join(dir, "ready"),
+        done = join(dir, "done");
+      const script = `#!${process.execPath}\nconst fs = require('node:fs'); process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(${JSON.stringify(done)}, 'done'); process.exit(); }, 100)); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+      await writeFile(file, script);
+      await chmod(file, 0o755);
+      setGitPath(file);
+      const stop = new AbortController();
+      const running = git(dir, ["commit"], { signal: stop.signal });
+      const failed = expect(running).rejects.toThrow("Cancelled.");
+      await vi.waitFor(async () =>
+        expect(await readFile(ready, "utf8")).toBe("ready"),
+      );
+      stop.abort();
+      await failed;
+      expect(await readFile(done, "utf8")).toBe("done");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "stops a real commit hook before cancellation settles",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "relay-git-hook-abort-"));
+    let pid: number | undefined;
+    try {
+      await git(dir, ["init"]);
+      const ready = join(dir, "ready"),
+        done = join(dir, "done");
+      const hook = join(dir, ".git", "hooks", "pre-commit");
+      await writeFile(
+        hook,
+        `#!${process.execPath}\nconst fs=require('node:fs'); process.on('SIGTERM',()=>{}); fs.writeFileSync(${JSON.stringify(ready)},String(process.pid)); setTimeout(()=>fs.writeFileSync(${JSON.stringify(done)},'still running'),3000); setInterval(()=>{},1000);`,
+      );
+      await chmod(hook, 0o755);
+      const stop = new AbortController();
+      const running = git(
+        dir,
+        [
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "test",
+        ],
+        { signal: stop.signal },
+      );
+      const failed = expect(running).rejects.toThrow("Cancelled.");
+      await vi.waitFor(async () => {
+        pid = Number(await readFile(ready, "utf8"));
+        expect(pid).toBeGreaterThan(0);
+      });
+      stop.abort();
+      await failed;
+      expect(() => process.kill(pid!, 0)).toThrow();
+      await expect(readFile(done, "utf8")).rejects.toThrow();
+    } finally {
+      if (pid)
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {}
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);

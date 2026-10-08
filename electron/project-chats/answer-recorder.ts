@@ -8,6 +8,7 @@ import type {
 } from "../../shared/projects";
 import type { TurnModel } from "../../shared/turn-model";
 import type { WatchNote } from "../../shared/watch";
+import type { AgentQuestion } from "../../shared/agent-modes";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -129,6 +130,14 @@ export class AnswerRecorder {
       if (index >= 0) trace[index] = entry;
       else if (trace.length < TRACE_LIMIT) trace.push(entry);
     }
+    this.changed();
+  }
+  questions(id: string, questions: AgentQuestion[]) {
+    if (this.stopped) return;
+    const groups = (this.message.questions ??= []);
+    // A reattached session can replay the completed item.
+    if (groups.some((group) => group.id === id)) return;
+    groups.push({ id, questions });
     this.changed();
   }
   /**

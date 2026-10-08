@@ -1,6 +1,12 @@
 import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, mkdir, writeFile, readFile, realpath } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  realpath,
+} from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -28,7 +34,10 @@ test("picks the account in Settings, switches it from the model picker, and runs
   await writeFile(join(repo, "README.md"), "# Accounts\n");
   git("add", ".");
   git("commit", "-qm", "Base");
-  const agent = await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8");
+  const agent = await readFile(
+    resolve("tests/fixtures/room-agent.cjs"),
+    "utf8",
+  );
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
   // The usual sign-in, and a second account Relay signed in earlier.
   await mkdir(join(claudeHome, "projects"), { recursive: true });
@@ -98,7 +107,9 @@ test("picks the account in Settings, switches it from the model picker, and runs
     // The whole line picks it, not just the radio.
     await accounts.getByText("Team · you@company.dev").click();
     await expect(inUse).toContainText("Work");
-    await screenshot(page, { path: "test-results/agent-accounts-settings.png" });
+    await screenshot(page, {
+      path: "test-results/agent-accounts-settings.png",
+    });
     await page.getByRole("button", { name: "Back to app" }).click();
 
     // The picker's footer shows the thread's account and switches it.
@@ -122,13 +133,14 @@ test("picks the account in Settings, switches it from the model picker, and runs
       .getByRole("button", { name: "Send message", exact: true })
       .click();
     await expect
-      .poll(async () =>
-        (await readFile(capture, "utf8").catch(() => ""))
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line))
-          .find((r) => r.provider === "claude" && r.prompt?.includes("hello"))
-          ?.claudeConfig,
+      .poll(
+        async () =>
+          (await readFile(capture, "utf8").catch(() => ""))
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
+            .find((r) => r.provider === "claude" && r.prompt?.includes("hello"))
+            ?.claudeConfig,
       )
       .toBe(work);
     // Settings' pick now belongs to the thread; switching in use leaves it be.

@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { reviveChat } from "./revive";
+import { reviewThreadTitle, type ReviewScope } from "../../shared/deep-review";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 const message = (fields: Partial<ChatMessage>): ChatMessage => ({
@@ -22,6 +23,64 @@ const thread = (fields: Partial<ProjectChat>): ProjectChat => ({
   updated: 1,
   messages: [],
   ...fields,
+});
+
+const prScope: ReviewScope = {
+  target: { kind: "pr", ref: { owner: "relay", name: "relay", number: 4 } },
+  label: "PR #4",
+  title: "Linked folders and an add-project palette",
+  branch: "main",
+};
+
+const review = (): NonNullable<ProjectChat["deepReview"]> => ({
+  scope: prScope,
+  request: "request",
+  reviewers: [],
+  lead: {
+    provider: "codex",
+    choice: { model: "", reasoningEffort: "medium", fast: false },
+  },
+  runChecks: false,
+  runtimeMode: "full-access",
+  status: "done",
+});
+
+it("names reviews after their PR or commit, keeping valid bounded thread names", () => {
+  expect(reviewThreadTitle(prScope)).toBe(
+    "Deep review · PR #4 · Linked folders and an add-project palette",
+  );
+  expect(reviewThreadTitle({ ...prScope, title: undefined })).toBe(
+    "Deep review · PR #4",
+  );
+  expect(
+    reviewThreadTitle({ ...prScope, title: "Fix\n\tlinked folders" }),
+  ).toBe("Deep review · PR #4 · Fix linked folders");
+  const long = reviewThreadTitle({ ...prScope, title: "A".repeat(200) });
+  expect(long).toHaveLength(120);
+  expect(long.endsWith("…")).toBe(true);
+});
+
+it("adds the saved PR title to an old review without changing its activity date", () => {
+  const chat = thread({
+    title: "Deep review · PR #4",
+    scope: { kind: "review" },
+    deepReview: review(),
+  });
+  expect(reviveChat(chat, () => false)).toBe(true);
+  expect(chat.title).toBe(reviewThreadTitle(prScope));
+  expect(chat.updated).toBe(1);
+  expect(reviveChat(chat, () => false)).toBe(false);
+});
+
+it("keeps manually renamed and generated review names", () => {
+  for (const fields of [
+    { title: "Deep review · PR #4", renamed: true },
+    { title: "Check linked folders" },
+  ]) {
+    const chat = thread({ ...fields, deepReview: review() });
+    expect(reviveChat(chat, () => false)).toBe(false);
+    expect(chat.title).toBe(fields.title);
+  }
 });
 
 it("leaves a thread saved in today's format alone", () => {
@@ -60,6 +119,7 @@ it("pauses a queue that was waiting when Relay closed and moves old modes over",
 it("stops councils and reviews an earlier session left running, reopening findings being fixed", () => {
   const chat = thread({
     deepReview: {
+      scope: prScope,
       status: "leading",
       statuses: { a: "fixing", b: "fixed" },
       fixing: { m: ["a", "b"] },

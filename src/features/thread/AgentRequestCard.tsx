@@ -18,9 +18,12 @@ export function AgentRequestCard({
   request,
   onRespond,
   pendingCount = 1,
+  deferred = false,
 }: {
   request: AgentRequest;
   pendingCount?: number;
+  /** The agent keeps working; answering requires an explicit Send. */
+  deferred?: boolean;
   onRespond: (response: AgentResponse) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false),
@@ -47,12 +50,16 @@ export function AgentRequestCard({
         <strong>{request.title}</strong>
         {pendingCount > 1 && <small>1/{pendingCount}</small>}
       </header>
+      {deferred && (
+        <p className="agent-question-timing">Answer whenever you're ready.</p>
+      )}
       {request.detail && <pre>{request.detail}</pre>}
       {request.kind === "question" && (
         <AgentQuestionForm
           questions={request.questions ?? []}
           busy={busy}
           onRespond={respond}
+          deferred={deferred}
         />
       )}
 

@@ -100,6 +100,7 @@ async function agentFor(
   const { Agent, JsonlLocalAgentStore } = await sdk();
   const key = JSON.stringify([
     run.cwd,
+    run.dirs,
     run.sandbox,
     run.autoReview,
     run.tools,
@@ -117,6 +118,7 @@ async function agentFor(
     ...(run.systemPrompt ? { systemPrompt: run.systemPrompt } : {}),
     local: {
       cwd: run.cwd,
+      ...(run.dirs?.length ? { dirs: run.dirs } : {}),
       ...(storeDir ? { store: new JsonlLocalAgentStore(storeDir) } : {}),
       // Left out, only what's passed inline loads: none of the user's own rules, MCP servers or hooks.
       ...(run.ambient

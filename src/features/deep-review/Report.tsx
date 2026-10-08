@@ -1,5 +1,9 @@
 import { ChevronRight, Wrench } from "lucide-react";
-import type { DeepReviewState, Finding } from "../../../shared/deep-review";
+import type {
+  DeepReviewState,
+  Finding,
+  FindingsReport,
+} from "../../../shared/deep-review";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { findingStatus, fixAllLabel } from "./finding-picks";
 import { useFindingPicks } from "./useFindingPicks";
@@ -9,6 +13,7 @@ import { FindingRow } from "./FindingRow";
 export function DeepReviewReport({
   chatId,
   state,
+  report = state.report,
   busy,
   onFix,
   onStatus,
@@ -16,18 +21,19 @@ export function DeepReviewReport({
 }: {
   chatId: string;
   state: DeepReviewState;
+  report?: FindingsReport;
   busy: boolean;
   onFix: (findings: Finding[]) => void;
   onStatus: (id: string, status: "open" | "dismissed") => void;
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
-  const findings = state.report?.findings ?? [];
+  const findings = report?.findings ?? [];
   const { open, selected, chosen, toggle, fix } = useFindingPicks(
     findings,
     state.statuses,
     onFix,
   );
-  const dropped = state.report?.dropped ?? [];
+  const dropped = report?.dropped ?? [];
   if (!findings.length && !dropped.length) return null;
   return (
     <div className="deep-review-report">

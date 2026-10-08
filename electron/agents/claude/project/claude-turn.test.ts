@@ -223,11 +223,19 @@ it("answers a steer that cut a running tool short", async () => {
     const prompt = await next();
     yield lifecycle(prompt.uuid, "started");
     yield assistant("m1", [
-      { type: "tool_use", id: "t1", name: "Bash", input: { command: "sleep 25" } },
+      {
+        type: "tool_use",
+        id: "t1",
+        name: "Bash",
+        input: { command: "sleep 25" },
+      },
     ]);
     const steered = await next();
     yield lifecycle(steered.uuid, "queued");
-    yield toolResult("t1", "<error>Command was aborted before completion</error>");
+    yield toolResult(
+      "t1",
+      "<error>Command was aborted before completion</error>",
+    );
     yield { ...result(""), terminal_reason: "aborted_tools" };
     yield lifecycle(prompt.uuid, "cancelled");
     yield lifecycle(steered.uuid, "started");

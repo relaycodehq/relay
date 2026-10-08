@@ -93,7 +93,7 @@ The speech engines come from npm, each checked against the SHA-512 Relay's lockf
 
 ## What stays on a desktop
 
-A phone can't start or steer these on a desktop Relay either, so a headless one doesn't add them: terminals, editing files, pull request review, shared rooms, and starting Deep reviews and Ultraplan councils (their threads show on the phone as usual). The phone wears its own theme, since a headless Relay has none to hand it.
+A phone can't start or steer these on a desktop Relay either, so a headless one doesn't add them: terminals, editing files, pull request review, and starting Deep reviews and Ultraplan councils (their threads show on the phone as usual). The phone wears its own theme, since a headless Relay has none to hand it.
 
 ## Build it yourself
 

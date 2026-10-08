@@ -3,11 +3,7 @@
  * desktop's tests drive this exact client against the real bridge.
  */
 import type { ChatMessage } from "./projects";
-import {
-  clientHandshake,
-  fromBase64Url,
-  type Channel,
-} from "./remote-crypto";
+import { clientHandshake, fromBase64Url, type Channel } from "./remote-crypto";
 import { applyChatsPatch, applyMessagePatch } from "./remote-delta";
 import { jsCodec, openFrame, sealFrame, type Codec } from "./remote-wire";
 import type {
@@ -332,10 +328,17 @@ export class RemoteClient {
       // Can't be, both ends start over with each connection; the final answer comes whole.
       if (!prev) return;
       const { patch, ...rest } = event;
-      event = { ...rest, kind: "message", message: applyMessagePatch(prev, patch) };
+      event = {
+        ...rest,
+        kind: "message",
+        message: applyMessagePatch(prev, patch),
+      };
     } else if (event.kind === "chatsPatch") {
       if (!this.chats) return;
-      event = { kind: "chats", chats: applyChatsPatch(this.chats, event.patch) };
+      event = {
+        kind: "chats",
+        chats: applyChatsPatch(this.chats, event.patch),
+      };
     }
     if (event.kind === "message") {
       if (event.message.status === "streaming")

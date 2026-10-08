@@ -4,6 +4,6 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["electron", "server", "shared", "*.config.ts"],
+  "include": ["electron", "shared", "*.config.ts"],
   "exclude": ["**/*.test.*", "electron/preload.ts"]
 }

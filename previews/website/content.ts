@@ -72,7 +72,7 @@ export const features: { title: string; text: string; detail: string }[] = [
   },
   {
     title: "Pull requests",
-    text: "The inbox shows comments and review progress. The inbox needs a Gitea server. The title bar shows CI status for GitHub and Gitea.",
+    text: "The Pull requests page shows comments and review progress, on GitHub or Gitea. The title bar shows CI status for GitHub and Gitea.",
     detail: "Gitea · GitHub CI",
   },
   {
@@ -145,7 +145,7 @@ export const platforms: Build[] = [
   },
 ];
 
-/** Builds outside the desktop list: the phone app and the Macs without a package. */
+/** Builds outside the desktop list: the phone app. */
 export const otherBuilds: Build[] = [
   {
     os: "android",
@@ -153,12 +153,6 @@ export const otherBuilds: Build[] = [
     file: "Relay-Android.apk",
     href: download("Relay-Android.apk"),
     status: "Follow and answer threads from your phone.",
-  },
-  {
-    system: "Intel Mac",
-    file: "Build from source",
-    href: BUILD_GUIDE,
-    status: "No package yet. Node.js 22 and npm.",
   },
 ];
 
@@ -255,12 +249,12 @@ export const faq: { q: string; a: string }[] = [
     a: "The phone app is for Android only. The computer and the phone must be on the same Tailscale network. You scan a pairing code from Settings → Phone. Relay encrypts each connection.",
   },
   {
-    q: "What needs Gitea?",
-    a: "Pull request review and its shared rooms need a Gitea server. All other functions work with a local folder.",
+    q: "Do I need GitHub or Gitea?",
+    a: "Only for pull requests. GitHub ones work through your gh CLI login; a Gitea server can be connected in Settings. Everything else works with a local folder.",
   },
   {
     q: "Which platforms does Relay support?",
-    a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use. For an Intel Mac, build Relay from source.",
+    a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use.",
   },
   {
     q: "Is Relay open source?",

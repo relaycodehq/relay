@@ -8,6 +8,7 @@ import { GroupedFileList } from "./GroupedFileList";
 import { PaneResizer } from "../../ui/PaneResizer";
 import { TriageControls } from "./TriageControls";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { pullHostName } from "../../../shared/source-control";
 
 /** The PR's changed files beside its review: filtered, grouped and paged in. */
 export function ChangedFilesPane({
@@ -36,9 +37,9 @@ export function ChangedFilesPane({
   hidden: boolean;
   /** In a pane with its own header: the titlebar, repository and footer stay hidden. */
   bare: boolean;
-  /** The Gitea server, which the footer opens. */
+  /** The PR's host, which the footer opens. */
   server: string;
-  /** What the footer says about the PR beside its Gitea link. */
+  /** What the footer says about the PR beside its host link. */
   note?: ReactNode;
   onHide: () => void;
 }) {
@@ -136,7 +137,7 @@ export function ChangedFilesPane({
       <footer className="files-footer" hidden={bare}>
         {note}
         <IconButton
-          label="Open Gitea"
+          label={`Open ${pullHostName(server)}`}
           onClick={() => void api.openExternal(server)}
         >
           <ArrowUpRight size={13} />

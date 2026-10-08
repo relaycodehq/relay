@@ -113,11 +113,6 @@
   border-radius: 7px;
   padding: 12px;
 }
-.chat-message-error {
-  font-size: 11px;
-  color: #c78073;
-  line-height: 1.6;
-}
 .message-actions {
   display: flex;
   align-items: center;

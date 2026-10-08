@@ -72,4 +72,4 @@ The Playwright spec pairs through the real Settings screen, then approves an age
 
 - **Notifications.** Android stops a backgrounded app's socket, so "the agent needs you" has to arrive as a push notification. That needs a development build (`npx expo run:android`) with Firebase set up; Expo Go can't receive remote pushes on Android.
 - Creating pull requests stays on the desktop for now.
-- Deep reviews and Ultraplan councils show as their messages; starting and steering them stays on the desktop, as do Gitea PR review, shared rooms, terminals and editing files.
+- Deep reviews and Ultraplan councils show as their messages; starting and steering them stays on the desktop, as do Gitea PR review, terminals and editing files.

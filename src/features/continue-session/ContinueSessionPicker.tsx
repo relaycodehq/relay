@@ -3,7 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronDown, RefreshCw, Search, SquareTerminal } from "lucide-react";
-import type { ChatSummary, Project } from "../../../shared/projects";
+import type {
+  ChatSummary,
+  Project,
+  LinkedFolder,
+} from "../../../shared/projects";
 import type { TerminalSession } from "../../../shared/terminal-sessions";
 import { api } from "../../lib/api";
 import { errorMessage } from "../../lib/error-message";
@@ -22,6 +26,7 @@ export function ContinueSessionPicker({
   settingsKey,
   workspace,
   branch,
+  links,
   onContinued,
   onOpenThread,
 }: {
@@ -30,6 +35,7 @@ export function ContinueSessionPicker({
   settingsKey: string;
   workspace: "checkout" | "worktree";
   branch?: string;
+  links?: LinkedFolder[];
   /** A thread was made for the session. */
   onContinued: (chat: ChatSummary) => Promise<void>;
   /** The session already had a thread. */
@@ -60,6 +66,7 @@ export function ContinueSessionPicker({
         { provider: session.provider, session: session.id },
         workspace,
         workspace === "worktree" ? branch : undefined,
+        links,
       );
       if (created) forkThreadSettings(settingsKey, chat.id, session.provider);
       setOpen(false);
@@ -156,7 +163,9 @@ export function ContinueSessionPicker({
               <p className="continue-session-note">
                 Claude Code and Codex sessions started in a terminal in{" "}
                 {project.name}
-                {workspace === "worktree" ? ", continued in a new worktree" : ""}
+                {workspace === "worktree"
+                  ? ", continued in a new worktree"
+                  : ""}
                 .
               </p>
               {error && (

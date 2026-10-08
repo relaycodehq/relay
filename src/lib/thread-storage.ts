@@ -1,4 +1,9 @@
-import type { ChatScope, ChatWorkspace } from "../../shared/projects";
+import { linkedFoldersSchema } from "../../shared/projects";
+import type {
+  ChatScope,
+  ChatWorkspace,
+  LinkedFolder,
+} from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import type { WorkItem } from "../../shared/devops";
 import type { CodeReference } from "../../shared/code-references";
@@ -213,6 +218,14 @@ export function threadStorage(id: string) {
       load: (): CodeReference[] => [...read().codeRefs],
       save: (codeRefs: CodeReference[]) => edit({ codeRefs }),
       clear: () => edit({ codeRefs: [] }),
+    },
+    links: {
+      load: (): LinkedFolder[] => [...(read().links ?? [])],
+      save: (links: LinkedFolder[]) =>
+        edit({
+          links: links.length ? linkedFoldersSchema.parse(links) : undefined,
+        }),
+      clear: () => edit({ links: undefined }),
     },
     /** The scope an unsent thread was written for; the repository by default. */
     scope: {

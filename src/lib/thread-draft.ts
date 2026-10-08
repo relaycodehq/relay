@@ -1,4 +1,6 @@
 import {
+  linkedFoldersSchema,
+  type LinkedFolder,
   chatScopeSchema,
   chatWorkspaceSchema,
   type ChatScope,
@@ -50,6 +52,7 @@ export interface ThreadDraft {
   workspace?: ChatWorkspace;
   /** The branch typed for an unsent thread's worktree, in place of Relay's pick. */
   branch?: string;
+  links?: LinkedFolder[];
 }
 
 export const emptyBody = (): DraftBody => ({
@@ -78,7 +81,8 @@ export const isThreadDraftEmpty = (draft: ThreadDraft) =>
   !draft.codeRefs.length &&
   !draft.scope &&
   draft.workspace === undefined &&
-  !draft.branch;
+  !draft.branch &&
+  !draft.links?.length;
 
 export const bodyOf = (draft: ThreadDraft, reply?: string): DraftBody =>
   (reply ? draft.replies[reply] : draft.main) ?? emptyBody();
@@ -159,6 +163,7 @@ export function parseThreadDraft(saved: unknown): ThreadDraft {
     scope: readScope(saved.scope),
     workspace: readWorkspace(saved.workspace),
     branch: readRoot(saved.branch),
+    links: linkedFoldersSchema.safeParse(saved.links).data,
   };
 }
 
@@ -186,6 +191,7 @@ export function serializeThreadDraft(draft: ThreadDraft): string {
     ...(draft.scope ? { scope: draft.scope } : {}),
     ...(draft.workspace !== undefined ? { workspace: draft.workspace } : {}),
     ...(draft.branch ? { branch: draft.branch } : {}),
+    ...(draft.links?.length ? { links: draft.links } : {}),
   });
 }
 
@@ -371,5 +377,7 @@ export function mergeLegacy(
     codeRefs: legacy.codeRefs.length ? legacy.codeRefs : record.codeRefs,
     scope: legacy.scope ?? record.scope,
     workspace: legacy.workspace ?? record.workspace,
+    branch: record.branch,
+    links: record.links,
   };
 }

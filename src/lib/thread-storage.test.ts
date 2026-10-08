@@ -258,3 +258,55 @@ describe("whose a key is", () => {
     expect(keyOwner("theme")).toBeUndefined();
   });
 });
+
+it("keeps unsent links through a reload, text edits, and failed storage writes", async () => {
+  const id = "new:project:slot";
+  const links = [{ path: "/sample/backend", access: "read" as const }];
+  let current = await storage();
+  current.threadStorage(id).links.save(links);
+  current.writeDraftText(current.threadDraftKey(id), "Ask about the API");
+  vi.resetModules();
+  current = await storage();
+  expect(current.threadStorage(id).links.load()).toEqual(links);
+  expect(current.readDraftText(current.threadDraftKey(id))).toBe(
+    "Ask about the API",
+  );
+  refuse = () => true;
+  const changed = [{ ...links[0], access: "write" as const }];
+  current.threadStorage(id).links.save(changed);
+  expect(current.threadStorage(id).links.load()).toEqual(changed);
+  refuse = () => false;
+  current.threadStorage(id).links.clear();
+  expect(current.threadStorage(id).links.load()).toEqual([]);
+  expect(current.readDraftText(current.threadDraftKey(id))).toBe(
+    "Ask about the API",
+  );
+});
+
+it("persists a draft with only links and removes it after unlinking", async () => {
+  const current = await storage();
+  current
+    .threadStorage("new:project")
+    .links.save([{ path: "/sample/backend", access: "read" }]);
+  expect(recordOf("new:project").links).toHaveLength(1);
+  current.threadStorage("new:project").links.clear();
+  expect(recordOf("new:project")).toBeNull();
+});
+
+it("rejects the twenty-first link without overwriting the saved twenty", async () => {
+  const current = await storage();
+  const links = Array.from({ length: 20 }, (_, i) => ({
+    path: `/sample/${i}`,
+    access: "read" as const,
+  }));
+  current.threadStorage("new:limit").links.save(links);
+  expect(() =>
+    current
+      .threadStorage("new:limit")
+      .links.save([...links, { path: "/sample/extra", access: "read" }]),
+  ).toThrow();
+  vi.resetModules();
+  expect((await storage()).threadStorage("new:limit").links.load()).toEqual(
+    links,
+  );
+});

@@ -5,21 +5,14 @@ import { workspaceSchema } from "../../shared/validation";
 import { seal } from "../app/login";
 import { Gitea } from "../pull-requests/gitea";
 import { teaSetup, teaToken } from "../source-control/tea";
+import { GITHUB_SERVER } from "../../shared/source-control";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Signing in and out of Gitea, and what the window starts from. */
 export function accountHandlers(ctx: ApiContext) {
-  const {
-    store,
-    login,
-    links,
-    triage,
-    rooms,
-    liveSyncs,
-    projectChecks,
-    blame,
-    requireClient,
-  } = ctx;
+  const { store, login, links, triage, projectChecks, blame } = ctx;
+  /** Whose Pull requests page it is: the Gitea account's, else GitHub's, as the page picks. */
+  const pageAccount = () => login.client?.account.id ?? GITHUB_SERVER;
   async function signIn(server: string, token: string) {
     login.cancelRestore();
     const next = await Gitea.connect(server, token, (url, options) =>
@@ -50,11 +43,11 @@ export function accountHandlers(ctx: ApiContext) {
         pendingUrl: links.take(),
         pendingProject: links.takeProject(),
         workspace: workspaceSchema.parse(
-          (client && store.get().workspaces?.[client.account.id]) ??
-            emptyWorkspace(),
+          store.get().workspaces?.[pageAccount()] ?? emptyWorkspace(),
         ),
       };
     },
+    githubAccount: () => ctx.github.account(),
     retryLoginRestore: () => {
       void login.restoreSaved(store);
     },
@@ -62,7 +55,7 @@ export function accountHandlers(ctx: ApiContext) {
       login.cancelRestore();
     },
     saveWorkspace: takes([workspaceSchema], async (workspace) => {
-      const accountId = requireClient().account.id;
+      const accountId = pageAccount();
       await store.update((s) => {
         s.workspaces ??= {};
         s.workspaces[accountId] = workspace;
@@ -79,8 +72,6 @@ export function accountHandlers(ctx: ApiContext) {
       return signIn(login.url, await teaToken(login));
     }),
     disconnect: async () => {
-      await liveSyncs.stopAll();
-      await rooms.dispose();
       blame.dispose();
       projectChecks.stop();
       login.cancelRestore();

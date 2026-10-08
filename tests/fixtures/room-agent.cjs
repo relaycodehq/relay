@@ -414,7 +414,9 @@ if (args.includes("--permission-prompt-tool")) {
   process.stdin.on("end", () => {
     record({ provider: "claude", prompt });
     // As an account that can't use the model it was asked for.
-    if (args[args.indexOf("--model") + 1] === process.env.RELAY_AGENT_REJECT_MODEL) {
+    if (
+      args[args.indexOf("--model") + 1] === process.env.RELAY_AGENT_REJECT_MODEL
+    ) {
       process.stdout.write(
         JSON.stringify({
           type: "result",
@@ -545,6 +547,10 @@ if (args.includes("--permission-prompt-tool")) {
       });
     } else if (m.method === "config/read")
       send({ id: m.id, result: { config: {} } });
+    else if (m.method === "experimentalFeature/enablement/set") {
+      record({ features: m.params.enablement });
+      send({ id: m.id, result: {} });
+    }
     // Codex 0.160 reads a thread's goal; these threads set none.
     else if (m.method === "thread/goal/get")
       send({ id: m.id, result: { goal: null } });
@@ -560,7 +566,7 @@ if (args.includes("--permission-prompt-tool")) {
         result: {
           thread: { id: "fixture-thread" },
           model: "fixture-model",
-          activePermissionProfile: { id: "relay-room" },
+          activePermissionProfile: { id: "relay-one-off" },
         },
       });
     } else if (m.method === "turn/start") {
@@ -665,6 +671,49 @@ if (args.includes("--permission-prompt-tool")) {
         });
         return;
       }
+      const asyncPrompt = m.params.input
+        .filter((i) => i.type === "text")
+        .at(-1)
+        .text.split("\n")[0];
+      if (asyncPrompt.includes("fixture async question")) {
+        awaitingSteer = asyncPrompt.includes("live");
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-async-question",
+              type: "agentMessage",
+              phase: "commentary",
+              delivery: "async",
+              text: "Which visibility should I use? I'll keep checking the release while you decide.",
+              questions: [
+                {
+                  title: "Which visibility should I use?",
+                  options: ["Private while preparing", "Public now"],
+                },
+                { title: "Which account should own it?", options: null },
+              ],
+            },
+          },
+        });
+        // A later tool proves asking didn't stop the turn.
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "after-question",
+              type: "commandExecution",
+              command: "git status --short",
+              status: "completed",
+              commandActions: [],
+              aggregatedOutput: "",
+              exitCode: 0,
+            },
+          },
+        });
+      }
       const titling = m.params.input[0].text;
       if (
         titling.startsWith("Generate a short title") ||
@@ -711,6 +760,18 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         }, turnMs);
+      // The plan ran out between the last answer and the handoff note.
+      if (
+        process.env.RELAY_AGENT_NOTE_LIMIT &&
+        asked.includes("is taking over this conversation")
+      ) {
+        failTurn({
+          message: "You've hit your usage limit.",
+          codexErrorInfo: "usageLimitExceeded",
+          additionalDetails: null,
+        });
+        return;
+      }
       if (asked.includes("fixture usage limit")) {
         failTurn(
           {
@@ -786,6 +847,29 @@ if (args.includes("--permission-prompt-tool")) {
       const answer =
         (echo >= 0 ? said.slice(echo + "fixture echo:".length).trim() : null) ??
         Object.entries({
+          "fixture followup findings": [
+            "Found two new issues: `F12` and `F13`.",
+            "```relay-findings",
+            JSON.stringify({
+              findings: [
+                {
+                  ...queueFinding,
+                  id: "F12",
+                  title: "A busy supervisor is incorrectly treated as dead",
+                  reviewers: [],
+                },
+                {
+                  ...queueFinding,
+                  id: "F13",
+                  title:
+                    "Read-only snapshot directories prevent staging cleanup",
+                  reviewers: [],
+                },
+              ],
+              dropped: [],
+            }),
+            "```",
+          ].join("\n"),
           // A review whose focus asks for it reports two findings.
           "fixture two findings": twoFindings,
           "You lead a deep review": leadAnswer,

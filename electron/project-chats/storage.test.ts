@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdtemp, rm, utimes } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../app/store";
@@ -82,6 +82,24 @@ it("leaves a thread that isn't listed to add", async () => {
   expect(store.get().chats ?? []).toEqual([]);
   await storage.addSummary(chat);
   expect(store.get().chats).toHaveLength(1);
+});
+
+it("flush reports a failed cached write and retries it after storage is repaired", async () => {
+  const chat = thread();
+  await storage.add(chat);
+  const path = join(root, "chats", chat.id + ".json");
+  await rename(path, path + ".backup");
+  await mkdir(path);
+  chat.title = "Keep this unsaved title";
+  await expect(storage.save(chat)).rejects.toThrow();
+  expect(storage.busy().writes).toEqual([]);
+  // An empty queue does not mean the cached data was saved successfully.
+  await expect(storage.flush()).rejects.toThrow();
+  await rm(path, { recursive: true });
+  await rename(path + ".backup", path);
+  await storage.flush();
+  expect(JSON.parse(await readFile(path, "utf8")).title).toBe(chat.title);
+  expect(listed(chat).title).toBe(chat.title);
 });
 
 it("puts right a summary a crash left behind its thread", async () => {

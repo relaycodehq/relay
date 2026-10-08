@@ -3,6 +3,7 @@ import {
   activityDrafts,
   currentNewThread,
   freshNewThread,
+  forgetNewThread,
   loadDraftScope,
   newThreadId,
   saveDraftScope,
@@ -104,4 +105,14 @@ it("lists one card per thread and keeps an open new thread's draft", () => {
     { key: "chat-draft:new:p1", id: "new:p1", reply: false },
     { key: "chat-draft:new:p1:k2", id: "new:p1:k2", reply: false },
   ]);
+});
+
+it("reserves a draft holding only linked folders and clears links after it becomes a thread", () => {
+  const base = newThreadId("p1");
+  threadStorage(base).links.save([{ path: "/sample/backend", access: "read" }]);
+  vi.useFakeTimers({ now: 1000 });
+  expect(freshNewThread("p1")).not.toBe(base);
+  expect(threadStorage(base).links.load()).toHaveLength(1);
+  forgetNewThread(base);
+  expect(threadStorage(base).links.load()).toEqual([]);
 });

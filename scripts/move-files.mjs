@@ -26,7 +26,7 @@
 //   /// <reference path>, CSS @import and url(...), HTML src/href/poster
 //   (relative and root-absolute). Vite query suffixes (?worker, ?raw, ...) and
 //   #fragments are kept. Specifiers into build output that isn't on disk
-//   (dist-*, anything top-level in .gitignore) keep pointing at the same place.
+//   (dist-*, anything top-level in .gitignore or .git/info/exclude) keep pointing at the same place.
 //
 // Resolution mirrors the bundler (exact file, extensions, a written .js that
 // is really a .ts, dir/index.*) and the author's style is kept: extension
@@ -130,16 +130,6 @@ function isFileOnDisk(p) {
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git", "__pycache__", ".idea"]);
-const SKIP_TOP = (name) =>
-  name.startsWith("dist") ||
-  [
-    "release",
-    "test-results",
-    "playwright-report",
-    "t3code",
-    "openusage",
-  ].includes(name);
-
 function walk(dir = "", out = []) {
   for (const name of readdirSync(resolvePath(root, dir)).sort()) {
     const rel = dir ? `${dir}/${name}` : name;
@@ -151,7 +141,7 @@ function walk(dir = "", out = []) {
     }
     if (st.isDirectory()) {
       if (SKIP_DIRS.has(name)) continue;
-      if (!dir && SKIP_TOP(name)) continue;
+      if (!dir && isGenerated(name)) continue;
       if (
         rel === "mobile/android" ||
         rel === "mobile/ios" ||
@@ -164,18 +154,20 @@ function walk(dir = "", out = []) {
   return out;
 }
 
-// Top-level names the repo ignores: build output. Relative specifiers that
+// Top-level names the repo ignores: build output, and local clones listed only
+// in .git/info/exclude. The walk skips them, and relative specifiers that
 // point there (and so don't exist) still have to keep pointing there.
 const generatedTop = new Set();
-try {
-  for (const line of readFileSync(
-    resolvePath(root, ".gitignore"),
-    "utf8",
-  ).split("\n")) {
-    const m = /^\/?([\w.-]+)\/?$/.exec(line.trim());
-    if (m && !line.trim().startsWith("*")) generatedTop.add(m[1]);
-  }
-} catch {}
+for (const file of [".gitignore", ".git/info/exclude"]) {
+  try {
+    for (const line of readFileSync(resolvePath(root, file), "utf8").split(
+      "\n",
+    )) {
+      const m = /^\/?([\w.-]+)\/?$/.exec(line.trim());
+      if (m && !line.trim().startsWith("*")) generatedTop.add(m[1]);
+    }
+  } catch {}
+}
 const isGenerated = (p) => {
   const top = p.split("/")[0];
   return generatedTop.has(top) || top.startsWith("dist");

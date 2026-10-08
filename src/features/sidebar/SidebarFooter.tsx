@@ -1,6 +1,7 @@
 import { ChartColumn, Settings2 } from "lucide-react";
 import { AgentUpdateButton } from "../updates/AgentUpdates";
 import { DevRestartButton } from "../updates/DevRestartButton";
+import { DevSwitchMenu } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
 import type { SettingsCategory } from "../settings/Settings";
 import { IconButton } from "../../ui/ui";
@@ -31,17 +32,20 @@ export function SidebarFooter({
 }) {
   return (
     <div className="sb-footer">
-      <button
-        className={`sb-account ${account ? "signed-in" : ""}`}
-        title={account}
-        aria-label={account}
-        onClick={onAccount}
-      >
-        <span className="sb-avatar" aria-hidden>
-          {(account ?? "?").slice(0, 2).toUpperCase()}
-        </span>
-        {!account && <span>Connect Gitea</span>}
-      </button>
+      {/* Gitea is optional; without it there's nobody to show here. */}
+      {account && (
+        <button
+          className="sb-account"
+          title={account}
+          aria-label={account}
+          onClick={onAccount}
+        >
+          <span className="sb-avatar" aria-hidden>
+            {account.slice(0, 2).toUpperCase()}
+          </span>
+        </button>
+      )}
+      <DevSwitchMenu />
       <DevRestartButton />
       <UpdateButton />
       <CheckUpdatesButton />

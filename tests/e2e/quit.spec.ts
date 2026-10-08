@@ -1,9 +1,17 @@
-import { test, expect, _electron as electron } from "@playwright/test";
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import {
+  test,
+  expect,
+  chromium,
+  _electron as electron,
+} from "@playwright/test";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+
+const electronPath = createRequire(import.meta.url)("electron") as string;
 
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
@@ -93,5 +101,85 @@ test("keeping unsaved code edits cancels a quit without shutting Relay down", as
     await app.close();
     await rm(data, { recursive: true, force: true });
     await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("dev IPC keeps unsaved edits on cancellation, then quits cleanly on retry", async () => {
+  const data = await mkdtemp(join(tmpdir(), "relay-dev-quit-"));
+  const launch = join(data, "launch.cjs");
+  await writeFile(
+    launch,
+    `
+    const { dialog } = require('electron');
+    dialog.showMessageBoxSync = () => {
+      process.send({type:'test:kept-editing'});
+      return 0;
+    };
+    process.on('message', message => {
+      if(message.type === 'test:discard') {
+        dialog.showMessageBoxSync = () => 1;
+        process.send({type:'test:discard-ready'});
+      }
+    });
+    require(${JSON.stringify(join(process.cwd(), "tests/fixtures/launch.cjs"))});
+  `,
+  );
+  const child = spawn(electronPath, ["--remote-debugging-port=0", launch], {
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    env: {
+      ...env,
+      RELAY_TEST_DATA: data,
+      RELAY_DEV_STALE: join(data, "stale.json"),
+    },
+  });
+  const messages: string[] = [];
+  let debugUrl = "";
+  child.on("message", (message) =>
+    messages.push((message as { type: string }).type),
+  );
+  child.stdout!.resume();
+  child.stderr!.on("data", (data) => {
+    const match = String(data).match(/DevTools listening on (ws:\/\/\S+)/);
+    if (match) debugUrl = match[1]!;
+  });
+  let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
+  try {
+    await expect.poll(() => debugUrl).toMatch(/^ws:\/\//);
+    browser = await chromium.connectOverCDP(debugUrl);
+    await expect.poll(() => messages).toContain("relay:dev-ready");
+    const page = browser.contexts()[0]!.pages()[0]!;
+    // Electron owns the unload dialog; don't let CDP dismiss it.
+    page.on("dialog", () => {});
+    await page.waitForLoadState();
+    await page.evaluate(() => {
+      (window as any).unsavedBuffer = "keep this edit";
+      addEventListener("beforeunload", (event) => {
+        event.preventDefault();
+        event.returnValue = "";
+      });
+    });
+    await page.mouse.click(5, 5);
+    child.send({ type: "relay:dev-stop" });
+    await expect.poll(() => messages).toContain("relay:dev-cancelled");
+    expect(messages).toContain("test:kept-editing");
+    expect(await page.evaluate(() => (window as any).unsavedBuffer)).toBe(
+      "keep this edit",
+    );
+    expect(child.exitCode).toBeNull();
+    child.send({ type: "test:discard" });
+    await expect.poll(() => messages).toContain("test:discard-ready");
+    const exited = new Promise<number | null>((resolve) =>
+      child.once("exit", resolve),
+    );
+    child.send({ type: "relay:dev-stop" });
+    expect(await exited).toBe(0);
+  } finally {
+    await browser?.close().catch(() => {});
+    if (child.exitCode === null && !child.signalCode) {
+      const exited = new Promise((resolve) => child.once("exit", resolve));
+      child.kill("SIGKILL");
+      await exited;
+    }
+    await rm(data, { recursive: true, force: true });
   }
 });

@@ -10,7 +10,9 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  writeFile,
   readdir,
+  rename,
   rm,
   realpath,
 } from "node:fs/promises";
@@ -68,9 +70,17 @@ async function restartable(
       join(bin, name),
       await readFile(resolve("tests/fixtures", fixture), "utf8"),
     );
+  let entry = "tests/fixtures/launch.cjs";
+  if (extra.RELAY_DEV_STALE) {
+    entry = join(root, "dev-ipc-launch.cjs");
+    await writeFile(
+      entry,
+      `process.send = () => {}; require(${JSON.stringify(resolve("tests/fixtures/launch.cjs"))});`,
+    );
+  }
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
+      args: [entry],
       env: { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data, ...extra },
     });
   let app: ElectronApplication = await launch();
@@ -87,6 +97,11 @@ async function restartable(
     project!.id,
   );
   return {
+    data,
+    chatId: chat.id,
+    get page() {
+      return page;
+    },
     get app() {
       return app;
     },
@@ -123,9 +138,14 @@ async function restartable(
     /** A rebuild restarts Relay with a signal. */
     restart: async () => {
       const exited = new Promise((r) => app.process().once("exit", r));
-      app.process().kill("SIGTERM");
+      // Emitting exercises the app's graceful handler on Windows too;
+      // process.kill on Windows would forcibly terminate Electron.
+      await app.evaluate(() => process.emit("SIGTERM"));
       await exited;
       app = await launch();
+      page = await app.firstWindow();
+    },
+    reopen: async () => {
       page = await app.firstWindow();
     },
     hosts: async () =>
@@ -134,6 +154,17 @@ async function restartable(
         .filter(Boolean)
         .map(Number),
     async dispose() {
+      if (test.info().status !== test.info().expectedStatus) {
+        for (const folder of ["logs", "agent-host"])
+          for (const name of await readdir(join(data, folder)).catch(
+            () => [] as string[],
+          ))
+            if (name.endsWith(".log"))
+              await test.info().attach(`${folder}-${name}`, {
+                body: await readFile(join(data, folder, name)),
+                contentType: "text/plain",
+              });
+      }
       await app.close().catch(() => {});
       for (const pid of await this.hosts())
         try {
@@ -143,6 +174,153 @@ async function restartable(
     },
   };
 }
+
+test("Keep open after a failed save preserves the live host, then a retry detaches and reattaches it", async () => {
+  test.setTimeout(90_000);
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-save-cancel-")),
+  );
+  const starts = join(root, "claude-starts.log");
+  const relay = await restartable(
+    { claude: "slow-claude.cjs" },
+    { SLOW_CLAUDE_LOG: starts, SLOW_CLAUDE_MS: "700" },
+  );
+  const path = join(relay.data, "project-chats", relay.chatId + ".json");
+  const backup = path + ".test-backup";
+  try {
+    await relay.send({ body: "@claude Count to twenty", provider: "claude" });
+    await expect
+      .poll(async () => (await relay.answers())[0]?.body ?? "", {
+        timeout: 20_000,
+      })
+      .toContain("three");
+    const [before] = await relay.answers();
+    const hostPids = await relay.hosts();
+    const agentPid = Number((await readFile(starts, "utf8")).trim());
+    expect(hostPids).toHaveLength(1);
+    await relay.app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (options: any) => {
+        if (options.title !== "Review data could not be saved")
+          throw new Error("Unexpected quit dialog");
+        (globalThis as any).failedSaveDialog = true;
+        return { response: 0, checkboxChecked: false };
+      };
+    });
+    // A directory at the chat's destination fails the actual atomic save on
+    // macOS, Linux and Windows, without touching the user's data or permissions.
+    await rename(path, backup);
+    await mkdir(path);
+    const reopened = relay.app.waitForEvent("window");
+    await relay.app.evaluate(() => process.emit("SIGTERM"));
+    await expect
+      .poll(() =>
+        relay.app.evaluate(() => (globalThis as any).failedSaveDialog),
+      )
+      .toBe(true);
+    await reopened;
+    await relay.reopen();
+    expect(relay.app.process().exitCode).toBeNull();
+    expect(await relay.hosts()).toEqual(hostPids);
+    expect(alive(agentPid)).toBe(true);
+    await rm(path, { recursive: true });
+    await rename(backup, path);
+    // The original connection still receives frames; the answer wasn't
+    // detached or restarted when Keep open cancelled the quit.
+    await expect
+      .poll(async () => (await relay.answers())[0]?.body ?? "")
+      .not.toBe(before.body);
+    expect((await relay.answers())[0].id).toBe(before.id);
+    await relay.send({
+      body: "Later",
+      provider: "claude",
+      sendAt: Date.now() + 60 * 60_000,
+    });
+    expect((await relay.state()).scheduled).toHaveLength(1);
+    // With saving repaired, the same real host and agent survive the
+    // successful restart and the new Relay attaches to the same answer.
+    await relay.restart();
+    expect(await relay.hosts()).toEqual(hostPids);
+    await expect
+      .poll(
+        async () =>
+          (await relay.answers()).map((answer) => [
+            answer.id,
+            answer.status,
+            answer.body,
+          ]),
+        { timeout: 30_000 },
+      )
+      .toEqual([
+        [
+          before.id,
+          "complete",
+          "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty",
+        ],
+      ]);
+    expect(
+      (await readFile(starts, "utf8")).trim().split("\n").map(Number),
+    ).toEqual([agentPid]);
+    await relay.app.close();
+    await expect.poll(() => alive(agentPid), { timeout: 10_000 }).toBe(false);
+  } finally {
+    // Repair the injected failure before the fixture's normal quit.
+    if (
+      await readFile(backup).then(
+        () => true,
+        () => false,
+      )
+    ) {
+      await rm(path, { recursive: true, force: true });
+      await rename(backup, path);
+    }
+    await relay.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("restore stop closes live sessions before saved data can be replaced", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-restore-stop-")),
+  );
+  const starts = join(root, "claude-starts.log");
+  const relay = await restartable(
+    { claude: "slow-claude.cjs" },
+    {
+      SLOW_CLAUDE_LOG: starts,
+      SLOW_CLAUDE_MS: "700",
+      RELAY_DEV_STALE: join(root, "stale.json"),
+    },
+  );
+  try {
+    await relay.send({ body: "@claude Count to twenty", provider: "claude" });
+    await expect
+      .poll(async () => (await relay.answers())[0]?.body ?? "", {
+        timeout: 20_000,
+      })
+      .toContain("three");
+    const agentPid = Number((await readFile(starts, "utf8")).trim());
+    const hosts = await relay.hosts();
+    expect(hosts).toHaveLength(1);
+    expect(alive(agentPid)).toBe(true);
+    const exited = new Promise((resolve) =>
+      relay.app.process().once("exit", resolve),
+    );
+    await relay.app.evaluate(() =>
+      process.emit(
+        "message",
+        { type: "relay:dev-stop", detach: false },
+        undefined,
+      ),
+    );
+    await exited;
+    await expect.poll(() => alive(agentPid), { timeout: 10_000 }).toBe(false);
+    for (const host of hosts)
+      await expect.poll(() => alive(host), { timeout: 10_000 }).toBe(false);
+  } finally {
+    await relay.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("Claude keeps answering while Relay restarts, and the answer finishes in place", async () => {
   test.setTimeout(90_000);

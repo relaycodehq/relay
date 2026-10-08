@@ -48,8 +48,11 @@ export function useComposerCommands({
   provider: AgentProvider | "message";
   /** False leaves the draft alone; a string explains why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
-  /** Values offered after a command name, e.g. effort levels. */
-  options: (command: RelayCommand) => CommandOption[] | undefined;
+  /** Values offered after a command name, e.g. effort levels; `query` is what's typed after it. */
+  options: (
+    command: RelayCommand,
+    query: string,
+  ) => CommandOption[] | undefined;
   input: RefObject<HTMLElement | null>;
   onSkillPick: (skill: SkillPick) => void;
   onFill: (range: { start: number; end: number; text: string }) => void;
@@ -68,7 +71,9 @@ export function useComposerCommands({
       c.name === argument?.name &&
       (!argument.inline || composerCommands.includes(c.name)),
   );
-  const argOptions = argCommand ? options(argCommand.name) : undefined;
+  const argOptions = argCommand
+    ? options(argCommand.name, argument!.query)
+    : undefined;
   const inline = argCommand ? argument!.inline : !!trigger?.inline;
   const open =
     (!!trigger || !!argOptions?.length) && dismissed !== draft && !disabled;
@@ -98,6 +103,7 @@ export function useComposerCommands({
     source: string;
     Icon: typeof Zap;
     current?: boolean;
+    fill?: string;
   };
   const items: Item[] = (
     argCommand && argOptions
@@ -107,8 +113,9 @@ export function useComposerCommands({
           label: `/${argCommand.name} ${o.label}`,
           description: o.description ?? "",
           source: o.current ? "Current" : (o.source ?? "Relay"),
-          Icon: o.current ? Check : Zap,
+          Icon: o.current ? Check : o.fill || o.folder ? Folder : Zap,
           current: o.current,
+          fill: o.fill,
         }))
       : [
           ...(prefix === "/"
@@ -128,6 +135,8 @@ export function useComposerCommands({
             : []
           )
             .filter(() => prefix === "/" || !commandsAlone)
+            // Relay runs its own command of the same name, e.g. /add-dir.
+            .filter((c) => !relayCommands.some((r) => r.name === c.name))
             .map((c) =>
               commandsAlone
                 ? {
@@ -252,7 +261,9 @@ export function useComposerCommands({
   function choose(index: number) {
     const item = items[index];
     if (!item) return;
-    if (item.kind === "argument")
+    if (item.kind === "argument" && item.fill !== undefined)
+      onFill({ start: argument!.start, end: at, text: item.fill });
+    else if (item.kind === "argument")
       run(argCommand!.name, item.name, argument!.start);
     else if (item.kind === "relay") {
       const command = relayCommands.find((c) => c.name === item.name)!;

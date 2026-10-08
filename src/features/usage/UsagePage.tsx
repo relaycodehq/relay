@@ -269,7 +269,7 @@ function Quiet({ summary }: { summary: UsageSummary }) {
               rows={summary.jobs}
               value={(j) => j[relayBy]}
               label={(j) =>
-                relayJobLabels[j.job as Exclude<UsageJob, "thread" | "room">]
+                relayJobLabels[j.job as Exclude<UsageJob, "thread">]
               }
               detail={(j) => (j.runs ? `${j.runs} runs` : undefined)}
               format={relayBy === "usd" ? usd : compact}

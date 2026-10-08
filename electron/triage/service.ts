@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Gitea } from "../pull-requests/gitea";
+import type { PullHost } from "../pull-requests/host";
 import type { Store } from "../app/store";
 import type { ChangedFile, PullRef, Review, Page } from "../../shared/types";
 import { revisionOf } from "../../shared/types";
@@ -72,7 +72,7 @@ export class TriageService {
     return saved ? restoreState(saved) : null;
   }
   async start(
-    client: Gitea,
+    client: PullHost,
     ref: PullRef,
     key: string,
     head: string,
@@ -128,7 +128,7 @@ export class TriageService {
     }
   }
   async protectedPaths(
-    client: Gitea,
+    client: PullHost,
     ref: PullRef,
     key: string,
     revision: string,
@@ -148,7 +148,7 @@ export class TriageService {
         signal?.throwIfAborted();
         if (review.comments_count === 0) continue;
         const data = await client.reviewComments(ref, review.id, signal);
-        if (!Array.isArray(data) || review.comments_count > data.length)
+        if (!Array.isArray(data) || (review.comments_count ?? 0) > data.length)
           throw new Error(
             "Could not load the complete line discussions. Grouping is unavailable until they can be checked.",
           );
@@ -161,7 +161,7 @@ export class TriageService {
     return protectedPaths;
   }
   async groupPaths(
-    client: Gitea,
+    client: PullHost,
     ref: PullRef,
     key: string,
     head: string,
@@ -193,7 +193,7 @@ export class TriageService {
     return paths;
   }
   private async run(
-    client: Gitea,
+    client: PullHost,
     ref: PullRef,
     key: string,
     state: TriageState,

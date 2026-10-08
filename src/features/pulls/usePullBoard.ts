@@ -33,7 +33,7 @@ export function usePullBoard(
     queries: (["review_requested", "assigned", "created"] as const).map(
       (filter) => ({
         queryKey: [PULL_BOARD, "search", account.id, filter, state],
-        queryFn: () => api.search(filter, "", state, 1),
+        queryFn: () => api.search(filter, "", state, 1, account.server),
       }),
     ),
   });
@@ -134,15 +134,15 @@ function useStarted(pulls: BoardPull[]) {
   return started;
 }
 
-/** Gitea's search across every repository you can see, for the search box. */
+/** The host's search across the repositories you can see, for the search box. */
 export function usePullSearch(
   query: string,
   state: PullState,
-  accountId: string,
+  account: Account,
 ) {
   return useQuery({
-    queryKey: [PULL_BOARD, "find", accountId, query, state],
-    queryFn: () => api.search("all", query, state, 1),
+    queryKey: [PULL_BOARD, "find", account.id, query, state],
+    queryFn: () => api.search("all", query, state, 1, account.server),
     enabled: !!query,
   });
 }

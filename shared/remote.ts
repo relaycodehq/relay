@@ -331,6 +331,7 @@ export const phoneDesktopMethods = [
   "sendProjectChat",
   "cancelProjectChat",
   "respondProjectChat",
+  "answerProjectChatQuestion",
   "projectChatQueueAction",
   "resumeProjectChat",
   "compactProjectChat",
@@ -572,7 +573,12 @@ export type RemoteEvent =
 /** What goes over the wire: events, or from `compactBridge` patches the client turns back into them. */
 export type WireEvent =
   | RemoteEvent
-  | { kind: "messagePatch"; chatId: string; patch: MessagePatch; title?: string }
+  | {
+      kind: "messagePatch";
+      chatId: string;
+      patch: MessagePatch;
+      title?: string;
+    }
   | { kind: "chatsPatch"; patch: ChatsPatch };
 
 /** Phones leave the kind out; a computer pairs to hand threads over. */
@@ -582,7 +588,13 @@ export type DeviceKind = "computer";
  * `remoteBridgeVersion`; clients before `compactBridge` send none.
  */
 export type ClientFrame =
-  | { t: "pair"; code: string; device: string; kind?: DeviceKind; bridge?: number }
+  | {
+      t: "pair";
+      code: string;
+      device: string;
+      kind?: DeviceKind;
+      bridge?: number;
+    }
   | { t: "auth"; deviceId: string; token: string; bridge?: number }
   | { t: "call"; id: number; method: RemoteMethod; args: unknown[] }
   /** The streaming frame numbered `s` arrived; from `compactBridge`. */

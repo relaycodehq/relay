@@ -8,6 +8,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
+import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged, type ThreadGoal } from "../../shared/goal";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
@@ -27,6 +28,7 @@ import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
 import type { ThreadTitles } from "./titles";
+import type { AgentQuestion } from "../../shared/agent-modes";
 
 /**
  * The first turn of a side conversation or a forked thread with the agent
@@ -87,6 +89,19 @@ export class TurnRunner {
     private host: TurnRunnerHost,
   ) {}
 
+  /** What the thread reaches beyond its folder; a reviewer or thinker reaches what its thread does. */
+  private async links(chat: ProjectChat, root: string) {
+    const parent = (chat.reviewer ?? chat.thinker)?.parent;
+    const own = parent
+      ? await this.core.storage.load(parent).then(
+          (c) => c.links,
+          () => undefined,
+        )
+      : chat.links;
+    const project = this.core.projects.get(chat.projectId).settings?.links;
+    return threadLinks(project, own, root).map(({ from, ...link }) => link);
+  }
+
   /**
    * Runs `message` as the agent's answer to `prompt`. Resolves with the
    * message the answer ended in: a steer moves the rest to one of its own.
@@ -123,7 +138,11 @@ export class TurnRunner {
     const account = hasAccounts(provider)
       ? accountFor(provider, chat.accounts?.[provider] ?? input.account)
       : undefined;
-    if (account && hasAccounts(provider) && chat.accounts?.[provider] !== account)
+    if (
+      account &&
+      hasAccounts(provider) &&
+      chat.accounts?.[provider] !== account
+    )
       chat.accounts = { ...chat.accounts, [provider]: account };
     if (rules.showsModel)
       void turnModel(provider, input, root).then((model) =>
@@ -189,6 +208,7 @@ export class TurnRunner {
     try {
       const relayTools = relayToolsFor(chat.id, !!chat.startedBy);
       const env = await this.host.env(chat);
+      const links = await this.links(chat, root);
       const options = {
         onControl: (control: AgentControl) => {
           const active = this.core.active.get(chat.id);
@@ -196,7 +216,9 @@ export class TurnRunner {
           active.steer = control.steer;
           active.goal = control.goal;
         },
-        ...(!branch && chat.goal?.provider === provider ? { goal: chat.goal } : {}),
+        ...(!branch && chat.goal?.provider === provider
+          ? { goal: chat.goal }
+          : {}),
         onGoal: (goal: ThreadGoal | null) => {
           // A goal belongs to the main conversation; side ones run their own.
           if (branch || rules.side) return;
@@ -222,17 +244,23 @@ export class TurnRunner {
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
         cwd: root,
+        ...(links.length ? { links } : {}),
         ...(Object.keys(env).length ? { env } : {}),
         prompt,
-        context: async () =>
-          projectTasks.note(
+        context: async () => {
+          const note = await projectTasks.note(
             root,
             noteKey,
             chat.id,
             chat.worktree
               ? await this.core.projects.root(chat.projectId)
               : undefined,
-          ),
+          );
+          return (
+            [note, linksInstructions(links)].filter(Boolean).join("\n\n") ||
+            undefined
+          );
+        },
         choice: input.choice,
         account,
         signal: abort.signal,
@@ -257,6 +285,10 @@ export class TurnRunner {
         },
         onCommentary: (id: string, text: string | null) =>
           answer.commentary(id, text),
+        onQuestions: rules.side
+          ? undefined
+          : (id: string, questions: AgentQuestion[]) =>
+              answer.questions(id, questions),
         onEdit: (paths: string[]) => {
           for (const path of paths) edited.add(path);
         },
@@ -266,10 +298,7 @@ export class TurnRunner {
           ? { readOnly: true }
           : {}),
         // A started thread only gets the reading ones: no threads of threads.
-        ...(relayTools &&
-        !chat.thinker &&
-        !chat.reviewer &&
-        !rules.side
+        ...(relayTools && !chat.thinker && !chat.reviewer && !rules.side
           ? { relayTools }
           : {}),
         // The thread's running answer owns its requests; a side turn asks none.
@@ -382,7 +411,9 @@ export class TurnRunner {
           if (fork.from) delete fork.from.forkPoint;
         }
       }
-      if (rules.pausesQueue(failed)) chat.queuePaused = true;
+      const handover = this.core.active.get(chat.id)?.handover;
+      if (rules.pausesQueue(failed) && !(abort.signal.aborted && handover))
+        chat.queuePaused = true;
     } finally {
       abort.signal.removeEventListener("abort", stop);
       const owner = this.core.active.get(chat.id);

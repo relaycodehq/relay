@@ -7,14 +7,21 @@ import {
   defaultAISettings,
   type StoredAISettings,
 } from "../../shared/settings";
-import type {
-  RemoteSettings,
-  RoomDelivery,
-  SavedComputer,
-} from "./store-types";
+import type { RemoteSettings, SavedComputer } from "./store-types";
+
+/** What pull request rooms saved, sealed room tokens among them; dropped on load. */
+const roomKeys = [
+  "roomAccessConsents",
+  "roomHosting",
+  "roomConnections",
+  "roomJoins",
+  "roomDeliveries",
+];
+
 interface State {
-  roomAccessConsents?: Record<string, boolean>;
   projects?: import("../../shared/projects").Project[];
+  /** Where the last clone or new project went; the add-project palette starts there. */
+  projectsFolder?: string;
   /** Sidebar group paths, kept even while no project is in them. */
   projectGroups?: string[];
   /** Prettify automatic project names; unset keeps the original default (on). */
@@ -35,10 +42,6 @@ interface State {
   /** Days after settling before a thread's worktree is removed; null never, unset the default. */
   worktreeCleanupDays?: number | null;
   chats?: import("../../shared/projects").ChatSummary[];
-  roomHosting?: string;
-  roomConnections?: Record<string, string>;
-  roomJoins?: Record<string, string>;
-  roomDeliveries?: Record<string, RoomDelivery>;
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../../shared/agents").AgentProvider;
@@ -98,6 +101,8 @@ export class Store {
       );
       if (parsed.version !== 1)
         throw new Error("Unsupported saved data version.");
+      // Gone from disk with the next write.
+      for (const key of roomKeys) delete parsed[key];
       this.state = parsed;
       this.savedAtLoad = (await stat(join(this.dir, "state.json"))).mtimeMs;
     } catch (e) {

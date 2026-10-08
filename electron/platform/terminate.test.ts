@@ -1,7 +1,13 @@
+import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
-import { describe, expect, it } from "vitest";
-import { terminate } from "./terminate";
+import { describe, expect, it, vi } from "vitest";
+import { terminate, stopProcessTree } from "./terminate";
 import { withTimeout } from "../util/timeout";
+
+vi.mock("node:child_process", async (actual) => {
+  const original = await actual<typeof import("node:child_process")>();
+  return { ...original, spawn: vi.fn(original.spawn) };
+});
 
 const exited = (child: ReturnType<typeof spawn>) =>
   new Promise<string | null>((resolve) =>
@@ -50,6 +56,24 @@ describe("terminate", () => {
   });
 });
 
+it("uses taskkill for an entire Windows process tree", () => {
+  const task = new EventEmitter();
+  const child = { pid: 123, exitCode: null, kill: vi.fn(), once: vi.fn() };
+  vi.mocked(spawn).mockReturnValueOnce(task as ReturnType<typeof spawn>);
+  vi.stubGlobal("process", { ...process, platform: "win32" });
+  try {
+    terminate(child, { group: true });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "taskkill",
+      ["/PID", "123", "/T", "/F"],
+      { windowsHide: true, stdio: "ignore" },
+    );
+    expect(child.kill).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 describe("withTimeout", () => {
   it("passes the result through", async () => {
     await expect(withTimeout(Promise.resolve(4), 50, "late")).resolves.toBe(4);
@@ -61,3 +85,33 @@ describe("withTimeout", () => {
     ).rejects.toThrow("took too long");
   });
 });
+
+it.skipIf(process.platform === "win32")(
+  "waits through a transient EPERM while a process group exits",
+  async () => {
+    const kill = vi
+      .spyOn(process, "kill")
+      .mockImplementationOnce(() => true)
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("exiting"), { code: "EPERM" });
+      })
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("gone"), { code: "ESRCH" });
+      });
+    try {
+      await stopProcessTree({
+        pid: 123,
+        exitCode: null,
+        kill: vi.fn(),
+        once: vi.fn(),
+      });
+      expect(kill.mock.calls).toEqual([
+        [-123, "SIGTERM"],
+        [-123, 0],
+        [-123, 0],
+      ]);
+    } finally {
+      kill.mockRestore();
+    }
+  },
+);

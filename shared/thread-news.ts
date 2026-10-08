@@ -14,7 +14,10 @@ export interface ThreadNews {
 }
 
 /** A thread's latest answer in the main conversation, as its message events left it. */
-export type LastAnswer = Pick<ChatMessage, "status" | "body" | "error" | "provider">;
+export type LastAnswer = Pick<
+  ChatMessage,
+  "status" | "body" | "error" | "provider"
+>;
 
 const previewLength = 240;
 
@@ -34,7 +37,12 @@ export function threadNews(
     if (!was || read(c)) continue;
     const agent = c.provider ? agentName(c.provider) : "The agent";
     if (c.waiting && !was.waiting) {
-      news.push({ chatId: c.id, kind: "waiting", title: c.title, body: `${agent} needs you` });
+      news.push({
+        chatId: c.id,
+        kind: "waiting",
+        title: c.title,
+        body: `${agent} needs you`,
+      });
       continue;
     }
     if (c.limitResume && !was.limitResume) {
@@ -56,8 +64,18 @@ export function threadNews(
     if (answer?.status === "cancelled") continue;
     news.push(
       answer?.status === "failed"
-        ? { chatId: c.id, kind: "failed", title: c.title, body: answer.error || `${agent}'s answer failed` }
-        : { chatId: c.id, kind: "finished", title: c.title, body: (answer && preview(answer.body)) || `${agent} finished` },
+        ? {
+            chatId: c.id,
+            kind: "failed",
+            title: c.title,
+            body: answer.error || `${agent}'s answer failed`,
+          }
+        : {
+            chatId: c.id,
+            kind: "finished",
+            title: c.title,
+            body: (answer && preview(answer.body)) || `${agent} finished`,
+          },
     );
   }
   return news;
@@ -84,5 +102,7 @@ export function preview(markdown: string) {
     .replace(/(\*\*|__|\*|_|~~|`)(?=\S)([^\n]*?\S)\1/g, "$2")
     .replace(/\s+/g, " ")
     .trim();
-  return text.length > previewLength ? `${text.slice(0, previewLength - 1).trimEnd()}…` : text;
+  return text.length > previewLength
+    ? `${text.slice(0, previewLength - 1).trimEnd()}…`
+    : text;
 }

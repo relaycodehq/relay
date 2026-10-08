@@ -3,6 +3,8 @@ import type {
   AskAgentRequest,
   RuntimeMode,
 } from "../../../shared/agent-modes";
+import { relative } from "node:path";
+import type { LinkedFolder } from "../../../shared/projects";
 import type { PermissionRequest, QuestionRequest } from "./events";
 
 type PermissionAction = "allow" | "ask" | "deny";
@@ -63,6 +65,45 @@ const readOnlyCommands = [
  */
 export function permissionRules(
   mode: RuntimeMode | undefined,
+  options: {
+    readOnly?: boolean;
+    title?: boolean;
+    cwd?: string;
+    links?: readonly LinkedFolder[];
+  },
+): PermissionRule[] {
+  const rules = modeRules(mode, options);
+  return options.title || (mode === "full-access" && !options.readOnly)
+    ? rules
+    : [...rules, ...linkRules(options.links ?? [], options)];
+}
+
+/**
+ * Linked folders are reached without asking. Edits in a read-only one still
+ * ask; OpenCode names an edited file from the project, so the rule names the
+ * folder both ways.
+ */
+function linkRules(
+  links: readonly LinkedFolder[],
+  { cwd, readOnly }: { cwd?: string; readOnly?: boolean },
+) {
+  const under = (dir: string) => `${dir.replaceAll("\\", "/")}/*`;
+  return links.flatMap((link) => [
+    rule("external_directory", "allow", under(link.path)),
+    // A reviewer edits nothing anywhere; that rule stands.
+    ...(link.access === "read" && !readOnly
+      ? [
+          rule("edit", "ask", under(link.path)),
+          ...(cwd
+            ? [rule("edit", "ask", under(relative(cwd, link.path)))]
+            : []),
+        ]
+      : []),
+  ]);
+}
+
+function modeRules(
+  mode: RuntimeMode | undefined,
   options: { readOnly?: boolean; title?: boolean },
 ): PermissionRule[] {
   if (options.title) return [rule("*", "ask")];
@@ -75,7 +116,7 @@ export function permissionRules(
       rule("edit", "deny"),
       rule("question", "deny"),
     ];
-  // A room or helper job: it reads the project and answers.
+  // A helper job: it reads the project and answers.
   if (!mode) return [rule("*", "ask"), ...reading, rule("question", "deny")];
   if (mode === "full-access")
     return [rule("*", "allow"), rule("external_directory", "allow")];

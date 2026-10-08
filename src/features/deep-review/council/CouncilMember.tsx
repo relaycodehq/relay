@@ -11,6 +11,7 @@ import { useFollowEnd } from "./useFollowEnd";
 import { useMemberThread } from "./useMemberThread";
 import { RichText } from "../../../ui/RichText";
 import { AgentTurn } from "../../agent-turn/AgentTurn";
+import { AgentError } from "../../agents/AgentError";
 import { formatTokens } from "../../agents/ContextWindowMeter";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 
@@ -117,9 +118,7 @@ export function CouncilMember({
                   </p>
                 )}
                 {m.error && m.status !== "cancelled" && (
-                  <p role="status" className="chat-message-error">
-                    {m.error}
-                  </p>
+                  <AgentError error={m.error} />
                 )}
               </article>
             ),

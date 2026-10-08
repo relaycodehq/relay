@@ -39,7 +39,13 @@ export function AccountBars({
   );
 }
 
-function AccountBar({ meter, resets }: { meter: UsageMeter; resets?: boolean }) {
+function AccountBar({
+  meter,
+  resets,
+}: {
+  meter: UsageMeter;
+  resets?: boolean;
+}) {
   return (
     <span className="account-bar" data-pace={meter.pace}>
       <span className="account-bar-top">

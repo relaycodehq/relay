@@ -15,6 +15,7 @@ import type {
   StartedBy,
   ChatWorktree,
   KnownMessages,
+  LinkedFolder,
   ProjectChat,
   ProjectChatPatch,
   ProjectChatSend,
@@ -56,6 +57,7 @@ import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
+import { AsyncQuestions } from "./async-questions";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -78,6 +80,7 @@ export class ProjectChats {
   private queue: ChatQueue;
   private turns: ChatTurns;
   private control = threadControl();
+  private questions: AsyncQuestions;
   private disposing = false;
   private councils: Councils;
   private watchNotes: WatchReviews;
@@ -118,6 +121,9 @@ export class ProjectChats {
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
     };
     this.core = core;
+    this.questions = new AsyncQuestions(core, (id, input) =>
+      this.sendHeld(id, input),
+    );
     this.watchNotes = new WatchReviews(
       store,
       this.storage,
@@ -281,6 +287,12 @@ export class ProjectChats {
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
   }
+  setLinks(id: string, links: LinkedFolder[]) {
+    return this.core.control(id, () => this.triaging.setLinks(id, links));
+  }
+  promoteLink(id: string, path: string) {
+    return this.core.control(id, () => this.triaging.promoteLink(id, path));
+  }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
   }
@@ -290,8 +302,16 @@ export class ProjectChats {
     workspace?: ChatWorkspace,
     startedBy?: StartedBy,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
-    return this.creating.create(projectId, scope, workspace, startedBy, branch);
+    return this.creating.create(
+      projectId,
+      scope,
+      workspace,
+      startedBy,
+      branch,
+      links,
+    );
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation
@@ -309,8 +329,9 @@ export class ProjectChats {
     pick: TerminalSessionPick,
     workspace?: ChatWorkspace,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
-    return this.terminal.continue(projectId, pick, workspace, branch);
+    return this.terminal.continue(projectId, pick, workspace, branch, links);
   }
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
     return this.handoffs.mark(id, sentTo);
@@ -473,38 +494,44 @@ export class ProjectChats {
   }
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      assertHere(await this.storage.load(id));
-      if (input.side || input.parentId) {
-        const chat = await this.storage.load(id);
-        if (input.side || replyRoot(chat.messages, input.parentId!).side)
-          return this.asides.ask(chat, input);
-      }
-      if (input.sendAt) return this.schedule.add(id, input);
-      // Queued, it would wait for the very goal it pauses or clears.
-      const asked = agentAsked(input);
-      const goal = asked && parseGoalCommand(asked.question);
-      const running = this.active.get(id);
-      if (
-        (goal?.type === "pause" || goal?.type === "clear") &&
-        !input.parentId &&
-        running?.goal &&
-        !running.stopping
-      )
-        return running.goal(goal.type);
-      // Sent right after a stop: it waits for the agent to let go, rather
-      // than queueing behind the answer the stop paused the queue for.
-      await this.active.finished(id);
-      if (
-        !this.active.has(id) &&
-        !this.councils.busy(await this.storage.load(id))
-      ) {
-        await this.turns.sendNow(id, input);
-        return this.queue.sentNow(id, input, fromRelay);
-      }
-      return this.queue.add(id, input);
-    });
+    return this.control(id, () => this.sendHeld(id, input, fromRelay));
+  }
+  /** A send whose caller already holds the thread's control. */
+  private async sendHeld(
+    id: string,
+    input: ProjectChatSend,
+    fromRelay = false,
+  ) {
+    if (this.disposing) throw new Error("Relay is closing.");
+    assertHere(await this.storage.load(id));
+    if (input.side || input.parentId) {
+      const chat = await this.storage.load(id);
+      if (input.side || replyRoot(chat.messages, input.parentId!).side)
+        return this.asides.ask(chat, input);
+    }
+    if (input.sendAt) return this.schedule.add(id, input);
+    // Queued, it would wait for the very goal it pauses or clears.
+    const asked = agentAsked(input);
+    const goal = asked && parseGoalCommand(asked.question);
+    const running = this.active.get(id);
+    if (
+      (goal?.type === "pause" || goal?.type === "clear") &&
+      !input.parentId &&
+      running?.goal &&
+      !running.stopping
+    )
+      return running.goal(goal.type);
+    // Sent right after a stop: it waits for the agent to let go, rather
+    // than queueing behind the answer the stop paused the queue for.
+    await this.active.finished(id);
+    if (
+      !this.active.has(id) &&
+      !this.councils.busy(await this.storage.load(id))
+    ) {
+      await this.turns.sendNow(id, input);
+      return this.queue.sentNow(id, input, fromRelay);
+    }
+    return this.queue.add(id, input);
   }
   queueAction(
     id: string,
@@ -640,6 +667,14 @@ export class ProjectChats {
     if (response.kind === "approval" && response.decision === "cancel")
       return this.cancel(id);
   }
+  answerQuestion(
+    id: string,
+    messageId: string,
+    itemId: string,
+    response: AgentResponse,
+  ) {
+    return this.questions.answer(id, messageId, itemId, response);
+  }
   async cancel(id: string) {
     const chat = this.storage.cached(id);
     if (chat) chat.queuePaused = true;
@@ -652,13 +687,16 @@ export class ProjectChats {
    * the agents' sessions going; running answers are saved as they stand and
    * picked back up by `reattach`.
    */
-  async dispose({ detach = false } = {}) {
-    this.sessions.stopListening();
-    await this.worktrees.setup.stop();
-    if (detach) {
-      this.disposing = true;
-      this.schedule.stop();
-      this.limits.stop();
+  async prepareToQuit({ detach = false, save = true } = {}) {
+    this.disposing = true;
+    this.schedule.stop();
+    this.limits.stop();
+    try {
+      await this.worktrees.setup.stop();
+      if (!detach) {
+        if (save) await this.schedule.keepPending();
+        for (const a of this.active.all()) a.abort.abort();
+      }
       for (const a of this.active.allSides()) a.abort.abort();
       this.titles.abort();
       // What was stopped writes its last state before the store goes to disk.
@@ -666,42 +704,43 @@ export class ProjectChats {
         ...this.active.allSides().map((a) => a.job),
         ...this.titles.running(),
       ]);
-      await Promise.allSettled(
-        this.active.ids().map((id) => {
-          const chat = this.storage.cached(id);
-          return chat && this.storage.save(chat);
-        }),
-      );
-      await Promise.allSettled(this.storage.busy().writes);
-      await this.store.flush();
+      await Promise.allSettled(this.titles.writing());
+      if (!detach) {
+        await Promise.allSettled(this.active.all().map((a) => a.job));
+        await Promise.allSettled(this.control.pending());
+        // A send in validation can attach a job while shutdown waits.
+        await Promise.allSettled(this.turns.starting());
+        await Promise.allSettled(this.active.all().map((a) => a.job));
+        await Promise.allSettled(this.councils.stepping());
+      }
+      if (save) {
+        await this.storage.flush();
+        await this.store.flush();
+      }
+    } catch (error) {
+      await this.resumeAfterCancelledQuit();
+      throw error;
+    }
+  }
+
+  /** Nothing has detached yet: reopen sends and re-arm the paused timers. */
+  async resumeAfterCancelledQuit() {
+    if (!this.disposing) return;
+    await this.schedule.rollbackPending();
+    this.disposing = false;
+    this.schedule.armAll();
+    this.limits.armAll();
+  }
+
+  /** Commit teardown only after preparation, or an explicit discard. */
+  async dispose({ detach = false, save = true } = {}) {
+    if (!this.disposing) await this.prepareToQuit({ detach, save });
+    this.sessions.stopListening();
+    if (detach) {
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
     }
-    await this.schedule
-      .keepPending()
-      .catch((e) =>
-        console.warn("Could not keep Claude's background work:", e),
-      );
-    this.schedule.stop();
-    this.limits.stop();
-    this.disposing = true;
-    for (const a of this.active.all()) a.abort.abort();
-    for (const a of this.active.allSides()) a.abort.abort();
-    this.titles.abort();
-    await Promise.allSettled(this.active.allSides().map((a) => a.job));
-    await Promise.allSettled(this.active.all().map((a) => a.job));
-    await Promise.allSettled(this.titles.running());
-    await Promise.allSettled(this.titles.writing());
-    await Promise.allSettled(this.control.pending());
-    // An answer still being set up starts its agent only once it is aborted.
-    await Promise.allSettled(this.turns.starting());
-    // A send already inside validation can attach its job while shutdown waits.
-    await Promise.allSettled(this.active.all().map((a) => a.job));
-    await Promise.allSettled(this.councils.stepping());
-    await Promise.allSettled(this.storage.busy().loads);
-    await Promise.all(this.storage.busy().writes);
-    // A finished answer refreshes its sidebar summary without waiting for it.
-    await this.store.flush();
+    this.schedule.commitPending();
     await this.sessions.closeAll();
     await Promise.all(
       Object.values(agentRuntimes).map((runtime) =>

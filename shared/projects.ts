@@ -1,4 +1,7 @@
 export * from "./projects/project";
+export * from "./projects/links";
+export * from "./projects/folders";
+export * from "./projects/adding";
 export * from "./projects/threads";
 export * from "./projects/worktrees";
 export * from "./projects/messages";

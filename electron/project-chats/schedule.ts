@@ -23,6 +23,14 @@ export interface ScheduleHost {
 export class ChatSchedule {
   /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
   private timers = new Map<string, NodeJS.Timeout>();
+  private pendingCopies = new Map<
+    string,
+    {
+      chat: ProjectChat;
+      heldWakeups: ProjectChat["heldWakeups"];
+      stopped: ProjectChat["stopped"];
+    }
+  >();
   constructor(
     private core: ChatCore,
     private host: ScheduleHost,
@@ -30,9 +38,14 @@ export class ChatSchedule {
 
   /** Arms the wake-ups kept when Relay last closed, and scheduled messages. */
   armAll() {
-    for (const chat of this.core.store.get().chats ?? []) {
+    for (const summary of this.core.store.get().chats ?? []) {
+      // Cancellation can correct the cache while a failed disk write leaves
+      // the listed summary stale. Never arm a discarded copy from that summary.
+      const cached = this.core.storage.cached(summary.id);
+      const chat = cached ?? summary;
       for (const wakeup of chat.heldWakeups ?? []) this.arm(chat.id, wakeup);
-      if (chat.nextSend) this.armSend(chat.id, chat.nextSend);
+      const at = cached ? nextSend(cached.scheduled) : summary.nextSend;
+      if (at) this.armSend(chat.id, at);
     }
   }
 
@@ -211,6 +224,11 @@ export class ChatSchedule {
     for (const chatId of new Set(left.map((p) => p.chatId))) {
       const chat = await this.core.storage.load(chatId).catch(() => undefined);
       if (!chat) continue;
+      this.pendingCopies.set(chatId, {
+        chat,
+        heldWakeups: structuredClone(chat.heldWakeups),
+        stopped: structuredClone(chat.stopped),
+      });
       const stopped: StoppedWork[] = [];
       const work = left.filter((p) => p.chatId === chatId);
       for (const { item, parentId } of work) {
@@ -231,6 +249,28 @@ export class ChatSchedule {
         };
       await this.core.storage.save(chat);
     }
+  }
+
+  /** A cancelled quit leaves Claude running; forget only the copies we made. */
+  async rollbackPending() {
+    const writes: Promise<void>[] = [];
+    for (const { chat, heldWakeups, stopped } of this.pendingCopies.values()) {
+      if (heldWakeups) chat.heldWakeups = heldWakeups;
+      else delete chat.heldWakeups;
+      if (stopped) chat.stopped = stopped;
+      else delete chat.stopped;
+      writes.push(
+        this.core.storage.save(chat).catch((error) => {
+          console.warn("Could not undo copied background work:", error);
+        }),
+      );
+    }
+    this.commitPending();
+    await Promise.all(writes);
+  }
+
+  commitPending() {
+    this.pendingCopies.clear();
   }
 
   async resolveStopped(id: string, action: "resume" | "dismiss") {

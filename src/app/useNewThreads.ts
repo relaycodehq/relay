@@ -39,18 +39,23 @@ export function useNewThreads(
   const spotNow = useShellSpot(nav);
   /** ⌘N's picker shows. */
   const [picking, setPicking] = useState(false);
-  async function addProject() {
+  /** The add-project palette shows. */
+  const [adding, setAdding] = useState(false);
+  function addProject() {
     if (lock.blocked()) return;
+    setPicking(false);
+    setAdding(true);
+  }
+  /** The palette added a project, or picked one there already: a new thread in it. */
+  async function added(p: Project) {
+    setAdding(false);
     try {
-      const p = await api.addProject();
-      if (p) {
-        await projects.refetch();
-        nav.setSelected(p.id);
-        nav.setInbox(false);
-      }
+      await projects.refetch();
     } catch (e) {
       onError(e);
     }
+    nav.setInbox(false);
+    open(p);
   }
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pick() {
@@ -106,5 +111,16 @@ export function useNewThreads(
     }
     if (sameSpot(spotNow(), from)) nav.navigate(project, undefined, id);
   }
-  return { picking, setPicking, addProject, pick, scratch, open, start };
+  return {
+    picking,
+    setPicking,
+    adding,
+    setAdding,
+    addProject,
+    added,
+    pick,
+    scratch,
+    open,
+    start,
+  };
 }

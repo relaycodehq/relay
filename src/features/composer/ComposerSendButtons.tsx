@@ -1,5 +1,10 @@
 import { ArrowUp } from "lucide-react";
-import { steerKeyLabel, type SendKey } from "../../lib/send-key";
+import {
+  queueKeyLabel,
+  steerKeyLabel,
+  type RunningSendAction,
+  type SendKey,
+} from "../../lib/send-key";
 import { SendLaterMenu } from "./SendLaterMenu";
 
 /** Stops the running answer; armed shows the first Escape of two is in. */
@@ -43,12 +48,14 @@ export function SendButton({
   disabled,
   running,
   sendKey,
+  runningAction,
   onSendLater,
 }: {
   disabled: boolean;
-  /** An answer runs, so the message queues. */
+  /** An answer runs, so the message queues or steers. */
   running: boolean;
   sendKey: SendKey;
+  runningAction: RunningSendAction;
   onSendLater: (at: number) => void;
 }) {
   return (
@@ -58,7 +65,9 @@ export function SendButton({
         aria-label="Send message"
         title={
           running
-            ? `Queue message · ${steerKeyLabel(sendKey)} to steer · right-click to send later`
+            ? runningAction === "steer"
+              ? `Steer answer · ${queueKeyLabel(sendKey, runningAction)} to queue · right-click to send later`
+              : `Queue message · ${steerKeyLabel(sendKey, runningAction)} to steer · right-click to send later`
             : "Send message · right-click to send later"
         }
         disabled={disabled}

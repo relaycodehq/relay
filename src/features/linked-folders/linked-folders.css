@@ -1,0 +1,146 @@
+/* Settings → Projects: the list of linked folders. */
+.linked-folders ul {
+  display: grid;
+  gap: 0;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.linked-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px 10px 12px 14px;
+}
+.linked-row + .linked-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.linked-icon {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.linked-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.linked-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.linked-title strong {
+  font-weight: 500;
+}
+.linked-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.linked-note {
+  width: 100%;
+  font-size: 12px;
+}
+.linked-warning {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.linked-access {
+  display: flex;
+  justify-content: flex-end;
+  width: 150px;
+  margin-top: -2px;
+}
+.linked-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Link folder's menu: a name, and its path after it. */
+.linked-menu {
+  min-width: 320px;
+}
+.linked-menu .composer-select-item {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: none;
+}
+.linked-menu .composer-select-item small {
+  margin-left: auto;
+  padding-left: 16px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.linked-menu-finder {
+  margin-top: 4px;
+  border-top: 1px solid var(--border) !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+/* The thread's control: which folders it reaches. */
+.linked-thread-popup {
+  min-width: 340px;
+}
+.linked-thread-popup ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.linked-thread-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+}
+.linked-thread-row > svg {
+  flex: none;
+  color: var(--muted);
+}
+.linked-thread-row > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.linked-thread-row small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.linked-thread-row strong {
+  font-weight: 500;
+}
+.linked-thread-hint {
+  margin: 2px 0 0;
+  padding: 4px 9px 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+/* A plain button dressed as the context menu's Project settings item. */
+button.linked-thread-settings {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+}
+button.linked-thread-settings:hover,
+button.linked-thread-settings:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+.thread-context-controls .composer-branch-trigger ~ .linked-trigger {
+  margin-left: 0;
+}

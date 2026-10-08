@@ -435,9 +435,62 @@ it("rejects stale state and non-fast-forward pushes without changing the working
       kind: "push",
       revision: (await workingTree(root)).revision,
     }),
-  ).rejects.toThrow(/rejected|fetch first/);
+  ).rejects.toThrow("Rebase onto origin/review");
   expect(git("rev-parse", "HEAD")).toBe(tree.head);
 });
+it.each([false, true])(
+  "refreshes remote state after a rejected push without moving the checkout (diverged: %s)",
+  async (diverged) => {
+    const other = await mkdtemp(join(tmpdir(), "relay-other-"));
+    const otherGit = (...args: string[]) =>
+      execFileSync("git", ["-C", other, ...args], {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim();
+    try {
+      execFileSync("git", ["clone", "-q", "-b", "review", remote, other]);
+      otherGit("config", "user.name", "Other");
+      otherGit("config", "user.email", "other@example.invalid");
+      await writeFile(join(other, "remote.txt"), "remote\n");
+      otherGit("add", ".");
+      otherGit("commit", "-qm", "Remote change");
+      otherGit("push", "-q");
+      if (diverged) {
+        await writeFile(join(root, "local.txt"), "local\n");
+        git("add", ".");
+        git("commit", "-qm", "Local change");
+      }
+      await writeFile(join(root, "code.ts"), "staged work\n");
+      git("add", "code.ts");
+      await writeFile(join(root, "code.ts"), "unfinished work\n");
+      const before = await workingTree(root);
+      const index = git("diff", "--cached");
+      expect(before.behind).toBe(0);
+      await expect(
+        performGitAction(root, { kind: "push", revision: before.revision }),
+      ).rejects.toThrow(
+        diverged ? "Rebase onto origin/review" : "Pull from origin/review",
+      );
+      const after = await workingTree(root);
+      expect(after).toMatchObject({
+        head: before.head,
+        ahead: diverged ? 1 : 0,
+        behind: 1,
+        changes: before.changes,
+        operation: null,
+      });
+      expect(git("rev-parse", "origin/review")).toBe(
+        otherGit("rev-parse", "HEAD"),
+      );
+      expect(git("diff", "--cached")).toBe(index);
+      expect(await readFile(join(root, "code.ts"), "utf8")).toBe(
+        "unfinished work\n",
+      );
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+  },
+);
 it("pushes to the branch's push remote and keeps tracking the remote it fetches from", async () => {
   const fork = await mkdtemp(join(tmpdir(), "relay-fork-"));
   try {

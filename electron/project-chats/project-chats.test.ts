@@ -81,6 +81,104 @@ const input = (body: string) => ({
     fast: true,
   },
 });
+it("answers async Codex questions inside the running turn without interrupting or queueing", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture async question live"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages[1]?.questions).toHaveLength(1),
+  );
+  const current = await chats.get(chat.id);
+  const message = current.messages[1];
+  expect(message.status).toBe("streaming");
+  expect(message.trace?.some((e) => e.id === "after-question")).toBe(true);
+  expect(current.requests).toEqual([]);
+  expect(
+    (await chats.list(projectId)).find((c) => c.id === chat.id)?.waiting,
+  ).toBe(false);
+  const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
+  await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+    kind: "question",
+    answers,
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const answered = await chats.get(chat.id);
+  expect(
+    answered.messages.find((m) => m.id === message.id)?.questions?.[0].answers,
+  ).toEqual(answers);
+  expect(
+    answered.messages.some(
+      (m) => m.role === "user" && m.steered && m.body.includes("fixture-owner"),
+    ),
+  ).toBe(true);
+  expect(answered.queue ?? []).toEqual([]);
+  const calls = (await agentCalls())
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  expect(calls.filter((call) => call.turn)).toHaveLength(1);
+  expect(calls.some((call) => call.interrupt)).toBe(false);
+  expect(calls.find((call) => call.steer).steer).toMatchObject({
+    threadId: "fixture-thread",
+    expectedTurnId: "fixture-turn",
+    input: [
+      {
+        type: "text",
+        text: expect.stringContaining("Private while preparing"),
+      },
+    ],
+  });
+  expect(
+    calls.find((call) => call.thread).thread.config.features
+      .send_message_to_user_async,
+  ).toBe(true);
+  await expect(
+    chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+      kind: "question",
+      answers,
+    }),
+  ).rejects.toThrow("already been answered");
+}, 15000);
+
+it("keeps unanswered async questions across a restart and answers them as a follow-up", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture async question finished"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const message = (await chats.get(chat.id)).messages[1];
+  expect(message.questions?.[0].questions).toEqual([
+    {
+      id: "0",
+      question: "Which visibility should I use?",
+      options: [{ label: "Private while preparing" }, { label: "Public now" }],
+    },
+    { id: "1", question: "Which account should own it?" },
+  ]);
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
+    events.push(structuredClone(event)),
+  );
+  expect((await chats.get(chat.id)).messages[1].questions).toEqual(
+    message.questions,
+  );
+  await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+    kind: "question",
+    answers: { "0": ["An unlisted choice"], "1": ["fixture-owner"] },
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const calls = (await agentCalls())
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const turns = calls.filter((call) => call.turn);
+  expect(turns).toHaveLength(2);
+  expect(turns[1].turn.input[0].text).toContain("An unlisted choice");
+  expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
+}, 15000);
 it("sends only messages the renderer doesn't hold at their current version", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
@@ -373,6 +471,75 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
 }, 20000);
+/** Sends `body` to Claude after Codex's turn, and returns the thread and Claude's prompt. */
+async function switchToClaude(chatId: string, body: string) {
+  await chats.send(chatId, { ...input(body), provider: "claude" });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chatId)).messages.at(-1)).toMatchObject({
+        provider: "claude",
+        status: "complete",
+      }),
+    { timeout: 10000 },
+  );
+  const prompt = JSON.parse(
+    (await agentCalls())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .find((c) => c.provider === "claude").prompt,
+  ).message.content.find((p: { type: string }) => p.type === "text")
+    .text as string;
+  return { chat: await chats.get(chatId), prompt };
+}
+it("briefs the new agent itself when a usage limit cut off the outgoing agent's turn", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture usage limit"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed"),
+    { timeout: 6000 },
+  );
+  const { chat: after, prompt } = await switchToClaude(
+    chat.id,
+    "@claude Carry on",
+  );
+  expect(after.messages.at(-2)).toMatchObject({
+    provider: "codex",
+    status: "complete",
+    handoff: { from: "codex", to: "claude", byRelay: true },
+  });
+  expect(prompt).toContain("Handoff note Relay wrote from the thread's record");
+  expect(prompt).toContain(
+    "didn't finish (failed: You've hit your usage limit.)",
+  );
+}, 20000);
+it("writes the note itself when the outgoing agent runs out while writing it", async () => {
+  vi.stubEnv("RELAY_AGENT_NOTE_LIMIT", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const { chat: after, prompt } = await switchToClaude(
+    chat.id,
+    "@claude Now fix it",
+  );
+  // Codex's failed note became Relay's, not a second marker beside it.
+  const notes = after.messages.filter((m) => m.handoff);
+  expect(notes).toHaveLength(1);
+  expect(notes[0]).toMatchObject({
+    status: "complete",
+    handoff: { byRelay: true },
+  });
+  expect(notes[0]!.error).toBeUndefined();
+  expect(prompt).toContain("Handoff note Relay wrote");
+  expect(prompt).toContain("Explain the cache guard");
+}, 20000);
 it("accepts a message for another agent without waiting for the handoff note", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -599,60 +766,16 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     ["assistant", false, "Claude found the same cache guard."],
   ]);
 }, 15000);
-it("steers a turn Claude started by itself", async () => {
-  const chat = await chats.create(projectId, { kind: "project" });
-  const claude = (body: string) => ({
-    ...input(body),
-    provider: "claude" as const,
-  });
-  await chats.send(
-    chat.id,
-    claude("@claude Start the fixture background task to steer"),
-  );
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
-      ).toBe("Looking into it."),
-    { timeout: 8000 },
-  );
-  await chats.send(chat.id, {
-    ...claude("@claude Use the blue one"),
-    delivery: "steer",
-  });
-  await vi.waitFor(
-    async () => {
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-      expect((await chats.get(chat.id)).messages).toHaveLength(5);
-    },
-    { timeout: 8000 },
-  );
-  expect(
-    (await chats.get(chat.id)).messages.map((m) => [
-      m.role,
-      m.body,
-      !!m.unprompted,
-      !!m.steered,
-    ]),
-  ).toEqual([
-    [
-      "user",
-      "@claude Start the fixture background task to steer",
-      false,
-      false,
-    ],
-    ["assistant", "Started the background task.", false, false],
-    ["assistant", "Looking into it.", true, false],
-    ["user", "@claude Use the blue one", false, true],
-    ["assistant", "Noted: Use the blue one", false, false],
-  ]);
-}, 15000);
 it.each([
-  ["reads it mid-turn", "fixture wait for steer", "Looking into it."],
-  ["reads it after finishing", "fixture late steer", "Done before your note."],
+  ["its answer", "fixture wait for steer", "Looking into it."],
+  [
+    "a turn it started by itself",
+    "Start the fixture background task to steer",
+    "Started the background task.",
+  ],
 ])(
-  "continues Claude's answer below a steering message once Claude %s",
-  async (_, prompt, earlier) => {
+  "stops Claude's running turn for a steer and sends the steer next: %s",
+  async (_, prompt, first) => {
     const chat = await chats.create(projectId, { kind: "project" });
     const claude = (body: string) => ({
       ...input(body),
@@ -666,73 +789,89 @@ it.each([
         ),
       { timeout: 8000 },
     );
-    await chats.send(chat.id, {
+    const steer = {
       ...claude("@claude Use the blue one"),
-      delivery: "steer",
-    });
+      delivery: "steer" as const,
+    };
+    await chats.send(chat.id, steer);
     await vi.waitFor(
       async () => {
         expect(chats.hasActiveProject(projectId)).toBe(false);
-        expect((await chats.get(chat.id)).messages).toHaveLength(4);
+        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+          "complete",
+        );
       },
       { timeout: 8000 },
     );
-    const messages = (await chats.get(chat.id)).messages;
-    expect(
-      messages.map((m) => [m.role, m.body, m.status, !!m.steered]),
-    ).toEqual([
-      ["user", `@claude ${prompt}`, "complete", false],
-      ["assistant", earlier, "complete", false],
-      ["user", "@claude Use the blue one", "complete", true],
-      ["assistant", "Noted: Use the blue one", "complete", false],
-    ]);
-    expect(messages[3]!.created).toBeGreaterThan(messages[2]!.created);
-    // Shown as waiting until Claude picks it up.
-    const steerEvents = events.filter((e) => e.message.id === messages[2]!.id);
-    expect(steerEvents[0]?.message.unread).toBe(true);
-    expect(steerEvents.at(-1)?.message.unread).toBeUndefined();
-    expect(messages[2]!.unread).toBeUndefined();
-    expect((await chats.get(chat.id)).sessions?.claude?.through).toBe(
-      messages[3]!.id,
-    );
+    const saved = await chats.get(chat.id);
+    const at = saved.messages.findIndex((m) => m.id === steer.id);
+    expect(saved.messages[1]?.body).toBe(first);
+    expect(saved.messages[at - 1]).toMatchObject({
+      role: "assistant",
+      status: "cancelled",
+    });
+    expect(saved.messages[at + 1]).toMatchObject({
+      role: "assistant",
+      status: "complete",
+    });
+    expect(saved.queue ?? []).toHaveLength(0);
+    expect(saved.queuePaused).toBeFalsy();
   },
   15000,
 );
-it("continues Codex's answer below a steering message once Codex reads it", async () => {
+it("stops a running Codex turn for a steer and sends it next, screenshot included", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
-  await chats.send(chat.id, input("@codex fixture codex steer"));
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
-      ).toBeGreaterThan(0),
-    { timeout: 15000 },
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
   );
   const steer = {
-    ...input("@codex Use the blue one"),
+    ...input("@codex Look at this"),
     delivery: "steer" as const,
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png" as const,
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
   };
   await chats.send(chat.id, steer);
   await vi.waitFor(
     async () => {
       expect(chats.hasActiveProject(projectId)).toBe(false);
-      expect((await chats.get(chat.id)).messages).toHaveLength(4);
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
     },
-    { timeout: 15000 },
+    { timeout: 8000 },
   );
-  const messages = (await chats.get(chat.id)).messages;
-  expect(messages.map((m) => [m.role, m.body, m.status])).toEqual([
-    ["user", "@codex fixture codex steer", "complete"],
-    ["assistant", "", "complete"],
-    ["user", "@codex Use the blue one", "complete"],
-    ["assistant", "Noted: Use the blue one", "complete"],
+  const saved = await chats.get(chat.id);
+  expect(saved.messages.map((m) => [m.role, m.status])).toEqual([
+    ["user", "complete"],
+    ["assistant", "cancelled"],
+    ["user", "complete"],
+    ["assistant", "complete"],
   ]);
+  expect(saved.messages[2]?.id).toBe(steer.id);
+  expect(saved.messages[2]?.images).toHaveLength(1);
+  expect(saved.queue ?? []).toHaveLength(0);
   const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
-  expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
-}, 30000);
+  expect(calls.some((c) => c.steer)).toBe(false);
+  expect(calls.some((c) => c.interrupt)).toBe(true);
+  expect(calls.filter((c) => c.turn).at(-1).turn.input).toEqual([
+    expect.objectContaining({
+      type: "text",
+      text: expect.stringContaining("Look at this"),
+    }),
+    expect.objectContaining({ type: "localImage" }),
+  ]);
+}, 15000);
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -1416,95 +1555,6 @@ it("discovers an enabled skill and sends its native input to Codex without trust
   });
 });
 
-it("steers an active Codex turn natively and resumes its saved session after stop", async () => {
-  const chat = await chats.create(projectId, { kind: "project" });
-  await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-      "cache guard",
-    ),
-  );
-  const followup = {
-    ...input("@codex Focus only on the cache key"),
-    parentId: null,
-    delivery: "steer" as const,
-  };
-  await chats.send(chat.id, followup);
-  expect((await chats.get(chat.id)).queue).toHaveLength(0);
-  expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(followup.id);
-  await chats.cancel(chat.id);
-  await vi.waitFor(async () =>
-    expect(
-      (await chats.get(chat.id)).messages.find((m) => m.role === "assistant")
-        ?.status,
-    ).toBe("cancelled"),
-  );
-  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
-  await chats.resume(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
-  );
-  const calls = (await agentCalls())
-    .trim()
-    .split("\n")
-    .map((s) => JSON.parse(s));
-  expect(calls.find((c) => c.steer)?.steer).toMatchObject({
-    threadId: "fixture-thread",
-    expectedTurnId: "fixture-turn",
-    input: [{ type: "text", text: "Focus only on the cache key" }],
-  });
-  expect(calls.some((c) => c.interrupt)).toBe(true);
-  expect(calls.filter((c) => c.turn).at(-1).turn.input[0].text).not.toContain(
-    "Focus only on the cache key",
-  );
-  expect(calls.filter((c) => c.thread).map((c) => c.method)).toEqual([
-    "thread/start",
-    "thread/resume",
-  ]);
-}, 15000);
-
-it("steers an active Codex turn with a screenshot", async () => {
-  const chat = await chats.create(projectId, { kind: "project" });
-  await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-      "cache guard",
-    ),
-  );
-  const followup = {
-    ...input("@codex Look at this"),
-    parentId: null,
-    delivery: "steer" as const,
-    images: [
-      {
-        name: "screen.png",
-        mimeType: "image/png" as const,
-        dataUrl: `data:image/png;base64,${tinyPng}`,
-      },
-    ],
-  };
-  await chats.send(chat.id, followup);
-  const saved = await chats.get(chat.id);
-  expect(saved.queue).toHaveLength(0);
-  const steered = saved.messages.find((m) => m.id === followup.id);
-  expect(steered?.steered).toBe(true);
-  expect(steered?.images).toHaveLength(1);
-  const calls = (await agentCalls())
-    .trim()
-    .split("\n")
-    .map((s) => JSON.parse(s));
-  expect(calls.find((c) => c.steer)?.steer.input).toEqual([
-    expect.objectContaining({ type: "text", text: "Look at this" }),
-    expect.objectContaining({ type: "localImage" }),
-  ]);
-  await chats.cancel(chat.id);
-  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
-});
-
 it("shows a stop at once and sends the next message once the agent lets go", async () => {
   vi.stubEnv("RELAY_FIXTURE_STOP_DELAY", "1500");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1569,53 +1619,6 @@ it("resumes a stopped answer with the agent picked since", async () => {
   expect(after.lastInput).toMatchObject({ provider: "claude", choice });
   expect(after.lastInput?.body).toMatch(/^@claude Continue/);
 }, 15000);
-
-it("tells an agent about steering that went to the other agent", async () => {
-  const chat = await chats.create(projectId, { kind: "project" });
-  const idle = () =>
-    vi.waitFor(
-      async () => {
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).not.toBe(
-          "streaming",
-        );
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
-  const claude = (body: string) => ({
-    ...input(body),
-    provider: "claude" as const,
-  });
-  await chats.send(chat.id, claude("@claude Explain the cache guard"));
-  await idle();
-  await chats.send(chat.id, input("@codex wait for cancellation"));
-  // Claude's handoff note comes first; steer Codex's own answer.
-  await vi.waitFor(
-    async () => {
-      const last = (await chats.get(chat.id)).messages.at(-1);
-      expect(last?.provider).toBe("codex");
-      expect(last?.body).toContain("cache guard");
-    },
-    { timeout: 6000 },
-  );
-  await chats.send(chat.id, {
-    ...input("@codex Focus only on the cache key"),
-    delivery: "steer",
-  });
-  expect((await chats.get(chat.id)).messages.at(-1)?.steered).toBe(true);
-  await chats.cancel(chat.id);
-  await idle();
-  await chats.send(chat.id, claude("@claude Carry on"));
-  await idle();
-  const prompt = (await agentCalls())
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line))
-    .filter((c) => c.provider === "claude" && !c.args.includes("--print"))
-    .map((c) => JSON.parse(c.prompt).message.content[0].text as string)
-    .find((text) => text.startsWith("My request: Carry on"))!;
-  expect(prompt).toContain("Focus only on the cache key");
-}, 30000);
 
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");

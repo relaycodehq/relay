@@ -40,7 +40,10 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
   git("commit", "-qm", "Base");
   // What the terminal session left uncommitted.
   await writeFile(join(repo, "cache.ts"), "export const guard = 2;\n");
-  const agent = await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8");
+  const agent = await readFile(
+    resolve("tests/fixtures/room-agent.cjs"),
+    "utf8",
+  );
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
 
   await writeClaudeSession(
@@ -48,8 +51,14 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     repo,
     "claude-idle-1",
     claudeTurns([
-      { prompt: "Why does the cache guard never trip?", answer: "It compares the wrong key." },
-      { prompt: "Fix it and keep the test", answer: "Fixed in cache.ts; the test passes." },
+      {
+        prompt: "Why does the cache guard never trip?",
+        answer: "It compares the wrong key.",
+      },
+      {
+        prompt: "Fix it and keep the test",
+        answer: "Fixed in cache.ts; the test passes.",
+      },
     ]),
     { ago: 2 * HOUR },
   );
@@ -72,10 +81,21 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     { ago: 3 * HOUR },
   );
   // Neither is listed: one is Relay's own, the other ran in another folder.
-  await writeClaudeSession(claudeHome, repo, "claude-relay-1", claudeTurns([{ prompt: "Relay's own", answer: "x" }]), {
-    entrypoint: "sdk-cli",
-  });
-  await writeClaudeSession(claudeHome, root, "claude-other1", claudeTurns([{ prompt: "Elsewhere", answer: "x" }]));
+  await writeClaudeSession(
+    claudeHome,
+    repo,
+    "claude-relay-1",
+    claudeTurns([{ prompt: "Relay's own", answer: "x" }]),
+    {
+      entrypoint: "sdk-cli",
+    },
+  );
+  await writeClaudeSession(
+    claudeHome,
+    root,
+    "claude-other1",
+    claudeTurns([{ prompt: "Elsewhere", answer: "x" }]),
+  );
 
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -129,7 +149,9 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     await expect(rows.nth(0).locator(".continue-session-detail")).toHaveText(
       "Codex · just now · 2 turns · open in a terminal, continues as a copy",
     );
-    await expect(rows.nth(1)).toContainText("Why does the cache guard never trip?");
+    await expect(rows.nth(1)).toContainText(
+      "Why does the cache guard never trip?",
+    );
     await expect(rows.nth(1).locator(".continue-session-detail")).toHaveText(
       "Claude · 2h ago · 2 turns",
     );
@@ -152,41 +174,64 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     await expect(popup).toHaveCount(0);
     const thread = page.locator(".project-message");
     await expect(thread.filter({ hasText: "Fixed in cache.ts" })).toBeVisible();
-    await expect(page.getByText("Continued from a terminal session")).toBeVisible();
-    await screenshot(page, { path: "test-results/continue-session-resumed.png" });
-    await page.getByLabel("Message project").fill("@claude Add a regression test");
-    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(
+      page.getByText("Continued from a terminal session"),
+    ).toBeVisible();
+    await screenshot(page, {
+      path: "test-results/continue-session-resumed.png",
+    });
+    await page
+      .getByLabel("Message project")
+      .fill("@claude Add a regression test");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
     await expect
       .poll(async () =>
-        (await calls()).find((c) => c.prompt?.includes("Add a regression test")),
+        (await calls()).find((c) =>
+          c.prompt?.includes("Add a regression test"),
+        ),
       )
       .toMatchObject({
         cwd: repo,
         args: expect.arrayContaining(["--resume=claude-idle-1"]),
       });
-    const resumed = (await calls()).find((c) => c.prompt?.includes("Add a regression test"));
+    const resumed = (await calls()).find((c) =>
+      c.prompt?.includes("Add a regression test"),
+    );
     expect(resumed.args).not.toContain("--fork-session");
 
     // A new thread with the worktree toggle on forks the live Codex session there.
     await newThread.click();
     await page.getByRole("button", { name: /Project folder/ }).click();
     await page.getByRole("menuitem", { name: "New worktree" }).click();
-    await expect(page.getByRole("button", { name: /New worktree/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /New worktree/ }),
+    ).toBeVisible();
     await trigger.click();
     await expect(popup).toContainText("continued in a new worktree");
     await rows.filter({ hasText: "Docs pass" }).click();
     await expect(popup).toHaveCount(0);
     await expect(thread.filter({ hasText: "Tidied." })).toBeVisible();
     // The turn still running in the terminal stays there.
-    await expect(thread.filter({ hasText: "Now the changelog" })).toHaveCount(0);
+    await expect(thread.filter({ hasText: "Now the changelog" })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByText("Forked from a session still open in a terminal"),
     ).toBeVisible();
-    await screenshot(page, { path: "test-results/continue-session-forked.png" });
+    await screenshot(page, {
+      path: "test-results/continue-session-forked.png",
+    });
     await page.getByLabel("Message project").fill("@codex Carry on");
-    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
     await expect
-      .poll(async () => (await calls()).find((c) => c.method === "thread/fork")?.thread)
+      .poll(
+        async () =>
+          (await calls()).find((c) => c.method === "thread/fork")?.thread,
+      )
       .toMatchObject({ threadId: "codex-live-01", lastTurnId: "turn-0" });
     const fork = (await calls()).find((c) => c.method === "thread/fork");
     expect(fork.thread.cwd).toContain(join(data, "worktrees"));
@@ -197,10 +242,16 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     // Listed again, the Claude session is already a thread; picking it opens that one.
     await newThread.click();
     await trigger.click();
-    await expect(rows.filter({ hasText: "cache guard" })).toContainText("in Relay");
-    await screenshot(page, { path: "test-results/continue-session-in-relay.png" });
+    await expect(rows.filter({ hasText: "cache guard" })).toContainText(
+      "in Relay",
+    );
+    await screenshot(page, {
+      path: "test-results/continue-session-in-relay.png",
+    });
     await rows.filter({ hasText: "cache guard" }).click();
-    await expect(thread.filter({ hasText: "Add a regression test" })).toBeVisible();
+    await expect(
+      thread.filter({ hasText: "Add a regression test" }),
+    ).toBeVisible();
     expect(
       await page.evaluate(async () => {
         const [project] = await window.relay.projects();

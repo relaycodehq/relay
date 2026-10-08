@@ -33,6 +33,7 @@ import { azureDevOps } from "../source-control/azure-devops";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../app/release-notes";
+import { devSwitchState, devSwitchTo } from "../app/dev-switch";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
@@ -200,6 +201,10 @@ export function settingsHandlers(ctx: ApiContext) {
     releaseNotes: () => fetchReleaseNotes(),
     devBuildState: () => ctx.devBuild.stale,
     restartDevBuild: () => ctx.devBuild.restart(),
+    devSwitchState: () => devSwitchState(),
+    devSwitch: takes([z.string().min(1).max(4096)], (path) =>
+      devSwitchTo(path),
+    ),
     agentVersions: () => agentUpdates.current,
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: takes([agentProviderSchema], (provider) =>

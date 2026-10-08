@@ -11,7 +11,7 @@ import {
   historyLimitSchema,
   historyScopeSchema,
 } from "../../shared/history";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import {
@@ -37,8 +37,7 @@ const branchNameSchema = z.string().min(1).max(250);
 
 /** Git in a project's checkout or a thread's worktree: changes, history, branches, commits. */
 export function gitHandlers(ctx: ApiContext) {
-  const { store, projects, projectChats, projectChecks, liveSyncs, placeRoot } =
-    ctx;
+  const { store, projects, projectChats, projectChecks, placeRoot } = ctx;
   return {
     projectWorkingTree: takes([workspaceIdSchema], async (where) =>
       workingTree(await placeRoot(where)),
@@ -87,8 +86,6 @@ export function gitHandlers(ctx: ApiContext) {
             throw new Error(
               "Stop the running agent in this project before switching branches.",
             );
-          if (liveSyncs.busy(root))
-            throw new Error("Pause live file sync before switching branches.");
           const result = await changeBranch(root, action);
           projectChecks.stop();
           return result;

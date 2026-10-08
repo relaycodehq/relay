@@ -30,6 +30,43 @@ export function claudePermissionMode(
   }[options.runtimeMode ?? "approval-required"] as PermissionMode;
 }
 
+/** Which folders the session reaches and how; a note about one changes nothing here. */
+export const linksSignature = (links: AgentOptions["links"]) =>
+  JSON.stringify((links ?? []).map((l) => [l.path, l.access]));
+
+/** `/Users/me/api` → `//Users/me/api`, the way permission rules spell a path from the root. */
+const rulePath = (path: string) =>
+  "/" +
+  path
+    .replace(/^([a-zA-Z]):/, (_, drive: string) => `/${drive.toLowerCase()}`)
+    .replace(/\\/g, "/");
+
+/**
+ * Linked folders. A writable one joins the working directories, so it is
+ * edited under the same mode as the project; a read-only one is only read
+ * without asking, and edits there still ask.
+ */
+export function linkedFolders(
+  links: AgentOptions["links"] = [],
+): Partial<Options> {
+  const writes = links.filter((l) => l.access === "write");
+  const reads = links.filter((l) => l.access === "read");
+  return {
+    ...(writes.length
+      ? { additionalDirectories: writes.map((l) => l.path) }
+      : {}),
+    ...(reads.length
+      ? {
+          settings: {
+            permissions: {
+              allow: reads.map((l) => `Read(${rulePath(l.path)}/**)`),
+            },
+          },
+        }
+      : {}),
+  };
+}
+
 /** The settings a session started with; another signature means retuning it or starting a new one. */
 export const sessionSignature = (options: ClaudeRunOptions) =>
   JSON.stringify([
@@ -43,6 +80,8 @@ export const sessionSignature = (options: ClaudeRunOptions) =>
     ...(options.account && options.account !== SYSTEM_ACCOUNT
       ? [options.account]
       : []),
+    // Sessions from before linked folders match too.
+    ...(options.links?.length ? [linksSignature(options.links)] : []),
   ]);
 
 /** What a thread's Claude Code session starts with; `env` signs in its account. */
@@ -73,6 +112,7 @@ export function sessionConfig(
           }
         : {}),
     settingSources: ["user", "project", "local"],
+    ...linkedFolders(options.links),
     // Allow rules in those settings skip canUseTool; this list they can't.
     ...(options.readOnly
       ? { disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit"] }

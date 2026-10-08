@@ -64,6 +64,7 @@ import { ErrorBox } from "../../ui/ui";
 import { RunCommand } from "../../ui/CodeBlock";
 import { WorkItemCards } from "../plugins/WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
+import { useThreadLinks } from "../linked-folders/useThreadLinks";
 import "./thread.css";
 
 /** What the thread's messages ask the shell's panes to show. */
@@ -88,6 +89,7 @@ export function ProjectChat({
   scopes,
   onSwitchProject,
   onAddProject,
+  onProjectSettings,
   opens,
   onDraftWorkspace,
   onStartThread,
@@ -117,6 +119,8 @@ export function ProjectChat({
   scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
+  /** Opens Settings → Projects on this project. */
+  onProjectSettings: () => void;
   opens: ThreadOpens;
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
@@ -167,12 +171,19 @@ export function ProjectChat({
   const background = useBackgroundWork(chat, running);
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
+  const links = useThreadLinks({
+    project,
+    chat,
+    draftId,
+    onError: handle.setError,
+  });
   const session = useSessionCommands({
     handle,
     shown,
     root,
     running,
-    onCommand,
+    onCommand: (command, args) =>
+      links.command(command, args) ?? onCommand(command, args),
   });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
   useLayoutEffect(() => {
@@ -232,7 +243,11 @@ export function ProjectChat({
   const councils = useCouncils({
     handle,
     data: history.data,
-    onCreated,
+    draftLinks: links.draftLinks,
+    onCreated: async (created) => {
+      await onCreated(created);
+      threadStorage(draftId).links.clear();
+    },
     onSent: followAnswer,
   });
   const newThread = useNewThread(
@@ -244,8 +259,12 @@ export function ProjectChat({
         scope.kind === "project" && workspace === "worktree"
           ? worktree.newBranch.trim() || undefined
           : undefined,
+        links.draftLinks,
       ),
-    onCreated,
+    async (created) => {
+      await onCreated(created);
+      threadStorage(draftId).links.clear();
+    },
   );
   const { send, resume } = useThreadSend({
     handle,
@@ -275,11 +294,15 @@ export function ProjectChat({
         <ContinueSessionPicker
           project={project}
           settingsKey={id}
+          links={links.draftLinks}
           workspace={
             scope.kind === "project" && !project.plain ? workspace : "checkout"
           }
           branch={worktree.newBranch.trim() || undefined}
-          onContinued={onCreated}
+          onContinued={async (created) => {
+            await onCreated(created);
+            threadStorage(draftId).links.clear();
+          }}
           onOpenThread={onOpenThread}
         />
       }
@@ -384,6 +407,8 @@ export function ProjectChat({
               locked: checkoutDisabled,
             }}
             scopeButtons={scopeButtons}
+            links={links}
+            onProjectSettings={onProjectSettings}
             onSend={send}
             onEditQueued={() => queue.editLast(root?.id ?? null)}
             onStartThread={onStartThread}

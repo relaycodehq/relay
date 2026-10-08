@@ -39,6 +39,7 @@ import {
   type MessageProvider,
   type PickerModel,
 } from "./model-picker-catalog";
+import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
 import { useCustomModels, useFavoriteModels } from "./useStoredModels";
 import "./composer-model-picker.css";
@@ -102,9 +103,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   /** The section shown in a grouped agent's list; "" shows them all. */
   const [group, setGroup] = useState("");
   const [favorites, setFavorites] = useFavoriteModels();
-  // Favorites lead the list in the order they had when the picker opened,
-  // so starring a row doesn't move it out from under the pointer.
-  const [pinned, setPinned] = useState(favorites);
+  const { list, captureReorder } = useModelReorder(favorites, open);
   const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
   const { usage, now } = usePickerUsage(open, account?.of);
@@ -130,7 +129,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     legacy,
     group,
     favorites,
-    pinned,
     allowDefault,
   });
 
@@ -144,7 +142,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   useEffect(() => {
     if (!openSignal) return;
     setOpen(true);
-    setPinned(favorites);
     onOpen?.();
     setCategory(provider);
     openGroup(provider);
@@ -203,7 +200,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
-          setPinned(favorites);
           onOpen?.();
           setCategory(provider);
           openGroup(provider);
@@ -355,7 +351,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                         ))}
                       </nav>
                     )}
-                    <div className="model-picker-scroll">
+                    <div className="model-picker-scroll" ref={list}>
                       <Combobox.List aria-label="Models">
                         {rows.map((m, index) => {
                           const key = modelKey(m),
@@ -375,6 +371,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                 onClick={() => {
                                   if (selectedKey === key) select(m);
                                 }}
+                                data-model-key={key}
                                 value={key}
                                 index={index}
                                 className="model-picker-row"
@@ -416,6 +413,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                       }}
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        captureReorder(key);
                                         setFavorites((prev) =>
                                           favorite
                                             ? prev.filter((v) => v !== key)

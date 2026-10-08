@@ -15,6 +15,7 @@ import { IconButton } from "../../ui/ui";
 import { timeAgo } from "../../lib/relative-date";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
+import { pullHostName } from "../../../shared/source-control";
 
 interface Actions {
   pull: Pull;
@@ -94,7 +95,7 @@ function ReviewActions({
         onOpenFile={onEditFile}
       />
       <IconButton
-        label="Open pull request in Gitea"
+        label={`Open pull request in ${pullHostName(pull.html_url)}`}
         onClick={() => void api.openExternal(pull.html_url).catch(onError)}
       >
         <ArrowUpRight size={iconSize} />

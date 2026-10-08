@@ -22,6 +22,8 @@ import {
 import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
+import { AsyncQuestionCards } from "./AsyncQuestionCards";
+import { AgentError } from "../agents/AgentError";
 import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
@@ -80,10 +82,10 @@ function HandoffRow({
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { from, to, computer } = m.handoff!;
+  const { from, to, computer, byRelay } = m.handoff!;
   const switched = computer
     ? `Handoff note for ${computer}`
-    : `Switched from ${agentName(from)} to ${agentName(to)}`;
+    : `Switched from ${agentName(from)} to ${agentName(to)}${byRelay ? ` · ${agentName(from)} couldn't write a note, Relay did` : ""}`;
   const note = m.status === "complete" && m.body.trim();
   return (
     <div
@@ -363,6 +365,9 @@ export const Message = memo(function Message({
         )
       ) : null}
       {after}
+      {m.role === "assistant" && (
+        <AsyncQuestionCards message={m} chatId={chatId} />
+      )}
       {m.role === "assistant" && onSteer && (
         <WatchNotes
           agent={agentName(m.provider)}
@@ -424,11 +429,7 @@ export const Message = memo(function Message({
           Stopped · partial output kept
         </p>
       )}
-      {m.error && m.status !== "cancelled" && (
-        <p role="status" className="chat-message-error">
-          {m.error}
-        </p>
-      )}
+      {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
       {onSignIn && m.signIn && (
         <SignIn provider={m.signIn} onSignIn={onSignIn} />
       )}

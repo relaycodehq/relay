@@ -3,6 +3,7 @@
 .settings-screen {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   background: var(--surface);
   color: var(--text);
@@ -133,6 +134,7 @@
 .settings-pane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -156,6 +158,7 @@
 }
 .settings-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px var(--settings-gutter) 28px;
 }
@@ -199,10 +202,78 @@
   font-weight: 500;
   color: var(--text);
 }
-.setting-text h4 mark {
+.settings-screen mark {
   color: inherit;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: transparent;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+/* Keep matches in the normal row layout, including keyword-only hits. */
+.setting[data-search-match] .setting-text h4,
+.setting[data-search-match] .settings-card-title {
+  color: var(--accent);
+}
+.setting:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.settings-search-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-search-context button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+.settings-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+}
+.settings-result:hover {
+  background: var(--hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.settings-result > svg {
+  flex: none;
+  color: var(--muted);
+}
+.settings-result-text {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.settings-result-text strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.settings-result-text > span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.settings-result-text small {
+  font-size: 11px;
+  color: var(--muted);
 }
 .setting-text p {
   margin: 3px 0 0;

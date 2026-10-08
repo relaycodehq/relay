@@ -11,6 +11,7 @@ import type {
 import type { FromTerminal } from "../terminal-sessions";
 import type { ThinkerTask } from "../ultraplan";
 import { refSchema } from "../validation";
+import type { LinkedFolder } from "./links";
 import type { AgentWorktree, ChatWorktree } from "./worktrees";
 
 export const threadTitleSchema = z
@@ -68,6 +69,8 @@ export interface ChatSummary {
   branch?: string;
   /** Set on threads that work in their own worktree; fixed when the thread starts. */
   worktree?: ChatWorktree;
+  /** Folders linked to this thread alone, with `/add-dir`; its project's links come on top. */
+  links?: LinkedFolder[];
   /** Worktrees the agent made itself with git, still on disk when last checked. */
   agentWorktrees?: AgentWorktree[];
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */

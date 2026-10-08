@@ -8,7 +8,11 @@ import type { Server } from "node:net";
 import { join } from "node:path";
 import { AgentHosts } from "../agent-host/client";
 import { hostAgents, setOpenCodeEnvRoot } from "../agents";
-import { AgentAccounts, setProfilesRoot } from "../agents/accounts";
+import {
+  AgentAccounts,
+  accountHomes,
+  setProfilesRoot,
+} from "../agents/accounts";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
 import {
   cursorSdkIo,
@@ -47,15 +51,18 @@ import { PluginSecrets } from "../plugins/secrets";
 import { ProjectChats } from "../project-chats";
 import { ChatSummaryFeed } from "../project-chats/chat-summaries";
 import { PullMerges } from "../project-chats/pull-merges";
-import { LiveSyncs } from "../projects/live-sync";
 import { Projects } from "../projects/projects";
+import { ProjectAdding } from "../project-add";
+import { TerminalSessions } from "../terminal-sessions";
+import { GithubLogin } from "../pull-requests/github-login";
+import type { Repo } from "../../shared/types";
+import { isGithubServer } from "../../shared/source-control";
 import { mergedPulls } from "../pull-requests/merged";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { questionContext } from "../pull-requests/questions";
 import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
 import { PhoneAppFiles } from "../remote/phone-app";
 import { PhoneRemote } from "../remote/phone-remote";
-import { RoomService } from "../rooms/service";
 import { applyLinkedTools } from "../source-control";
 import {
   agentProjects,
@@ -140,7 +147,14 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   void gitExecutable().catch(() => {});
   const login = new GiteaLogin();
   const projects = new Projects(store);
-  const rooms = new RoomService(store, fetcher, seal, unseal);
+  const github = new GithubLogin(fetcher);
+  const hostOf = async (repo: Repo) =>
+    isGithubServer(repo.server) ? github.require() : login.require();
+  async function projectHost(projectId: string) {
+    const repository = projects.get(projectId).repository;
+    if (!repository) return null;
+    return isGithubServer(repository.server) ? github.require() : login.client;
+  }
   const devops = new DevOps(
     store,
     fetcher,
@@ -158,8 +172,12 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     async (chat, selection) => {
       if (chat.scope.kind !== "pr")
         throw new Error("This is not a pull request conversation.");
-      const client = login.require(),
-        repo = await projects.linked(chat.projectId, client);
+      const client = await projectHost(chat.projectId);
+      if (!client)
+        throw new Error(
+          "Relay can't match this project to a GitHub or Gitea repository.",
+        );
+      const repo = await projects.linked(chat.projectId, client);
       if (
         repo.owner !== chat.scope.ref.owner ||
         repo.name !== chat.scope.ref.name
@@ -178,18 +196,15 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const pullMerges = new PullMerges({
     chats: () => store.get().chats ?? [],
     repository: async (projectId) => {
-      const client = login.client;
+      const client = await projectHost(projectId).catch(() => null);
       return client
         ? projects.linked(projectId, client).catch(() => null)
         : null;
     },
-    mergedAmong: (repo, numbers, signal) =>
-      mergedPulls(login.require(), repo, numbers, signal),
-    merged: (repo, number) =>
-      login
-        .require()
-        .pull({ ...repo, number })
-        .then((pull) => !!pull.merged),
+    mergedAmong: async (repo, numbers, signal) =>
+      mergedPulls(await hostOf(repo), repo, numbers, signal),
+    merged: async (repo, number) =>
+      !!(await (await hostOf(repo)).pull({ ...repo, number })).merged,
     record: (id) => chats.pullMerged(id),
     online: () => true,
   });
@@ -231,7 +246,11 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   const speech = new HeadlessSpeech(runtime, dictation, readAloud);
   void speech.catchUp();
-  const window = new AppWindow({ closed: () => {}, rendererGone: () => {} });
+  const window = new AppWindow({
+    closed: () => {},
+    quitCancelled: () => {},
+    rendererGone: () => {},
+  });
   const agentUpdates = new AgentUpdates(() => {}, {
     ...machineIo,
     fetch: fetcher,
@@ -243,13 +262,13 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     projects,
     projectChats: chats,
     pullMerges,
-    rooms,
     devops,
     clockify,
     triage,
     phoneRemote: () => phoneRemote,
     handoffs: () => handoffs,
     login,
+    github,
     window,
     menubar: new Menubar(
       () => {},
@@ -259,14 +278,25 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     projectChecks: new ProjectChecks(join(__dirname, "checks-worker.mjs")),
     blame: new BlameService(),
     ci: new Ci(fetcher),
-    liveSyncs: new LiveSyncs(() => join(home, "live-sync")),
     pullRequestCreation: new PullRequestCreation(),
     updater: new Updater(() => {}),
-    devBuild: new DevBuild(() => {}, { beforeQuit: () => {} }),
+    devBuild: new DevBuild(() => {}, {
+      quit: () => {
+        void shutDown(true, { restart: true });
+      },
+    }),
     dictation,
     readAloud,
     agentUpdates,
     agentAccounts,
+    projectAdding: new ProjectAdding({
+      store,
+      projects,
+      client: () => login.client,
+      sessions: new TerminalSessions(async () => accountHomes()),
+      appData: home,
+      send: () => {},
+    }),
   });
   const dispatch: Dispatch = createDispatch(api);
   const summaries = new ChatSummaryFeed(api.listChats, (event) =>
@@ -392,7 +422,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         computers.close();
         if (detach) agentHosts?.detach();
         await chats.dispose({ detach });
-        await rooms.dispose();
         await Promise.all([
           store.flush(),
           flushWorkingFiles(),

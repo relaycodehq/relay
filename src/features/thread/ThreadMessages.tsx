@@ -2,6 +2,7 @@ import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import { unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
+import { reviewReports } from "../../../shared/deep-review";
 import { api } from "../../lib/api";
 import type {
   ChatMessage,
@@ -112,10 +113,13 @@ export function ThreadMessages({
   // the review changes with every finding dismissed or fixed.
   const reviewCode = useMemo(
     () =>
-      chat && review?.report
-        ? findingCode(chat.id, review.report.findings)
+      chat && review
+        ? findingCode(
+            chat.id,
+            reviewReports(review).flatMap((r) => r.findings),
+          )
         : undefined,
-    [chat?.id, review?.report],
+    [chat?.id, review?.report, review?.reports],
   );
   // Said once, under the message that made the worktree.
   const renamedAfter =
@@ -205,13 +209,18 @@ export function ThreadMessages({
                   ? () => api.rerunWorktreeSetup(chat.id, m.id)
                   : undefined
               }
-              {...(chat && review?.report?.messageId === m.id
+              {...(chat &&
+              review &&
+              reviewReports(review).some((r) => r.messageId === m.id)
                 ? {
                     inlineCode: reviewCode,
                     after: (
                       <DeepReviewReport
                         chatId={chat.id}
                         state={review}
+                        report={reviewReports(review).find(
+                          (r) => r.messageId === m.id,
+                        )}
                         // A fix asked for while the lead works would wait in the
                         // queue, its findings still open to ask for again.
                         busy={busy || running}

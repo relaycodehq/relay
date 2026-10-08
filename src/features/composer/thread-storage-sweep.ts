@@ -2,7 +2,7 @@ import { draftImageKeys, saveDraftImages } from "../images/draft-images";
 import {
   currentNewThread,
   dropThreadDraft,
-  hasText,
+  hasDraft,
   newThreadId,
   newThreadProject,
 } from "./drafts";
@@ -28,7 +28,7 @@ function reachable(thread: string, known: KnownThreads): boolean {
   return (
     known.projects.has(project) &&
     (thread === newThreadId(project) ||
-      hasText(thread) ||
+      hasDraft(thread) ||
       currentNewThread(project) === thread)
   );
 }

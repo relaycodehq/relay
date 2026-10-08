@@ -7,10 +7,12 @@ export function AgentQuestionForm({
   questions,
   busy,
   onRespond,
+  deferred = false,
 }: {
   questions: AgentQuestion[];
   busy: boolean;
   onRespond: (response: AgentResponse) => Promise<void>;
+  deferred?: boolean;
 }) {
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [index, setIndex] = useState(0);
@@ -37,13 +39,13 @@ export function AgentQuestionForm({
     };
     setAnswers(next);
     clearTimeout(timer.current);
-    if (!question.multiple)
+    if (!question.multiple && !deferred)
       timer.current = setTimeout(() => advance(next), 200);
   };
   const pick = useRef(select);
   pick.current = select;
   useEffect(() => {
-    if (!question || busy || collapsed) return;
+    if (!question || busy || collapsed || deferred) return;
     const keydown = (event: KeyboardEvent) => {
       if (
         event.metaKey ||
@@ -61,7 +63,7 @@ export function AgentQuestionForm({
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [question, busy, collapsed]);
+  }, [question, busy, collapsed, deferred]);
   if (!question) return null;
   return (
     <form
@@ -109,7 +111,7 @@ export function AgentQuestionForm({
                     <span className="agent-question-option-key" aria-hidden>
                       {checked ? (
                         <Check size={13} strokeWidth={2.5} />
-                      ) : i < 9 ? (
+                      ) : i < 9 && !deferred ? (
                         <kbd>{i + 1}</kbd>
                       ) : null}
                     </span>
@@ -145,7 +147,7 @@ export function AgentQuestionForm({
             }}
           />
           <footer>
-            {question.options?.length ? (
+            {question.options?.length && !deferred ? (
               <span className="agent-question-hint">
                 {question.multiple
                   ? "Pick any that apply"
@@ -168,7 +170,11 @@ export function AgentQuestionForm({
               className="primary"
               disabled={busy || !answers[question.id]?.some((a) => a.trim())}
             >
-              {index < questions.length - 1 ? "Next" : "Continue"}
+              {index < questions.length - 1
+                ? "Next"
+                : deferred
+                  ? "Send answer"
+                  : "Continue"}
             </button>
           </footer>
         </fieldset>

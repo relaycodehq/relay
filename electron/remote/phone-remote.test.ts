@@ -435,7 +435,11 @@ it("says who answers in `to` only to desktops that take it", async () => {
 });
 
 /** A phone from before `compactBridge`: base64 text both ways, and it never says its bridge. */
-async function olderPhone(port: number, key: string, credentials: RemoteCredentials) {
+async function olderPhone(
+  port: number,
+  key: string,
+  credentials: RemoteCredentials,
+) {
   const handshake = clientHandshake(fromBase64Url(key));
   const socket = new WebSocket(`ws://127.0.0.1:${port}/`);
   cleanup.push(async () => socket.close());
@@ -454,9 +458,12 @@ async function olderPhone(port: number, key: string, credentials: RemoteCredenti
     }
     const frame = JSON.parse(channel.open(fromBase64Url(m.data)));
     frames.push(frame);
-    if (frame.t === "ready") send({ t: "call", id: 1, method: "overview", args: [] });
+    if (frame.t === "ready")
+      send({ t: "call", id: 1, method: "overview", args: [] });
   };
-  await vi.waitFor(() => expect(frames.some((f) => f.t === "result")).toBe(true));
+  await vi.waitFor(() =>
+    expect(frames.some((f) => f.t === "result")).toBe(true),
+  );
   return {
     binary: () => binary,
     events: () => frames.flatMap((f) => (f.t === "event" ? [f.event] : [])),
@@ -482,7 +489,8 @@ it("streams patches to a current phone that add up to what an older one gets who
   const older = await olderPhone(old.link.port, old.link.key, old.credentials);
 
   const id = randomUUID();
-  const words = "Looked at the flaky test and found a race in the watcher. ".repeat(40);
+  const words =
+    "Looked at the flaky test and found a race in the watcher. ".repeat(40);
   const trace: NonNullable<ChatMessage["trace"]> = [];
   const snapshot = (n: number, status: ChatMessage["status"]): ChatMessage => ({
     id,
@@ -495,7 +503,11 @@ it("streams patches to a current phone that add up to what an older one gets who
     trace: structuredClone(trace),
   });
   for (let n = 1; n <= 5; n++) {
-    trace.push({ kind: "commentary", id: `c${n}`, text: `Step ${n}: reading the watcher.` });
+    trace.push({
+      kind: "commentary",
+      id: `c${n}`,
+      text: `Step ${n}: reading the watcher.`,
+    });
     remote.chatEvent({ chatId, message: snapshot(n, "streaming") });
     // Past the bridge's throttle, so each step goes out on its own.
     await new Promise((r) => setTimeout(r, 200));

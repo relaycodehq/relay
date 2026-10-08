@@ -1,11 +1,23 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./shell-path", () => ({ pathReady: async () => {} }));
 
-import { findExecutable, setLinkedAgents, setLinkedTools } from "./executables";
+import {
+  findExecutable,
+  runExecutable,
+  setLinkedAgents,
+  setLinkedTools,
+} from "./executables";
 
 const posix = process.platform !== "win32";
 let root: string;
@@ -96,4 +108,59 @@ describe.skipIf(!posix)("finding an agent CLI", () => {
     setLinkedTools({ gh: join(root, "gone/gh") });
     await expect(findExecutable("gh")).rejects.toThrow(/linked in Settings/);
   });
+});
+
+it.skipIf(!posix)(
+  "waits for a cancelled executable to exit before rejecting",
+  async () => {
+    const ready = join(root, "ready"),
+      done = join(root, "done");
+    const stop = new AbortController();
+    let settled = false;
+    const script = `const fs = require('node:fs'); process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(${JSON.stringify(done)}, 'done'); process.exit(); }, 100)); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+    const running = runExecutable(
+      process.execPath,
+      ["-e", script],
+      5000,
+      stop.signal,
+    );
+    const failed = expect(running).rejects.toThrow("Cancelled.");
+    void running.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await vi.waitFor(async () =>
+      expect(await readFile(ready, "utf8")).toBe("ready"),
+    );
+    stop.abort();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+    await failed;
+    expect(await readFile(done, "utf8")).toBe("done");
+  },
+);
+
+it.skipIf(!posix)("cancels subprocesses spawned by an executable", async () => {
+  const ready = join(root, "child-ready"),
+    done = join(root, "child-done");
+  const childScript = `const fs = require('node:fs'); process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(done)}, 'stopped'); process.exit(); }); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+  const parentScript = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(childScript)}], {stdio:'inherit'}); setInterval(() => {}, 1000);`;
+  const stop = new AbortController();
+  const running = runExecutable(
+    process.execPath,
+    ["-e", parentScript],
+    5000,
+    stop.signal,
+  );
+  const failed = expect(running).rejects.toThrow("Cancelled.");
+  await vi.waitFor(async () =>
+    expect(await readFile(ready, "utf8")).toBe("ready"),
+  );
+  stop.abort();
+  await failed;
+  expect(await readFile(done, "utf8")).toBe("stopped");
 });

@@ -55,7 +55,11 @@ export async function ignoreRules(root: string, paths: string[]) {
   }
   return rules;
 }
-async function checkIgnore(root: string, paths: string[], flags: string[] = []) {
+async function checkIgnore(
+  root: string,
+  paths: string[],
+  flags: string[] = [],
+) {
   if (!paths.length) return "";
   const file = await gitExecutable();
   return new Promise<string>((resolve, reject) => {
@@ -265,48 +269,48 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
   const [index, stamps, destination, counts, log, lines, ignored] =
     await Promise.all([
-    tracked.length
-      ? git(root, [
-          "ls-files",
-          "--stage",
-          "-z",
-          ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
-        ])
-      : "",
-    Promise.all(
-      changes.map(async (c) => {
-        const s = await lstat(join(root, c.path)).catch(
-          (e: NodeJS.ErrnoException) => {
-            if (e.code !== "ENOENT") throw e;
-            return null;
-          },
-        );
-        return s
-          ? [c.path, s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode]
-          : [c.path, null];
-      }),
-    ),
-    pushDestination(root, branch),
-    !upstream
-      ? [0, 0]
-      : head
+      tracked.length
         ? git(root, [
-            "rev-list",
-            "--left-right",
-            "--count",
-            `${upstream}...HEAD`,
-          ]).then((out) => out.trim().split(/\s+/).map(Number))
-        : // An unborn branch has nothing ahead, and everything upstream is behind.
-          git(root, ["rev-list", "--count", upstream]).then((out) => [
-            Number(out.trim()),
-            0,
-          ]),
-    upstream && head
-      ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
-      : "",
-    lineCounts(root, changes, head),
-    ignoredTouches(root, head),
-  ]);
+            "ls-files",
+            "--stage",
+            "-z",
+            ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
+          ])
+        : "",
+      Promise.all(
+        changes.map(async (c) => {
+          const s = await lstat(join(root, c.path)).catch(
+            (e: NodeJS.ErrnoException) => {
+              if (e.code !== "ENOENT") throw e;
+              return null;
+            },
+          );
+          return s
+            ? [c.path, s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode]
+            : [c.path, null];
+        }),
+      ),
+      pushDestination(root, branch),
+      !upstream
+        ? [0, 0]
+        : head
+          ? git(root, [
+              "rev-list",
+              "--left-right",
+              "--count",
+              `${upstream}...HEAD`,
+            ]).then((out) => out.trim().split(/\s+/).map(Number))
+          : // An unborn branch has nothing ahead, and everything upstream is behind.
+            git(root, ["rev-list", "--count", upstream]).then((out) => [
+              Number(out.trim()),
+              0,
+            ]),
+      upstream && head
+        ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
+        : "",
+      lineCounts(root, changes, head),
+      ignoredTouches(root, head),
+    ]);
   return {
     head,
     branch,
@@ -552,18 +556,43 @@ export async function performGitAction(
         const target = await pushDestination(root, state.branch);
         if (!target)
           throw new Error("Configure a Git push remote for this branch first.");
-        await git(
-          root,
-          [
-            "push",
-            "--porcelain",
-            // A branch fetching from one remote and pushing to another keeps tracking the first.
-            ...(target.tracks ? ["--set-upstream"] : []),
-            target.remote,
-            `HEAD:${target.ref}`,
-          ],
-          120000,
-        );
+        try {
+          await git(
+            root,
+            [
+              "push",
+              "--porcelain",
+              // A branch fetching from one remote and pushing to another keeps tracking the first.
+              ...(target.tracks ? ["--set-upstream"] : []),
+              target.remote,
+              `HEAD:${target.ref}`,
+            ],
+            120000,
+          );
+        } catch (e) {
+          if (
+            !(e instanceof Error) ||
+            !/\[rejected\].*\((fetch first|non-fast-forward)\)/.test(e.message)
+          )
+            throw e;
+          // A local status refresh can't discover remote commits. Fetch before
+          // reporting the failure so callers' refreshes offer Pull or Rebase.
+          try {
+            await git(
+              root,
+              ["fetch", "--prune", "--quiet", target.remote],
+              60000,
+            );
+          } catch {
+            // Keep the push failure if the remote also refuses the refresh.
+            throw e;
+          }
+          const fresh = await workingTree(root);
+          if (fresh.upstream !== target.label || !fresh.behind) throw e;
+          throw new Error(
+            `Remote has new commits. ${fresh.ahead ? "Rebase onto" : "Pull from"} ${target.label}, then push again.`,
+          );
+        }
       }
     }
     return workingTree(root);

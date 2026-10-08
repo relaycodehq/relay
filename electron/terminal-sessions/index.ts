@@ -9,7 +9,12 @@ import {
   type TerminalSession,
   type TerminalSessionPick,
 } from "../../shared/terminal-sessions";
-import { claudeHistory, claudeOrigin, claudeSlug, claudeSummary } from "./claude";
+import {
+  claudeHistory,
+  claudeOrigin,
+  claudeSlug,
+  claudeSummary,
+} from "./claude";
 import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 import { FileCache, head } from "./scan";
@@ -114,6 +119,105 @@ export class TerminalSessions {
     };
   }
 
+  /**
+   * Folders Claude and Codex ran in lately, newest first, from a terminal or
+   * not: Relay's own threads are mostly in its projects, which callers drop.
+   * Claude keeps a folder per working folder, so its newest session there
+   * says where; Codex's files are read newest first until enough are found.
+   */
+  async recentFolders(most: number) {
+    const found = new Map<string, number>();
+    const note = (cwd: string, mtime: number) =>
+      found.set(cwd, Math.max(found.get(cwd) ?? 0, mtime));
+    const seen = new Set<string>();
+    const codex: File[] = [];
+    for (const { provider, account, home } of await this.homes()) {
+      if (provider === "codex") {
+        const days = codexDays(join(home, "sessions"), this.now()).slice(0, 15);
+        for (const dir of days) {
+          const at = await real(dir);
+          if (!at || seen.has(at)) continue;
+          seen.add(at);
+          for (const path of await files(
+            dir,
+            (n) => n.startsWith("rollout-") && n.endsWith(".jsonl"),
+          )) {
+            const s = await stat(path).catch(() => undefined);
+            if (s?.isFile())
+              codex.push({
+                provider,
+                account,
+                home,
+                path,
+                mtime: s.mtimeMs,
+                size: s.size,
+              });
+          }
+        }
+        continue;
+      }
+      const projects = join(home, "projects");
+      const at = await real(projects);
+      if (!at || seen.has(at)) continue;
+      seen.add(at);
+      const dirs = await Promise.all(
+        (await files(projects, () => true)).map(async (dir) => ({
+          dir,
+          mtime: (await stat(dir).catch(() => undefined))?.mtimeMs ?? 0,
+        })),
+      );
+      dirs.sort((a, b) => b.mtime - a.mtime);
+      await Promise.all(
+        dirs.slice(0, most * 3).map(async ({ dir }) => {
+          const sessions = await Promise.all(
+            (await files(dir, (n) => n.endsWith(".jsonl"))).map(
+              async (path) => {
+                const s = await stat(path).catch(() => undefined);
+                return s?.isFile()
+                  ? { path, mtime: s.mtimeMs, size: s.size }
+                  : undefined;
+              },
+            ),
+          );
+          const newest = sessions
+            .filter((s) => !!s)
+            .sort((a, b) => b.mtime - a.mtime)
+            .slice(0, 3);
+          for (const s of newest) {
+            const file = { provider, account, home, ...s };
+            const origin = await this.origins
+              .get(file.path, () => this.origin(file), file)
+              .catch(() => undefined);
+            if (origin) return note(origin.cwd, s.mtime);
+          }
+        }),
+      );
+    }
+    codex.sort((a, b) => b.mtime - a.mtime);
+    const before = found.size;
+    for (
+      let at = 0;
+      at < Math.min(codex.length, BATCH * 4) && found.size - before < most;
+      at += BATCH
+    ) {
+      const batch = codex.slice(at, at + BATCH);
+      const origins = await Promise.all(
+        batch.map((file) =>
+          this.origins
+            .get(file.path, () => this.origin(file), file)
+            .catch(() => undefined),
+        ),
+      );
+      batch.forEach((file, i) => {
+        const origin = origins[i];
+        if (origin) note(origin.cwd, file.mtime);
+      });
+    }
+    return [...found]
+      .map(([cwd, mtime]) => ({ cwd, mtime }))
+      .sort((a, b) => b.mtime - a.mtime);
+  }
+
   /** What the session holds, as thread messages. */
   history(session: { provider: TerminalAgent; id: string; path: string }) {
     return session.provider === "claude"
@@ -130,11 +234,14 @@ export class TerminalSessions {
     const now = this.now();
     const claude = found.some(({ file }) => file.provider === "claude")
       ? await this.open(
-          (await this.homes()).flatMap((h) => (h.provider === "claude" ? [h.home] : [])),
+          (await this.homes()).flatMap((h) =>
+            h.provider === "claude" ? [h.home] : [],
+          ),
         ).catch(() => new Set<string>())
       : new Set<string>();
     return (file: File, id: string) =>
-      (file.provider === "claude" && claude.has(id)) || now - file.mtime < LIVE_WINDOW;
+      (file.provider === "claude" && claude.has(id)) ||
+      now - file.mtime < LIVE_WINDOW;
   }
 
   /**
@@ -142,8 +249,14 @@ export class TerminalSessions {
    * Most files in these folders are Relay's own sessions or another folder's,
    * so heads are read newest first until enough of them are this project's.
    */
-  private async candidates(roots: Set<string>, most: number, only?: TerminalSessionPick) {
-    const all = (await this.files(roots, only)).sort((a, b) => b.mtime - a.mtime);
+  private async candidates(
+    roots: Set<string>,
+    most: number,
+    only?: TerminalSessionPick,
+  ) {
+    const all = (await this.files(roots, only)).sort(
+      (a, b) => b.mtime - a.mtime,
+    );
     const out: { file: File; origin: NonNullable<Origin> }[] = [];
     for (let at = 0; at < all.length && out.length < most; at += BATCH) {
       const checked = await Promise.all(
@@ -155,7 +268,8 @@ export class TerminalSessions {
         })),
       );
       for (const { file, origin } of checked)
-        if (origin?.terminal && roots.has(origin.cwd)) out.push({ file, origin });
+        if (origin?.terminal && roots.has(origin.cwd))
+          out.push({ file, origin });
     }
     return out.slice(0, most);
   }
@@ -165,7 +279,8 @@ export class TerminalSessions {
     let { text, whole } = await head(file.path);
     let origin = claudeOrigin(text);
     // A long first prompt can push where it ran past the usual read.
-    if (!origin && !whole) origin = claudeOrigin((await head(file.path, 1024 * 1024)).text);
+    if (!origin && !whole)
+      origin = claudeOrigin((await head(file.path, 1024 * 1024)).text);
     return origin && { ...origin, id: basename(file.path, ".jsonl") };
   }
 
@@ -199,7 +314,11 @@ export class TerminalSessions {
       if (only && only.provider !== provider) continue;
       const dirs =
         provider === "claude"
-          ? [...new Set([...roots].map((r) => join(home, "projects", claudeSlug(r))))]
+          ? [
+              ...new Set(
+                [...roots].map((r) => join(home, "projects", claudeSlug(r))),
+              ),
+            ]
           : codexDays(join(home, "sessions"), this.now());
       for (const dir of dirs) {
         const at = await real(dir);
@@ -207,7 +326,8 @@ export class TerminalSessions {
         seen.add(at);
         const paths = await files(dir, (name) =>
           provider === "claude"
-            ? name.endsWith(".jsonl") && (!only || name === `${only.session}.jsonl`)
+            ? name.endsWith(".jsonl") &&
+              (!only || name === `${only.session}.jsonl`)
             : name.startsWith("rollout-") &&
               name.endsWith(".jsonl") &&
               (!only || name.endsWith(`-${only.session}.jsonl`)),
@@ -218,7 +338,14 @@ export class TerminalSessions {
         paths.forEach((path, i) => {
           const s = stats[i];
           if (s?.isFile())
-            out.push({ provider, account, home, path, mtime: s.mtimeMs, size: s.size });
+            out.push({
+              provider,
+              account,
+              home,
+              path,
+              mtime: s.mtimeMs,
+              size: s.size,
+            });
         });
       }
     }

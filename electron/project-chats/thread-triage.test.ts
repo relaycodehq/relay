@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -115,4 +115,88 @@ it("a lead sees a started thread that settled by itself as settled", async () =>
   );
   expect(settle.content[0]!.text).toBe("Already settled.");
   expect((await chats.get(child.id)).settledAt).toBeUndefined();
+});
+
+it("promotes links atomically and does not resurrect the old thread link after reload", async () => {
+  const links = [{ path: join(root, "backend"), access: "write" as const }];
+  const made = await chats.create(
+    projectId,
+    scope,
+    "checkout",
+    undefined,
+    undefined,
+    links,
+  );
+  await store.update((s) => {
+    s.projects!.find((p) => p.id === projectId)!.settings = {
+      worktreeSetup: "npm ci",
+    };
+  });
+  const promoted = await chats.promoteLink(made.id, links[0].path);
+  expect(promoted.project.settings).toEqual({ worktreeSetup: "npm ci", links });
+  expect(promoted.chat.links).toBeUndefined();
+  expect(
+    store.get().chats!.find((c) => c.id === made.id)!.links,
+  ).toBeUndefined();
+  await chats.dispose();
+  chats = new ProjectChats(
+    store,
+    new Projects(store),
+    join(root, "chats"),
+    () => {},
+  );
+  expect((await chats.get(made.id)).links).toBeUndefined();
+  await chats.rename(made.id, "Renamed");
+  expect(
+    store.get().chats!.find((c) => c.id === made.id)!.links,
+  ).toBeUndefined();
+});
+
+it("leaves both link scopes unchanged when the promotion transaction fails", async () => {
+  const links = [{ path: join(root, "backend"), access: "write" as const }];
+  const made = await chats.create(
+    projectId,
+    scope,
+    "checkout",
+    undefined,
+    undefined,
+    links,
+  );
+  const before = structuredClone(store.get());
+  const failed = vi
+    .spyOn(store, "update")
+    .mockRejectedValueOnce(new Error("disk refused"));
+  await expect(chats.promoteLink(made.id, links[0].path)).rejects.toThrow(
+    "disk refused",
+  );
+  expect(store.get()).toEqual(before);
+  expect((await chats.get(made.id)).links).toEqual(links);
+  failed.mockRestore();
+  expect(
+    (await chats.promoteLink(made.id, links[0].path)).chat.links,
+  ).toBeUndefined();
+});
+
+it("persists thread link edits in state and keeps them through later chat writes and reloads", async () => {
+  const made = await chats.create(projectId, scope);
+  const links = [{ path: join(root, "backend"), access: "read" as const }];
+  await chats.setLinks(made.id, links);
+  await chats.rename(made.id, "Linked thread");
+  await chats.dispose();
+  chats = new ProjectChats(
+    store,
+    new Projects(store),
+    join(root, "chats"),
+    () => {},
+  );
+  expect((await chats.get(made.id)).links).toEqual(links);
+  await chats.setLinks(made.id, []);
+  await chats.dispose();
+  chats = new ProjectChats(
+    store,
+    new Projects(store),
+    join(root, "chats"),
+    () => {},
+  );
+  expect((await chats.get(made.id)).links).toBeUndefined();
 });

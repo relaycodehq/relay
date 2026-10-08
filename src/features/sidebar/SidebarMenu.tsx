@@ -8,7 +8,7 @@ export function MenuPopup({
   sideOffset = 4,
   children,
 }: {
-  side: "bottom" | "right";
+  side: "bottom" | "right" | "top";
   align: "start" | "end";
   sideOffset?: number;
   children: ReactNode;

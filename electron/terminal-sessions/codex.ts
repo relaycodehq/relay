@@ -176,8 +176,7 @@ export function codexTranscript(
     if (payload.turn_id !== turn) continue;
     if (item.type === "AgentMessage") {
       const text = textOf(item.content);
-      if (item.phase === "commentary")
-        transcript.commentary(item.id, text, at);
+      if (item.phase === "commentary") transcript.commentary(item.id, text, at);
       else transcript.text(item.id, text, at);
     } else {
       const activity = activityOf(item);

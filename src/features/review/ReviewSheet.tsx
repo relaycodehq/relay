@@ -4,8 +4,9 @@ import type { Progress, Pull } from "../../../shared/types";
 import { revisionOf } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { ErrorBox, Modal } from "../../ui/ui";
+import { pullHostName } from "../../../shared/source-control";
 
-/** Finishing a review: its summary, verdict and this revision's drafts, published to Gitea. */
+/** Finishing a review: its summary, verdict and this revision's drafts, published to its host. */
 export function ReviewSheet({
   pull,
   progress,
@@ -41,7 +42,7 @@ export function ReviewSheet({
     >
       <p className="muted">
         {drafts.length} inline comment{drafts.length !== 1 ? "s" : ""} will be
-        published to Gitea.
+        published to {pullHostName(pull.html_url)}.
       </p>
       {stale.length > 0 && (
         <p className="warning-note">

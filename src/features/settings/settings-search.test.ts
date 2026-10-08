@@ -37,6 +37,16 @@ describe("matches", () => {
   it("doesn't match across the gap between two fields", () => {
     expect(matches(sendKey, searchWords("withenter"), "")).toBe(false);
   });
+
+  it("finds entries by their section heading", () => {
+    expect(
+      matches(
+        entry("setup", { section: "Worktrees" }),
+        searchWords("worktrees"),
+        "Projects",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("sections", () => {
@@ -58,16 +68,41 @@ describe("sections", () => {
 });
 
 describe("highlight", () => {
-  it("marks the query's first word only, keeping the title's case", () => {
-    expect(highlight("Light theme", " THEME light")).toEqual([
-      "Light ",
-      "theme",
-      "",
+  it("marks every word and occurrence while keeping the original case", () => {
+    expect(highlight("Light theme, light text", " THEME light")).toEqual([
+      { text: "Light", matched: true },
+      { text: " ", matched: false },
+      { text: "theme", matched: true },
+      { text: ", ", matched: false },
+      { text: "light", matched: true },
+      { text: " text", matched: false },
     ]);
   });
 
   it("leaves titles without the word, and empty queries, alone", () => {
-    expect(highlight("Accent", "dark")).toBeUndefined();
-    expect(highlight("Accent", "   ")).toBeUndefined();
+    expect(highlight("Accent", "dark")).toEqual([
+      { text: "Accent", matched: false },
+    ]);
+    expect(highlight("Accent", "   ")).toEqual([
+      { text: "Accent", matched: false },
+    ]);
+  });
+
+  it("merges overlaps, regardless of the order or duplication of words", () => {
+    expect(highlight("Settled", "settle settled settle")).toEqual([
+      { text: "Settled", matched: true },
+    ]);
+    expect(highlight("banana", "ana ban")).toEqual([
+      { text: "banana", matched: true },
+    ]);
+  });
+
+  it("treats punctuation literally", () => {
+    expect(highlight("Use [Image #1] and C++", "[image c++")).toEqual([
+      { text: "Use ", matched: false },
+      { text: "[Image", matched: true },
+      { text: " #1] and ", matched: false },
+      { text: "C++", matched: true },
+    ]);
   });
 });

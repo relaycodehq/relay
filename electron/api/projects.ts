@@ -7,14 +7,26 @@ import { agentProviderSchema } from "../../shared/agents";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import { projectFolderSchema } from "../../shared/project-folders";
 import {
+  linkedFoldersSchema,
   projectNameSchema,
   projectSettingsSchema,
 } from "../../shared/projects";
+import {
+  checkNewLinks,
+  inspectFolder,
+  linkSuggestions,
+  listFolders,
+} from "../projects/folder-inspect";
+import { newProjectSchema } from "../../shared/projects";
+import { githubRepos } from "../project-add";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
-import { idSchema } from "../../shared/rooms";
 import { isSourceControlOn } from "../../shared/source-control";
-import type { Pull } from "../../shared/types";
-import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
+import {
+  digestSchema,
+  idSchema,
+  shaSchema,
+  textSchema,
+} from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { imageMime } from "../../shared/project-files";
@@ -33,6 +45,13 @@ import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
+/** A folder on disk as typed: absolute, or from `~`. */
+const folderInputSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4096)
+  .refine((v) => /^(~|\/|[a-zA-Z]:[\\/])/.test(v) && !v.includes("\0"));
 
 export function projectHandlers(ctx: ApiContext) {
   const {
@@ -41,15 +60,23 @@ export function projectHandlers(ctx: ApiContext) {
     ci,
     store,
     pullRequestCreation,
-    requireClient,
+    clientFor,
     place,
   } = ctx;
+  /** The project's repository and the client for its host. */
+  async function projectRepo(projectId: string) {
+    const known = projects.get(projectId).repository;
+    if (!known)
+      throw new Error(
+        "Relay can't match this project to a GitHub or Gitea repository.",
+      );
+    const client = await clientFor(known);
+    return { client, repo: await projects.linked(projectId, client) };
+  }
   async function pullRequestPlace(where: string) {
     // A worktree thread's PR opens from its own branch.
     const { root, projectId, chatId } = await place(where);
-    const client = requireClient();
-    const repo = await projects.linked(projectId, client);
-    return { root, chatId, client, repo };
+    return { root, chatId, ...(await projectRepo(projectId)) };
   }
   return {
     projectIcon: takes([idSchema], async (id) =>
@@ -93,7 +120,31 @@ export function projectHandlers(ctx: ApiContext) {
     saveProjectSettings: takes(
       [idSchema, projectSettingsSchema],
       async (id, settings) => {
+        const current = projects.get(id);
+        if (settings.links)
+          settings.links = await checkNewLinks(
+            settings.links,
+            current.settings?.links,
+            current.path,
+          );
         const saved = await projects.saveSettings(id, settings);
+        projectChats.summariesChanged(id);
+        return saved;
+      },
+    ),
+    addProjectLinks: takes(
+      [idSchema, linkedFoldersSchema],
+      async (id, links) => {
+        const current = projects.get(id);
+        const added = await checkNewLinks(
+          links,
+          current.settings?.links,
+          current.path,
+        );
+        const saved = await projects.updateLinks(id, (kept) => {
+          const paths = new Set(kept.map((l) => l.path));
+          return [...kept, ...added.filter((l) => !paths.has(l.path))];
+        });
         projectChats.summariesChanged(id);
         return saved;
       },
@@ -109,6 +160,35 @@ export function projectHandlers(ctx: ApiContext) {
         ? null
         : projects.add(result.filePaths[0], ctx.login.client);
     },
+    inspectFolder: takes([folderInputSchema], inspectFolder),
+    listFolders: takes([folderInputSchema], (dir) =>
+      listFolders(dir).catch(() => []),
+    ),
+    chooseFolder: takes([z.string().max(200)], async (title) => {
+      const result = await dialog.showOpenDialog(ctx.window.win!, {
+        title,
+        properties: ["openDirectory", "createDirectory"],
+      });
+      return result.canceled ? null : result.filePaths[0];
+    }),
+    linkSuggestions: takes([idSchema], async (id) =>
+      linkSuggestions(projects.get(id), await projects.list(ctx.login.client)),
+    ),
+    addingStart: () => ctx.projectAdding.start(),
+    addProjectAt: takes(
+      [folderInputSchema, z.boolean().optional()],
+      (path, setUpGit) => ctx.projectAdding.addAt(path, setUpGit),
+    ),
+    cloneProject: takes(
+      [z.string().trim().min(1).max(2000), folderInputSchema],
+      (remote, into) => ctx.projectAdding.clone(remote, into),
+    ),
+    createProject: takes(
+      [newProjectSchema.extend({ location: folderInputSchema })],
+      (spec) => ctx.projectAdding.create(spec),
+    ),
+    cancelProjectAdding: () => ctx.projectAdding.cancel(),
+    githubRepos: () => githubRepos(),
     createScratch: () =>
       projects.scratch(join(app.getPath("userData"), "Scratchpad"), (id) =>
         projectChats.list(id).some((c) => !chatIsEmpty(c)),
@@ -118,7 +198,7 @@ export function projectHandlers(ctx: ApiContext) {
         .scratchIds()
         .flatMap((id) => projectChats.list(id))
         .sort((a, b) => b.updated - a.updated),
-    linkProject: takes([idSchema], (id) => projects.link(id, requireClient())),
+    linkProject: takes([idSchema], (id) => projects.link(id, ctx.login.client)),
     projectCommands: takes(
       [idSchema, agentProviderSchema],
       async (id, provider) =>
@@ -257,12 +337,8 @@ export function projectHandlers(ctx: ApiContext) {
     projectPulls: takes(
       [idSchema, z.enum(["open", "closed", "all"]), pageSchema],
       async (id, state, page) => {
-        const client = requireClient();
-        const repo = await projects.linked(id, client);
-        const pulls = await client.page<Pull>(
-          `${client.repo(repo)}/pulls?state=${state}`,
-          page,
-        );
+        const { client, repo } = await projectRepo(id);
+        const pulls = await client.pulls(repo, state, page);
         return {
           ...pulls,
           items: pulls.items.map((p) => ({
@@ -271,6 +347,7 @@ export function projectHandlers(ctx: ApiContext) {
               name: repo.name,
               full_name: `${repo.owner}/${repo.name}`,
               owner: repo.owner,
+              ...(repo.server ? { server: repo.server } : {}),
             },
             pull_request: { merged: p.merged },
           })),

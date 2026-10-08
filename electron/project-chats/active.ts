@@ -22,6 +22,8 @@ export interface ActiveChat {
   finishing?: boolean;
   /** Stopped: the answer already shows it, while the agent winds down. */
   stopping?: boolean;
+  /** Stopped for a steering message, which goes out next: the queue carries on. */
+  handover?: boolean;
   end: () => void;
 }
 

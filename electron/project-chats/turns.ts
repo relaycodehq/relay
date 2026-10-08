@@ -17,6 +17,7 @@ import type { ChatTurn } from "./chat-turn";
 import { currentBranchOr } from "../git/git";
 import { codexSkills, type CodexSkill } from "../agents/provider-commands";
 import { promptTitle } from "../agents/thread-titles";
+import { relayNote } from "./relay-note";
 import { turnPrompt } from "./turn-prompt";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
@@ -336,24 +337,37 @@ export class ChatTurns {
             !m.worktreeCommand &&
             onBranch(m),
         );
-      const handoffFrom =
-        !command &&
-        outgoing &&
-        outgoing.provider !== asked.provider &&
-        outgoing.status !== "failed" &&
-        agentSession(chat, outgoing.provider, parent?.id).thread
+      const switchedFrom =
+        !command && outgoing && outgoing.provider !== asked.provider
           ? outgoing.provider
           : undefined;
-      const note = handoffFrom
+      // An agent whose last turn failed, usually on a usage limit, can't
+      // write a note either; Relay writes one from what it left instead.
+      const asksNote =
+        switchedFrom &&
+        outgoing!.status !== "failed" &&
+        agentSession(chat, switchedFrom, parent?.id).thread;
+      let note = asksNote
         ? await this.handoff(
             chat,
             root,
-            handoffFrom,
+            switchedFrom,
             asked.provider,
             parent?.id,
             active,
           )
         : undefined;
+      if (switchedFrom && !(note?.status === "complete" && note.body.trim()))
+        note = await this.relayHandoff(
+          chat,
+          note,
+          switchedFrom,
+          asked.provider,
+          parent?.id,
+          chat.messages.filter(
+            (m) => m.id !== user.id && onBranch(m) && !m.side,
+          ),
+        );
       const answer = streamingAnswer(asked.provider, {
         // With a council, the lead's first answer is its brief.
         ...(input.ultraplan ? { brief: true } : {}),
@@ -473,6 +487,34 @@ export class ChatTurns {
       clearTimeout(timer);
       active.abort.signal.removeEventListener("abort", stop);
     }
+    return message;
+  }
+  /**
+   * The note Relay writes when the outgoing agent left none, in the place of
+   * its failed one if it tried, so the thread shows what the new agent got.
+   */
+  private async relayHandoff(
+    chat: ProjectChat,
+    failed: ChatMessage | undefined,
+    from: AgentProvider,
+    to: AgentProvider,
+    parentId: string | undefined,
+    conversation: ChatMessage[],
+  ): Promise<ChatMessage> {
+    const body = relayNote(conversation, from);
+    const kept = failed && chat.messages.find((m) => m.id === failed.id);
+    const message =
+      kept ?? streamingAnswer(from, { ...(parentId ? { parentId } : {}) });
+    Object.assign(message, {
+      handoff: { from, to, byRelay: true },
+      body,
+      status: "complete",
+      ended: Date.now(),
+    });
+    delete message.error;
+    if (!kept) chat.messages.push(message);
+    await this.core.storage.save(chat);
+    this.core.emit({ chatId: chat.id, message: structuredClone(message) });
     return message;
   }
   /**

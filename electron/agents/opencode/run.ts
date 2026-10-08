@@ -63,12 +63,13 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   const { signal, job } = options;
   signal.throwIfAborted();
   const directory = options.cwd;
-  const title = job.kind === "helper";
-  // Helper jobs and room answers are one-offs; the rest are a thread's turns.
-  const oneOff = title || job.kind === "answer";
+  // Helper jobs are one-offs; the rest are a thread's turns.
+  const oneOff = job.kind === "helper";
   const rules = permissionRules(oneOff ? undefined : options.runtimeMode, {
     readOnly: options.readOnly,
-    title,
+    title: oneOff,
+    cwd: directory,
+    links: options.links,
   });
   // Only a thread's own turn has someone to ask; the rest is rejected.
   const ask =
@@ -78,7 +79,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   const call: Call = (method, path, body) =>
     openCode<unknown>(method, path, { directory, body });
 
-  // Rooms, titles and helper jobs leave nothing behind.
+  // Titles and helper jobs leave nothing behind.
   const ephemeral = !options.session;
   // A turn a restart cut off carries on in the session it was running in.
   const sessionID =

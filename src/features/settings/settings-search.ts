@@ -29,7 +29,13 @@ export const matches = (
   categoryLabel: string,
 ) =>
   words.every((word) =>
-    [entry.title, entry.description, entry.keywords, categoryLabel]
+    [
+      entry.title,
+      entry.description,
+      entry.section,
+      entry.keywords,
+      categoryLabel,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(word),
@@ -46,14 +52,35 @@ export function sections(entries: SettingEntry[]) {
   return runs;
 }
 
-/** `text` split around the query's first word, if it's there. */
+/** Every occurrence of every search word, with overlapping ranges merged. */
 export function highlight(text: string, query: string) {
-  const word = query.trim().split(/\s+/)[0];
-  const at = word ? text.toLowerCase().indexOf(word.toLowerCase()) : -1;
-  if (at < 0) return undefined;
-  return [
-    text.slice(0, at),
-    text.slice(at, at + word.length),
-    text.slice(at + word.length),
-  ] as const;
+  const words = [...new Set(searchWords(query))].sort(
+    (a, b) => b.length - a.length,
+  );
+  if (!words.length) return [{ text, matched: false }];
+  // Escape literal search words; punctuation must not become a regex.
+  const pattern = new RegExp(
+    `(?=(${words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`,
+    "gi",
+  );
+  const ranges: { start: number; end: number }[] = [];
+  // Look at every offset so overlapping words ("settle settled") both count.
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index;
+    const end = start + match[1].length;
+    const last = ranges.at(-1);
+    if (last && start <= last.end) last.end = Math.max(last.end, end);
+    else ranges.push({ start, end });
+  }
+  const parts: { text: string; matched: boolean }[] = [];
+  let cursor = 0;
+  for (const { start, end } of ranges) {
+    if (start > cursor)
+      parts.push({ text: text.slice(cursor, start), matched: false });
+    parts.push({ text: text.slice(start, end), matched: true });
+    cursor = end;
+  }
+  if (cursor < text.length || !parts.length)
+    parts.push({ text: text.slice(cursor), matched: false });
+  return parts;
 }

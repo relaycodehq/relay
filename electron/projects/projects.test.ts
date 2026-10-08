@@ -59,6 +59,36 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
   }
 });
 
+it("links a github.com remote without any account, preferring origin over an older fork", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  const root = join(dir, "repo");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  try {
+    execFileSync("git", ["init", "-q", root]);
+    // `old` sorts before `origin`, the way Git lists them.
+    git("remote", "add", "old", "https://github.com/me/relay.git");
+    git("remote", "add", "origin", "git@github.com:team/relay.git");
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const added = await projects.add(root, null);
+    expect(added.repository).toEqual({
+      server: "https://github.com",
+      owner: "team",
+      name: "relay",
+    });
+    // A project saved before GitHub links on its next listing.
+    await store.update((s) => {
+      s.projects![0]!.repository = null;
+    });
+    const [listed] = await new Projects(store).list(null);
+    expect(listed!.repository?.owner).toBe("team");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("resolves legacy automatic names without rewriting saved names", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   try {
@@ -289,6 +319,44 @@ it("hides a removed project and brings it back, same id, when its folder is adde
     const back = await projects.add(root, null);
     expect(back.id).toBe(project.id);
     expect((await projects.list(null)).map((p) => p.id)).toEqual([project.id]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("changes links against current queued settings without replacing other preferences", async () => {
+  const dir = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-project-links-")),
+  );
+  try {
+    const root = join(dir, "web");
+    await mkdir(root);
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const project = await projects.add(root, null);
+    await Promise.all([
+      projects.saveSettings(project.id, {
+        worktreeSetup: "npm ci",
+        workspace: "worktree",
+      }),
+      projects.updateLinks(project.id, (kept) => [
+        ...kept,
+        { path: join(dir, "backend"), access: "read" },
+      ]),
+      projects.updateLinks(project.id, (kept) => [
+        ...kept,
+        { path: join(dir, "shared"), access: "write" },
+      ]),
+    ]);
+    expect(projects.get(project.id).settings).toEqual({
+      worktreeSetup: "npm ci",
+      workspace: "worktree",
+      links: [
+        { path: join(dir, "backend"), access: "read" },
+        { path: join(dir, "shared"), access: "write" },
+      ],
+    });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

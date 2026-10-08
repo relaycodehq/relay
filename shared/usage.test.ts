@@ -3,6 +3,7 @@ import {
   modelLabel,
   summarizeUsage,
   type UsageEntry,
+  type UsageJob,
   type UsageModelSpend,
 } from "./usage";
 
@@ -75,14 +76,16 @@ describe("summarizeUsage", () => {
     expect(s.models[0]).toMatchObject({ model: "x/y", usd: 0, unpriced: true });
   });
 
-  it("splits Relay's own jobs from threads and rooms", () => {
+  it("splits Relay's own jobs from threads and old room runs", () => {
     const s = summary([
       run({ chat: "c1", models: { m: spend(100, 0, 1) } }),
-      run({ job: "room", models: { m: spend(40, 0, 0.4) } }),
+      // Logged before pull request rooms were removed.
+      run({ job: "room" as UsageJob, models: { m: spend(40, 0, 0.4) } }),
       run({ job: "title", models: { m: spend(5, 0, 0.05) } }),
       run({ job: "title", models: { m: spend(5, 0, 0.05) } }),
       run({ job: "watch", answer: false, models: { m: spend(20, 0, 0.2) } }),
     ]);
+    expect(s.totals.tokens).toBe(170);
     expect(s.totals.relayTokens).toBe(30);
     expect(s.totals.relayUsd).toBeCloseTo(0.3);
     expect(s.jobs.map((j) => [j.job, j.runs])).toEqual([

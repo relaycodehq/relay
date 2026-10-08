@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   GitBranch,
@@ -9,6 +10,7 @@ import {
   Plus,
   ArrowDown,
   ArrowUp,
+  CircleAlert,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
@@ -411,9 +413,34 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
         </Popover.Root>
       )}
       {syncError && (
-        <span role="alert" className="composer-branch-error" title={syncError}>
-          {syncError}
-        </span>
+        <Tooltip.Root>
+          <span role="alert" className="sr-only">
+            {syncError}
+          </span>
+          <Tooltip.Trigger
+            className="composer-branch-error"
+            aria-label={`Git sync failed: ${syncError}`}
+            delay={200}
+          >
+            <CircleAlert size={14} aria-hidden="true" />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner
+              className="composer-popup-positioner"
+              side="top"
+              align="end"
+              sideOffset={6}
+              collisionPadding={12}
+            >
+              <Tooltip.Popup
+                role="tooltip"
+                className="composer-branch-error-tooltip"
+              >
+                {syncError}
+              </Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
       )}
     </>
   );

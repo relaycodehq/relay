@@ -1,13 +1,9 @@
 import { app } from "electron";
-import { roomProtocol } from "../../shared/rooms";
 import { launchFolder } from "./open-folder";
 import type { AppWindow } from "./window";
 
 function isAppUrl(url: string) {
-  return (
-    url.length <= 16384 &&
-    (url.startsWith("relay:") || url.startsWith(roomProtocol + ":"))
-  );
+  return url.length <= 16384 && url.startsWith("relay:");
 }
 
 /** A launch's own arguments: `electron .` in development puts the app's folder first. */

@@ -16,7 +16,6 @@ type Counting = Pick<AgentOptions, "job" | "usage">;
 function jobOf(options: Counting): UsageJob {
   if (options.usage?.job) return options.usage.job;
   if (options.job.kind === "helper") return "helper";
-  if (options.job.kind === "answer") return "room";
   return "thread";
 }
 

@@ -190,7 +190,7 @@ const shortcutCommands = {
     title: "Send, then start a new thread",
     group: "Composer",
     description:
-      "Sends as the send key does, queued while an answer runs, then opens a new thread in the project once the message is in.",
+      "Follows your send behavior while an answer runs, then opens a new thread in the project once the message is in.",
     keywords: "send next another fresh",
     sends: true,
     defaults: one("mod+alt+Enter"),

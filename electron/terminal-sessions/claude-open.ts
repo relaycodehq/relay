@@ -10,7 +10,9 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 
 /** Running pids, each with its start time as `ps -o lstart` gives it, when known. */
-export type RunningSince = (pids: number[]) => Promise<Map<number, string | undefined>>;
+export type RunningSince = (
+  pids: number[],
+) => Promise<Map<number, string | undefined>>;
 
 type Entry = { pid: number; sessionId: string; procStart?: string };
 
@@ -22,9 +24,13 @@ export const runningSince: RunningSince = async (pids) => {
   if (!pids.length) return out;
   if (process.platform !== "win32") {
     try {
-      const { stdout } = await run("ps", ["-o", "pid=,lstart=", "-p", pids.join(",")], {
-        env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
-      });
+      const { stdout } = await run(
+        "ps",
+        ["-o", "pid=,lstart=", "-p", pids.join(",")],
+        {
+          env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+        },
+      );
       for (const line of stdout.split("\n")) {
         const match = /^\s*(\d+)\s+(.+)$/.exec(line);
         if (match) out.set(Number(match[1]), spaced(match[2]!));
@@ -40,7 +46,8 @@ export const runningSince: RunningSince = async (pids) => {
       process.kill(pid, 0);
       out.set(pid, undefined);
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "EPERM") out.set(pid, undefined);
+      if ((e as NodeJS.ErrnoException).code === "EPERM")
+        out.set(pid, undefined);
     }
   }
   return out;
@@ -50,26 +57,33 @@ async function entries(dir: string) {
   const names = await readdir(dir).catch(() => [] as string[]);
   const read = await Promise.all(
     // Only the session lists; the folder holds other things too.
-    names.filter((name) => /^\d+\.json$/.test(name)).map(async (name) => {
-      try {
-        const entry = JSON.parse(await readFile(join(dir, name), "utf8"));
-        if (!Number.isSafeInteger(entry?.pid) || entry.pid <= 0) return;
-        if (typeof entry.sessionId !== "string") return;
-        return {
-          pid: entry.pid,
-          sessionId: entry.sessionId,
-          ...(typeof entry.procStart === "string" ? { procStart: entry.procStart } : {}),
-        } satisfies Entry;
-      } catch {
-        return undefined;
-      }
-    }),
+    names
+      .filter((name) => /^\d+\.json$/.test(name))
+      .map(async (name) => {
+        try {
+          const entry = JSON.parse(await readFile(join(dir, name), "utf8"));
+          if (!Number.isSafeInteger(entry?.pid) || entry.pid <= 0) return;
+          if (typeof entry.sessionId !== "string") return;
+          return {
+            pid: entry.pid,
+            sessionId: entry.sessionId,
+            ...(typeof entry.procStart === "string"
+              ? { procStart: entry.procStart }
+              : {}),
+          } satisfies Entry;
+        } catch {
+          return undefined;
+        }
+      }),
   );
   return read.filter((entry): entry is Entry => !!entry);
 }
 
 /** Ids of the sessions a running `claude` process lists as its own, across `homes`. */
-export async function claudeOpen(homes: string[], since: RunningSince = runningSince) {
+export async function claudeOpen(
+  homes: string[],
+  since: RunningSince = runningSince,
+) {
   const dirs = new Set<string>();
   for (const home of homes) {
     const dir = await realpath(join(home, "sessions")).catch(() => undefined);

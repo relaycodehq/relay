@@ -15,8 +15,11 @@ import { ScratchpadWord } from "./ScratchpadWord";
 export interface ScopeChoice {
   canChoosePR: boolean;
   onRepository: () => void;
-  /** Asks for the Git host first, when PRs can't be chosen yet. */
-  onChoosePR: () => void;
+  /**
+   * Asks for the Git host first, when PRs can't be chosen yet. Absent when
+   * there's no host to ask for: no GitHub remote and no Gitea account.
+   */
+  onChoosePR?: () => void;
   onSelectPR: (ref: PullRef) => void;
   onDeepReview: () => void;
 }
@@ -61,7 +64,7 @@ export function ScopeButtons({
               onSelect={onSelectPR}
               compact
             />
-          ) : (
+          ) : onChoosePR ? (
             <button
               className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
               onClick={onChoosePR}
@@ -70,7 +73,7 @@ export function ScopeButtons({
               {scope.kind === "pr" ? `PR #${scope.ref.number}` : "Review a PR"}
               <ChevronDown size={12} />
             </button>
-          )}
+          ) : null}
           <button
             className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
             onClick={onDeepReview}

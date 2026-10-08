@@ -32,6 +32,8 @@ import { IconButton } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
+import { LinksControl } from "../linked-folders/LinksControl";
+import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { WorktreeBranchField } from "./WorktreeBranchField";
 import "../changes/branch-picker.css";
 
@@ -166,6 +168,8 @@ export function ThreadComposer({
   worktree,
   checkout,
   scopeButtons,
+  links,
+  onProjectSettings,
   onSend,
   onEditQueued,
   onStartThread,
@@ -184,6 +188,8 @@ export function ThreadComposer({
   worktree: ThreadWorktree;
   checkout: ProjectCheckout;
   scopeButtons: ReactNode;
+  links: ThreadLinks;
+  onProjectSettings: () => void;
   onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
   /** Takes the newest queued message back into the composer; false when none waits. */
   onEditQueued: () => boolean;
@@ -309,6 +315,7 @@ export function ThreadComposer({
             disabled={waiting || held}
             onStartThread={onStartThread}
           />
+          <LinksControl links={links} onProjectSettings={onProjectSettings} />
         </>
       }
       notice={({ sendGoal }) =>
@@ -361,6 +368,7 @@ export function ThreadComposer({
             }
       }
       onCommand={runCommand}
+      commandOptions={links.options}
     />
   );
 }

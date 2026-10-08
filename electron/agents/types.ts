@@ -3,11 +3,13 @@ import type {
   RuntimeMode,
   InteractionMode,
   AskAgentRequest,
+  AgentQuestion,
 } from "../../shared/agent-modes";
 import type {
   AgentActivity,
   ContextUsage,
   ForkPoint,
+  LinkedFolder,
   SessionReload,
 } from "../../shared/projects";
 import type { CodexReviewTarget } from "../../shared/deep-review";
@@ -40,9 +42,7 @@ export type AgentJob =
   /** A `/btw` side thread, forked from the main one while that may still be working. */
   | { kind: "side" }
   /** A one-off helper job (a thread title, a commit message): no tools, no session, these instructions in place of the chat's own. */
-  | { kind: "helper"; instructions: string }
-  /** A one-off answer to a room's question: it may read the project, keeps no session. */
-  | { kind: "answer" };
+  | { kind: "helper"; instructions: string };
 
 /** A thread turn's side check; see shared/watch. Claude reads it, the others ignore it. */
 export type AgentWatch = {
@@ -58,7 +58,7 @@ export type AgentWatch = {
   onSpend?: (spend: WatchSpend) => void;
 };
 
-/** One turn of any agent, as a thread, room, title or helper job runs it. */
+/** One turn of any agent, as a thread, title or helper job runs it. */
 export interface AgentOptions {
   job: AgentJob;
   /** `id` names the chat message the steer came from, for `onSteered`. */
@@ -74,6 +74,8 @@ export interface AgentOptions {
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
   cwd: string;
+  /** Folders beyond `cwd` the user linked, and whether the agent may edit them. */
+  links?: LinkedFolder[];
   /** Added to the agent process's environment, e.g. a worktree's RELAY_PORT_OFFSET; read when its process starts. */
   env?: Record<string, string>;
   prompt: string;
@@ -85,6 +87,8 @@ export interface AgentOptions {
   signal: AbortSignal;
   onText: (text: string) => void;
   onCommentary?: (id: string, text: string | null) => void;
+  /** Questions sent as messages, without holding up the agent's turn. */
+  onQuestions?: (id: string, questions: AgentQuestion[]) => void;
   onActivity?: (activity: AgentActivity) => void;
   /** Paths the agent's own file tools are writing, as it reported them. */
   onEdit?: (paths: string[]) => void;
