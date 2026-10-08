@@ -11,6 +11,7 @@ import type {
 import {
   checkoutPaths,
   extractFindings,
+  reviewThreadTitle,
   type DeepReviewStart,
   type DeepReviewState,
   type FindingStatus,
@@ -112,7 +113,7 @@ export class DeepReviews {
       branch: chat.branch,
     };
     chat.messages.push(request);
-    chat.title = `Deep review · ${scope.label}`;
+    chat.title = reviewThreadTitle(scope);
     chat.updated = Date.now();
     chat.branch = scope.branch ?? chat.branch;
     chat.deepReview = state;

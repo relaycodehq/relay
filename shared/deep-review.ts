@@ -107,6 +107,15 @@ export interface ReviewScope {
   stats?: { files: number; additions: number; deletions: number };
 }
 
+/** The review's topic, kept within the editable thread name's limit. */
+export function reviewThreadTitle(scope: ReviewScope): string {
+  const title =
+    `Deep review · ${scope.label}${scope.title?.trim() ? ` · ${scope.title.trim()}` : ""}`
+      .replace(/[\x00-\x1f\x7f]/g, " ")
+      .replace(/\s+/g, " ");
+  return title.length > 120 ? `${title.slice(0, 119).trimEnd()}…` : title;
+}
+
 /** Codex's review scale. */
 const priorities = ["P0", "P1", "P2", "P3"] as const;
 export type Priority = (typeof priorities)[number];
