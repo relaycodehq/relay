@@ -1,7 +1,16 @@
-import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /**
  * Where a headless Relay keeps everything: its threads, settings, keys and
@@ -34,13 +43,66 @@ export function controlSocket(home: string, platform = process.platform) {
   if (platform === "win32") return `\\\\.\\pipe\\relay-${id}`;
   const inHome = join(home, "relay.sock");
   // macOS allows 104 bytes for a socket path, Linux 108.
-  return Buffer.byteLength(inHome) < 100
-    ? inHome
-    : join(
-        "/tmp",
-        `relay-${process.getuid?.() ?? "user"}-${id}`,
-        "control.sock",
-      );
+  if (Buffer.byteLength(inHome) < 100) return inHome;
+  // An unstarted home has no endpoint. A fresh unoccupied name makes the
+  // CLI report NotRunning without connecting to a guessable foreign socket.
+  return (
+    recordedSocket(home) ??
+    join("/tmp", `relay-${randomUUID()}`, "control.sock")
+  );
+}
+
+function recordedSocket(home: string) {
+  try {
+    const path = readFileSync(join(home, "control-path"), "utf8").trim();
+    const prefix = `/tmp/relay-${process.getuid?.() ?? "user"}-`;
+    if (
+      !path.startsWith(prefix) ||
+      !/^[A-Za-z0-9]+\/control\.sock$/.test(path.slice(prefix.length))
+    )
+      throw new Error("Invalid Relay control socket path.");
+    const directory = lstatSync(dirname(path));
+    // Temporary directories may disappear at reboot. Never reconnect to a
+    // replacement directory owned by another user, or through a symlink.
+    if (
+      !directory.isDirectory() ||
+      directory.uid !== process.getuid!() ||
+      (directory.mode & 0o077) !== 0
+    )
+      return undefined;
+    return path;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw e;
+  }
+}
+
+/** Called only by the daemon holding the home lock, before serving control. */
+export async function prepareControlSocket(home: string) {
+  if (
+    process.platform === "win32" ||
+    Buffer.byteLength(join(home, "relay.sock")) < 100
+  )
+    return controlSocket(home);
+  const existing = recordedSocket(home);
+  if (existing) return existing;
+  // mkdtemp creates the private directory atomically. Clients discover the
+  // random name through the protected home, never a predictable /tmp entry.
+  const directory = await mkdtemp(
+    `/tmp/relay-${process.getuid?.() ?? "user"}-`,
+  );
+  const path = join(directory, "control.sock");
+  const temporary = join(home, `control-path.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, path + "\n", { mode: 0o600, flag: "wx" });
+    await rename(temporary, join(home, "control-path"));
+  } catch (e) {
+    await rm(directory, { recursive: true, force: true });
+    throw e;
+  } finally {
+    await rm(temporary, { force: true });
+  }
+  return path;
 }
 
 /** Creates a private directory, and secures an existing one before using it. */

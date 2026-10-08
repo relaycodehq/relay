@@ -73,8 +73,13 @@ import {
   type ThreadRow,
 } from "./control";
 import { onAppQuit, powerMonitor } from "./electron-stand-in";
-import { autoUpdateEnabled, claimHome, restartCode, spawnRelay } from "./launch";
-import { headlessPaths } from "./paths";
+import {
+  autoUpdateEnabled,
+  claimHome,
+  restartCode,
+  spawnRelay,
+} from "./launch";
+import { headlessPaths, prepareControlSocket } from "./paths";
 import { headlessPower } from "./power";
 import { compressImage } from "./image";
 import { HeadlessSpeech, SpeechRuntime } from "./speech";
@@ -100,6 +105,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const paths = headlessPaths(home);
   const startedAt = Date.now();
   const releaseHome = await claimHome(paths.pid);
+  paths.control = await prepareControlSocket(home);
   setComputerName(name);
   // Started this early, the login shell has usually answered before the first
   // CLI lookup waits for it.
@@ -129,10 +135,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     store: join(home, "cursor-agents"),
     fetch: fetcher,
   });
-  const agentAccounts = new AgentAccounts(
-    store,
-    () => {},
-  );
+  const agentAccounts = new AgentAccounts(store, () => {});
   applyLinkedTools(store);
   void gitExecutable().catch(() => {});
   const login = new GiteaLogin();

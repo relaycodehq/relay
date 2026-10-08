@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { chmod, mkdtemp, realpath, rm, stat } from "node:fs/promises";
-import { createConnection } from "node:net";
+import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -98,6 +98,29 @@ it("makes an existing public socket directory private even with a permissive uma
     process.umask(mask);
     if (server)
       await new Promise<void>((resolve) => server!.close(() => resolve()));
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("rejects malformed replies without an uncaught socket-handler exception", async () => {
+  const dir = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-control-replies-")),
+  );
+  const path = controlSocket(dir);
+  try {
+    for (const reply of ["garbage", "null", "{}", '{"ok":"yes"}']) {
+      const server = createServer((socket) => {
+        socket.resume();
+        socket.end(reply + "\n");
+      });
+      await new Promise<void>((resolve) => server.listen(path, resolve));
+      try {
+        await expect(callControl(path, "status")).rejects.toThrow();
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    }
+  } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
