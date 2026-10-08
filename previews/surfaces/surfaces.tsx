@@ -1063,7 +1063,6 @@ function Sidebar() {
         onSendDraft={() => {}}
         onAdd={() => {}}
         onSettings={() => {}}
-        onAccount={() => {}}
         onInbox={() => {}}
       />
     </aside>

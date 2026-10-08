@@ -5,26 +5,26 @@ import { DevCheckoutLabel } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
 import type { SettingsCategory } from "../settings/Settings";
 import { IconButton } from "../../ui/ui";
-import { CheckUpdatesButton, UpdateButton } from "../updates/UpdateButton";
+import {
+  CheckUpdatesButton,
+  RunningVersion,
+  UpdateButton,
+} from "../updates/UpdateButton";
 
-/** The account, the time tracker, updates, Usage and Settings, under the sidebar. */
+/** The version, the time tracker, updates, Usage and Settings, under the sidebar. */
 export function SidebarFooter({
-  account,
   projectId,
   projectName,
   chatId,
   usage,
-  onAccount,
   onUsage,
   onSettings,
 }: {
-  account: string | undefined;
   projectId: string | undefined;
   projectName: string | undefined;
   chatId: string | undefined;
   /** Whether the Usage page is showing. */
   usage?: boolean;
-  onAccount: () => void;
   // Here as well as in the Projects nav, since Activity hides that nav.
   onUsage?: () => void;
   /** Opens Settings, at `category` when given. */
@@ -32,19 +32,7 @@ export function SidebarFooter({
 }) {
   return (
     <div className="sb-footer">
-      {/* Gitea is optional; without it there's nobody to show here. */}
-      {account && (
-        <button
-          className="sb-account"
-          title={account}
-          aria-label={account}
-          onClick={onAccount}
-        >
-          <span className="sb-avatar" aria-hidden>
-            {account.slice(0, 2).toUpperCase()}
-          </span>
-        </button>
-      )}
+      <RunningVersion onAbout={() => onSettings("about")} />
       <DevCheckoutLabel />
       <DevRestartButton />
       <UpdateButton />

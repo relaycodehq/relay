@@ -114,7 +114,6 @@ function Preview() {
             onSendDraft={() => {}}
             onAdd={() => {}}
             onSettings={() => {}}
-            onAccount={() => {}}
             onInbox={() => {}}
           />
         </QueryClientProvider>

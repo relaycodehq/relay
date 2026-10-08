@@ -14,6 +14,27 @@ import { releasesPage } from "../../../shared/updates";
 import { IconButton, Spinner } from "../../ui/ui";
 
 /**
+ * The version this Relay runs, at the footer's start; opens About. A
+ * development build never updates, and its package version is a placeholder.
+ */
+export function RunningVersion({ onAbout }: { onAbout: () => void }) {
+  const state = useUpdates().state;
+  const dev = state?.status === "off";
+  return (
+    <button
+      className="sb-version"
+      title={
+        state &&
+        (dev ? "Development build · About" : `Relay ${state.current} · About`)
+      }
+      onClick={onAbout}
+    >
+      {state && (dev ? "dev" : `v${state.current}`)}
+    </button>
+  );
+}
+
+/**
  * Sidebar footer icon that looks for a newer release. It steps aside once
  * there is one: the update button beside it takes over from there.
  */

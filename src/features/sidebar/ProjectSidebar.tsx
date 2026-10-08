@@ -44,7 +44,6 @@ export function ProjectSidebar({
   initialView,
   projects,
   showing: { projectId, chatId, draftId, inbox, usage },
-  account,
   onOpen,
   onPickNew,
   onNewScratch,
@@ -53,13 +52,11 @@ export function ProjectSidebar({
   onInbox,
   onUsage,
   onSettings,
-  onAccount,
   onAttention,
 }: {
   initialView?: SidebarView;
   projects: Project[];
   showing: SidebarShowing;
-  account?: string;
   /**
    * Opens `chat` in `p`, or with `fresh` one of its unsent threads: a new
    * one, or with a draft's id that draft.
@@ -75,7 +72,6 @@ export function ProjectSidebar({
   onUsage?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
-  onAccount: () => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
@@ -241,12 +237,10 @@ export function ProjectSidebar({
         />
       )}
       <SidebarFooter
-        account={account}
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
         chatId={chatId}
         usage={usage}
-        onAccount={onAccount}
         onUsage={onUsage}
         onSettings={onSettings}
       />

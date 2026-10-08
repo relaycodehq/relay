@@ -274,7 +274,6 @@ export default function ProjectShell() {
                     draftId: chat ? undefined : draftId,
                   }
             }
-            account={account?.user.login}
             onOpen={navigate}
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
@@ -282,10 +281,6 @@ export default function ProjectShell() {
             onAdd={() => starts.addProject()}
             onAttention={setAttention}
             onSettings={settings.show}
-            onAccount={() => {
-              if (!account) return void signIn.withAccount();
-              settings.show("account");
-            }}
             onInbox={() => {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.

@@ -520,7 +520,6 @@ export function AppWindow({
           <ProjectSidebar
             initialView="activity"
             projects={projects}
-            account="you"
             showing={{ projectId: chat.projectId, chatId: open }}
             onOpen={(_, picked) => picked && setOpen(picked.id)}
             onPickNew={() => {}}
@@ -528,7 +527,6 @@ export function AppWindow({
             onSendDraft={() => {}}
             onAdd={() => {}}
             onSettings={() => {}}
-            onAccount={() => {}}
             onInbox={() => {}}
           />
         </aside>

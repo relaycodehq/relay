@@ -52,14 +52,12 @@ export function AppFrame({
               initialView="threads"
               projects={projects}
               showing={showing ?? {}}
-              account="you"
               onOpen={() => {}}
               onPickNew={() => {}}
               onNewScratch={() => {}}
               onSendDraft={() => {}}
               onAdd={onAdd}
               onSettings={() => {}}
-              onAccount={() => {}}
               onInbox={() => {}}
             />
           </aside>

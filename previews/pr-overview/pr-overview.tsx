@@ -390,14 +390,12 @@ function Preview() {
                 initialView="threads"
                 projects={projects}
                 showing={{ projectId: project?.id, chatId: thread?.id }}
-                account="you"
                 onOpen={() => {}}
                 onPickNew={() => {}}
                 onNewScratch={() => {}}
                 onSendDraft={() => {}}
                 onAdd={() => {}}
                 onSettings={() => {}}
-                onAccount={() => {}}
                 onInbox={() => {
                   if (option === "sidebar") return setSidebarView("prs");
                   setOpened(null);
