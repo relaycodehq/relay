@@ -199,3 +199,8 @@
   background: transparent;
   border-right: 0;
 }
+
+/* Only under `npm run dev`; a drag region would swallow the right-click. */
+.relay-mark-trigger {
+  -webkit-app-region: no-drag;
+}

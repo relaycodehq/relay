@@ -24,6 +24,7 @@ import {
 } from "../lib/workspace-panes";
 import { CiStatusIcon } from "./CiStatus";
 import { ProjectBadge } from "../features/projects/ProjectBadge";
+import { DevSwitchMark } from "../features/sidebar/DevSwitchMenu";
 import { RelayMark } from "../ui/RelayMark";
 import { PaneToggles } from "../ui/WorkspacePanes";
 import "./titlebar.css";
@@ -72,7 +73,9 @@ export function TitlebarBrand({
           </span>
         )}
       </button>
-      <RelayMark size={38} />
+      <DevSwitchMark>
+        <RelayMark size={38} />
+      </DevSwitchMark>
     </div>
   );
 }
