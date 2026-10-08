@@ -117,7 +117,7 @@ export function TargetField({
               />
             ) : (
               <span className="deep-review-target-detail">
-                Connect your Gitea account to review pull requests
+                Sign in to this repository's host to review pull requests
               </span>
             ))}
           {kind === "commit" &&

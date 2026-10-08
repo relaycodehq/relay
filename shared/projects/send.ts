@@ -3,10 +3,9 @@ import { interactionModeSchema, runtimeModeSchema } from "../agent-modes";
 import { agentProviderSchema } from "../agents";
 import { accountIdSchema } from "../agent-accounts";
 import { lineQuestionSchema } from "../questions";
-import { idSchema } from "../rooms";
 import { aiSettingsSchema } from "../settings";
 import { ultraplanKindSchema } from "../ultraplan";
-import { filePathSchema } from "../validation";
+import { filePathSchema, idSchema } from "../validation";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z

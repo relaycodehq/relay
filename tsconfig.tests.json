@@ -8,7 +8,6 @@
     "tests",
     "src/**/*.test.*",
     "electron/**/*.test.*",
-    "shared/**/*.test.*",
-    "server/**/*.test.*"
+    "shared/**/*.test.*"
   ]
 }

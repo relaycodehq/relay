@@ -1,8 +1,7 @@
 import { readTurn } from "../../../shared/agent-trace";
 import { summarizeActivity } from "../../../shared/activity-labels";
-import type { AgentProvider } from "../../../shared/agents";
+import { agentMention, type AgentProvider } from "../../../shared/agents";
 import type { AgentActivity, ChatMessage } from "../../../shared/projects";
-import { agentMention } from "../../../shared/rooms";
 
 /** One prompt in the thread's timeline and the start of what answered it. */
 export interface TimelineTurn {

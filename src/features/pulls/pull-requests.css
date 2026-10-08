@@ -580,3 +580,29 @@
   background: transparent;
   text-decoration: underline;
 }
+
+.pulls-no-host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  text-align: center;
+  background: var(--surface);
+}
+.pulls-no-host > svg {
+  color: var(--accent);
+}
+.pulls-no-host h1 {
+  margin: 10px;
+  font-size: 24px;
+  font-weight: 600;
+}
+.pulls-no-host p {
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--muted);
+}

@@ -16,9 +16,8 @@ export function NoProject({
       <FolderGit2 size={40} />
       <h1>Your project. Your conversation.</h1>
       <p>
-        Open a project folder to edit, review changes and chat with your agent.
-        <br />
-        Connect Gitea when you’re ready to review pull requests together.
+        Open a project folder to edit, review changes and pull requests, and
+        chat with your agent.
       </p>
       <button className="primary" onClick={onAdd}>
         <FolderPlus size={16} />

@@ -4,16 +4,6 @@ import type { DeviceKind, PhoneAppearance } from "../../shared/remote";
 // Shapes the store saves for other folders. They live here so the store can
 // name them without importing the folders that own the code around them.
 
-/** A local agent's answer, saved before it reaches the room server so it survives going offline or a restart. */
-export interface RoomDelivery {
-  key: string;
-  roomId: string;
-  id: string;
-  body: string;
-  status: "running" | "completed" | "failed" | "cancelled";
-  error: string | null;
-}
-
 export interface RemoteDevice {
   id: string;
   name: string;

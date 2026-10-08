@@ -189,7 +189,7 @@ export async function acquireCodexConnection(
   const live = key ? sessions.get(key) : undefined;
   if (live && !live.busy && (live.account ?? SYSTEM_ACCOUNT) !== account.id)
     await sessions.close(key!);
-  // A thread's session runs in the host; rooms and helper jobs end with their turn.
+  // A thread's session runs in the host; helper jobs end with their turn.
   return sessions.acquire(key, async () => {
     const connection = new CodexConnection(() =>
       sessions.spawn(

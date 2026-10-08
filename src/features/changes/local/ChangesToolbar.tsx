@@ -1,8 +1,6 @@
 import { createPortal } from "react-dom";
 import { ArrowUp, FolderTree, GitBranch, List, RefreshCw } from "lucide-react";
-import type { Pull } from "../../../../shared/types";
 import type { WorkingTree } from "../../../../shared/working-tree";
-import { LiveSyncControls } from "../LiveSyncControls";
 import { IconButton } from "../../../ui/ui";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
 
@@ -12,7 +10,6 @@ import type { PaneSlots } from "../../../ui/WorkspacePanes";
  */
 export function ChangesToolbar({
   slots,
-  pull,
   tree,
   busy,
   grouped,
@@ -21,7 +18,6 @@ export function ChangesToolbar({
   onPush,
 }: {
   slots?: PaneSlots;
-  pull?: Pull;
   tree?: WorkingTree;
   busy: boolean;
   grouped: boolean;
@@ -96,7 +92,6 @@ export function ChangesToolbar({
         </span>
       )}
       <span className="spacer" />
-      {pull && <LiveSyncControls pull={pull} />}
       {actions}
     </header>
   );

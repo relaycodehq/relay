@@ -8,6 +8,15 @@ export const sourceControlNames: Record<SourceControlKind, string> = {
   "azure-devops": "Azure DevOps",
 };
 
+/** GitHub's server, as a repository's `server` names it. */
+export const GITHUB_SERVER = "https://github.com";
+export const isGithubServer = (server: string | undefined) =>
+  server === GITHUB_SERVER;
+
+/** Which host a PR, server or repository URL is on, for copy: GitHub or Gitea. */
+export const pullHostName = (url: string | undefined) =>
+  url && /^https?:\/\/(www\.)?github\.com(\/|$)/i.test(url) ? "GitHub" : "Gitea";
+
 /** What Settings keeps: hosts the user turned off, and the CLIs they linked. */
 export interface SourceControlSettings {
   off?: SourceControlKind[];

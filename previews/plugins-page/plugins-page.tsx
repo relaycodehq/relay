@@ -18,7 +18,6 @@ import {
   Sparkles,
   Sun,
   UserRound,
-  Users,
   X,
 } from "lucide-react";
 import "../../src/styles.css";
@@ -60,7 +59,6 @@ const nav = [
   { label: "AI models", icon: Sparkles },
   { label: "Integrations", icon: ListTodo },
   { label: "Plugins", icon: PluginsIcon },
-  { label: "Shared rooms", icon: Users },
   { label: "Phone", icon: Smartphone },
   { label: "Computers", icon: MonitorUp },
   { label: "Dictation", icon: Mic },

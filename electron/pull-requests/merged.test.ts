@@ -1,18 +1,15 @@
 import { it, expect, vi } from "vitest";
-import type { Gitea } from "./gitea";
+import type { PullHost } from "./host";
 import { mergedPulls } from "./merged";
 
 const repo = { owner: "acme", name: "app" };
 
 function host(pages: { number: number; merged: boolean }[][]) {
-  const page = vi.fn(async (_path: string, n: number) => ({
+  const page = vi.fn(async (_repo: unknown, _state: string, n: number) => ({
     items: pages[n - 1] ?? [],
     nextPage: n < pages.length ? n + 1 : null,
   }));
-  return {
-    client: { page, repo: () => "/repos/acme/app" } as unknown as Gitea,
-    page,
-  };
+  return { client: { pulls: page } as unknown as PullHost, page };
 }
 
 it("finds the wanted merged PRs among the recently closed ones and ignores closed-unmerged", async () => {
@@ -26,7 +23,7 @@ it("finds the wanted merged PRs among the recently closed ones and ignores close
   const signal = new AbortController().signal;
   expect(await mergedPulls(client, repo, [7, 8], signal)).toEqual([7]);
   expect(page).toHaveBeenCalledTimes(1);
-  expect(page.mock.calls[0]![0]).toContain("state=closed");
+  expect(page.mock.calls[0]![1]).toBe("closed");
 });
 
 it("stops paging once every wanted PR was seen, and after a few pages otherwise", async () => {

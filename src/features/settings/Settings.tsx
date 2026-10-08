@@ -14,7 +14,6 @@ import { accountEntries } from "./sections/account";
 import { useModelEntries } from "./sections/models";
 import { integrationEntries } from "./sections/integrations";
 import { pluginEntries } from "./sections/plugins";
-import { roomEntries } from "./sections/rooms";
 import { phoneEntries } from "./sections/phone";
 import { computerEntries } from "./sections/computers";
 import { useDictationEntries } from "./sections/dictation";
@@ -69,7 +68,6 @@ export function Settings({
     ...models,
     ...integrationEntries(onConnect),
     ...pluginEntries(),
-    ...roomEntries(),
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),
     ...dictation,

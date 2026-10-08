@@ -1,7 +1,6 @@
 import { app, dialog, net, powerMonitor } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { roomProtocol } from "../shared/rooms";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
 import { hostAgents, setOpenCodeEnvRoot } from "./agents";
@@ -11,6 +10,9 @@ import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
+import { GithubLogin } from "./pull-requests/github-login";
+import type { Repo } from "../shared/types";
+import { isGithubServer } from "../shared/source-control";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
@@ -35,7 +37,6 @@ import { ReadAloud } from "./read-aloud";
 import { gitExecutable, setGitPath } from "./git/git";
 import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
-import { LiveSyncs } from "./projects/live-sync";
 import { ProjectChats } from "./project-chats";
 import {
   agentProjects,
@@ -54,8 +55,6 @@ import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
 import { Handoffs } from "./handoff/sender";
-import { readHostingSetup } from "./rooms/provision";
-import { RoomService } from "./rooms/service";
 import { pathReady } from "./platform/shell-path";
 import { setLinkedAgents } from "./platform/executables";
 import { applyLinkedTools } from "./source-control";
@@ -89,7 +88,6 @@ if (
 // CLI lookup waits for it.
 void pathReady();
 let store: Store | undefined;
-let rooms: RoomService | undefined;
 let projectChats: ProjectChats | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
@@ -98,6 +96,8 @@ let handoffs: { computers: Computers; sender: Handoffs } | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
 const login = new GiteaLogin();
+const github = new GithubLogin((url, options) => net.fetch(url, options));
+/** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({
   closed: () => {
     blame.dispose();
@@ -123,15 +123,12 @@ const quit = new Quit({
   runningTasks: () => projectChats?.runningTasks() ?? [],
   stopping: () => triage?.cancel(),
   shutDown: () =>
-    liveSyncs
-      .stopAll()
-      .then(() => phoneRemote?.close())
+    Promise.resolve(phoneRemote?.close())
       .then(() => handoffs?.computers.close())
       .then(() => {
         if (quit.detaching) agentHosts?.detach();
         return projectChats?.dispose({ detach: quit.detaching });
       })
-      .then(() => rooms?.dispose())
       .then(() =>
         Promise.all([
           store!.flush(),
@@ -202,9 +199,6 @@ const agentUpdates = new AgentUpdates(
     cursor: cursorSdkIo,
   },
 );
-const liveSyncs = new LiveSyncs(() =>
-  join(app.getPath("userData"), "live-sync"),
-);
 // The worker runs under the system Node.js, which cannot read inside app.asar.
 const projectChecks = new ProjectChecks(
   join(__dirname, "checks-worker.mjs"),
@@ -215,19 +209,9 @@ const projectChecks = new ProjectChecks(
 );
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init));
-const hostingSetup = process.argv.includes("--configure-room-hosting-stdin")
-  ? readHostingSetup(process.stdin).then(
-      (value) => ({ value }),
-      (error) => ({ error }),
-    )
-  : null;
 let lastRun: LastRun | null = null;
-if (!app.requestSingleInstanceLock()) {
-  if (hostingSetup) {
-    console.error("Close Relay before configuring hosting.");
-    app.exit(1);
-  } else app.quit();
-} else if (!hostingSetup) lastRun = watchForCrashes();
+if (!app.requestSingleInstanceLock()) app.quit();
+else lastRun = watchForCrashes();
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();
@@ -271,13 +255,15 @@ app
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});
     const projects = new Projects(loaded);
-    const roomService = new RoomService(
-      loaded,
-      (url, init) => net.fetch(url, init),
-      seal,
-      unseal,
-    );
-    rooms = roomService;
+    const hostOf = async (repo: Repo) =>
+      isGithubServer(repo.server) ? github.require() : login.require();
+    async function projectHost(projectId: string) {
+      const repository = projects.get(projectId).repository;
+      if (!repository) return null;
+      return isGithubServer(repository.server)
+        ? github.require()
+        : login.client;
+    }
     const devops = new DevOps(
       loaded,
       (url, init) => net.fetch(url, init),
@@ -298,8 +284,12 @@ app
       async (chat, selection) => {
         if (chat.scope.kind !== "pr")
           throw new Error("This is not a pull request conversation.");
-        const client = login.require(),
-          repo = await projects.linked(chat.projectId, client);
+        const client = await projectHost(chat.projectId);
+        if (!client)
+          throw new Error(
+            "Relay can't match this project to a GitHub or Gitea repository.",
+          );
+        const repo = await projects.linked(chat.projectId, client);
         if (
           repo.owner !== chat.scope.ref.owner ||
           repo.name !== chat.scope.ref.name
@@ -312,18 +302,15 @@ app
     const pullMerges = new PullMerges({
       chats: () => loaded.get().chats ?? [],
       repository: async (projectId) => {
-        const client = login.client;
+        const client = await projectHost(projectId).catch(() => null);
         return client
           ? projects.linked(projectId, client).catch(() => null)
           : null;
       },
-      mergedAmong: (repo, numbers, signal) =>
-        mergedPulls(login.require(), repo, numbers, signal),
-      merged: (repo, number) =>
-        login
-          .require()
-          .pull({ ...repo, number })
-          .then((pull) => !!pull.merged),
+      mergedAmong: async (repo, numbers, signal) =>
+        mergedPulls(await hostOf(repo), repo, numbers, signal),
+      merged: async (repo, number) =>
+        !!(await (await hostOf(repo)).pull({ ...repo, number })).merged,
       record: (id) => chats.pullMerged(id),
       online: () => net.isOnline(),
     });
@@ -344,16 +331,6 @@ app
       },
       aiSettings: () => loaded.aiSettings(),
     });
-    if (hostingSetup) {
-      const input = await hostingSetup;
-      if ("error" in input) throw input.error;
-      await roomService.saveHosting(input.value);
-      await loaded.flush();
-      console.log("Shared-room hosting access saved securely.");
-      quit.ready = true;
-      app.quit();
-      return;
-    }
     const triageService = new TriageService(loaded, app.getPath("userData"));
     triage = triageService;
     const api = apiContext({
@@ -361,20 +338,19 @@ app
       projects,
       projectChats: chats,
       pullMerges,
-      rooms: roomService,
       devops,
       clockify,
       triage: triageService,
       phoneRemote: () => phoneRemote,
       handoffs: () => handoffs,
       login,
+      github,
       window,
       menubar,
       links,
       projectChecks,
       blame,
       ci,
-      liveSyncs,
       pullRequestCreation,
       updater,
       devBuild,
@@ -490,8 +466,6 @@ app
         iconDir: app.getPath("userData"),
         env: process.env,
       });
-    // Use a dedicated invitation scheme; stable PR links keep their existing handler.
-    if (app.isPackaged) app.setAsDefaultProtocolClient(roomProtocol);
     window.ready = true;
     // Test runs stay off the user's menubar, as their windows stay off the desktop.
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
@@ -504,13 +478,6 @@ app
     });
   })
   .catch((e) => {
-    if (hostingSetup) {
-      console.error(
-        "Hosting setup failed. Check the server, setup key and Keychain access.",
-      );
-      app.exit(1);
-      return;
-    }
     dialog.showErrorBox("Relay could not start", e.message);
     app.quit();
   });

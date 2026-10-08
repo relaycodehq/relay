@@ -560,7 +560,7 @@ if (args.includes("--permission-prompt-tool")) {
         result: {
           thread: { id: "fixture-thread" },
           model: "fixture-model",
-          activePermissionProfile: { id: "relay-room" },
+          activePermissionProfile: { id: "relay-one-off" },
         },
       });
     } else if (m.method === "turn/start") {

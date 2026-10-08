@@ -15,7 +15,7 @@ import {
   projectChatSendSchema,
   resumeSettingsSchema,
 } from "../../shared/projects";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -32,7 +32,7 @@ const branchSchema = z.string().trim().min(1).max(250);
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
-  const { store, projectChats, pullMerges, requireClient } = ctx;
+  const { store, projectChats, pullMerges, clientFor } = ctx;
   return {
     projectChats: takes([idSchema], (id) => ctx.listChats(id)),
     createProjectChat: takes(
@@ -226,7 +226,7 @@ export function chatHandlers(ctx: ApiContext) {
         // The forge knows which branch a pull request merges into.
         const pull =
           config.target.kind === "pr"
-            ? await requireClient().pull(config.target.ref)
+            ? await (await clientFor(config.target.ref)).pull(config.target.ref)
             : undefined;
         return projectChats.startDeepReview(
           id,

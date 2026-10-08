@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { pullsNav } from "../fixtures/navigation";
 
-test("The avatar signs in through tea's login, asks only without one, and then opens Settings", async () => {
+test("Pull requests offers Gitea without a gh login, through tea's login and a form only without one; the avatar then opens Settings", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-tea-"))),
     repo = join(root, "project"),
     bin = join(root, "bin"),
@@ -89,10 +90,19 @@ else if (cmd === "logins" && sub === "helper") {
     const signInForm = page.getByLabel("Gitea server", { exact: true });
     const avatar = page.locator(".sb-account");
 
-    // Signed out, but tea has a login: the avatar signs in without a form.
-    await expect(avatar).not.toHaveClass(/signed-in/);
-    await avatar.click();
-    await expect(avatar).toHaveClass(/signed-in/);
+    const connectGitea = page.getByRole("button", {
+      name: "Or connect a Gitea server",
+    });
+    // Signed out there's no avatar, and Pull requests asks for nothing on its
+    // own; connecting Gitea from it goes through tea's login without a form.
+    await expect(avatar).toHaveCount(0);
+    await pullsNav(page).click();
+    await expect(
+      page.getByRole("heading", { name: "No pull requests yet" }),
+    ).toBeVisible();
+    await expect(signInForm).toHaveCount(0);
+    await connectGitea.click();
+    await expect(avatar).toBeVisible();
     await expect(signInForm).toHaveCount(0);
 
     // Signed in, the avatar is the account in Settings, not a token form.
@@ -100,13 +110,14 @@ else if (cmd === "logins" && sub === "helper") {
     await expect(page.locator(".settings-account")).toBeVisible();
     await expect(signInForm).toHaveCount(0);
 
-    // Without a token or a tea login, the avatar asks.
+    // Without a token or a tea login, connecting asks.
     await writeFile(logins, "[]");
     await page
       .getByRole("button", { name: "Disconnect account", exact: true })
       .click();
-    await expect(avatar).not.toHaveClass(/signed-in/);
-    await avatar.click();
+    await expect(avatar).toHaveCount(0);
+    await pullsNav(page).click();
+    await connectGitea.click();
     await expect(signInForm).toBeVisible();
     await signInForm.fill(fixture.serverUrl);
     await page
@@ -114,7 +125,7 @@ else if (cmd === "logins" && sub === "helper") {
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
     await expect(signInForm).toHaveCount(0);
-    await expect(avatar).toHaveClass(/signed-in/);
+    await expect(avatar).toBeVisible();
   } finally {
     await app.close().catch(() => {});
     await fixture.close();

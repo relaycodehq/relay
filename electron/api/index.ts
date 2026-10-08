@@ -15,7 +15,6 @@ import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
 import { reviewCheckoutHandlers } from "./review-checkout";
 import { reviewHandlers } from "./reviews";
-import { roomHandlers } from "./rooms";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { terminalHandlers } from "./terminals";
@@ -35,7 +34,6 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     gitHandlers(ctx),
     chatHandlers(ctx),
     terminalHandlers(ctx),
-    roomHandlers(ctx),
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
     pluginHandlers(ctx),

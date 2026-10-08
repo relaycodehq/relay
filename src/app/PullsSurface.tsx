@@ -21,10 +21,8 @@ import {
   type PullsLocation,
   type PullsPageHandle,
 } from "../features/pulls/pull-board";
-import { isRoomInvitation } from "../features/rooms/pull-links";
 import { useShortcut } from "../lib/shortcuts";
 import { usePullReview } from "../features/review/usePullReview";
-import { usePullRoom } from "../features/rooms/usePullRoom";
 import { usePullSelection } from "../features/review/usePullSelection";
 import { usePullsRepo } from "../features/pulls/usePullsRepo";
 import { useSavedWorkspace } from "../features/pulls/useSavedWorkspace";
@@ -32,20 +30,17 @@ import { useStoredFlag } from "../lib/useStoredFlag";
 // In the order ReviewSurface imported them, so their stylesheets keep their place in the
 // cascade. Its tea-signin.css now comes later, through ProjectShell's SignIn; nothing it
 // overlaps with sits in between.
-import { RoomPanel } from "../features/rooms/RoomPanel";
-import { RoomInvitationDialog } from "../features/rooms/RoomInvitationDialog";
 import { Loading, Modal } from "../ui/ui";
 import { PaneControls } from "../features/review/PaneControls";
 import { ErrorToast, ReviewPanes } from "../features/review/ReviewPanes";
 import { PullRequestsPage } from "../features/pulls/PullRequestsPage";
 import { OpenPullUrl } from "../features/pulls/OpenPullUrl";
-import type { SettingsCategory } from "../features/settings/Settings";
 
 const LocalFileEditor = lazy(() => import("../features/files/LocalFileEditor"));
 
 /**
  * The Pull requests page: its board while no PR is open, else the PR's
- * review with its room. A PR whose repository is one of your projects opens
+ * review. A PR whose repository is one of your projects opens
  * on that project's thread instead. The page reopens where it was left.
  */
 export function PullsSurface({
@@ -57,7 +52,6 @@ export function PullsSurface({
   onOpenProject,
   onAddProject,
   onLocation,
-  onSettings,
   initialWorkspace,
   incomingLink,
 }: {
@@ -71,19 +65,16 @@ export function PullsSurface({
   onAddProject: (repo?: Repo) => void;
   /** Where the page is, for the window title. */
   onLocation: (where: PullsLocation) => void;
-  onSettings: (category?: SettingsCategory) => void;
   initialWorkspace: WorkspaceState;
   incomingLink?: { url: string };
 }) {
-  const [roomInvitationUrl, setRoomInvitationUrl] = useState<string>();
   const qc = useQueryClient();
   const selection = usePullSelection(
     initialWorkspace.pull,
     initialWorkspace.file,
     !!initialWorkspace.pull,
   );
-  const { selected, file, restoring, select, deselect, selectFile } = selection;
-  const room = usePullRoom(selected);
+  const { selected, file, select, deselect } = selection;
   const [query, setQuery] = useState(initialWorkspace.query),
     [state, setState] = useState(initialWorkspace.state),
     [repo, setRepo] = usePullsRepo(account.id),
@@ -124,11 +115,6 @@ export function PullsSurface({
   }, [selected, repo, pull.data?.title]);
   const openUrl = async (url: string) => {
     try {
-      if (isRoomInvitation(url)) {
-        setRoomInvitationUrl(url);
-        setUrlOpen(false);
-        return;
-      }
       open(await api.parseUrl(url));
       setUrlOpen(false);
     } catch (e) {
@@ -174,51 +160,24 @@ export function PullsSurface({
               onAdd={() => onAddProject(selected)}
             />
           }
-          room={
-            room.open &&
-            pull.data &&
-            !restoring && (
-              <RoomPanel
-                key={JSON.stringify([
-                  account.id,
-                  pull.data.owner,
-                  pull.data.name,
-                  pull.data.number,
-                ])}
-                pull={pull.data}
-                accountId={account.id}
-                onAppSettings={onSettings}
-                path={review.current?.filename}
-                target={room.targetFor(pull.data)}
-                viewed={review.readCount}
-                onClearTarget={room.clearTarget}
-                onClose={() => {
-                  room.setOpen(false);
-                }}
-                onSelect={selectFile}
-                onLink={() => {
-                  void api
-                    .linkFolder(pull.data!)
-                    .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
-                    .catch(setError);
-                }}
-              />
-            )
-          }
           paneControls={
             <PaneControls
               filesHidden={filesHidden}
               onToggleFiles={() => setFilesHidden((v) => !v)}
               onRefresh={() => void review.refresh()}
-              roomOpen={room.open}
-              onToggleRoom={
-                pull.data && !restoring
-                  ? () => room.setOpen((v) => !v)
-                  : undefined
-              }
             />
           }
-          onDiscuss={(target, p) => room.discuss(p, target)}
+          onDiscuss={(_, p) => {
+            // Lines are discussed in a PR thread, which needs the repository's project.
+            const project = projectOf(p);
+            if (project) onOpenInProject(project, p);
+            else
+              setError(
+                new Error(
+                  "Add this repository's folder as a project to discuss it in a thread.",
+                ),
+              );
+          }}
           onEditFile={(path, line) =>
             setEditing({ pull: pull.data!, path, line })
           }
@@ -227,20 +186,6 @@ export function PullsSurface({
       )}
       {!!error && (
         <ErrorToast error={error} onDismiss={() => setError(undefined)} />
-      )}
-      {roomInvitationUrl && (
-        <RoomInvitationDialog
-          key={roomInvitationUrl}
-          url={roomInvitationUrl}
-          account={account}
-          onClose={() => setRoomInvitationUrl(undefined)}
-          onJoined={(ref) => {
-            select(ref);
-            room.setOpen(true);
-            void qc.invalidateQueries({ queryKey: ["roomState"] });
-            setRoomInvitationUrl(undefined);
-          }}
-        />
       )}
       {urlOpen && (
         <OpenPullUrl onOpen={openUrl} onClose={() => setUrlOpen(false)} />

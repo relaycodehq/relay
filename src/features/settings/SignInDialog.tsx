@@ -9,13 +9,10 @@ import "./sign-in-dialog.css";
 export function SignInDialog({
   boot,
   signIn,
-  invitationUrl,
   onRestored,
 }: {
   boot: Bootstrap;
   signIn: SignInFlow;
-  /** The link that asked for an account, whose server the form takes up. */
-  invitationUrl?: string;
   /** Reads the bootstrap again once the saved login is retried or given up. */
   onRestored: () => Promise<unknown>;
 }) {
@@ -29,7 +26,6 @@ export function SignInDialog({
         onConnected={signIn.connected}
         loginRestore={boot.loginRestore}
         savedServer={boot.savedServer}
-        invitationUrl={invitationUrl}
         platform={boot.platform}
         onRestoreAction={async (action) => {
           if (action === "retry") await api.retryLoginRestore();

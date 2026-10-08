@@ -68,7 +68,7 @@ export function SelectionToolbar({
         }}
       >
         <MessageSquare size={13} />
-        Discuss in room
+        Discuss in thread
       </button>
       <button onClick={onComment}>
         <MessageSquare size={13} />

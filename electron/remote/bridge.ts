@@ -32,7 +32,7 @@ import {
 import { sentAgent } from "../../shared/recipient";
 import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";

@@ -19,7 +19,7 @@ export interface AgentInfo {
   defaultModel: string;
   /**
    * Runs Relay's own helper jobs besides threads: grouping changes, line
-   * questions, shared rooms, commit messages, and thread titles when a
+   * questions, commit messages, and thread titles when a
    * thread's own agent can't write one.
    */
   helper: boolean;
@@ -172,6 +172,20 @@ export const agentMentionPattern = new RegExp(
   `^@(${agentProviders.join("|")})(?=\\s|$)\\s*`,
   "i",
 );
+
+/** Only an explicit leading mention picks an agent. Quoted/code mentions are ordinary text. */
+export function agentMention(
+  text: string,
+): { provider: AgentProvider; question: string } | null {
+  const trimmed = text.trim();
+  const m = agentMentionPattern.exec(trimmed);
+  return m
+    ? {
+        provider: m[1].toLowerCase() as AgentProvider,
+        question: trimmed.slice(m[0].length).trim(),
+      }
+    : null;
+}
 
 /** A model an agent offers, as its CLI or server lists it. */
 export interface AgentModel {

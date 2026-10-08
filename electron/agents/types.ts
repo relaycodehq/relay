@@ -40,9 +40,7 @@ export type AgentJob =
   /** A `/btw` side thread, forked from the main one while that may still be working. */
   | { kind: "side" }
   /** A one-off helper job (a thread title, a commit message): no tools, no session, these instructions in place of the chat's own. */
-  | { kind: "helper"; instructions: string }
-  /** A one-off answer to a room's question: it may read the project, keeps no session. */
-  | { kind: "answer" };
+  | { kind: "helper"; instructions: string };
 
 /** A thread turn's side check; see shared/watch. Claude reads it, the others ignore it. */
 export type AgentWatch = {
@@ -58,7 +56,7 @@ export type AgentWatch = {
   onSpend?: (spend: WatchSpend) => void;
 };
 
-/** One turn of any agent, as a thread, room, title or helper job runs it. */
+/** One turn of any agent, as a thread, title or helper job runs it. */
 export interface AgentOptions {
   job: AgentJob;
   /** `id` names the chat message the steer came from, for `onSteered`. */

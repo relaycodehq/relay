@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Bootstrap } from "../../shared/types";
+import { isGithubPullUrl } from "../../shared/validation";
 import { api } from "../lib/api";
 import type { NavigationLock } from "../lib/navigation-lock";
 import type { ShellNavigation } from "./useShellNavigation";
@@ -30,7 +31,8 @@ export function useIncomingLinks(
     }
     setIncoming({ url });
     setInbox(true);
-    if (!boot?.account) void signIn.withAccount();
+    // GitHub links go through the `gh` login; only Gitea needs signing in here.
+    if (!boot?.account && !isGithubPullUrl(url)) void signIn.withAccount();
   }
   useEffect(() => api.onOpenUrl(openUrl), [boot?.account]);
   useEffect(() => {

@@ -3,11 +3,9 @@ import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
 import type { ClockifyApi } from "./clockify";
 import type { PluginsApi } from "./plugins";
-import type { LiveSyncApi } from "./live-sync";
 import type { TaskApi } from "./tasks";
 import type { TerminalApi } from "./terminals";
 import type { WorkingTreeApi } from "./working-tree";
-import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
@@ -49,6 +47,8 @@ export interface Account {
 export interface Repo {
   owner: string;
   name: string;
+  /** The host, e.g. `https://github.com`; absent in older saves, which meant the Gitea account's server. */
+  server?: string;
 }
 export interface PullRef extends Repo {
   number: number;
@@ -75,7 +75,8 @@ export interface Issue {
   html_url: string;
   updated_at: string;
   user: User;
-  repository: { name: string; owner: string; full_name: string };
+  /** `server` is set where it isn't the Gitea account's, i.e. GitHub. */
+  repository: { name: string; owner: string; full_name: string; server?: string };
   labels: { id: number; name: string; color: string }[];
   comments: number;
   pull_request?: { merged: boolean };
@@ -129,7 +130,8 @@ export interface Review {
   user: User;
   submitted_at: string;
   commit_id: string;
-  comments_count: number;
+  /** Absent when the host doesn't count them, as GitHub doesn't. */
+  comments_count?: number;
   dismissed?: boolean;
   stale?: boolean;
 }
@@ -231,9 +233,7 @@ export interface LocalFile {
 }
 export interface Api
   extends
-    importRoomApi,
     WorkingTreeApi,
-    LiveSyncApi,
     ProjectApi,
     DevOpsApi,
     PluginsApi,
@@ -374,6 +374,8 @@ export interface Api
   ): Promise<import("./agents").AgentDefaults | null>;
   askAboutLines(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
+  /** Who Relay reviews as on GitHub, through the `gh` CLI; null without a `gh` login. */
+  githubAccount(): Promise<Account | null>;
   retryLoginRestore(): Promise<void>;
   cancelLoginRestore(): Promise<void>;
   saveWorkspace(workspace: WorkspaceState): Promise<void>;
@@ -384,6 +386,8 @@ export interface Api
     q: string,
     state: WorkspaceState["state"],
     page: number,
+    /** The host to search; the Gitea account's when absent. */
+    server?: string,
   ): Promise<Page<Issue>>;
   pull(ref: PullRef): Promise<Pull>;
   files(ref: PullRef, page: number): Promise<Page<ChangedFile>>;

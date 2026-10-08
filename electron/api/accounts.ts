@@ -4,7 +4,7 @@ import {
   accountLabelSchema,
   accountProviderSchema,
 } from "../../shared/agent-accounts";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Claude Code and Codex accounts: Settings' list, and a thread's own pick. */

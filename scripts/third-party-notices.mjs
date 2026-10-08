@@ -1,5 +1,5 @@
 // Rewrites the generated part of THIRD_PARTY_NOTICES.md: the npm packages
-// that end up in the desktop app, the phone app and the room server, with
+// that end up in the desktop app and the phone app, with
 // their licence texts, and the Android libraries the phone's native modules
 // declare. Everything above the generated marker is written by hand and kept.
 //
@@ -8,7 +8,7 @@
 //   node scripts/third-party-notices.mjs --check   exit 1 when it's out of date
 //
 // Packages are found the way the builds find them: esbuild's metafile for the
-// main process, its workers and the room server, Vite's chunks for the
+// main process and its workers, Vite's chunks for the
 // renderer, and Metro's source map for the phone, so what was tree-shaken or
 // never imported doesn't show up. Packages the build copies as plain files are
 // listed in `copied`. Licences outside `permissive` are printed for review.
@@ -112,18 +112,6 @@ async function desktopMainPackages() {
     },
   ]);
 }
-
-const serverPackages = () =>
-  esbuildPackages([
-    {
-      entryPoints: ["server/main.ts"],
-      bundle: true,
-      platform: "node",
-      target: "node22",
-      format: "esm",
-      outfile: "dist-server/server.mjs",
-    },
-  ]);
 
 async function rendererPackages() {
   const { build } = await import(
@@ -390,10 +378,9 @@ function isPermissive(licence) {
     );
 }
 
-const [mainDirs, rendererDirs, serverDirs] = [
+const [mainDirs, rendererDirs] = [
   await desktopMainPackages(),
   await rendererPackages(),
-  await serverPackages(),
 ];
 const copiedDirs = copied.map((name) => join(repo, "node_modules", name));
 const phoneDirs = phonePackages();
@@ -402,16 +389,9 @@ const desktop = toPackages(
   new Set([...mainDirs, ...rendererDirs, ...copiedDirs]),
 );
 const phone = toPackages(phoneDirs);
-const server = toPackages(serverDirs);
 const android = androidLibraries(phoneDirs);
 const all = toPackages(
-  new Set([
-    ...mainDirs,
-    ...rendererDirs,
-    ...copiedDirs,
-    ...phoneDirs,
-    ...serverDirs,
-  ]),
+  new Set([...mainDirs, ...rendererDirs, ...copiedDirs, ...phoneDirs]),
 );
 
 const generated = [
@@ -444,12 +424,6 @@ const generated = [
       `| ${coordinate} | ${[...owners].sort().join(", ")} |`,
   ),
   "",
-  "### In the room server",
-  "",
-  "`dist-server/server.mjs`, in the room server archive and its Docker image.",
-  "",
-  table(server),
-  "",
   "### Licence texts",
   "",
   licenceTexts(all),
@@ -481,6 +455,6 @@ if (process.argv.includes("--check")) {
 } else {
   writeFileSync(noticesFile, next);
   console.log(
-    `THIRD_PARTY_NOTICES.md: ${desktop.length} desktop, ${phone.length} phone, ${server.length} server packages, ${android.length} Android libraries.`,
+    `THIRD_PARTY_NOTICES.md: ${desktop.length} desktop, ${phone.length} phone packages, ${android.length} Android libraries.`,
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GITHUB_SERVER } from "./source-control";
 const name = z
   .string()
   .min(1)
@@ -7,7 +8,11 @@ const name = z
     (v) => !/[\/\\\x00-\x1f]/.test(v) && v !== "." && v !== "..",
     "Invalid repository name",
   );
-export const repoSchema = z.object({ owner: name, name });
+export const repoSchema = z.object({
+  owner: name,
+  name,
+  server: z.string().url().max(2048).optional(),
+});
 export const refSchema = repoSchema.extend({
   number: z.number().int().positive(),
 });
@@ -22,6 +27,7 @@ export const filePathSchema = z
       !v.split("/").some((s) => s === ".." || s === "."),
     "Invalid file path",
   );
+export const idSchema = z.string().uuid();
 export const shaSchema = z.string().regex(/^[a-f0-9]{40,64}$/);
 /** A SHA-256 of file contents, as `digest` makes for versions and checks. */
 export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -103,6 +109,31 @@ export function parsePullUrl(input: string, server: string) {
     owner: decodeURIComponent(parts[0]),
     name: decodeURIComponent(parts[1]),
     number: Number(parts[3]),
+  });
+}
+const githubHost = (input: string) => {
+  try {
+    let u = new URL(input);
+    if (u.protocol === "relay:") u = new URL(u.searchParams.get("url") ?? "");
+    return u.hostname === "github.com" || u.hostname === "www.github.com"
+      ? u
+      : null;
+  } catch {
+    return null;
+  }
+};
+export const isGithubPullUrl = (input: string) => !!githubHost(input);
+/** `https://github.com/owner/name/pull/42`, as a ref that names its server. */
+export function parseGithubPullUrl(input: string) {
+  const u = githubHost(input);
+  const parts = u?.pathname.split("/").filter(Boolean) ?? [];
+  if (parts[2] !== "pull" || !/^\d+$/.test(parts[3] ?? ""))
+    throw new Error("Paste a GitHub pull request URL.");
+  return refSchema.parse({
+    owner: decodeURIComponent(parts[0]),
+    name: decodeURIComponent(parts[1]),
+    number: Number(parts[3]),
+    server: GITHUB_SERVER,
   });
 }
 export function shellQuote(value: string): string {
