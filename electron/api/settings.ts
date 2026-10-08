@@ -34,6 +34,7 @@ import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../app/release-notes";
 import { devSwitchState, devSwitchTo } from "../app/dev-switch";
+import { releaseGitea } from "./account";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
@@ -237,6 +238,9 @@ export function settingsHandlers(ctx: ApiContext) {
       [sourceControlKindSchema, z.boolean()],
       async (kind, enabled) => {
         await setSourceControlEnabled(store, kind, enabled);
+        // Off keeps the saved account, so turning it back on needs no token.
+        if (kind === "gitea" && !enabled) releaseGitea(ctx);
+        if (kind === "gitea" && enabled) await ctx.login.restoreSaved(store);
         return sourceControl();
       },
     ),

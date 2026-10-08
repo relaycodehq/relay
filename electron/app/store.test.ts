@@ -33,3 +33,25 @@ it("loads a save from before pull request rooms were removed and drops what they
   const saved = JSON.parse(await readFile(join(dir, "state.json"), "utf8"));
   expect(Object.keys(saved).filter((k) => k.startsWith("room"))).toEqual([]);
 });
+
+it("keeps Gitea connected for saves where its switch only hid CI, once", async () => {
+  await writeFile(
+    join(dir, "state.json"),
+    JSON.stringify({
+      version: 1,
+      folders: {},
+      progress: {},
+      sourceControl: { off: ["github", "gitea"] },
+    }),
+  );
+  const store = new Store(dir);
+  await store.load();
+  expect(store.get().sourceControl).toEqual({ off: ["github"], on: [] });
+  // Turned off again after the change, it stays off.
+  await store.update((s) => {
+    s.sourceControl = { off: ["github", "gitea"], on: [] };
+  });
+  const reloaded = new Store(dir);
+  await reloaded.load();
+  expect(reloaded.get().sourceControl?.off).toEqual(["github", "gitea"]);
+});

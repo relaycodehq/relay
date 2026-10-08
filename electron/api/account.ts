@@ -2,11 +2,29 @@ import { net } from "electron";
 import { z } from "zod";
 import { emptyWorkspace } from "../../shared/types";
 import { workspaceSchema } from "../../shared/validation";
-import { seal } from "../app/login";
+import { giteaOn, seal } from "../app/login";
 import { Gitea } from "../pull-requests/gitea";
 import { teaSetup, teaToken } from "../source-control/tea";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import { takes, type ApiContext, type Handlers } from "./context";
+
+/**
+ * Stops everything that runs as the Gitea account and lets go of it. The
+ * saved account and token stay unless the caller removes them.
+ */
+export function releaseGitea({
+  login,
+  triage,
+  projectChecks,
+  blame,
+}: ApiContext) {
+  blame.dispose();
+  projectChecks.stop();
+  login.cancelRestore();
+  triage.cancel();
+  login.client?.dispose();
+  login.client = null;
+}
 
 /** Signing in and out of Gitea, and what the window starts from. */
 export function accountHandlers(ctx: ApiContext) {
@@ -23,6 +41,13 @@ export function accountHandlers(ctx: ApiContext) {
     await store.update((s) => {
       s.account = next.account;
       s.encryptedToken = encryptedToken;
+      // Connecting is what turning Gitea on is for.
+      const sc = s.sourceControl ?? {};
+      s.sourceControl = {
+        ...sc,
+        off: sc.off?.filter((k) => k !== "gitea"),
+        on: [...new Set([...(sc.on ?? []), "gitea" as const])],
+      };
     });
     triage.cancel();
     projectChecks.stop();
@@ -36,6 +61,7 @@ export function accountHandlers(ctx: ApiContext) {
       const client = login.client;
       return {
         account: client?.account ?? null,
+        gitea: giteaOn(store.get()),
         platform: process.platform,
         loginRestore: login.restore,
         savedServer: store.get().account?.server,
@@ -72,16 +98,12 @@ export function accountHandlers(ctx: ApiContext) {
       return signIn(login.url, await teaToken(login));
     }),
     disconnect: async () => {
-      blame.dispose();
-      projectChecks.stop();
       login.cancelRestore();
       await store.update((s) => {
         delete s.account;
         delete s.encryptedToken;
       });
-      triage.cancel();
-      login.client?.dispose();
-      login.client = null;
+      releaseGitea(ctx);
     },
   } satisfies Handlers;
 }

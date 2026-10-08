@@ -9,7 +9,8 @@ export function NoPullHost({
 }: {
   checking: boolean;
   onRecheck: () => void;
-  onConnectGitea: () => void;
+  /** Absent while Gitea is off in Settings → Integrations. */
+  onConnectGitea?: () => void;
 }) {
   return (
     <main className="pulls-no-host">
@@ -22,9 +23,11 @@ export function NoPullHost({
       <button className="primary" disabled={checking} onClick={onRecheck}>
         {checking ? "Checking…" : "Check again"}
       </button>
-      <button className="text-button" onClick={onConnectGitea}>
-        Or connect a Gitea server
-      </button>
+      {onConnectGitea && (
+        <button className="text-button" onClick={onConnectGitea}>
+          Or connect a Gitea server
+        </button>
+      )}
     </main>
   );
 }

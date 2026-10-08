@@ -221,6 +221,8 @@ export interface DevSwitchState {
 }
 export interface Bootstrap {
   account: Account | null;
+  /** Gitea is on in Settings → Integrations; off, nothing offers it. */
+  gitea: boolean;
   platform: string;
   loginRestore: "idle" | "unlocking" | "failed";
   savedServer?: string;

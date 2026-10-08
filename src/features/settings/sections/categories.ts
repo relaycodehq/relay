@@ -9,7 +9,6 @@ import {
   Puzzle,
   Smartphone,
   Sparkles,
-  UserRound,
   Volume2,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
@@ -32,13 +31,6 @@ export const categories: {
     description:
       "What one project does its own way. Anything left alone follows the rest of Settings.",
     icon: FolderGit2,
-  },
-  {
-    id: "account",
-    label: "Gitea",
-    description:
-      "Optional: pull requests on a Gitea server. GitHub needs nothing here; Relay uses the gh CLI's login.",
-    icon: UserRound,
   },
   {
     id: "models",

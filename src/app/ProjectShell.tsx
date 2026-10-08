@@ -167,6 +167,8 @@ export default function ProjectShell() {
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
+  // Off in Settings → Integrations, nothing offers to connect it.
+  const gitea = boot.data.gitea;
   const codeOpen =
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
@@ -322,7 +324,9 @@ export default function ProjectShell() {
               <NoPullHost
                 checking={pullsHost.checking}
                 onRecheck={pullsHost.recheck}
-                onConnectGitea={() => void signIn.withAccount()}
+                onConnectGitea={
+                  gitea ? () => void signIn.withAccount() : undefined
+                }
               />
             )}
           </div>
@@ -447,7 +451,7 @@ export default function ProjectShell() {
                           .open(pr)
                           .then(() => opens.askAbout(target, pr))
                           .catch(setError),
-                      onConnect: () => void linkProject(),
+                      onConnect: gitea ? () => void linkProject() : undefined,
                     }}
                   />
                 )}
@@ -524,7 +528,7 @@ export default function ProjectShell() {
           github={host.github}
           checking={host.checking}
           onRecheck={host.recheck}
-          onConnectGitea={() => void linkProject()}
+          onConnectGitea={gitea ? () => void linkProject() : undefined}
           onClose={() => setChoosePR(false)}
         />
       )}

@@ -13,7 +13,6 @@ import { SettingsNav } from "./sections/SettingsNav";
 import { useAppearanceEntries } from "./sections/appearance";
 import { projectEntries } from "./sections/projects";
 import { useSettingsProject } from "../projects/ProjectSettings";
-import { accountEntries } from "./sections/account";
 import { useModelEntries } from "./sections/models";
 import { integrationEntries } from "./sections/integrations";
 import { pluginEntries } from "./sections/plugins";
@@ -83,9 +82,8 @@ export function Settings({
   const entries = [
     ...appearance,
     ...projectEntries(project),
-    ...accountEntries({ account, onConnect, onDisconnect, setError }),
     ...models,
-    ...integrationEntries(onConnect),
+    ...integrationEntries({ account, onConnect, onDisconnect }),
     ...pluginEntries(),
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),

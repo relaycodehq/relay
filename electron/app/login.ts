@@ -1,6 +1,7 @@
 import { net, safeStorage } from "electron";
 import { Gitea } from "../pull-requests/gitea";
 import type { Store } from "./store";
+import type { SourceControlSettings } from "../../shared/source-control";
 
 /** Linux's basic_text backend stores plaintext; secrets then stay in memory. */
 const canEncrypt = async () =>
@@ -15,6 +16,17 @@ export const seal = async (value: string) =>
     : null;
 export const unseal = async (value: string) =>
   (await safeStorage.decryptStringAsync(Buffer.from(value, "base64"))).result;
+
+/**
+ * Whether Gitea is on in Settings → Integrations. Off, Relay doesn't sign in
+ * to it at all. Until switched, a saved account means it's in use.
+ */
+export const giteaOn = (s: {
+  sourceControl?: SourceControlSettings;
+  account?: unknown;
+}) =>
+  !s.sourceControl?.off?.includes("gitea") &&
+  (!!s.sourceControl?.on?.includes("gitea") || !!s.account);
 
 /** The signed-in Gitea account, and bringing a saved one back from the Keychain. */
 export class GiteaLogin {
@@ -46,6 +58,7 @@ export class GiteaLogin {
     if (
       this.client ||
       this.restore === "unlocking" ||
+      !giteaOn(saved) ||
       !saved.account ||
       !saved.encryptedToken
     )

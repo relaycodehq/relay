@@ -11,7 +11,8 @@ export function ConnectHost({
   github: boolean;
   checking: boolean;
   onRecheck: () => void;
-  onConnectGitea: () => void;
+  /** Absent while Gitea is off in Settings → Integrations. */
+  onConnectGitea?: () => void;
   onClose: () => void;
 }) {
   return github ? (
@@ -26,11 +27,21 @@ export function ConnectHost({
     </Modal>
   ) : (
     <Modal title="No pull request host" onClose={onClose}>
-      <p>
-        Relay reviews pull requests on GitHub and Gitea. This folder has no
-        github.com remote; if its remote is on Gitea, connect Gitea to match it.
-      </p>
-      <button onClick={onConnectGitea}>Connect Gitea</button>
+      {onConnectGitea ? (
+        <>
+          <p>
+            Relay reviews pull requests on GitHub and Gitea. This folder has no
+            github.com remote; if its remote is on Gitea, connect Gitea to match
+            it.
+          </p>
+          <button onClick={onConnectGitea}>Connect Gitea</button>
+        </>
+      ) : (
+        <p>
+          Relay reviews pull requests on GitHub, and on Gitea once it's on in
+          Settings → Integrations. This folder has no github.com remote.
+        </p>
+      )}
     </Modal>
   );
 }

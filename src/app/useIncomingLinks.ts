@@ -32,9 +32,10 @@ export function useIncomingLinks(
     setIncoming({ url });
     setInbox(true);
     // GitHub links go through the `gh` login; only Gitea needs signing in here.
-    if (!boot?.account && !isGithubPullUrl(url)) void signIn.withAccount();
+    if (!boot?.account && boot?.gitea && !isGithubPullUrl(url))
+      void signIn.withAccount();
   }
-  useEffect(() => api.onOpenUrl(openUrl), [boot?.account]);
+  useEffect(() => api.onOpenUrl(openUrl), [boot?.account, boot?.gitea]);
   useEffect(() => {
     if (!lock.locked && queuedUrl) {
       setQueuedUrl(undefined);

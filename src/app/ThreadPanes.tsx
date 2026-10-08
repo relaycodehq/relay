@@ -64,7 +64,8 @@ export function ThreadChanges({
     onRecheck: () => void;
     /** Asks the PR's thread about lines of its diff. */
     onDiscuss: (target: QuestionTarget, pr: Pull) => void;
-    onConnect: () => void;
+    /** Absent while Gitea is off in Settings → Integrations. */
+    onConnect?: () => void;
   };
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
@@ -119,11 +120,22 @@ export function ThreadChanges({
             ) : (
               <>
                 <h2>No pull request host</h2>
-                <p>
-                  Relay reviews pull requests on GitHub and Gitea. This folder
-                  has no github.com remote; for a Gitea one, connect Gitea.
-                </p>
-                <button onClick={review.onConnect}>Connect Gitea</button>
+                {review.onConnect ? (
+                  <>
+                    <p>
+                      Relay reviews pull requests on GitHub and Gitea. This
+                      folder has no github.com remote; for a Gitea one, connect
+                      Gitea.
+                    </p>
+                    <button onClick={review.onConnect}>Connect Gitea</button>
+                  </>
+                ) : (
+                  <p>
+                    Relay reviews pull requests on GitHub, and on Gitea once
+                    it's on in Settings → Integrations. This folder has no
+                    github.com remote.
+                  </p>
+                )}
               </>
             )}
           </div>

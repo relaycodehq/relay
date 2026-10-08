@@ -103,6 +103,13 @@ export class Store {
         throw new Error("Unsupported saved data version.");
       // Gone from disk with the next write.
       for (const key of roomKeys) delete parsed[key];
+      // Gitea "off" used to hide only its CI; now it signs out. Saves from
+      // before `on` existed keep their Gitea account connected.
+      const sc = parsed.sourceControl;
+      if (sc && !sc.on) {
+        sc.off = sc.off?.filter((kind: string) => kind !== "gitea");
+        sc.on = [];
+      }
       this.state = parsed;
       this.savedAtLoad = (await stat(join(this.dir, "state.json"))).mtimeMs;
     } catch (e) {

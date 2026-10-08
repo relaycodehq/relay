@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { pullsNav } from "../fixtures/navigation";
+import { openGiteaSettings, pullsNav } from "../fixtures/navigation";
 
-test("Pull requests offers Gitea without a gh login, through tea's login and a form only without one; the avatar then opens Settings", async () => {
+test("Gitea is off until switched on in Integrations: off, nothing offers it; on, it connects through tea's login and a form only without one", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-tea-"))),
     repo = join(root, "project"),
     bin = join(root, "bin"),
@@ -88,34 +88,42 @@ else if (cmd === "logins" && sub === "helper") {
     });
     await page.reload();
     const signInForm = page.getByLabel("Gitea server", { exact: true });
-    const avatar = page.locator(".sb-account");
-
     const connectGitea = page.getByRole("button", {
       name: "Or connect a Gitea server",
     });
-    // Signed out there's no avatar, and Pull requests asks for nothing on its
-    // own; connecting Gitea from it goes through tea's login without a form.
-    await expect(avatar).toHaveCount(0);
+    const noHost = page.getByRole("heading", {
+      name: "No pull requests yet",
+    });
+
+    // Off, the Pull requests page and Integrations never mention Gitea, and
+    // the footer shows the version instead of an account.
+    await expect(page.locator(".sb-version")).toBeVisible();
     await pullsNav(page).click();
-    await expect(
-      page.getByRole("heading", { name: "No pull requests yet" }),
-    ).toBeVisible();
-    await expect(signInForm).toHaveCount(0);
-    await connectGitea.click();
-    await expect(avatar).toBeVisible();
-    await expect(signInForm).toHaveCount(0);
+    await expect(noHost).toBeVisible();
+    await expect(connectGitea).toHaveCount(0);
 
-    // Signed in, the avatar is the account in Settings, not a token form.
-    await avatar.click();
-    await expect(page.locator(".settings-account")).toBeVisible();
+    // Switched on in Integrations, it connects through tea's login without
+    // a form.
+    const row = await openGiteaSettings(page);
+    const toggle = row.getByRole("switch", { name: "Use Gitea" });
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    await expect(row).toContainText("Not connected.");
+    await row.getByRole("button", { name: "Connect…" }).click();
     await expect(signInForm).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        page.evaluate(async () => (await window.relay.bootstrap()).account),
+      )
+      .toBeTruthy();
+    await openGiteaSettings(page);
+    await expect(row).toContainText(`on ${new URL(fixture.serverUrl).host}`);
 
-    // Without a token or a tea login, connecting asks.
+    // Without a token or a tea login, connecting asks. Disconnecting leaves
+    // Settings; Gitea stays on, so Pull requests offers it now.
     await writeFile(logins, "[]");
-    await page
-      .getByRole("button", { name: "Disconnect account", exact: true })
-      .click();
-    await expect(avatar).toHaveCount(0);
+    await row.getByRole("button", { name: "Disconnect", exact: true }).click();
+    await expect(row).toHaveCount(0);
     await pullsNav(page).click();
     await connectGitea.click();
     await expect(signInForm).toBeVisible();
@@ -125,7 +133,20 @@ else if (cmd === "logins" && sub === "helper") {
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
     await expect(signInForm).toHaveCount(0);
-    await expect(avatar).toBeVisible();
+
+    // Off again, Relay lets go of the account but keeps it for next time.
+    await page.evaluate(() =>
+      window.relay.setSourceControlEnabled("gitea", false),
+    );
+    let boot = await page.evaluate(() => window.relay.bootstrap());
+    expect(boot.account).toBeNull();
+    expect(boot.gitea).toBe(false);
+    await page.evaluate(() =>
+      window.relay.setSourceControlEnabled("gitea", true),
+    );
+    boot = await page.evaluate(() => window.relay.bootstrap());
+    expect(boot.account).toBeTruthy();
+    expect(boot.gitea).toBe(true);
   } finally {
     await app.close().catch(() => {});
     await fixture.close();

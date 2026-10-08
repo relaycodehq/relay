@@ -40,6 +40,14 @@ export async function gitea(
     server: new URL(saved.server).host,
   };
   if (login.client) return { ...base, ...who, signIn: "signed-in" };
+  // Off, the saved account waits unopened.
+  if (!enabled)
+    return {
+      ...base,
+      ...who,
+      signIn: "unknown",
+      detail: "Saved for when Gitea is on.",
+    };
   return {
     ...base,
     ...who,

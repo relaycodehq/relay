@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
+import { LogOut } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import type { Account } from "../../../shared/types";
 import type {
   SourceControlFix,
   SourceControlKind,
@@ -15,6 +17,7 @@ import {
   withCode,
 } from "../../ui/ToolRow";
 import { ErrorBox } from "../../ui/ui";
+import { reloadAccount } from "./useSignIn";
 
 const queryKey = ["source-control"];
 // Azure DevOps is a plugin now, so it never reaches this list.
@@ -25,7 +28,8 @@ const marks: Partial<Record<SourceControlKind, ReactNode>> = {
 /** What the switch stops, said once it's off. */
 const offNotes: Partial<Record<SourceControlKind, string>> = {
   github: "Turned off: Relay doesn't show GitHub CI status.",
-  gitea: "Turned off: Relay doesn't show Gitea CI status.",
+  gitea:
+    "Turned off: Relay doesn't sign in to Gitea, so nothing offers its pull requests or CI. A saved account stays for when you turn it back on.",
 };
 const fixLabels: Record<SourceControlFix, string> = {
   link: "Link it…",
@@ -38,6 +42,8 @@ const followers = ["ci-status", "tea-setup"];
 
 type Apply = (
   run: () => Promise<SourceControlProvider[] | null>,
+  /** Gitea's switch signs Relay in or out, so the account is read again. */
+  signsIn?: boolean,
 ) => Promise<void>;
 
 const useProviders = () =>
@@ -57,21 +63,27 @@ export function SourceControlRescan() {
 
 /** Settings → Integrations: where pull requests and CI come from. */
 export function SourceControlSettings({
+  account,
   onConnect,
+  onDisconnect,
 }: {
+  /** The Gitea account Relay is signed in to. */
+  account: Account | null;
   /** Opens the Gitea sign-in, which also offers the logins tea holds. */
   onConnect?: () => void;
+  onDisconnect: () => Promise<void>;
 }) {
   const qc = useQueryClient();
   const providers = useProviders();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const apply: Apply = async (run) => {
+  const apply: Apply = async (run, signsIn) => {
     setBusy(true);
     setError(undefined);
     try {
       const next = await run();
       if (!next) return;
+      if (signsIn) await reloadAccount(qc, [queryKey[0]]);
       qc.setQueryData(queryKey, next);
       await qc.invalidateQueries({
         predicate: (q) => followers.includes(String(q.queryKey[0])),
@@ -101,6 +113,15 @@ export function SourceControlSettings({
             busy={busy}
             apply={apply}
             onConnect={onConnect}
+            disconnect={
+              provider.kind === "gitea" && account && provider.enabled ? (
+                <GiteaAccount
+                  account={account}
+                  busy={busy}
+                  onDisconnect={() => void onDisconnect().catch(setError)}
+                />
+              ) : undefined
+            }
           />
         ))}
       </ToolRows>
@@ -114,11 +135,14 @@ function ProviderRow({
   busy,
   apply,
   onConnect,
+  disconnect,
 }: {
   provider: SourceControlProvider;
   busy: boolean;
   apply: Apply;
   onConnect?: () => void;
+  /** Gitea's account and the way out of it, in its details. */
+  disconnect?: ReactNode;
 }) {
   const { kind, name, cli, version, enabled, fix } = provider;
   const cliField = cli && (
@@ -156,17 +180,46 @@ function ProviderRow({
         // Nothing to turn on before it's set up.
         disabled: busy || fix === "set-up",
         onChange: (on) =>
-          void apply(() => api.setSourceControlEnabled(kind, on)),
+          void apply(
+            () => api.setSourceControlEnabled(kind, on),
+            kind === "gitea",
+          ),
       }}
       details={
         <>
           {cliField}
+          {disconnect}
           {!enabled && fix !== "set-up" && (
             <p className="tool-row-off">{offNotes[kind]}</p>
           )}
         </>
       }
     />
+  );
+}
+
+/** Where the Gitea token is kept, and signing out. */
+function GiteaAccount({
+  account,
+  busy,
+  onDisconnect,
+}: {
+  account: Account;
+  busy: boolean;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="source-control-account">
+      <p className="setting-muted">
+        {account.persistent
+          ? "The token is saved in your system keychain."
+          : "The token is kept until Relay quits: this computer can't store it encrypted."}
+      </p>
+      <button className="danger subtle" disabled={busy} onClick={onDisconnect}>
+        <LogOut size={14} />
+        Disconnect
+      </button>
+    </div>
   );
 }
 

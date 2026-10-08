@@ -1161,3 +1161,14 @@
   white-space: normal;
   color: var(--muted);
 }
+.source-control-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 34px;
+}
+.source-control-account p {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+}

@@ -19,9 +19,11 @@ export const pullHostName = (url: string | undefined) =>
     ? "GitHub"
     : "Gitea";
 
-/** What Settings keeps: hosts the user turned off, and the CLIs they linked. */
+/** What Settings keeps: hosts the user turned on or off, and the CLIs they linked. */
 export interface SourceControlSettings {
   off?: SourceControlKind[];
+  /** Only Gitea needs it: it starts off unless an account was already saved. */
+  on?: SourceControlKind[];
   paths?: Partial<Record<SourceControlKind, string>>;
 }
 

@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Account, Bootstrap } from "../../../shared/types";
 import { api } from "../../lib/api";
 
 export type SignInFlow = ReturnType<typeof useSignIn>;
+
+/** Reads the Gitea account afresh; what was read as the old one goes. */
+export async function reloadAccount(qc: QueryClient, keep: string[] = []) {
+  const next = await api.bootstrap();
+  qc.removeQueries({
+    predicate: (q) =>
+      !["bootstrap", "project-chat", "project-chats", ...keep].includes(
+        String(q.queryKey[0]),
+      ),
+  });
+  qc.setQueryData(["bootstrap"], next);
+  return next;
+}
 
 /** Signing in to Gitea, through tea's login or the sign-in form, and out again. */
 export function useSignIn(boot: Bootstrap | undefined) {
@@ -17,13 +30,7 @@ export function useSignIn(boot: Bootstrap | undefined) {
     afterSignIn.current = undefined;
   }, [boot?.account?.id]);
   const connected = async (account: Account) => {
-    const next = await api.bootstrap();
-    qc.removeQueries({
-      predicate: (q) =>
-        !["bootstrap", "project-chat", "project-chats"].includes(
-          String(q.queryKey[0]),
-        ),
-    });
+    const next = await reloadAccount(qc);
     qc.setQueryData(["bootstrap"], { ...next, account });
     setOpen(false);
     const then = afterSignIn.current;

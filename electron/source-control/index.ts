@@ -4,7 +4,7 @@ import {
   type SourceControlKind,
   type SourceControlProvider,
 } from "../../shared/source-control";
-import type { GiteaLogin } from "../app/login";
+import { giteaOn, type GiteaLogin } from "../app/login";
 import type { Store } from "../app/store";
 import { gitea } from "./gitea";
 import { github } from "./github";
@@ -21,10 +21,13 @@ export function sourceControlStatus(
 ): Promise<SourceControlProvider[]> {
   const settings = store.get().sourceControl;
   const on = (kind: SourceControlKind) => isSourceControlOn(settings, kind);
-  return Promise.all([github(on("github")), gitea(store, login, on("gitea"))]);
+  return Promise.all([
+    github(on("github")),
+    gitea(store, login, giteaOn(store.get())),
+  ]);
 }
 
-/** A host turned off stops showing its CI. */
+/** A host turned off stops showing its CI; Gitea off isn't signed in to at all. */
 export async function setSourceControlEnabled(
   store: Store,
   kind: SourceControlKind,
@@ -32,11 +35,13 @@ export async function setSourceControlEnabled(
 ) {
   await store.update((s) => {
     const off = new Set(s.sourceControl?.off ?? []);
-    if (enabled) off.delete(kind);
-    else off.add(kind);
+    const on = new Set(s.sourceControl?.on ?? []);
+    (enabled ? off : on).delete(kind);
+    (enabled ? on : off).add(kind);
     s.sourceControl = {
       ...s.sourceControl,
       off: sourceControlKinds.filter((k) => off.has(k)),
+      on: sourceControlKinds.filter((k) => on.has(k)),
     };
   });
 }
