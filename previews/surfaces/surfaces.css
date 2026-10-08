@@ -1,0 +1,722 @@
+/* Surfaces preview: the three header shapes and the stand-in pane bodies.
+   Nothing here loops; the terminal cursor is a plain block. */
+
+.sf-about {
+  flex-basis: 100%;
+  margin: 0;
+  max-width: 900px;
+}
+.sf-window {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--surface);
+}
+.sf-window .project-layout {
+  flex: 1;
+  min-height: 0;
+}
+.sf-window .project-titlebar {
+  flex: none;
+}
+
+/* Stand-in traffic lights so the bar reads at its real height. */
+.sf-traffic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+}
+.sf-traffic i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+.sf-traffic i:nth-child(2) {
+  background: #febc2e;
+}
+.sf-traffic i:nth-child(3) {
+  background: #28c840;
+}
+
+/* The title's ⋯: shows on hover, like the rename pencil. */
+.sf-thread-more.icon-button {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+.project-window-title:hover .sf-thread-more,
+.sf-thread-more.active,
+.sf-thread-more:focus-visible {
+  opacity: 1;
+}
+
+/* Menus drawn by the preview itself; the real ones come from Base UI. */
+.sf-menu-host {
+  position: relative;
+  display: inline-flex;
+}
+.sf-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 200;
+  min-width: 190px;
+}
+.sf-menu-end {
+  right: 0;
+}
+.sf-menu-start {
+  left: 0;
+}
+.sf-menu .sb-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.sf-menu .sb-menu-item:hover {
+  background: var(--hover);
+}
+.sf-menu .sb-menu-item kbd {
+  font-size: 10px;
+}
+
+/* Checks: only what needs fixing. */
+.sf-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.sf-ok {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.sf-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.sf-count.error {
+  color: var(--danger);
+}
+.sf-count.warning {
+  color: #c39236;
+}
+.sf-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.sf-icon:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.sf-caret {
+  opacity: 0.7;
+}
+.sf-header .thread-header-actions {
+  flex-shrink: 0;
+}
+
+/* A: the + that lists closed surfaces. */
+.sf-add {
+  padding: 5px 6px;
+  color: var(--muted);
+}
+.sf-add.active {
+  color: var(--text);
+}
+
+/* B: the rail at the window's edge. */
+.sf-rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 44px;
+  padding: 8px 0;
+  border-left: 1px solid var(--border);
+  background: var(--sidebar);
+}
+.sf-rail-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.sf-rail-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sf-rail-button.active {
+  background: var(--selected);
+  color: var(--text);
+}
+.sf-rail-button.active::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  right: -5px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.sf-rail-button:has(.sf-rail-stat) {
+  height: 50px;
+}
+.sf-rail-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 8.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* C: one work pane, tabs in its header. */
+.sf-work-toggle.icon-button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.sf-tabs-head {
+  padding-left: 0;
+}
+.sf-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.sf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sf-tab > svg {
+  flex-shrink: 0;
+}
+.sf-tab:hover {
+  color: var(--text);
+  background: transparent;
+}
+.sf-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.sf-tab .pane-toggle-stat {
+  margin-left: 2px;
+}
+
+/* Pane bodies. */
+.sf-pane {
+  border-left: 1px solid var(--border);
+}
+.sf-pane > :not(.pane-header) {
+  flex: 1;
+  min-height: 0;
+}
+.sf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 24px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.sf-empty p {
+  margin: 0;
+}
+.sf-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sf-commit-row small {
+  font-variant-numeric: tabular-nums;
+}
+.sf-diff {
+  margin: 0;
+  padding: 10px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  font-family: var(--font-mono);
+}
+.sf-diff-line {
+  display: block;
+  padding: 0 14px;
+  white-space: pre;
+}
+.sf-diff-line.add {
+  background: color-mix(in srgb, #3fb950 14%, transparent);
+}
+.sf-diff-line.del {
+  background: color-mix(in srgb, #f85149 14%, transparent);
+}
+.sf-diff-line.hunk {
+  margin: 6px 0;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.sf-tree {
+  overflow: auto;
+  padding: 6px 0;
+}
+.sf-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.sf-tree-row:hover {
+  background: var(--hover);
+}
+.sf-tree-row.selected {
+  background: var(--selected);
+}
+.sf-tree-twist {
+  display: inline-flex;
+  width: 14px;
+  color: var(--muted);
+}
+.sf-tree-twist svg.open {
+  transform: rotate(90deg);
+}
+.sf-tree-dir {
+  font-weight: 500;
+}
+
+.sf-commits {
+  overflow: auto;
+  padding: 6px;
+}
+.sf-commit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+}
+.sf-commit:hover {
+  background: var(--hover);
+}
+.sf-commit-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-commit-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sf-commit-meta code {
+  font-size: 10.5px;
+}
+
+.sf-term {
+  position: relative;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  height: 100%;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.sf-term > span {
+  display: block;
+  white-space: pre;
+}
+.sf-term-cursor {
+  position: absolute;
+  margin-top: -18px;
+  margin-left: 2ch;
+  width: 7px;
+  height: 14px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+
+.sf-browser {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sf-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.sf-browser-bar .icon-button {
+  width: 24px;
+  height: 24px;
+}
+.sf-browser-url {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--toolbar);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-browser-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 14px;
+  padding: 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 3%, var(--surface));
+}
+.sf-browser-page > small {
+  color: var(--muted);
+  text-align: center;
+}
+.sf-page-bar {
+  height: 36px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.sf-page-cols {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+  min-height: 0;
+}
+.sf-page-side {
+  width: 140px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.sf-page-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.sf-page-main i {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* D: one small icon per surface in the title bar. Open ones light up a
+   little, the one in front gets the accent. No borders, no labels. */
+.sf-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.sf-tool.icon-button {
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  gap: 5px;
+  border-radius: 7px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.sf-tool.icon-button:hover {
+  opacity: 1;
+  color: var(--text);
+}
+.sf-tool.open {
+  opacity: 1;
+  color: var(--text);
+  background: var(--hover);
+}
+.sf-tool.front {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.sf-tool-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sf-tool.front .sf-tool-stat .pane-toggle-add,
+.sf-tool.front .sf-tool-stat .pane-toggle-del {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* D's tabs: each has a close that shows on hover or while in front. */
+.sf-tab-host {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+.sf-tab-host .sf-tab {
+  padding-right: 24px;
+}
+.sf-tab-close {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+}
+.sf-tab-host:hover .sf-tab-close,
+.sf-tab-close:focus-visible {
+  opacity: 1;
+}
+.sf-tab-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.sf-d .sf-checks {
+  border: 0;
+  padding: 0 6px;
+}
+.sf-work .pane-header-actions .git-actions {
+  margin-right: 4px;
+}
+
+/* D: the two panel buttons and the picker an empty panel shows. */
+.sf-layouts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.sf-layout.icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.sf-layout.icon-button:hover {
+  color: var(--text);
+}
+.sf-layout.open {
+  color: var(--text);
+  background: var(--hover);
+}
+.sf-tab-add {
+  padding: 0 9px;
+}
+.sf-tab-add.active {
+  border-bottom-color: var(--accent);
+}
+.sf-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+}
+.sf-picker h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.sf-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 260px;
+  max-width: 100%;
+}
+.sf-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+.sf-picker-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+.sf-picker-item:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.sf-picker-item > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.sf-picker-label {
+  flex: 1;
+}
+.sf-picker-stat {
+  display: inline-flex;
+  gap: 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.sf-picker-item kbd {
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+}
+.sf-panel-bottom {
+  height: 240px;
+  flex: none;
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}
+.sf-panel-bottom .sf-picker {
+  padding: 10px;
+  gap: 8px;
+}
+.sf-panel-bottom .sf-picker-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: auto;
+  justify-content: center;
+}
+.sf-panel-bottom .sf-picker-item {
+  height: 28px;
+}
+.sf-panel-bottom .sf-picker-label {
+  flex: none;
+}
+
+/* E: the panel button sits in the strip after Chat and Changes. */
+.sf-edge.pane-toggle {
+  padding: 5px 7px;
+}
+.sf-e .sf-pane[data-pane="changes"] {
+  flex-grow: 1;
+}
+.sf-e .sf-tabs-head {
+  padding-left: 8px;
+}
+.sf-e .sf-tabs-head[draggable="true"] {
+  cursor: grab;
+}
+.sf-e .sf-tabs-head[draggable="true"] .sf-tab,
+.sf-e .sf-tabs-head[draggable="true"] .sf-tab-close,
+.sf-e .sf-tabs-head[draggable="true"] .icon-button {
+  cursor: pointer;
+}
+
+/* E: terminal dock under the panes. */
+.sf-e .sf-dock {
+  position: relative;
+  flex: none;
+  min-height: 120px;
+  max-height: calc(100% - 160px);
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}
+.sf-dock-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  height: 6px;
+  z-index: 30;
+  cursor: row-resize;
+  touch-action: none;
+}
+.sf-dock-handle:hover,
+.sf-dock-handle.dragging {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.sf-e .sf-dock .sf-tabs-head {
+  padding-left: 0;
+}
