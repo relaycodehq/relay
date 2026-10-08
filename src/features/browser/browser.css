@@ -4,6 +4,18 @@
   flex-direction: column;
   min-height: 0;
 }
+.browser-action-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--danger);
+  font-size: 12px;
+}
+.browser-action-error span {
+  flex: 1;
+}
 .browser-bar {
   display: flex;
   align-items: center;

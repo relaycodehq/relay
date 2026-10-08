@@ -176,6 +176,7 @@ export class TurnRunner {
         await this.core.storage.save(chat);
       },
     );
+    let worktreesSettled = Promise.resolve();
     let point: string | undefined,
       goalSaved = 0,
       committed = false,
@@ -256,9 +257,16 @@ export class TurnRunner {
               ? await this.core.projects.root(chat.projectId)
               : undefined,
           );
+          const browserLinks =
+            !rules.side && !chat.thinker && !chat.reviewer
+              ? await this.core.previewLinks?.note(chat).catch((e) => {
+                  console.warn("Could not discover browser links:", e);
+                })
+              : undefined;
           return (
-            [note, linksInstructions(links)].filter(Boolean).join("\n\n") ||
-            undefined
+            [note, browserLinks, linksInstructions(links)]
+              .filter(Boolean)
+              .join("\n\n") || undefined
           );
         },
         choice: input.choice,
@@ -280,7 +288,7 @@ export class TurnRunner {
             commands.set(activity.id, activity.label);
             commits?.command(activity.label);
           } else if (activity.kind === "file") commits?.edited();
-          watchWorktrees(activity);
+          worktreesSettled = watchWorktrees(activity) ?? worktreesSettled;
           answer.activity(activity);
         },
         onCommentary: (id: string, text: string | null) =>
@@ -375,6 +383,23 @@ export class TurnRunner {
         const summary = done.body.trim();
         if (summary) done.compactSummary = summary.slice(0, 100000);
         done.body = "";
+      }
+      if (
+        !abort.signal.aborted &&
+        turn.kind === "reply" &&
+        !rules.side &&
+        !chat.thinker &&
+        !chat.reviewer &&
+        this.core.previewLinks
+      ) {
+        await worktreesSettled;
+        const namedBody = await this.core.previewLinks
+          .answer(chat, done.body)
+          .catch((e) => {
+            console.warn("Could not name browser links:", e);
+            return done.body;
+          });
+        if (!answer.stopped && !abort.signal.aborted) done.body = namedBody;
       }
       done.status = abort.signal.aborted ? "cancelled" : "complete";
       const { thread } = agentSession(chat, provider, input.parentId);

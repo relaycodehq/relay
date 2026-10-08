@@ -943,6 +943,31 @@ if (args.includes("--permission-prompt-tool")) {
           },
         });
       }
+      // A real manual worktree, credited through the normal command activity.
+      const madeWorktree = /fixture make worktree (\{[^\n]+\})/.exec(said)?.[1];
+      if (madeWorktree) {
+        const { folder, branch } = JSON.parse(madeWorktree);
+        require("node:child_process").execFileSync(
+          "git",
+          ["worktree", "add", "-q", "-b", branch, folder, "HEAD"],
+          { cwd: m.params.cwd },
+        );
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-manual-worktree",
+              type: "commandExecution",
+              command: `git worktree add -b ${JSON.stringify(branch)} ${JSON.stringify(folder)} HEAD`,
+              status: "completed",
+              commandActions: [],
+              aggregatedOutput: "",
+              exitCode: 0,
+            },
+          },
+        });
+      }
       // Leaves the checkout on another branch, as landing one in main does.
       const switchTo = /fixture switch branch to (\S+)/.exec(said)?.[1];
       if (switchTo)

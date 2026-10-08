@@ -130,20 +130,29 @@ class ProjectTasks {
   }
 
   /** Processes in the project's checkout, and in the `worktrees` its threads work in. */
-  async list(root: string, worktrees: Worktree[] = []): Promise<ProjectTask[]> {
+  async list(
+    root: string,
+    worktrees: Worktree[] = [],
+    options: { fresh?: boolean; includeNewServers?: boolean } = {},
+  ): Promise<ProjectTask[]> {
     if (process.platform === "win32") return [];
     this.watch(root);
     for (const w of worktrees) this.watch(w.path);
+    if (options.fresh) this.scanned = 0;
     await this.scan();
     const folders: { path: string; chatId?: string }[] = [
       { path: root },
       ...worktrees,
-    ];
+    ].sort((a, b) => b.path.length - a.path.length);
     const folder = (cwd?: string) =>
       cwd ? folders.find((f) => within(cwd, f.path)) : undefined;
     const now = Date.now();
     const tasks = [...this.tracked.values()].filter(
-      (t) => !!folder(t.cwd) && (t.restarted || now - t.started >= minimumAge),
+      (t) =>
+        !!folder(t.cwd) &&
+        (t.restarted ||
+          now - t.started >= minimumAge ||
+          options.includeNewServers),
     );
     const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
     // An editor or pager open in a terminal isn't worth listing; servers are.
@@ -162,6 +171,7 @@ class ProjectTasks {
           command: t.command,
           ...describeTask(t.command, listening),
           ...(worktree?.chatId ? { worktree: worktree.chatId } : {}),
+          ...(worktree ? { folder: worktree.path } : {}),
           ...(t.agent ? { agent: t.agent } : {}),
           origin: t.origin,
           ...(chatId ? { chatId } : {}),
@@ -170,7 +180,13 @@ class ProjectTasks {
           pids: t.pids.size,
         };
       })
-      .filter((t) => t.origin !== "terminal" || lastingTask(t))
+      .filter(
+        (t) =>
+          (t.origin !== "terminal" || lastingTask(t)) &&
+          (now - t.started >= minimumAge ||
+            t.ports.length > 0 ||
+            this.tracked.get(t.id)?.restarted),
+      )
       .sort((a, b) => a.started - b.started);
   }
 

@@ -45,6 +45,8 @@ export function previewHandlers(ctx: ApiContext) {
           "devtools",
           "popOut",
           "bringBack",
+          "openExternal",
+          "previewIndex",
           "stopPicking",
         ]),
       ],

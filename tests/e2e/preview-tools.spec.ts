@@ -5,7 +5,14 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+  realpath,
+} from "node:fs/promises";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -36,16 +43,24 @@ async function callTool(page: Page, tool: string, input: unknown) {
   return (await answers.last().locator(".markdown").innerText()).trim();
 }
 
-test("an agent opens its thread's preview, pictures it unseen and reads its errors; a picked element goes to the composer", async () => {
+test("an agent opens its thread's preview, pictures it unseen and reads its errors; a picked element goes to the composer", async ({
+  browser,
+}) => {
   test.setTimeout(120_000);
-  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-preview-tools-"))),
+  const root = await realpath(
+      await mkdtemp(join(tmpdir(), "relay-preview-tools-")),
+    ),
     bin = join(root, "bin"),
     repo = join(root, "project");
   let app: ElectronApplication | undefined;
   try {
     await mkdir(bin);
-    const script = await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8");
-    for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), script);
+    const script = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
+    for (const name of ["codex", "claude"])
+      await fakeCli(join(bin, name), script);
     await mkdir(repo);
     const git = (...args: string[]) =>
       execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
@@ -84,7 +99,10 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     });
     const page = await app.firstWindow();
     await app.evaluate(({ dialog }, folder) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [folder],
+      });
     }, repo);
     await page.evaluate(() => window.relay.addProject());
     await page.evaluate(async (port) => {
@@ -100,16 +118,27 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     ).toHaveText("Full access");
 
     // Nothing to picture before the preview has a page.
-    expect(await callTool(page, "screenshot", {})).toMatch(/Call open_preview first/);
+    expect(await callTool(page, "screenshot", {})).toMatch(
+      /Call open_preview first/,
+    );
 
     // Opening starts the dev server and waits for the page.
     const opened = JSON.parse(await callTool(page, "open_preview", {}));
     expect(opened).toEqual({
       url: `http://localhost:${port}/`,
+      browserUrl: expect.stringMatching(
+        /^http:\/\/checkout-[a-f0-9]{8}\.project\.relay\.localhost:\d+\/$/,
+      ),
       title: "Tools fixture",
       server: `running on port ${port}, started by Relay`,
       consoleErrorsWhileLoading: 0,
     });
+    // The tool returns an already usable named route without opening the user's browser.
+    const external = await browser.newPage();
+    await external.goto(opened.browserUrl);
+    await expect(external).toHaveTitle("[project] Tools fixture");
+    expect(await external.evaluate(() => window.isSecureContext)).toBe(true);
+    await external.close();
 
     // The panel is closed, so the page has never been drawn; it is pictured anyway.
     // 1280×800 at the screen's density, no wider than 1600.
@@ -127,6 +156,7 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     );
     expect(broken).toMatchObject({
       url: `http://localhost:${port}/broken`,
+      browserUrl: opened.browserUrl + "broken",
       consoleErrorsWhileLoading: 1,
     });
     expect(await callTool(page, "console_errors", { clear: true })).toMatch(
@@ -147,7 +177,9 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     );
 
     // Picking: a click on the page hands the element to the composer.
-    const pick = panel.getByRole("button", { name: "Pick an element to ask about" });
+    const pick = panel.getByRole("button", {
+      name: "Pick an element to ask about",
+    });
     await expect(pick).toBeEnabled();
     await pick.click();
     await expect(
@@ -160,8 +192,18 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
       const at = { x: 60, y: 40 };
       wc.sendInputEvent({ type: "mouseMove", ...at });
       await new Promise((r) => setTimeout(r, 100));
-      wc.sendInputEvent({ type: "mouseDown", ...at, button: "left", clickCount: 1 });
-      wc.sendInputEvent({ type: "mouseUp", ...at, button: "left", clickCount: 1 });
+      wc.sendInputEvent({
+        type: "mouseDown",
+        ...at,
+        button: "left",
+        clickCount: 1,
+      });
+      wc.sendInputEvent({
+        type: "mouseUp",
+        ...at,
+        button: "left",
+        clickCount: 1,
+      });
     }, port);
     const composer = page.getByLabel("Message project");
     await expect(composer).toContainText(

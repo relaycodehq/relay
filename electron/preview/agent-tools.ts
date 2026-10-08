@@ -1,7 +1,11 @@
 // What Relay's preview tools do for an agent: open its thread's preview,
 // picture it, and read what its page logged. The tools are listed with the
 // others in electron/relay-mcp.
-import type { ConsoleEntry, DevServerState, PreviewState } from "../../shared/preview";
+import type {
+  ConsoleEntry,
+  DevServerState,
+  PreviewState,
+} from "../../shared/preview";
 import { toolText, type ToolResult } from "../relay-mcp/tools";
 import type { ThreadPreviews } from "./thread-previews";
 
@@ -73,13 +77,20 @@ export function consoleText(entries: ConsoleEntry[], now: number) {
     return `[${e.level}] ${ago(e.at, now)}${e.source ? ` at ${e.source}` : ""}\n${message}`;
   });
   const skipped = entries.length - shown.length;
-  return (skipped ? [`(${skipped} older left out)`, ...lines] : lines).join("\n\n");
+  return (skipped ? [`(${skipped} older left out)`, ...lines] : lines).join(
+    "\n\n",
+  );
 }
 
-const describeState = (state: PreviewState, errors: number) =>
+const describeState = (
+  state: PreviewState,
+  errors: number,
+  browser: { browserUrl?: string; browserUrlError?: string },
+) =>
   JSON.stringify(
     {
       url: state.url,
+      ...browser,
       title: state.title,
       server: serverLine(state.server),
       ...(state.error ? { loadError: state.error } : {}),
@@ -100,15 +111,22 @@ export async function answerPreviewTool(
   switch (name) {
     case "open_preview": {
       const started = Date.now();
-      let state = await previews.open(caller.projectId, caller.chatId);
+      let state = await previews.open(
+        caller.projectId,
+        caller.chatId,
+        input.url,
+      );
       previews.reveal(caller.projectId, caller.chatId);
       const home = previews.home(key);
       if (input.url)
-        previews.navigate(key, previewTarget(input.url, state.url || home));
+        await previews.navigate(
+          key,
+          previewTarget(input.url, state.url || home),
+        );
       else if (input.reload) previews.act(key, "reload");
       else if (!state.url && !home)
         return toolText(
-          "The project has no dev port in Settings → Projects → Preview, so there's nothing to open by default. Pass a url, or ask the user to set the dev command and port.",
+          "No single HTTP server or saved dev port is available to open by default. Pass an explicit localhost URL, or set the dev command and port in Project settings → Preview.",
           true,
         );
       await previews.settled(key, OPEN_WAIT_MS, signal);
@@ -126,7 +144,16 @@ export async function answerPreviewTool(
       const errors = (previews.consoleErrors(key) ?? []).filter(
         (e) => e.level === "error" && e.at >= started,
       ).length;
-      return toolText(describeState(state, errors), !!state.error);
+      const browser: { browserUrl?: string; browserUrlError?: string } = {};
+      if (state.url && !state.error) {
+        try {
+          browser.browserUrl = await previews.browserUrl(key);
+        } catch (error) {
+          browser.browserUrlError =
+            error instanceof Error ? error.message : String(error);
+        }
+      }
+      return toolText(describeState(state, errors, browser), !!state.error);
     }
     case "screenshot": {
       if (!previews.current(key)?.url) return toolText(NO_PAGE, true);
@@ -134,7 +161,8 @@ export async function answerPreviewTool(
       const image = await previews.capture(key);
       if (!image) return toolText(NO_PAGE, true);
       const { width } = image.getSize();
-      const scaled = width > SHOT_WIDTH ? image.resize({ width: SHOT_WIDTH }) : image;
+      const scaled =
+        width > SHOT_WIDTH ? image.resize({ width: SHOT_WIDTH }) : image;
       const state = previews.current(key);
       return {
         content: [
@@ -143,7 +171,10 @@ export async function answerPreviewTool(
             data: scaled.toPNG().toString("base64"),
             mimeType: "image/png",
           },
-          { type: "text", text: `${state?.url ?? ""}${state?.title ? ` (${state.title})` : ""}` },
+          {
+            type: "text",
+            text: `${state?.url ?? ""}${state?.title ? ` (${state.title})` : ""}`,
+          },
         ],
       };
     }

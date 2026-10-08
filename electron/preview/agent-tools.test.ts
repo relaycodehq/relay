@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { consoleText, previewTarget } from "./agent-tools";
+import { answerPreviewTool, consoleText, previewTarget } from "./agent-tools";
+import type { ThreadPreviews } from "./thread-previews";
 import { clipRect } from "./element-pick";
 
 describe("previewTarget", () => {
@@ -31,7 +32,14 @@ describe("consoleText", () => {
   it("says when and where each entry came from", () => {
     expect(
       consoleText(
-        [{ level: "error", message: "boom", source: "app.js:3", at: now - 90_000 }],
+        [
+          {
+            level: "error",
+            message: "boom",
+            source: "app.js:3",
+            at: now - 90_000,
+          },
+        ],
         now,
       ),
     ).toBe("[error] 2 min ago at app.js:3\nboom");
@@ -54,7 +62,10 @@ describe("clipRect", () => {
   const viewport = { width: 800, height: 600 };
   it("frames the element with a margin, in whole pixels", () => {
     expect(
-      clipRect({ rect: { x: 100.4, y: 50.6, width: 20, height: 10 }, viewport }),
+      clipRect({
+        rect: { x: 100.4, y: 50.6, width: 20, height: 10 },
+        viewport,
+      }),
     ).toEqual({ x: 92, y: 42, width: 37, height: 27 });
   });
   it("keeps the frame inside the viewport", () => {
@@ -67,4 +78,39 @@ describe("clipRect", () => {
       clipRect({ rect: { x: 0, y: 900, width: 100, height: 20 }, viewport }),
     ).toBeUndefined();
   });
+});
+
+it("keeps a working pane successful when the external URL proxy cannot start", async () => {
+  const state = {
+    key: "chat",
+    url: "http://localhost:3000/",
+    title: "Page",
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    poppedOut: false,
+    server: { state: "none" as const },
+  };
+  const previews = {
+    open: async () => state,
+    current: () => state,
+    reveal: () => {},
+    home: () => state.url,
+    settled: async () => {},
+    consoleErrors: () => [],
+    browserUrl: async () => {
+      throw new Error("Proxy port is busy");
+    },
+  } as unknown as ThreadPreviews;
+  const answer = await answerPreviewTool(
+    previews,
+    { projectId: "project", chatId: "chat" },
+    "open_preview",
+    {},
+    new AbortController().signal,
+  );
+  expect(answer.isError).toBeFalsy();
+  expect(
+    JSON.parse((answer.content[0] as { text: string }).text),
+  ).toMatchObject({ url: state.url, browserUrlError: "Proxy port is busy" });
 });

@@ -5,6 +5,7 @@ import {
   Bug,
   ExternalLink,
   Globe,
+  LayoutGrid,
   PictureInPicture2,
   RotateCw,
   SquareDashedMousePointer,
@@ -52,7 +53,12 @@ export function BrowserSurface({
     setOpening(null);
     openPreview(projectId, chatId).catch((e: Error) => setOpening(e.message));
   }, [projectId, chatId, front]);
-  const act = (action: PreviewAction) => void api.previewAction(key, action);
+  const act = (action: PreviewAction) => {
+    setOpening(null);
+    void api
+      .previewAction(key, action)
+      .catch((e: Error) => setOpening(e.message));
+  };
   const viewport = useRef<HTMLDivElement>(null);
   const place = useCallback(
     (bounds: PreviewBounds | null) => void api.placePreview(key, bounds),
@@ -78,16 +84,23 @@ export function BrowserSurface({
           if (picked) onPick(pickedContext(picked));
         }}
       />
+      {opening && state?.url && (
+        <div className="browser-action-error" role="alert">
+          <span>{opening}</span>
+          <IconButton
+            label="Dismiss browser error"
+            onClick={() => setOpening(null)}
+          >
+            <X size={14} />
+          </IconButton>
+        </div>
+      )}
       <div className="browser-viewport" ref={viewport}>
         {showPage && state.snapshot && (
           <img className="browser-snapshot" src={state.snapshot} alt="" />
         )}
         {!showPage && (
-          <BrowserNotice
-            state={state}
-            failure={opening}
-            onAct={act}
-          />
+          <BrowserNotice state={state} failure={opening} onAct={act} />
         )}
       </div>
     </div>
@@ -139,7 +152,11 @@ function AddressBar({
           <X size={14} />
         </IconButton>
       ) : (
-        <IconButton label="Reload" disabled={!state} onClick={() => onAct("reload")}>
+        <IconButton
+          label="Reload"
+          disabled={!state}
+          onClick={() => onAct("reload")}
+        >
           <RotateCw size={14} />
         </IconButton>
       )}
@@ -162,9 +179,7 @@ function AddressBar({
       />
       <IconButton
         label={
-          state?.picking
-            ? "Stop picking (Esc)"
-            : "Pick an element to ask about"
+          state?.picking ? "Stop picking (Esc)" : "Pick an element to ask about"
         }
         disabled={!state?.url || state.poppedOut}
         active={state?.picking}
@@ -180,12 +195,30 @@ function AddressBar({
         <Bug size={14} />
       </IconButton>
       <IconButton
-        label={state?.poppedOut ? "Bring back to the panel" : "Open in its own window"}
+        label={
+          state?.poppedOut
+            ? "Bring back to the panel"
+            : "Open in its own window"
+        }
         disabled={!state}
         active={state?.poppedOut}
         onClick={() => onAct(state?.poppedOut ? "bringBack" : "popOut")}
       >
         <PictureInPicture2 size={14} />
+      </IconButton>
+      <IconButton
+        label="Open in browser"
+        disabled={!state?.url}
+        onClick={() => onAct("openExternal")}
+      >
+        <ExternalLink size={14} />
+      </IconButton>
+      <IconButton
+        label="All previews in browser"
+        disabled={!state}
+        onClick={() => onAct("previewIndex")}
+      >
+        <LayoutGrid size={14} />
       </IconButton>
     </form>
   );
@@ -230,7 +263,9 @@ function BrowserNotice({
   if (server.state === "failed")
     return (
       <div className="browser-notice" role="alert">
-        <p>The dev server didn’t start on port <code>{server.port}</code>.</p>
+        <p>
+          The dev server didn’t start on port <code>{server.port}</code>.
+        </p>
         {server.output && <pre className="browser-output">{server.output}</pre>}
         <button type="button" onClick={() => onAct("reload")}>
           Try again

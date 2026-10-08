@@ -1,6 +1,7 @@
 import {
   BrowserWindow,
   session,
+  shell,
   WebContentsView,
   type NativeImage,
   type NavigationEntry,
@@ -18,21 +19,28 @@ import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
 import { pickElement } from "./element-pick";
+import { LocalUrls, localPort, type LocalPreview } from "./local-urls";
 
 /** Where a thread's preview runs and what it loads. */
 export interface PreviewTarget {
   key: string;
+  projectId: string;
+  chatId: string | null;
   /** The thread's folder: its worktree, or the project's checkout. */
   folder: string;
+  project: string;
+  branch?: string;
   /** Its worktree's name; unset in the checkout. */
   worktree?: string;
-  /** The partition the checkout's previews share. */
+  /** The checkout's browser, used to seed a thread on its first open. */
   checkoutPartition: string;
-  /** Its own partition in a worktree, seeded from the checkout's. */
+  /** Every thread owns a partition, seeded from the checkout's. */
   partition: string;
   env: Record<string, string>;
   /** The project's dev command and port, the port already moved by the worktree's offset. */
   dev?: { command?: string; port: number };
+  /** Shares routing with automatically named agent answers. */
+  external: (port: number) => Promise<LocalPreview>;
 }
 
 interface Preview {
@@ -93,11 +101,20 @@ function prepare(ses: Session) {
  */
 export class ThreadPreviews {
   private previews = new Map<string, Preview>();
+  private thumbnails = new Map<string, Buffer>();
+  readonly external = new LocalUrls(
+    process.env.RELAY_TEST_DATA
+      ? Number(process.env.RELAY_TEST_PREVIEW_PROXY_PORT || 0)
+      : undefined,
+  );
   readonly servers = new DevServers((folder, state) => {
     for (const preview of this.previews.values())
       if (preview.target.folder === folder) {
         preview.server = state;
-        if (state.state === "running" && preview.target.dev?.port === state.port)
+        if (
+          state.state === "running" &&
+          preview.target.dev?.port === state.port
+        )
           this.loadDefault(preview);
         this.emit(preview);
       }
@@ -107,26 +124,77 @@ export class ThreadPreviews {
 
   constructor(
     private window: AppWindow,
-    private resolve: (projectId: string, chatId: string | null) => Promise<PreviewTarget>,
+    private resolve: (
+      projectId: string,
+      chatId: string | null,
+      url?: string,
+      preferredFolder?: string,
+    ) => Promise<PreviewTarget>,
     private now = Date.now,
   ) {
-    this.sweep = setInterval(() => this.unloadIdle(), Math.min(60_000, UNLOAD_MS));
+    this.sweep = setInterval(
+      () => this.unloadIdle(),
+      Math.min(60_000, UNLOAD_MS),
+    );
     this.sweep.unref();
   }
 
-  async open(projectId: string, chatId: string | null) {
-    const target = await this.resolve(projectId, chatId);
+  async open(projectId: string, chatId: string | null, url?: string) {
+    const previous = this.previews.get(chatId ?? `draft:${projectId}`);
+    const target = await this.resolve(
+      projectId,
+      chatId,
+      url,
+      previous?.target.folder,
+    );
     let preview = this.previews.get(target.key);
+    const oldPort = preview?.target.dev?.port;
     if (preview && preview.target.folder !== target.folder) {
       // The thread moved to a worktree: a fresh browser in its own partition.
       this.close(target.key);
       preview = undefined;
     }
     if (!preview) preview = await this.create(target);
-    else preview.target = target;
+    else {
+      preview.target = target;
+      const page = this.page(preview).url;
+      if (
+        !url &&
+        oldPort &&
+        target.dev &&
+        oldPort !== target.dev.port &&
+        localPort(page) === oldPort
+      ) {
+        const next = new URL(page);
+        next.port = String(target.dev.port);
+        void this.revive(preview)
+          .loadURL(next.href)
+          .catch(() => {});
+      }
+    }
     this.revive(preview);
     this.wake(preview);
+    if (!url) await this.registerExternal(preview);
     return this.state(preview);
+  }
+
+  private async externalTarget(preview: Preview, port: number) {
+    const route = await preview.target.external(port);
+    route.screenshot = () => this.thumbnails.get(route.folder);
+    route.active = () =>
+      [...this.previews.values()].some((p) => p.target.folder === route.folder);
+    return route;
+  }
+
+  /** Register in memory; a direct in-app preview never needs a proxy listener. */
+  private async registerExternal(preview: Preview) {
+    const port = localPort(this.page(preview).url) ?? preview.target.dev?.port;
+    if (!port) return;
+    try {
+      this.external.register(await this.externalTarget(preview, port));
+    } catch {
+      /* A conflicting proxy port must not prevent the pane loading. */
+    }
   }
 
   /** Starts the dev server if it isn't up, and loads its page once it is. */
@@ -370,6 +438,11 @@ export class ThreadPreviews {
       if (call !== preview.placed) return;
       if (frame && !frame.isEmpty())
         preview.snapshot = `data:image/jpeg;base64,${frame.toJPEG(70).toString("base64")}`;
+      if (frame && !frame.isEmpty())
+        this.thumbnails.set(
+          preview.target.folder,
+          frame.resize({ width: 640 }).toJPEG(70),
+        );
     }
     this.hide(preview);
     this.emit(preview);
@@ -391,15 +464,25 @@ export class ThreadPreviews {
     for (const preview of this.previews.values()) this.hide(preview);
   }
 
-  navigate(key: string, url: string) {
-    const preview = this.previews.get(key);
+  async navigate(key: string, url: string) {
+    let preview = this.previews.get(key);
     if (!preview || !webUrl(url)) return;
-    void this.revive(preview).loadURL(url).catch(() => {});
+    if (localPort(url)) {
+      await this.open(preview.target.projectId, preview.target.chatId, url);
+      preview = this.previews.get(key)!;
+    }
+    await this.revive(preview)
+      .loadURL(url)
+      .catch(() => {});
+    await this.registerExternal(preview);
   }
 
   act(key: string, action: PreviewAction) {
     const preview = this.previews.get(key);
     if (!preview) return;
+    if (action === "openExternal") return this.openExternal(preview);
+    if (action === "previewIndex")
+      return this.external.indexUrl().then((url) => shell.openExternal(url));
     const wc = this.revive(preview);
     const history = wc.navigationHistory;
     switch (action) {
@@ -433,6 +516,32 @@ export class ThreadPreviews {
         preview.stopPick?.();
         return;
     }
+  }
+
+  /** A named browser link to the page's actual port, including manually started servers. */
+  async browserUrl(key: string): Promise<string | undefined> {
+    const preview = this.previews.get(key);
+    if (!preview) return;
+    const page = this.page(preview).url;
+    if (!page || !webUrl(page)) return;
+    const port = localPort(page);
+    if (!port) return page;
+    const named = new URL(
+      await this.external.url(await this.externalTarget(preview, port)),
+    );
+    const original = new URL(page);
+    named.pathname = original.pathname;
+    named.search = original.search;
+    named.hash = original.hash;
+    return named.href;
+  }
+
+  private async openExternal(preview: Preview) {
+    const url = await this.browserUrl(preview.target.key);
+    if (!url) return;
+    if (preview.shown && localPort(this.page(preview).url))
+      await this.capture(preview.target.key).catch(() => {});
+    await shell.openExternal(url);
   }
 
   private popOut(preview: Preview) {
@@ -473,7 +582,9 @@ export class ThreadPreviews {
 
   private title(preview: Preview) {
     const page = this.page(preview).title || "Preview";
-    return preview.target.worktree ? `[${preview.target.worktree}] ${page}` : page;
+    return preview.target.worktree
+      ? `[${preview.target.worktree}] ${page}`
+      : page;
   }
 
   close(key: string) {
@@ -534,7 +645,13 @@ export class ThreadPreviews {
     // Chromium has no frame for a view just taken off a window at first.
     for (let attempt = 1; ; attempt++) {
       const image = await wc.capturePage().catch(() => null);
-      if (image && !image.isEmpty()) return image;
+      if (image && !image.isEmpty()) {
+        this.thumbnails.set(
+          preview.target.folder,
+          image.resize({ width: 640 }).toJPEG(70),
+        );
+        return image;
+      }
       if (attempt === 10) throw new Error("The preview could not be drawn.");
       if (attempt === 4 && !preview.shown && !preview.popOut)
         await this.prime(preview);
@@ -547,7 +664,9 @@ export class ThreadPreviews {
     const win = this.window.win;
     const view = preview.view;
     if (!win || win.isDestroyed() || !view)
-      throw new Error("Relay's window is closed, so the preview can't be drawn.");
+      throw new Error(
+        "Relay's window is closed, so the preview can't be drawn.",
+      );
     const bounds = view.getBounds();
     view.setBounds({ ...bounds, x: 100_000, y: 0 });
     win.contentView.addChildView(view, 0);
@@ -592,6 +711,8 @@ export class ThreadPreviews {
     clearInterval(this.sweep);
     for (const key of [...this.previews.keys()]) this.close(key);
     this.servers.dispose();
+    this.external.dispose();
+    this.thumbnails.clear();
   }
 
   /** Where the page is, live or parked. */

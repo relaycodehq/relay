@@ -1,6 +1,6 @@
 import { app, dialog, net, powerMonitor } from "electron";
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
 import { hostAgents, setOpenCodeEnvRoot } from "./agents";
@@ -77,8 +77,7 @@ import { ProjectAdding } from "./project-add";
 import { TerminalSessions } from "./terminal-sessions";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
-import { ThreadPreviews } from "./preview";
-import { draftTerminalKey } from "../shared/terminals";
+import { ThreadPreviews, PreviewProjects, ServerLinks } from "./preview";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -113,7 +112,7 @@ const github = new GithubLogin((url, options) => net.fetch(url, options));
 const window = new AppWindow({
   quitCancelled: () => quit.cancel(),
   closed: () => {
-    previews?.dispose();
+    previews?.hideAll();
     blame.dispose();
     projectChecks.stop();
   },
@@ -364,33 +363,27 @@ app
     });
     const triageService = new TriageService(loaded, app.getPath("userData"));
     triage = triageService;
-    previews = new ThreadPreviews(window, async (projectId, chatId) => {
-      const settings = projects.get(projectId).settings;
-      const env = chatId ? await chats.worktreeEnv(chatId) : {};
-      const offset = Number(env.RELAY_PORT_OFFSET) || 0;
-      const checkoutPartition = `persist:project-${projectId}`;
-      return {
-        key: chatId ?? draftTerminalKey(projectId),
-        folder: chatId
-          ? await chats.terminalFolder(projectId, chatId)
-          : await projects.root(projectId),
-        ...(env.RELAY_WORKTREE ? { worktree: basename(env.RELAY_WORKTREE) } : {}),
-        checkoutPartition,
-        partition:
-          chatId && env.RELAY_WORKTREE
-            ? `persist:thread-${chatId}`
-            : checkoutPartition,
-        env,
-        ...(settings?.devPort
-          ? {
-              dev: {
-                command: settings.devCommand,
-                port: settings.devPort + offset,
-              },
-            }
-          : {}),
-      };
-    });
+    const previewProjects = new PreviewProjects(
+      projects,
+      chats,
+      () => loaded.get().chats ?? [],
+    );
+    previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
+      previewProjects.target(projectId, chatId, url, serverLinks, folder),
+    );
+    const serverLinks = new ServerLinks(
+      previews.external,
+      (chat) => previewProjects.folders(chat),
+      async (chat, folder, port) => {
+        const settings = projects.get(chat.projectId).settings;
+        if (!settings?.devCommand || !settings.devPort) return;
+        const env = await previewProjects.env(chat, folder);
+        if (port !== settings.devPort + (Number(env.RELAY_PORT_OFFSET) || 0))
+          return;
+        return previews?.servers.ensure(folder, settings.devCommand, port, env);
+      },
+    );
+    chats.setPreviewLinks(serverLinks);
     const api = apiContext({
       store: loaded,
       projects,

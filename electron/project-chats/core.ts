@@ -6,6 +6,7 @@ import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";
 import type { ChatStorage } from "./storage";
 import type { WatchSpendLog } from "./watch-spend";
+import type { ProjectChat } from "../../shared/projects";
 
 /** What every part of a project's threads shares; one of each per `ProjectChats`. */
 export interface ChatCore {
@@ -20,4 +21,8 @@ export interface ChatCore {
   closing: () => boolean;
   /** What "Flag what I'd miss" spent; absent in tests. */
   watchSpend?: WatchSpendLog;
+  previewLinks?: {
+    note(chat: ProjectChat): Promise<string | undefined>;
+    answer(chat: ProjectChat, body: string): Promise<string>;
+  };
 }

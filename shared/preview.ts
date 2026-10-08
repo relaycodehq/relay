@@ -53,6 +53,8 @@ export type PreviewAction =
   | "devtools"
   | "popOut"
   | "bringBack"
+  | "openExternal"
+  | "previewIndex"
   | "stopPicking";
 
 /** An element the user picked on the page, to ask the agent about. */

@@ -14,6 +14,8 @@ export interface ProjectTask {
   chatId?: string;
   /** Runs in this thread's worktree rather than the project's checkout. */
   worktree?: string;
+  /** The checkout or worktree folder this process belongs to. */
+  folder?: string;
   started: number;
   ports: number[];
   pids: number;

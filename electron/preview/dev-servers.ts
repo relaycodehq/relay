@@ -66,6 +66,7 @@ export class DevServers {
     env: Record<string, string>,
   ): Promise<DevServerState> {
     const had = this.servers.get(folder);
+    if (had) had.usedAt = this.now();
     if (had?.port === port && had.state.state === "starting")
       return this.waitFor(had);
     if (had?.port === port && had.state.state === "running" && had.child)

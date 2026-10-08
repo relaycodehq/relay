@@ -478,6 +478,9 @@ export class ProjectChats {
   worktreeFolders(projectId: string) {
     return this.worktrees.folders(projectId);
   }
+  setPreviewLinks(links: ChatCore["previewLinks"]) {
+    this.core.previewLinks = links;
+  }
   /**
    * Gives worktree thread `id` its worktree now, holding a copy of the files
    * thread `from` works on, uncommitted edits included; see electron/started-threads.
