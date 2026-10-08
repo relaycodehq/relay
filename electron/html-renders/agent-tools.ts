@@ -58,7 +58,7 @@ export async function answerRenderTool(
         {
           type: "text",
           text: [
-            `At ${width} px wide the page is ${height} px tall; the frame in the thread would be ${clampRenderHeight(height)} px.`,
+            `In the app's ${look.scheme} theme, at ${width} px wide the page is ${height} px tall; the frame in the thread would be ${clampRenderHeight(height)} px.`,
             logs ? `It logged:\n${logs}` : "It logged no errors or warnings.",
             "The user hasn't seen it; call show_html to show it.",
           ].join("\n"),

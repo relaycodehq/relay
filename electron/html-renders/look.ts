@@ -7,6 +7,7 @@ import {
   RENDER_SCHEME,
   RENDER_WIDTHS,
   withSeries,
+  type RenderTheme,
 } from "../../shared/html-render";
 import { renderDrafts } from "./protocol";
 
@@ -26,6 +27,8 @@ export interface PageLook {
   logs: PageLog[];
   /** At `shotWidth` when asked for, with the content height there. */
   image?: NativeImage;
+  /** The theme it was looked at in. */
+  scheme: RenderTheme["scheme"];
   shotHeight?: number;
   loadError?: string;
 }
@@ -53,7 +56,7 @@ const KEEP_CANVASES = `new Promise((done) => {
 
 export async function lookAtPage(
   html: string,
-  options: { shotWidth?: number },
+  options: { shotWidth?: number; theme?: RenderTheme },
   signal?: AbortSignal,
 ): Promise<PageLook> {
   const token = randomUUID();
@@ -90,13 +93,11 @@ export async function lookAtPage(
         source: sourceId ? `${sourceId}:${lineNumber}` : undefined,
       });
   });
-  const theme = encodeURIComponent(
-    JSON.stringify(withSeries(LIGHT_RENDER_THEME)),
-  );
+  const theme = options.theme ?? withSeries(LIGHT_RENDER_THEME);
   let loadError: string | undefined;
   try {
     await Promise.race([
-      win.loadURL(`${RENDER_SCHEME}://draft/${token}#theme=${theme}`),
+      win.loadURL(`${RENDER_SCHEME}://draft/${token}#theme=${encodeURIComponent(JSON.stringify(theme))}`),
       pause(LOAD_MS).then(() => {
         throw new Error(`The page didn't finish loading in ${LOAD_MS / 1000}s.`);
       }),
@@ -104,6 +105,8 @@ export async function lookAtPage(
       loadError = error.message;
     });
     if (win.isDestroyed()) throw new Error("Cancelled.");
+    // The thread shows through a page; here nothing would but white.
+    await wc.insertCSS("html { background: var(--background) }");
     await pause(SETTLE_MS);
     const heights: number[] = [];
     const measure = () =>
@@ -127,7 +130,14 @@ export async function lookAtPage(
       await wc.executeJavaScript(KEEP_CANVASES);
       image = await wc.capturePage();
     }
-    return { heights, logs, image, shotHeight, loadError };
+    return {
+      heights,
+      logs,
+      image,
+      shotHeight,
+      loadError,
+      scheme: theme.scheme,
+    };
   } finally {
     renderDrafts.delete(token);
     signal?.removeEventListener("abort", close);

@@ -82,7 +82,10 @@ test("an agent shows pages in its answer: fitted, themed, variants to switch bet
     await page.evaluate(() => window.relay.addProject());
     await page.reload();
 
-    // A look the user doesn't see: a picture at the width asked for, and what it logged.
+    // A look the user doesn't see: in the app's theme, a picture at the width
+    // asked for, and what it logged.
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     const looked = await callTool(page, "preview_html", {
       html: `<div style="height:300px"></div><script>console.error("chart failed")</script>`,
       width: 640,
@@ -90,9 +93,12 @@ test("an agent shows pages in its answer: fitted, themed, variants to switch bet
     expect(looked).toMatch(/^\[image\/png (\d+)x(\d+)\]/);
     const [, w, h] = /^\[image\/png (\d+)x(\d+)\]/.exec(looked)!;
     expect(Number(w) / Number(h)).toBeCloseTo(640 / 300, 2);
-    expect(looked).toContain("At 640 px wide the page is 300 px tall");
+    expect(looked).toMatch(
+      /In the app's dark theme, at 640 px wide the page is 300 px tall/,
+    );
     expect(looked).toContain("chart failed");
     await expect(page.locator(".html-render")).toHaveCount(0);
+    await page.emulateMedia({ colorScheme: "light" });
 
     // Shown: the answer carries it above its reply, at the height it measured.
     const shown = await callTool(page, "show_html", {

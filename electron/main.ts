@@ -39,6 +39,7 @@ import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { ProjectChats } from "./project-chats";
 import {
+  appRenderTheme,
   lookAtPage,
   registerRenderScheme,
   serveRenders,
@@ -522,7 +523,10 @@ app
         agentHosts,
         agentProjects(projects, () => login.client, app.getPath("userData")),
         previews,
-        lookAtPage,
+        (html, options, signal) =>
+          appRenderTheme(window.win).then((theme) =>
+            lookAtPage(html, { ...options, theme }, signal),
+          ),
       );
     chats.armWakeups();
     void chats

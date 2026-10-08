@@ -1,5 +1,6 @@
 export { RenderFiles } from "./files";
 export { registerRenderScheme, serveRenders } from "./protocol";
+export { appRenderTheme } from "./app-theme";
 export { lookAtPage } from "./look";
 export {
   answerRenderTool,
