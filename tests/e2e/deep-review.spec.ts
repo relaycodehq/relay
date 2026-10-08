@@ -20,7 +20,7 @@ import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 /** Relay with fake Codex and Claude on its PATH. */
-async function launch(root: string) {
+async function launch(root: string, withOpenRouter = false) {
   const bin = join(root, "bin");
   await mkdir(bin);
   const agent = await readFile(
@@ -28,6 +28,14 @@ async function launch(root: string) {
     "utf8",
   );
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
+  if (withOpenRouter)
+    await fakeCli(
+      join(bin, "opencode"),
+      (await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"))
+        .replaceAll('"zen"', '"openrouter"')
+        .replaceAll('"Zen"', '"OpenRouter"')
+        .replaceAll("zen/", "openrouter/"),
+    );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -48,7 +56,7 @@ async function launch(root: string) {
 }
 
 /** Relay on a new project whose src/queue.ts has an uncommitted change. */
-async function openProject() {
+async function openProject(withOpenRouter = false) {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-deep-review-")),
   );
@@ -63,7 +71,7 @@ async function openProject() {
   git("add", ".");
   git("commit", "-qm", "Start");
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
-  const app = await launch(root);
+  const app = await launch(root, withOpenRouter);
   const page = await app.firstWindow();
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = async () => ({
@@ -82,6 +90,77 @@ async function openProject() {
     },
   };
 }
+
+test("shares OpenRouter favorites between deep review reviewers and the lead", async () => {
+  const { page, close } = await openProject(true);
+  try {
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    const reviewer = page.getByRole("button", {
+      name: "Reviewer 1 model",
+      exact: true,
+    });
+    const selected = await reviewer.textContent();
+    await reviewer.click();
+    await page.getByRole("button", { name: "OpenCode", exact: true }).click();
+    await page.getByRole("button", { name: /^OpenRouter\s+1$/ }).click();
+    await page.getByRole("button", { name: "Add Pickle to favorites" }).click();
+    await expect(
+      page.getByRole("button", { name: "Remove Pickle from favorites" }),
+    ).toBeVisible();
+    await page.getByLabel("Search models", { exact: true }).press("Escape");
+    await expect(reviewer).toHaveText(selected!);
+
+    await page
+      .getByRole("button", { name: "Reviewer 2 model", exact: true })
+      .click();
+    await page.getByRole("button", { name: "OpenCode", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Remove Pickle from favorites" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Add OpenCode default to favorites" })
+      .click();
+    await page.getByLabel("Search models", { exact: true }).press("Escape");
+
+    await page.getByRole("button", { name: "Lead model", exact: true }).click();
+    await page.getByRole("button", { name: "OpenCode", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Remove Pickle from favorites" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Remove OpenCode default from favorites",
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Remove Pickle from favorites" })
+      .click();
+    await page.getByLabel("Search models", { exact: true }).press("Escape");
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Reviewer 1 model", exact: true })
+      .click();
+    await page.getByRole("button", { name: "OpenCode", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Add Pickle to favorites" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Remove OpenCode default from favorites",
+      }),
+    ).toBeVisible();
+    await screenshot(page, {
+      path: "test-results/deep-review-model-favorites.png",
+    });
+  } finally {
+    await close();
+  }
+});
 
 test("reviews uncommitted changes with two agents, then fixes a finding with the lead", async () => {
   const root = await realpath(
