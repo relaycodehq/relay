@@ -40,7 +40,9 @@ async function callTool(page: Page, tool: string, input: unknown) {
   await expect(
     page.getByRole("button", { name: "Stop answer", exact: true }),
   ).toHaveCount(0, { timeout: 30_000 });
-  return (await answers.last().locator(".markdown").innerText()).trim();
+  const markdown = answers.last().locator(".markdown");
+  const code = markdown.locator("pre code");
+  return (await ((await code.count()) ? code : markdown).innerText()).trim();
 }
 
 test("an agent opens its thread's preview, pictures it unseen and reads its errors; a picked element goes to the composer", async ({
@@ -84,7 +86,10 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     const port = await freePort();
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+        ([k, v]) =>
+          k !== "ELECTRON_RUN_AS_NODE" &&
+          k !== "RELAY_DEV_URL" &&
+          v !== undefined,
       ),
     ) as Record<string, string>;
     app = await electron.launch({

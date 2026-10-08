@@ -80,13 +80,18 @@ async function callRelayTool(tool, input) {
   const { result, error } = await response.json();
   if (error) return `Error: ${error.message}`;
   // A picture says what it is: a PNG's size sits in its header.
-  return result.content
+  const text = result.content
     .map((part) => {
       if (part.type === "text") return part.text;
       const png = Buffer.from(part.data, "base64");
       return `[${part.mimeType} ${png.readUInt32BE(16)}x${png.readUInt32BE(20)}]`;
     })
     .join("\n");
+  // Preserve preview tool payloads as code when echoing them into Markdown.
+  // Clickable answer links are named separately by Relay.
+  return ["open_preview", "screenshot", "console_errors"].includes(tool)
+    ? "```\n" + text + "\n```"
+    : text;
 }
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,

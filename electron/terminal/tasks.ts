@@ -129,6 +129,12 @@ class ProjectTasks {
     this.terminals.delete(pid);
   }
 
+  /** Dev commands Relay starts directly, outside an agent or terminal shell. */
+  trackServer(pid: number, command: string, cwd: string) {
+    this.adopting.set(pid, { command, cwd, origin: "relay", restarted: true });
+    this.scanned = 0;
+  }
+
   /** Processes in the project's checkout, and in the `worktrees` its threads work in. */
   async list(
     root: string,
@@ -420,6 +426,21 @@ class ProjectTasks {
         fresh.push(child.pid);
       }
     }
+    for (const [pid, task] of this.adopting) {
+      const p = byPid.get(pid);
+      if (!p) continue;
+      this.adopting.delete(pid);
+      firstSight(p);
+      fresh.push(p.pid);
+      const id = `${p.pid}:${p.started}`;
+      this.tracked.set(id, {
+        ...task,
+        id,
+        root: p.pid,
+        started: p.started,
+        pids: new Map([[p.pid, p.started]]),
+      });
+    }
     // Follow every task's descendants so a detached server stays in its task.
     const owner = new Map<number, Tracked>();
     for (const task of this.tracked.values()) {
@@ -441,20 +462,6 @@ class ProjectTasks {
       if (!task.pids.size) this.tracked.delete(task.id);
       else if (!task.pids.has(task.root) && task.origin !== "external")
         task.origin = "detached";
-    }
-    for (const [pid, task] of this.adopting) {
-      const p = byPid.get(pid);
-      if (!p) continue;
-      this.adopting.delete(pid);
-      firstSight(p);
-      const id = `${p.pid}:${p.started}`;
-      this.tracked.set(id, {
-        ...task,
-        id,
-        root: p.pid,
-        started: p.started,
-        pids: new Map([[p.pid, p.started]]),
-      });
     }
     // `nohup … &` and `(cmd &)` leave launchd as the parent before any scan sees them.
     for (const p of procs) {

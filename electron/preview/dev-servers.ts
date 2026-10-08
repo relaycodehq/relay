@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 import type { DevServerState } from "../../shared/preview";
 import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
+import { projectTasks } from "../terminal/tasks";
 
 const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
@@ -65,6 +66,8 @@ export class DevServers {
     port: number,
     env: Record<string, string>,
   ): Promise<DevServerState> {
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      throw new Error("The preview’s dev port must be between 1 and 65535.");
     const had = this.servers.get(folder);
     if (had) had.usedAt = this.now();
     if (had?.port === port && had.state.state === "starting")
@@ -72,22 +75,37 @@ export class DevServers {
     if (had?.port === port && had.state.state === "running" && had.child)
       return had.state;
     if (had && had.port !== port) this.stop(folder);
-    const server: Server = had?.port === port
-      ? had
-      : { folder, port, watchers: 0, usedAt: this.now(), state: { state: "starting", port } };
+    const server: Server =
+      had?.port === port
+        ? had
+        : {
+            folder,
+            port,
+            watchers: 0,
+            usedAt: this.now(),
+            state: { state: "starting", port },
+          };
     this.servers.set(folder, server);
     server.usedAt = this.now();
-    if (await listening(port)) {
+    // Claim the restart before probing, so concurrent wakeups share this start.
+    this.set(server, { state: "starting", port });
+    const up = await listening(port);
+    if (this.servers.get(folder) !== server) return server.state;
+    if (up) {
       this.set(server, { state: "running", port, ours: false });
       return server.state;
     }
-    this.set(server, { state: "starting", port });
     let output = "";
     const [shell] = userShell();
     const childEnv = { ...inheritedEnv(), ...env, PORT: String(port) };
     const child =
       process.platform === "win32"
-        ? spawn(command, { cwd: folder, env: childEnv, shell: true, windowsHide: true })
+        ? spawn(command, {
+            cwd: folder,
+            env: childEnv,
+            shell: true,
+            windowsHide: true,
+          })
         : spawn(shell, ["-lc", command], {
             cwd: folder,
             env: childEnv,
@@ -95,8 +113,11 @@ export class DevServers {
             stdio: ["ignore", "pipe", "pipe"],
           });
     server.child = child;
+    if (child.pid) projectTasks.trackServer(child.pid, command, folder);
     const add = (chunk: Buffer | string) => {
-      output = (output + stripVTControlCharacters(String(chunk))).slice(-keepChars);
+      output = (output + stripVTControlCharacters(String(chunk))).slice(
+        -keepChars,
+      );
     };
     child.stdout?.on("data", add);
     child.stderr?.on("data", add);
@@ -104,25 +125,34 @@ export class DevServers {
       if (server.child !== child) return;
       server.child = undefined;
       if (server.state.state === "asleep") return;
-      this.set(server, { state: "failed", port, output: why ? `${output}${why}\n` : output });
+      this.set(server, {
+        state: "failed",
+        port,
+        output: why ? `${output}${why}\n` : output,
+      });
     };
     child.on("error", (e) => failed(e.message));
     child.on("exit", (code, signal) =>
-      failed(server.state.state === "running" || code === null
-        ? `Exited${signal ? ` on ${signal}` : ""}.`
-        : `Exited with code ${code}.`),
+      failed(
+        server.state.state === "running" || code === null
+          ? `Exited${signal ? ` on ${signal}` : ""}.`
+          : `Exited with code ${code}.`,
+      ),
     );
     const started = this.now();
     void (async () => {
       while (server.child === child && server.state.state === "starting") {
-        if (await listening(port)) {
-          if (server.child === child)
-            this.set(server, { state: "running", port, ours: true });
+        const up = await listening(port);
+        if (server.child !== child) return;
+        if (up) {
+          this.set(server, { state: "running", port, ours: true });
           return;
         }
         if (this.now() - started > START_TIMEOUT_MS) {
           terminate(child, { group: true });
-          failed(`Nothing listened on port ${port} after ${START_TIMEOUT_MS / 60_000} minutes.`);
+          failed(
+            `Nothing listened on port ${port} after ${START_TIMEOUT_MS / 60_000} minutes.`,
+          );
           return;
         }
         await new Promise((r) => setTimeout(r, 400));
@@ -168,7 +198,11 @@ export class DevServers {
     const server = this.servers.get(folder);
     if (!server) return;
     this.servers.delete(folder);
-    if (server.child) terminate(server.child, { group: true });
+    // Settle waiters and invalidate the child before its final events arrive.
+    server.state = { state: "asleep", port: server.port };
+    const child = server.child;
+    server.child = undefined;
+    if (child) terminate(child, { group: true });
   }
 
   dispose() {
