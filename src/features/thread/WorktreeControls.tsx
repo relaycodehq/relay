@@ -18,7 +18,6 @@ import { agentWorktreeKey } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import type { ThreadWorktree } from "./useThreadWorktree";
-import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import { Modal } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
@@ -58,11 +57,6 @@ export function WorkspaceControl({
         onReveal={(path) =>
           void api.revealAgentWorktree(chat.id, path).catch(onError)
         }
-        onMove={
-          !chat.agentWorktrees?.length
-            ? () => worktree.setDialog("move")
-            : undefined
-        }
       />
     );
   const { status } = worktree;
@@ -92,9 +86,7 @@ export function WorktreeDialogs({
   worktree: ThreadWorktree;
 }) {
   const close = () => worktree.setDialog(undefined);
-  if (worktree.dialog === "move")
-    return chat && <MoveToWorktreeDialog chatId={chat.id} onClose={close} />;
-  if (worktree.dialog === "remove")
+  if (chat && worktree.dialog === "remove")
     return (
       <RemoveWorktreeDialog
         files={worktree.status?.files.length ?? 0}
@@ -174,8 +166,9 @@ function WorkspacePicker({
 const folderName = (path: string) => path.split(/[\\/]/).pop() || path;
 
 /**
- * A checkout thread, plus any worktree its agent made with git on its own:
- * that's where its edits go, so the footer has to say so.
+ * A checkout thread with a worktree its agent made with git on its own:
+ * that's where its edits go, so the footer has to say so. Without one there
+ * is nothing to choose; moving the thread out is in its right-click menu.
  */
 export function CheckoutControl({
   worktrees = [],
@@ -183,51 +176,14 @@ export function CheckoutControl({
   onSelect,
   selectionDisabled = false,
   onReveal,
-  onMove,
 }: {
   worktrees?: AgentWorktree[];
   active?: ActiveAgentWorktree;
   onSelect?: (path: string | null) => void;
   selectionDisabled?: boolean;
   onReveal: (path: string) => void;
-  /** Moves the thread into a worktree of its own; unset where it can't. */
-  onMove?: () => void;
 }) {
-  const move = onMove && (
-    <Menu.Item className="composer-select-item worktree-item" onClick={onMove}>
-      <FolderGit2 size={14} />
-      Move into its own worktree…
-    </Menu.Item>
-  );
-  if (!worktrees.length && !active)
-    return (
-      <Menu.Root>
-        <Menu.Trigger
-          className={`composer-branch-trigger workspace-trigger${move ? "" : " static"}`}
-          disabled={!move}
-          title="Edits go straight into the project folder, alongside any other thread working there"
-        >
-          <Folder size={13} />
-          <span>Project folder</span>
-          {move && <ChevronDown size={12} />}
-        </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner
-            className="composer-popup-positioner"
-            side="top"
-            align="end"
-            sideOffset={6}
-          >
-            <Menu.Popup
-              className="composer-select-popup worktree-menu"
-              aria-label="Workspace"
-            >
-              {move}
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
-    );
+  if (!worktrees.length && !active) return null;
   const selected =
     active &&
     worktrees.find((w) => agentWorktreeKey(w) === agentWorktreeKey(active));
@@ -342,8 +298,6 @@ export function CheckoutControl({
                 </Menu.Item>
               </>
             )}
-            {move && <Menu.Separator className="composer-menu-separator" />}
-            {move}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

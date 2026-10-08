@@ -354,8 +354,14 @@ test("a project-folder thread moves into its own worktree mid-conversation and i
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
 
-    await page.getByRole("button", { name: /Project folder/ }).click();
+    // With no worktree to choose, a started thread's composer has no workspace slot.
+    await expect(page.locator(".workspace-trigger")).toHaveCount(0);
     await page
+      .locator(".sb-thread.selected, .sb-card.selected")
+      .first()
+      .click({ button: "right" });
+    await page
+      .locator(".sb-menu")
       .getByRole("menuitem", { name: "Move into its own worktree…" })
       .click();
     const dialog = page.getByRole("dialog", {

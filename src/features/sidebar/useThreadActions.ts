@@ -21,6 +21,7 @@ export type ThreadMenuAction =
   | { kind: "regenerate" }
   | { kind: "reload" }
   | { kind: "detach" }
+  | { kind: "move-worktree" }
   | { kind: "project-settings" }
   | { kind: "triage"; triage: ChatTriage };
 
@@ -59,6 +60,8 @@ export function useThreadActions({
 }) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState<string>();
+  /** The thread the Move into its own worktree dialog is for. */
+  const [moving, setMoving] = useState<string>();
   /** Threads whose title is being generated again. */
   const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
     new Set(),
@@ -223,6 +226,8 @@ export function useThreadActions({
     renaming,
     setRenaming,
     rename,
+    moving,
+    setMoving,
     regenerating,
     reloading,
     /** Does what the thread's right-click menu picked. */
@@ -244,6 +249,8 @@ export function useThreadActions({
           return void reload(c);
         case "detach":
           return void detach(c);
+        case "move-worktree":
+          return setMoving(c.id);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "triage":

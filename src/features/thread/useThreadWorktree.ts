@@ -85,7 +85,7 @@ export function useThreadWorktree({
     enabled: !!agentWorktree && !unavailable,
   });
   const [busy, setBusy] = useState(false);
-  const [dialog, setDialog] = useState<"remove" | "move">();
+  const [dialog, setDialog] = useState<"remove">();
   useEffect(() => {
     // A finished turn leaves new changes to count.
     if (!running && chat?.worktree) void query.refetch();
@@ -149,7 +149,7 @@ export function useThreadWorktree({
     select,
     selectionDisabled: running || lock.locked,
     busy,
-    /** The Remove or Move dialog, while one is open. */
+    /** The Remove dialog, while it is open. */
     dialog,
     setDialog,
     remove,

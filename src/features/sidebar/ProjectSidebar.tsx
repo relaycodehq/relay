@@ -20,6 +20,7 @@ import { useThreadActions } from "./useThreadActions";
 import { useActivityKeys } from "./useActivityKeys";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
+import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
 import type { SidebarRows } from "./SidebarThread";
@@ -233,6 +234,12 @@ export function ProjectSidebar({
         )}
       </div>
       {viewError && <ErrorBox error={viewError} />}
+      {actions.moving && (
+        <MoveToWorktreeDialog
+          chatId={actions.moving}
+          onClose={() => actions.setMoving(undefined)}
+        />
+      )}
       <SidebarFooter
         account={account}
         projectId={projectId}

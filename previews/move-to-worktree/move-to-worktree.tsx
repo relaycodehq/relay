@@ -1,5 +1,5 @@
 // Moving a project-folder thread into its own worktree mid-conversation:
-// the footer's Project folder menu, the handoff menu, the confirm dialog and
+// the thread's right-click menu, the handoff menu, the confirm dialog and
 // the footer afterwards, on sample data.
 // Open http://127.0.0.1:5177/previews/move-to-worktree/ (?s=<scene>)
 import "../_shared/desktop-stub";
@@ -14,10 +14,7 @@ import "../../src/features/agents/composer-model-picker.css";
 import { initAppearance } from "../../src/lib/appearance";
 import { HandoffButton } from "../../src/features/handoff/HandoffButton";
 import { MoveToWorktreeDialog } from "../../src/features/changes/MoveToWorktreeDialog";
-import {
-  CheckoutControl,
-  WorktreeMenu,
-} from "../../src/features/thread/WorktreeControls";
+import { WorktreeMenu } from "../../src/features/thread/WorktreeControls";
 import type { PairedComputer } from "../../shared/handoff";
 import type {
   ChatSummary,
@@ -145,15 +142,22 @@ function Preview() {
         />
       </header>
       <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 24 }}>
-        {moved
-          ? "Moved: the footer now shows the worktree and its branch, and the handoff button lists computers."
-          : name === "handoff"
-            ? "Open the handoff button (top right): the dead end now offers the move."
-            : "Open “Project folder” in the footer below."}
+        {moved ? (
+          "Moved: the footer now shows the worktree and its branch, and the handoff button lists computers."
+        ) : name === "handoff" ? (
+          "Open the handoff button (top right): the dead end now offers the move."
+        ) : (
+          <>
+            In the app this is in the thread's right-click menu:{" "}
+            <button onClick={() => setDialog(true)}>
+              Move into its own worktree…
+            </button>
+          </>
+        )}
       </p>
       <div className="project-chat" style={{ marginTop: 200 }}>
         <div className="thread-context-controls">
-          {moved ? (
+          {moved && (
             <WorktreeMenu
               status={worktree}
               running={false}
@@ -161,11 +165,6 @@ function Preview() {
               onShowChanges={() => console.log("show changes")}
               onReveal={() => console.log("reveal")}
               onRemove={() => console.log("remove")}
-            />
-          ) : (
-            <CheckoutControl
-              onReveal={() => {}}
-              onMove={() => setDialog(true)}
             />
           )}
           <span

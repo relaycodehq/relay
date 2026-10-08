@@ -81,12 +81,13 @@ export function ThreadRowMenu({
   chat: ChatSummary;
   rows: SidebarRows;
 }) {
-  const own = projects.get(c.projectId)?.settings;
+  const project = projects.get(c.projectId);
+  const own = project?.settings;
   return (
     <ThreadMenu
       chat={c}
-      projectName={projects.get(c.projectId)?.name}
-      projectPath={projects.get(c.projectId)?.path}
+      projectName={project?.name}
+      projectPath={project?.path}
       now={now}
       unread={unread(c)}
       regenerating={actions.regenerating.has(c.id)}
@@ -96,6 +97,12 @@ export function ThreadRowMenu({
       }
       settleOnCommit={own?.settleOnCommit}
       settleKeys={c.id === chatId ? settleKeys : undefined}
+      canMove={
+        c.scope.kind === "project" &&
+        !project?.plain &&
+        !c.worktree &&
+        !c.agentWorktrees?.length
+      }
       onAction={(action) => actions.act(c, action)}
     />
   );

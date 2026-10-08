@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  FolderGit2,
   Hourglass,
   Mail,
   Pencil,
@@ -57,6 +58,7 @@ export function ThreadMenu({
   autoSettleDays,
   settleOnCommit,
   settleKeys,
+  canMove,
   onAction,
 }: {
   chat: ChatSummary;
@@ -71,6 +73,8 @@ export function ThreadMenu({
   /** The project also settles a thread after its agent committed. */
   settleOnCommit?: boolean;
   settleKeys?: string;
+  /** A Git project's thread working in the project folder. */
+  canMove?: boolean;
   onAction: (action: ThreadMenuAction) => void;
 }) {
   const section = chatActivitySection(chat, now);
@@ -105,6 +109,15 @@ export function ThreadMenu({
           onClick={() => onAction({ kind: "reload" })}
         >
           {reloading ? "Reloading session…" : "Reload session"}
+        </MenuAction>
+      )}
+      {canMove && (
+        <MenuAction
+          icon={<FolderGit2 size={13} />}
+          disabled={busy || !!chat.pending?.length}
+          onClick={() => onAction({ kind: "move-worktree" })}
+        >
+          Move into its own worktree…
         </MenuAction>
       )}
       {section === "settled" ? (
