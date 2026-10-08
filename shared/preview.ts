@@ -112,7 +112,7 @@ export function previewUrl(typed: string): string | null {
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text)
     ? text
     : // Local names, IP addresses and bare hosts with a port mean a dev server.
-      /^((localhost|([\w-]+\.)+localhost|\d{1,3}(\.\d{1,3}){3}|\[[\da-f:]+\])(:\d+)?|[\w-]+:\d+)(\/|$)|^:\d/i.test(
+      /^((localhost|([\w-]+\.)+localhost|\d{1,3}(\.\d{1,3}){3}|\[[\da-f:]+\])(:\d+)?|[\w.-]+:\d+)(\/|$)|^:\d/i.test(
           text,
         )
       ? `http://${text.replace(/^:/, "localhost:")}`

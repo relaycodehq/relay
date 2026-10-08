@@ -10,6 +10,11 @@ describe("previewUrl", () => {
       "http://fix-login.relay.localhost:7352/",
     );
     expect(previewUrl("mac-mini:7352")).toBe("http://mac-mini:7352/");
+    expect(previewUrl("nas.lan:3000")).toBe("http://nas.lan:3000/");
+    expect(previewUrl("host.tailnet:3000/a?q=1#b")).toBe(
+      "http://host.tailnet:3000/a?q=1#b",
+    );
+    expect(previewUrl("https://nas.lan:3000")).toBe("https://nas.lan:3000/");
     expect(previewUrl("192.168.1.20/app")).toBe("http://192.168.1.20/app");
     expect(previewUrl("example.com")).toBe("https://example.com/");
     expect(previewUrl("http://example.com/a")).toBe("http://example.com/a");
