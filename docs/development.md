@@ -20,6 +20,8 @@ npm run package:linux
 npm run package:omarchy
 ```
 
+`npm run dev` in the main checkout runs Relay from it and can switch it to any of its worktrees, on the same data: `npm run dev:switch` lists them, `npm run dev:switch -- <branch or folder>` switches and `-- main` goes back, as does quitting a worktree's Relay. The sidebar footer has the same menu in dev. Agents carry on in their host across a switch. Before each one, Relay's records (`state.json`, `project-chats`, local storage) are cloned into `Dev snapshots` in its data folder, the last eight kept; `npm run dev:switch -- --restore [name]` puts one back. A worktree needs its own `node_modules` or a link to the main checkout's.
+
 `package:omarchy` builds the Linux x86-64 directory and wraps it with the user installer, instructions and a SHA-256 checksum. After an existing Linux build, `python3 scripts/package-omarchy.py` only creates the bundle. `python3 -m unittest discover -s tests/packaging -v` checks install/update/removal and failure recovery using isolated directories. These checks can run on macOS; they do not establish Omarchy runtime compatibility.
 
 `npm run test:setup` installs a pinned Angular/TypeScript toolchain solely for isolated language-service tests. It is not bundled with the app.

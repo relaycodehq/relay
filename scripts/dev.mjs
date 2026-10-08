@@ -17,7 +17,9 @@ const vite = spawn("npm", ["run", "dev:web"], { stdio: "inherit" });
 let electron;
 const stop = () => {
   vite.kill();
-  electron?.kill();
+  // Before Relay started, nothing else would end this script.
+  if (!electron) process.exit();
+  electron.kill();
 };
 // Relay exits with this to be built and started again (electron/app/dev-build.ts).
 const RESTART = 75;

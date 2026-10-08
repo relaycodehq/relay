@@ -228,6 +228,8 @@ const methods = [
   "releaseNotes",
   "devBuildState",
   "restartDevBuild",
+  "devSwitchState",
+  "devSwitch",
   "dictationState",
   "downloadDictationModel",
   "cancelDictationDownload",
