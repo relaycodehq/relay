@@ -7,6 +7,7 @@ import type {
 } from "../../shared/projects";
 import { agentName } from "../../shared/agents";
 import { council } from "../../shared/ultraplan";
+import { reviewReports } from "../../shared/deep-review";
 import { briefPrompt } from "./ultraplan";
 
 export interface TurnPromptInput {
@@ -150,9 +151,19 @@ export function turnPrompt({
     (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
   };
   const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
+  const reports = reviewReports(chat.deepReview);
+  const nextFinding =
+    Math.max(
+      0,
+      ...reports.flatMap((r) => r.findings.map((f) => Number(f.id.slice(1)))),
+    ) + 1;
+  const findingsNote =
+    chat.deepReview && !parent && !command
+      ? `\n\nIf you discover new confirmed issues, publish only the new findings as a fresh report at the end of your answer in a fenced block tagged relay-findings. Use JSON shaped like {"findings":[{"id":"F${nextFinding}","priority":"P2","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[],"check":"How you confirmed it"}],"dropped":[]}. Continue numbering from F${nextFinding}; never reuse earlier IDs or repeat old findings. Relay shows this batch under this answer with its own fix controls. For a normal answer or fix summary with no new findings, omit the block.`
+      : "";
   const prompt = command
     ? question
-    : `${question ? `My request: ${question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`.trimStart();
+    : `${question ? `My request: ${question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}${findingsNote}`.trimStart();
   return {
     prompt,
     // What a command couldn't carry, the session hears next turn.

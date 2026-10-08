@@ -135,7 +135,7 @@ const reviewerNumbersSchema = z
   .max(MAX_REVIEWERS)
   .catch([]);
 const findingSchema = z.object({
-  id: z.string().regex(/^F\d{1,3}$/),
+  id: z.string().regex(/^F\d{1,6}$/),
   priority: z.enum(priorities),
   title: z.string().trim().min(1).max(300),
   files: z.array(findingFileSchema).max(12).catch([]),
@@ -167,11 +167,18 @@ export interface DeepReviewState {
   focus?: string;
   runtimeMode: RuntimeMode;
   status: "reviewing" | "leading" | "done" | "stopped" | "failed";
-  /** The lead's findings, from the answer that listed them. */
+  /** The initial report, kept under the answer that listed it. */
   report?: FindingsReport & { messageId: string };
+  /** Later batches, each shown under its own answer. */
+  reports?: (FindingsReport & { messageId: string })[];
   statuses?: Record<string, FindingStatus>;
   /** Findings each fix request covers, by the user message that asked. */
   fixing?: Record<string, string[]>;
+}
+
+/** All batches in conversation order, including the initial review. */
+export function reviewReports(state: DeepReviewState | undefined) {
+  return [...(state?.report ? [state.report] : []), ...(state?.reports ?? [])];
 }
 /** A reviewer thread's place in its review. */
 export interface ReviewerTask {

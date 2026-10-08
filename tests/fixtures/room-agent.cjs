@@ -847,6 +847,29 @@ if (args.includes("--permission-prompt-tool")) {
       const answer =
         (echo >= 0 ? said.slice(echo + "fixture echo:".length).trim() : null) ??
         Object.entries({
+          "fixture followup findings": [
+            "Found two new issues: `F12` and `F13`.",
+            "```relay-findings",
+            JSON.stringify({
+              findings: [
+                {
+                  ...queueFinding,
+                  id: "F12",
+                  title: "A busy supervisor is incorrectly treated as dead",
+                  reviewers: [],
+                },
+                {
+                  ...queueFinding,
+                  id: "F13",
+                  title:
+                    "Read-only snapshot directories prevent staging cleanup",
+                  reviewers: [],
+                },
+              ],
+              dropped: [],
+            }),
+            "```",
+          ].join("\n"),
           // A review whose focus asks for it reports two findings.
           "fixture two findings": twoFindings,
           "You lead a deep review": leadAnswer,

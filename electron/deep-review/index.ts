@@ -9,8 +9,8 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import {
-  checkoutPaths,
   extractFindings,
+  reviewReports,
   reviewThreadTitle,
   type DeepReviewStart,
   type DeepReviewState,
@@ -25,6 +25,7 @@ import {
   unfinishedSlots,
 } from "./council";
 import { settleFixes, startFixing } from "./fixes";
+import { addReport } from "./reports";
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 
@@ -174,7 +175,9 @@ export class DeepReviews {
     status: Extract<FindingStatus, "open" | "dismissed">,
   ) {
     const chat = await this.host.load(chatId);
-    const report = chat.deepReview?.report;
+    const report = reviewReports(chat.deepReview).find((r) =>
+      r.findings.some((f) => f.id === findingId),
+    );
     if (!report?.findings.some((f) => f.id === findingId))
       throw new Error("That finding is no longer in this review.");
     const statuses = (chat.deepReview!.statuses ??= {});
@@ -203,24 +206,27 @@ export class DeepReviews {
       : undefined;
     const fix = settleFixes(state, turn.request, answer?.status === "complete");
     let changed = fix ? state.report?.messageId : undefined;
-    // Only the lead's first answer settles the review. Another answer while
-    // it's stopped, like a question asked meanwhile, leaves it resumable.
+    // Every completed follow-up can publish a fresh batch under its answer.
     if (
       answer?.role === "assistant" &&
-      !state.report &&
-      state.status === "leading"
+      !answer.parentId &&
+      answer.status === "complete" &&
+      (state.report || state.status === "leading" || state.status === "done")
     ) {
+      const { body, report } = extractFindings(answer.body);
+      if (
+        report &&
+        !reviewReports(state).some((r) => r.messageId === answer.id)
+      ) {
+        const root = await this.host.root(chat.projectId);
+        answer.body = addReport(state, report, answer.id, body, root);
+        answer.version++;
+        changed = answer.id;
+      }
+    }
+    // Only the lead's initial turn settles the review lifecycle.
+    if (answer?.role === "assistant" && state.status === "leading") {
       if (answer.status === "complete") {
-        const { body, report } = extractFindings(answer.body);
-        if (report) {
-          const root = await this.host.root(chat.projectId);
-          answer.body = body;
-          state.report = {
-            ...checkoutPaths(report, root),
-            messageId: answer.id,
-          };
-          state.statuses = {};
-        }
         state.status = "done";
       } else
         state.status = answer.status === "cancelled" ? "stopped" : "failed";
