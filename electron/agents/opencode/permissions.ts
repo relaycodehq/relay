@@ -75,7 +75,7 @@ export function permissionRules(
       rule("edit", "deny"),
       rule("question", "deny"),
     ];
-  // A room or helper job: it reads the project and answers.
+  // A helper job: it reads the project and answers.
   if (!mode) return [rule("*", "ask"), ...reading, rule("question", "deny")];
   if (mode === "full-access")
     return [rule("*", "allow"), rule("external_directory", "allow")];

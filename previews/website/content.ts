@@ -72,7 +72,7 @@ export const features: { title: string; text: string; detail: string }[] = [
   },
   {
     title: "Pull requests",
-    text: "The inbox shows comments and review progress. The inbox needs a Gitea server. The title bar shows CI status for GitHub and Gitea.",
+    text: "The Pull requests page shows comments and review progress, on GitHub or Gitea. The title bar shows CI status for GitHub and Gitea.",
     detail: "Gitea · GitHub CI",
   },
   {
@@ -241,8 +241,8 @@ export const faq: { q: string; a: string }[] = [
     a: "The phone app is for Android only. The computer and the phone must be on the same Tailscale network. You scan a pairing code from Settings → Phone. Relay encrypts each connection.",
   },
   {
-    q: "What needs Gitea?",
-    a: "Pull request review and its shared rooms need a Gitea server. All other functions work with a local folder.",
+    q: "Do I need GitHub or Gitea?",
+    a: "Only for pull requests. GitHub ones work through your gh CLI login; a Gitea server can be connected in Settings. Everything else works with a local folder.",
   },
   {
     q: "Which platforms does Relay support?",

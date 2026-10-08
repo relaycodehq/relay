@@ -81,8 +81,8 @@ function ProviderAccounts({
       ))}
       {several && (
         <p className="accounts-note">
-          New threads start on the one you pick. When it runs out, the next
-          one down takes over.
+          New threads start on the one you pick. When it runs out, the next one
+          down takes over.
         </p>
       )}
     </SettingsCard>
@@ -171,7 +171,9 @@ function AccountRow({
             ) : (
               <b>{account.label}</b>
             )}
-            {several && inUse && <span className="accounts-in-use">In use</span>}
+            {several && inUse && (
+              <span className="accounts-in-use">In use</span>
+            )}
             {out && usage?.windows.length ? (
               <span className="accounts-quiet">Out until reset</span>
             ) : null}
@@ -288,7 +290,8 @@ function AddAccount({
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
-  const waiting = state.signingIn?.provider === provider ? state.signingIn : null;
+  const waiting =
+    state.signingIn?.provider === provider ? state.signingIn : null;
   if (waiting)
     return (
       <span className="accounts-adding" role="status">

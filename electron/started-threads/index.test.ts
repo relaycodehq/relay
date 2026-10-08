@@ -198,7 +198,10 @@ test("any thread finds and reads every other, but a lead drives only its own", a
     running: true,
   });
   const elsewhere = await api.create(site, { kind: "project" });
-  Object.assign(chats.get(elsewhere.id)!, { title: "Landing page", updated: 40 });
+  Object.assign(chats.get(elsewhere.id)!, {
+    title: "Landing page",
+    updated: 40,
+  });
   const archived = await api.create(site, { kind: "project" });
   chats.get(archived.id)!.archivedAt = 1;
   const [mine] = parse(
@@ -229,9 +232,9 @@ test("any thread finds and reads every other, but a lead drives only its own", a
     ).map((t: any) => t.id),
   ).toEqual([stranger.id]);
   expect(
-    parse(
-      await call(threads, lead.id, "find_threads", { project: site }),
-    ).map((t: any) => t.title),
+    parse(await call(threads, lead.id, "find_threads", { project: site })).map(
+      (t: any) => t.title,
+    ),
   ).toEqual(["Landing page"]);
 
   const read = parse(

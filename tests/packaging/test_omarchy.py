@@ -52,12 +52,12 @@ class OmarchyInstallerTests(unittest.TestCase):
         saved.write_text('{"draft":"keep me"}')
         self.install()
         app, binary, desktop = installer.locations(self.prefix, self.data)
-        literal = "relay-room://join?url=hello $(touch nope) 'quotes'"
+        literal = "relay://open?url=hello $(touch nope) 'quotes'"
         result = subprocess.run([str(binary), literal], capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.strip(), literal)
         self.assertIn('Exec="', desktop.read_text())
         self.assertIn('apps \\\\$safe/lib/relay-experimental/relay-experimental" %U', desktop.read_text())
-        self.assertIn("MimeType=x-scheme-handler/relay-room;", desktop.read_text())
+        self.assertNotIn("MimeType=", desktop.read_text())
         self.assertIn("StartupWMClass=relay-experimental", desktop.read_text().splitlines())
         self.assertIn("Icon=relay-experimental", desktop.read_text().splitlines())
         self.assertEqual((app / "VERSION").read_text(), "0.1.7\n")

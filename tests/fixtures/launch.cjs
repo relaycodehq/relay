@@ -84,6 +84,28 @@ app.setPath(
   require("node:path").join(process.env.RELAY_TEST_DATA, "app-data"),
 );
 app.setPath("userData", process.env.RELAY_TEST_DATA);
+// Keep the user's own `gh` login out, or GitHub would answer for real. An
+// empty GH_CONFIG_DIR isn't enough: `gh auth token` falls back to the keychain.
+{
+  const childProcess = require("node:child_process");
+  const { promisify } = require("node:util");
+  const execFile = childProcess.execFile;
+  const isGhAuth = (file, args) =>
+    /(^|[\\/])gh(\.exe)?$/.test(String(file)) &&
+    Array.isArray(args) &&
+    args[0] === "auth";
+  const signedOut = () => new Error("not logged in to github.com");
+  childProcess.execFile = function (file, args, ...rest) {
+    if (!isGhAuth(file, args)) return execFile.call(this, file, args, ...rest);
+    const done = rest.find((a) => typeof a === "function");
+    setImmediate(() => done?.(signedOut(), "", ""));
+  };
+  // Promisified, execFile answers { stdout, stderr }; keep that.
+  childProcess.execFile[promisify.custom] = (file, args, ...rest) =>
+    isGhAuth(file, args)
+      ? Promise.reject(signedOut())
+      : execFile[promisify.custom](file, args, ...rest);
+}
 globalThis.fetch = async () => {
   throw new Error("Node networking must not handle desktop API requests");
 };

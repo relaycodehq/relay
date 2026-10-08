@@ -1,4 +1,3 @@
-import { roomProtocol } from "../../shared/rooms";
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -48,7 +47,6 @@ function renderAppImageEntry(appImage: string, icon: string) {
     "Terminal=false",
     "Categories=Development;",
     `StartupWMClass=${desktopId.replace(/\.desktop$/, "")}`,
-    `MimeType=x-scheme-handler/${roomProtocol};`,
     appImageMarker,
     "",
   ].join("\n");
@@ -64,9 +62,8 @@ const read = (path: string) => {
 
 /**
  * AppImages get no launcher on desktops without an integration tool (Omarchy has
- * none), and the room links need an entry to open with. Writes one pointing at the
- * AppImage itself; the mounted execPath is a transient /tmp/.mount_* path.
- * Returns whether the entry is ours to claim the scheme with.
+ * none). Writes one pointing at the AppImage itself; the mounted execPath is a
+ * transient /tmp/.mount_* path. Returns whether the entry was ours to write.
  */
 export function writeAppImageEntry(input: {
   appImage: string;
@@ -102,19 +99,13 @@ export function writeAppImageEntry(input: {
   return true;
 }
 
-/** Best effort: a read-only home or missing xdg-mime must never block startup. */
+/** Best effort: a read-only home must never block startup. */
 export function registerAppImage(
   input: Parameters<typeof writeAppImageEntry>[0],
 ) {
   try {
-    if (!writeAppImageEntry(input)) return;
+    writeAppImageEntry(input);
   } catch (error) {
     console.warn("Could not write Relay's desktop entry:", error);
-    return;
   }
-  execFile(
-    "xdg-mime",
-    ["default", desktopId, `x-scheme-handler/${roomProtocol}`],
-    () => {},
-  );
 }

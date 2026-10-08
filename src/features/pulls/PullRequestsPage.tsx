@@ -45,6 +45,7 @@ import {
   type PullContext,
 } from "./PullRows";
 import { ErrorBox, Loading } from "../../ui/ui";
+import { isGithubServer } from "../../../shared/source-control";
 import "./pull-requests.css";
 
 /** The window title's trail back from a PR or a project's page. */
@@ -148,7 +149,14 @@ export function PullRequestsPage({
   const head = query
     ? {
         title: "Pull requests",
-        summary: <>Searching every repository you can see</>,
+        summary: isGithubServer(account.server) ? (
+          <>
+            Searching pull requests you're part of; add repo: or org: to look
+            wider
+          </>
+        ) : (
+          <>Searching every repository you can see</>
+        ),
       }
     : repo
       ? {
@@ -578,7 +586,7 @@ function SearchResults({
   context: PullContext;
   projectOf: (r: Repo) => Project | undefined;
 }) {
-  const found = usePullSearch(query, state, account.id);
+  const found = usePullSearch(query, state, account);
   if (found.isPending) return <Loading text="Searching…" />;
   if (found.error)
     return <ErrorBox error={found.error} retry={() => void found.refetch()} />;

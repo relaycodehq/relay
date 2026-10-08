@@ -23,7 +23,7 @@ export function checkHandlers(ctx: ApiContext) {
     prKey,
     linkedFolder,
     requireFolder,
-    requireClient,
+    requireServer,
   } = ctx;
   const local = (where: string) => "project:" + where;
   return {
@@ -91,7 +91,7 @@ export function checkHandlers(ctx: ApiContext) {
         projectChecks.start(
           prKey(r),
           requireFolder(r),
-          requireClient().account.server,
+          requireServer(r),
           r,
           head,
           target,
@@ -106,7 +106,7 @@ export function checkHandlers(ctx: ApiContext) {
         r,
         "Link this repository to a local folder to see line history.",
       );
-      return blame.read(dir, requireClient().account.server, r, query);
+      return blame.read(dir, requireServer(r), r, query);
     }),
   } satisfies Handlers;
 }

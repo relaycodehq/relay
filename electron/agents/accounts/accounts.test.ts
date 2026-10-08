@@ -70,5 +70,9 @@ it("lists the usual sign-in's folder first however the accounts are ordered", as
     accountHomes()
       .filter((h) => h.provider === "claude")
       .map((h) => h.home),
-  ).toEqual(["/home/.claude", "/profiles/claude/work", "/profiles/claude/client"]);
+  ).toEqual([
+    "/home/.claude",
+    "/profiles/claude/work",
+    "/profiles/claude/client",
+  ]);
 });

@@ -130,16 +130,13 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     await pasteShot(page, 400, "#e5484d");
     await expect(pills).toHaveCount(1);
     await page.keyboard.type("look like ");
-    await pasteShot(
-      page,
-      500,
-      "#3e63dd",
-      "settings-page-before-redesign.png",
-    );
+    await pasteShot(page, 500, "#3e63dd", "settings-page-before-redesign.png");
     // A paste is just its picture, a named file shows its name; the number
     // is what the agent reads.
     await expect(pills).toHaveText(["", "settings-page-b…sign.png"]);
-    await expect(pills.first().getByRole("img", { name: "Image #1" })).toBeVisible();
+    await expect(
+      pills.first().getByRole("img", { name: "Image #1" }),
+    ).toBeVisible();
     expect(await numbers(pills)).toEqual(["1", "2"]);
     await expect(strip).toHaveCount(2);
     await screenshot(page.locator(".project-composer"), {

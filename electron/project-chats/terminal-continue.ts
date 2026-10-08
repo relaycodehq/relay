@@ -143,7 +143,12 @@ export class TerminalContinue {
       chat.forkedAt = last.id;
     }
     if (workspace === "worktree") {
-      const { worktree } = await this.worktrees.copyFor(chat, root, chat.title, named);
+      const { worktree } = await this.worktrees.copyFor(
+        chat,
+        root,
+        chat.title,
+        named,
+      );
       chat.worktree = worktree;
       // The session ran in the project folder; its paths point there.
       chat.movedIn = {

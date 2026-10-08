@@ -414,7 +414,9 @@ if (args.includes("--permission-prompt-tool")) {
   process.stdin.on("end", () => {
     record({ provider: "claude", prompt });
     // As an account that can't use the model it was asked for.
-    if (args[args.indexOf("--model") + 1] === process.env.RELAY_AGENT_REJECT_MODEL) {
+    if (
+      args[args.indexOf("--model") + 1] === process.env.RELAY_AGENT_REJECT_MODEL
+    ) {
       process.stdout.write(
         JSON.stringify({
           type: "result",
@@ -560,7 +562,7 @@ if (args.includes("--permission-prompt-tool")) {
         result: {
           thread: { id: "fixture-thread" },
           model: "fixture-model",
-          activePermissionProfile: { id: "relay-room" },
+          activePermissionProfile: { id: "relay-one-off" },
         },
       });
     } else if (m.method === "turn/start") {

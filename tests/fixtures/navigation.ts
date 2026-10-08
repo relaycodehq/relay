@@ -1,9 +1,10 @@
 import { expect, type Page } from "@playwright/test";
+/** The Gitea sign-in, offered by the Pull requests page while there's no `gh` login or Gitea. */
 export async function openSignIn(page: Page) {
-  if (!(await page.getByLabel("Gitea server", { exact: true }).isVisible()))
-    await page
-      .getByRole("button", { name: "Connect Gitea", exact: true })
-      .click();
+  if (await page.getByLabel("Gitea server", { exact: true }).isVisible())
+    return;
+  await pullsNav(page).click();
+  await page.getByRole("button", { name: "Or connect a Gitea server" }).click();
 }
 /** The sidebar's Pull requests: opens the page, and on it goes back to the board. */
 export const pullsNav = (page: Page) =>

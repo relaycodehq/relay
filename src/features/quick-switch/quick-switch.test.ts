@@ -78,7 +78,15 @@ describe("parseQuickSwitch", () => {
     });
   });
   it("drops a corrupt preset list rather than the whole setting", () => {
-    const parsed = parseQuickSwitch({ style: "tab", presets: [{ provider: "gpt" }] });
-    expect(parsed).toEqual({ enabled: true, style: "tab", sound: true, presets: [] });
+    const parsed = parseQuickSwitch({
+      style: "tab",
+      presets: [{ provider: "gpt" }],
+    });
+    expect(parsed).toEqual({
+      enabled: true,
+      style: "tab",
+      sound: true,
+      presets: [],
+    });
   });
 });

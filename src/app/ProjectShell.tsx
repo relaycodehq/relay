@@ -21,6 +21,10 @@ import { useNewThreads } from "./useNewThreads";
 import { usePaneOpens } from "./usePaneOpens";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
+import { useHostAccount } from "../features/pulls/useHostAccount";
+import { usePullsAccount } from "../features/pulls/usePullsAccount";
+import { NoPullHost } from "../features/pulls/NoPullHost";
+import { ConnectHost } from "../features/pulls/ConnectHost";
 import { usePullThreads } from "./usePullThreads";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
@@ -59,7 +63,7 @@ import {
 import { SignInDialog } from "../features/settings/SignInDialog";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
 import { ThreadChanges, ThreadFiles, ThreadHistory } from "./ThreadPanes";
-import { ErrorBox, IconButton, Loading, Modal } from "../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../ui/ui";
 import { Pane } from "../ui/WorkspacePanes";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
@@ -155,6 +159,8 @@ export default function ProjectShell() {
     onResize: panes.resize,
     onMove: panes.move,
   });
+  const host = useHostAccount(project?.repository, boot.data?.account);
+  const pullsHost = usePullsAccount(boot.data?.account);
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
@@ -281,8 +287,7 @@ export default function ProjectShell() {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.
               if (lock.blocked()) return;
-              if (!account) void signIn.withAccount(() => nav.setInbox(true));
-              else if (inbox) pullsPage.go({ to: "board" });
+              if (inbox) pullsPage.go({ to: "board" });
               else nav.setInbox(true);
             }}
             onUsage={() => {
@@ -291,25 +296,37 @@ export default function ProjectShell() {
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
-        {inbox && account ? (
+        {inbox ? (
           <div className="project-legacy" hidden={settings.open}>
-            <PullsSurface
-              ref={pullsPage.page}
-              account={account}
-              initialWorkspace={boot.data.workspace}
-              incomingLink={links.incoming}
-              projects={projects.data ?? NO_PROJECTS}
-              projectOf={(repo) =>
-                projectFor(projects.data ?? NO_PROJECTS, account.server, repo)
-              }
-              onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
-              onOpenProject={(p) => navigate(p)}
-              onAddProject={(repo) => void pullsPage.addProject(repo)}
-              onLocation={pullsPage.setWhere}
-              onSettings={(category) =>
-                settings.show(category === "rooms" ? category : undefined)
-              }
-            />
+            {pullsHost.account ? (
+              <PullsSurface
+                key={pullsHost.account.id}
+                ref={pullsPage.page}
+                account={pullsHost.account}
+                initialWorkspace={boot.data.workspace}
+                incomingLink={links.incoming}
+                projects={projects.data ?? NO_PROJECTS}
+                projectOf={(repo) =>
+                  projectFor(
+                    projects.data ?? NO_PROJECTS,
+                    pullsHost.account!.server,
+                    repo,
+                  )
+                }
+                onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
+                onOpenProject={(p) => navigate(p)}
+                onAddProject={(repo) => void pullsPage.addProject(repo)}
+                onLocation={pullsPage.setWhere}
+              />
+            ) : pullsHost.pending ? (
+              <Loading />
+            ) : (
+              <NoPullHost
+                checking={pullsHost.checking}
+                onRecheck={pullsHost.recheck}
+                onConnectGitea={() => void signIn.withAccount()}
+              />
+            )}
           </div>
         ) : usage ? (
           <div className="project-legacy" hidden={settings.open}>
@@ -355,11 +372,14 @@ export default function ProjectShell() {
                     contextText={view.context}
                     onContextUsed={() => view.setContext(undefined)}
                     scopes={{
-                      canChoosePR: !!account && !!project.repository,
+                      canChoosePR: !!host.account || host.pending,
                       onRepository: () => nav.newThreadIn({ kind: "project" }),
-                      onChoosePR: () => {
-                        if (!lock.blocked()) setChoosePR(true);
-                      },
+                      onChoosePR:
+                        project.repository || account
+                          ? () => {
+                              if (!lock.blocked()) setChoosePR(true);
+                            }
+                          : undefined,
                       onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
                       onDeepReview: () => nav.newThreadIn({ kind: "review" }),
                     }}
@@ -418,7 +438,9 @@ export default function ProjectShell() {
                     view={view}
                     opens={opens}
                     review={{
-                      account,
+                      account: host.account,
+                      github: host.github,
+                      onRecheck: host.recheck,
                       onDiscuss: (target, pr) =>
                         void prs
                           .open(pr)
@@ -495,13 +517,14 @@ export default function ProjectShell() {
           <button onClick={() => setError(undefined)}>Dismiss</button>
         </div>
       )}
-      {choosePR && project && (
-        <Modal title="Connect Gitea" onClose={() => setChoosePR(false)}>
-          <p>
-            Connect Gitea to match this folder’s Git remote and choose a PR.
-          </p>
-          <button onClick={() => void linkProject()}>Connect Gitea</button>
-        </Modal>
+      {choosePR && project && !host.account && !host.pending && (
+        <ConnectHost
+          github={host.github}
+          checking={host.checking}
+          onRecheck={host.recheck}
+          onConnectGitea={() => void linkProject()}
+          onClose={() => setChoosePR(false)}
+        />
       )}
       {starts.picking && (
         <NewThreadPicker
@@ -519,7 +542,6 @@ export default function ProjectShell() {
         <SignInDialog
           boot={boot.data}
           signIn={signIn}
-          invitationUrl={links.incoming?.url}
           onRestored={boot.refetch}
         />
       )}

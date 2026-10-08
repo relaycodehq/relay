@@ -1,6 +1,9 @@
-import { agentMentionPattern, type AgentProvider } from "./agents";
+import {
+  agentMention,
+  agentMentionPattern,
+  type AgentProvider,
+} from "./agents";
 import type { ChatMessage, ChatSummary, ProjectChatSend } from "./projects";
-import { agentMention } from "./rooms";
 
 /** Who a message goes to: an agent, or "message", a note no agent answers. */
 export type Recipient = AgentProvider | "message";

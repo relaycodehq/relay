@@ -1,4 +1,4 @@
-import type { Gitea } from "./gitea";
+import type { PullHost } from "./host";
 import type { ChangedFile, PullRef, Page } from "../../shared/types";
 import {
   lineExcerpt,
@@ -10,7 +10,7 @@ import { inspectFolder } from "../git/repository";
 import { openClaudeQuestionTerminal, openCodexTerminal } from "./local";
 
 export async function questionContext(
-  client: Gitea,
+  client: PullHost,
   ref: PullRef,
   input: LineQuestion,
 ) {
@@ -53,7 +53,7 @@ export async function questionContext(
 }
 
 export async function launchLineQuestion(
-  client: Gitea,
+  client: PullHost,
   dir: string,
   dataDir: string,
   ref: PullRef,

@@ -10,7 +10,6 @@ import {
   Smartphone,
   Sparkles,
   UserRound,
-  Users,
   Volume2,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
@@ -36,8 +35,9 @@ export const categories: {
   },
   {
     id: "account",
-    label: "Account",
-    description: "Your Gitea connection and credential storage.",
+    label: "Gitea",
+    description:
+      "Optional: pull requests on a Gitea server. GitHub needs nothing here; Relay uses the gh CLI's login.",
     icon: UserRound,
   },
   {
@@ -60,12 +60,6 @@ export const categories: {
     description:
       "Extras that ship with Relay and stay out of sight until you turn them on.",
     icon: Puzzle,
-  },
-  {
-    id: "rooms",
-    label: "Shared rooms",
-    description: "Host rooms for pull request conversations.",
-    icon: Users,
   },
   {
     id: "phone",

@@ -12,10 +12,12 @@ export type UsageTokens = {
   output: number;
 };
 
-/** What an agent run was for: a thread's own work, a room's question, or one of Relay's jobs. */
+/**
+ * What an agent run was for: a thread's own work or one of Relay's jobs.
+ * Ledgers written before pull request rooms were removed also hold "room".
+ */
 export const usageJobs = [
   "thread",
-  "room",
   "title",
   "commit",
   "watch",
@@ -26,10 +28,7 @@ export const usageJobs = [
 export type UsageJob = (typeof usageJobs)[number];
 
 /** Relay's own jobs, by what the page calls them. */
-export const relayJobLabels: Record<
-  Exclude<UsageJob, "thread" | "room">,
-  string
-> = {
+export const relayJobLabels: Record<Exclude<UsageJob, "thread">, string> = {
   title: "Thread titles",
   commit: "Commit messages",
   watch: "Watcher checks",
@@ -353,7 +352,8 @@ export function summarizeUsage(
     h.usd += usd;
     h.answers += answers;
     harness.set(e.provider, h);
-    if (e.job !== "thread" && e.job !== "room") {
+    // Old "room" runs still count above, but aren't one of Relay's jobs.
+    if (e.job !== "thread" && Object.hasOwn(relayJobLabels, e.job)) {
       totals.relayTokens += tokens;
       totals.relayUsd += usd;
       const j = jobs.get(e.job) ?? { runs: 0, tokens: 0, usd: 0 };

@@ -97,7 +97,7 @@ for (let d = 41; d >= 0; d--) {
       at: at.getTime(),
       ms: (2 + rng() * 14) * 60_000,
       provider: runner.provider,
-      job: rng() < 0.04 ? "room" : "thread",
+      job: "thread",
       chat: pick(chats.slice(0, Math.max(8, Math.round(90 - d * 2)))).id,
       project: "relay",
       answer: true,

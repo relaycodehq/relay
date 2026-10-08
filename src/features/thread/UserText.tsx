@@ -29,13 +29,11 @@ const sentToken = /^\[Image #(\d+)\]$/;
 /** The screenshot numbers a sent message's text shows as pills. */
 export function pilledImages(text: string) {
   const shown = new Set<number>();
-  text
-    .replace(pasteBlock, "")
-    .replace(codeOrToken, (m, code?: string) => {
-      const n = sentToken.exec(code ? code.slice(1, -1) : m)?.[1];
-      if (n) shown.add(Number(n));
-      return m;
-    });
+  text.replace(pasteBlock, "").replace(codeOrToken, (m, code?: string) => {
+    const n = sentToken.exec(code ? code.slice(1, -1) : m)?.[1];
+    if (n) shown.add(Number(n));
+    return m;
+  });
   return shown;
 }
 

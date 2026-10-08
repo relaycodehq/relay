@@ -22,7 +22,6 @@ import {
   Smartphone,
   Sparkles,
   UserRound,
-  Users,
   X,
 } from "lucide-react";
 import "../../src/styles.css";
@@ -246,7 +245,6 @@ const categories = [
   ["Account", UserRound],
   ["AI models", Sparkles],
   ["Integrations", ListTodo],
-  ["Shared rooms", Users],
   ["Phone", Smartphone],
   ["Keyboard shortcuts", Keyboard],
   ["About", Info],

@@ -36,8 +36,9 @@ export interface TerminalSession {
  * session itself: always for Codex, which can't say whether a terminal still
  * holds it, and for a Claude session a terminal holds.
  */
-export const continuesAsCopy = (session: Pick<TerminalSession, "provider" | "live">) =>
-  session.provider === "codex" || session.live;
+export const continuesAsCopy = (
+  session: Pick<TerminalSession, "provider" | "live">,
+) => session.provider === "codex" || session.live;
 
 export const terminalSessionPickSchema = z
   .object({

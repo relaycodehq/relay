@@ -50,7 +50,8 @@ const maxConnections = 24;
 export const nodeCodec: Codec = {
   deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
   // Inflated past this is no frame we'd send.
-  inflate: (bytes) => inflateRawSync(bytes, { maxOutputLength: 32 * 1024 * 1024 }),
+  inflate: (bytes) =>
+    inflateRawSync(bytes, { maxOutputLength: 32 * 1024 * 1024 }),
   deflateUpTo: Infinity,
 };
 

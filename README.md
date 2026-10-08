@@ -76,12 +76,8 @@ Automated tests do not cover real agent accounts, OS credential prompts, signing
 - Threads, drafts and settings stay local. Data lives in `~/Library/Application Support/Relay Experimental` on macOS, `%APPDATA%\Relay Experimental` on Windows and `~/.config/Relay Experimental` on Linux.
 - Saved tokens are encrypted with the OS credential store (Keychain on macOS). Chat history and folder paths are not encrypted.
 - Relay never checks out, resets, pulls, force-pushes or stages files on its own. Git actions that change your checkout or remote happen only when you click them.
-- Pull request review and its shared rooms currently need a Gitea server. Everything else works with any local folder, Git or not.
+- Pull request review works with GitHub through your `gh` CLI login, or with a Gitea server. Everything else works with any local folder, Git or not.
 - Relay is an independent project and is not affiliated with OpenAI, Anthropic, OpenCode or Cursor (Anysphere). Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
-
-## Pull request rooms
-
-A pull request can have a room: a conversation with coworkers beside the review, where everyone runs their own agent in their own clone. Rooms need a Gitea server and a room server you trust. Setup is in the [room server guide](server/README.md).
 
 ## More documentation
 

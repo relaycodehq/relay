@@ -61,6 +61,7 @@ const itemRef = (item: Issue): PullRef => ({
   owner: item.repository.owner,
   name: item.repository.name,
   number: item.number,
+  ...(item.repository.server ? { server: item.repository.server } : {}),
 });
 
 /** Where the page is: a project's page, an open PR, both or neither. */

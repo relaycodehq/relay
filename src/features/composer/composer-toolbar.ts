@@ -130,7 +130,8 @@ export const showItem = (
     : layout;
 
 export const isDefaultToolbar = (layout: ToolbarLayout) =>
-  [...layout.hidden].sort().join() === [...defaultToolbar.hidden].sort().join() &&
+  [...layout.hidden].sort().join() ===
+    [...defaultToolbar.hidden].sort().join() &&
   layout.slots.join() === defaultToolbar.slots.join();
 
 const isSlot = (value: unknown): value is ToolbarSlot =>

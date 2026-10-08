@@ -49,7 +49,10 @@ function applyList<T>(was: readonly T[] = [], patch: ListPatch<T>) {
 }
 
 /** `next` as a patch on `prev`, the same message a moment earlier. */
-export function diffMessage(prev: ChatMessage, next: ChatMessage): MessagePatch {
+export function diffMessage(
+  prev: ChatMessage,
+  next: ChatMessage,
+): MessagePatch {
   const patch: MessagePatch = { id: next.id };
   const keys = new Set([...Object.keys(prev), ...Object.keys(next)]) as Set<
     keyof ChatMessage
@@ -63,7 +66,10 @@ export function diffMessage(prev: ChatMessage, next: ChatMessage): MessagePatch 
   if (prev.body !== next.body) {
     let from = 0;
     const max = Math.min(prev.body.length, next.body.length);
-    while (from < max && prev.body.charCodeAt(from) === next.body.charCodeAt(from))
+    while (
+      from < max &&
+      prev.body.charCodeAt(from) === next.body.charCodeAt(from)
+    )
       from++;
     patch.body = { from, text: next.body.slice(from) };
   }

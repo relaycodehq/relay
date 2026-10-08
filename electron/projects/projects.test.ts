@@ -59,6 +59,36 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
   }
 });
 
+it("links a github.com remote without any account, preferring origin over an older fork", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  const root = join(dir, "repo");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  try {
+    execFileSync("git", ["init", "-q", root]);
+    // `old` sorts before `origin`, the way Git lists them.
+    git("remote", "add", "old", "https://github.com/me/relay.git");
+    git("remote", "add", "origin", "git@github.com:team/relay.git");
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const added = await projects.add(root, null);
+    expect(added.repository).toEqual({
+      server: "https://github.com",
+      owner: "team",
+      name: "relay",
+    });
+    // A project saved before GitHub links on its next listing.
+    await store.update((s) => {
+      s.projects![0]!.repository = null;
+    });
+    const [listed] = await new Projects(store).list(null);
+    expect(listed!.repository?.owner).toBe("team");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("resolves legacy automatic names without rewriting saved names", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   try {

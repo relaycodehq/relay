@@ -72,14 +72,15 @@ export function accountHomes() {
   return accounts.map(({ provider, id }) => ({
     provider,
     account: id,
-    home: id === SYSTEM_ACCOUNT ? usualHome(provider) : profileDir(provider, id),
+    home:
+      id === SYSTEM_ACCOUNT ? usualHome(provider) : profileDir(provider, id),
   }));
 }
 
 export class AgentAccounts {
   private signIn:
-    | (SignIn & { provider: AccountProvider; id: string; label: string })
-    | null = null;
+    (SignIn & { provider: AccountProvider; id: string; label: string }) | null =
+    null;
   private signInError: string | null = null;
 
   constructor(
@@ -94,7 +95,11 @@ export class AgentAccounts {
     const saved = this.store.get().agentAccounts;
     const accounts = [...(saved?.accounts ?? [])];
     for (const provider of accountProviders)
-      if (!accounts.some((a) => a.provider === provider && a.id === SYSTEM_ACCOUNT))
+      if (
+        !accounts.some(
+          (a) => a.provider === provider && a.id === SYSTEM_ACCOUNT,
+        )
+      )
         accounts.unshift({ provider, id: SYSTEM_ACCOUNT, label: "Default" });
     const inUse: Record<AccountProvider, string> = {
       claude: SYSTEM_ACCOUNT,
@@ -191,7 +196,8 @@ export class AgentAccounts {
           });
       })
       .catch(async (e: Error) => {
-        this.signInError = e.message === "Sign-in cancelled." ? null : e.message;
+        this.signInError =
+          e.message === "Sign-in cancelled." ? null : e.message;
         if (fresh) await removeProfile(provider, id).catch(() => {});
       })
       .finally(() => {
@@ -219,7 +225,9 @@ export class AgentAccounts {
 
   async remove(provider: AccountProvider, id: string) {
     if (id === SYSTEM_ACCOUNT)
-      throw new Error("The CLI's own sign-in stays; sign out in the CLI instead.");
+      throw new Error(
+        "The CLI's own sign-in stays; sign out in the CLI instead.",
+      );
     this.find(provider, id);
     await this.save((saved) => {
       saved.accounts = saved.accounts.filter(
