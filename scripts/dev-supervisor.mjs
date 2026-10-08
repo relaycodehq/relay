@@ -48,17 +48,32 @@ function supervise(home) {
   let next = null;
   let quitting = false;
 
-  const run = (root) => {
+  const record = (result = {}) =>
+    writeJson(recordFile, { pid: process.pid, home, running, ...result });
+  const run = (root, completed) => {
     running = root;
-    writeJson(recordFile, { pid: process.pid, home, running: root });
+    record(completed ? { completed } : {});
     if (root !== home) log(`Running Relay from ${nameOf(root)} (${root}).`);
-    // Its own process group, so a switch can stop all of it: dev.mjs, Vite
-    // and Electron. No stdin: Vite would read it from the background.
+    // The runner asks Electron over IPC to quit, and cleans up Vite only
+    // after it exits. No group signals: Chromium and hosts must stay alive
+    // while an unsaved-edits prompt can still cancel the switch.
     child = spawn(process.execPath, ["scripts/dev.mjs"], {
       cwd: root,
-      stdio: ["ignore", "inherit", "inherit"],
+      stdio: ["ignore", "inherit", "inherit", "ipc"],
       detached: true,
       env: { ...process.env, RELAY_DEV_HOME: home, RELAY_DEV_RUNNING: root },
+    });
+    child.on("message", (message) => {
+      if (message?.type === "relay:dev-ready" && (next || quitting)) stop();
+      if (message?.type !== "relay:dev-cancelled") return;
+      record({ rejected: next?.id, error: "Relay's quit was cancelled." });
+      next = null;
+      quitting = false;
+      log("Quit cancelled; keeping this Relay running.");
+    });
+    child.on("error", (error) => {
+      log(`Could not start Relay: ${error.message}`);
+      done(1);
     });
     child.on("exit", async (code) => {
       child = null;
@@ -67,14 +82,20 @@ function supervise(home) {
       await portFree(5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0));
       const ask = next;
       next = null;
-      if (ask?.restore) {
-        restore(ask.restore);
-        log(`Restored the data from ${ask.restore}.`);
-        return run(home);
-      }
-      if (ask?.to) {
-        snapshot(`${nameOf(root)} to ${nameOf(ask.to)}`);
-        return run(ask.to);
+      try {
+        if (ask?.restore) {
+          restore(ask.restore);
+          log(`Restored the data from ${ask.restore}.`);
+          return run(home, ask.id);
+        }
+        if (ask?.to) {
+          snapshot(`${nameOf(root)} to ${nameOf(ask.to)}`);
+          return run(ask.to, ask.id);
+        }
+      } catch (error) {
+        // Preserve the backup and leave Relay stopped if copying fails.
+        log(`Could not switch or restore: ${error.message}`);
+        return done(1);
       }
       if (root !== home) {
         log(`Relay from ${nameOf(root)} stopped; back to main.`);
@@ -85,22 +106,7 @@ function supervise(home) {
   };
 
   const stop = () => {
-    if (!child) return;
-    const pid = child.pid;
-    try {
-      process.kill(-pid, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
-    setTimeout(() => {
-      if (child?.pid !== pid) return;
-      log("Relay didn't stop within 20 s; killing it.");
-      try {
-        process.kill(-pid, "SIGKILL");
-      } catch {
-        // Gone after all.
-      }
-    }, 20_000).unref();
+    if (child?.connected) child.send({ type: "relay:dev-stop" });
   };
 
   const done = (code) => {
@@ -115,15 +121,25 @@ function supervise(home) {
     const ask = readJson(requestFile);
     if (!ask) return;
     rmSync(requestFile, { force: true });
+    if (next || quitting) {
+      record({ rejected: ask.id, error: "Relay is already stopping." });
+      return;
+    }
     if (ask.to) {
       const target = checkouts(home).find((c) => c.path === ask.to);
-      if (!target || target.problem)
+      if (!target || target.problem) {
+        record({
+          rejected: ask.id,
+          error: target?.problem ?? "Not a checkout of this repository.",
+        });
         return log(
           `Can't run Relay from ${ask.to}: ${target?.problem ?? "not a checkout of this repository"}.`,
         );
+      }
       if (ask.to === running && !next) return;
     } else if (!ask.restore) return;
     next = ask;
+    record();
     log(
       ask.to
         ? `Switching to ${nameOf(ask.to)}…`
@@ -132,12 +148,15 @@ function supervise(home) {
     stop();
   });
 
-  for (const signal of ["SIGINT", "SIGTERM"])
-    process.on(signal, () => {
-      quitting = true;
-      if (child) stop();
-      else done(0);
-    });
+  const quit = () => {
+    quitting = true;
+    if (child) stop();
+    else done(0);
+  };
+  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, quit);
+  process.on("message", (message) => {
+    if (message?.type === "relay:dev-stop") quit();
+  });
 
   run(home);
 }

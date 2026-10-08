@@ -64,6 +64,7 @@ import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
 import { DevBuild } from "./app/dev-build";
+import { listenDevSwitch } from "./app/dev-switch";
 import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
 import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
@@ -99,6 +100,7 @@ const login = new GiteaLogin();
 const github = new GithubLogin((url, options) => net.fetch(url, options));
 /** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({
+  quitCancelled: () => quit.cancel(),
   closed: () => {
     blame.dispose();
     projectChecks.stop();
@@ -121,21 +123,24 @@ const quit = new Quit({
   window,
   started: () => !!store,
   runningTasks: () => projectChats?.runningTasks() ?? [],
+  prepare: async () => {
+    await Promise.all([flushWorkingFiles(), flushGitOperations()]);
+    await projectChats?.prepareToQuit({ detach: quit.detaching });
+    await store!.flush();
+  },
+  cancelled: () => projectChats?.resumeAfterCancelledQuit(),
   stopping: () => triage?.cancel(),
-  shutDown: () =>
-    Promise.resolve(phoneRemote?.close())
-      .then(() => handoffs?.computers.close())
-      .then(() => {
-        if (quit.detaching) agentHosts?.detach();
-        return projectChats?.dispose({ detach: quit.detaching });
-      })
-      .then(() =>
-        Promise.all([
-          store!.flush(),
-          flushWorkingFiles(),
-          flushGitOperations(),
-        ]),
-      ),
+  shutDown: async () => {
+    const closed = await Promise.allSettled([
+      Promise.resolve().then(() => phoneRemote?.close()),
+      Promise.resolve().then(() => handoffs?.computers.close()),
+    ]);
+    for (const result of closed)
+      if (result.status === "rejected")
+        console.warn("Could not close a remote service:", result.reason);
+    await projectChats?.dispose({ detach: quit.detaching, save: false });
+    if (quit.detaching) agentHosts?.detach();
+  },
   release: () => {
     menubar.destroy();
     keepAwake.dispose();
@@ -158,10 +163,7 @@ const updater = new Updater((state) => window.send("relay:update", state), {
 const devBuild = new DevBuild(
   (stale) => window.send("relay:dev-build", stale),
   {
-    beforeQuit: () => {
-      quit.confirmed = true;
-      quit.detaching = true;
-    },
+    quit: (cancelled) => quit.restart(cancelled),
   },
 );
 const dictation = new Dictation(app.getPath("userData"), (state) =>
@@ -455,6 +457,7 @@ app
     rearmOnWake(powerMonitor, () => chats.armWakeups());
     updater.start();
     devBuild.start();
+    listenDevSwitch(quit);
     // Tests' stand-in agents only answer what a test expects of them.
     if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
     setApplicationMenu(window);

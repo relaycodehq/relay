@@ -9,14 +9,13 @@
 //   --json      print the list as JSON (Relay's dev menu reads it)
 //   --no-wait   ask and exit, without waiting for the other Relay to start
 import { realpathSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import {
   checkoutName,
   checkouts,
   findCheckout,
   findSnapshot,
   listSnapshots,
-  recordFile,
-  readJson,
   requestFile,
   supervisor,
   writeJson,
@@ -32,6 +31,23 @@ const fail = (text) => {
   process.exit(1);
 };
 
+async function request(ask) {
+  const id = randomUUID();
+  writeJson(requestFile, { ...ask, id });
+  if (flag("--no-wait")) return;
+  for (let i = 0; i < 600; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const record = supervisor();
+    if (!record)
+      fail("The dev supervisor stopped; see the `npm run dev` terminal.");
+    if (record.rejected === id) fail(record.error);
+    if (record.completed === id) return;
+  }
+  fail(
+    "Relay hasn't stopped yet; check its quit dialog and the `npm run dev` terminal.",
+  );
+}
+
 if (flag("--json")) {
   console.log(
     JSON.stringify({ running: running?.running ?? null, checkouts: list }),
@@ -41,7 +57,7 @@ if (flag("--json")) {
   const snapshot = findSnapshot(name);
   if (!snapshot)
     fail(name ? `No snapshot matches ${name}.` : "No snapshots yet.");
-  writeJson(requestFile, { restore: snapshot });
+  await request({ restore: snapshot });
   console.log(`Restoring ${snapshot}; Relay starts again from main.`);
 } else if (!name) {
   for (const c of list)
@@ -62,14 +78,6 @@ if (flag("--json")) {
     fail(`Can't run Relay from ${target.path}: ${target.problem}.`);
   if (target.path === running.running)
     fail(`Relay already runs from ${checkoutName(target)}.`);
-  writeJson(requestFile, { to: target.path });
-  if (flag("--no-wait")) process.exit(0);
-  for (let i = 0; i < 600; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-    if (readJson(recordFile)?.running === target.path) {
-      console.log(`Relay is starting from ${checkoutName(target)}.`);
-      process.exit(0);
-    }
-  }
-  fail("Relay didn't switch within a minute; see the `npm run dev` terminal.");
+  await request({ to: target.path });
+  console.log(`Relay is starting from ${checkoutName(target)}.`);
 }

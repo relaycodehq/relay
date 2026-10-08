@@ -29,6 +29,18 @@ jobs:
       - run: npm test
       - run: python3 -m unittest discover -s tests/packaging -v
 
+  dev-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      # The dev runner tests use stand-ins; no Electron/native SDK downloads.
+      - run: npm ci --ignore-scripts
+      - run: npm test -- scripts/dev-home.test.mjs scripts/dev-process.test.mjs scripts/dev-supervisor.test.mjs electron/app/quit.test.ts electron/app/dev-build.test.ts
+
   e2e:
     runs-on: ubuntu-22.04
     # A runner draws Electron in software, about 10x slower than a desktop, so

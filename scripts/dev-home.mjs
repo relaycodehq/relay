@@ -67,16 +67,20 @@ export function supervisor() {
  * run from it when it can't.
  */
 export function checkouts(from) {
-  const out = execFileSync("git", ["worktree", "list", "--porcelain"], {
-    cwd: from,
-    encoding: "utf8",
-  });
+  const out = execFileSync(
+    "git",
+    ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"],
+    {
+      cwd: from,
+      encoding: "utf8",
+    },
+  );
   return out
     .split("\n\n")
     .map((block) => block.split("\n"))
     .filter((lines) => lines[0]?.startsWith("worktree "))
     .map((lines, i) => {
-      const path = lines[0].slice("worktree ".length);
+      const path = resolve(lines[0].slice("worktree ".length));
       const branch = lines
         .find((l) => l.startsWith("branch "))
         ?.slice("branch ".length)
@@ -89,8 +93,10 @@ export function checkouts(from) {
 function problem(path) {
   if (!existsSync(join(path, "scripts", "dev.mjs")))
     return "Not a Relay checkout";
-  if (!existsSync(join(path, "node_modules", ".bin", "electron")))
+  if (!existsSync(join(path, "node_modules", "electron", "cli.js")))
     return "No node_modules: install there or link the main checkout's";
+  if (!existsSync(join(path, "scripts", "dev-process.mjs")))
+    return "Rebase this checkout to include the current dev-switch support";
 }
 
 /** The checkout `name` means: "main", a path, a branch or a folder name. */

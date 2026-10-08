@@ -652,13 +652,16 @@ export class ProjectChats {
    * the agents' sessions going; running answers are saved as they stand and
    * picked back up by `reattach`.
    */
-  async dispose({ detach = false } = {}) {
-    this.sessions.stopListening();
-    await this.worktrees.setup.stop();
-    if (detach) {
-      this.disposing = true;
-      this.schedule.stop();
-      this.limits.stop();
+  async prepareToQuit({ detach = false, save = true } = {}) {
+    this.disposing = true;
+    this.schedule.stop();
+    this.limits.stop();
+    try {
+      await this.worktrees.setup.stop();
+      if (!detach) {
+        if (save) await this.schedule.keepPending();
+        for (const a of this.active.all()) a.abort.abort();
+      }
       for (const a of this.active.allSides()) a.abort.abort();
       this.titles.abort();
       // What was stopped writes its last state before the store goes to disk.
@@ -666,42 +669,41 @@ export class ProjectChats {
         ...this.active.allSides().map((a) => a.job),
         ...this.titles.running(),
       ]);
-      await Promise.allSettled(
-        this.active.ids().map((id) => {
-          const chat = this.storage.cached(id);
-          return chat && this.storage.save(chat);
-        }),
-      );
-      await Promise.allSettled(this.storage.busy().writes);
-      await this.store.flush();
+      await Promise.allSettled(this.titles.writing());
+      if (!detach) {
+        await Promise.allSettled(this.active.all().map((a) => a.job));
+        await Promise.allSettled(this.control.pending());
+        // A send in validation can attach a job while shutdown waits.
+        await Promise.allSettled(this.turns.starting());
+        await Promise.allSettled(this.active.all().map((a) => a.job));
+        await Promise.allSettled(this.councils.stepping());
+      }
+      if (save) {
+        await this.storage.flush();
+        await this.store.flush();
+      }
+    } catch (error) {
+      this.resumeAfterCancelledQuit();
+      throw error;
+    }
+  }
+
+  /** Nothing has detached yet: reopen sends and re-arm the paused timers. */
+  resumeAfterCancelledQuit() {
+    if (!this.disposing) return;
+    this.disposing = false;
+    this.schedule.armAll();
+    this.limits.armAll();
+  }
+
+  /** Commit teardown only after preparation, or an explicit discard. */
+  async dispose({ detach = false, save = true } = {}) {
+    if (!this.disposing) await this.prepareToQuit({ detach, save });
+    this.sessions.stopListening();
+    if (detach) {
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
     }
-    await this.schedule
-      .keepPending()
-      .catch((e) =>
-        console.warn("Could not keep Claude's background work:", e),
-      );
-    this.schedule.stop();
-    this.limits.stop();
-    this.disposing = true;
-    for (const a of this.active.all()) a.abort.abort();
-    for (const a of this.active.allSides()) a.abort.abort();
-    this.titles.abort();
-    await Promise.allSettled(this.active.allSides().map((a) => a.job));
-    await Promise.allSettled(this.active.all().map((a) => a.job));
-    await Promise.allSettled(this.titles.running());
-    await Promise.allSettled(this.titles.writing());
-    await Promise.allSettled(this.control.pending());
-    // An answer still being set up starts its agent only once it is aborted.
-    await Promise.allSettled(this.turns.starting());
-    // A send already inside validation can attach its job while shutdown waits.
-    await Promise.allSettled(this.active.all().map((a) => a.job));
-    await Promise.allSettled(this.councils.stepping());
-    await Promise.allSettled(this.storage.busy().loads);
-    await Promise.all(this.storage.busy().writes);
-    // A finished answer refreshes its sidebar summary without waiting for it.
-    await this.store.flush();
     await this.sessions.closeAll();
     await Promise.all(
       Object.values(agentRuntimes).map((runtime) =>

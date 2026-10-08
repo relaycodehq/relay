@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { DevSwitchState } from "../../shared/types";
+import type { Quit } from "./quit";
 
 const run = promisify(execFile);
 // Set by scripts/dev-supervisor.mjs: the main checkout, and the one running.
@@ -27,5 +28,15 @@ export async function devSwitchState(): Promise<DevSwitchState | null> {
 
 /** Asks the supervisor to run Relay from `path`, which stops this one. */
 export async function devSwitchTo(path: string) {
-  if (home) await script([path, "--no-wait"]);
+  if (home) await script([path]);
+}
+
+/** IPC works on Windows too, without terminating Chromium or agent hosts. */
+export function listenDevSwitch(quit: Pick<Quit, "restart">) {
+  if (!process.env.RELAY_DEV_STALE || !process.send) return;
+  process.on("message", (message) => {
+    if ((message as { type?: unknown })?.type !== "relay:dev-stop") return;
+    quit.restart(() => process.send?.({ type: "relay:dev-cancelled" }));
+  });
+  process.send({ type: "relay:dev-ready" });
 }
