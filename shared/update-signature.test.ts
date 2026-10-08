@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { signedByAny } from "./update-signature";
-import { updateKeys } from "../../shared/updates";
+import { updateKeys } from "./updates";
 
 /** A key pair as the release build has one: raw public key in base64. */
 function keyPair() {
