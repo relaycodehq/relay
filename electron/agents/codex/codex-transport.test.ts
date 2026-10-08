@@ -206,9 +206,14 @@ it("fails what is still waiting when the run ends, without reporting it", async 
   const codex = fakeCodex();
   const onError = vi.fn();
   let left!: Promise<unknown>;
-  await withCodexTransport(codex.child, () => {}, onError, async (wire) => {
-    left = wire.request("thread/start", {});
-  });
+  await withCodexTransport(
+    codex.child,
+    () => {},
+    onError,
+    async (wire) => {
+      left = wire.request("thread/start", {});
+    },
+  );
   await expect(left).rejects.toThrow("closed");
   expect(onError).not.toHaveBeenCalled();
 });

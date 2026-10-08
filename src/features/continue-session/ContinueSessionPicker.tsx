@@ -156,7 +156,9 @@ export function ContinueSessionPicker({
               <p className="continue-session-note">
                 Claude Code and Codex sessions started in a terminal in{" "}
                 {project.name}
-                {workspace === "worktree" ? ", continued in a new worktree" : ""}
+                {workspace === "worktree"
+                  ? ", continued in a new worktree"
+                  : ""}
                 .
               </p>
               {error && (

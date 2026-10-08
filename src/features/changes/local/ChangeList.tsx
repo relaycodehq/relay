@@ -136,7 +136,9 @@ function IgnoredRow({
       onOpenFile={onOpenFile}
       onDismiss={() => onDismiss([t.path])}
       onDismissAll={
-        ignored.length > 1 ? () => onDismiss(ignored.map((i) => i.path)) : undefined
+        ignored.length > 1
+          ? () => onDismiss(ignored.map((i) => i.path))
+          : undefined
       }
       onError={onError}
       trigger={

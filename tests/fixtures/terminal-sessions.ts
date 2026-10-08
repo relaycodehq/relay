@@ -87,7 +87,11 @@ export function claudeTurns(turns: { prompt: string; answer: string }[]) {
       message: {
         role: "user",
         content: [
-          { type: "tool_result", tool_use_id: `toolu_${i}`, content: `out ${i}` },
+          {
+            type: "tool_result",
+            tool_use_id: `toolu_${i}`,
+            content: `out ${i}`,
+          },
         ],
       },
     });
@@ -120,7 +124,8 @@ export function claudeQueued(
     parentUuid: parent,
     attachment: {
       type: "queued_command",
-      commandMode: origin?.kind === "task-notification" ? "task-notification" : "prompt",
+      commandMode:
+        origin?.kind === "task-notification" ? "task-notification" : "prompt",
       prompt,
       ...(origin ? { origin } : {}),
     },
@@ -199,15 +204,19 @@ export async function writeCodexSession(
         content: [{ type: "Text", text: answer }],
       }),
     );
-    if (done) lines.push(line("event_msg", { type: "task_complete", turn_id: turn }));
+    if (done)
+      lines.push(line("event_msg", { type: "task_complete", turn_id: turn }));
   });
   const path = join(dir, `rollout-2026-10-06T09-00-00-${id}.jsonl`);
   await writeFile(path, jsonl(lines));
   if (name)
     await writeFile(
       join(home, "session_index.jsonl"),
-      JSON.stringify({ id, thread_name: name, updated_at: new Date().toISOString() }) +
-        "\n",
+      JSON.stringify({
+        id,
+        thread_name: name,
+        updated_at: new Date().toISOString(),
+      }) + "\n",
       { flag: "a" },
     );
   if (ago) await age(path, ago);

@@ -117,9 +117,7 @@ export function meterOf(session: ClaudeSession) {
 export function watchOf(session: ClaudeSession) {
   if (!session.watch) {
     const checks = new WatchChecks((question, signal) =>
-      meterOf(session).measure(() =>
-        askLive(session.stream, question, signal),
-      ),
+      meterOf(session).measure(() => askLive(session.stream, question, signal)),
     );
     session.watch = { checks, subagents: new SubagentWatch() };
   }

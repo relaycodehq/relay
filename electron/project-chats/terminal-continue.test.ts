@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -101,13 +108,21 @@ it("resumes a Claude session no terminal holds, sending only what's new", async 
     { ago: HOUR },
   );
   const [row] = await chats.terminalSessions(projectId);
-  expect(row).toMatchObject({ provider: "claude", id: "claude-idle-1", live: false, turns: 2 });
+  expect(row).toMatchObject({
+    provider: "claude",
+    id: "claude-idle-1",
+    live: false,
+    turns: 2,
+  });
   expect(row).not.toHaveProperty("path");
 
-  const { chat: summary, created } = await chats.continueTerminalSession(projectId, {
-    provider: "claude",
-    session: "claude-idle-1",
-  });
+  const { chat: summary, created } = await chats.continueTerminalSession(
+    projectId,
+    {
+      provider: "claude",
+      session: "claude-idle-1",
+    },
+  );
   expect(created).toBe(true);
   const chat = await chats.get(summary.id);
   expect(chat.title).toBe("TERMINAL first");
@@ -128,7 +143,10 @@ it("resumes a Claude session no terminal holds, sending only what's new", async 
   // Listed again, it points at its thread; picked again, it opens that thread.
   expect((await chats.terminalSessions(projectId))[0]!.chatId).toBe(summary.id);
   expect(
-    await chats.continueTerminalSession(projectId, { provider: "claude", session: "claude-idle-1" }),
+    await chats.continueTerminalSession(projectId, {
+      provider: "claude",
+      session: "claude-idle-1",
+    }),
   ).toMatchObject({ chat: { id: summary.id }, created: false });
 
   await sendAndSettle(summary.id, "claude");
@@ -145,7 +163,12 @@ it("forks a Claude session a terminal still writes to, cut after its last finish
     repo,
     "claude-live-1",
     // The terminal is mid-turn: a prompt with no answer yet.
-    [...claudeTurns(turns), ...claudeTurns([{ prompt: "TERMINAL third", answer: "x" }]).slice(0, 1).map((e) => ({ ...e, uuid: "u-third", parentUuid: "system-15" }))],
+    [
+      ...claudeTurns(turns),
+      ...claudeTurns([{ prompt: "TERMINAL third", answer: "x" }])
+        .slice(0, 1)
+        .map((e) => ({ ...e, uuid: "u-third", parentUuid: "system-15" })),
+    ],
   );
   const { chat: summary } = await chats.continueTerminalSession(projectId, {
     provider: "claude",
@@ -174,20 +197,31 @@ it("forks a Claude session a terminal still writes to, cut after its last finish
 
 it("forks a quiet Claude session a running claude still lists, unless that pid now runs something else", async () => {
   const home = join(root, "claude-home");
-  await writeClaudeSession(home, repo, "claude-held-1", claudeTurns(turns), { ago: HOUR });
+  await writeClaudeSession(home, repo, "claude-held-1", claudeTurns(turns), {
+    ago: HOUR,
+  });
   const started = (await runningSince([process.pid])).get(process.pid);
   expect(started).toBeTruthy();
   const listed = (procStart: string) =>
     writeFile(
       join(home, "sessions", `${process.pid}.json`),
-      JSON.stringify({ pid: process.pid, sessionId: "claude-held-1", cwd: repo, procStart }),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: "claude-held-1",
+        cwd: repo,
+        procStart,
+      }),
     );
   await mkdir(join(home, "sessions"));
   // The pid was reused: the claude that listed it started at another time.
   await listed("Thu Jan  1 00:00:00 2026");
-  expect((await chats.terminalSessions(projectId))[0]).toMatchObject({ live: false });
+  expect((await chats.terminalSessions(projectId))[0]).toMatchObject({
+    live: false,
+  });
   await listed(started!);
-  expect((await chats.terminalSessions(projectId))[0]).toMatchObject({ live: true });
+  expect((await chats.terminalSessions(projectId))[0]).toMatchObject({
+    live: true,
+  });
 
   const { chat: summary } = await chats.continueTerminalSession(projectId, {
     provider: "claude",
@@ -196,7 +230,10 @@ it("forks a quiet Claude session a running claude still lists, unless that pid n
   const chat = await chats.get(summary.id);
   expect(chat.fromTerminal).toMatchObject({ how: "forked", open: true });
   expect(chat.sessions).toBeUndefined();
-  expect(chat.messages.at(-1)?.forkPoint).toEqual({ thread: "claude-held-1", at: "assistant-14" });
+  expect(chat.messages.at(-1)?.forkPoint).toEqual({
+    thread: "claude-held-1",
+    at: "assistant-14",
+  });
 });
 
 it("forks Codex sessions at their last finished turn, whether or not one looks open", async () => {
@@ -210,25 +247,41 @@ it("forks Codex sessions at their last finished turn, whether or not one looks o
     provider: "codex",
     session: "codex-idle-01",
   });
-  expect((await chats.get(idle.id)).fromTerminal).toMatchObject({ how: "forked", open: false });
+  expect((await chats.get(idle.id)).fromTerminal).toMatchObject({
+    how: "forked",
+    open: false,
+  });
   await sendAndSettle(idle.id, "codex");
   const { chat: live } = await chats.continueTerminalSession(projectId, {
     provider: "codex",
     session: "codex-live-01",
   });
   expect((await chats.get(live.id)).messages).toHaveLength(4);
-  expect((await chats.get(live.id)).fromTerminal).toMatchObject({ how: "forked", open: true });
+  expect((await chats.get(live.id)).fromTerminal).toMatchObject({
+    how: "forked",
+    open: true,
+  });
   await sendAndSettle(live.id, "codex");
 
   const threads = (await calls()).filter((c) => c.thread);
   expect(threads.map((c) => c.method)).toEqual(["thread/fork", "thread/fork"]);
-  expect(threads[0].thread).toMatchObject({ threadId: "codex-idle-01", lastTurnId: "turn-1" });
-  expect(threads[1].thread).toMatchObject({ threadId: "codex-live-01", lastTurnId: "turn-1" });
-  const prompts = (await calls()).filter((c) => c.turn).map((c) =>
-    c.turn.input.map((i: { text?: string }) => i.text ?? "").join("\n"),
-  );
+  expect(threads[0].thread).toMatchObject({
+    threadId: "codex-idle-01",
+    lastTurnId: "turn-1",
+  });
+  expect(threads[1].thread).toMatchObject({
+    threadId: "codex-live-01",
+    lastTurnId: "turn-1",
+  });
+  const prompts = (await calls())
+    .filter((c) => c.turn)
+    .map((c) =>
+      c.turn.input.map((i: { text?: string }) => i.text ?? "").join("\n"),
+    );
   for (const prompt of prompts) expect(prompt).not.toContain("TERMINAL first");
-  expect(prompts[0]).toContain("continues a copy of your session from a terminal, cut after");
+  expect(prompts[0]).toContain(
+    "continues a copy of your session from a terminal, cut after",
+  );
   expect(prompts[1]).toContain("where it is still open");
 }, 30000);
 
@@ -241,7 +294,12 @@ it("continues in a new worktree with a copy of the folder's edits when the toggl
     claudeTurns(turns),
     { ago: HOUR },
   );
-  await writeCodexSession(join(root, "codex-home"), repo, "codex-live-01", turns);
+  await writeCodexSession(
+    join(root, "codex-home"),
+    repo,
+    "codex-live-01",
+    turns,
+  );
   const resumed = await chats.continueTerminalSession(
     projectId,
     { provider: "claude", session: "claude-idle-1" },
@@ -256,9 +314,13 @@ it("continues in a new worktree with a copy of the folder's edits when the toggl
   const chat = await chats.get(resumed.chat.id);
   const path = chat.worktree!.path!;
   expect(chat.worktree?.branch).toBe("relay/from-terminal");
-  expect(await readFile(join(path, "cache.ts"), "utf8")).toBe("guard fixed in the terminal\n");
+  expect(await readFile(join(path, "cache.ts"), "utf8")).toBe(
+    "guard fixed in the terminal\n",
+  );
   // The project folder keeps its own copy.
-  expect(await readFile(join(repo, "cache.ts"), "utf8")).toBe("guard fixed in the terminal\n");
+  expect(await readFile(join(repo, "cache.ts"), "utf8")).toBe(
+    "guard fixed in the terminal\n",
+  );
   expect(chat.movedIn).toMatchObject({ from: repo, to: path, copied: true });
 
   await sendAndSettle(resumed.chat.id, "claude");
@@ -270,20 +332,38 @@ it("continues in a new worktree with a copy of the folder's edits when the toggl
   expect(claudeText(claude)).toContain("now continues in its own Git worktree");
   const fork = all.find((c) => c.method === "thread/fork");
   const forkPath = (await chats.get(forked.chat.id)).worktree!.path!;
-  expect(fork.thread).toMatchObject({ threadId: "codex-live-01", lastTurnId: "turn-1", cwd: forkPath });
+  expect(fork.thread).toMatchObject({
+    threadId: "codex-live-01",
+    lastTurnId: "turn-1",
+    cwd: forkPath,
+  });
   const codexInput = all
     .find((c) => c.turn)
     .turn.input.map((i: { text?: string }) => i.text ?? "")
     .join("\n");
   expect(codexInput).toContain("now continues in its own Git worktree");
-  expect(codexInput).toContain("continues a copy of your session from a terminal");
+  expect(codexInput).toContain(
+    "continues a copy of your session from a terminal",
+  );
   // Said once.
   expect((await chats.get(resumed.chat.id)).movedIn).toBeUndefined();
 }, 40000);
 
 it("makes one thread for a session picked twice at once, none when its worktree fails, and keeps to an archived one", async () => {
-  await writeClaudeSession(join(root, "claude-home"), repo, "claude-idle-1", claudeTurns(turns), { ago: HOUR });
-  await writeCodexSession(join(root, "codex-home"), repo, "codex-idle-01", turns, { ago: HOUR });
+  await writeClaudeSession(
+    join(root, "claude-home"),
+    repo,
+    "claude-idle-1",
+    claudeTurns(turns),
+    { ago: HOUR },
+  );
+  await writeCodexSession(
+    join(root, "codex-home"),
+    repo,
+    "codex-idle-01",
+    turns,
+    { ago: HOUR },
+  );
   const pick = { provider: "claude", session: "claude-idle-1" } as const;
   const [first, second] = await Promise.all([
     chats.continueTerminalSession(projectId, pick, "worktree"),
@@ -294,15 +374,29 @@ it("makes one thread for a session picked twice at once, none when its worktree 
   expect(second.chat.worktree?.path).toBeTruthy();
   expect(chats.list(projectId)).toHaveLength(1);
 
-  vi.spyOn(ThreadWorktrees.prototype, "copyFor").mockRejectedValueOnce(new Error("Disk full"));
+  vi.spyOn(ThreadWorktrees.prototype, "copyFor").mockRejectedValueOnce(
+    new Error("Disk full"),
+  );
   await expect(
-    chats.continueTerminalSession(projectId, { provider: "codex", session: "codex-idle-01" }, "worktree"),
+    chats.continueTerminalSession(
+      projectId,
+      { provider: "codex", session: "codex-idle-01" },
+      "worktree",
+    ),
   ).rejects.toThrow("Disk full");
   expect(chats.list(projectId)).toHaveLength(1);
-  expect((await chats.terminalSessions(projectId)).find((r) => r.provider === "codex")?.chatId).toBeUndefined();
+  expect(
+    (await chats.terminalSessions(projectId)).find(
+      (r) => r.provider === "codex",
+    )?.chatId,
+  ).toBeUndefined();
 
   await chats.triage(first.chat.id, { kind: "archive" });
-  expect((await chats.terminalSessions(projectId)).find((r) => r.provider === "claude")?.chatId).toBe(first.chat.id);
+  expect(
+    (await chats.terminalSessions(projectId)).find(
+      (r) => r.provider === "claude",
+    )?.chatId,
+  ).toBe(first.chat.id);
   expect(await chats.continueTerminalSession(projectId, pick)).toMatchObject({
     chat: { id: first.chat.id },
     created: false,
@@ -310,9 +404,17 @@ it("makes one thread for a session picked twice at once, none when its worktree 
 }, 30000);
 
 it("refuses a session from another folder or one that isn't there", async () => {
-  await writeClaudeSession(join(root, "claude-home"), join(root, "elsewhere"), "claude-other1", claudeTurns(turns));
+  await writeClaudeSession(
+    join(root, "claude-home"),
+    join(root, "elsewhere"),
+    "claude-other1",
+    claudeTurns(turns),
+  );
   await expect(
-    chats.continueTerminalSession(projectId, { provider: "claude", session: "claude-other1" }),
+    chats.continueTerminalSession(projectId, {
+      provider: "claude",
+      session: "claude-other1",
+    }),
   ).rejects.toThrow("no longer in this project's folder");
   expect(chats.list(projectId)).toHaveLength(0);
 });

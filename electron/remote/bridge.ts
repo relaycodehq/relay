@@ -77,7 +77,11 @@ const knownIconsSchema = z
   .refine((known) => Object.keys(known).length <= 1000);
 const imageSourceSchema = z.discriminatedUnion("kind", [
   z
-    .object({ kind: z.literal("attached"), chatId: idSchema, imageId: idSchema })
+    .object({
+      kind: z.literal("attached"),
+      chatId: idSchema,
+      imageId: idSchema,
+    })
     .strict(),
   z
     .object({
@@ -256,7 +260,8 @@ export class RemoteBridge {
       return value;
     },
     phoneAppFile: async (path, offset) => {
-      if (!this.host.phoneApp) throw new Error("This Relay has no phone app to hand out.");
+      if (!this.host.phoneApp)
+        throw new Error("This Relay has no phone app to hand out.");
       return this.host.phoneApp.chunk(path, offset);
     },
     projectIcons: async (known) => {
@@ -380,20 +385,22 @@ export class RemoteBridge {
     this.streams.clear();
   }
   private summaries() {
-    return (this.projectIds ?? [])
-      .flatMap((id) => {
-        try {
-          return this.host.chats(id);
-        } catch {
-          return [];
-        }
-      })
-      .filter((c) => !c.archivedAt && !chatIsEmpty(c))
-      .sort((a, b) => b.updated - a.updated)
-      .slice(0, 300)
-      .map(summary)
-      // Ties included, the order a phone rebuilds a patched list in.
-      .sort(chatOrder);
+    return (
+      (this.projectIds ?? [])
+        .flatMap((id) => {
+          try {
+            return this.host.chats(id);
+          } catch {
+            return [];
+          }
+        })
+        .filter((c) => !c.archivedAt && !chatIsEmpty(c))
+        .sort((a, b) => b.updated - a.updated)
+        .slice(0, 300)
+        .map(summary)
+        // Ties included, the order a phone rebuilds a patched list in.
+        .sort(chatOrder)
+    );
   }
 }
 

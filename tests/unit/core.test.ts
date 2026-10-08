@@ -21,9 +21,9 @@ describe("URL and command boundaries", () => {
   it("preserves Gitea subpaths and handles file-tab links and deep links", () => {
     const root = "https://git.example.com/gitea";
     expect(normalizeServer(root + "/")).toBe(root);
-    expect(
-      parsePullUrl(root + "/Web/web-store/pulls/7/files", root),
-    ).toEqual(ref);
+    expect(parsePullUrl(root + "/Web/web-store/pulls/7/files", root)).toEqual(
+      ref,
+    );
     expect(
       parsePullUrl(
         "relay://open?url=" +

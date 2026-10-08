@@ -73,7 +73,10 @@ export async function readIdentity(
     const path =
       system && !process.env.CLAUDE_CONFIG_DIR?.trim()
         ? join(homedir(), ".claude.json")
-        : join(system ? usualHome("claude") : profileDir("claude", id), ".claude.json");
+        : join(
+            system ? usualHome("claude") : profileDir("claude", id),
+            ".claude.json",
+          );
     return claudeIdentity(await readJson(path));
   }
   const dir = system ? usualHome("codex") : profileDir("codex", id);

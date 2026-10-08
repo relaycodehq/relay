@@ -163,7 +163,10 @@ export function ProjectComposer({
     };
   }, []);
   const runs = useAgentRuns(composer, catalogs, draft.dropMention);
-  const accounts = useThreadAccounts(conversation.chatId, conversation.accounts);
+  const accounts = useThreadAccounts(
+    conversation.chatId,
+    conversation.accounts,
+  );
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
   const [spark, setSpark] = useState(0);
   const input = useRef<HTMLElement>(null);

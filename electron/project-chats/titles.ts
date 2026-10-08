@@ -77,7 +77,10 @@ export class ThreadTitles {
       const small = titleModel(by);
       // A sign-in that can't reach the small model still names the thread.
       return small && small !== own.model
-        ? [{ by, choice: { ...own, model: small } }, { by, choice: own }]
+        ? [
+            { by, choice: { ...own, model: small } },
+            { by, choice: own },
+          ]
         : [{ by, choice: own }];
     });
     const job = (async () => {

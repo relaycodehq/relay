@@ -16,7 +16,10 @@ function connect() {
 
 const thread = {
   t: "event",
-  event: { kind: "message", body: "Read the watcher, found the race. ".repeat(200) },
+  event: {
+    kind: "message",
+    body: "Read the watcher, found the race. ".repeat(200),
+  },
 };
 
 it("reads frames the other side deflated with its own library", () => {
@@ -40,7 +43,10 @@ it("still reads an older peer's text frames on a compact link", () => {
 it("won't inflate a frame into more than any real one", () => {
   const { phone, desktop } = connect();
   const bomb = { pad: "0".repeat(40 * 1024 * 1024) };
-  const sealed = sealFrame(phone, bomb, true, { ...jsCodec, deflateUpTo: Infinity });
+  const sealed = sealFrame(phone, bomb, true, {
+    ...jsCodec,
+    deflateUpTo: Infinity,
+  });
   expect(sealed.length).toBeLessThan(100_000);
   expect(() => openFrame(desktop, sealed, nodeCodec)).toThrow();
 });

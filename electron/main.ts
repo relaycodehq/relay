@@ -247,9 +247,8 @@ app
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
     setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
     // Before anything starts an agent: runs ask it which account they use.
-    const agentAccounts = new AgentAccounts(
-      loaded,
-      (state) => window.send("relay:agent-accounts", state),
+    const agentAccounts = new AgentAccounts(loaded, (state) =>
+      window.send("relay:agent-accounts", state),
     );
     applyLinkedTools(loaded);
     // Found once up front, every Git call after starts right away.

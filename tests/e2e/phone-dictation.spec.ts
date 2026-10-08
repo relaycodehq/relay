@@ -17,10 +17,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dictationModel } from "../../shared/dictation";
-import {
-  parsePairingUrl,
-  type PhoneDictationHeard,
-} from "../../shared/remote";
+import { parsePairingUrl, type PhoneDictationHeard } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
 
 // The real speech model is a 670 MB download, so this runs only when pointed
@@ -104,9 +101,7 @@ test("a phone dictates with the desktop's speech engine", async () => {
     }
     // Words come back while the phone is still listening, not only at the end.
     expect(
-      heard.some((h) =>
-        /flaky test/i.test(`${h.settled} ${h.tentative}`),
-      ),
+      heard.some((h) => /flaky test/i.test(`${h.settled} ${h.tentative}`)),
     ).toBe(true);
     const final = await phone.call("dictate", { type: "stop", id: 1 });
     expect(final.settled).toMatch(/^Fix the flaky test\./i);

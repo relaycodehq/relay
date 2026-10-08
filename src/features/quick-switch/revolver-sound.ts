@@ -64,7 +64,11 @@ const noiseBuffers = new WeakMap<BaseAudioContext, AudioBuffer>();
 function noiseOf(ctx: BaseAudioContext) {
   let buffer = noiseBuffers.get(ctx);
   if (!buffer) {
-    buffer = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.05), ctx.sampleRate);
+    buffer = ctx.createBuffer(
+      1,
+      Math.round(ctx.sampleRate * 0.05),
+      ctx.sampleRate,
+    );
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noiseBuffers.set(ctx, buffer);
@@ -77,7 +81,13 @@ function snap(
   ctx: BaseAudioContext,
   out: AudioNode,
   t: number,
-  o: { gain: number; decay: number; freq: number; q: number; type: BiquadFilterType },
+  o: {
+    gain: number;
+    decay: number;
+    freq: number;
+    q: number;
+    type: BiquadFilterType;
+  },
 ) {
   const src = ctx.createBufferSource();
   src.buffer = noiseOf(ctx);
@@ -99,8 +109,20 @@ function snap(
  * click a little different, as real parts are.
  */
 function tick(ctx: BaseAudioContext, out: AudioNode, t: number, vary: number) {
-  snap(ctx, out, t, { gain: 1.3, decay: 0.008, freq: 3000 * vary, q: 1.6, type: "bandpass" });
-  snap(ctx, out, t, { gain: 0.4, decay: 0.004, freq: 7000, q: 1, type: "highpass" });
+  snap(ctx, out, t, {
+    gain: 1.3,
+    decay: 0.008,
+    freq: 3000 * vary,
+    q: 1.6,
+    type: "bandpass",
+  });
+  snap(ctx, out, t, {
+    gain: 0.4,
+    decay: 0.004,
+    freq: 7000,
+    q: 1,
+    type: "highpass",
+  });
   const ring = ctx.createOscillator();
   ring.frequency.value = 1850 * vary;
   const env = ctx.createGain();

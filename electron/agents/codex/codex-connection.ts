@@ -84,7 +84,8 @@ class CodexConnection {
             if (side) return side(method, params);
             if (method === "thread/goal/cleared") this.goal = null;
             if (method === "thread/goal/updated")
-              this.goal = codexGoal((params as { goal?: unknown })?.goal) ?? this.goal;
+              this.goal =
+                codexGoal((params as { goal?: unknown })?.goal) ?? this.goal;
             if (this.onNotification) this.onNotification(method, params);
             else this.unheard(method, params);
           },

@@ -30,7 +30,11 @@ export function accountHandlers(ctx: ApiContext) {
       (provider, id) => accounts.remove(provider, id),
     ),
     moveAgentAccount: takes(
-      [accountProviderSchema, accountIdSchema, z.union([z.literal(-1), z.literal(1)])],
+      [
+        accountProviderSchema,
+        accountIdSchema,
+        z.union([z.literal(-1), z.literal(1)]),
+      ],
       (provider, id, by) => accounts.move(provider, id, by),
     ),
     useAgentAccount: takes(

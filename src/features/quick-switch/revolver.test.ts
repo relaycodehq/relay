@@ -34,7 +34,9 @@ describe("turnCylinder", () => {
   it("passes empty chambers when fewer presets than chambers wrap", () => {
     // Four presets in six chambers: from the 4th on to the 1st passes two empties.
     const last = restingCylinder(3, true, chambers);
-    expect(turnCylinder(last, 0, true, 1, chambers).rot - last.rot).toBe(-180 - 720);
+    expect(turnCylinder(last, 0, true, 1, chambers).rot - last.rot).toBe(
+      -180 - 720,
+    );
   });
   it("spins a whole turn as it opens", () => {
     const closed = restingCylinder(1, false, chambers);

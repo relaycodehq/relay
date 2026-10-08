@@ -3,7 +3,9 @@ import { agentName } from "../../../shared/agents";
 
 function note({ how, open }: FromTerminal) {
   if (how === "resumed") return "Continued from a terminal session";
-  const from = open ? "a session still open in a terminal" : "a terminal session";
+  const from = open
+    ? "a session still open in a terminal"
+    : "a terminal session";
   return how === "forked"
     ? `Forked from ${from} · ${open ? "the terminal keeps the original" : "the original stays as it was"}`
     : `Copied from ${from} · the agent reads it as text`;

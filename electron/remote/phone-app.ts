@@ -54,6 +54,8 @@ export class PhoneAppFiles {
       this.cache.set(path, data);
       data.catch(() => this.cache.delete(path));
     }
-    return (await data).subarray(offset, offset + phoneAppChunk).toString("base64");
+    return (await data)
+      .subarray(offset, offset + phoneAppChunk)
+      .toString("base64");
   }
 }
