@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
-import { terminate } from "./terminate";
+import { terminate, stopProcessTree } from "./terminate";
 import { withTimeout } from "../util/timeout";
 
 vi.mock("node:child_process", async (actual) => {
@@ -85,3 +85,33 @@ describe("withTimeout", () => {
     ).rejects.toThrow("took too long");
   });
 });
+
+it.skipIf(process.platform === "win32")(
+  "waits through a transient EPERM while a process group exits",
+  async () => {
+    const kill = vi
+      .spyOn(process, "kill")
+      .mockImplementationOnce(() => true)
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("exiting"), { code: "EPERM" });
+      })
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("gone"), { code: "ESRCH" });
+      });
+    try {
+      await stopProcessTree({
+        pid: 123,
+        exitCode: null,
+        kill: vi.fn(),
+        once: vi.fn(),
+      });
+      expect(kill.mock.calls).toEqual([
+        [-123, "SIGTERM"],
+        [-123, 0],
+        [-123, 0],
+      ]);
+    } finally {
+      kill.mockRestore();
+    }
+  },
+);

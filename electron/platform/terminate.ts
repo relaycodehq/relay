@@ -77,7 +77,11 @@ export async function stopProcessTree(child: Stoppable): Promise<void> {
       process.kill(-pid, name);
       return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ESRCH") return false;
+      // Darwin can report EPERM while the last group member is exiting.
+      // Keep probing until it disappears; this is not permission to clean up yet.
+      if (name === 0 && code === "EPERM") return true;
       throw error;
     }
   };
