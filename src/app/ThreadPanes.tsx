@@ -30,7 +30,10 @@ import {
 } from "../features/terminal/thread-terminals";
 import { terminalLabel } from "../features/terminal/TerminalDrawer";
 import { TerminalView } from "../features/terminal/TerminalView";
-import { BrowserSurface } from "../features/browser/BrowserSurface";
+import {
+  BrowserSurface,
+  BrowserTabIcon,
+} from "../features/browser/BrowserSurface";
 import {
   closePreview,
   previewKey,
@@ -178,19 +181,29 @@ export function ThreadPanel({
   let terminals = 0;
   const tabs = panel.tabs.map((tab) => ({
     key: tab.key,
-    icon: SURFACE_ICONS[tab.surface],
+    icon:
+      tab.surface === "browser" ? (
+        <BrowserTabIcon
+          key={preview?.favicon ?? "globe"}
+          favicon={preview?.favicon}
+        />
+      ) : (
+        SURFACE_ICONS[tab.surface]
+      ),
+    closeLabel: tab.surface === "browser" ? "Close browser" : undefined,
     label:
       tab.surface === "terminal"
         ? terminalLabel(terminals++)
-        : tab.surface === "browser" && preview?.worktree
-          ? preview.worktree
+        : tab.surface === "browser"
+          ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
           : SURFACE_LABELS[tab.surface],
     closeDisabled: tab.surface === "files" && locked,
   }));
   const close = (key: string) => {
     const tab = panel.tabs.find((t) => t.key === key);
     if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
-    if (tab?.surface === "browser") closePreview(previewKey(project.id, chatId));
+    if (tab?.surface === "browser")
+      closePreview(previewKey(project.id, chatId));
     panel.close(key);
   };
   const folderShown =

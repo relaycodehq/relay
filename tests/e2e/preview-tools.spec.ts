@@ -139,7 +139,9 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     // The thread got a Browser tab for the page the agent opened.
     await openSurface(page, "Browser");
     const panel = page.locator('[data-pane="panel"]');
-    await expect(panel.getByRole("tab", { name: "Browser" })).toHaveCount(1);
+    await expect(
+      panel.getByRole("button", { name: "Close browser", exact: true }),
+    ).toHaveCount(1);
     await expect(panel.getByRole("textbox", { name: "Address" })).toHaveValue(
       `http://localhost:${port}/broken`,
     );

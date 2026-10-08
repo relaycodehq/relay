@@ -257,3 +257,18 @@ function BrowserNotice({
     </div>
   );
 }
+
+/** A failed or missing favicon falls back to the browser's globe. */
+export function BrowserTabIcon({ favicon }: { favicon?: string }) {
+  const [failed, setFailed] = useState(false);
+  return favicon && !failed ? (
+    <img
+      className="browser-tab-icon"
+      src={favicon}
+      alt=""
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <Globe size={14} />
+  );
+}

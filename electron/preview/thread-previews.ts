@@ -54,6 +54,8 @@ interface Preview {
   server: DevServerState;
   console: ConsoleEntry[];
   snapshot?: string;
+  favicon?: string;
+  faviconRequest?: object;
   /** Counts place calls, so a hide still capturing knows it was overtaken. */
   placed: number;
 }
@@ -203,6 +205,38 @@ export class ThreadPreviews {
       emit();
     });
     wc.on("did-stop-loading", emit);
+    wc.on("did-start-navigation", ({ isSameDocument, isMainFrame }) => {
+      if (!isMainFrame || isSameDocument || !current()) return;
+      preview.favicon = undefined;
+      preview.faviconRequest = undefined;
+      emit();
+    });
+    wc.on("page-favicon-updated", (_event, urls) => {
+      if (!current()) return;
+      const request = {};
+      preview.faviconRequest = request;
+      void (async () => {
+        let favicon: string | undefined;
+        for (const url of urls) {
+          if (!webUrl(url) && !url.startsWith("data:image/")) continue;
+          try {
+            const response = await wc.session.fetch(url);
+            if (!response.ok) continue;
+            const mime = response.headers.get("content-type")?.split(";")[0];
+            if (!mime?.startsWith("image/")) continue;
+            const bytes = Buffer.from(await response.arrayBuffer());
+            if (!bytes.length || bytes.length > 1024 * 1024) continue;
+            favicon = `data:${mime};base64,${bytes.toString("base64")}`;
+            break;
+          } catch {
+            // Missing icons should never stop a page from loading.
+          }
+        }
+        if (!current() || preview.faviconRequest !== request) return;
+        preview.favicon = favicon;
+        emit();
+      })();
+    });
     wc.on("did-navigate", emit);
     wc.on("did-navigate-in-page", emit);
     wc.on("page-title-updated", emit);
@@ -585,6 +619,7 @@ export class ThreadPreviews {
     return {
       key: preview.target.key,
       ...this.page(preview),
+      ...(preview.favicon ? { favicon: preview.favicon } : {}),
       ...(preview.error ? { error: preview.error } : {}),
       ...(preview.snapshot ? { snapshot: preview.snapshot } : {}),
       poppedOut: !!preview.popOut,

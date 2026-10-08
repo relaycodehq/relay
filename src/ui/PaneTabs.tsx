@@ -8,6 +8,7 @@ export interface PaneTab {
   icon: ReactNode;
   /** Kept open, like Files over an unsaved edit. */
   closeDisabled?: boolean;
+  closeLabel?: string;
 }
 
 /** Tabs along a pane's header; each closes on its own, + adds one. */
@@ -35,6 +36,7 @@ export function PaneTabs({
             type="button"
             role="tab"
             aria-selected={front === tab.key}
+            title={tab.label}
             className={`pane-tab ${front === tab.key ? "active" : ""}`}
             onClick={() => onFront(tab.key)}
           >
@@ -44,7 +46,7 @@ export function PaneTabs({
           <button
             type="button"
             className="pane-tab-close"
-            aria-label={`Close ${tab.label.toLowerCase()}`}
+            aria-label={tab.closeLabel ?? `Close ${tab.label.toLowerCase()}`}
             title="Close"
             disabled={tab.closeDisabled}
             onClick={() => onClose(tab.key)}

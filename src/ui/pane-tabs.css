@@ -21,6 +21,10 @@
   white-space: nowrap;
   cursor: pointer;
 }
+.pane-tab > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .pane-tab > svg {
   flex-shrink: 0;
 }
@@ -40,6 +44,8 @@
 }
 .pane-tab-host .pane-tab {
   padding-right: 24px;
+  min-width: 0;
+  max-width: 240px;
 }
 .pane-tab-close {
   position: absolute;

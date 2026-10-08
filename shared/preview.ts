@@ -20,6 +20,8 @@ export interface PreviewState {
   key: string;
   url: string;
   title: string;
+  /** The page icon as an image data URL, loaded in its browser session. */
+  favicon?: string;
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;

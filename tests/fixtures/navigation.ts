@@ -57,7 +57,18 @@ export async function openSurface(
     await toggle.click();
   const panel = page.locator('[data-pane="panel"]');
   await expect(panel.locator(".pane-header")).toBeVisible();
-  const tab = panel.getByRole("tab", { name, exact: true });
+  const tab =
+    name === "Browser"
+      ? panel
+          .locator(".pane-tab-host")
+          .filter({
+            has: page.getByRole("button", {
+              name: "Close browser",
+              exact: true,
+            }),
+          })
+          .getByRole("tab")
+      : panel.getByRole("tab", { name, exact: true });
   if (name !== "Terminal" && (await tab.isVisible())) return tab.click();
   const item = panel.getByRole("menuitem", { name, exact: true });
   if (!(await item.isVisible()))
