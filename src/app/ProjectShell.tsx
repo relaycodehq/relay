@@ -210,10 +210,10 @@ export default function ProjectShell() {
                   key={folder.where}
                   project={project}
                   where={folder.where}
-                  connected={!!account}
+                  connected={!!host.account}
                   disabled={lock.locked}
                   ref={gitActions}
-                  onConnect={() => void signIn.withAccount()}
+                  onConnect={() => setChoosePR(true)}
                   onReview={(ref) => void prs.review(ref)}
                   onChanges={() => opens.openCode("changes")}
                   onError={setError}
