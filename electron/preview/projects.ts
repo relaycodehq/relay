@@ -10,6 +10,16 @@ import { runningServerPorts } from "./running-server";
 import type { ServerLinks } from "./server-links";
 import type { PreviewTarget } from "./thread-previews";
 
+/** The configured port in this worktree, validated before any socket is opened. */
+export function worktreeDevPort(port: number, env: Record<string, string>) {
+  const effective = port + (Number(env.RELAY_PORT_OFFSET) || 0);
+  if (!Number.isInteger(effective) || effective < 1 || effective > 65535)
+    throw new Error(
+      `The dev port ${port} plus worktree offset ${env.RELAY_PORT_OFFSET ?? "0"} must be between 1 and 65535. Change the project’s dev port or worktree offset.`,
+    );
+  return effective;
+}
+
 /** The folders and server identity shared by the Browser and named links. */
 export class PreviewProjects {
   constructor(
@@ -101,13 +111,14 @@ export class PreviewProjects {
       ),
     );
     const requested = localPort(url ?? "");
+    const remote = !!url && /^https?:\/\//i.test(url) && !requested;
     let folder = primary;
     if (requested) {
       const matches = [...live].filter(([, ports]) =>
         ports.includes(requested),
       );
       if (matches.length === 1) folder = matches[0]![0];
-    } else if (primary === scope.root) {
+    } else if (!remote && primary === scope.root) {
       const worktrees = [...live].filter(
         ([path, ports]) => path !== scope.root && ports.length,
       );
@@ -122,9 +133,10 @@ export class PreviewProjects {
     }
     const env = await this.env(chat, folder);
     const settings = this.projects.get(projectId).settings;
-    const configured = settings?.devPort
-      ? settings.devPort + (Number(env.RELAY_PORT_OFFSET) || 0)
-      : undefined;
+    const configured =
+      settings?.devPort && !remote
+        ? worktreeDevPort(settings.devPort, env)
+        : undefined;
     const ports = live.get(folder) ?? [];
     const select = (ports: number[]) =>
       configured && ports.includes(configured)
@@ -132,10 +144,11 @@ export class PreviewProjects {
         : ports.length === 1
           ? ports[0]
           : undefined;
-    const port =
-      requested ??
-      select(ports) ??
-      (ports.length === 0 ? configured : undefined);
+    const port = remote
+      ? undefined
+      : (requested ??
+        select(ports) ??
+        (ports.length === 0 ? configured : undefined));
     const branch =
       folder !== scope.root
         ? await currentBranchOr(folder, "worktree")

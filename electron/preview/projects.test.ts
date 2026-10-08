@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ProjectChat } from "../../shared/projects";
 import type { ProjectTask } from "../../shared/tasks";
 import { projectTasks } from "../terminal/tasks";
-import { PreviewProjects } from "./projects";
+import { PreviewProjects, worktreeDevPort } from "./projects";
 import * as runningServers from "./running-server";
 import type { ServerLinks } from "./server-links";
 
@@ -14,6 +14,7 @@ afterEach(() => vi.restoreAllMocks());
 function setup(
   chat: Partial<ProjectChat>,
   listeners: Record<string, number[]>,
+  devPort = 3000,
 ) {
   const own = { id: "one", projectId: "project", ...chat } as ProjectChat;
   const tasks = Object.entries(listeners).map(
@@ -36,7 +37,7 @@ function setup(
       get: () =>
         ({
           path: "/repo",
-          settings: { devPort: 3000, devCommand: "npm run dev" },
+          settings: { devPort, devCommand: "npm run dev" },
         }) as never,
     },
     {
@@ -140,4 +141,53 @@ it("does not load the checkout's configured port when a manual worktree has seve
   const target = await resolver.target("project", "one", undefined, links);
   expect(target.folder).toBe("/repo/manual");
   expect(target.dev).toBeUndefined();
+});
+
+it("validates worktree offsets before returning a configured dev target", async () => {
+  expect(() => worktreeDevPort(65530, { RELAY_PORT_OFFSET: "10" })).toThrow(
+    "between 1 and 65535",
+  );
+  expect(() => worktreeDevPort(1, { RELAY_PORT_OFFSET: "-10" })).toThrow(
+    "between 1 and 65535",
+  );
+  expect(() => worktreeDevPort(3000, { RELAY_PORT_OFFSET: "0.5" })).toThrow(
+    "between 1 and 65535",
+  );
+  expect(worktreeDevPort(65525, { RELAY_PORT_OFFSET: "10" })).toBe(65535);
+});
+
+it("opens an explicit remote page even when local worktree selection is ambiguous", async () => {
+  const { resolver, links } = setup(
+    {
+      agentWorktrees: [
+        { path: "/repo/a", branch: "a", at: 1 },
+        { path: "/repo/b", branch: "b", at: 1 },
+      ],
+    },
+    { "/repo/a": [5173], "/repo/b": [8080] },
+  );
+  const target = await resolver.target(
+    "project",
+    "one",
+    "https://example.com/",
+    links,
+  );
+  expect(target.folder).toBe("/repo");
+  expect(target.dev).toBeUndefined();
+});
+
+it("rejects an overflowing configured port during target resolution", async () => {
+  const { resolver, links } = setup(
+    {
+      worktree: {
+        path: "/repo/managed",
+        branch: "managed",
+      } as ProjectChat["worktree"],
+    },
+    {},
+    65530,
+  );
+  await expect(
+    resolver.target("project", "one", undefined, links),
+  ).rejects.toThrow("dev port 65530 plus worktree offset 10");
 });

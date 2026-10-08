@@ -77,7 +77,12 @@ import { ProjectAdding } from "./project-add";
 import { TerminalSessions } from "./terminal-sessions";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
-import { ThreadPreviews, PreviewProjects, ServerLinks } from "./preview";
+import {
+  ThreadPreviews,
+  PreviewProjects,
+  ServerLinks,
+  worktreeDevPort,
+} from "./preview";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -378,8 +383,7 @@ app
         const settings = projects.get(chat.projectId).settings;
         if (!settings?.devCommand || !settings.devPort) return;
         const env = await previewProjects.env(chat, folder);
-        if (port !== settings.devPort + (Number(env.RELAY_PORT_OFFSET) || 0))
-          return;
+        if (port !== worktreeDevPort(settings.devPort, env)) return;
         return previews?.servers.ensure(folder, settings.devCommand, port, env);
       },
     );
