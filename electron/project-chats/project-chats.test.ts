@@ -1618,6 +1618,24 @@ it("resumes a stopped answer with the agent picked since", async () => {
   expect(after.messages.at(-1)?.provider).toBe("claude");
   expect(after.lastInput).toMatchObject({ provider: "claude", choice });
   expect(after.lastInput?.body).toMatch(/^@claude Continue/);
+  const resume = after.messages.find((m) => m.resumed);
+  expect(resume).toMatchObject({
+    role: "user",
+    provider: "claude",
+    body: after.lastInput?.body,
+  });
+  expect(after.messages[0].resumed).toBeUndefined();
+  expect(
+    events.some((e) => e.message.id === resume?.id && e.message.resumed),
+  ).toBe(true);
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  expect(
+    (await chats.get(chat.id)).messages.find((m) => m.id === resume?.id)
+      ?.resumed,
+  ).toBe(true);
 }, 15000);
 
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
@@ -1734,6 +1752,10 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
     { timeout: 15000 },
   );
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+  const inputs = (await chats.get(chat.id)).messages.filter(
+    (m) => m.role === "user",
+  );
+  expect(inputs.map((m) => m.resumed)).toEqual([undefined, true, undefined]);
 }, 30000);
 
 it("keeps an answer a usage limit stopped on its account, waiting for the reset, even with another signed in", async () => {

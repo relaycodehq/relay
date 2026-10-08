@@ -265,6 +265,22 @@ export const Message = memo(function Message({
       image={m.status === "streaming" ? hiddenImage : answerImage}
     />
   );
+  if (m.resumed)
+    return (
+      <div
+        className="context-compaction resume-divider"
+        data-message-id={m.id}
+        role="separator"
+        aria-label={`Resumed at ${clock(m.created)}`}
+      >
+        <span>
+          Resumed ·{" "}
+          <time dateTime={new Date(m.created).toISOString()}>
+            {clock(m.created)}
+          </time>
+        </span>
+      </div>
+    );
   if (m.handoff)
     return (
       <HandoffRow

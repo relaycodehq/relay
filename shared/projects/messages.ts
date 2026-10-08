@@ -58,6 +58,8 @@ export interface WorktreeCommandRun {
   stopped?: "timeout" | "cancelled";
 }
 export interface ChatMessage {
+  /** Local marker: Relay sent this prompt to resume a stopped answer; shown as a divider. */
+  resumed?: boolean;
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
   /** Local: what a compaction left the agent with, when the provider hands it back readable. */
