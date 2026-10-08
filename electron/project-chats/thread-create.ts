@@ -108,6 +108,11 @@ export class ThreadCreate {
     };
     chat.forkedAt = chat.messages.at(-1)!.id;
     await this.core.storage.copyImages(source.id, chat.id, kept);
+    await this.core.storage.renders.copy(
+      source.id,
+      chat.id,
+      kept.flatMap((m) => m.renders ?? []).map((r) => r.id),
+    );
     await this.core.storage.add(chat);
     return chatSummary(chat);
   }

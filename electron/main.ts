@@ -39,6 +39,11 @@ import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { ProjectChats } from "./project-chats";
 import {
+  lookAtPage,
+  registerRenderScheme,
+  serveRenders,
+} from "./html-renders";
+import {
   agentProjects,
   answerRelayTools,
   prepareRelayTools,
@@ -235,6 +240,7 @@ else lastRun = watchForCrashes();
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();
+registerRenderScheme();
 app
   .whenReady()
   .then(async () => {
@@ -334,6 +340,9 @@ app
       },
     );
     projectChats = chats;
+    serveRenders((chatId, renderId, page) =>
+      chats.renderPage(chatId, renderId, page),
+    );
     const pullMerges = new PullMerges({
       chats: () => loaded.get().chats ?? [],
       repository: async (projectId) => {
@@ -513,6 +522,7 @@ app
         agentHosts,
         agentProjects(projects, () => login.client, app.getPath("userData")),
         previews,
+        lookAtPage,
       );
     chats.armWakeups();
     void chats

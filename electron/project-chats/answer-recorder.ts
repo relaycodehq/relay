@@ -9,6 +9,7 @@ import type {
 import type { TurnModel } from "../../shared/turn-model";
 import type { WatchNote } from "../../shared/watch";
 import type { AgentQuestion } from "../../shared/agent-modes";
+import type { HtmlRender } from "../../shared/html-render";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -113,6 +114,12 @@ export class AnswerRecorder {
   note(note: WatchNote) {
     if (this.stopped) return;
     (this.message.notes ??= []).push(note);
+    this.changed();
+  }
+  /** A page the agent showed with show_html; it sits above the reply. */
+  render(render: HtmlRender) {
+    if (this.stopped) return;
+    (this.message.renders ??= []).push(render);
     this.changed();
   }
   commentary(id: string, text: string | null) {

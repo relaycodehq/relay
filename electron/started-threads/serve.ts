@@ -4,6 +4,7 @@ import { mkdir, realpath } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import type { AgentHosts } from "../agent-host/client";
 import type { ProjectChats } from "../project-chats";
+import type { RenderTools } from "../html-renders";
 import type { ThreadPreviews } from "../preview";
 import { repositoryRoot, type Projects } from "../projects/projects";
 import {
@@ -56,8 +57,9 @@ export async function answerRelayTools(
   hosts: AgentHosts | undefined,
   projects: AgentProjects,
   previews?: ThreadPreviews,
+  look?: RenderTools["look"],
 ) {
-  const started = new StartedThreads(chats, { projects, previews });
+  const started = new StartedThreads(chats, { projects, previews, look });
   if (hosts) {
     hosts.tools = started.handle;
     // The host serves them; this makes sure one of this version runs.

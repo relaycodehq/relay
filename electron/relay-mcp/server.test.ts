@@ -92,6 +92,8 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
     "open_preview",
     "screenshot",
     "console_errors",
+    "show_html",
+    "preview_html",
   ]);
   expect(list.result.tools[0].inputSchema.properties.threads.type).toBe(
     "array",
@@ -143,6 +145,8 @@ test("a started thread's path lists and answers only the tools that drive no oth
     "open_preview",
     "screenshot",
     "console_errors",
+    "show_html",
+    "preview_html",
   ]);
   const refused = await (
     await post(started, {

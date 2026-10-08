@@ -23,6 +23,7 @@ import type {
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
+import type { HtmlRender } from "../../shared/html-render";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
@@ -674,6 +675,18 @@ export class ProjectChats {
         new Error("This thread has no running turn to ask in."),
       );
     return active.requests.ask(request, signal);
+  }
+  /** Adds a page the thread's agent showed to the answer it is writing; see electron/html-renders. */
+  async showRender(id: string, render: HtmlRender, pages: string[]) {
+    const active = this.active.get(id);
+    if (!active?.render || active.finishing || active.stopping)
+      throw new Error("This thread has no running answer to show it in.");
+    await this.storage.renders.save(id, render.id, pages);
+    active.render(render);
+  }
+  /** A page an answer showed, as its agent wrote it. */
+  renderPage(id: string, renderId: string, page: number) {
+    return this.storage.renders.read(id, renderId, page);
   }
   respond(id: string, requestId: string, response: AgentResponse) {
     const active = this.active.get(id);

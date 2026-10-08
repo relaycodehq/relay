@@ -259,6 +259,16 @@ export const session = {
   fromPartition: () => {
     throw unavailable("Browser storage");
   },
+  get defaultSession(): never {
+    throw unavailable("Browser storage");
+  },
+};
+
+// No pages are shown here, so nothing serves them (see electron/html-renders).
+export const protocol = {
+  registerSchemesAsPrivileged: () => {
+    throw unavailable("Showing pages");
+  },
 };
 
 export class Tray {

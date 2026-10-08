@@ -21,6 +21,7 @@ import type {
 import { contextAgent } from "../../shared/recipient";
 import { keyedQueue } from "../util/keyed-queue";
 import type { Store } from "../app/store";
+import { RenderFiles } from "../html-renders";
 import { imageMimeType } from "./images";
 import { reviveChat } from "./revive";
 
@@ -96,12 +97,16 @@ export class ChatStorage {
   /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
   private ready: Promise<void> = Promise.resolve();
   private listeners = new Set<(projectId: string) => void>();
+  /** The pages answers showed with show_html. */
+  readonly renders: RenderFiles;
   constructor(
     private store: Store,
     private dir: string,
     /** The answer's session is still in the turn a restart cut off. */
     private resuming: (chatId: string, branch?: string) => boolean,
-  ) {}
+  ) {
+    this.renders = new RenderFiles(join(dir, "renders"));
+  }
 
   /** Loads wait for `ready` from here on. */
   waitFor(ready: Promise<void>) {

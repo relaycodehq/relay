@@ -1,3 +1,4 @@
+import type { HtmlRender } from "../../shared/html-render";
 import type { ProjectChatSend } from "../../shared/projects";
 import { AgentRequests } from "./agent-requests";
 import type { AgentOptions } from "../agents/types";
@@ -14,6 +15,8 @@ export interface ActiveChat {
   job?: Promise<unknown>;
   input?: ProjectChatSend;
   steer?: AgentControl["steer"];
+  /** Adds a page the agent showed to the answer it is writing. */
+  render?: (render: HtmlRender) => void;
   /** Pauses or clears the goal the turn pursues; Codex only. */
   goal?: AgentControl["goal"];
   /** Settles once the turn gives the thread back; see `release`. */

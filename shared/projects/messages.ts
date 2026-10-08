@@ -3,6 +3,7 @@ import { isImagePath } from "../answer-images";
 import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
 import type { AgentQuestion } from "../agent-modes";
+import type { HtmlRender } from "../html-render";
 
 /** A question the agent leaves open while it keeps working. */
 export interface AsyncAgentQuestions {
@@ -99,6 +100,8 @@ export interface ChatMessage {
   questions?: AsyncAgentQuestions[];
   /** Local: what the side check flagged during this turn; see shared/watch. */
   notes?: WatchNote[];
+  /** Local: pages the agent showed in its answer with show_html, above its reply. */
+  renders?: HtmlRender[];
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */

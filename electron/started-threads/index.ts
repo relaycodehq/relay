@@ -33,6 +33,11 @@ import {
   type ThreadPreviews,
 } from "../preview";
 import {
+  answerRenderTool,
+  type RenderToolName,
+  type RenderTools,
+} from "../html-renders";
+import {
   relayToolSchemas,
   toolText,
   STARTED_LIMIT,
@@ -68,6 +73,7 @@ type Chats = Pick<
   | "askInTurn"
   | "worktreeFrom"
   | "triage"
+  | "showRender"
 >;
 
 const defaultChoice: ModelChoice = {
@@ -162,17 +168,21 @@ export class StartedThreads {
   private readUsage: ReadUsage;
   private projects: AgentProjects | undefined;
   private previews: ThreadPreviews | undefined;
+  private look: RenderTools["look"];
   constructor(
     private chats: Chats,
     options: {
       readUsage?: ReadUsage;
       projects?: AgentProjects;
       previews?: ThreadPreviews;
+      /** Loads pages unseen for show_html and preview_html; absent without windows. */
+      look?: RenderTools["look"];
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
     this.projects = options.projects;
     this.previews = options.previews;
+    this.look = options.look;
   }
 
   /** Answers one tool call made by the agent in `chatId`. */
@@ -239,6 +249,19 @@ export class StartedThreads {
           this.previews,
           { projectId: lead.projectId, chatId: lead.id },
           name as PreviewToolName,
+          input,
+          signal,
+        );
+      case "show_html":
+      case "preview_html":
+        return answerRenderTool(
+          {
+            look: this.look,
+            show: (id, render, pages) =>
+              this.chats.showRender(id, render, pages),
+          },
+          lead.id,
+          name as RenderToolName,
           input,
           signal,
         );
