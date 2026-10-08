@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Image,
@@ -80,6 +80,7 @@ export interface ComposerHandle {
   restore(back: Pick<TakenBack, "body" | "images">): () => void;
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
+  focus(): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -102,9 +103,27 @@ export const Composer = forwardRef<
     draftKey?: string;
     /** A new thread's models, per agent, for switching to one not picked here yet. */
     remembered?: NewThreadModels;
+    /** Over the message box, inside the dock. */
+    above?: ReactNode;
+    autoFocus?: boolean;
   }
 >(function Composer(
-  { projectId, settings, onSettings, placeholder, running, disabled, context, onSend, onStop, onCommand, draftKey, remembered },
+  {
+    projectId,
+    settings,
+    onSettings,
+    placeholder,
+    running,
+    disabled,
+    context,
+    onSend,
+    onStop,
+    onCommand,
+    draftKey,
+    remembered,
+    above,
+    autoFocus,
+  },
   ref,
 ) {
   const t = useTheme();
@@ -158,6 +177,7 @@ export const Composer = forwardRef<
       };
     },
     settingsOn: (to) => switched(settings, to),
+    focus: () => input.current?.focus(),
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});
@@ -384,6 +404,7 @@ export const Composer = forwardRef<
         },
       ]}
     >
+      {above}
       {items && (
         <CommandMenu
           items={items}
@@ -420,6 +441,7 @@ export const Composer = forwardRef<
           ref={input}
           accessibilityLabel="Message"
           multiline
+          autoFocus={autoFocus}
           // Typing goes on while it reconnects; only sending waits. Dictated
           // words hold it still until they settle.
           editable={!live}
