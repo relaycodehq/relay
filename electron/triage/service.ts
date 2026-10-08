@@ -148,10 +148,7 @@ export class TriageService {
         signal?.throwIfAborted();
         if (review.comments_count === 0) continue;
         const data = await client.reviewComments(ref, review.id, signal);
-        if (
-          !Array.isArray(data) ||
-          (review.comments_count ?? 0) > data.length
-        )
+        if (!Array.isArray(data) || (review.comments_count ?? 0) > data.length)
           throw new Error(
             "Could not load the complete line discussions. Grouping is unavailable until they can be checked.",
           );

@@ -76,7 +76,12 @@ export interface Issue {
   updated_at: string;
   user: User;
   /** `server` is set where it isn't the Gitea account's, i.e. GitHub. */
-  repository: { name: string; owner: string; full_name: string; server?: string };
+  repository: {
+    name: string;
+    owner: string;
+    full_name: string;
+    server?: string;
+  };
   labels: { id: number; name: string; color: string }[];
   comments: number;
   pull_request?: { merged: boolean };

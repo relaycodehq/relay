@@ -81,9 +81,30 @@ it("puts a review's comments on the side and line they were left on, resolved by
   const client = github({
     "GET /repos/o/r/pulls/7/comments": () =>
       json([
-        { id: 10, pull_request_review_id: 5, path: "a", side: "RIGHT", line: 4, original_line: 4 },
-        { id: 11, pull_request_review_id: 5, path: "b", side: "LEFT", line: 9, original_line: 9 },
-        { id: 12, pull_request_review_id: 6, path: "c", side: "RIGHT", line: 1, original_line: 1 },
+        {
+          id: 10,
+          pull_request_review_id: 5,
+          path: "a",
+          side: "RIGHT",
+          line: 4,
+          original_line: 4,
+        },
+        {
+          id: 11,
+          pull_request_review_id: 5,
+          path: "b",
+          side: "LEFT",
+          line: 9,
+          original_line: 9,
+        },
+        {
+          id: 12,
+          pull_request_review_id: 6,
+          path: "c",
+          side: "RIGHT",
+          line: 1,
+          original_line: 1,
+        },
       ]),
     "POST /graphql": () =>
       json({
@@ -108,7 +129,11 @@ it("puts a review's comments on the side and line they were left on, resolved by
   });
   const comments = await client.reviewComments(ref, 5);
   expect(comments.map((c) => c.id)).toEqual([10, 11]);
-  expect(comments[0]).toMatchObject({ position: 4, original_position: 0, resolver: null });
+  expect(comments[0]).toMatchObject({
+    position: 4,
+    original_position: 0,
+    resolver: null,
+  });
   expect(comments[1]).toMatchObject({
     position: 0,
     original_position: 9,
@@ -150,7 +175,10 @@ it("submits drafts by line and side, with GitHub's name for approving", async ()
 });
 
 it("says what changed between two commits only when one follows the other", async () => {
-  const answer = { status: "ahead", files: [{ filename: "b", previous_filename: "a" }] };
+  const answer = {
+    status: "ahead",
+    files: [{ filename: "b", previous_filename: "a" }],
+  };
   const client = github({
     "GET /repos/o/r/compare/x...y": () => json(answer),
   });
@@ -166,7 +194,9 @@ it("reads a GitHub pull request URL as a ref on github.com", () => {
     number: 12,
     server: "https://github.com",
   });
-  expect(() => parseGithubPullUrl("https://github.com/o/r/issues/12")).toThrow();
+  expect(() =>
+    parseGithubPullUrl("https://github.com/o/r/issues/12"),
+  ).toThrow();
 });
 
 it("searches PRs you're part of and answers them as the board's issues, on github.com", async () => {
@@ -200,7 +230,12 @@ it("searches PRs you're part of and answers them as the board's issues, on githu
   expect(found.nextPage).toBe(2);
   expect(found.items[0]).toMatchObject({
     body: "",
-    repository: { owner: "o", name: "r", full_name: "o/r", server: "https://github.com" },
+    repository: {
+      owner: "o",
+      name: "r",
+      full_name: "o/r",
+      server: "https://github.com",
+    },
     pull_request: { merged: true },
   });
 });

@@ -44,7 +44,10 @@ export async function ghToken() {
 
 export type SearchFilter = "review_requested" | "assigned" | "created" | "all";
 
-interface GithubIssue extends Omit<Issue, "body" | "repository" | "pull_request"> {
+interface GithubIssue extends Omit<
+  Issue,
+  "body" | "repository" | "pull_request"
+> {
   body: string | null;
   draft?: boolean;
   repository_url: string;
@@ -84,7 +87,12 @@ const asIssue = (i: GithubIssue): Issue & { draft?: boolean } => {
   return {
     ...rest,
     body: i.body ?? "",
-    repository: { owner, name, full_name: `${owner}/${name}`, server: GITHUB_SERVER },
+    repository: {
+      owner,
+      name,
+      full_name: `${owner}/${name}`,
+      server: GITHUB_SERVER,
+    },
     pull_request: { merged: !!pull_request?.merged_at },
   };
 };
@@ -433,7 +441,9 @@ export class GitHub {
       return [
         ...new Set(
           data.files.flatMap((f) =>
-            f.previous_filename ? [f.previous_filename, f.filename] : [f.filename],
+            f.previous_filename
+              ? [f.previous_filename, f.filename]
+              : [f.filename],
           ),
         ),
       ];
@@ -442,7 +452,11 @@ export class GitHub {
     }
   }
   async reviews(r: PullRef, page: number, signal?: AbortSignal) {
-    const found = await this.page<Review>(`${this.pr(r)}/reviews`, page, signal);
+    const found = await this.page<Review>(
+      `${this.pr(r)}/reviews`,
+      page,
+      signal,
+    );
     return { ...found, items: found.items.map(asReview) };
   }
   /** The review's comments, the line each sits on, and whether its thread is resolved. */

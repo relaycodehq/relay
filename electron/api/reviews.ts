@@ -15,8 +15,7 @@ import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
 /** Reviewing a pull request on GitHub or Gitea: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
-  const { store, triage, requireClient, clientFor, prKey, projectChats } =
-    ctx;
+  const { store, triage, requireClient, clientFor, prKey, projectChats } = ctx;
 
   const triageArgs = [refSchema, shaSchema, shaSchema] as const;
 
@@ -45,7 +44,9 @@ export function reviewHandlers(ctx: ApiContext) {
       },
     ),
     parseUrl: takes([z.string().max(4096)], (url) =>
-      isGithubPullUrl(url) ? parseGithubPullUrl(url) : requireClient().parseUrl(url),
+      isGithubPullUrl(url)
+        ? parseGithubPullUrl(url)
+        : requireClient().parseUrl(url),
     ),
     pull: takes([refSchema], async (r) => (await clientFor(r)).pull(r)),
     files: takes([refSchema, pageSchema], async (r, page) =>
@@ -65,16 +66,19 @@ export function reviewHandlers(ctx: ApiContext) {
         shaSchema,
         shaSchema,
       ],
-      async (r, file, head, base) => (await clientFor(r)).contents(r, file, head, base),
+      async (r, file, head, base) =>
+        (await clientFor(r)).contents(r, file, head, base),
     ),
-    changedBetween: takes([refSchema, shaSchema, shaSchema], async (r, from, to) =>
-      (await clientFor(r)).changedBetween(r, from, to),
+    changedBetween: takes(
+      [refSchema, shaSchema, shaSchema],
+      async (r, from, to) => (await clientFor(r)).changedBetween(r, from, to),
     ),
     reviews: takes([refSchema, pageSchema], async (r, page) =>
       (await clientFor(r)).reviews(r, page),
     ),
-    reviewComments: takes([refSchema, z.number().int().positive()], async (r, id) =>
-      (await clientFor(r)).reviewComments(r, id),
+    reviewComments: takes(
+      [refSchema, z.number().int().positive()],
+      async (r, id) => (await clientFor(r)).reviewComments(r, id),
     ),
     discussion: takes([refSchema, pageSchema], async (r, page) =>
       (await clientFor(r)).discussion(r, page),

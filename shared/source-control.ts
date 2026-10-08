@@ -15,7 +15,9 @@ export const isGithubServer = (server: string | undefined) =>
 
 /** Which host a PR, server or repository URL is on, for copy: GitHub or Gitea. */
 export const pullHostName = (url: string | undefined) =>
-  url && /^https?:\/\/(www\.)?github\.com(\/|$)/i.test(url) ? "GitHub" : "Gitea";
+  url && /^https?:\/\/(www\.)?github\.com(\/|$)/i.test(url)
+    ? "GitHub"
+    : "Gitea";
 
 /** What Settings keeps: hosts the user turned off, and the CLIs they linked. */
 export interface SourceControlSettings {

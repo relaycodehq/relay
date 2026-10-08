@@ -150,7 +150,10 @@ export function PullRequestsPage({
     ? {
         title: "Pull requests",
         summary: isGithubServer(account.server) ? (
-          <>Searching pull requests you're part of; add repo: or org: to look wider</>
+          <>
+            Searching pull requests you're part of; add repo: or org: to look
+            wider
+          </>
         ) : (
           <>Searching every repository you can see</>
         ),
