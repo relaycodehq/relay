@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../app/store";
-import { ChatStorage } from "./storage";
+import { chatSummary, ChatStorage } from "./storage";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 let root: string, store: Store, storage: ChatStorage, changed: string[];
@@ -41,6 +41,48 @@ beforeEach(async () => {
   await open();
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
+
+it("lists each answering agent once, most recently used first, including side conversations", () => {
+  const chat = thread();
+  chat.messages = [
+    { ...answer("First"), provider: "claude" },
+    { ...answer("Second"), provider: "cursor" },
+    { ...answer("Third"), provider: "opencode" },
+    { ...answer("Fourth"), provider: "claude", parentId: "side" },
+    answer("Working"),
+    { ...answer("User message"), role: "user", provider: "cursor" },
+  ];
+  expect(chatSummary(chat).providers).toEqual([
+    "codex",
+    "claude",
+    "opencode",
+    "cursor",
+  ]);
+  chat.messages = [];
+  expect(chatSummary(chat).providers).toEqual([]);
+});
+
+it("backfills agent history for older summaries even when the thread file is old", async () => {
+  const chat = thread();
+  chat.messages = [
+    { ...answer("Earlier"), provider: "claude" },
+    answer("Latest"),
+  ];
+  await storage.add(chat);
+  await store.update((s) => {
+    delete s.chats![0]!.providers;
+  });
+  await store.flush();
+  await open();
+  const old = new Date(Date.now() - 3_600_000);
+  await utimes(join(root, "chats", chat.id + ".json"), old, old);
+  await storage.reconcile(store.savedAtLoad);
+  expect(listed(chat).providers).toEqual(["codex", "claude"]);
+  expect(changed).toEqual(["p"]);
+  changed.length = 0;
+  await storage.reconcile(store.savedAtLoad);
+  expect(changed).toEqual([]);
+});
 
 it("writes the summary when a save changes what the sidebar lists, and only then", async () => {
   const chat = thread();

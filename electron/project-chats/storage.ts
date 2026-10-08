@@ -55,9 +55,19 @@ export function chatSummary({
     .reverse()
     .find((m) => m.role === "assistant")?.provider;
   const holder = contextAgent(messages.filter((m) => !m.parentId));
+  const providers = [
+    ...new Set(
+      [...messages]
+        .reverse()
+        .flatMap((m) =>
+          m.role === "assistant" && m.provider ? [m.provider] : [],
+        ),
+    ),
+  ];
   const next = nextSend(scheduled);
   return {
     ...summary,
+    providers,
     ...(provider ? { provider } : {}),
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
@@ -214,12 +224,14 @@ export class ChatStorage {
   /**
    * After a crash between a thread's file and its summary, the summary reads
    * the older of the two. Reads only the threads saved since the store was,
-   * the other files being too many to parse at launch.
+   * the other files being too many to parse at launch. Older summaries missing
+   * the agent history are backfilled once from their conversations too.
    */
   async reconcile(storeSavedAt: number) {
     const listed = this.store.get().chats ?? [];
     const recent = await Promise.all(
-      listed.map(async ({ id }) => {
+      listed.map(async ({ id, providers }) => {
+        if (!providers) return id;
         const saved = await stat(join(this.dir, id + ".json")).catch(
           () => undefined,
         );

@@ -13,23 +13,20 @@ import { useNow } from "../../lib/useNow";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { Spinner } from "../../ui/ui";
 
-/** Past this many agents, the last slot counts the rest. */
-const CARD_AGENT_ICONS = 3;
-/** Who's answering while it runs, otherwise who answered last. */
+/** Every agent used in the thread, most recently used first. */
 export function CardAgents({ chat }: { chat: ChatSummary }) {
-  const agents = chat.runningAgents?.length
-    ? chat.runningAgents
-    : chat.provider
-      ? [chat.provider]
-      : [];
+  const agents = [
+    ...new Set([
+      ...(chat.providers ?? (chat.provider ? [chat.provider] : [])),
+      ...(chat.runningAgents ?? []),
+    ]),
+  ];
   if (!agents.length) return null;
-  const more = agents.length - CARD_AGENT_ICONS;
   return (
     <span className="sb-card-provider" title={agents.map(agentName).join(", ")}>
-      {agents.slice(0, more > 0 ? CARD_AGENT_ICONS - 1 : undefined).map((p) => (
+      {agents.map((p) => (
         <ProviderIcon key={p} provider={p} />
       ))}
-      {more > 0 && <span className="sb-card-provider-more">+{more + 1}</span>}
     </span>
   );
 }

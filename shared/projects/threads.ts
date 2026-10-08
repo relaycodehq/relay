@@ -41,6 +41,8 @@ export interface ChatSummary {
   updated: number;
   /** Provider of the latest answer, for the activity card. */
   provider?: AgentProvider;
+  /** Every agent used in the conversation, most recently used first. */
+  providers?: AgentProvider[];
   /** The agent holding the main conversation's context; see shared/recipient. */
   contextAgent?: AgentProvider;
   /** The account each agent runs on here, pinned on its first turn; see shared/agent-accounts. */

@@ -965,9 +965,6 @@
   width: 13px;
   height: 13px;
 }
-.sb-card-provider-more {
-  font-variant-numeric: tabular-nums;
-}
 
 /* Threads a thread's agent started hang off a guide line under its card. */
 .sb-started {
