@@ -32,6 +32,25 @@ export interface PageLook {
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// In the running app, a canvas drawn once (a chart without animation) went
+// missing from capturePage after the resizes, while one redrawn every frame
+// showed. Rewriting a pixel of each 2D canvas every frame until the shot is
+// taken (the window closes right after) keeps them in it without changing
+// what they show.
+const KEEP_CANVASES = `new Promise((done) => {
+  let frames = 0;
+  const touch = () => {
+    for (const canvas of document.querySelectorAll("canvas")) {
+      if (!canvas.width || !canvas.height) continue;
+      const g = canvas.getContext("2d");
+      try { if (g) g.putImageData(g.getImageData(0, 0, 1, 1), 0, 0); } catch {}
+    }
+    requestAnimationFrame(touch);
+    if (++frames === 2) done(true);
+  };
+  requestAnimationFrame(touch);
+})`;
+
 export async function lookAtPage(
   html: string,
   options: { shotWidth?: number },
@@ -59,8 +78,10 @@ export async function lookAtPage(
   wc.setWindowOpenHandler(() => ({ action: "deny" }));
   wc.on("will-navigate", (e) => e.preventDefault());
   const logs: PageLog[] = [];
+  // Off once the shot starts: KEEP_CANVASES's readbacks warn on their own.
+  let listening = true;
   wc.on("console-message", ({ level, message, sourceId, lineNumber }) => {
-    if (level !== "error" && level !== "warning") return;
+    if (!listening || (level !== "error" && level !== "warning")) return;
     if (sourceId.startsWith("node:electron/")) return;
     if (logs.length < KEPT_LOGS)
       logs.push({
@@ -102,6 +123,8 @@ export async function lookAtPage(
         Math.min(Math.max(shotHeight, 40), 4000),
       );
       await measure();
+      listening = false;
+      await wc.executeJavaScript(KEEP_CANVASES);
       image = await wc.capturePage();
     }
     return { heights, logs, image, shotHeight, loadError };
