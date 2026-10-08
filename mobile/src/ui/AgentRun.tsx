@@ -266,6 +266,7 @@ function Preview({ activity: a, name }: { activity: AgentActivity; name: string 
   const { chatId, messageId, openImage } = useContext(Subagents);
   return (
     <ReadPreview
+      key={a.label}
       source={{ kind: "read", chatId, messageId, path: a.label }}
       name={name}
       done={a.status === "complete"}
@@ -325,11 +326,11 @@ function ActivityGroup({ activity }: { activity: AgentActivity[] }) {
       under={(open) =>
         !open &&
         looked.length > 0 && (
-          <View style={[styles.under, styles.wrap]}>
+          <ScrollView horizontal style={styles.under} contentContainerStyle={styles.previews}>
             {looked.map((a) => (
               <Preview key={a.id} activity={a} name={display(a.label)} />
             ))}
-          </View>
+          </ScrollView>
         )
       }
       heading={
@@ -398,6 +399,11 @@ function OpenBatch({ activity }: { activity: AgentActivity[] }) {
           />
         )}
       </Pressable>
+      {open && looksAtImage(head) && (
+        <View style={styles.under}>
+          <Preview activity={head} name={display(head.label)} />
+        </View>
+      )}
       {open && calls.length > 0 && <SubagentRows calls={calls} />}
       {open && earlier.length > 0 && (
         <View style={styles.rows}>
@@ -510,7 +516,7 @@ const styles = StyleSheet.create({
   progress: { fontSize: 13, opacity: 0.6, flexShrink: 1000 },
   rows: { marginLeft: 21, marginBottom: 4 },
   under: { marginLeft: 21, flexDirection: "row" },
-  wrap: { flexWrap: "wrap", columnGap: 6 },
+  previews: { gap: 6 },
   detail: { marginLeft: 21, marginTop: 2, marginBottom: 8, maxHeight: 220, borderRadius: 5, padding: 9 },
   detailText: { fontFamily: mono, fontSize: 11, lineHeight: 16 },
   glyph: { width: 14, fontSize: 13, textAlign: "center" },
