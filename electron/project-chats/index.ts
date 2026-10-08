@@ -683,14 +683,15 @@ export class ProjectChats {
         await this.store.flush();
       }
     } catch (error) {
-      this.resumeAfterCancelledQuit();
+      await this.resumeAfterCancelledQuit();
       throw error;
     }
   }
 
   /** Nothing has detached yet: reopen sends and re-arm the paused timers. */
-  resumeAfterCancelledQuit() {
+  async resumeAfterCancelledQuit() {
     if (!this.disposing) return;
+    await this.schedule.rollbackPending();
     this.disposing = false;
     this.schedule.armAll();
     this.limits.armAll();
@@ -704,6 +705,7 @@ export class ProjectChats {
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
     }
+    this.schedule.commitPending();
     await this.sessions.closeAll();
     await Promise.all(
       Object.values(agentRuntimes).map((runtime) =>
