@@ -60,8 +60,14 @@ export function decodePng(bytes: Buffer): Pixels | null {
   const bits = channels * depth,
     stride = Math.ceil((width * bits) / 8),
     step = Math.max(1, bits >> 3);
-  const raw = inflateSync(Buffer.concat(data));
-  if (raw.length < (stride + 1) * height) return null;
+  const expected = (stride + 1) * height;
+  let raw: Buffer;
+  try {
+    raw = inflateSync(Buffer.concat(data), { maxOutputLength: expected });
+  } catch {
+    return null;
+  }
+  if (raw.length !== expected) return null;
 
   const rows = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y++) {

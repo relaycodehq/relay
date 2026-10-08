@@ -226,6 +226,15 @@ export function encodeJpeg(
   height: number,
   quality = 85,
 ): Buffer {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > 65535 ||
+    height > 65535
+  )
+    throw new Error("JPEG dimensions must be between 1 and 65535.");
   const { luma, chroma } = quantizers(quality);
   const w = new BitWriter();
   w.word(0xffd8);

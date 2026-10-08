@@ -128,7 +128,7 @@ export function compressImage(dataUrl: string, quality = 85): string {
   let result = dataUrl;
   try {
     const pixels = decodePng(Buffer.from(png[1]!, "base64"));
-    if (pixels?.opaque) {
+    if (pixels?.opaque && pixels.width <= 65535 && pixels.height <= 65535) {
       const jpeg = `data:image/jpeg;base64,${encodeJpeg(pixels.rgba, pixels.width, pixels.height, quality).toString("base64")}`;
       if (jpeg.length < dataUrl.length * 0.9) result = jpeg;
     }

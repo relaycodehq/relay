@@ -219,3 +219,23 @@ it("sends opaque PNGs whole as JPEGs where they come out smaller, and leaves the
     "data:image/gif;base64,R0lGODlh",
   );
 });
+
+it("rejects a tiny PNG whose compressed scanlines expand past its declared size", () => {
+  const bytes = png(1, 1, 8, 2, [Buffer.alloc(1024 * 1024)]);
+  expect(bytes.length).toBeLessThan(2000);
+  expect(decodePng(bytes)).toBeNull();
+});
+
+it("preserves PNGs outside JPEG's dimension range", () => {
+  const row = Buffer.alloc(65536 * 3);
+  let seed = 42;
+  for (let i = 0; i < row.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+    row[i] = seed >>> 24;
+  }
+  const original = `data:image/png;base64,${png(65536, 1, 8, 2, [row]).toString("base64")}`;
+  expect(compressImage(original)).toBe(original);
+  expect(() => encodeJpeg(new Uint8Array(4), 1, 65536)).toThrow(
+    "JPEG dimensions",
+  );
+});
