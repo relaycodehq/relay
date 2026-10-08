@@ -175,7 +175,9 @@ export class PhoneRemote {
     );
   }
   /** Resumes listening if phone access was on when Relay last quit. */
-  async start() {
+  async start(defaultEnabled = false) {
+    if (defaultEnabled && this.devices.settings.enabled === undefined)
+      await this.devices.setEnabled(true);
     if (this.devices.settings.enabled) await this.follow();
   }
   /** Keeps the window's theme for phones, and hands a change to those online. */

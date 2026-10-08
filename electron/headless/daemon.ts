@@ -337,18 +337,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     port,
   );
   phoneRemote = remote;
-  // Unlike the desktop's, a headless Relay is only reached remotely: phone
-  // access is what it's for, so it listens from the first start.
-  if (!remote.devices.settings.enabled)
-    await remote
-      .setEnabled(true)
-      .catch((e) =>
-        console.warn(
-          "Phone access waits for Tailscale:",
-          e instanceof Error ? e.message : e,
-        ),
-      );
-  await remote.start();
+  // Default phone access on once, even if Tailscale isn't available yet.
+  // start() watches for it; an explicitly saved false remains false.
+  await remote.start(true);
   void computers.start();
   // Agent sessions that kept running through a restart come back first.
   await chats.reattach();

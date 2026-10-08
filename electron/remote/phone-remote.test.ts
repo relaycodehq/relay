@@ -518,3 +518,28 @@ it("streams patches to a current phone that add up to what an older one gets who
   expect(current.p.events.filter((e) => e.kind === "message")).toHaveLength(6);
   expect(older.binary()).toBe(0);
 });
+
+it("headless startup watches initially disconnected Tailscale and respects saved disabled access", async () => {
+  const tailnet: { current: PhoneTailnet } = {
+    current: { status: "missing", addresses: [] },
+  };
+  const { remote } = await desktop(undefined, tailnet);
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  try {
+    await remote.start(true);
+    expect((await remote.state()).enabled).toBe(true);
+    expect((await remote.state()).listening).toBe(false);
+    tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
+    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.waitFor(async () =>
+      expect((await remote.state()).listening).toBe(true),
+    );
+    await remote.setEnabled(false);
+    await remote.start(true);
+    expect((await remote.state()).enabled).toBe(false);
+    expect((await remote.state()).listening).toBe(false);
+    await remote.close();
+  } finally {
+    vi.useRealTimers();
+  }
+});
