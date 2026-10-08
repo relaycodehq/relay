@@ -160,8 +160,9 @@ export class ProjectAdding {
     const location = expandHome(spec.location);
     const dest = join(location, spec.name);
     if (await exists(dest)) throw new Error(`${dest} is there already.`);
-    return this.job(`Creating ${spec.name}`, async (_, step) => {
-      await createProjectFolder({ ...spec, location }, dest, step);
+    return this.job(`Creating ${spec.name}`, async (signal, step) => {
+      await createProjectFolder({ ...spec, location }, dest, step, signal);
+      if (signal.aborted) throw new Error("Cancelled.");
       await this.remember(location);
       return this.deps.projects.add(dest, this.deps.client());
     });
@@ -183,9 +184,15 @@ export class ProjectAdding {
     const running = (this.running = new AbortController());
     this.deps.send({ title, step: "Starting", progress: null });
     try {
-      return await work(running.signal, (step, progress) =>
+      const project = await work(running.signal, (step, progress) =>
         this.deps.send({ title, step, progress }),
       );
+      if (running.signal.aborted) throw new Error("Cancelled.");
+      return project;
+    } catch (error) {
+      if (running.signal.aborted && (error as Error).name === "AbortError")
+        throw new Error("Cancelled.");
+      throw error;
     } finally {
       this.running = undefined;
       this.deps.send(null);

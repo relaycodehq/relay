@@ -47,7 +47,7 @@ export const newProjectSchema = z.object({
     .min(1)
     .max(100)
     .regex(/^[\w.-]+$/)
-    .refine((n) => n !== "." && n !== ".."),
+    .refine((n) => n !== "." && n !== ".." && !n.startsWith("-")),
   location: z.string().min(1).max(4096),
   git: z.boolean(),
   github: z.boolean(),
@@ -57,12 +57,15 @@ export type NewProject = z.infer<typeof newProjectSchema>;
 
 /** A clone URL from any host, or owner/repo for GitHub; null for anything else. */
 export function parseRemote(text: string) {
-  const t = text.trim();
+  const t = text
+    .trim()
+    .replace(/^[a-z]+(?=:\/\/)/i, (scheme) => scheme.toLowerCase());
   const url =
     /^(?:(?:https?|ssh|git):\/\/(?:[^@/]+@)?|git@)([^/:]+)(?::\d+)?[/:]((?:[\w.-]+\/)*[\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(
       t,
     );
-  if (url) return { host: url[1], full: `${url[2]}/${url[3]}`, url: t };
+  if (url)
+    return { host: url[1].toLowerCase(), full: `${url[2]}/${url[3]}`, url: t };
   const short = /^([\w-][\w.-]*)\/([\w.-]+?)(?:\.git)?$/.exec(t);
   if (short && !t.startsWith("."))
     return {

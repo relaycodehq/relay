@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readdir,
@@ -22,7 +23,7 @@ let dir: string;
 const saved = { ...process.env };
 const jobs: (AddingJob | null)[] = [];
 
-async function adding() {
+async function adding(onJob?: (job: AddingJob | null) => void) {
   const store = new Store(join(dir, "state"));
   await store.load();
   const projects = new Projects(store);
@@ -32,7 +33,10 @@ async function adding() {
     client: () => null,
     sessions: { recentFolders: async () => [] } as unknown as TerminalSessions,
     appData: join(dir, "app-data"),
-    send: (job) => jobs.push(job),
+    send: (job) => {
+      jobs.push(job);
+      onJob?.(job);
+    },
   });
   return { store, projects, service };
 }
@@ -148,4 +152,54 @@ it("clones with progress, and a stopped clone says so", async () => {
       signal: stop.signal,
     }),
   ).rejects.toThrow("Cancelled.");
+});
+
+it("cancels creation before committing and never registers the project", async () => {
+  const { service, projects } = await adding((job) => {
+    if (job?.step === "First commit") service.cancel();
+  });
+  const location = join(dir, "work");
+  await expect(service.create(spec(location))).rejects.toThrow(/Cancelled/);
+  expect(await projects.list(null)).toEqual([]);
+  expect(await readdir(location)).toEqual([]);
+  expect(jobs.at(-1)).toBeNull();
+});
+
+it("cleans up a failed initial commit so creation can be retried", async () => {
+  const { service } = await adding();
+  const template = join(dir, "template");
+  await mkdir(join(template, "hooks"), { recursive: true });
+  const hook = join(template, "hooks", "pre-commit");
+  await writeFile(hook, "#!/bin/sh\nexit 1\n");
+  await chmod(hook, 0o755);
+  process.env.GIT_TEMPLATE_DIR = template;
+  const location = join(dir, "work");
+  await expect(service.create(spec(location))).rejects.toThrow();
+  expect(await readdir(location)).toEqual([]);
+  await rm(hook);
+  expect((await service.create(spec(location))).path).toBe(
+    join(location, "acme-web"),
+  );
+});
+
+it("refuses an existing clone from a different owner with the same name", async () => {
+  const { service } = await adding();
+  const there = join(dir, "work", "web");
+  execFileSync("git", ["init", "-q", there]);
+  execFileSync("git", [
+    "-C",
+    there,
+    "remote",
+    "add",
+    "origin",
+    "https://github.com/alice/web.git",
+  ]);
+  await expect(service.clone("bob/web", join(dir, "work"))).rejects.toThrow(
+    /isn't a clone of bob\/web/,
+  );
+  expect(
+    execFileSync("git", ["-C", there, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+    }).trim(),
+  ).toBe("https://github.com/alice/web.git");
 });

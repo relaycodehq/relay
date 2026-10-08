@@ -1,3 +1,4 @@
+import { stopProcessTree } from "../platform/terminate";
 import { spawn } from "node:child_process";
 import { gitEnv, gitExecutable, redactCredentials } from "../git/git";
 
@@ -44,9 +45,17 @@ export async function cloneRepository(
         env,
         stdio: ["ignore", "ignore", "pipe"],
         windowsHide: true,
-        signal: options.signal,
+        detached: process.platform !== "win32",
       },
     );
+    let stopping: Promise<void> | undefined;
+    const stop = () => {
+      stopping ??= stopProcessTree(child).catch((e) => {
+        error = e;
+      });
+    };
+    options.signal.addEventListener("abort", stop, { once: true });
+    if (options.signal.aborted) stop();
     let tail = "";
     let partial = "";
     child.stderr.setEncoding("utf8");
@@ -60,11 +69,19 @@ export async function cloneRepository(
         if (read) options.onProgress(read.step, read.progress);
       }
     });
-    child.once("error", (e) =>
-      reject(options.signal.aborted ? new Error("Cancelled.") : e),
-    );
-    child.once("close", (code) => {
+    let error: Error | undefined;
+    child.once("error", (e) => {
+      error = e;
+    });
+    child.once("close", async (code) => {
+      options.signal.removeEventListener("abort", stop);
+      try {
+        await stopping;
+      } catch (e) {
+        return reject(e);
+      }
       if (options.signal.aborted) return reject(new Error("Cancelled."));
+      if (error) return reject(error);
       if (code === 0) return resolve();
       const said = redactCredentials(tail)
         .split(/[\r\n]/)

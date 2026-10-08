@@ -69,7 +69,8 @@ export async function githubCredentials(host: string): Promise<string[]> {
 }
 
 /** The `gh` login, or why there's none; asked before anything is made. */
-export async function githubLogin() {
+export async function githubLogin(signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const path = await gh();
   if (!path)
     throw new Error(
@@ -79,6 +80,7 @@ export async function githubLogin() {
     path,
     ["api", "user", "--jq", ".login"],
     15000,
+    signal,
   );
   if (user.code !== 0)
     throw new Error(
@@ -93,21 +95,24 @@ export async function createGithubRepo(
   dir: string,
   name: string,
   visibility: "private" | "public",
+  signal?: AbortSignal,
 ) {
   const run = await runExecutable(
     gh,
     [
       "repo",
       "create",
-      name,
       `--${visibility}`,
       "--source",
       dir,
       "--remote",
       "origin",
       "--push",
+      "--",
+      name,
     ],
     120000,
+    signal,
   );
   if (run.code !== 0)
     throw new Error(

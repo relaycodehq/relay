@@ -1,5 +1,8 @@
-import { expect, it } from "vitest";
-import { cloneProgress } from "./clone";
+import { expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+import { spawn } from "node:child_process";
+import { cloneRepository, cloneProgress } from "./clone";
 
 it("turns git's progress lines into one rising fraction", () => {
   const at = (line: string) => cloneProgress(line)?.progress ?? null;
@@ -15,4 +18,46 @@ it("turns git's progress lines into one rising fraction", () => {
   expect(steps.at(-1)).toBe(1);
   expect(cloneProgress("Cloning into 'web'...")).toBeNull();
   expect(cloneProgress("remote: Enumerating objects: 5, done.")).toBeNull();
+});
+
+vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
+vi.mock("../git/git", () => ({
+  gitExecutable: async () => "git",
+  gitEnv: () => ({}),
+  redactCredentials: (text: string) => text,
+}));
+it("does not settle a cancelled clone until its process closes", async () => {
+  const child = Object.assign(new EventEmitter(), {
+    stderr: new PassThrough(),
+  });
+  vi.mocked(spawn).mockReturnValue(
+    child as unknown as ReturnType<typeof spawn>,
+  );
+  const stop = new AbortController();
+  let settled = false;
+  const cloning = cloneRepository(
+    "https://example.com/acme/web",
+    "/sample/web",
+    { extraArgs: [], onProgress: () => {}, signal: stop.signal },
+  );
+  const failed = expect(cloning).rejects.toThrow("Cancelled.");
+  void cloning.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    },
+  );
+  await vi.waitFor(() => expect(spawn).toHaveBeenCalled());
+  stop.abort();
+  child.emit(
+    "error",
+    Object.assign(new Error("aborted"), { name: "AbortError" }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(settled).toBe(false);
+  child.emit("close", null);
+  await failed;
+  expect(settled).toBe(true);
 });

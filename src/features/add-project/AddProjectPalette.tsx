@@ -149,11 +149,7 @@ export function AddProjectPalette({
     if (related.length) setLinking({ project, related });
     else onDone(project);
   }
-  function clone(remote: string, full: string) {
-    const there = projects.find(
-      (p) => p.path === `${cloneInto}/${repoName(full)}`,
-    );
-    if (there) return onDone(there);
+  function clone(remote: string) {
     void adding.clone(remote, cloneInto).then(finish);
   }
   async function choose(what: "clone" | "new") {
@@ -170,11 +166,7 @@ export function AddProjectPalette({
   if (page === "root") {
     const q = query.trim().toLowerCase();
     if (remote)
-      items.push(
-        cloneItem(remote.full, remote.host, () =>
-          clone(remote.url, remote.full),
-        ),
-      );
+      items.push(cloneItem(remote.full, remote.host, () => clone(remote.url)));
     else {
       const sources: Item[] = [
         {
@@ -286,9 +278,7 @@ export function AddProjectPalette({
         .map(repoItem),
     );
   } else if (page === "url" && remote) {
-    items.push(
-      cloneItem(remote.full, remote.host, () => clone(remote.url, remote.full)),
-    );
+    items.push(cloneItem(remote.full, remote.host, () => clone(remote.url)));
   }
 
   function enter(f: FolderEntry) {
@@ -296,10 +286,21 @@ export function AddProjectPalette({
     setActive(0);
     adding.clear();
   }
+  function existingClone(full: string, host: string) {
+    return projects.find((p) => {
+      if (p.path !== `${cloneInto}/${repoName(full)}` || !p.repository)
+        return false;
+      const remote = parseRemote(
+        `${p.repository.server}/${p.repository.owner}/${p.repository.name}`,
+      );
+      return (
+        remote?.host.toLowerCase() === host.toLowerCase() &&
+        remote.full.toLowerCase() === full.toLowerCase()
+      );
+    });
+  }
   function cloneItem(full: string, host: string, run: () => void): Item {
-    const there = projects.find(
-      (p) => p.path === `${cloneInto}/${repoName(full)}`,
-    );
+    const there = existingClone(full, host);
     return {
       key: `clone:${full}`,
       icon: <GitHubMark size={15} />,
@@ -311,8 +312,9 @@ export function AddProjectPalette({
     };
   }
   function repoItem(r: GithubRepo): Item {
-    const there = projects.find(
-      (p) => p.path === `${cloneInto}/${repoName(r.full)}`,
+    const there = existingClone(
+      r.full,
+      parseRemote(r.url)?.host ?? "github.com",
     );
     return {
       key: r.full,
@@ -327,7 +329,7 @@ export function AddProjectPalette({
           {r.pushed ? timeAgo(new Date(r.pushed).toISOString()) : ""}
         </>
       ),
-      run: () => clone(r.url, r.full),
+      run: () => clone(r.url),
     };
   }
 

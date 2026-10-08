@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { parseRemote, repoName, slug } from "./adding";
+import { newProjectSchema, parseRemote, repoName, slug } from "./adding";
 
 it("reads clone URLs from any host and owner/repo as GitHub", () => {
   expect(parseRemote("https://github.com/acme/web.git")).toMatchObject({
@@ -41,4 +41,22 @@ it("names the clone's folder after the repository", () => {
 it("makes a folder name from what was typed", () => {
   expect(slug("  My New App! ")).toBe("my-new-app");
   expect(slug("..hidden")).toBe("hidden");
+});
+
+it("accepts URL scheme casing without changing SSH usernames or repository names", () => {
+  expect(parseRemote("HTTPS://GitHub.COM/Acme/Web.git")).toEqual({
+    host: "github.com",
+    full: "Acme/Web",
+    url: "https://GitHub.COM/Acme/Web.git",
+  });
+  expect(parseRemote("GIT@github.com:acme/web")).toBeNull();
+});
+
+it("refuses project names that would be command-line options", () => {
+  const spec = { location: "/sample", git: true, github: true, private: true };
+  for (const name of ["-f", "--public", "--private"])
+    expect(newProjectSchema.safeParse({ ...spec, name }).success).toBe(false);
+  expect(
+    newProjectSchema.safeParse({ ...spec, name: "my-project" }).success,
+  ).toBe(true);
 });

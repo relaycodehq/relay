@@ -1,7 +1,13 @@
+import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { terminate } from "./terminate";
 import { withTimeout } from "../util/timeout";
+
+vi.mock("node:child_process", async (actual) => {
+  const original = await actual<typeof import("node:child_process")>();
+  return { ...original, spawn: vi.fn(original.spawn) };
+});
 
 const exited = (child: ReturnType<typeof spawn>) =>
   new Promise<string | null>((resolve) =>
@@ -48,6 +54,24 @@ describe("terminate", () => {
     terminate(stuck, { byInput: true, graceMs: 200 });
     expect(await killed).toBe("SIGKILL");
   });
+});
+
+it("uses taskkill for an entire Windows process tree", () => {
+  const task = new EventEmitter();
+  const child = { pid: 123, exitCode: null, kill: vi.fn(), once: vi.fn() };
+  vi.mocked(spawn).mockReturnValueOnce(task as ReturnType<typeof spawn>);
+  vi.stubGlobal("process", { ...process, platform: "win32" });
+  try {
+    terminate(child, { group: true });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "taskkill",
+      ["/PID", "123", "/T", "/F"],
+      { windowsHide: true, stdio: "ignore" },
+    );
+    expect(child.kill).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 describe("withTimeout", () => {
