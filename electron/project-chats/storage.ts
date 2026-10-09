@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type {
   ChatImage,
@@ -31,6 +31,21 @@ export function nextSend(scheduled: ScheduledChatMessage[] = []) {
   return times.length ? Math.min(...times) : undefined;
 }
 
+/** A short mark of what waits in the thread's queue and Send later list; none when nothing does. */
+export function queueMark({
+  queue,
+  queuePaused,
+  scheduled,
+}: Pick<ProjectChat, "queue" | "queuePaused" | "scheduled">) {
+  if (!queue?.length && !scheduled?.length) return undefined;
+  const waiting = JSON.stringify([
+    queue?.map((q) => [q.input.id, q.error ?? ""]),
+    !!queuePaused,
+    scheduled?.map((s) => [s.input.id, s.at, s.error ?? ""]),
+  ]);
+  return createHash("sha1").update(waiting).digest("base64url").slice(0, 10);
+}
+
 /** What the sidebar lists of a thread: everything but its conversation and the state behind it. */
 export function chatSummary({
   messages,
@@ -50,6 +65,8 @@ export function chatSummary({
   ultraplans,
   handover,
   carriedIds,
+  // Worked out below; a stale copy on the thread itself doesn't count.
+  queueMark: _staleMark,
   ...summary
 }: ProjectChat): ChatSummary {
   const provider = [...messages]
@@ -66,12 +83,14 @@ export function chatSummary({
     ),
   ];
   const next = nextSend(scheduled);
+  const mark = queueMark({ queue, queuePaused, scheduled });
   return {
     ...summary,
     providers,
     ...(provider ? { provider } : {}),
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
+    ...(mark ? { queueMark: mark } : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }

@@ -107,6 +107,27 @@ it("writes the summary when a save changes what the sidebar lists, and only then
   expect(changed).toEqual(["p"]);
 });
 
+it("tells listeners when only the queue moves, so phones fetch it", async () => {
+  const chat = thread();
+  chat.messages.push(answer("Working on it"));
+  await storage.add(chat);
+  expect(listed(chat).queueMark).toBeUndefined();
+  const input = (id: string) => ({ ...answer(id), id, body: id }) as never;
+  const marks: (string | undefined)[] = [];
+  for (const queue of [["a"], ["a", "b"], ["b", "a"], ["b"]]) {
+    changed.length = 0;
+    chat.queue = queue.map((id) => ({ input: input(id), created: 1 }));
+    await storage.save(chat);
+    expect(changed).toEqual(["p"]);
+    marks.push(listed(chat).queueMark);
+  }
+  expect(new Set(marks).size).toBe(4);
+
+  chat.queue = [];
+  await storage.save(chat);
+  expect(listed(chat).queueMark).toBeUndefined();
+});
+
 it("holds the summary back until it is synced", async () => {
   const chat = thread();
   await storage.add(chat);

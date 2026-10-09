@@ -457,6 +457,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.worktree ? { worktree: true } : {}),
     ...(c.pending?.length ? { pending: c.pending } : {}),
     ...(c.nextSend ? { nextSend: c.nextSend } : {}),
+    ...(c.queueMark ? { queueMark: c.queueMark } : {}),
     ...(c.empty ? { empty: true } : {}),
     ...(c.goal ? { goal: c.goal } : {}),
     ...(c.startedBy ? { startedBy: c.startedBy } : {}),

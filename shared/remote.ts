@@ -114,6 +114,8 @@ export interface RemoteChatSummary {
   pending?: ChatPending[];
   /** When its next scheduled message goes out. */
   nextSend?: number;
+  /** Changes with its queue and Send later list; older desktops leave it out. */
+  queueMark?: string;
   empty?: boolean;
   /** Its native `/goal`; older desktops leave it out. */
   goal?: ThreadGoal;

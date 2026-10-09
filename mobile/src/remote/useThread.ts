@@ -100,7 +100,7 @@ export function useThread(id: string) {
   // Running, waiting and queue changes arrive as thread summaries.
   const summary = remote.overview?.chats.find((c) => c.id === id);
   const signature = summary
-    ? `${summary.running}:${summary.waiting}:${summary.updated}:${summary.title}`
+    ? `${summary.running}:${summary.waiting}:${summary.updated}:${summary.title}:${summary.queueMark}`
     : "";
   useEffect(() => {
     if (signature && current.current) void load();
