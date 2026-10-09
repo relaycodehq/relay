@@ -82,7 +82,7 @@ describe("threadNews", () => {
   it("tells of a question at once, even while the agent still runs", () => {
     const news = threadNews(
       list(chat("a", { running: true })),
-      [chat("a", { running: true, waiting: true })],
+      [chat("a", { running: true, waiting: true, asking: true })],
       new Map(),
     );
     expect(news).toEqual([
@@ -132,4 +132,24 @@ describe("preview", () => {
     );
     expect(preview("word ".repeat(100))).toHaveLength(240);
   });
+});
+
+it("still reports a failed turn while an earlier async question remains open", () => {
+  expect(
+    threadNews(
+      list(chat("a", { running: true, waiting: true, asking: true })),
+      [chat("a", { waiting: true, asking: true, updated: 20 })],
+      new Map([
+        [
+          "a",
+          answer({
+            status: "failed",
+            error: 'API Error: 529 {"error":{"message":"Overloaded"}}',
+          }),
+        ],
+      ]),
+    ),
+  ).toEqual([
+    { chatId: "a", kind: "failed", title: "Thread a", body: "Overloaded" },
+  ]);
 });
