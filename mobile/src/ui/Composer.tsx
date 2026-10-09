@@ -137,6 +137,7 @@ export const Composer = forwardRef<
         id: i.id ?? i.uri,
         ...(i.n === undefined ? {} : { n: i.n }),
       }));
+      setError(undefined);
       const merged = returnedDraft(before.text, mine, back, true, () => `taken-back-${takenBackCount.current++}`);
       setText(merged.body);
       setImages(
@@ -167,7 +168,12 @@ export const Composer = forwardRef<
       ...(settings.contextWindow ? { contextWindow: settings.contextWindow } : {}),
     };
   }, [settings]);
-  useEffect(() => setError(undefined), [text]);
+  // Only the reader's own edits clear it: a failed send puts the draft back
+  // in `text`, which mustn't take its error with it.
+  const edit = (next: string) => {
+    setText(next);
+    setError(undefined);
+  };
 
   const { overview, desktop } = useRemote();
   // Desktops from before phone dictation don't say, and can't.
@@ -205,6 +211,7 @@ export const Composer = forwardRef<
   const dictationTarget = (): DictationTarget => ({
     begin: () => {
       const base = typed.current;
+      setError(undefined);
       // At the cursor while typing; after the draft otherwise.
       const at = input.current?.isFocused() ? selection.current : { start: base.length, end: base.length };
       const from = Math.min(at.start, base.length),
@@ -309,13 +316,13 @@ export const Composer = forwardRef<
   const pick = (item: CommandItem) => {
     if (item.kind === "relay") {
       // Required values are picked or typed after it; the rest run now.
-      if (item.name === "btw") return setText("/btw ");
-      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return setText(`/${item.name} `);
+      if (item.name === "btw") return edit("/btw ");
+      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return edit(`/${item.name} `);
       return void run(item.name, "");
     }
-    if (item.kind === "command") return setText(`/${item.name} `);
+    if (item.kind === "command") return edit(`/${item.name} `);
     // A skill goes in where it was typed, as `$name`.
-    setText(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
+    edit(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
   };
 
   const empty = !text.trim() && !images.length;
@@ -393,7 +400,13 @@ export const Composer = forwardRef<
         />
       )}
       {!!(error ?? dictationError) && (
-        <Pressable onPress={() => (error ? setDismissed(text) : clearDictationError())}>
+        <Pressable
+          onPress={() => {
+            if (!error) return clearDictationError();
+            setError(undefined);
+            setDismissed(text);
+          }}
+        >
           <Text style={[styles.note, { color: t.danger }]}>{error ?? dictationError}</Text>
         </Pressable>
       )}
@@ -424,7 +437,7 @@ export const Composer = forwardRef<
           // words hold it still until they settle.
           editable={!live}
           value={live ? undefined : text}
-          onChangeText={setText}
+          onChangeText={edit}
           onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
           placeholder={placeholder ?? `Message ${agentNames[provider]}`}
           placeholderTextColor={t.faint}
@@ -477,7 +490,7 @@ export const Composer = forwardRef<
             <Tool
               label="Commands"
               onPress={() => {
-                setText("/");
+                edit("/");
                 input.current?.focus();
               }}
             >
