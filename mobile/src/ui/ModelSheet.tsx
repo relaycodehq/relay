@@ -180,7 +180,7 @@ export function ModelSheet({
           onChange={(fast) => onChange({ ...settings, choice: { ...settings.choice, fast } })}
         />
       )}
-      {provider === "claude" && (
+      {provider === "claude" && effortModel?.longContext && (
         <ToggleRow
           label="200k context window"
           hint="Off leaves Claude on its default window, 1M on most models."
