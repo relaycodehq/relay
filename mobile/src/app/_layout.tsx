@@ -108,26 +108,31 @@ function Screens() {
                   </View>
                 </ReportHeaderHeight>
               )}
-              screenOptions={({ navigation, route }) => ({
-                headerStyle: { backgroundColor: t.background },
-                headerTintColor: t.text,
-                headerTitleStyle: { fontSize: 16, fontWeight: "600" },
-                headerShadowVisible: false,
-                contentStyle: {
-                  backgroundColor: t.background,
-                  // Lists end above Android's navigation bar instead of under
-                  // it; screens with a composer pad it themselves.
-                  paddingBottom: ownsBottom.has(route.name) ? 0 : insets.bottom,
-                },
-                // Beside the list, the first screen has nothing to go back to.
-                headerBackVisible: !(
-                  panes && navigation.getState()?.routes[1]?.key === route.key
-                ),
-                headerLeft:
-                  panes && hidden && !fullWidth
-                    ? () => <SidebarToggle hidden onPress={toggleSidebar} />
-                    : undefined,
-              })}
+              screenOptions={({ navigation, route }) => {
+                // Beside the list, what the list opens fills the pane.
+                const first =
+                  panes && navigation.getState()?.routes[1]?.key === route.key;
+                return {
+                  headerStyle: { backgroundColor: t.background },
+                  headerTintColor: t.text,
+                  headerTitleStyle: { fontSize: 16, fontWeight: "600" },
+                  headerShadowVisible: false,
+                  contentStyle: {
+                    backgroundColor: t.background,
+                    // Lists end above Android's navigation bar instead of under
+                    // it; screens with a composer pad it themselves.
+                    paddingBottom: ownsBottom.has(route.name) ? 0 : insets.bottom,
+                  },
+                  // It has nothing to go back to, and it swaps in place: sliding
+                  // in, it would push the last one out beside a list that stays put.
+                  headerBackVisible: !first,
+                  ...(first ? { animation: "none" as const } : {}),
+                  headerLeft:
+                    panes && hidden && !fullWidth
+                      ? () => <SidebarToggle hidden onPress={toggleSidebar} />
+                      : undefined,
+                };
+              }}
             >
               <Stack.Screen name="index" options={{ title: "Relay" }} />
               <Stack.Screen
