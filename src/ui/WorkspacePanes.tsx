@@ -178,31 +178,39 @@ export function Pane({
 }) {
   const drop = useDropTarget(id, onMove);
   return (
-    <section
-      className={`workspace-pane ${className} ${drop.side ? `drop-${drop.side}` : ""}`}
-      data-pane={id}
-      aria-label={label}
-      hidden={!open}
-      style={{ order, flexGrow: grow }}
-      {...drop.handlers}
-    >
+    <>
+      {/* A sibling, not a child: the pane clips its overflow, which cut the
+          splitter's left half off. Same order and earlier in the DOM puts it
+          right before its pane. */}
       {previous && (
         <PaneSplitter
+          order={order}
           left={previous}
           right={{ id, weight }}
           onResize={onResize}
         />
       )}
-      {children}
-    </section>
+      <section
+        className={`workspace-pane ${className} ${drop.side ? `drop-${drop.side}` : ""}`}
+        data-pane={id}
+        aria-label={label}
+        hidden={!open}
+        style={{ order, flexGrow: grow }}
+        {...drop.handlers}
+      >
+        {children}
+      </section>
+    </>
   );
 }
 
 function PaneSplitter({
+  order,
   left,
   right,
   onResize,
 }: {
+  order: number;
   left: { id: PaneId; weight: number };
   right: { id: PaneId; weight: number };
   onResize: (weights: Partial<Record<PaneId, number>>) => void;
@@ -216,8 +224,8 @@ function PaneSplitter({
     });
   };
   const widths = (element: HTMLElement) => {
-    const pane = element.parentElement!;
-    const before = pane.parentElement!.querySelector<HTMLElement>(
+    const pane = element.nextElementSibling!;
+    const before = element.parentElement!.querySelector<HTMLElement>(
       `[data-pane="${left.id}"]`,
     )!;
     const l = before.getBoundingClientRect().width;
@@ -230,6 +238,7 @@ function PaneSplitter({
       aria-label="Resize panes"
       aria-orientation="vertical"
       tabIndex={0}
+      style={{ order }}
       onDoubleClick={() => onResize({ [left.id]: 1, [right.id]: 1 })}
       onKeyDown={(e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -238,14 +247,8 @@ function PaneSplitter({
         resizeBy(l + (e.key === "ArrowLeft" ? -20 : 20), total);
       }}
       onPointerDown={(e) => {
-        const element = e.currentTarget;
-        const { l, total } = widths(element);
-        element.classList.add("dragging");
-        dragFrom(
-          e,
-          (dx) => resizeBy(l + dx, total),
-          () => element.classList.remove("dragging"),
-        );
+        const { l, total } = widths(e.currentTarget);
+        dragFrom(e, (dx) => resizeBy(l + dx, total));
       }}
     />
   );

@@ -24,7 +24,6 @@
   height: 6px;
   cursor: row-resize;
 }
-.terminal-drawer-resizer:hover,
 .terminal-drawer-resizer:focus-visible {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
   outline: none;
