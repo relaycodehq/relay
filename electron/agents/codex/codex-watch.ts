@@ -175,8 +175,8 @@ export class CodexWatch {
   }
 
   /** One of the thread's own requests finished, on `model`. */
-  requested(model: string, usage: Usage) {
-    const usd = listCost(model, codexTokens(usage));
+  requested(model: string, usage: Usage, fast: boolean) {
+    const usd = listCost(model, codexTokens(usage), { fast });
     if (usd !== undefined) this.watch?.onSpend?.({ kind: "thread", usd });
   }
 }
@@ -219,7 +219,7 @@ export function codexTurnWatcher(
     requested: (tokenUsage) => {
       const last = (tokenUsage as { last?: Usage } | null)?.last;
       const model = options.choice.model || connection.started?.model || "";
-      if (last && model) state.requested(model, last);
+      if (last && model) state.requested(model, last, options.choice.fast);
     },
   };
 }

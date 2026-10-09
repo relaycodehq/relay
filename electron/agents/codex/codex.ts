@@ -177,7 +177,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       const last = (n.params.tokenUsage as { last?: object } | null)?.last;
       const model = options.choice.model || connection.started?.model;
       if (last && model)
-        options.onUsage?.({ model, tokens: codexTokens(last) });
+        options.onUsage?.({
+          model,
+          tokens: codexTokens(last),
+          fast: options.choice.fast,
+        });
     }
     if (n.method === "thread/name/updated" && n.params.threadName != null)
       options.onTitle?.(n.params.threadName);

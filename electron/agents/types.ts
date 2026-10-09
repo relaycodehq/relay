@@ -25,6 +25,8 @@ export type UsageReport = {
   tokens: UsageTokens;
   /** The agent's own price; left out, Relay prices it at list rates. */
   usd?: number;
+  /** Served in fast mode, which bills at a multiple of the list rates. */
+  fast?: boolean;
 };
 
 /** What the run is for; each runtime handles every kind. */
