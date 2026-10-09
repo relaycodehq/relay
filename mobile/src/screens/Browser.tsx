@@ -19,6 +19,7 @@ import { useProjectIconSync } from "../remote/project-icons";
 import { ActivityList } from "../ui/ActivityList";
 import { Button } from "../ui/Button";
 import { ConnectionLine } from "../ui/ConnectionLine";
+import { HeldWhileCovered } from "../ui/HeldWhileCovered";
 import { ComputerUpdateBanner } from "../ui/ComputerUpdate";
 import { UpdateBanner } from "../ui/UpdateBanner";
 import { ProjectIcon } from "../ui/ProjectIcon";
@@ -204,9 +205,11 @@ export function Browser({
 
   return (
     <View style={styles.screen}>
-      <ConnectionLine />
-      <ComputerUpdateBanner />
-      <UpdateBanner />
+      <HeldWhileCovered>
+        <ConnectionLine />
+        <ComputerUpdateBanner />
+        <UpdateBanner />
+      </HeldWhileCovered>
       {remote.status === "denied" ? (
         <View style={styles.empty}>
           <Text style={[rowStyles.empty, { color: t.muted }]}>

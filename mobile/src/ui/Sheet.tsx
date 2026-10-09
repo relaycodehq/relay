@@ -23,7 +23,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { type, useTheme } from "./theme";
 
 const settle = { damping: 40, stiffness: 400 };
@@ -51,7 +51,6 @@ export function Sheet({
   scroll?: boolean;
 }) {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   // Stays mounted while it slides away, after `open` has gone false.
   const [shown, setShown] = useState(open);
@@ -160,51 +159,61 @@ export function Sheet({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <GestureHandlerRootView style={styles.fill}>
-        <KeyboardAvoidingView
-          style={styles.end}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <Animated.View style={[styles.backdrop, backdropStyle]}>
-            <Pressable style={styles.fill} accessibilityLabel="Close" onPress={onClose} />
-          </Animated.View>
-          <GestureDetector gesture={pan}>
-            <Animated.View
-              onLayout={(e) => height.set(e.nativeEvent.layout.height)}
-              style={[
-                styles.sheet,
-                { backgroundColor: t.raised, paddingBottom: 12 + insets.bottom },
-                sheetStyle,
-              ]}
-            >
-              <View style={styles.handle} onLayout={(e) => gripHeight.set(e.nativeEvent.layout.height)}>
-                <View style={[styles.grip, { backgroundColor: t.border }]} />
-                {title && (
-                  <Text style={[styles.title, { color: t.text }]}>{title}</Text>
-                )}
-              </View>
-              {scroll ? (
-                <GestureDetector gesture={native}>
-                  <Animated.ScrollView
-                    ref={list}
-                    keyboardShouldPersistTaps="handled"
-                    onScroll={onScroll}
-                    scrollEventThrottle={16}
-                    overScrollMode="never"
-                    bounces={false}
-                  >
-                    {children}
-                  </Animated.ScrollView>
-                </GestureDetector>
-              ) : (
-                children
-              )}
+      {/* Its own provider: the modal draws under the system bars, the screen may not. */}
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={styles.fill}>
+          <KeyboardAvoidingView
+            style={styles.end}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <Animated.View style={[styles.backdrop, backdropStyle]}>
+              <Pressable style={styles.fill} accessibilityLabel="Close" onPress={onClose} />
             </Animated.View>
-          </GestureDetector>
-        </KeyboardAvoidingView>
-      </GestureHandlerRootView>
+            <GestureDetector gesture={pan}>
+              <Animated.View
+                onLayout={(e) => height.set(e.nativeEvent.layout.height)}
+                style={[
+                  styles.sheet,
+                  { backgroundColor: t.raised },
+                  sheetStyle,
+                ]}
+              >
+                <View style={styles.handle} onLayout={(e) => gripHeight.set(e.nativeEvent.layout.height)}>
+                  <View style={[styles.grip, { backgroundColor: t.border }]} />
+                  {title && (
+                    <Text style={[styles.title, { color: t.text }]}>{title}</Text>
+                  )}
+                </View>
+                {scroll ? (
+                  <GestureDetector gesture={native}>
+                    <Animated.ScrollView
+                      ref={list}
+                      keyboardShouldPersistTaps="handled"
+                      onScroll={onScroll}
+                      scrollEventThrottle={16}
+                      overScrollMode="never"
+                      bounces={false}
+                    >
+                      {children}
+                    </Animated.ScrollView>
+                  </GestureDetector>
+                ) : (
+                  children
+                )}
+                <Foot />
+              </Animated.View>
+            </GestureDetector>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
     </Modal>
   );
+}
+
+/** Room under the content for the navigation bar, as measured inside the modal. */
+function Foot() {
+  const insets = useSafeAreaInsets();
+  return <View style={{ height: 12 + insets.bottom }} />;
 }
 
 export interface MenuItem {
