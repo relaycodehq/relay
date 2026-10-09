@@ -1,4 +1,4 @@
-import { agentMentionPattern, type AgentProvider } from "./agents";
+import { agentMentionPattern, isAgentProvider, type AgentProvider } from "./agents";
 import { onModel, windowFor } from "./model-fit";
 import { buildSend, planGoAhead } from "./compose-send";
 import {
@@ -15,6 +15,9 @@ import type { NewThreadModels } from "./new-thread-models";
 export const withoutMention = (body: string) =>
   body.replace(agentMentionPattern, "");
 
+/** An agent this build can drive; a newer desktop may have picked one it doesn't know. */
+const known = (provider: unknown) => (isAgentProvider(provider) ? provider : undefined);
+
 /**
  * A new thread's composer, as the desktop starts one: the default agent,
  * Full access and Build, on the agent's remembered model or its Default.
@@ -23,7 +26,7 @@ export const withoutMention = (body: string) =>
  */
 export function newThreadSettings(
   settings: AISettings | undefined,
-  provider: AgentProvider = settings?.threadProvider ?? "codex",
+  provider: AgentProvider = known(settings?.threadProvider) ?? "codex",
   models: NewThreadModels = {},
 ): RemoteSettings {
   const codex =
@@ -76,7 +79,7 @@ export async function desktopNewThread(desktop: RemoteClient["desktop"]) {
     desktop("newThreadModels").catch(() => ({}) as NewThreadModels),
   ]);
   return {
-    settings: newThreadSettings(ai, last ?? ai?.threadProvider, models),
+    settings: newThreadSettings(ai, known(last) ?? known(ai?.threadProvider), models),
     models,
   };
 }

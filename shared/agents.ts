@@ -118,7 +118,14 @@ export const agents = {
   },
 } as const satisfies Record<AgentProvider, AgentInfo>;
 
-export const agentName = (provider: AgentProvider) => agents[provider].name;
+/**
+ * An agent's profile, or nothing for one this build doesn't know: a newer
+ * desktop can run agents an older phone (or desktop build) has never heard of.
+ */
+export const agentInfo = (provider: string) =>
+  isAgentProvider(provider) ? agents[provider] : undefined;
+
+export const agentName = (provider: AgentProvider) => agentInfo(provider)?.name ?? provider;
 
 /** The agents with `AgentInfo` field `K` on, as a type. */
 type AgentsWith<K extends keyof AgentInfo> = {

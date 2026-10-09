@@ -2,7 +2,7 @@
 // Relay's own actions, then the agent's commands or skills.
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { agents, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, type AgentProvider } from "../../../shared/agents";
 import {
   commandTrigger,
   relayCommands,
@@ -76,7 +76,7 @@ export function commandItems(
   // Relay's actions start a message; a slash mid-sentence is just text.
   if (!trigger || trigger.inline) return null;
   const query = trigger.query.toLowerCase();
-  const commandsAlone = agents[provider].commandsAlone;
+  const commandsAlone = agentInfo(provider)?.commandsAlone;
   const items: CommandItem[] = [
     ...(trigger.prefix === "/"
       ? relayCommands

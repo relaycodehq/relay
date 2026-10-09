@@ -265,3 +265,15 @@ it("opens the main conversation on the agent holding it when a side reply was th
     claudeReply,
   );
 });
+
+it("starts a new thread on a known agent when the desktop remembers one this build doesn't know", async () => {
+  // Another Relay build on the same data saved "gemini"; the phone can't drive it.
+  const ai = { ...defaultAISettings, threadProvider: "gemini" } as unknown as typeof defaultAISettings;
+  const desktop = (async (method: string) =>
+    method === "newThreadAgent" ? "gemini" : method === "aiSettings" ? ai : {}) as Parameters<
+    typeof desktopNewThreadSettings
+  >[0];
+  const settings = await desktopNewThreadSettings(desktop);
+  expect(settings.provider).toBe("codex");
+  expect(newThreadSettings(ai).provider).toBe("codex");
+});

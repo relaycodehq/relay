@@ -1,4 +1,4 @@
-import { agents, type AgentModel, type AgentProvider } from "./agents";
+import { agentInfo, type AgentModel, type AgentProvider } from "./agents";
 import type { NewThreadModel } from "./new-thread-models";
 import {
   claudeContextWindow,
@@ -13,7 +13,7 @@ import {
 
 /** Fast stays on only for agents that have it. */
 export const fastFor = (provider: AgentProvider, fast: boolean) =>
-  agents[provider].fast && fast;
+  !!agentInfo(provider)?.fast && fast;
 
 /** The 200k window is Claude's, and a model with 1M built in asks for none. */
 export const windowFor = (

@@ -19,7 +19,7 @@ import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
 import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
-import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
@@ -391,8 +391,8 @@ export const Composer = forwardRef<
       if (command && command.name !== "btw" && command.name !== "goal") return void run(command.name, command.args);
       if (command?.name === "btw" && !command.args) return setError("Add a question after /btw.");
       const name = /^\/([^\s]+)/.exec(draft)?.[1];
-      const agentCommand = agents[provider].commandsAlone && commands.some((c) => c.name === name);
-      const skill = agents[provider].skills && /^\/skill:[^\s]+(?:\s|$)/.test(draft);
+      const agentCommand = agentInfo(provider)?.commandsAlone && commands.some((c) => c.name === name);
+      const skill = agentInfo(provider)?.skills && /^\/skill:[^\s]+(?:\s|$)/.test(draft);
       if (!command && !agentCommand && !skill)
         return setError(
           "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or an agent's command.",
@@ -519,7 +519,7 @@ export const Composer = forwardRef<
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
               {modelLabel}
               {settings.choice.reasoningEffort ? ` · ${effortLabel(settings.choice.reasoningEffort)}` : ""}
-              {agents[provider].fast && settings.choice.fast ? " · Fast" : ""}
+              {agentInfo(provider)?.fast && settings.choice.fast ? " · Fast" : ""}
             </Text>
             <ChevronDown size={12} color={t.faint} />
           </Tool>
