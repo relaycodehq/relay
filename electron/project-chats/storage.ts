@@ -50,6 +50,7 @@ export function chatSummary({
   ultraplans,
   handover,
   carriedIds,
+  asking,
   ...summary
 }: ProjectChat): ChatSummary {
   const provider = [...messages]
@@ -66,12 +67,16 @@ export function chatSummary({
     ),
   ];
   const next = nextSend(scheduled);
+  const open = messages.some((m) =>
+    m.questions?.some((group) => !group.answers && !group.dismissed),
+  );
   return {
     ...summary,
     providers,
     ...(provider ? { provider } : {}),
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
+    ...(open ? { asking: true as const } : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }

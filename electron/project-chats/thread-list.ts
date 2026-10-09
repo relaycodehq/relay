@@ -96,7 +96,11 @@ export class ThreadList {
             at: w.at,
           })),
         ];
-        return active || pending.length
+        // A question left in an answer waits on the user like a live
+        // request, the turn running or not; away, it's answered there.
+        const waiting =
+          !!active?.requests.list().length || (!!c.asking && !c.sentTo);
+        return active || pending.length || waiting
           ? {
               ...c,
               ...(active
@@ -104,9 +108,11 @@ export class ThreadList {
                     running: true,
                     runningSince: active.started,
                     runningAgents: running,
-                    waiting: active.requests.list().length > 0,
+                    waiting,
                   }
-                : {}),
+                : waiting
+                  ? { waiting }
+                  : {}),
               ...(pending.length ? { pending } : {}),
             }
           : c;

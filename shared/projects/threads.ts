@@ -101,6 +101,8 @@ export interface ChatSummary {
   startedBy?: StartedBy;
   /** Continues a Claude Code or Codex session started in a terminal. */
   fromTerminal?: FromTerminal;
+  /** An agent's question in it is still open: neither answered nor dismissed. It waits on the user like a live request. */
+  asking?: true;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
