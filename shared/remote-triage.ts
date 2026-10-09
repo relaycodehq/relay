@@ -9,7 +9,10 @@ import type { RemoteChatSummary } from "./remote";
  * alone, and only the marks the phone does see go back.
  */
 export function undoTriage(
-  before: Pick<RemoteChatSummary, "settledAt" | "snoozedAt" | "snoozedUntil">,
+  before: Pick<
+    RemoteChatSummary,
+    "settledAt" | "autoSettled" | "snoozedAt" | "snoozedUntil"
+  >,
   after: ChatSummary,
 ): ChatTriage {
   const from = triageState(after);
@@ -20,7 +23,9 @@ export function undoTriage(
     to: {
       ...(unsettledAt ? { unsettledAt } : {}),
       ...(archivedAt ? { archivedAt } : {}),
-      ...(before.settledAt ? { settledAt: before.settledAt } : {}),
+      ...(!before.autoSettled && before.settledAt
+        ? { settledAt: before.settledAt }
+        : {}),
       ...(before.snoozedUntil
         ? { snoozedAt: before.snoozedAt, snoozedUntil: before.snoozedUntil }
         : {}),

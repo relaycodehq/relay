@@ -70,6 +70,19 @@ export class ThreadTriage {
         .catch((e) => console.warn("Could not drop an archived worktree:", e));
       return chatSummary(chat);
     }
+    // A phone's card can be a couple of seconds behind the live turn.
+    if (
+      triage.kind === "settle" &&
+      (this.core.active.has(id) || this.councils.busy(chat) || chat.waiting)
+    )
+      throw new Error(
+        "Wait for the running answer and its requests before settling.",
+      );
+    if (
+      triage.kind === "snooze" &&
+      (this.core.active.requests(id).length || chat.waiting)
+    )
+      throw new Error("Answer the waiting request before snoozing.");
     delete chat.snoozedAt;
     delete chat.snoozedUntil;
     if (triage.kind === "settle") chat.settledAt = now;
@@ -109,12 +122,13 @@ export class ThreadTriage {
     for (const child of await this.started(id)) {
       const going =
         this.core.active.has(child.id) ||
+        this.councils.busy(child) ||
+        !!child.waiting ||
         this.core.sessions.pending(child.id).length > 0 ||
         (!!child.queue?.length && !child.queuePaused) ||
         !!nextSend(child.scheduled);
       if (going || child.settledAt) continue;
-      delete child.snoozedAt;
-      delete child.snoozedUntil;
+      // The settle overlay wins while present; keep the snooze underneath for Undo.
       child.settledAt = now;
       await this.core.storage.save(child);
     }

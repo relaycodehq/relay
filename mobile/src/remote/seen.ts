@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { movedSinceSeen } from "../../../shared/chat-activity";
+import { useForeground } from "../ui/motion";
 import type { RemoteChatSummary } from "../../../shared/remote";
 
 const seenKey = "relay-thread-seen";
@@ -42,7 +43,8 @@ const unread = (
 ) => !!c.markedUnread || movedSinceSeen(c, since, seen);
 
 /** Whether a thread has news for this phone; re-renders when that changes. */
-export function useUnread() {
+export function useUnread(openId?: string) {
+  const foreground = useForeground();
   useEffect(() => void load(), []);
   useSyncExternalStore(
     (listener) => {
@@ -51,5 +53,6 @@ export function useUnread() {
     },
     () => version,
   );
-  return unread;
+  return (c: RemoteChatSummary) =>
+    (c.id === openId && foreground ? movedSinceSeen(c, since, seen) : unread(c));
 }

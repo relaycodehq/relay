@@ -18,16 +18,20 @@ export function threadExtras({
   branch?: string;
   /** Its own worktree's folder, while it has one. */
   worktree?: string;
-  onUnread: () => void;
+  onUnread?: () => void;
   /** Left out where the desktop can't take it from a phone. */
   onRegenerate?: () => void;
 }): MenuItem[] {
   return [
-    {
-      label: "Mark as unread",
-      hint: "Back to the list, marked for later",
-      onPress: onUnread,
-    },
+    ...(onUnread
+      ? [
+          {
+            label: "Mark as unread",
+            hint: "Back to the list, marked for later",
+            onPress: onUnread,
+          },
+        ]
+      : []),
     ...(onRegenerate
       ? [
           {

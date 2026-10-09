@@ -10,12 +10,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Stack, router } from "expo-router";
+import { Stack, router, useIsFocused } from "expo-router";
 import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
-import { remoteHistory, titleBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
+import { remoteHistory, titleBridge, markedUnreadBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
 import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
@@ -88,13 +88,15 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   // are marked when it comes back.
   const updated = summary?.updated;
   const foreground = useForeground();
+  const focused = useIsFocused();
+  const leavingUnread = useRef(false);
   useEffect(() => {
-    if (!updated || !foreground) return;
+    if (!updated || !foreground || !focused || leavingUnread.current) return;
     markSeen(id, updated);
     clearThreadNotice(id);
     // The desktop keeps the shared mark; an older one just doesn't know the call.
     void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
-  }, [id, updated, foreground]);
+  }, [id, updated, foreground, focused, remote.desktop]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
     "thread" | "snooze" | "rename" | "sides"
@@ -409,14 +411,29 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                 ),
             }
           : { label: "Snooze…", onPress: () => setSheet("snooze") },
+        // These callbacks read refs only when picked, never while building the menu.
+        // eslint-disable-next-line react-hooks/refs
         ...threadExtras({
           branch: thread?.worktree?.branch ?? summary?.branch,
           worktree: thread?.worktree?.removedAt ? undefined : thread?.worktree?.path,
-          onUnread: () =>
-            void remote
-              .desktop("triageProjectChat", id, { kind: "unread" })
-              .then(() => router.back())
-              .catch((e) => Alert.alert("Couldn't mark it", String(e?.message ?? e))),
+          onUnread:
+            (remote.overview?.bridge ?? 1) >= markedUnreadBridge
+              ? () => {
+                  // No trailing seen write should clear the mark while navigation leaves.
+                  leavingUnread.current = true;
+                  void remote
+                    .desktop("triageProjectChat", id, { kind: "unread" })
+                    .then(async () => {
+                      await remote.refresh().catch(() => {});
+                      // Replies share the thread's mark: leave the entire thread.
+                      router.dismissTo("/");
+                    })
+                    .catch((e) => {
+                      leavingUnread.current = false;
+                      Alert.alert("Couldn't mark it", String(e?.message ?? e));
+                    });
+                }
+              : undefined,
           onRegenerate:
             (remote.overview?.bridge ?? 1) >= titleBridge
               ? () =>

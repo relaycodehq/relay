@@ -1,15 +1,23 @@
 // Activity cards triaged with one thumb: swipe right to settle, left to snooze,
 // and a moment to take it back.
-import { useEffect, useRef, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   FadeIn,
   FadeOut,
+  ReduceMotion,
+  useSharedValue,
   interpolate,
-  useAnimatedReaction,
   useAnimatedStyle,
   type SharedValue,
 } from "react-native-reanimated";
@@ -24,7 +32,7 @@ const commitAt = 96;
 const undoMs = 5_000;
 const snoozeColor = "#d99a2b";
 /** A plain function for worklets to call back, rather than the Haptics module itself. */
-const tick = () => void Haptics.selectionAsync();
+const tick = () => void Haptics.selectionAsync().catch(() => {});
 
 /** A swipe's job: resolves whether it went through, so a refused one slides back. */
 export type SwipeAction = { label: string; run: () => Promise<boolean> };
@@ -32,11 +40,15 @@ export type SwipeAction = { label: string; run: () => Promise<boolean> };
 export function SwipeTriage({
   settle,
   snooze,
+  scrollGesture,
+  blocked,
   radius,
   t,
   children,
 }: {
-  /** Left out where the thread can't be settled, so that way doesn't move. */
+  scrollGesture: ReturnType<typeof Gesture.Native>;
+  blocked: boolean;
+  /** Left out where the thread cannot be settled. */
   settle?: SwipeAction;
   snooze?: SwipeAction;
   /** The card's corners, for what shows behind it. */
@@ -45,63 +57,123 @@ export function SwipeTriage({
   children: ReactNode;
 }) {
   const row = useRef<SwipeableMethods>(null);
-  // A card that went through leaves the list with the next thread list; one
-  // that stays (something new happened meanwhile) slides back.
+  const committing = useRef(false);
+  const pastThreshold = useSharedValue(false);
   const back = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(back.current), []);
-  const commit = (action: SwipeAction) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    void action.run().then((done) => {
-      if (!done) return row.current?.close();
-      back.current = setTimeout(() => row.current?.close(), 2_500);
-    });
-  };
+  const release = useCallback(
+    (distance: number) => {
+      const action =
+        distance >= commitAt
+          ? settle
+          : distance <= -commitAt
+            ? snooze
+            : undefined;
+      if (!action || blocked) return row.current?.close();
+      if (committing.current) return;
+      committing.current = true;
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+        () => {},
+      );
+      void action
+        .run()
+        .then((done) => {
+          if (!done) return row.current?.close();
+          clearTimeout(back.current);
+          back.current = setTimeout(() => row.current?.close(), 2_500);
+        })
+        .catch(() => row.current?.close())
+        .finally(() => {
+          committing.current = false;
+        });
+    },
+    [settle, snooze, blocked],
+  );
+  const canSettle = !!settle && !blocked;
+  const canSnooze = !!snooze && !blocked;
+  // Vertical intent wins before a row can swipe, while the native list still scrolls.
+  const vertical = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .failOffsetX([-24, 24])
+        .simultaneousWithExternalGesture(scrollGesture),
+    [scrollGesture],
+  );
+  // Swipeable projects velocity beyond the finger. Commit from the actual release
+  // event instead, so a short flick can never triage (or earn a threshold tick).
+  const horizontal = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-24, 24])
+        .failOffsetY([-8, 8])
+        .onBegin(() => {
+          pastThreshold.set(false);
+        })
+        .onUpdate((event) => {
+          const past =
+            (canSettle && event.translationX >= commitAt) ||
+            (canSnooze && event.translationX <= -commitAt);
+          if (past !== pastThreshold.get()) scheduleOnRN(tick);
+          pastThreshold.set(past);
+        })
+        // Registered with the gesture handler; refs are read only after release on JS.
+        // eslint-disable-next-line react-hooks/refs
+        .onEnd((event, success) => {
+          if (success) scheduleOnRN(release, event.translationX);
+        }),
+    [pastThreshold, canSettle, canSnooze, release],
+  );
+  const intent = Gesture.Simultaneous(vertical, horizontal);
+
   const settleBg = { backgroundColor: t.accentSoft, borderRadius: radius };
   const snoozeBg = {
     backgroundColor: mix(snoozeColor, t.background, 0.22),
     borderRadius: radius,
   };
   return (
-    <ReanimatedSwipeable
-      ref={row}
-      containerStyle={{ borderRadius: radius }}
-      leftThreshold={commitAt}
-      rightThreshold={commitAt}
-      overshootLeft={false}
-      overshootRight={false}
-      renderLeftActions={
-        settle &&
-        ((_, drag) => (
-          <Behind
-            drag={drag}
-            style={settleBg}
-            icon={<Check size={18} color={t.accent} />}
-            label={settle.label}
-            color={t.accent}
-          />
-        ))
-      }
-      renderRightActions={
-        snooze &&
-        ((_, drag) => (
-          <Behind
-            drag={drag}
-            end
-            style={snoozeBg}
-            icon={<AlarmClock size={18} color={snoozeColor} />}
-            label={snooze.label}
-            color={snoozeColor}
-          />
-        ))
-      }
-      onSwipeableWillOpen={(direction) => {
-        // "right" is the card moving right, uncovering the left side's action.
-        const action = direction === "right" ? settle : snooze;
-        if (action) commit(action);
-      }}
-    >
-      {children}
-    </ReanimatedSwipeable>
+    <GestureDetector gesture={intent}>
+      <ReanimatedSwipeable
+        ref={row}
+        enabled={!blocked && !!(settle || snooze)}
+        requireExternalGestureToFail={vertical}
+        simultaneousWithExternalGesture={horizontal}
+        dragOffsetFromLeftEdge={24}
+        dragOffsetFromRightEdge={24}
+        containerStyle={{ borderRadius: radius }}
+        leftThreshold={commitAt}
+        rightThreshold={commitAt}
+        overshootLeft={false}
+        overshootRight={false}
+        renderLeftActions={
+          settle &&
+          ((_, drag) => (
+            <Behind
+              drag={drag}
+              style={settleBg}
+              icon={<Check size={18} color={t.accent} />}
+              label={settle.label}
+              color={t.accent}
+            />
+          ))
+        }
+        renderRightActions={
+          snooze &&
+          ((_, drag) => (
+            <Behind
+              drag={drag}
+              end
+              style={snoozeBg}
+              icon={<AlarmClock size={18} color={snoozeColor} />}
+              label={snooze.label}
+              color={snoozeColor}
+            />
+          ))
+        }
+      >
+        {children}
+      </ReanimatedSwipeable>
+    </GestureDetector>
   );
 }
 
@@ -122,16 +194,13 @@ function Behind({
   label: string;
   color: string;
 }) {
-  // A tick as the swipe passes the point where letting go commits it, either way.
-  useAnimatedReaction(
-    () => Math.abs(drag.get()) >= commitAt,
-    (past, before) => {
-      if (before !== null && past !== before)
-        scheduleOnRN(tick);
-    },
-  );
   const shown = useAnimatedStyle(() => ({
-    opacity: interpolate(Math.abs(drag.get()), [0, commitAt], [0.35, 1], "clamp"),
+    opacity: interpolate(
+      Math.abs(drag.get()),
+      [0, commitAt],
+      [0.35, 1],
+      "clamp",
+    ),
   }));
   return (
     <View style={[styles.behind, style, end && styles.end]}>
@@ -174,14 +243,17 @@ export function UndoBar({
   return (
     <Animated.View
       key={undo.title + undo.done}
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
       pointerEvents="box-none"
       style={[styles.undoWrap, { bottom }]}
     >
       <View
         accessibilityLiveRegion="polite"
-        style={[styles.undo, { backgroundColor: t.raised, borderColor: t.border }]}
+        style={[
+          styles.undo,
+          { backgroundColor: t.raised, borderColor: t.border },
+        ]}
       >
         <Text numberOfLines={1} style={[styles.undoText, { color: t.text }]}>
           {undo.done}

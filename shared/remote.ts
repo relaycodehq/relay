@@ -105,6 +105,8 @@ export interface RemoteChatSummary {
   /** The agent asked something and is waiting for an answer. */
   waiting?: boolean;
   settledAt?: number;
+  /** A computed shelf position rather than a saved settle mark. */
+  autoSettled?: true;
   /** Marked unread by hand, until someone opens it; older desktops leave it out. */
   markedUnread?: true;
   snoozedAt?: number;
@@ -164,6 +166,8 @@ export const imageBridge = 14;
 
 /** From here a desktop takes `regenerateProjectChatTitle` from phones. */
 export const titleBridge = 15;
+/** From here thread summaries carry manual unread marks. */
+export const markedUnreadBridge = 15;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =

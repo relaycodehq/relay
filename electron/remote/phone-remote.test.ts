@@ -555,3 +555,19 @@ it("headless startup watches initially disconnected Tailscale and respects saved
     vi.useRealTimers();
   }
 });
+
+it("carries manual unread marks in overview and live summaries, and clears them", async () => {
+  const { remote, summary } = await desktop();
+  summary.markedUnread = true;
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  expect((await p.client.call("overview")).chats[0].markedUnread).toBe(true);
+  delete summary.markedUnread;
+  remote.chatsEvent({ projectId, chats: [summary] });
+  await vi.waitFor(() =>
+    expect(
+      p.events.some((e) => e.kind === "chats" && !e.chats[0].markedUnread),
+    ).toBe(true),
+  );
+});

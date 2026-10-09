@@ -25,3 +25,16 @@ it("brings back the snooze a settle replaced", () => {
     to: { snoozedAt: 300, snoozedUntil: 400 },
   });
 });
+
+it("doesn't turn an automatic shelf position into a saved settle when undoing", () => {
+  expect(
+    undoTriage({ settledAt: 100, autoSettled: true }, {
+      snoozedAt: 200,
+      snoozedUntil: 900,
+    } as ChatSummary),
+  ).toEqual({
+    kind: "restore",
+    from: { snoozedAt: 200, snoozedUntil: 900 },
+    to: {},
+  });
+});
