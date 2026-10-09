@@ -442,7 +442,7 @@ export const Composer = forwardRef<
           <Tool label="Attach a photo" disabled={images.length >= maxImages} onPress={() => setSheet("attach")}>
             <ImagePlus size={17} color={t.muted} />
           </Tool>
-          <Tool label="Agent and model" onPress={() => setSheet("model")}>
+          <Tool label="Agent and model" shrink onPress={() => setSheet("model")}>
             <ProviderIcon provider={provider} color={t.muted} size={13} />
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
               {modelLabel}
@@ -454,7 +454,7 @@ export const Composer = forwardRef<
           {/* Room for the waveform on a narrow phone. */}
           {!dictating && !shrinking && (
             <>
-              <Tool label="Permissions" onPress={() => setSheet("mode")}>
+              <Tool label="Permissions" shrink onPress={() => setSheet("mode")}>
                 <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
                   {modeLabel(settings.runtimeMode)}
                 </Text>
@@ -602,11 +602,14 @@ export const Composer = forwardRef<
 function Tool({
   label,
   disabled,
+  shrink,
   onPress,
   children,
 }: {
   label: string;
   disabled?: boolean;
+  /** Gives up width, its label cut short, so the send buttons always fit. */
+  shrink?: boolean;
   onPress: () => void;
   children: React.ReactNode;
 }) {
@@ -618,7 +621,12 @@ function Tool({
       disabled={disabled}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => [styles.tool, pressed && { backgroundColor: t.hover }, disabled && { opacity: 0.4 }]}
+      style={({ pressed }) => [
+        styles.tool,
+        shrink && styles.shrink,
+        pressed && { backgroundColor: t.hover },
+        disabled && { opacity: 0.4 },
+      ]}
     >
       {children}
     </Pressable>
@@ -645,6 +653,7 @@ const styles = StyleSheet.create({
   input: { fontSize: type.body, lineHeight: 21, maxHeight: 132, minHeight: 38, paddingHorizontal: 8, paddingVertical: 8 },
   toolbar: { flexDirection: "row", alignItems: "center", gap: 2 },
   tool: { flexDirection: "row", alignItems: "center", gap: 4, height: 32, paddingHorizontal: 6, borderRadius: 8, maxWidth: 140 },
+  shrink: { flexShrink: 1, minWidth: 0 },
   toolText: { fontSize: type.tiny, flexShrink: 1 },
   spacer: { flex: 1 },
   slash: { fontFamily: mono, fontSize: 15, width: 18, textAlign: "center" },
