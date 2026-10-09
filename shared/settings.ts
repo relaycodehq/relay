@@ -96,13 +96,19 @@ export function findClaudeModel<M extends { id: string; resolved?: string }>(
 ): M | undefined {
   if (!models || !id) return undefined;
   const bare = withClaudeContextWindow(id, "200k");
-  return (
+  const listed =
     models.find((m) => m.id === id) ??
-    models.find((m) => withClaudeContextWindow(m.id, "200k") === bare) ??
-    models.find(
-      (m) =>
-        !!m.resolved && withClaudeContextWindow(m.resolved, "200k") === bare,
-    )
+    models.find((m) => withClaudeContextWindow(m.id, "200k") === bare);
+  if (listed) return listed;
+  const aliases = models.filter(
+    (m) => !!m.resolved && withClaudeContextWindow(m.resolved, "200k") === bare,
+  );
+  // Separate alias rows can resolve to the same full id. Prefer the requested
+  // window before falling back to the only spelling the CLI lists.
+  return (
+    aliases.find(
+      (m) => claudeContextWindow(m.id) === claudeContextWindow(id),
+    ) ?? aliases[0]
   );
 }
 /** Levels accepted by `claude --effort` and the Agent SDK. */

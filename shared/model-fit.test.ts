@@ -97,6 +97,20 @@ it("keeps an explicit full id ahead of an alias resolving to it", () => {
   expect(listedModel("claude", list, "sonnet[1m]")).toBe(claudeList[1]);
 });
 
+it("resolves a full Claude id to the matching window when both alias rows are listed", () => {
+  const bare = { id: "opus", name: "Opus", resolved: "claude-opus-5-5" };
+  for (const resolved of ["claude-opus-5-5", "claude-opus-5-5[1m]"]) {
+    const long = { id: "opus[1m]", name: "Opus 1M", resolved };
+    for (const list of [
+      [bare, long],
+      [long, bare],
+    ]) {
+      expect(listedModel("claude", list, "claude-opus-5-5")).toBe(bare);
+      expect(listedModel("claude", list, "claude-opus-5-5[1m]")).toBe(long);
+    }
+  }
+});
+
 it("switches Claude's window the way the desktop's control does", () => {
   const on1m = { choice: choice("opus[1m]", false) };
   expect(onWindow(on1m, "200k")).toEqual({
