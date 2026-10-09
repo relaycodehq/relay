@@ -66,7 +66,16 @@ import {
   WaitingStrip,
 } from "../ui/ThreadExtras";
 import { useForeground } from "../ui/motion";
+import { useTurnHaptics } from "../ui/turn-haptics";
 import { type, useTheme } from "../ui/theme";
+
+/** An agent's answer, not one of the notes Relay itself writes into the thread. */
+const isAnswer = (m: ChatMessage) =>
+  m.role === "assistant" &&
+  !m.compaction &&
+  !m.handoff &&
+  !m.reload &&
+  !m.worktreeCommand;
 
 /** A thread, or with `rootId` one of its side conversations. */
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
@@ -149,14 +158,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     : !!(thread?.running ?? summary?.running);
   const lastAnswer = [...listed]
     .reverse()
-    .find(
-      (m) =>
-        m.role === "assistant" &&
-        !m.compaction &&
-        !m.handoff &&
-        !m.reload &&
-        !m.worktreeCommand,
-    );
+    .find(isAnswer);
+  // The latest answer anywhere in the thread, side conversations too: what a turn's end buzzes for.
+  const latestAnswer = useMemo(() => all.findLast(isAnswer), [all]);
+  useTurnHaptics(summary, latestAnswer);
   const canResume =
     !running &&
     !!lastAnswer &&
