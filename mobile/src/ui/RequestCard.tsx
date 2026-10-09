@@ -50,7 +50,8 @@ export function RequestCard({
     setError(undefined);
     try {
       await onRespond(response);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // A tap, not Success: that one is the turn's end, often a moment later.
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

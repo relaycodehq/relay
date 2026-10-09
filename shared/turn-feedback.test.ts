@@ -66,6 +66,33 @@ it("doesn't take an earlier turn's answer for this one's", () => {
   ).toEqual([undefined, undefined, "success"]);
 });
 
+it("buzzes once for a turn a stale list reports running again after it ended", () => {
+  const done = { ...idle, answer: { created: 150, status: "complete" as const } };
+  // The plan and the answer after it: the later message is still this turn's.
+  const after = { ...idle, answer: { created: 160, status: "complete" as const } };
+  expect(buzzes([running, done, running, done])).toEqual([
+    undefined,
+    "success",
+    undefined,
+    undefined,
+  ]);
+  expect(buzzes([running, done, running, after])).toEqual([
+    undefined,
+    "success",
+    undefined,
+    undefined,
+  ]);
+  // The next turn starts later and buzzes again.
+  expect(
+    buzzes([
+      running,
+      done,
+      { ...running, since: 200 },
+      { ...idle, answer: { created: 250, status: "complete" } },
+    ]),
+  ).toEqual([undefined, "success", undefined, "success"]);
+});
+
 it("stays quiet for a stopped answer", () => {
   expect(
     buzzes([

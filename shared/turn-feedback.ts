@@ -22,6 +22,8 @@ export interface TurnWatch {
   ended?: number;
   /** A finished answer already present at the first look, possibly from a cached thread. */
   ignoredAnswer?: number;
+  /** When the turn whose end already buzzed started, so a stale "still running" can't end it twice. */
+  told?: number;
 }
 
 /**
@@ -30,7 +32,9 @@ export interface TurnWatch {
  * failing. With nothing to compare with (opening the thread, reconnecting)
  * it only takes note. A turn's end often arrives before its answer's last
  * state does, so it waits for an answer from that turn that is no longer
- * streaming; a stopped answer gets no buzz.
+ * streaming; a stopped answer gets no buzz. A turn ends once: a list that
+ * reports it running again (an overview fetched before it ended, answered
+ * after) and then ended doesn't buzz a second time.
  */
 export function watchTurn(
   last: TurnWatch | undefined,
@@ -45,6 +49,7 @@ export function watchTurn(
       : sight.answer?.status !== "streaming"
         ? sight.answer?.created
         : undefined,
+    told: last?.told,
   };
   if (!last) return { watch };
   const asked = sight.waiting && !last.waiting;
@@ -53,6 +58,7 @@ export function watchTurn(
     : last.running
       ? last.since
       : last.ended;
+  if (ended !== undefined && ended === last.told) ended = undefined;
   let end: TurnFeedback | undefined;
   const answer = sight.answer;
   if (
@@ -64,6 +70,7 @@ export function watchTurn(
   ) {
     if (answer.status === "complete") end = "success";
     if (answer.status === "failed") end = "error";
+    watch.told = ended;
     ended = undefined;
   }
   return {
