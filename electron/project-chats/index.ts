@@ -512,8 +512,9 @@ export class ProjectChats {
     if (this.disposing) throw new Error("Relay is closing.");
     const held = await this.storage.load(id);
     assertHere(held);
-    // Sent again after its answer got lost: the first copy already waits its turn.
+    // Sent again after its answer got lost: don't send it or pick a stopped queue back up.
     if (
+      held.messages.some((m) => m.id === input.id) ||
       held.queue?.some((q) => q.input.id === input.id) ||
       held.scheduled?.some((s) => s.input.id === input.id)
     )

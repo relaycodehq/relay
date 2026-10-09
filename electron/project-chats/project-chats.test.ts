@@ -1177,6 +1177,16 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
   expect((await chats.get(chat.id)).queuePaused).toBe(true);
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  // Retrying the accepted first send mustn't unpause and drain the waiting follow-up.
+  const accepted = (await chats.get(chat.id)).messages.find(
+    (m) => m.role === "user" && m.body.startsWith("@codex"),
+  )!;
+  await chats.send(chat.id, {
+    ...another,
+    id: accepted.id,
+    body: accepted.body,
+  });
+  expect((await chats.get(chat.id)).queuePaused).toBe(true);
   // A phone that never heard back sends it again: it still waits in the queue, once.
   await chats.send(chat.id, another);
   expect(chats.hasActiveProject(projectId)).toBe(false);
@@ -2063,6 +2073,11 @@ it("holds a Send later message until its time, sends it now on request, and keep
   const now = input("Send me early."),
     dropped = input("Never mind.");
   await chats.send(chat.id, { ...now, sendAt: Date.now() + 3_600_000 });
+  // A retry without sendAt must leave a scheduled message waiting, not start it early.
+  await chats.send(chat.id, now);
+  expect((await chats.get(chat.id)).messages.some((m) => m.id === now.id)).toBe(
+    false,
+  );
   const shot = {
     name: "s.png",
     mimeType: "image/png" as const,
