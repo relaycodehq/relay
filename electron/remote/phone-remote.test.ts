@@ -271,6 +271,28 @@ it("ends the session of a phone removed without being cut off", async () => {
   expect(dispatched).toEqual([]);
 });
 
+it("keeps a phone trying when its sign-in can't be checked, and says no only to a bad token", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  first.client.close();
+
+  // As when saving lastSeen fails for a moment.
+  const verify = vi
+    .spyOn(remote.devices, "verify")
+    .mockRejectedValueOnce(new Error("EBUSY"));
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  const again = phone(credentials);
+  await again.until("online");
+  expect(verify).toHaveBeenCalledTimes(2);
+  expect(again.statuses.map((s) => s.status)).not.toContain("denied");
+
+  const wrong = phone({ ...credentials, token: "not-the-token" });
+  await wrong.until("denied");
+});
+
 it("gives up on a quiet link at once, even when the socket never finishes closing", async () => {
   const { remote } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;

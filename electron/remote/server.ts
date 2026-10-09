@@ -47,6 +47,12 @@ interface Connection {
 const handshakeMs = 10_000;
 const maxConnections = 24;
 
+class Unavailable extends Error {
+  constructor(cause: unknown) {
+    super("Couldn't check the phone's sign-in.", { cause });
+  }
+}
+
 export const nodeCodec: Codec = {
   deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
   // Inflated past this is no frame we'd send.
@@ -209,10 +215,11 @@ export class RemoteServer {
             bridge: remoteBridgeVersion,
           });
         } else if (frame.t === "auth") {
-          const device = await devices.verify(
-            String(frame.deviceId),
-            String(frame.token),
-          );
+          const device = await devices
+            .verify(String(frame.deviceId), String(frame.token))
+            .catch((e: unknown) => {
+              throw new Unavailable(e);
+            });
           if (!device)
             throw new Error("This phone isn't paired with Relay anymore.");
           c.deviceId = device.id;
@@ -227,6 +234,12 @@ export class RemoteServer {
           c.link = new LinkSender((f) => this.send(c, f));
         this.options.onPresence?.();
       } catch (e) {
+        // Only a phone Relay doesn't know is told no, which stops it for
+        // good; one Relay couldn't check right now tries again.
+        if (e instanceof Unavailable) {
+          console.warn("Phone remote: couldn't check a phone's sign-in:", e.cause);
+          return c.socket.close();
+        }
         this.send(c, {
           t: "denied",
           reason: e instanceof Error ? e.message : "Not allowed.",
