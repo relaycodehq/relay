@@ -1,4 +1,4 @@
-// Agent CLI updates: the sidebar footer control and Settings' Installed agents.
+// Agent CLI updates: the sidebar footer control and Settings' agent cards.
 // Open http://127.0.0.1:5177/previews/agent-updates/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
@@ -8,10 +8,8 @@ import "../../src/styles.css";
 import "../../src/features/sidebar/sidebar.css";
 import "../../src/features/settings/settings.css";
 import { initAppearance } from "../../src/lib/appearance";
-import {
-  AgentUpdateButton,
-  AgentVersionSettings,
-} from "../../src/features/updates/AgentUpdates";
+import { AgentUpdateButton } from "../../src/features/updates/AgentUpdates";
+import { AgentCards } from "../../src/features/updates/AgentCards";
 import { UpdateButton } from "../../src/features/updates/UpdateButton";
 import { IconButton } from "../../src/ui/ui";
 import type { AgentVersion, AgentVersions } from "../../shared/agent-updates";
@@ -223,12 +221,12 @@ function Preview() {
         </div>
       </div>
       <section>
-        <h3 style={{ margin: "0 0 4px", fontSize: 13 }}>Installed agents</h3>
+        <h3 style={{ margin: "0 0 4px", fontSize: 13 }}>Your agents</h3>
         <p className="setting-muted" style={{ margin: "0 0 10px" }}>
           Relay runs the agent CLIs installed on this computer and tells you
           when a newer release is out.
         </p>
-        <AgentVersionSettings />
+        <AgentCards accounts={() => null} />
       </section>
     </div>
   );

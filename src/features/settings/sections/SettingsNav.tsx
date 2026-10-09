@@ -79,24 +79,40 @@ export function SettingsNav({
         )}
         {categories
           .filter((c) => c.id !== "project" || projectId)
-          .map(({ id, label, icon: Icon }) => {
+          .map(({ id, label, icon: Icon, group }, i, list) => {
             const count = results
               ? results.filter((e) => e.category === id).length
               : null;
-            return (
+            const active = !showResults && category === id;
+            const link = (
               <button
                 key={id}
-                className={!showResults && category === id ? "active" : ""}
-                aria-current={
-                  !showResults && category === id ? "page" : undefined
+                className={
+                  [active && "active", group && "settings-nav-sub"]
+                    .filter(Boolean)
+                    .join(" ") || undefined
                 }
+                aria-current={active ? "page" : undefined}
                 onClick={() => onPick(id)}
               >
-                <Icon size={15} />
+                {!group && <Icon size={15} />}
                 <span>{label}</span>
                 {count != null && count > 0 && <small>{count}</small>}
               </button>
             );
+            // A group's heading goes before its first page and opens it.
+            if (!group || list[i - 1]?.group === group) return link;
+            return [
+              <button
+                key={group.label}
+                className="settings-nav-group"
+                onClick={() => onPick(id)}
+              >
+                <group.icon size={15} />
+                <span>{group.label}</span>
+              </button>,
+              link,
+            ];
           })}
       </nav>
     </aside>

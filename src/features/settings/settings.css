@@ -113,6 +113,16 @@
 .settings-nav nav button.active > svg {
   color: var(--accent);
 }
+/* A group's pages, indented under its heading without icons of their own. */
+.settings-nav nav button.settings-nav-sub {
+  height: 28px;
+  margin-left: 25px;
+  padding-left: 10px;
+  color: var(--muted);
+}
+.settings-nav nav button.settings-nav-sub.active {
+  color: var(--text);
+}
 .settings-nav nav button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -150,6 +160,10 @@
   margin: 0;
   font-size: 17px;
   font-weight: 600;
+}
+.settings-crumb {
+  font-weight: 400;
+  color: var(--muted);
 }
 .settings-pane > header p {
   margin: 4px 0 0;
@@ -994,6 +1008,25 @@
   font-size: 12px;
   color: var(--muted);
 }
+/* Used by Relay: each job's text beside its model, saved as it changes. */
+.review-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.review-model:last-child {
+  border-bottom: 0;
+}
+.review-models-saved {
+  margin: 0;
+  padding: 8px 16px 9px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
 .settings-row-below {
   flex: 1 0 100%;
   min-width: 0;
@@ -1105,6 +1138,31 @@
 /* Flag what I'd miss: a switch at its own width, the cost in a line under it. */
 .watch-scope {
   display: flex;
+}
+.watch-how {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.watch-how > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text);
+}
+.watch-how ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-width: 640px;
+}
+.watch-how :is(b, i) {
+  color: var(--text);
+  font-weight: 500;
+}
+.watch-how code {
+  font-size: 11px;
 }
 .watch-cost {
   margin: 8px 0 0;

@@ -75,7 +75,7 @@ function Preview() {
       {open && (
         <Settings
           account={null}
-          initialCategory="models"
+          initialCategory="quick-switch"
           onClose={() => setOpen(false)}
           onDisconnect={async () => {}}
         />

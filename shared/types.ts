@@ -362,11 +362,6 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<void>;
-  moveAgentAccount(
-    provider: import("./agent-accounts").AccountProvider,
-    id: string,
-    by: -1 | 1,
-  ): Promise<void>;
   /** The account new threads start on. */
   useAgentAccount(
     provider: import("./agent-accounts").AccountProvider,

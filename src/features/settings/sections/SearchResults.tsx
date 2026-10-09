@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import type { SettingEntry } from "../settings-search";
-import { categories } from "./categories";
+import { categories, fullLabel } from "./categories";
 import { SearchHighlight } from "./SearchHighlight";
 
 /** Search links to the real control in its full section. */
@@ -18,7 +18,7 @@ export function SearchResults({
     .map((category) => (
       <div key={category.id} className="settings-group">
         <h5>
-          <SearchHighlight text={category.label} query={query} />
+          <SearchHighlight text={fullLabel(category.id)} query={query} />
         </h5>
         {results
           .filter((e) => e.category === category.id)
@@ -28,7 +28,7 @@ export function SearchResults({
               type="button"
               className="settings-result"
               onClick={() => onOpen(entry)}
-              aria-label={`Open ${entry.title} in ${category.label}`}
+              aria-label={`Open ${entry.title} in ${fullLabel(category.id)}`}
             >
               <span className="settings-result-text">
                 <strong>
@@ -41,7 +41,7 @@ export function SearchResults({
                 )}
                 <small>
                   <SearchHighlight
-                    text={[category.label, entry.section]
+                    text={[fullLabel(category.id), entry.section]
                       .filter(Boolean)
                       .join(" › ")}
                     query={query}

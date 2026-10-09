@@ -1,215 +1,181 @@
 import {
   agentName,
   agentProviders,
-  agents,
   type AgentProvider,
 } from "../../../../shared/agents";
-import { useQuickKeysLabel } from "../../quick-switch/effort-shortcut";
-import { usePluginEnabled } from "../../plugins/plugins";
+import { accountProviders } from "../../../../shared/agent-accounts";
+import type { AISettings } from "../../../../shared/settings";
 import type { SettingEntry } from "../settings-search";
-import {
-  useAISettingsDraft,
-  type AISettingsDraft,
-} from "../useAISettingsDraft";
-import { AgentVersionSettings } from "../../updates/AgentUpdates";
-import { AccountsSettings } from "../../accounts/AccountsSettings";
+import { useSaveAISettings } from "../../agents/useAISettings";
+import { AgentCards } from "../../updates/AgentCards";
+import { useRecent } from "../../updates/useRecent";
+import { AccountRows } from "../../accounts/AccountRows";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { ModelField } from "../../agents/ModelField";
 import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
-import {
-  SettingsCard,
-  SettingsFooter,
-  SettingsRow,
-  SettingsSelect,
-} from "../../../ui/SettingsCard";
+import { SettingsCard, SettingsSelect } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import { WatchThreadsSetting } from "../WatchThreadsSetting";
 
+type AISave = ReturnType<typeof useSaveAISettings>;
+
+const hasAccounts = (provider: AgentProvider) =>
+  (accountProviders as readonly AgentProvider[]).includes(provider);
+
+/** Settings → AI models: Agents, Used by Relay and Quick switch. */
 export function useModelEntries(
   setError: (error: unknown) => void,
 ): SettingEntry[] {
-  const ai = useAISettingsDraft(setError);
-  // Plugins that are off leave no trace in the rest of Settings.
-  const timesheets = usePluginEnabled("clockify");
-  const quickKeys = useQuickKeysLabel();
+  const ai = useSaveAISettings(setError);
   return [
     {
-      id: "codex-models",
-      category: "models",
-      title: "Agents",
-      description: `Uses your signed-in ${agentProviders.map((p) => agents[p].cli).join(", ")}. Model availability depends on your account.`,
-      keywords:
-        "default agent new thread grouping line questions commit split message reasoning effort fast mode model codex claude opencode cursor ai",
-      block: true,
-      render: () => <AIModelsCard ai={ai} timesheets={timesheets} />,
+      id: "default-agent",
+      category: "agents",
+      title: "New threads start on",
+      description: "Unless the project picked its own agent.",
+      keywords: "default agent new thread start codex claude opencode cursor",
+      render: () => <AgentSelect ai={ai} />,
     },
     {
-      id: "agent-accounts",
-      category: "models",
-      title: "Accounts",
+      id: "agent-list",
+      category: "agents",
+      title: "Your agents",
       description:
-        "Sign in to more than one Claude Code or Codex account. Each keeps its own sign-in folder; your usual one stays where the CLI put it.",
+        "Relay runs the agent CLIs installed on this computer, and Cursor's SDK, which it downloads itself. Claude Code and Codex can each sign in to more than one account.",
       keywords:
-        "account accounts sign in login switch work personal subscription limit usage claude codex email plan profile",
+        "account accounts sign in login switch work personal subscription limit usage email plan profile version update upgrade install link path cli codex claude code opencode cursor sdk npm homebrew bun",
       block: true,
-      render: () => <AccountsSettings onError={setError} />,
+      render: () => (
+        <AgentCards
+          accounts={(provider) =>
+            hasAccounts(provider) && (
+              <AccountRows
+                provider={provider as (typeof accountProviders)[number]}
+                onError={setError}
+              />
+            )
+          }
+        />
+      ),
+    },
+    {
+      id: "review-models",
+      category: "relay-models",
+      title: "Review and commits",
+      description:
+        "Default runs the agent's own model and effort. Fast mode uses more credits where available.",
+      keywords:
+        "model grouping pull request steps line questions commit split message reasoning effort fast mode codex claude opencode cursor",
+      block: true,
+      render: () => <ReviewModelsCard ai={ai} />,
     },
     {
       id: "watch-threads",
-      category: "models",
+      category: "relay-models",
       title: "Flag what I'd miss",
       description:
-        "A side check reads along and points out what you'd likely miss, like a subagent changing a test to make it pass, or a tradeoff mentioned in passing. Notes show in the turn they're about. Claude and Codex threads; subagents are watched in Claude only.",
+        "After a turn that did real work, Relay asks the same session one side question: is there anything here you'd likely miss? Usually the answer is no and nothing shows.",
       keywords:
-        "watch watcher heads up you should know flag miss notice subagent cheat tests side check observer cost price tokens",
+        "watch watcher heads up you should know flag miss notice subagent cheat tests side check btw fork observer cost price tokens",
       block: true,
       render: () => <WatchThreadsSetting />,
     },
     {
       id: "quick-switch",
-      category: "models",
+      category: "quick-switch",
       title: "Quick switch",
-      description: `Presets of agent, model and effort that ${quickKeys || "the quick-switch keys"} step through in the composer.`,
       keywords:
-        "quick switch presets favourite favorite model agent effort keyboard shortcut arrows drum style",
-      block: true,
-      render: () => <QuickSwitchSettings />,
-    },
-    {
-      id: "agent-versions",
-      category: "models",
-      title: "Installed agents",
-      description:
-        "Relay runs the agent CLIs installed on this computer, and Cursor's SDK, which it downloads itself, and tells you when a newer release is out.",
-      keywords:
-        "version update upgrade install cli codex claude code opencode cursor sdk npm homebrew bun",
-      block: true,
-      render: () => <AgentVersionSettings />,
+        "quick switch presets favourite favorite model agent effort keyboard shortcut arrows drum style revolver",
+      card: () => <QuickSwitchSettings />,
     },
   ];
 }
 
-/** The helpers' models, saved together with one button. */
-function AIModelsCard({
-  ai,
-  timesheets,
-}: {
-  ai: AISettingsDraft;
-  /** Whether the Clockify plugin, which writes timesheets, is on. */
-  timesheets: boolean;
-}) {
-  const { values, change } = ai;
-  return values ? (
-    <SettingsCard>
-      <SettingsRow
-        label="Default agent"
-        hint="Where a new thread starts in a project you haven't picked an agent for. A pick stays with its project."
-      >
-        <AgentSelect
-          value={values.threadProvider}
-          onChange={ai.setThreadProvider}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Grouping"
-        hint="Splits a pull request into reviewable steps."
-      >
-        <ModelField
-          label="Grouping"
-          value={values.grouping}
-          provider={values.groupingProvider}
-          onChange={(value, provider) => change("grouping", value, provider)}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Line questions"
-        hint="Answers what you ask about a line of code."
-      >
-        <ModelField
-          label="Line questions"
-          value={values.questions}
-          provider={values.questionsProvider}
-          allowDefault
-          onChange={(value, provider) => change("questions", value, provider)}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Commit splits"
-        hint="Splits your local changes into logical commits you review before they're made."
-      >
-        <ModelField
-          label="Commit splits"
-          value={values.split}
-          provider={values.splitProvider}
-          providers={agentProviders}
-          allowDefault
-          onChange={(value, provider) => change("split", value, provider)}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Commit messages"
-        hint="Drafts the message in the Commit and Commit & push sheets."
-      >
-        <ModelField
-          label="Commit messages"
-          value={values.commitMessage}
-          provider={values.commitMessageProvider}
-          providers={agentProviders}
-          allowDefault
-          onChange={(value, provider) =>
-            change("commitMessage", value, provider)
-          }
-        />
-      </SettingsRow>
-      {timesheets && (
-        <SettingsRow
-          label="Timesheets"
-          hint="Describes your day's entries for the Clockify plugin."
-        >
+const reviewRows: {
+  kind: "grouping" | "questions" | "split" | "commitMessage";
+  label: string;
+  hint: string;
+  allowDefault?: boolean;
+  /** Runs on any agent, not only Codex and Claude. */
+  anyAgent?: boolean;
+}[] = [
+  {
+    kind: "grouping",
+    label: "Pull request steps",
+    hint: "Groups a pull request into reviewable steps. Steps already made keep theirs.",
+  },
+  {
+    kind: "questions",
+    label: "Line questions",
+    hint: "Answers what you ask about a line of code.",
+    allowDefault: true,
+  },
+  {
+    kind: "split",
+    label: "Commit splits",
+    hint: "Splits your changes into commits you review first.",
+    allowDefault: true,
+    anyAgent: true,
+  },
+  {
+    kind: "commitMessage",
+    label: "Commit messages",
+    hint: "Drafts the message in the Commit sheets.",
+    allowDefault: true,
+    anyAgent: true,
+  },
+];
+
+function ReviewModelsCard({ ai }: { ai: AISave }) {
+  const saved = useRecent(ai.savedAt, 2000);
+  const { values } = ai;
+  if (!values)
+    return ai.settings.error ? (
+      <ErrorBox
+        error={ai.settings.error}
+        retry={() => void ai.settings.refetch()}
+      />
+    ) : (
+      <p className="setting-muted">Loading model settings…</p>
+    );
+  return (
+    <SettingsCard className="review-models">
+      {reviewRows.map((row) => (
+        <div key={row.kind} className="review-model">
+          <div className="settings-row-text">
+            <span>{row.label}</span>
+            <small>{row.hint}</small>
+          </div>
           <ModelField
-            label="Timesheets"
-            value={values.timesheet}
-            provider={values.timesheetProvider}
-            providers={agentProviders}
-            allowDefault
-            onChange={(value, provider) => change("timesheet", value, provider)}
+            label={row.label}
+            value={values[row.kind]}
+            provider={values[`${row.kind}Provider`]}
+            providers={row.anyAgent ? agentProviders : undefined}
+            allowDefault={row.allowDefault}
+            onChange={(value, provider) =>
+              void ai.save({
+                [row.kind]: value,
+                [`${row.kind}Provider`]: provider,
+              } as Partial<AISettings>)
+            }
           />
-        </SettingsRow>
+        </div>
+      ))}
+      {saved && (
+        <p className="review-models-saved" role="status">
+          Saved
+        </p>
       )}
-      <SettingsFooter
-        note={
-          ai.saved ? (
-            <span role="status">Settings saved</span>
-          ) : (
-            "Fast mode uses more credits where available. Existing grouping checkpoints keep their saved model, reasoning effort and speed."
-          )
-        }
-      >
-        <button className="primary" disabled={!ai.canSave} onClick={ai.save}>
-          {ai.saving ? "Saving…" : "Save AI settings"}
-        </button>
-      </SettingsFooter>
     </SettingsCard>
-  ) : ai.settings.error ? (
-    <ErrorBox
-      error={ai.settings.error}
-      retry={() => void ai.settings.refetch()}
-    />
-  ) : (
-    <p className="setting-muted">Loading model settings…</p>
   );
 }
 
-function AgentSelect({
-  value,
-  onChange,
-}: {
-  value: AgentProvider;
-  onChange: (provider: AgentProvider) => void;
-}) {
+function AgentSelect({ ai }: { ai: AISave }) {
+  if (!ai.values) return null;
+  const value = ai.values.threadProvider;
   return (
     <SettingsSelect<AgentProvider>
-      label="Default agent"
+      label="New threads start on"
       value={value}
       icon={<ProviderIcon provider={value} />}
       options={agentProviders.map((provider) => ({
@@ -217,7 +183,7 @@ function AgentSelect({
         label: agentName(provider),
         icon: <ProviderIcon provider={provider} />,
       }))}
-      onChange={onChange}
+      onChange={(threadProvider) => void ai.save({ threadProvider })}
     />
   );
 }

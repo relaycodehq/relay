@@ -71,7 +71,7 @@ function Preview() {
       {open && (
         <Settings
           account={null}
-          initialCategory="models"
+          initialCategory="agents"
           onClose={() => setOpen(false)}
           onDisconnect={async () => {}}
         />

@@ -1,4 +1,5 @@
 import {
+  Bot,
   FolderGit2,
   Info,
   Keyboard,
@@ -10,14 +11,21 @@ import {
   Smartphone,
   Sparkles,
   Volume2,
+  Zap,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
+
+/** A heading in the nav over the categories that share it. */
+export type CategoryGroup = { label: string; icon: typeof Palette };
+
+const aiModels: CategoryGroup = { label: "AI models", icon: Sparkles };
 
 export const categories: {
   id: SettingsCategory;
   label: string;
   description: string;
   icon: typeof Palette;
+  group?: CategoryGroup;
 }[] = [
   {
     id: "appearance",
@@ -33,11 +41,28 @@ export const categories: {
     icon: FolderGit2,
   },
   {
-    id: "models",
-    label: "AI models",
+    id: "agents",
+    label: "Agents",
     description:
-      "The agent new threads start on, and the models for grouping, line questions and commits.",
+      "The agents Relay runs, the accounts they sign in with, and where new threads start.",
+    icon: Bot,
+    group: aiModels,
+  },
+  {
+    id: "relay-models",
+    label: "Used by Relay",
+    description:
+      "Models Relay calls itself, outside your threads: review, commits, and the side check that reads along.",
     icon: Sparkles,
+    group: aiModels,
+  },
+  {
+    id: "quick-switch",
+    label: "Quick switch",
+    description:
+      "Presets of agent, model and effort you step through in the composer.",
+    icon: Zap,
+    group: aiModels,
   },
   {
     id: "integrations",
@@ -95,3 +120,9 @@ export const categories: {
 
 export const categoryOf = (id: SettingsCategory) =>
   categories.find((c) => c.id === id)!;
+
+/** A category's name with its group's in front, for search and the window title. */
+export const fullLabel = (id: SettingsCategory) => {
+  const { label, group } = categoryOf(id);
+  return group ? `${group.label} › ${label}` : label;
+};

@@ -671,6 +671,11 @@
 
 /* ---------- Settings (QuickSwitchSettings) ---------- */
 
+/* It draws its own cards in a settings row, which is a flex row. */
+.quick-settings {
+  flex: 1;
+  min-width: 0;
+}
 .quick-settings .settings-card + .settings-card {
   margin-top: 12px;
 }

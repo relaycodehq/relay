@@ -5,7 +5,7 @@ import type { SettingsCategory } from "../../lib/settings-page";
 import { matches, searchWords, sections } from "./settings-search";
 import { useLeaveOnEscape } from "./useLeaveOnEscape";
 import { ErrorBox } from "../../ui/ui";
-import { categoryOf } from "./sections/categories";
+import { categoryOf, fullLabel } from "./sections/categories";
 import { SearchResults } from "./sections/SearchResults";
 import { SearchHighlight } from "./sections/SearchHighlight";
 import { Setting } from "./sections/Setting";
@@ -95,7 +95,7 @@ export function Settings({
 
   const words = searchWords(query);
   const results = words.length
-    ? entries.filter((e) => matches(e, words, categoryOf(e.category).label))
+    ? entries.filter((e) => matches(e, words, fullLabel(e.category)))
     : [];
   const current = categoryOf(category);
   const showResults = !!words.length && searching;
@@ -105,7 +105,7 @@ export function Settings({
     ? "Search results"
     : category === "project" && project
       ? `${project.name} settings`
-      : current.label;
+      : fullLabel(category);
   useEffect(() => onWhere?.(where), [where, onWhere]);
   useLayoutEffect(() => {
     const pane = content.current;
@@ -149,7 +149,12 @@ export function Settings({
       />
       <main className="settings-pane">
         <header>
-          <h3>{where}</h3>
+          <h3>
+            {!showResults && current.group && (
+              <span className="settings-crumb">{current.group.label} / </span>
+            )}
+            {showResults || category === "project" ? where : current.label}
+          </h3>
           <p>
             {showResults
               ? `${results.length} ${results.length === 1 ? "setting" : "settings"} matching “${query.trim()}”`
