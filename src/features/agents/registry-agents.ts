@@ -38,12 +38,14 @@ function subscribe(listener: () => void) {
   return () => void listeners.delete(listener);
 }
 
+const getState = () => state;
+
 export const useRegistryAgents = () =>
-  useSyncExternalStore(subscribe, () => state);
+  useSyncExternalStore(subscribe, getState, getState);
 
 /** Every agent a thread can run: Relay's own, then the installed registry ones. */
 export const useRunnableAgents = () =>
-  useSyncExternalStore(subscribe, runnableAgents);
+  useSyncExternalStore(subscribe, runnableAgents, runnableAgents);
 
 export const registryIcon = (provider: AgentProvider) =>
   state.installed.find((agent) => agent.provider === provider)?.icon;
