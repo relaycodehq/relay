@@ -34,10 +34,15 @@ describe("threadNews", () => {
     const before = list(
       chat("a", { running: true }),
       chat("b", { running: true }),
+      chat("c", { running: true }),
     );
     const news = threadNews(
       before,
-      [chat("a", { updated: 20 }), chat("b", { updated: 20 })],
+      [
+        chat("a", { updated: 20 }),
+        chat("b", { updated: 20 }),
+        chat("c", { updated: 20 }),
+      ],
       new Map([
         [
           "a",
@@ -46,6 +51,14 @@ describe("threadNews", () => {
           }),
         ],
         ["b", answer({ status: "failed", error: "Claude's login expired." })],
+        [
+          "c",
+          answer({
+            status: "failed",
+            error:
+              'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+          }),
+        ],
       ]),
     );
     expect(news).toEqual([
@@ -61,6 +74,8 @@ describe("threadNews", () => {
         title: "Thread b",
         body: "Claude's login expired.",
       },
+      // The provider's words, not the envelope around them.
+      { chatId: "c", kind: "failed", title: "Thread c", body: "Overloaded" },
     ]);
   });
 

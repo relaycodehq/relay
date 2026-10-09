@@ -1,6 +1,7 @@
 // What a phone tells you about while it's in your pocket: a thread that
 // finished, failed or asked you something since the last list, worded for a
 // notification.
+import { agentError } from "./agent-error";
 import { agentName } from "./agents";
 import { wakeLabel } from "./chat-activity";
 import type { ChatMessage } from "./projects";
@@ -68,7 +69,9 @@ export function threadNews(
             chatId: c.id,
             kind: "failed",
             title: c.title,
-            body: answer.error || `${agent}'s answer failed`,
+            body: answer.error?.trim()
+              ? agentError(answer.error).message
+              : `${agent}'s answer failed`,
           }
         : {
             chatId: c.id,
