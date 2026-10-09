@@ -46,9 +46,7 @@ export function applyIconUpdates(
   return { index: { ...index, [computer]: mine }, unused };
 }
 
-/** Every computer's icons by project id; ids are random, so they don't meet. */
-export function iconsByProject(index: IconIndex) {
-  const all: Record<string, IconEntry> = {};
-  for (const icons of Object.values(index)) Object.assign(all, icons);
-  return all;
+/** Lookup stays scoped too: copied desktop state can share project ids. */
+export function projectIcon(index: IconIndex, computer: string | undefined, projectId: string) {
+  return computer ? index[computer]?.[projectId]?.uri : undefined;
 }

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import {
   applyIconUpdates,
-  iconsByProject,
+  projectIcon,
   knownHashes,
   type IconIndex,
 } from "../../mobile/src/remote/project-icon-index";
@@ -35,7 +35,17 @@ it("leaves the other computer's icons alone when one computer syncs", () => {
   });
   // The replaced icon and the removed project's; never the Mac's.
   expect(next.unused.sort()).toEqual(["file:///gone-c.png", "file:///server-b.png"]);
-  expect(iconsByProject(next.index).relay?.uri).toBe("file:///relay-a.png");
+  expect(projectIcon(next.index, "mac", "relay")).toBe("file:///relay-a.png");
+});
+
+it("shows the active computer's icon even when their project ids match", () => {
+  const index: IconIndex = {
+    mac: { relay: { hash: "a", uri: "file:///mac.png" } },
+    linux: { relay: { hash: "b", uri: "file:///linux.png" } },
+  };
+  expect(projectIcon(index, "mac", "relay")).toBe("file:///mac.png");
+  expect(projectIcon(index, "linux", "relay")).toBe("file:///linux.png");
+  expect(projectIcon(index, undefined, "relay")).toBeUndefined();
 });
 
 it("keeps a file the update wrote to the same place", () => {

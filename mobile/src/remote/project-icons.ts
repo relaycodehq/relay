@@ -7,7 +7,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import type { RemoteClient } from "../../../shared/remote-client";
 import {
   applyIconUpdates,
-  iconsByProject,
+  projectIcon,
   knownHashes,
   type IconIndex,
 } from "./project-icon-index";
@@ -27,16 +27,16 @@ const extensions: Record<string, string> = {
 };
 
 let index: IconIndex = {};
-let icons = iconsByProject(index);
 let loading: Promise<void> | undefined;
 /** When each computer's icons were last checked. */
 const checked = new Map<string, number>();
 const syncing = new Set<string>();
+/** Invalidates an in-flight sync when a computer is forgotten. */
+const generations = new Map<string, number>();
 const listeners = new Set<() => void>();
 
 function update(next: IconIndex) {
   index = next;
-  icons = iconsByProject(next);
   listeners.forEach((l) => l());
 }
 
@@ -79,7 +79,9 @@ async function sync(
   call: RemoteClient["call"],
   projectIds: string[],
 ): Promise<void> {
+  const generation = generations.get(computer);
   await load();
+  if (generations.get(computer) !== generation) return;
   const missing = projectIds.some((id) => !(id in (index[computer] ?? {})));
   if (
     syncing.has(computer) ||
@@ -92,6 +94,7 @@ async function sync(
       "projectIcons",
       knownHashes(index, computer, projectIds),
     );
+    if (generations.get(computer) !== generation) return;
     const next = applyIconUpdates(index, computer, projectIds, updates, (id, icon) =>
       save(computer, id, icon),
     );
@@ -101,7 +104,7 @@ async function sync(
   } catch {
     // An older desktop has no icons to give; the folders stay.
   } finally {
-    checked.set(computer, Date.now());
+    if (generations.get(computer) === generation) checked.set(computer, Date.now());
     syncing.delete(computer);
   }
 }
@@ -142,8 +145,8 @@ export function useProjectIconSync(
 
 /** A forgotten computer's icons go with it. */
 export async function forgetIcons(computer: string) {
+  generations.set(computer, (generations.get(computer) ?? 0) + 1);
   await load();
-  if (!(computer in index)) return;
   const { [computer]: _, ...rest } = index;
   update(rest);
   checked.delete(computer);
@@ -155,13 +158,13 @@ export async function forgetIcons(computer: string) {
 }
 
 /** The project's icon file, or undefined to show its folder. */
-export function useProjectIcon(projectId: string) {
+export function useProjectIcon(computer: string | undefined, projectId: string) {
   useEffect(() => void load(), []);
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    () => icons[projectId]?.uri,
+    () => projectIcon(index, computer, projectId),
   );
 }
