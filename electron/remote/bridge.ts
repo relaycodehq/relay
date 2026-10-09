@@ -125,6 +125,7 @@ const diffSourceSchema = z.discriminatedUnion("kind", [
 const maxDiffLines = 3000;
 /** Streaming answers go out at most this often; the phone doesn't need every token. */
 const streamMs = 150;
+const sendKey = (chatId: string, id: string) => JSON.stringify([chatId, id]);
 
 /** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 export class RemoteBridge {
@@ -134,7 +135,9 @@ export class RemoteBridge {
   >();
   private lastChats = "";
   // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
-  private sends = new Set<{ chatId: string; id: string }>();
+  private sends = new Map<string, Promise<unknown>>();
+  // A taken-back queue item no longer holds its id. Its lost answer still counts as a receipt.
+  private acceptedSends = new Set<string>();
   private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
@@ -179,8 +182,8 @@ export class RemoteBridge {
       };
     },
     chat: async (id, known, history = remoteHistory, sendId) => {
-      const sending = () =>
-        [...this.sends].some((s) => s.chatId === id && s.id === sendId);
+      const key = sendId === undefined ? undefined : sendKey(id, sendId);
+      const sending = () => key !== undefined && this.sends.has(key);
       const inFlight = sendId !== undefined && sending();
       const patch = await this.host.chat(id, known);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
@@ -196,6 +199,7 @@ export class RemoteBridge {
               sendPending,
               hasSend:
                 sendPending ||
+                (key !== undefined && this.acceptedSends.has(key)) ||
                 patch.messages.some(
                   (m) => (typeof m === "string" ? m : m.id) === sendId,
                 ) ||
@@ -280,14 +284,22 @@ export class RemoteBridge {
               id: projectChatSendSchema.parse(args[1]).id,
             }
           : undefined;
-      if (send) this.sends.add(send);
+      const key = send && sendKey(send.chatId, send.id);
+      if (key && this.acceptedSends.has(key)) return;
+      // A reconnect may retry before worktree creation finishes: both await the same send.
+      let job = key ? this.sends.get(key) : undefined;
+      if (!job) {
+        job = this.host.dispatch(method, args);
+        if (key) this.sends.set(key, job);
+      }
       try {
-        const value = await this.host.dispatch(method, args);
+        const value = await job;
+        if (key) this.acceptedSends.add(key);
         // Sends, stops and triage move thread states; phones hear before the call returns.
         this.refresh();
         return value;
       } finally {
-        if (send) this.sends.delete(send);
+        if (key && this.sends.get(key) === job) this.sends.delete(key);
       }
     },
     phoneAppFile: async (path, offset) => {

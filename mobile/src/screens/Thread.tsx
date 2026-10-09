@@ -733,7 +733,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           // Unanswered, it may be on the computer already: sent again it would go twice.
           if (o.unsure && (await reached(remote.call, o, knownOf(thread)))) {
             void reload();
-            return Alert.alert("The computer has it", `${remote.name} has this send or is still processing it. Wait for it to finish before editing.`);
+            return Alert.alert("The computer received it", `${remote.name} already accepted this send or is still processing it, so it can't be taken back here.`);
           }
           const restored = composer.current?.restore({
             body: `${o.send.side ? "/btw " : ""}${withoutMention(o.send.body)}`,

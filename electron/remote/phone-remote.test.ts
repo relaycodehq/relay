@@ -424,13 +424,8 @@ it("waits longer for calls that push, write or send, and not for the rest", asyn
 
 it("checks unanswered sends while dispatch runs, after reconnect, and outside the history page", async () => {
   let finish!: () => void;
-  let finishRetry!: () => void;
   const gate = new Promise<void>((resolve) => (finish = resolve));
-  const retryGate = new Promise<void>((resolve) => (finishRetry = resolve));
-  let calls = 0;
-  const { remote, dispatched, chat } = await desktop(async () =>
-    ++calls === 1 ? gate : retryGate,
-  );
+  const { remote, dispatched, chat } = await desktop(async () => gate);
   const p = phone({
     link: parsePairingUrl((await remote.pairing()).url)!,
     device: "Pixel",
@@ -453,11 +448,10 @@ it("checks unanswered sends while dispatch runs, after reconnect, and outside th
   const again = phone(p.credentials()!);
   await again.until("online");
   expect((await receipt(again.client)).hasSend).toBe(true);
-  // Two requests with this id may overlap; finishing one mustn't forget the other.
+  // Two requests with this id share one dispatch, even across a reconnect.
   const retry = again.client.desktop("sendProjectChat", chatId, send);
-  await vi.waitFor(() => expect(dispatched).toHaveLength(2));
-  finish();
   expect((await receipt(again.client)).hasSend).toBe(true);
+  expect(dispatched).toHaveLength(1);
   chat.messages = Array.from({ length: 102 }, (_, i): ChatMessage => ({
     id: i === 0 ? send.id : randomUUID(),
     role: "user",
@@ -467,13 +461,17 @@ it("checks unanswered sends while dispatch runs, after reconnect, and outside th
     created: i,
     version: 1,
   }));
-  finishRetry();
+  finish();
   await retry;
   const checked = await receipt(again.client);
   expect(checked.sendPending).toBe(false);
   expect(checked.messages).toHaveLength(1);
   expect(checked.messages[0]).not.toMatchObject({ id: send.id });
   expect(checked.hasSend).toBe(true);
+  // An old accepted send that predates this bridge session is checked through the full history too.
+  const old = randomUUID();
+  chat.messages[0].id = old;
+  expect((await receipt(again.client, old)).hasSend).toBe(true);
   expect((await receipt(again.client, randomUUID())).hasSend).toBe(false);
   chat.queue = [{ input: { ...send, id: randomUUID() }, created: 1 }];
   chat.scheduled = [
@@ -489,6 +487,32 @@ it("checks unanswered sends while dispatch runs, after reconnect, and outside th
   expect(
     (await receipt(again.client, chat.scheduled[0].input.id)).hasSend,
   ).toBe(true);
+});
+
+it("doesn't revive a taken-back queue item when its phone retries after reconnecting", async () => {
+  const { remote, dispatched, chat } = await desktop();
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "queued", {
+    id: randomUUID(),
+  });
+  chat.queue = [{ input: send, created: 1 }];
+  await p.client.desktop("sendProjectChat", chatId, send);
+  chat.queue = [];
+  p.client.close();
+  const again = phone(p.credentials()!);
+  await again.until("online");
+  expect(
+    await again.client.call("chat", chatId, undefined, 1, send.id),
+  ).toMatchObject({ hasSend: true, sendPending: false });
+  await again.client.desktop("sendProjectChat", chatId, send);
+  expect(dispatched).toHaveLength(1);
+  // The receipt belongs to this thread, not every thread that might carry the same message id.
+  await again.client.desktop("sendProjectChat", randomUUID(), send);
+  expect(dispatched).toHaveLength(2);
 });
 
 it("keeps a desktop rejection distinct from an unanswered call and releases its receipt", async () => {
@@ -529,7 +553,10 @@ it("says who answers in `to` only to desktops that take it", async () => {
   // A desktop from before `to` names no version in its handshake, and
   // refuses fields it doesn't know; the body's mention tells it the same.
   Reflect.set(p.client, "bridge", undefined);
-  await p.client.desktop("sendProjectChat", chatId, send);
+  await p.client.desktop("sendProjectChat", chatId, {
+    ...send,
+    id: randomUUID(),
+  });
   const older = dispatched.at(-1)?.args[1];
   expect(older).not.toHaveProperty("to");
   expect(
