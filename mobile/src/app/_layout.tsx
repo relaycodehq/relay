@@ -15,10 +15,10 @@ import {
   ReportHeaderHeight,
   SidebarToggle,
   paneBreakpoint,
-  sidebarWidth,
   useOpenItem,
   useOrientationPolicy,
   useSidebarHidden,
+  useSidebarWidth,
 } from "../ui/panes";
 import { ComputerSheet } from "../ui/ComputerSwitch";
 import { ConnectionLine } from "../ui/ConnectionLine";
@@ -48,6 +48,7 @@ function Screens() {
   const insets = useSafeAreaInsets();
   const [fullWidth, setFullWidth] = useState(false);
   const [hidden, toggleSidebar] = useSidebarHidden();
+  const [listWidth, resizeList] = useSidebarWidth(width);
   const [headerHeight, setHeaderHeight] = useState(0);
   const selected = useOpenItem(pathname);
   useOrientationPolicy();
@@ -88,7 +89,9 @@ function Screens() {
         <View style={[styles.panes, { backgroundColor: t.background }]}>
           {sidebar && (
             <Sidebar
-              width={sidebarWidth(width)}
+              width={listWidth}
+              window={width}
+              onResize={resizeList}
               selected={selected}
               headerHeight={headerHeight}
               onHide={toggleSidebar}

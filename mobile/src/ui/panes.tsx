@@ -51,8 +51,31 @@ export function useOrientationPolicy() {
   }, [phone]);
 }
 
-export const sidebarWidth = (window: number) =>
-  Math.round(Math.min(360, Math.max(280, window * 0.36)));
+/** How wide the list may be dragged, leaving the pane a phone's width. */
+export const sidebarBounds = (window: number) => ({
+  min: 240,
+  max: Math.max(240, Math.min(560, window - 360)),
+});
+
+const widthKey = "relay-sidebar-width";
+
+/** The list's width: dragged by its edge and remembered, else a share of the window. */
+export function useSidebarWidth(window: number) {
+  const [saved, setSaved] = useState<number>();
+  useEffect(() => {
+    void AsyncStorage.getItem(widthKey).then((value) => {
+      const width = Number(value);
+      if (value && width > 0) setSaved(width);
+    });
+  }, []);
+  const save = useCallback((width: number) => {
+    setSaved(width);
+    void AsyncStorage.setItem(widthKey, String(Math.round(width)));
+  }, []);
+  const { min, max } = sidebarBounds(window);
+  const width = saved ?? Math.min(360, Math.max(280, window * 0.36));
+  return [Math.round(Math.min(max, Math.max(min, width))), save] as const;
+}
 
 /**
  * Opens something from the sidebar as the whole pane, instead of on top of
