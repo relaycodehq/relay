@@ -59,7 +59,7 @@ it("opens one permission screen and leaves one listener for simultaneous taps", 
   expect(mocks.native.allowInstalls).toHaveBeenCalledTimes(1);
   expect(mocks.appListeners).toHaveLength(1);
   await installApk(feed);
-  expect(mocks.native.download).toHaveBeenCalledTimes(1);
+  expect(mocks.native.download).toHaveBeenCalledTimes(2);
   expect(mocks.appListeners).toHaveLength(1);
   mocks.native.canInstall.mockReturnValue(true);
   mocks.appListeners[0]("active");
@@ -176,4 +176,22 @@ it("rechecks staged code after returning from the install-permission screen", as
   mocks.appListeners[0]("active");
   expect(useApkInstall()).toMatchObject({ kind: "failed", message: expect.stringContaining("older code") });
   expect(mocks.native.install).not.toHaveBeenCalled();
+});
+
+it("notices an already granted install permission even without an AppState event", async () => {
+  const { installApk } = await import("./apk-install");
+  await installApk(feed);
+  mocks.native.canInstall.mockReturnValue(true);
+  await installApk(feed);
+  expect(mocks.native.install).toHaveBeenCalledTimes(1);
+  expect(mocks.appListeners).toHaveLength(0);
+});
+
+it("checks a newly available checksum when retrying the same version's permission flow", async () => {
+  const { installApk } = await import("./apk-install");
+  await installApk(desktop);
+  await installApk(feed);
+  expect(mocks.native.download).toHaveBeenLastCalledWith(feed.url, feed.version, feed.sha512);
+  expect(mocks.native.download).toHaveBeenCalledTimes(2);
+  expect(mocks.appListeners).toHaveLength(1);
 });

@@ -141,10 +141,6 @@ async function requestInstall(offer: ApkOffer, browser: boolean) {
     return;
   }
   if (state.kind === "installing") return;
-  if (state.kind === "allow" && state.version === offer.version) {
-    native.allowInstalls();
-    return;
-  }
   waitingForAllow?.remove();
   waitingForAllow = undefined;
   const path = await download(offer, false);
