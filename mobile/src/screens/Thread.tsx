@@ -59,6 +59,7 @@ import {
 import { confirmAgentSwitch } from "../remote/agent-switch";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
+import { alertFailure } from "../ui/failure";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
 import { KeyboardAware } from "../ui/KeyboardAware";
@@ -226,12 +227,10 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   const snoozed = !!summary?.snoozedUntil && summary.snoozedUntil > Date.now();
 
   const act = useCallback(
-    (what: string, job: () => Promise<unknown>) =>
+    (what: string, job: () => Promise<unknown>, unsure?: string) =>
       void job()
         .then(() => reload())
-        .catch((e) =>
-          Alert.alert(what, e instanceof Error ? e.message : String(e)),
-        ),
+        .catch((e) => alertFailure(e, what, unsure)),
     [reload],
   );
   const rerunSetup = useCallback(
@@ -872,8 +871,10 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           draftKey={draftKey}
           onSend={send}
           onStop={() =>
-            act("Couldn't stop it", () =>
-              remote.desktop("cancelProjectChat", id),
+            act(
+              "Couldn't stop it",
+              () => remote.desktop("cancelProjectChat", id),
+              "Stop may still go through",
             )
           }
         />

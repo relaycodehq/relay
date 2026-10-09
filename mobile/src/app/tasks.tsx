@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "re
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ProjectTask } from "../../../shared/tasks";
 import { useRemote } from "../remote/RemoteProvider";
+import { alertFailure } from "../ui/failure";
 import { rowStyles } from "../ui/Rows";
 import { Action } from "../ui/ThreadExtras";
 import { ago } from "../ui/ThreadRow";
@@ -40,8 +41,8 @@ export default function TasksScreen() {
     const timer = setInterval(() => void load(), 3000);
     return () => clearInterval(timer);
   }, [load, foreground]));
-  const run = (what: string, job: Promise<void>) =>
-    job.then(load).catch((e) => Alert.alert(what, e instanceof Error ? e.message : String(e)));
+  const run = (what: string, job: Promise<void>, unsure?: string) =>
+    job.then(load).catch((e) => alertFailure(e, what, unsure));
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "Tasks" }} />
@@ -91,7 +92,7 @@ export default function TasksScreen() {
                           text: "Stop",
                           style: "destructive",
                           onPress: () =>
-                            void run("Couldn't stop it", desktop("stopProjectTask", project, task.id)).finally(resolve),
+                            void run("Couldn't stop it", desktop("stopProjectTask", project, task.id), "Stop may still go through").finally(resolve),
                         },
                       ]),
                     )
