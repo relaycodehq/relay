@@ -644,6 +644,10 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       ) : (
         <FlatList
           inverted
+          // Basis 0, not its content's height: otherwise a long thread and the
+          // composer share every shortfall and the composer is squeezed under
+          // the navigation bar, where only the command list should give way.
+          style={styles.thread}
           data={shown}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => (
@@ -1002,6 +1006,7 @@ const styles = StyleSheet.create({
   },
   note: { fontSize: type.small, textAlign: "center" },
   grow0: { flexGrow: 0 },
+  thread: { flex: 1 },
   list: { paddingVertical: 8 },
   earlier: { fontSize: type.tiny, textAlign: "center", padding: 16 },
   earlierButton: { paddingVertical: 4 },
