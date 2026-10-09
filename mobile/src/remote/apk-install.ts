@@ -138,6 +138,7 @@ export function installApk(offer: ApkOffer, { browser = false } = {}): Promise<v
 async function requestInstall(offer: ApkOffer, browser: boolean) {
   if (browser || !native) {
     await Linking.openURL(offer.url);
+    set({ kind: "idle" });
     return;
   }
   if (state.kind === "installing") return;
