@@ -1,7 +1,7 @@
 // The desktop's AsyncQuestionCards (src/features/thread): questions an agent
 // left in its answer while it kept working. They stay answerable after the
 // turn ends; dismissing one hides it without telling the agent anything.
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ChevronDown, ChevronRight, MessageCircleQuestion } from "lucide-react-native";
@@ -33,9 +33,12 @@ function Open({
 }) {
   const t = useTheme();
   const { desktop } = useRemote();
+  const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const run = async (call: () => Promise<unknown>) => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setBusy(true);
     setError(undefined);
     try {
@@ -45,6 +48,7 @@ function Open({
       setError(e instanceof Error ? e.message : String(e));
       return false;
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -88,7 +92,7 @@ function Open({
                 answers,
               }),
             ).then((sent) => {
-              if (sent) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              if (sent) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             })
           }
         />
@@ -121,7 +125,7 @@ function Answered({ group }: { group: AsyncAgentQuestions }) {
         <View key={q.id} style={styles.qa}>
           <Text style={[styles.hint, { color: t.text }]}>{q.question}</Text>
           <Text selectable style={[styles.hint, { color: t.muted }]}>
-            {group.answers![q.id]?.join(", ")}
+            {q.isSecret ? "Hidden answer" : group.answers![q.id]?.join(", ")}
           </Text>
         </View>
       ))}
