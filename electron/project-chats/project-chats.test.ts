@@ -2033,9 +2033,12 @@ it("drops the planned resume when the thread moves on, and resumes nothing it no
 it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const soon = input("Check the deploy.");
-  await chats.send(chat.id, { ...soon, sendAt: Date.now() + 400 });
+  const scheduled = { ...soon, sendAt: Date.now() + 400 };
+  await chats.send(chat.id, scheduled);
+  await chats.send(chat.id, scheduled);
   let saved = await chats.get(chat.id);
   expect(saved.messages).toHaveLength(0);
+  expect(saved.scheduled).toHaveLength(1);
   expect(saved.scheduled?.[0]).toMatchObject({ input: { id: soon.id } });
   expect(saved.scheduled?.[0].input.sendAt).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBe(saved.scheduled?.[0].at);
@@ -2048,6 +2051,10 @@ it("holds a Send later message until its time, sends it now on request, and keep
   );
   expect((await chats.get(chat.id)).scheduled).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBeUndefined();
+
+  // A lost acknowledgement can be retried after the original time passed.
+  await expect(chats.send(chat.id, scheduled)).resolves.toBeUndefined();
+  expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([soon.id]);
 
   await expect(
     chats.send(chat.id, { ...input("Too late"), sendAt: Date.now() - 1000 }),
