@@ -18,7 +18,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import { Check, Copy, X } from "lucide-react-native";
 import { keyOf, useImage, type Source } from "./Images";
 
 export interface LightboxImage {
@@ -134,6 +136,7 @@ export function Lightbox({
         <SafeAreaProvider style={styles.over} pointerEvents="box-none">
           {bar && (
             <Bar
+              image={image}
               name={image?.name}
               count={images.length > 1 ? `${index + 1} of ${images.length}` : undefined}
               onClose={onClose}
@@ -145,7 +148,17 @@ export function Lightbox({
   );
 }
 
-function Bar({ name, count, onClose }: { name?: string; count?: string; onClose: () => void }) {
+function Bar({
+  image,
+  name,
+  count,
+  onClose,
+}: {
+  image?: LightboxImage;
+  name?: string;
+  count?: string;
+  onClose: () => void;
+}) {
   const insets = useSafeAreaInsets();
   return (
     <Animated.View
@@ -159,6 +172,7 @@ function Bar({ name, count, onClose }: { name?: string; count?: string; onClose:
         </Text>
         {count && <Text style={styles.count}>{count}</Text>}
       </View>
+      {image && <CopyImage key={keyOf(image.source)} source={image.source} />}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
@@ -169,6 +183,40 @@ function Bar({ name, count, onClose }: { name?: string; count?: string; onClose:
         <X size={22} color="#fff" />
       </Pressable>
     </Animated.View>
+  );
+}
+
+/**
+ * Puts the image on the clipboard to paste into another app: sharing it would
+ * need a native module the app doesn't have, and React Native's Share carries
+ * only text on Android.
+ */
+function CopyImage({ source }: { source: Source }) {
+  // The page already fetched it; this finds it in the cache.
+  const { uri } = useImage(source);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1_500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const base64 = uri?.startsWith("data:") ? uri.slice(uri.indexOf(",") + 1) : undefined;
+  if (!base64) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copied ? "Image copied" : "Copy image"}
+      hitSlop={12}
+      style={styles.close}
+      onPress={() =>
+        void Clipboard.setImageAsync(base64).then(() => {
+          void Haptics.selectionAsync();
+          setCopied(true);
+        }, () => {})
+      }
+    >
+      {copied ? <Check size={20} color="#fff" /> : <Copy size={20} color="#fff" />}
+    </Pressable>
   );
 }
 
