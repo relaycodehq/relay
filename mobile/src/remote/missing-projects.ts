@@ -5,7 +5,7 @@ export class MissingProjects {
   private asked = new Set<string>();
   private pending = new Set<string>();
   private timer?: ReturnType<typeof setTimeout>;
-  constructor(private refresh: () => Promise<void>) {}
+  constructor(private refresh: () => Promise<unknown>) {}
 
   observe(overview: Pick<RemoteOverview, "projects" | "chats">) {
     const known = new Set(overview.projects.map((p) => p.id));
