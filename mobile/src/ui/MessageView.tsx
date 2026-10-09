@@ -132,17 +132,20 @@ export const MessageView = memo(function MessageView({
     );
   if (m.compaction)
     return (
-      <StatusRow failed={m.status === "failed"}>
-        {m.status === "streaming"
-          ? "Compacting context…"
-          : m.status === "complete"
-            ? "Context compacted"
-            : m.status === "cancelled"
-              ? "Compaction stopped"
-              : m.error
-                ? agentError(m.error).message
-                : "Compaction failed"}
-      </StatusRow>
+      <>
+        <StatusRow failed={m.status === "failed"}>
+          {m.status === "streaming"
+            ? "Compacting context…"
+            : m.status === "complete"
+              ? "Context compacted"
+              : m.status === "cancelled"
+                ? "Compaction stopped"
+                : m.error && !m.signIn
+                  ? agentError(m.error).message
+                  : "Compaction failed"}
+        </StatusRow>
+        {m.signIn && <SignInNote provider={m.signIn} />}
+      </>
     );
   const user = m.role === "user";
   return (
