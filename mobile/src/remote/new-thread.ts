@@ -52,3 +52,13 @@ export function availableWhere(
     return picked;
   return startingWhere(overview, asked);
 }
+
+export type Made = Pick<RemoteChatSummary, "id" | "projectId" | "title">;
+/**
+ * Threads made on this phone, for their screen to open on a title and a
+ * composer: the computer lists a thread only once its first message is in.
+ */
+const made = new Map<string, Made>();
+export const madeHere = ({ id, projectId, title }: Made) =>
+  void made.set(id, { id, projectId, title });
+export const madeThread = (id: string): Made | undefined => made.get(id);

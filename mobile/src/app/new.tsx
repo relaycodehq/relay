@@ -12,7 +12,7 @@ import {
 } from "../../../shared/remote-compose";
 import { loadNewThread, saveNewThread } from "../remote/offline";
 import { deliver } from "../remote/outbox";
-import { availableWhere, projectsByUse, startingWhere, type Where } from "../remote/new-thread";
+import { availableWhere, madeHere, projectsByUse, startingWhere, type Made, type Where } from "../remote/new-thread";
 import {
   sameModel,
   type NewThreadModels,
@@ -147,7 +147,7 @@ function NewThreadComposer() {
   };
 
   // A thread made for a scheduled message that then failed to go, used again on the next try.
-  const made = useRef<{ key: string; id: string }>(undefined);
+  const made = useRef<{ key: string; chat: Made }>(undefined);
   const start = async ({ id: messageId, body, settings: using, images, sendAt }: Outgoing) => {
     if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
     if (!picked)
@@ -155,18 +155,12 @@ function NewThreadComposer() {
     const where = picked === "scratch" ? await askScratch() : picked;
     const space = !chosen || chosen.plain ? undefined : workspace;
     const key = `${where}:${space ?? ""}`;
-    const chatId =
+    const chat =
       made.current?.key === key
-        ? made.current.id
-        : (
-            await desktop(
-              "createProjectChat",
-              where,
-              { kind: "project" },
-              space,
-            )
-          ).id;
-    made.current = { key, id: chatId };
+        ? made.current.chat
+        : await desktop("createProjectChat", where, { kind: "project" }, space);
+    const chatId = chat.id;
+    made.current = { key, chat };
     const message = composeSend(using, body, {
       id: messageId,
       ...(sendAt ? { sendAt } : {}),
@@ -183,6 +177,7 @@ function NewThreadComposer() {
     if (sendAt) await desktop("sendProjectChat", chatId, message);
     else deliver(desktop, remote.active ?? "", chatId, message);
     made.current = undefined;
+    madeHere(chat);
     void remote.refresh().catch(() => {});
     if (!focused.current) return;
     // Put away before the composer goes: beside the list, Android would hand

@@ -16,7 +16,7 @@ import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { remoteHistory, titleBridge, markedUnreadBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
-import { takenBack, type TakenBack } from "../../../shared/remote-queued";
+import { sentSettings, takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
@@ -27,6 +27,7 @@ import { latestSetup } from "../../../shared/worktree-command";
 import { outsideBatch, runningBatch } from "../../../shared/subagents";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
+import { madeThread } from "../remote/new-thread";
 import { useSubagents } from "../remote/subagents";
 import { markSeen } from "../remote/seen";
 import { clearThreadNotice } from "../remote/watch";
@@ -154,10 +155,18 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   const loaded = !!thread;
   const lastSent = thread?.settings;
   const lastParentId = thread?.lastParentId;
+  // A thread just made here isn't loaded yet, but the message on its way says what it runs on.
+  const sentHere = useMemo(() => {
+    const last = outgoing.filter((o) => (o.send.parentId ?? undefined) === rootId).at(-1);
+    return last && sentSettings(last.send);
+  }, [outgoing, rootId]);
+  // Set in the render, so the composer is there on the thread's first frame.
+  const startsOn = lastSent
+    ? conversationSettings(lastSent, lastParentId, rootId, holder)
+    : sentHere;
+  if (!settings && startsOn) setSettings(startsOn);
   useEffect(() => {
     if (!loaded || settings) return;
-    if (lastSent)
-      return setSettings(conversationSettings(lastSent, lastParentId, rootId, holder));
     let live = true;
     void desktopNewThreadSettings(remote.desktop).then(
       (s) => live && setSettings((current) => current ?? s),
@@ -165,7 +174,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     return () => {
       live = false;
     };
-  }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
+  }, [loaded, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
   const { pinned, revealMessage, ...scroll } = useThreadScroll(shown);
@@ -198,6 +207,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   // The go-ahead's send: its bubble hides the button once rendered, but a
   // double tap lands before that. Taken back from the outbox, it may go again.
   const goingAhead = useRef<string>(undefined);
+  // One made here has no summary until its first message is in.
+  const made = madeThread(id);
+  const projectId = thread?.projectId ?? summary?.projectId ?? made?.projectId;
   const where =
     thread &&
     (thread.worktree?.path && !thread.worktree.removedAt
@@ -590,7 +602,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     ...messageExtras(m, settings && thread ? composer : undefined),
   ];
 
-  const title = rootId ? "Replies" : (thread?.title ?? summary?.title ?? "");
+  const title = rootId
+    ? "Replies"
+    : (thread?.title ?? summary?.title ?? made?.title ?? "");
   // Questions and approvals belong to the whole thread, replies included.
   const request = thread?.requests?.[0];
   return (
@@ -602,9 +616,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
             ? undefined
             : () => (
                 <View style={styles.headerActions}>
-                  {thread && (
+                  {projectId && (
                     <CiStatusButton
-                      projectId={thread.projectId}
+                      projectId={projectId}
                       chatId={id}
                       running={running}
                     />
@@ -793,7 +807,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         <SubagentStrip
           batch={agentBatch}
           // Only Claude sends agents off; a Codex turn would hold an empty line.
-          reserve={running && lastSent?.provider === "claude"}
+          reserve={running && (lastSent ?? sentHere)?.provider === "claude"}
           display={display}
           onPress={() => setSheet("agents")}
           error={agents.error}
@@ -864,11 +878,11 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           />
         </View>
       )}
-      {settings && thread && (
+      {settings && projectId && (
         <Composer
           ref={composer}
           onCommand={command}
-          projectId={thread.projectId}
+          projectId={projectId}
           settings={settings}
           onSettings={setSettings}
           running={running}

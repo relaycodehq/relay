@@ -22,15 +22,18 @@ export function queuedForPhone(q: {
     ...(q.error ? { error: q.error } : {}),
     ...(input.parentId ? { parentId: input.parentId } : {}),
     to: recipient(input),
-    settings: {
-      provider: sentAgent(input),
-      choice: input.choice,
-      runtimeMode: input.runtimeMode,
-      interactionMode: input.interactionMode,
-      ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
-    },
+    settings: sentSettings(input),
   };
 }
+
+/** The agent and model a message went with, as a phone composer holds them. */
+export const sentSettings = (input: ProjectChatSend): RemoteSettings => ({
+  provider: sentAgent(input),
+  choice: input.choice,
+  runtimeMode: input.runtimeMode,
+  interactionMode: input.interactionMode,
+  ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
+});
 
 /** What taking a queued message back puts in a phone's composer. */
 export interface TakenBack {
