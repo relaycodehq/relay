@@ -31,11 +31,11 @@ export interface ReelTiming {
   land: number;
 }
 
-// Ticks through the first names, builds to about 7.5 names a second three
+// Ticks through the first names, builds to about 6 names a second three
 // quarters in, gliding by then, and brakes onto "any ACP agent". The long
 // first handle is what makes the build feel exponential.
 export const defaultTiming: ReelTiming = {
-  spin: 5.95,
+  spin: 7.45,
   speed: [
     { t: 0, v: 0.15, out: { t: 0.75, v: 0.11 } },
     { t: 0.75, v: 0.93, in: { t: -0.05, v: 0 }, out: { t: 0.16, v: 0 } },
@@ -48,9 +48,9 @@ export const defaultTiming: ReelTiming = {
   pause: 0.45,
   blur: 3,
   blurFrom: 3,
-  hold: 500,
-  acpHold: 1000,
-  land: 150,
+  hold: 625,
+  acpHold: 1250,
+  land: 190,
 };
 
 export const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
