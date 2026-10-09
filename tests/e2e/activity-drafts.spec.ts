@@ -137,6 +137,25 @@ test("keeps several new-thread drafts in Activity and sends them from their card
     await expect(prompt).toHaveText("");
     await expect(cards.first()).toHaveAttribute("data-card", followed!);
 
+    // A settled thread rises while written in, and goes back if it's cleared.
+    const title = await thread.locator(".sb-card-title").innerText();
+    await thread.hover();
+    await thread.getByRole("button", { name: "Settle", exact: true }).click();
+    await expect(thread).toHaveCount(0);
+    const shelf = page.locator(".sb-shelf-toggle", { hasText: "Settled" });
+    if ((await shelf.getAttribute("aria-expanded")) !== "true")
+      await shelf.click();
+    const shelved = page.locator(".sb-shelf-list .sb-compact", {
+      hasText: title,
+    });
+    await shelved.click();
+    await prompt.fill("Second thoughts");
+    await expect(thread).toHaveClass(/draft/);
+    await expect(shelved).toHaveCount(0);
+    await prompt.fill("");
+    await expect(thread).toHaveCount(0);
+    await expect(shelved).toBeVisible();
+
     // With nothing written, new threads don't pile up slots.
     await newThread();
     await newThread();

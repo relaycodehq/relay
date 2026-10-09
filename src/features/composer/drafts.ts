@@ -42,6 +42,16 @@ export function writeDraft(key: string, value: string) {
   changed(key, had, !!value.trim());
 }
 
+// When each thread last had a draft go out, so Activity can tell a sent
+// draft from one cleared away.
+const sentAt = new Map<string, number>();
+
+/** Called before a thread's draft empties to go out. */
+export const markDraftSent = (chatId: string) =>
+  void sentAt.set(chatId, Date.now());
+
+export const draftSentAt = (chatId: string) => sentAt.get(chatId);
+
 /** Moves a composer's text and pills to another's, as when a draft follows its thread. */
 export function moveDraft(from: string, to: string) {
   const hadFrom = !!readDraft(from).trim(),

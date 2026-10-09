@@ -10,7 +10,7 @@ import { asideNeedsAnswer } from "../../../shared/commands";
 import { api } from "../../lib/api";
 import { startThreadSettings } from "../agents/composer-settings";
 import { withAttachments } from "../composer/draft-attachments";
-import { clearDraftWorkspace } from "../composer/drafts";
+import { clearDraftWorkspace, markDraftSent } from "../composer/drafts";
 import type { ComposerAttachments } from "./useComposerAttachments";
 import type { NewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
@@ -56,6 +56,7 @@ export function useThreadSend({
     try {
       if (value.side) return await askAside(value, write, dispatch);
       if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
+      if (chat) markDraftSent(chat.id);
       dispatch?.();
       async function post(target: ChatSummary) {
         await api.sendProjectChat(target.id, {
@@ -94,6 +95,7 @@ export function useThreadSend({
       setError(new Error(asideNeedsAnswer));
       return false;
     }
+    markDraftSent(chat.id);
     dispatch?.();
     return write.run(async () => {
       const question = crypto.randomUUID();
