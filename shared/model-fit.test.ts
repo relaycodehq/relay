@@ -6,6 +6,7 @@ import {
   onModel,
   onWindow,
 } from "./model-fit";
+import { agentProviders } from "./agents";
 
 const choice = (model: string, fast = true) => ({
   model,
@@ -73,9 +74,27 @@ it("prefers a listed 1M row to its 200k sibling, and keeps other agents' ids exa
   ];
   expect(modelName("claude", both, "sonnet[1m]")).toBe("Sonnet (1M)");
   expect(modelName("claude", both, "sonnet")).toBe("Sonnet");
-  expect(modelName("codex", [{ id: "gpt[1m]", name: "GPT" }], "gpt")).toBe(
-    "gpt",
-  );
+  for (const list of [both, [...both].reverse()]) {
+    expect(listedModel("claude", list, "sonnet[1m]")?.id).toBe("sonnet[1m]");
+    expect(listedModel("claude", list, "sonnet")?.id).toBe("sonnet");
+  }
+  for (const provider of agentProviders.filter((p) => p !== "claude")) {
+    const models = [
+      { id: "vendor/model[1m]", name: "Model", resolved: "vendor/model" },
+    ];
+    expect(listedModel(provider, models, "vendor/model")).toBeUndefined();
+    expect(modelName(provider, models, "vendor/model[1m]")).toBe("Model");
+  }
+  expect(listedModel("claude", claudeList, "opus[other]")).toBeUndefined();
+  expect(listedModel("claude", claudeList, "opus[1m]-custom")).toBeUndefined();
+});
+
+it("keeps an explicit full id ahead of an alias resolving to it", () => {
+  const explicit = { id: "claude-opus-5-5", name: "Explicit Opus" };
+  const list = [...claudeList, explicit];
+  expect(listedModel("claude", list, explicit.id)).toBe(explicit);
+  expect(listedModel("claude", list, `${explicit.id}[1m]`)).toBe(explicit);
+  expect(listedModel("claude", list, "sonnet[1m]")).toBe(claudeList[1]);
 });
 
 it("switches Claude's window the way the desktop's control does", () => {

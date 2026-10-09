@@ -11,6 +11,27 @@ const model = (id: string, name: string): AgentModel => ({
 const claudeModels = [model("opus", "Opus 5.5"), model("sonnet", "Sonnet 5.5")];
 
 describe("turn model", () => {
+  it("resolves a full Claude id's name and effort while keeping its 1M window", () => {
+    const choice = {
+      model: "claude-opus-5-5[1m]",
+      fast: false,
+      reasoningEffort: "" as const,
+    };
+    expect(
+      resolveTurnModel(
+        "claude",
+        { choice },
+        [{ ...claudeModels[0], resolved: "claude-opus-5-5" }],
+        { model: "sonnet", effort: "medium", efforts: { opus: "xhigh" } },
+      ),
+    ).toEqual({
+      name: "Opus 5.5",
+      effort: "xhigh",
+      effortByDefault: true,
+      window: "1M",
+    });
+    expect(choice.model).toBe("claude-opus-5-5[1m]");
+  });
   it("names an explicit Claude pick with its 1M window", () => {
     const turn = resolveTurnModel(
       "claude",
