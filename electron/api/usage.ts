@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { app, dialog } from "electron";
 import { z } from "zod";
 import { summarizeUsage, usageRanges } from "../../shared/usage";
-import { usageSamples } from "../agents/usage-history";
 import { usageLog } from "../usage";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -12,29 +11,16 @@ export function usageHandlers(ctx: ApiContext) {
   const { store } = ctx;
   return {
     usageSummary: takes([z.enum(usageRanges)], async (range) => {
-      const [entries, samples] = await Promise.all([
-        usageLog(),
-        usageSamples(),
-      ]);
+      const entries = await usageLog();
       const state = store.get();
       const names = new Map((state.projects ?? []).map((p) => [p.id, p.name]));
-      const chats = (state.chats ?? [])
-        // Reviewers and thinkers are parts of another thread, not threads of their own.
-        .filter((c) => !c.reviewer && !c.thinker)
-        .map((c) => ({
-          id: c.id,
-          title: c.title,
-          project: names.get(c.projectId) ?? "",
-          created: c.created,
-          byAgent: !!c.startedBy,
-          settledAt: c.settledAt,
-        }));
-      return summarizeUsage(entries, {
-        range,
-        now: Date.now(),
-        chats,
-        limits: { claude: samples.claude, codex: samples.codex },
-      });
+      const chats = (state.chats ?? []).map((c) => ({
+        id: c.id,
+        title: c.title,
+        projectId: c.projectId,
+        project: names.get(c.projectId) ?? "",
+      }));
+      return summarizeUsage(entries, { range, now: Date.now(), chats });
     }),
     /** The share card, saved where the user picks; null when they cancel. */
     saveUsageImage: takes(

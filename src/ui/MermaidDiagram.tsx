@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import {
   useEffect,
   useRef,
@@ -72,6 +73,19 @@ function themeVariables() {
   };
 }
 
+/**
+ * The source comes from an agent, so Mermaid's own "strict" mode isn't the only
+ * thing between it and the page. Labels are HTML inside <foreignObject>, which
+ * has to survive.
+ */
+function sanitizeSvg(svg: string) {
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true, html: true },
+    ADD_TAGS: ["foreignObject"],
+    HTML_INTEGRATION_POINTS: { foreignobject: true },
+  });
+}
+
 /** The diagram's SVG, or a rejection with Mermaid's complaint about the source. */
 function draw(code: string, look: string): Promise<string> {
   const key = `${look}\n${code}`;
@@ -95,9 +109,10 @@ function draw(code: string, look: string): Promise<string> {
     const id = `relay-mermaid-${nextId++}`;
     try {
       const { svg } = await mermaid.render(id, code);
-      drawn.set(key, svg);
+      const safe = sanitizeSvg(svg);
+      drawn.set(key, safe);
       if (drawn.size > KEEP_DRAWN) drawn.delete(drawn.keys().next().value!);
-      return svg;
+      return safe;
     } finally {
       // What it measured in, left behind when the source didn't parse.
       document.getElementById(`d${id}`)?.remove();
@@ -159,7 +174,7 @@ export function MermaidDiagram({
           className="markdown-diagram"
           role="img"
           aria-label="Diagram"
-          // Mermaid's strict mode sanitizes what the source puts in labels.
+          // Already through sanitizeSvg in draw().
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       ) : (

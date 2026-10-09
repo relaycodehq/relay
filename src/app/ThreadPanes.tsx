@@ -210,6 +210,7 @@ export function ThreadPanel({
           ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
           : SURFACE_LABELS[tab.surface],
     closeDisabled: tab.surface === "files" && locked,
+    unseen: tab.key === panel.unseen,
   }));
   const close = (key: string) => {
     const tab = panel.tabs.find((t) => t.key === key);

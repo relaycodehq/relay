@@ -46,7 +46,8 @@
   components on sample data (`previews/_shared/desktop-stub.ts` stands in for
   the desktop bridge), add a switcher between the options, make the controls
   work, label the data as sample, check it in a headless browser, then open
-  it for the user with `open <url>`.
+  it for the user in Relay's preview pane (the `open_preview` tool) when you
+  run inside Relay, otherwise with `open <url>`.
 - **Small choices go in the answer instead.** A component, a card, a chart or
   a few variants of one that fit the chat column go through Relay's
   `show_html` tool (with `variants`, checked with `preview_html` first) when

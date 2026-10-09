@@ -32,6 +32,13 @@
   color: var(--text);
   background: transparent;
 }
+.pane-tab .unseen-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .pane-tab.active {
   color: var(--text);
   border-bottom-color: var(--accent);

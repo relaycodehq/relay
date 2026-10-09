@@ -89,6 +89,8 @@ export function PaneToggles({
     disabled?: boolean;
     /** Lines changed, shown after the label; hidden when there are none. */
     stat?: { additions: number; deletions: number };
+    /** Holds something new the user hasn't looked at: a dot. */
+    unseen?: boolean;
   }[];
   onToggle: (id: PaneId) => void;
   onMove: (dragged: PaneId, target: PaneId, after: boolean) => void;
@@ -114,6 +116,7 @@ function PaneToggle({
     disabled?: boolean;
     /** Lines changed, shown after the label; hidden when there are none. */
     stat?: { additions: number; deletions: number };
+    unseen?: boolean;
   };
   onToggle: (id: PaneId) => void;
   onMove: (dragged: PaneId, target: PaneId, after: boolean) => void;
@@ -125,13 +128,14 @@ function PaneToggle({
       className={`pane-toggle ${pane.open ? "active" : ""} ${drop.side ? `drop-${drop.side}` : ""}`}
       aria-pressed={pane.open}
       disabled={pane.disabled}
-      title={`${pane.open ? "Hide" : "Show"} ${pane.label.toLowerCase()} · drag to reorder`}
+      title={`${pane.open ? "Hide" : "Show"} ${pane.label.toLowerCase()}${pane.unseen ? " · something new" : ""} · drag to reorder`}
       onClick={() => onToggle(pane.id)}
       {...dragSource(pane.id)}
       {...drop.handlers}
     >
       {pane.icon}
       <span className="pane-toggle-label">{pane.label}</span>
+      {pane.unseen && <span className="unseen-dot" aria-hidden="true" />}
       {!!(pane.stat?.additions || pane.stat?.deletions) && (
         <span
           className="pane-toggle-stat"

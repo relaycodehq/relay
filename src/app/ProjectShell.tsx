@@ -106,7 +106,7 @@ export default function ProjectShell() {
   const everyThread = useEveryThread(realProjects);
   const terminal = useThreadTerminal(nav);
   const folder = useThreadFolder(nav);
-  const panel = usePanelTabs(panes.layout.thread);
+  const panel = usePanelTabs(panes.layout.thread, panes.layout.open.panel);
   const opens = usePaneOpens(nav, panel, view, folder, lock, setError);
   const links = useIncomingLinks(boot.data, nav, signIn, lock, setError);
   const prs = usePullThreads(nav, lock, setError);
@@ -156,6 +156,23 @@ export default function ProjectShell() {
         setError(e);
       }
     });
+  }
+  /** A thread known only by its ids, as Settings and Usage name one. */
+  function openChatById(projectId: string, chatId: string, then?: () => void) {
+    const p = projects.data?.find((p) => p.id === projectId);
+    if (!p) return;
+    void qc
+      .fetchQuery({
+        queryKey: ["project-chats", projectId],
+        queryFn: () => api.projectChats(projectId),
+      })
+      .then((list) => {
+        const next = list.find((c) => c.id === chatId);
+        if (!next) return;
+        navigate(p, next);
+        then?.();
+      })
+      .catch(setError);
   }
   const frame = (id: PaneId) => ({
     ...paneFrame(panes.layout, id),
@@ -238,6 +255,7 @@ export default function ProjectShell() {
                   pull={pull}
                   lines={folder.tree?.lines}
                   filesOpen={panel.has("files")}
+                  unseen={!panes.layout.open.panel && !!panel.unseen}
                   onToggle={opens.togglePane}
                 />
                 <span className="header-strip-sep" aria-hidden="true" />
@@ -332,7 +350,7 @@ export default function ProjectShell() {
           </div>
         ) : usage ? (
           <div className="project-legacy" hidden={settings.open}>
-            <UsagePage />
+            <UsagePage onOpenChat={openChatById} />
           </div>
         ) : !project ? (
           <NoProject
@@ -493,22 +511,9 @@ export default function ProjectShell() {
               settings.close();
               void signIn.withAccount();
             }}
-            onOpenChat={(projectId, chatId) => {
-              const p = projects.data?.find((p) => p.id === projectId);
-              if (!p) return;
-              void qc
-                .fetchQuery({
-                  queryKey: ["project-chats", projectId],
-                  queryFn: () => api.projectChats(projectId),
-                })
-                .then((list) => {
-                  const next = list.find((c) => c.id === chatId);
-                  if (!next) return;
-                  navigate(p, next);
-                  settings.close();
-                })
-                .catch(setError);
-            }}
+            onOpenChat={(projectId, chatId) =>
+              openChatById(projectId, chatId, settings.close)
+            }
             onDisconnect={async () => {
               await signIn.signOut();
               settings.close();

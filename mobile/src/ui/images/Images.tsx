@@ -25,7 +25,8 @@ const fileName = (path: string) => path.split("/").at(-1) || path;
  * Every image of a message, in the order the lightbox steps through them:
  * pasted ones, those its answer shows (under `root`), then, once the turn
  * ends, the rest its agent read. `strip` holds the pasted and the unshown
- * read ones for the row below.
+ * read ones for the row below, `pasted` the row's share while the open trace
+ * shows the read ones under their calls.
  */
 export function messageImages(chatId: string, message: ChatMessage, root?: string) {
   const read = (path: string): LightboxImage => ({
@@ -49,6 +50,7 @@ export function messageImages(chatId: string, message: ChatMessage, root?: strin
           .map(read);
   return {
     all: [...pasted, ...(message.status === "streaming" ? [] : shown.map(read)), ...unshown],
+    pasted,
     strip: [...pasted, ...unshown],
     /** What the agent has looked at so far, which its trace rows open among. */
     looked: turnImages(message).map(read),

@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openSurface } from "../fixtures/navigation";
+import { openSurface, panelToggle } from "../fixtures/navigation";
 
 const freePort = () =>
   new Promise<number>((resolve) => {
@@ -190,8 +190,15 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
       "Nothing logged: no errors or warnings.",
     );
 
-    // The thread got a Browser tab for the page the agent opened.
+    // The thread got a Browser tab for the page the agent opened, and the
+    // closed panel's toggle says so until the user looks.
+    const dot = panelToggle(page).locator(".unseen-dot");
+    await expect(dot).toBeVisible();
+    await page
+      .getByRole("group", { name: "Workspace panes" })
+      .screenshot({ path: test.info().outputPath("unseen-dot.png") });
     await openSurface(page, "Browser");
+    await expect(dot).toHaveCount(0);
     const panel = page.locator('[data-pane="panel"]');
     await expect(
       panel.getByRole("button", { name: "Close browser", exact: true }),

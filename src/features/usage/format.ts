@@ -1,5 +1,5 @@
 import { agentProviders } from "../../../shared/agents";
-import type { UsageDay } from "../../../shared/usage";
+import type { UsageDay, UsageMeasure } from "../../../shared/usage";
 
 /** 1.2K, 34M, 2.1B. */
 export function compact(n: number) {
@@ -38,8 +38,16 @@ export function hours(ms: number) {
     : `${Math.round(h).toLocaleString("en-US")} h`;
 }
 
-export const dayTotal = (d: UsageDay) =>
-  agentProviders.reduce((n, p) => n + d.tokens[p], 0);
+/** Dollars or fresh tokens, written the way the page writes that measure. */
+export const measured = (n: number, m: UsageMeasure) =>
+  m === "usd" ? usd(n) : compact(n);
+
+export const dayTotal = (d: UsageDay, m: UsageMeasure) =>
+  agentProviders.reduce((n, p) => n + d[m][p], 0);
+
+/** "19:00"; 24 reads as midnight again. */
+export const clock = (hour: number) =>
+  `${String(hour % 24).padStart(2, "0")}:00`;
 
 /** A column of the daily chart: a day, or a week once there are too many days to draw. */
 export type UsageColumn = UsageDay & { last: number };
@@ -52,14 +60,14 @@ export function columnsOf(days: UsageDay[], most = 92): UsageColumn[] {
     const column: UsageColumn = {
       day: week[0].day,
       last: week[week.length - 1].day,
-      tokens: { ...week[0].tokens },
+      fresh: { ...week[0].fresh },
       usd: { ...week[0].usd },
       answers: week[0].answers,
     };
     for (const d of week.slice(1)) {
       column.answers += d.answers;
       for (const p of agentProviders) {
-        column.tokens[p] += d.tokens[p];
+        column.fresh[p] += d.fresh[p];
         column.usd[p] += d.usd[p];
       }
     }

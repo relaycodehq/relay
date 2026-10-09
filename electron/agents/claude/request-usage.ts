@@ -5,6 +5,8 @@ type Counts = {
   cache_creation_input_tokens?: number | null;
   cache_read_input_tokens?: number | null;
   output_tokens?: number | null;
+  /** "fast" when the request ran in fast mode. */
+  speed?: string | null;
 };
 
 /** A stream frame as both the SDK and `claude --print` send it. */
@@ -20,7 +22,9 @@ type Frame = {
 
 const defined = (c: Counts | undefined): Counts =>
   Object.fromEntries(
-    Object.entries(c ?? {}).filter(([, v]) => typeof v === "number"),
+    Object.entries(c ?? {}).filter(
+      ([, v]) => typeof v === "number" || typeof v === "string",
+    ),
   );
 
 /**
@@ -55,6 +59,7 @@ export class RequestUsage {
           cacheRead: u.cache_read_input_tokens ?? 0,
           output: u.output_tokens ?? 0,
         },
+        ...(u.speed === "fast" ? { fast: true } : {}),
       });
     }
   }

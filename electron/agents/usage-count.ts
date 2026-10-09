@@ -35,7 +35,9 @@ export class CountedRun {
   ) {}
 
   add = (report: UsageReport) => {
-    const usd = report.usd ?? listCost(report.model, report.tokens);
+    const usd =
+      report.usd ??
+      listCost(report.model, report.tokens, { fast: report.fast });
     if (this.ended) {
       this.log(Date.now(), 0, false, [
         [report.model, { tokens: report.tokens, usd, requests: 1 }],

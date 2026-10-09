@@ -1,23 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu } from "@base-ui/react/menu";
-import {
-  ArrowDown,
-  ArrowUp,
-  LoaderCircle,
-  MoreHorizontal,
-  Plus,
-} from "lucide-react";
+import { LoaderCircle, MoreHorizontal, Plus } from "lucide-react";
 import { api } from "../../lib/api";
-import { agentName, agents } from "../../../shared/agents";
+import { agents } from "../../../shared/agents";
 import {
-  accountProviders,
   accountsOf,
   type AccountProvider,
   type AgentAccount,
   type AgentAccountsState,
 } from "../../../shared/agent-accounts";
-import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { SettingsCard } from "../../ui/SettingsCard";
 import { AccountBars, headroom } from "./AccountBars";
 import { useAgentAccounts } from "./agent-accounts";
 import { useAccountsUsage } from "./useAccountUsage";
@@ -25,67 +16,41 @@ import "./accounts.css";
 
 type OnError = (error: unknown) => void;
 
-/** Settings → AI models → Accounts. */
-export function AccountsSettings({ onError }: { onError: OnError }) {
-  const state = useAgentAccounts();
-  if (!state) return null;
-  return (
-    <div className="accounts-settings">
-      {accountProviders.map((provider) => (
-        <ProviderAccounts
-          key={provider}
-          provider={provider}
-          state={state}
-          onError={onError}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ProviderAccounts({
+/**
+ * An agent's accounts as lines of its card in Settings → AI models → Agents:
+ * the one new threads start on is picked by clicking its line.
+ */
+export function AccountRows({
   provider,
-  state,
   onError,
 }: {
   provider: AccountProvider;
-  state: AgentAccountsState;
   onError: OnError;
 }) {
-  const list = accountsOf(state, provider);
+  const state = useAgentAccounts();
+  const list = state ? accountsOf(state, provider) : [];
   const usage = useAccountsUsage(
     provider,
     list.map((a) => a.id),
   );
+  if (!state) return null;
   const several = list.length > 1;
   return (
-    <SettingsCard className="accounts-card">
-      <div className="accounts-provider">
-        <ProviderIcon provider={provider} />
-        <b>{agentName(provider)}</b>
-        <span className="accounts-provider-tools">
-          <AddAccount provider={provider} state={state} onError={onError} />
-        </span>
-      </div>
-      {list.map((account, i) => (
+    <>
+      {list.map((account) => (
         <AccountRow
           key={account.id}
           account={account}
           usage={usage[account.id]}
           several={several}
           inUse={state.inUse[provider] === account.id}
-          first={i === 0}
-          last={i === list.length - 1}
           onError={onError}
         />
       ))}
-      {several && (
-        <p className="accounts-note">
-          New threads start on the one you pick. When it runs out, the next one
-          down takes over.
-        </p>
-      )}
-    </SettingsCard>
+      <div className="accounts-add-line">
+        <AddAccount provider={provider} state={state} onError={onError} />
+      </div>
+    </>
   );
 }
 
@@ -94,23 +59,17 @@ function AccountRow({
   usage,
   several,
   inUse,
-  first,
-  last,
   onError,
 }: {
   account: AgentAccount;
   usage: Parameters<typeof AccountBars>[0]["usage"];
   several: boolean;
   inUse: boolean;
-  first: boolean;
-  last: boolean;
   onError: OnError;
 }) {
   const [renaming, setRenaming] = useState(false);
   const { provider, id } = account;
   const out = headroom(usage) === 0;
-  const move = (by: -1 | 1) =>
-    api.moveAgentAccount(provider, id, by).catch(onError);
   const who = [
     account.signedIn ? account.plan : "Signed out",
     account.email,
@@ -125,28 +84,6 @@ function AccountRow({
       data-in-use={(several && inUse) || undefined}
       data-out={out || undefined}
     >
-      {several && (
-        <span className="accounts-order">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={`Move ${account.label} up`}
-            disabled={first}
-            onClick={() => move(-1)}
-          >
-            <ArrowUp size={12} />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={`Move ${account.label} down`}
-            disabled={last}
-            onClick={() => move(1)}
-          >
-            <ArrowDown size={12} />
-          </button>
-        </span>
-      )}
       {/* The whole line picks the account, not just its radio. */}
       <label className="accounts-pick">
         {several && (
@@ -172,7 +109,7 @@ function AccountRow({
               <b>{account.label}</b>
             )}
             {several && inUse && (
-              <span className="accounts-in-use">In use</span>
+              <span className="accounts-in-use">New threads</span>
             )}
             {out && usage?.windows.length ? (
               <span className="accounts-quiet">Out until reset</span>

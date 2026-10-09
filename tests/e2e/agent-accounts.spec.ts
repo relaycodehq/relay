@@ -99,7 +99,7 @@ test("picks the account in Settings, switches it from the model picker, and runs
       .getByRole("button", { name: "Open settings", exact: true })
       .click();
     await page.getByRole("button", { name: "AI models", exact: true }).click();
-    const accounts = page.getByRole("region", { name: "Accounts" });
+    const accounts = page.getByRole("region", { name: "Your agents" });
     await expect(accounts.getByText("you@personal.dev")).toBeVisible();
     await expect(accounts.getByText("Team · you@company.dev")).toBeVisible();
     const inUse = accounts.locator(".accounts-row[data-in-use]");

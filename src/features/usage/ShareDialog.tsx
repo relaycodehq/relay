@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
-import type { UsageSummary } from "../../../shared/usage";
+import type { UsageMeasure, UsageSummary } from "../../../shared/usage";
 import { api } from "../../lib/api";
 import { useAppearance } from "../../lib/appearance";
 import { ErrorBox, Modal } from "../../ui/ui";
@@ -9,16 +9,19 @@ import { cardPng, UsageCard, type CardOptions } from "./share-card";
 /** The card to share, with what it shows and ways to take it out of Relay. */
 export function ShareDialog({
   summary,
+  measure,
   onClose,
 }: {
   summary: UsageSummary;
+  /** The page's measure, which the card starts in. */
+  measure: UsageMeasure;
   onClose: () => void;
 }) {
   const kind = useAppearance().palette.kind;
   const card = useRef<SVGSVGElement>(null);
   const [options, setOptions] = useState<CardOptions>({
     names: false,
-    dollars: true,
+    dollars: measure === "usd",
   });
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -52,7 +55,7 @@ export function ShareDialog({
               setOptions({ ...options, dollars: e.target.checked })
             }
           />
-          Show dollars
+          Show dollars, not tokens
         </label>
         <label>
           <input

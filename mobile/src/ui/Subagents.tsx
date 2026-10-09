@@ -12,6 +12,7 @@ import {
   took,
   type SubagentRun,
 } from "../../../shared/subagents";
+import { alertFailure } from "./failure";
 import { useNow } from "./motion";
 import { Sheet } from "./Sheet";
 import { Action } from "./ThreadExtras";
@@ -61,11 +62,12 @@ export function confirmStop(run: SubagentRun) {
 /** Stops it, saying so when it couldn't. */
 export const stopping = (stop: () => Promise<void>) => () =>
   stop().catch((e) =>
-    Alert.alert(
+    alertFailure(
+      e,
       e instanceof Error && /already finished/i.test(e.message)
         ? "Agent already finished"
         : "Couldn't stop it",
-      e instanceof Error ? e.message : String(e),
+      "Stop may still go through",
     ),
   );
 

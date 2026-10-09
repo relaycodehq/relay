@@ -20,6 +20,8 @@ import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
+import { openPlan } from "../../../shared/open-plan";
+import { preview } from "../../../shared/thread-news";
 import { contextAgent } from "../../../shared/recipient";
 import { latestSetup } from "../../../shared/worktree-command";
 import { outsideBatch, runningBatch } from "../../../shared/subagents";
@@ -57,6 +59,7 @@ import {
 import { confirmAgentSwitch } from "../remote/agent-switch";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
+import { alertFailure } from "../ui/failure";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
 import { KeyboardAware, RevealMessage } from "../ui/KeyboardAware";
@@ -189,11 +192,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     ["cancelled", "failed"].includes(lastAnswer.status) &&
     !!thread?.settings &&
     (thread.lastParentId ?? null) === (rootId ?? null);
-  const last = listed.at(-1);
-  const planProvider =
-    !running && last?.status === "complete" && last.proposedPlan
-      ? last.provider
-      : undefined;
+  const planProvider = running
+    ? undefined
+    : openPlan([...all, ...outgoing.map(outgoingMessage)], listed);
   // The go-ahead's send: its bubble hides the button once rendered, but a
   // double tap lands before that. Taken back from the outbox, it may go again.
   const goingAhead = useRef<string>(undefined);
@@ -226,12 +227,10 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   const snoozed = !!summary?.snoozedUntil && summary.snoozedUntil > Date.now();
 
   const act = useCallback(
-    (what: string, job: () => Promise<unknown>) =>
+    (what: string, job: () => Promise<unknown>, unsure?: string) =>
       void job()
         .then(() => reload())
-        .catch((e) =>
-          Alert.alert(what, e instanceof Error ? e.message : String(e)),
-        ),
+        .catch((e) => alertFailure(e, what, unsure)),
     [reload],
   );
   const rerunSetup = useCallback(
@@ -812,9 +811,14 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       )}
       <UnsentStrip
         unsent={outgoing.filter((o) => o.error && (o.send.parentId ?? undefined) === rootId)}
+        online={remote.status === "online"}
         onRetry={(o) => retry(remote.desktop, o.send.id)}
         onEdit={async (o) => {
           // Unanswered, it may be on the computer already: sent again it would go twice.
+          if (o.unsure && !(await remote.whenOnline(20_000)))
+            throw new Error(
+              `${remote.name} isn't connected yet, so the phone can't tell whether this one arrived. It isn't lost: once connected, the phone checks and it arrives only once.`,
+            );
           if (o.unsure && (await reached(remote.call, o, knownOf(thread)))) {
             void reload();
             return Alert.alert("The computer received it", `${remote.name} already accepted this send or is still processing it, so it can't be taken back here.`);
@@ -874,8 +878,10 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           draftKey={draftKey}
           onSend={send}
           onStop={() =>
-            act("Couldn't stop it", () =>
-              remote.desktop("cancelProjectChat", id),
+            act(
+              "Couldn't stop it",
+              () => remote.desktop("cancelProjectChat", id),
+              "Stop may still go through",
             )
           }
         />
@@ -907,9 +913,8 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         title="Side conversations"
         onClose={() => setSheet(undefined)}
         items={sides.map((m) => ({
-          label:
-            withoutMention(m.body).split("\n")[0]!.slice(0, 80) ||
-            "Side conversation",
+          label: preview(withoutMention(m.body), 80) || "Side conversation",
+          labelLines: 1,
           hint: `${m.side ? "Asked beside the conversation" : m.role === "user" ? "Your message" : "An answer"} · ${counts.get(m.id) ?? 0} ${counts.get(m.id) === 1 ? "reply" : "replies"}`,
           onPress: () => openReplies(m),
         }))}

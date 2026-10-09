@@ -1,11 +1,13 @@
 import { useRef, useSyncExternalStore } from "react";
-import { Platform, Pressable, StyleSheet, Text } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text } from "react-native";
 import { router } from "expo-router";
 import { ChevronDown, Monitor, Plus, RefreshCw } from "lucide-react-native";
 import { useRemote, type PairedComputer } from "../remote/RemoteProvider";
+import { useComputersSeen } from "../remote/computer-seen";
 import { useComputerUpdateAction } from "./ComputerUpdate";
 import { MenuRow, Sheet } from "./Sheet";
-import { useTheme } from "./theme";
+import { ago } from "./ThreadRow";
+import { type, useTheme } from "./theme";
 
 // The sheet sits beside the stack, not in the header: a modal inside the
 // native header's title is left behind when the header is rebuilt.
@@ -52,6 +54,7 @@ export function ComputerSheet() {
   const t = useTheme();
   const remote = useRemote();
   const action = useComputerUpdateAction();
+  const seen = useComputersSeen();
   const open = useOpen();
   // iOS won't navigate while the sheet is still leaving; the pick waits for it.
   const picked = useRef<() => void>(undefined);
@@ -72,15 +75,47 @@ export function ComputerSheet() {
       if (router.canDismiss()) router.dismissAll();
       void remote.switchTo(c.id);
     });
+  const lastReached = (c: PairedComputer) => {
+    const at = seen[c.id];
+    return at ? `Last reached ${ago(at)}` : "Not reached lately";
+  };
   const status = (c: PairedComputer) => {
-    if (c.id !== remote.active) return "Tap to switch to it";
+    if (c.id !== remote.active) return lastReached(c);
     const version = remote.overview?.version;
     if (remote.status === "online")
       return version ? `Connected · Relay ${version}` : "Connected";
     if (remote.status === "connecting") return "Connecting…";
     if (remote.status === "denied") return "Turned this phone away";
-    return "Can't reach it right now";
+    return `Can't reach it right now · ${lastReached(c)}`;
   };
+  // Pairings that share a name, e.g. the same computer paired again, say where they point.
+  // Paired again at the same name and address since: Relay there has a new key, this one is dead.
+  const replaced = (c: PairedComputer, index: number) =>
+    remote.computers
+      .slice(index + 1)
+      .some((o) => o.name === c.name && o.address === c.address);
+  const hint = (c: PairedComputer, index: number) => {
+    if (c.id !== remote.active && replaced(c, index))
+      return `Paired again since · ${lastReached(c)}`;
+    return remote.computers.some((o) => o.id !== c.id && o.name === c.name)
+      ? `${status(c)} · ${c.address}`
+      : status(c);
+  };
+  const forget = (c: PairedComputer, index: number) =>
+    Alert.alert(
+      `Forget ${c.name}?`,
+      replaced(c, index)
+        ? "This phone paired with it again since, so this older pairing can't connect."
+        : `${lastReached(c)}. Pairing again needs a new code from Relay there.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Forget",
+          style: "destructive",
+          onPress: () => void remote.forget(c.id),
+        },
+      ],
+    );
   return (
     <Sheet
       open={open}
@@ -88,11 +123,11 @@ export function ComputerSheet() {
       onClose={() => setOpen(false)}
       onDismiss={run}
     >
-      {remote.computers.map((c) => (
+      {remote.computers.map((c, index) => (
         <MenuRow
           key={c.id}
           label={c.name}
-          hint={status(c)}
+          hint={hint(c, index)}
           checked={c.id === remote.active}
           icon={
             <Monitor
@@ -101,6 +136,18 @@ export function ComputerSheet() {
             />
           }
           onPress={() => switchTo(c)}
+          trailing={
+            c.id !== remote.active && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Forget ${c.name}`}
+                hitSlop={10}
+                onPress={() => forget(c, index)}
+              >
+                <Text style={[styles.forget, { color: t.muted }]}>Forget</Text>
+              </Pressable>
+            )
+          }
         />
       ))}
       {action.can && !action.update && (
@@ -124,4 +171,5 @@ export function ComputerSheet() {
 const styles = StyleSheet.create({
   title: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
   name: { fontSize: 16, fontWeight: "600", flexShrink: 1 },
+  forget: { fontSize: type.small },
 });

@@ -6,6 +6,7 @@ import {
   bareModel as bare,
   costAt,
   priceOf,
+  promptOf,
   type Price,
 } from "../../watch/prices";
 import type { SDKMessage } from "../project/sdk";
@@ -161,7 +162,7 @@ export function checkSpend(
   const split = theirs.length > 0;
   if (!split) return { model, tokens, usd: Math.max(0, usd), split };
   // The check's own tokens at list price; unknown models take their share of the dollars.
-  const price = priceOf(model);
+  const price = priceOf(model, { prompt: promptOf(tokens) });
   return {
     model,
     tokens,

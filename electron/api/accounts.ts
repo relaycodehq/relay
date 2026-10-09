@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   accountIdSchema,
   accountLabelSchema,
@@ -28,14 +27,6 @@ export function accountHandlers(ctx: ApiContext) {
     removeAgentAccount: takes(
       [accountProviderSchema, accountIdSchema],
       (provider, id) => accounts.remove(provider, id),
-    ),
-    moveAgentAccount: takes(
-      [
-        accountProviderSchema,
-        accountIdSchema,
-        z.union([z.literal(-1), z.literal(1)]),
-      ],
-      (provider, id, by) => accounts.move(provider, id, by),
     ),
     useAgentAccount: takes(
       [accountProviderSchema, accountIdSchema],

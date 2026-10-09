@@ -37,7 +37,7 @@ export function SidebarFooter({
       <DevRestartButton />
       <UpdateButton />
       <CheckUpdatesButton />
-      <AgentUpdateButton onDetails={() => onSettings("models")} />
+      <AgentUpdateButton onDetails={() => onSettings("agents")} />
       <ClockifyTimer
         projectId={projectId}
         projectName={projectName}

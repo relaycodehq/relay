@@ -19,6 +19,7 @@ import type { ChatPending, LimitResume } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
 import type { RemoteQueued } from "../../../shared/remote";
 import { agentNames } from "./ProviderIcon";
+import { alertFailure } from "./failure";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
@@ -62,6 +63,11 @@ export function WaitingStrip({
       label={item.kind === "task" ? "Stop" : "Cancel"}
       busyLabel={item.kind === "task" ? "Stopping…" : "Cancelling…"}
       failed={item.kind === "task" ? "Couldn't stop it" : "Couldn't cancel it"}
+      unsure={
+        item.kind === "task"
+          ? "Stop may still go through"
+          : "Cancel may still go through"
+      }
       onPress={() => onStop(item)}
     />
   );
@@ -193,12 +199,14 @@ export function StoppedStrip({
         <Action
           label="Dismiss"
           failed="Couldn't dismiss it"
+          unsure="Dismiss may still go through"
           onPress={() => onResolve("dismiss")}
         />
         <Action
           label="Pick it back up"
           primary
           failed="Couldn't pick it back up"
+          unsure="It may still pick back up"
           onPress={() => onResolve("resume")}
         />
       </View>
@@ -387,10 +395,13 @@ export function QueueList({
 /** Messages the desktop didn't take: send again, or back into the composer. */
 export function UnsentStrip({
   unsent,
+  online,
   onRetry,
   onEdit,
 }: {
   unsent: Outgoing[];
+  /** Offline, Edit waits for the computer before it can tell whether one arrived. */
+  online: boolean;
   onRetry: (o: Outgoing) => void;
   onEdit: (o: Outgoing) => Promise<void> | void;
 }) {
@@ -403,7 +414,12 @@ export function UnsentStrip({
           <Text numberOfLines={1} style={[styles.text, { color: t.text }]}>
             {withoutMention(o.send.body)}
           </Text>
-          <Action label="Edit" failed="Couldn't take it back" onPress={async () => onEdit(o)} />
+          <Action
+            label="Edit"
+            busyLabel={o.unsure && !online ? "Connecting…" : undefined}
+            failed="Couldn't take it back yet"
+            onPress={async () => onEdit(o)}
+          />
           <Action label="Try again" primary onPress={async () => onRetry(o)} />
         </View>
       ))}
@@ -416,6 +432,7 @@ export function Action({
   label,
   busyLabel,
   failed = "That didn't work",
+  unsure,
   primary,
   confirm,
   onPress,
@@ -424,6 +441,8 @@ export function Action({
   busyLabel?: string;
   /** The alert's title when the work fails. */
   failed?: string;
+  /** The alert's title when the request went out but no answer came back. */
+  unsure?: string;
   primary?: boolean;
   /** Asked first; the button only turns busy once it says yes. */
   confirm?: () => Promise<boolean>;
@@ -446,7 +465,7 @@ export function Action({
             setBusy(true);
             await onPress();
           } catch (e) {
-            Alert.alert(failed, e instanceof Error ? e.message : String(e));
+            alertFailure(e, failed, unsure);
           } finally {
             claimed.current = false;
             setBusy(false);

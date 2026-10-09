@@ -42,6 +42,16 @@ export function writeDraft(key: string, value: string) {
   changed(key, had, !!value.trim());
 }
 
+// When each thread last had a draft go out, so Activity can tell a sent
+// draft from one cleared away.
+const sentAt = new Map<string, number>();
+
+/** Called before a thread's draft empties to go out. */
+export const markDraftSent = (chatId: string) =>
+  void sentAt.set(chatId, Date.now());
+
+export const draftSentAt = (chatId: string) => sentAt.get(chatId);
+
 /** Moves a composer's text and pills to another's, as when a draft follows its thread. */
 export function moveDraft(from: string, to: string) {
   const hadFrom = !!readDraft(from).trim(),
@@ -203,14 +213,12 @@ export interface ActivityDraft {
 /**
  * Activity's drafts, from `chat-draft:<chat>[:<reply>]` and
  * `chat-draft:new:<project>[:<slot>]` keys: one per thread, its main draft
- * first. The open thread's draft is on its own card already; an open new
- * thread's stays, so its card doesn't come and go as it's typed.
+ * first. The open thread's is listed too, so its card rises as it's typed.
  */
 export function activityDrafts(
   keys: string[],
   projects: Map<string, Project>,
   chats: Map<string, ChatSummary>,
-  openChat: string | undefined,
 ): ActivityDraft[] {
   const drafts: ActivityDraft[] = [];
   const seen = new Set<string>();
@@ -226,7 +234,7 @@ export function activityDrafts(
     const chat = chats.get(chatId);
     const project = chat && projects.get(chat.projectId);
     // Sorted keys put a thread's main draft before its replies.
-    if (!project || chatId === openChat || seen.has(chatId)) continue;
+    if (!project || seen.has(chatId)) continue;
     seen.add(chatId);
     drafts.push({ key, id: chatId, project, chat, reply: !!reply });
   }

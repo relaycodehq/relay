@@ -103,9 +103,6 @@
   width: 14px;
   height: 14px;
 }
-.file-tree-row .file-entry-icon {
-  color: var(--muted);
-}
 /* Ignored files are there to browse, but they're not part of the project's story. */
 .file-tree-row.ignored .file-tree-name-button > span,
 .folder-list .ignored,

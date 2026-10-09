@@ -99,31 +99,39 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
-  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Used by Relay", exact: true })
+    .click();
   const pick = async (control: string, option: string) => {
     await page.getByRole("button", { name: control, exact: true }).click();
     await page.getByRole("option", { name: option, exact: true }).click();
   };
-  await pick("Grouping model", "GPT-5.6-Sol");
+  await pick("Pull request steps model", "GPT-5.6-Sol");
   await page
-    .getByRole("combobox", { name: "Grouping reasoning effort", exact: true })
+    .getByRole("combobox", {
+      name: "Pull request steps reasoning effort",
+      exact: true,
+    })
     .click();
   await page.getByRole("option", { name: "Ultra", exact: true }).click();
   // Luna has no Ultra effort, so switching falls back to the default.
-  await pick("Grouping model", "GPT-5.6-Luna");
+  await pick("Pull request steps model", "GPT-5.6-Luna");
   await expect(
     page.getByRole("combobox", {
-      name: "Grouping reasoning effort",
+      name: "Pull request steps reasoning effort",
       exact: true,
     }),
   ).toHaveText("Default effort");
-  await pick("Grouping model", "GPT-5.6-Sol");
+  await pick("Pull request steps model", "GPT-5.6-Sol");
   await page
-    .getByRole("combobox", { name: "Grouping reasoning effort", exact: true })
+    .getByRole("combobox", {
+      name: "Pull request steps reasoning effort",
+      exact: true,
+    })
     .click();
   await page.getByRole("option", { name: "Ultra", exact: true }).click();
   await page
-    .getByRole("button", { name: "Grouping Fast mode", exact: true })
+    .getByRole("button", { name: "Pull request steps Fast mode", exact: true })
     .click();
   await pick("Line questions model", "GPT-5.6-Luna");
   await page
@@ -139,12 +147,13 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page
     .getByRole("button", { name: "Line questions Fast mode", exact: true })
     .click();
-  await page.getByRole("button", { name: "Save AI settings" }).click();
+  // Each pick saves at once; the last one says so.
   await expect(
     page
       .getByRole("region", { name: "Settings", exact: true })
-      .getByRole("status"),
-  ).toContainText("Settings saved");
+      .getByRole("status")
+      .filter({ hasText: "Saved" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   for (const theme of ["Dark", "Light"]) {
     await page.getByRole("radio", { name: theme, exact: true }).click();
@@ -178,19 +187,24 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
-  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Used by Relay", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Grouping model", exact: true }),
+    page.getByRole("button", { name: "Pull request steps model", exact: true }),
   ).toContainText("GPT-5.6-Sol");
   await expect(
-    page.getByRole("button", { name: "Grouping Fast mode", exact: true }),
+    page.getByRole("button", {
+      name: "Pull request steps Fast mode",
+      exact: true,
+    }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", { name: "Line questions model", exact: true }),
   ).toContainText("GPT-5.6-Luna");
   await expect(
     page.getByRole("combobox", {
-      name: "Grouping reasoning effort",
+      name: "Pull request steps reasoning effort",
       exact: true,
     }),
   ).toHaveText("Ultra");
@@ -328,7 +342,9 @@ test("line questions can run in a read-only Claude Code session", async () => {
   await page
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
-  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Used by Relay", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Line questions model", exact: true })
     .click();
@@ -343,12 +359,13 @@ test("line questions can run in a read-only Claude Code session", async () => {
   await expect(
     page.getByRole("button", { name: "Line questions Fast mode", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Save AI settings" }).click();
+  // Each pick saves at once; the last one says so.
   await expect(
     page
       .getByRole("region", { name: "Settings", exact: true })
-      .getByRole("status"),
-  ).toContainText("Settings saved");
+      .getByRole("status")
+      .filter({ hasText: "Saved" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Back to app" }).click();
   await page.getByRole("button", { name: "Clear selected lines" }).click();
   await page

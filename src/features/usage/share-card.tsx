@@ -1,12 +1,12 @@
-// The image people share: the Quiet page in one 1200×630 card. Colours are
-// literal because an exported SVG can't read the app's CSS variables.
+// The image people share: the page's lede and its average day in one
+// 1200×630 card. Colours are literal because an exported SVG can't read the
+// app's CSS variables.
 import { forwardRef } from "react";
-import { agents } from "../../../shared/agents";
 import type { UsageSummary } from "../../../shared/usage";
 import { relayMarkSvg, svgDataUrl } from "../../lib/relay-icon";
 import type { ThemeKind } from "../../lib/themes";
-import { compact, columnsOf, dayLabel, dayTotal, hours, usd } from "./format";
-import { heatLevel, providerLogos } from "./usage-charts";
+import { clock, dayLabel, hours } from "./format";
+import { average, headline, inStretch, rhythmLine } from "./rhythm";
 
 const sans = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif`;
 
@@ -39,14 +39,6 @@ function mix(a: string, b: string, t: number) {
     .join("")}`;
 }
 
-/** Five steps from the surface to the accent, and a faint empty step. */
-function heatFill(kind: ThemeKind, level: number) {
-  const c = base[kind];
-  return level === 0
-    ? mix(c.bg, c.text, 0.07)
-    : mix(c.bg, c.accent, [0, 0.22, 0.4, 0.58, 0.78, 1][level]);
-}
-
 const clip = (text: string, most: number) =>
   text.length > most ? `${text.slice(0, most - 1).trimEnd()}…` : text;
 
@@ -57,22 +49,19 @@ export const UsageCard = forwardRef<
   { summary: UsageSummary; kind: ThemeKind; options: CardOptions }
 >(function UsageCard({ summary, kind, options }, ref) {
   const c = base[kind];
-  const { totals } = summary;
+  const m = options.dollars ? "usd" : "fresh";
   const W = 1200;
   const H = 630;
-  const columns = columnsOf(summary.days);
-  const max = Math.max(1, ...columns.map(dayTotal));
-  const cw = 1080;
-  const slot = cw / columns.length;
-  const barW = Math.min(16, slot * 0.6);
-  const heatMax = Math.max(...summary.heat.flat());
-  const busiest = summary.threads[0];
-  const facts = [
-    ...(options.dollars ? [["At API prices", usd(totals.usd)]] : []),
-    ["Answers", totals.answers.toLocaleString("en-US")],
-    ["Threads", summary.cards.started.toLocaleString("en-US")],
-    ["Agents working", hours(totals.agentMs)],
-  ];
+  const line = rhythmLine(summary, m);
+  const values = summary.hours.map((h) => average(h, m));
+  const max = Math.max(1e-9, ...values);
+  const left = 60;
+  const plotW = W - 2 * left;
+  const slot = plotW / 24;
+  const barW = slot * 0.7;
+  const baseline = 520;
+  const plotH = 170;
+  const busiest = [...summary.threads].sort((a, b) => b[m] - a[m])[0];
   return (
     <svg
       ref={ref}
@@ -85,7 +74,7 @@ export const UsageCard = forwardRef<
       <rect width={W} height={H} fill={c.bg} />
       <image
         href={svgDataUrl(relayMarkSvg(c.accent))}
-        x={60}
+        x={left}
         y={52}
         width={26}
         height={26}
@@ -93,94 +82,90 @@ export const UsageCard = forwardRef<
       <text x={94} y={72} fill={c.text} fontSize={19} fontWeight={600}>
         Relay
       </text>
-      <text x={W - 60} y={72} fill={c.muted} fontSize={17} textAnchor="end">
-        {dayLabel(summary.from)} – {dayLabel(summary.to)},{" "}
-        {new Date(summary.to).getFullYear()}
+      <text x={W - left} y={72} fill={c.muted} fontSize={17} textAnchor="end">
+        {dayLabel(summary.days[0]?.day ?? summary.from)} –{" "}
+        {dayLabel(summary.to)}, {new Date(summary.to).getFullYear()}
       </text>
 
       <text
-        x={58}
-        y={196}
+        x={left - 2}
+        y={170}
         fill={c.text}
-        fontSize={96}
+        fontSize={52}
         fontWeight={600}
-        letterSpacing={-3}
+        letterSpacing={-1.2}
       >
-        {compact(totals.tokens)}
+        You vibe hardest <tspan fill={c.accent}>{line.stretch}</tspan>
+        {line.weekdays ? "," : "."}
       </text>
-      <text x={62} y={232} fill={c.muted} fontSize={20}>
-        tokens
-      </text>
-      {facts.map(([label, value], i) => (
-        <g key={label} transform={`translate(${560 + i * 150}, 150)`}>
-          <text fill={c.muted} fontSize={14}>
-            {label}
-          </text>
-          <text y={34} fill={c.text} fontSize={26} fontWeight={600}>
-            {value}
-          </text>
-        </g>
-      ))}
-      {options.names && busiest && (
-        <text x={560} y={232} fill={c.muted} fontSize={15}>
-          Busiest thread: {clip(busiest.title, 48)}
-          {busiest.project ? ` · ${clip(busiest.project, 24)}` : ""}
+      {line.weekdays && (
+        <text
+          x={left - 2}
+          y={234}
+          fill={c.text}
+          fontSize={52}
+          fontWeight={600}
+          letterSpacing={-1.2}
+        >
+          and most on <tspan fill={c.accent}>{line.weekdays}</tspan>.
         </text>
       )}
+      <text x={left} y={line.weekdays ? 284 : 220} fill={c.muted} fontSize={20}>
+        {headline(summary, m)} ·{" "}
+        {summary.totals.answers.toLocaleString("en-US")} answers ·{" "}
+        {hours(summary.totals.agentMs)} of agents working
+      </text>
 
-      <line x1={60} x2={60 + cw} y1={400} y2={400} stroke={c.line} />
-      {columns.map((d, i) => {
-        const h = (dayTotal(d) / max) * 120;
+      <line
+        x1={left}
+        x2={W - left}
+        y1={baseline}
+        y2={baseline}
+        stroke={c.line}
+      />
+      {values.map((v, i) => {
+        const h = (v / max) * plotH;
+        const lit = line.start !== null && inStretch(i, line.start);
         return (
-          h > 0 && (
-            <rect
-              key={d.day}
-              x={60 + i * slot + (slot - barW) / 2}
-              y={400 - h}
-              width={barW}
-              height={h}
-              rx={Math.min(3, barW / 2)}
-              fill={c.accent}
-            />
-          )
-        );
-      })}
-
-      {summary.harnesses.map((h, i) => {
-        const Logo = providerLogos[h.provider];
-        return (
-          <g key={h.provider} transform={`translate(${60 + i * 170}, 460)`}>
-            <Logo
-              x={0}
-              y={-14}
-              width={16}
-              height={16}
-              style={{ fill: c.text }}
-            />
-            <text x={24} fill={c.text} fontSize={17}>
-              {agents[h.provider].name}
-            </text>
-            <text x={24} y={26} fill={c.muted} fontSize={16}>
-              {compact(h.tokens)}
-            </text>
+          <g key={i}>
+            {h > 0 && (
+              <rect
+                x={left + i * slot + (slot - barW) / 2}
+                y={baseline - h}
+                width={barW}
+                height={h}
+                rx={3}
+                fill={lit ? c.accent : mix(c.bg, c.text, 0.16)}
+              />
+            )}
+            {i % 6 === 0 && (
+              <text
+                x={left + i * slot + slot / 2}
+                y={baseline + 22}
+                fill={c.muted}
+                fontSize={14}
+                textAnchor="middle"
+              >
+                {clock(i)}
+              </text>
+            )}
           </g>
         );
       })}
 
-      {summary.heat.map((row, wd) =>
-        row.map((v, hr) => (
-          <rect
-            key={`${wd}-${hr}`}
-            x={W - 60 - 24 * 13 + hr * 13}
-            y={446 + wd * 13}
-            width={10}
-            height={10}
-            rx={2}
-            fill={heatFill(kind, heatLevel(v, heatMax))}
-          />
-        )),
+      {options.names && busiest && (
+        <text x={left} y={H - 40} fill={c.muted} fontSize={15}>
+          Busiest thread: {clip(busiest.title, 48)}
+          {busiest.project ? ` · ${clip(busiest.project, 24)}` : ""}
+        </text>
       )}
-      <text x={W - 60} y={H - 40} fill={c.muted} fontSize={14} textAnchor="end">
+      <text
+        x={W - left}
+        y={H - 40}
+        fill={c.muted}
+        fontSize={14}
+        textAnchor="end"
+      >
         Counted on this computer. Nothing was uploaded.
       </text>
     </svg>

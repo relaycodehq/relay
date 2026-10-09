@@ -57,9 +57,11 @@ it("keeps a thread on its account, and moves one whose account is gone to the on
 });
 
 it("lists the usual sign-in's folder first however the accounts are ordered", async () => {
-  const accounts = new AgentAccounts(fakeStore(three), () => {});
-  await accounts.move("claude", "default", 1);
-  await accounts.move("claude", "default", 1);
+  // Saved by a version that could reorder accounts.
+  const accounts = new AgentAccounts(
+    fakeStore({ accounts: [...three.accounts.slice(1), three.accounts[0]!] }),
+    () => {},
+  );
   expect(
     accounts
       .list()

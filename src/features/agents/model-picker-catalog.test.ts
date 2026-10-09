@@ -160,6 +160,40 @@ describe("the picker's rows", () => {
     ).toEqual(["opencode:anthropic/sonnet"]);
   });
 
+  it("finds a grouped agent's model typed without its separators", () => {
+    const glm = pickerRows(
+      pickerCatalog(
+        ["opencode"],
+        {
+          opencode: {
+            models: [
+              model("zai/glm-5.3-flash", {
+                name: "GLM-5.3 Flash",
+                group: "Z.AI",
+              }),
+              model("zai/glm-5.3", { name: "GLM-5.3", group: "Z.AI" }),
+            ],
+            model: "",
+          },
+        },
+        noCustoms,
+      ),
+      {
+        category: "opencode",
+        query: "GLM5.3",
+        legacy: false,
+        group: "",
+        favorites: [],
+        allowDefault: true,
+      },
+    );
+    expect(ids(glm.rows)).toEqual([
+      "opencode:zai/glm-5.3",
+      "opencode:zai/glm-5.3-flash",
+    ]);
+    expect(glm.groups).toEqual([{ name: "Z.AI", count: 2 }]);
+  });
+
   it("drops fuzzy matches in a grouped agent but not in a short list", () => {
     expect(ids(rowsOf({ category: "codex", query: "gta" }).rows)).toEqual([
       "codex:gpt-a",

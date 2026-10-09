@@ -33,6 +33,7 @@ import {
   loadDraftScope,
   draftWorktreeBranch,
   loadDraftWorkspace,
+  markDraftSent,
   readDraft,
   writeDraft,
   type ActivityDraft,
@@ -137,6 +138,7 @@ export async function sendDraft(
   }
   // The draft may have been opened and written in while this went out: only
   // what went goes.
+  if (chat) markDraftSent(chat.id);
   const left = unsent(readDraft(key), text);
   if (left !== readDraft(key)) writeDraft(key, left);
   clearDraftAttachments(id, attachments);

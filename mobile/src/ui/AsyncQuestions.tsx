@@ -95,7 +95,8 @@ function Open({
                   answers,
                 }),
               ).then((sent) => {
-                if (sent) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                // A tap, not Success: that one is the turn's end.
+                if (sent) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               })
             }
           />

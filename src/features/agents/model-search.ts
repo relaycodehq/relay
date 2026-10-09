@@ -22,6 +22,8 @@ const boundaries = new Set([" ", "-", "_", "/"]);
 
 const normalize = (value: string | undefined) =>
   (value ?? "").trim().toLowerCase();
+// "glm5.3", "glm 53" and "GLM-5.3" all read as "glm53".
+const compact = (value: string) => value.replace(/[^a-z0-9]/g, "");
 
 /** The earliest place `word` starts right after a separator, or -1. */
 function wordStart(field: string, word: string) {
@@ -55,6 +57,18 @@ function scoreField(field: string, word: string, base: number) {
   if (start >= 0) return base + 4 + 2 * start + penalty;
   const inside = field.indexOf(word);
   if (inside >= 0) return base + 6 + 2 * inside + penalty;
+  const bare = compact(word);
+  const bareField = compact(field);
+  if (bare.length >= 2) {
+    const barePenalty = Math.min(
+      maxLengthPenalty,
+      bareField.length - bare.length,
+    );
+    if (bareField === bare) return base + 1;
+    if (bareField.startsWith(bare)) return base + 3 + barePenalty;
+    const at = bareField.indexOf(bare);
+    if (at >= 0) return base + 8 + 2 * at + barePenalty;
+  }
   if (word.length < 3) return null;
   const fuzzy = subsequence(field, word);
   if (!fuzzy) return null;

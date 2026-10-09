@@ -12,7 +12,9 @@ export const SIDEBAR_WIDTH = { initial: 250, min: 210, max: 360 };
 export type SettingsCategory =
   | "appearance"
   | "project"
-  | "models"
+  | "agents"
+  | "relay-models"
+  | "quick-switch"
   | "integrations"
   | "plugins"
   | "phone"

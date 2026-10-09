@@ -241,22 +241,6 @@ export class AgentAccounts {
     await removeProfile(provider, id);
   }
 
-  /** Moves an account one place up or down its agent's list. */
-  move(provider: AccountProvider, id: string, by: -1 | 1) {
-    this.find(provider, id);
-    return this.save((saved) => {
-      const mine = saved.accounts.filter((a) => a.provider === provider);
-      const at = mine.findIndex((a) => a.id === id);
-      const to = at + by;
-      if (to < 0 || to >= mine.length) return;
-      [mine[at], mine[to]] = [mine[to]!, mine[at]!];
-      saved.accounts = [
-        ...saved.accounts.filter((a) => a.provider !== provider),
-        ...mine,
-      ];
-    });
-  }
-
   use(provider: AccountProvider, id: string) {
     this.find(provider, id);
     return this.save((saved) => {

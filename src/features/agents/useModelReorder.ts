@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { reducedMotion, slideRow } from "../../lib/slide-row";
 
 /** Animate a star click from the rows' current visual positions, even mid-slide. */
 export function useModelReorder(favorites: string[], open: boolean) {
@@ -28,12 +29,7 @@ export function useModelReorder(favorites: string[], open: boolean) {
     stop();
     const positions = before.current;
     before.current = new Map();
-    if (
-      !open ||
-      !positions.size ||
-      matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
+    if (!open || !positions.size || reducedMotion()) return;
     const moves = Array.from(
       list.current?.querySelectorAll<HTMLElement>("[data-model-key]") ?? [],
     )
@@ -46,20 +42,13 @@ export function useModelReorder(favorites: string[], open: boolean) {
         (move) => move.from !== undefined && Math.abs(move.from - move.to) >= 1,
       );
     for (const { row, from, to } of moves) {
-      row.dataset.reordering =
-        row.dataset.modelKey === clicked.current ? "active" : "";
-      const animation = row.animate(
-        [
-          { transform: `translateY(${from! - to}px)` },
-          { transform: "translateY(0)" },
-        ],
-        { duration: 220, easing: "cubic-bezier(.2,.7,.2,1)" },
+      const animation = slideRow(
+        row,
+        from! - to,
+        row.dataset.modelKey === clicked.current,
       );
       running.current.set(row, animation);
-      animation.onfinish = () => {
-        row.removeAttribute("data-reordering");
-        running.current.delete(row);
-      };
+      animation.onfinish = () => running.current.delete(row);
     }
   }, [favorites, open]);
 

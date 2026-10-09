@@ -237,7 +237,6 @@ const methods = [
   "cancelAgentAccountSignIn",
   "renameAgentAccount",
   "removeAgentAccount",
-  "moveAgentAccount",
   "useAgentAccount",
   "setThreadAccount",
   "openRouterCredit",

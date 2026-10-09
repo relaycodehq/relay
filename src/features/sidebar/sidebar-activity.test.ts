@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attention, nextAfterSettle, triaged } from "./activity";
+import { attention, draftsFirst, nextAfterSettle, triaged } from "./activity";
 import { chatActivitySection } from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
 
@@ -73,5 +73,71 @@ describe("attention", () => {
       count: 0,
       mark: undefined,
     });
+  });
+});
+
+describe("draftsFirst", () => {
+  it("puts threads with unsent text first, off the shelves too", () => {
+    const [a, b, c, d] = ["a", "b", "c", "d"].map((id) => chat({ id }));
+    const sections = { active: [a, b], snoozed: [c], settled: [d] };
+    const moved = draftsFirst(
+      sections,
+      [a, b, c, d],
+      new Set(["b", "d"]),
+      new Map(),
+    );
+    expect(moved.active.map((x) => x.id)).toEqual(["b", "d", "a"]);
+    expect(moved.snoozed).toEqual([c]);
+    expect(moved.settled).toEqual([]);
+  });
+
+  it("keeps a thread on top once its draft is gone, until something passes it", () => {
+    const a = chat({ id: "a", updated: 9_000 });
+    const b = chat({ id: "b", updated: 5_000 });
+    const sections = {
+      active: [a, b],
+      snoozed: [] as ChatSummary[],
+      settled: [] as ChatSummary[],
+    };
+    const order = (at: number) =>
+      draftsFirst(
+        sections,
+        [a, b],
+        new Set(),
+        new Map([["b", { at, sent: false }]]),
+      ).active.map((x) => x.id);
+    expect(order(8_000)).toEqual(["a", "b"]);
+    expect(order(9_500)).toEqual(["b", "a"]);
+  });
+
+  it("sends a shelved thread back when its draft is cleared, not when it went out", () => {
+    const a = chat({ id: "a", updated: 9_000 });
+    const s = chat({ id: "s", updated: 4_000, settledAt: 4_500 });
+    const z = chat({
+      id: "z",
+      updated: 4_000,
+      snoozedAt: 4_500,
+      snoozedUntil: 99_000,
+    });
+    const sections = { active: [a], snoozed: [z], settled: [s] };
+    const place = (sent: boolean, settledAt = 4_500) => {
+      const settled = { ...s, settledAt };
+      const moved = draftsFirst(
+        { ...sections, settled: [settled] },
+        [a, settled, z],
+        new Set(),
+        new Map([
+          ["s", { at: 9_500, sent }],
+          ["z", { at: 9_500, sent }],
+        ]),
+      );
+      return [moved.active, moved.snoozed, moved.settled].map((list) =>
+        list.map((x) => x.id),
+      );
+    };
+    expect(place(false)).toEqual([["a"], ["z"], ["s"]]);
+    expect(place(true)).toEqual([["s", "z", "a"], [], []]);
+    // Settled again after it went out, it stays on the shelf.
+    expect(place(true, 9_800)).toEqual([["z", "a"], [], ["s"]]);
   });
 });

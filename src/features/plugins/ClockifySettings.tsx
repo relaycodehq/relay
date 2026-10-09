@@ -15,6 +15,9 @@ import {
   useTrackableProjects,
 } from "./plugins";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
+import { agentProviders } from "../../../shared/agents";
+import { useSaveAISettings } from "../agents/useAISettings";
+import { ModelField } from "../agents/ModelField";
 import { ErrorBox } from "../../ui/ui";
 import { ClockifyProjectMap } from "./ClockifyProjectMap";
 import { PluginStatus, usePluginSaved } from "./plugin-ui";
@@ -64,6 +67,7 @@ export function ClockifySettings() {
   const [account, setAccount] = useState<string>();
   const [quiet, setQuiet] = useState<string>();
   const [error, setError] = useState<unknown>();
+  const ai = useSaveAISettings(setError);
   const latest = useRef(0);
   const settings = status.data?.settings;
   const connected = !!status.data?.hasToken;
@@ -257,6 +261,24 @@ export function ClockifySettings() {
               }}
             />
           </SettingsRow>
+          {ai.values && (
+            <SettingsRow
+              label="Descriptions"
+              hint="The model that describes your day's entries."
+            >
+              <ModelField
+                label="Timesheets"
+                value={ai.values.timesheet}
+                provider={ai.values.timesheetProvider}
+                providers={agentProviders}
+                allowDefault
+                onChange={async (timesheet, timesheetProvider) => {
+                  setError(undefined);
+                  if (await ai.save({ timesheet, timesheetProvider })) saved();
+                }}
+              />
+            </SettingsRow>
+          )}
         </SettingsCard>
       </div>
       {connected && settings.workspaceId && (

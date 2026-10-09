@@ -48,32 +48,46 @@ describe("summarizeUsage", () => {
     ]);
     expect(s.days).toHaveLength(7);
     expect(s.days[0].day).toBe(at(0, 0)); // Sep 30
-    expect(s.days.at(-1)!.tokens).toMatchObject({ claude: 100, codex: 0 });
-    expect(s.days.at(-2)!.tokens).toMatchObject({ codex: 50 });
-    expect(s.totals).toMatchObject({ tokens: 151, usd: 1.5, answers: 3 });
-    expect(s.harnesses.map((h) => h.provider)).toEqual(["claude", "codex"]);
+    expect(s.days.at(-1)!.fresh).toMatchObject({ claude: 100, codex: 0 });
+    expect(s.days.at(-2)!.usd).toMatchObject({ codex: 0.5 });
+    expect(s.totals).toMatchObject({ fresh: 151, usd: 1.5, answers: 3 });
   });
 
-  it("credits an answer to the model that did most of it and merges dated model ids", () => {
+  it("starts the days at the first one counted", () => {
+    const s = summary([run({ at: at(4, 9), models: { m: spend(1, 0) } })]);
+    expect(s.days.map((d) => d.day)).toEqual([at(4, 0), at(5, 0), at(6, 0)]);
+  });
+
+  it("counts cache re-reads in tokens but not in fresh tokens", () => {
     const s = summary([
       run({
         models: {
-          "claude-opus-5-5-20260901": spend(1000, 100, 2),
-          "claude-haiku-4-5": spend(10, 1, 0.01),
+          m: {
+            tokens: { input: 10, cacheWrite: 20, cacheRead: 900, output: 5 },
+            requests: 1,
+          },
         },
       }),
-      run({ models: { "claude-opus-5-5": spend(10, 1, 0.1) } }),
     ]);
-    const opus = s.models.find((m) => m.model === "Opus 5.5")!;
-    expect(opus).toMatchObject({ tokens: 1111, answers: 2, unpriced: false });
-    expect(s.models.find((m) => m.model === "Haiku 4.5")!.answers).toBe(0);
+    expect(s.totals).toMatchObject({ tokens: 935, fresh: 35 });
+    expect(s.models[0].fresh).toBe(35);
   });
 
-  it("marks a model with unpriced tokens", () => {
+  it("merges dated model ids and marks unpriced ones", () => {
     const s = summary([
+      run({ models: { "claude-opus-5-5-20260901": spend(1000, 100, 2) } }),
+      run({ models: { "claude-opus-5-5": spend(10, 1, 0.1) } }),
       run({ provider: "opencode", models: { "x/y": spend(10, 0) } }),
     ]);
-    expect(s.models[0]).toMatchObject({ model: "x/y", usd: 0, unpriced: true });
+    expect(s.models.find((m) => m.model === "Opus 5.5")).toMatchObject({
+      fresh: 1111,
+      unpriced: false,
+    });
+    expect(s.models.find((m) => m.model === "x/y")).toMatchObject({
+      usd: 0,
+      unpriced: true,
+    });
+    expect(s.totals.unpriced).toBe(true);
   });
 
   it("splits Relay's own jobs from threads and old room runs", () => {
@@ -82,112 +96,58 @@ describe("summarizeUsage", () => {
       // Logged before pull request rooms were removed.
       run({ job: "room" as UsageJob, models: { m: spend(40, 0, 0.4) } }),
       run({ job: "title", models: { m: spend(5, 0, 0.05) } }),
-      run({ job: "title", models: { m: spend(5, 0, 0.05) } }),
       run({ job: "watch", answer: false, models: { m: spend(20, 0, 0.2) } }),
     ]);
-    expect(s.totals.tokens).toBe(170);
-    expect(s.totals.relayTokens).toBe(30);
-    expect(s.totals.relayUsd).toBeCloseTo(0.3);
-    expect(s.jobs.map((j) => [j.job, j.runs])).toEqual([
-      ["watch", 1],
-      ["title", 2],
-    ]);
+    expect(s.totals.fresh).toBe(165);
+    expect(s.totals.relayFresh).toBe(25);
+    expect(s.totals.relayUsd).toBeCloseTo(0.25);
     expect(s.threads.map((t) => t.chat)).toEqual(["c1"]);
   });
 
-  it("counts threads and what each used", () => {
+  it("keeps the busiest threads by either measure, named from the chats", () => {
     const s = summary(
       [
-        run({ chat: "a", models: { m: spend(100, 0) } }),
-        run({ chat: "a", models: { m: spend(100, 0) } }),
-        run({ chat: "b", provider: "codex", models: { m: spend(50, 0) } }),
-        run({ chat: "c", models: { m: spend(1000, 0) } }),
+        // Cheap but huge, then three pricier small ones.
+        run({ chat: "big", models: { m: spend(10_000, 0, 0.01) } }),
+        run({ chat: "a", models: { m: spend(30, 0, 3) } }),
+        run({ chat: "b", provider: "codex", models: { m: spend(20, 0, 2) } }),
+        run({ chat: "c", models: { m: spend(10, 0, 1) } }),
+        run({ chat: "d", models: { m: spend(5, 0, 0) } }),
       ],
       {
         chats: [
-          {
-            id: "a",
-            title: "Usage page",
-            project: "relay",
-            created: at(5),
-            byAgent: false,
-          },
-          {
-            id: "b",
-            title: "Fix",
-            project: "relay",
-            created: at(6),
-            byAgent: true,
-            settledAt: at(6),
-          },
-          {
-            id: "old",
-            title: "Old",
-            project: "relay",
-            created: at(1, 0) - 30 * 86_400_000,
-            byAgent: false,
-          },
+          { id: "a", title: "Usage page", projectId: "p", project: "relay" },
         ],
       },
     );
-    expect(s.cards).toEqual({ started: 2, byAgents: 1, settled: 1 });
-    expect(s.perThread.tokensAvg).toBeCloseTo(1250 / 3);
-    expect(s.perThread.tokensMedian).toBe(200);
-    expect(s.perThread.answersAvg).toBeCloseTo(4 / 3);
-    expect(s.threads[0]).toMatchObject({ chat: "c", title: "Deleted thread" });
-    expect(s.threads[1]).toMatchObject({
-      chat: "a",
+    expect(s.threads.map((t) => t.chat).sort()).toEqual(["a", "b", "big", "c"]);
+    expect(s.threads.find((t) => t.chat === "a")).toMatchObject({
       title: "Usage page",
+      projectId: "p",
       project: "relay",
-      answers: 2,
     });
-    expect(s.threads[2].provider).toBe("codex");
+    expect(s.threads.find((t) => t.chat === "big")!.title).toBe(
+      "Deleted thread",
+    );
+    expect(s.threads.find((t) => t.chat === "b")!.provider).toBe("codex");
   });
 
-  it("spreads busy time over the hours a run covered", () => {
+  it("puts spend at a run's start hour and spreads its busy time", () => {
     // Monday Oct 5, 10:30 for an hour.
     const s = summary([
-      run({ at: at(5, 10, 30), ms: 60 * 60_000, models: { m: spend(1, 0) } }),
+      run({
+        at: at(5, 10, 30),
+        ms: 60 * 60_000,
+        models: { m: spend(7, 0, 1) },
+      }),
     ]);
-    expect(s.heat[0][10]).toBe(30);
-    expect(s.heat[0][11]).toBe(30);
+    expect(s.hours[10]).toMatchObject({ usd: 1, fresh: 7, minutes: 30 });
+    expect(s.hours[11]).toMatchObject({ usd: 0, minutes: 30 });
+    expect(s.weekdays[0]).toMatchObject({ usd: 1, minutes: 60, days: 1 });
+    // Counted Oct 5 and 6, so every hour came round twice.
+    expect(s.hours[3].days).toBe(2);
+    expect(s.weekdays[1].days).toBe(1);
     expect(s.totals.agentMs).toBe(3_600_000);
-  });
-
-  it("reads five-hour windows and the weekly line from limit readings", () => {
-    const reading = (
-      hour: number,
-      session: number | null,
-      weekly: number | null,
-    ) => ({
-      at: at(6, hour),
-      session,
-      weekly,
-    });
-    const s = summary([run({ models: { m: spend(1, 0) } })], {
-      now: at(6, 23),
-      limits: {
-        claude: [
-          reading(1, 0, 10),
-          reading(2, 30, 12),
-          reading(3, 100, 15),
-          reading(4, 100, 15),
-          reading(7, 5, 15),
-          reading(8, 40, 20),
-        ],
-        codex: [reading(5, 50, 60)],
-      },
-    });
-    expect(s.windows).toEqual({ opened: 3, ranOut: 1 });
-    expect(s.weekly.map((p) => [p.claude, p.codex])).toEqual([
-      [10, null],
-      [12, null],
-      [15, null],
-      [15, null],
-      [15, 60],
-      [15, 60],
-      [20, 60],
-    ]);
   });
 
   it("starts All at the first thing counted", () => {
@@ -212,6 +172,14 @@ describe("modelLabel", () => {
     expect(modelLabel("claude-opus-5-5-20260901[1m]")).toBe("Opus 5.5");
     expect(modelLabel("claude-sonnet-5-5")).toBe("Sonnet 5.5");
     expect(modelLabel("claude-fable-5-1")).toBe("Fable 5.1");
-    expect(modelLabel("gpt-5.1-codex")).toBe("gpt-5.1-codex");
+  });
+
+  it("names GPT models by version and name", () => {
+    expect(modelLabel("gpt-6.1-sol")).toBe("GPT-6.1 Sol");
+    expect(modelLabel("gpt-6-luna")).toBe("GPT-6 Luna");
+    expect(modelLabel("gpt-5.5")).toBe("GPT-5.5");
+    expect(modelLabel("opencode/deepseek-v4.1-flash")).toBe(
+      "opencode/deepseek-v4.1-flash",
+    );
   });
 });

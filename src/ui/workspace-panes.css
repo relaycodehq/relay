@@ -204,6 +204,20 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
+/* Something the agent opened in a closed pane. The ring cuts it out of the icon. */
+.pane-toggle .unseen-dot {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--toolbar);
+}
+.pane-toggle:hover:not(:disabled) .unseen-dot {
+  box-shadow: 0 0 0 2px var(--hover);
+}
 .pane-toggle.drop-before::before,
 .pane-toggle.drop-after::before {
   content: "";
