@@ -15,8 +15,9 @@
 // thread where it sends three agents off, eight times slower than the spec's;
 // each message there sends three more.
 // --family N starts a lead thread that starts N threads of its own through
-// Relay's start_threads tool, two of them still streaming, so the phone lists
-// a started family under its lead (at most 6, the tool's limit).
+// Relay's start_threads tool, two of them still streaming and the third asking
+// a question, so the phone lists a started family under its lead (at most 6,
+// the tool's limit). With --subagents its lead then sends Claude's agents off too.
 // --asks starts threads that end on what the phone has to tell: an open
 // question, a provider error envelope, a lost login and a page shown with show_html.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
@@ -318,14 +319,24 @@ const pairing = await page
             prompt:
               i < 2
                 ? `fixture stream long answer, started thread ${i + 1}`
-                : `fixture echo: Started thread ${i + 1} is done.`,
+                : i === 2
+                  ? "fixture ask question, started thread 3"
+                  : `fixture echo: Started thread ${i + 1} is done.`,
           }));
-          await window.relay.renameProjectChat(
-            await start(
-              `fixture relay start_threads ${JSON.stringify({ threads })}`,
-            ),
-            "Mobile app polish pass",
+          const lead = await start(
+            `fixture relay start_threads ${JSON.stringify({ threads })}`,
           );
+          await window.relay.renameProjectChat(lead, "Mobile app polish pass");
+          // Its own subagents too, for the one strip that tells of both.
+          if (subagents)
+            await window.relay.sendProjectChat(lead, {
+              id: crypto.randomUUID(),
+              body: "@claude Fan out while they work",
+              provider: "claude",
+              choice: { model: "sonnet", reasoningEffort: "", fast: false },
+              runtimeMode: "full-access",
+              interactionMode: "default",
+            });
         }
         if (seed) {
           await start("fixture edit files in the cache");

@@ -43,10 +43,8 @@ import { ProjectBadge } from "./ProjectIcon";
 import { ProviderIcon } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
 import { SwipeTriage, UndoBar, type Undo } from "./SwipeTriage";
-import { mix, type, useTheme, type Palette } from "./theme";
+import { mix, type, useTheme, waitingColor, type Palette } from "./theme";
 
-/** The desktop's colour for threads waiting on you. */
-const waitingColor = "#d99a2b";
 const shelfPage = 5;
 
 /** Resolves the thread as the desktop left it, or nothing when it refused (and said why). */

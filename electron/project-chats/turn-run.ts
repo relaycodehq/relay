@@ -10,7 +10,11 @@ import type {
 import { resolveTurnModel } from "../../shared/turn-model";
 import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged, type ThreadGoal } from "../../shared/goal";
-import { turnWorkspace, watchAgentWorktrees } from "./agent-worktrees";
+import {
+  threadWorktreePaths,
+  turnWorkspace,
+  watchAgentWorktrees,
+} from "./agent-worktrees";
 import { agentRuntime } from "../agents";
 import { accountFor, accountLabel } from "../agents/accounts";
 import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
@@ -84,8 +88,6 @@ export class TurnRunner {
   constructor(
     private core: ChatCore,
     private titles: ThreadTitles,
-    /** The folder Relay makes threads' worktrees in. */
-    private worktreesFolder: string,
     private host: TurnRunnerHost,
   ) {}
 
@@ -172,7 +174,7 @@ export class TurnRunner {
     const workspace = turnWorkspace(chat);
     const watchWorktrees = watchAgentWorktrees(
       await this.core.projects.root(chat.projectId),
-      this.worktreesFolder,
+      () => threadWorktreePaths(this.core.store.get().chats),
       () => chat.agentWorktrees ?? [],
       async (worktrees) => {
         workspace(worktrees);

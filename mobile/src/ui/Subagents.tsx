@@ -5,6 +5,8 @@ import { useRef, useState } from "react";
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Bot, Check, ChevronUp, CircleStop, CircleX } from "lucide-react-native";
 import { plural } from "../../../shared/activity-labels";
+import type { RemoteChatSummary } from "../../../shared/remote";
+import { slotLine } from "../../../shared/started-threads";
 import {
   agentKind,
   modelName,
@@ -15,6 +17,7 @@ import {
 import { alertFailure } from "./failure";
 import { useNow } from "./motion";
 import { Sheet } from "./Sheet";
+import { FamilyMark, StartedList } from "./StartedThreads";
 import { Action } from "./ThreadExtras";
 import { type, useTheme } from "./theme";
 
@@ -75,7 +78,8 @@ export const stopping = (stop: () => Promise<void>) => () =>
  * One line over the composer while a fan-out works: how many are out, how
  * many are back, and what the newest working one is on. It's the same
  * height whatever it says, so the thread above doesn't move as calls come
- * and go. An idle thread with no agents out gives the screen back.
+ * and go. An idle thread with no agents out gives the screen back. Threads
+ * the thread's agent started share the line: never two strips.
  */
 export function SubagentStrip({
   batch,
@@ -84,7 +88,10 @@ export function SubagentStrip({
   onPress,
   error,
   onRetry,
+  started,
 }: {
+  /** The started threads to tell of, while any works or asks. */
+  started: RemoteChatSummary[];
   /** Holds its height with no agents out, e.g. while a turn runs that may send some. */
   reserve: boolean;
   error?: string;
@@ -99,6 +106,30 @@ export function SubagentStrip({
     (a, r) => (!a || r.started >= a.started ? r : a),
     undefined,
   );
+  if (started.length) {
+    const line = slotLine(started, working.length);
+    return (
+      <View style={styles.slot}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={line}
+          accessibilityHint="Lists them, to open one"
+          onPress={onPress}
+          hitSlop={4}
+          style={({ pressed }) => [
+            styles.strip,
+            { borderColor: t.border, backgroundColor: pressed ? t.hover : t.raised },
+          ]}
+        >
+          <FamilyMark started={started} />
+          <Text numberOfLines={1} style={[styles.stripText, { color: t.text }]}>
+            {line}
+          </Text>
+          <ChevronUp size={16} color={t.muted} />
+        </Pressable>
+      </View>
+    );
+  }
   if (!latest) {
     if (!reserve && !error) return null;
     return (
@@ -178,10 +209,15 @@ export function SubagentsSheet({
   onStop,
   error,
   onRetry,
+  started,
+  onOpenThread,
 }: {
   error?: string;
   onRetry: () => Promise<unknown>;
   open: boolean;
+  /** The thread's started threads, listed too when the strip told of them as it opened. */
+  started: { family: RemoteChatSummary[]; shown: boolean };
+  onOpenThread: (id: string) => void;
   /** The fan-out the strip showed; the sheet holds on to it once it's all back. */
   batch: SubagentRun[];
   /** Every agent the thread knows of, for their latest state. */
@@ -194,29 +230,49 @@ export function SubagentsSheet({
   const t = useTheme();
   const [ids, setIds] = useState<string[]>([]);
   const [wasOpen, setWasOpen] = useState(false);
+  const [withStarted, setWithStarted] = useState(false);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setIds(batch.map((r) => r.id));
+    if (open) {
+      setIds(batch.map((r) => r.id));
+      setWithStarted(started.shown);
+    }
   }
   // New agents of the same fan-out join while it's open.
   const fresh = batch.filter((r) => !ids.includes(r.id)).map((r) => r.id);
   if (open && fresh.length) setIds([...ids, ...fresh]);
   const shown = ids.flatMap((id) => runs.find((r) => r.id === id) ?? []);
   const back = shown.filter((r) => r.status !== "running").length;
+  const family = withStarted ? started.family : [];
   // iOS won't push a screen while the sheet is still leaving.
-  const picked = useRef<string>(undefined);
+  const picked = useRef<{ thread?: string; run?: string }>(undefined);
   const openRun = () => {
-    const id = picked.current;
+    const { thread, run } = picked.current ?? {};
     picked.current = undefined;
-    if (id) onOpen(id);
+    if (run) onOpen(run);
+    if (thread) onOpenThread(thread);
   };
+  const pick = (which: { thread?: string; run?: string }) => {
+    picked.current = which;
+    onClose();
+    if (Platform.OS !== "ios") openRun();
+  };
+  const both = family.length > 0 && shown.length > 0;
+  const working = shown.filter((r) => r.status === "running").length;
   return (
     <Sheet
       open={open}
-      title={`Subagents · ${back} of ${shown.length} back`}
+      title={
+        both
+          ? slotLine(family, working)
+          : family.length
+            ? ["Started threads", ...slotLine(family).split(" · ").slice(1)].join(" · ")
+            : `Subagents · ${back} of ${shown.length} back`
+      }
       onClose={onClose}
       onDismiss={openRun}
     >
+      {both && <Section label={`Subagents · ${back} of ${shown.length} back`} />}
       {error && (
         <View style={styles.retry}>
           <Text style={[styles.now, { color: t.muted }]}>{error}</Text>
@@ -233,19 +289,24 @@ export function SubagentsSheet({
           key={run.id}
           run={run}
           display={display}
-          onPress={() => {
-            picked.current = run.id;
-            onClose();
-            if (Platform.OS !== "ios") openRun();
-          }}
+          onPress={() => pick({ run: run.id })}
           onStop={() => onStop(run.id)}
         />
       ))}
-      <Text style={[styles.foot, { color: t.muted }]}>
-        Stopping one leaves Claude&apos;s turn and the other agents running.
-      </Text>
+      {shown.length > 0 && (
+        <Text style={[styles.foot, { color: t.muted }]}>
+          Stopping one leaves Claude&apos;s turn and the other agents running.
+        </Text>
+      )}
+      {both && <Section label="Started threads" />}
+      <StartedList started={family} onOpen={(thread) => pick({ thread })} />
     </Sheet>
   );
+}
+
+function Section({ label }: { label: string }) {
+  const t = useTheme();
+  return <Text style={[styles.section, { color: t.muted }]}>{label}</Text>;
 }
 
 function Row({
@@ -336,5 +397,6 @@ const styles = StyleSheet.create({
   time: { fontSize: type.tiny, fontVariant: ["tabular-nums"] },
   now: { fontSize: type.small, lineHeight: 18 },
   about: { fontSize: type.tiny },
+  section: { fontSize: type.tiny, fontWeight: "600", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 2 },
   foot: { fontSize: type.tiny, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 12 },
 });

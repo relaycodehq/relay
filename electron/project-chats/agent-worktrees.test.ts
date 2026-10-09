@@ -29,11 +29,11 @@ const ran = (label: string): AgentActivity => ({
 });
 
 /** A thread's turn: its recorded worktrees and the watcher following its commands. */
-function thread() {
+function thread(relayMade: string[] = []) {
   const own = { worktrees: [] as AgentWorktree[] };
   const watch = watchAgentWorktrees(
     root,
-    join(temp, "relay-worktrees"),
+    () => new Set(relayMade),
     () => own.worktrees,
     (next) => {
       own.worktrees = next;
@@ -148,9 +148,7 @@ it("recovers an older chat's missing association from creation history and stabl
       },
     ],
   } as unknown as ProjectChat;
-  expect(
-    await recoverAgentWorktrees(root, join(temp, "relay-worktrees"), chat),
-  ).toEqual([
+  expect(await recoverAgentWorktrees(root, new Set(), chat)).toEqual([
     {
       path: recovered,
       branch: "local-urls",
@@ -158,16 +156,10 @@ it("recovers an older chat's missing association from creation history and stabl
       at: 42,
     },
   ]);
-  chat.agentWorktrees = await recoverAgentWorktrees(
-    root,
-    join(temp, "relay-worktrees"),
-    chat,
-  );
+  chat.agentWorktrees = await recoverAgentWorktrees(root, new Set(), chat);
   expect(ownAgentWorktrees(chat)).toEqual(chat.agentWorktrees);
   git("worktree", "remove", recovered);
-  expect(
-    await recoverAgentWorktrees(root, join(temp, "relay-worktrees"), chat),
-  ).toEqual([]);
+  expect(await recoverAgentWorktrees(root, new Set(), chat)).toEqual([]);
 });
 
 it("doesn't lose ownership when another thread notices a worktree before its creation event arrives", async () => {
@@ -210,6 +202,37 @@ it("matches the folder however the command spelled the path", () => {
   );
 });
 
+it("follows the folder through a shell variable the command set", () => {
+  const path = "/Users/me/Library/Relay/worktrees/relay/acp-agents";
+  const made = (add: string) =>
+    addsWorktree(
+      `git log -3; WT="$HOME/Library/Relay/worktrees/relay/acp-agents"; ${add} && cd "$WT"`,
+      path,
+    );
+  expect(made('git worktree add -b relay/acp-agents "$WT" main')).toBe(true);
+  expect(made("git worktree add ${WT}")).toBe(true);
+  // Single quotes keep the shell from expanding it.
+  expect(made("git worktree add '$WT'")).toBe(false);
+  expect(
+    addsWorktree(
+      "WT=/tmp/other; git worktree add $WT; ls /tmp/acp-agents",
+      path,
+    ),
+  ).toBe(false);
+});
+
+it("credits a worktree an agent made in Relay's worktrees folder, but never a thread's own", async () => {
+  const folder = join(temp, "relay-worktrees", "project");
+  const mine = join(folder, "acp-agents");
+  const relays = join(folder, "other-thread");
+  git("worktree", "add", "-q", "-b", "relay/other-thread", relays);
+  const t = thread([relays]);
+  git("worktree", "add", "-q", "-b", "relay/acp-agents", mine);
+  await t.run(`WT="${mine}"; git worktree add -b relay/acp-agents "$WT" main`);
+  await t.run(`git worktree add -b relay/other-thread ${relays}`);
+  expect(t.paths()).toEqual([mine]);
+});
+
 it("drops worktrees older saves credited to the wrong thread", () => {
   const chat = {
     messages: [
@@ -241,7 +264,7 @@ function projectTurn(chat = { scope: { kind: "project" }, messages: [] }) {
   const thread = chat as unknown as ProjectChat;
   const watch = watchAgentWorktrees(
     root,
-    join(temp, "relay-worktrees"),
+    () => new Set(),
     () => thread.agentWorktrees ?? [],
     turnWorkspace(thread),
   );
@@ -289,23 +312,19 @@ it("goes back to the project folder when the turn removes the worktree it moved 
 it("keeps a worktree the user chose selected, as unavailable, when a turn removes it", async () => {
   const chosen = join(temp, "chosen");
   git("worktree", "add", "-q", "-b", "chosen", chosen);
-  const [recorded] = await recoverAgentWorktrees(
-    root,
-    join(temp, "relay-worktrees"),
-    {
-      messages: [
-        {
-          trace: [
-            {
-              kind: "activity",
-              id: "1",
-              activity: ran(`git worktree add -b chosen ${chosen}`),
-            },
-          ],
-        },
-      ],
-    } as unknown as ProjectChat,
-  );
+  const [recorded] = await recoverAgentWorktrees(root, new Set(), {
+    messages: [
+      {
+        trace: [
+          {
+            kind: "activity",
+            id: "1",
+            activity: ran(`git worktree add -b chosen ${chosen}`),
+          },
+        ],
+      },
+    ],
+  } as unknown as ProjectChat);
   const active = { path: chosen, gitdir: recorded.gitdir, branch: "chosen" };
   const { thread, run } = projectTurn({
     scope: { kind: "project" },

@@ -31,6 +31,7 @@ import {
   type RemoteProjectIcon,
 } from "../../shared/remote";
 import { sentAgent } from "../../shared/recipient";
+import { isStartThreads } from "../../shared/started-threads";
 import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/validation";
@@ -493,7 +494,8 @@ const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
  */
 function cutDetail(a: AgentActivity): AgentActivity {
   const detail = a.detail;
-  if (!detail || detail.length <= phoneDetailPreview) return a;
+  // The started threads' ids, which a phone needs whole to tell its turn's threads apart.
+  if (!detail || detail.length <= phoneDetailPreview || isStartThreads(a)) return a;
   const half = phoneDetailPreview / 2;
   return {
     ...a,

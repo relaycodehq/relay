@@ -6,7 +6,7 @@ import { createContext, useContext, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, MessagesSquare } from "lucide-react";
-import type { AgentActivity, ChatSummary } from "../../../shared/projects";
+import type { ChatSummary } from "../../../shared/projects";
 import { agentName } from "../../../shared/agents";
 import { chatSettled } from "../../../shared/chat-activity";
 import { chatKey, fetchChat } from "../../lib/chat-events";
@@ -25,24 +25,6 @@ export const StartedThreadsContext = createContext<
   StartedThreadsView | undefined
 >(undefined);
 export const useStartedThreads = () => useContext(StartedThreadsContext);
-
-/** A call to Relay's start_threads tool. */
-export const isStartThreads = (a: AgentActivity) =>
-  a.mcp?.server === "relay" && a.mcp.tool === "start_threads";
-
-/** The ids a start_threads call's result names, when it can be read. */
-export function startedIds(result: string | undefined) {
-  try {
-    const parsed = JSON.parse(result ?? "");
-    if (!Array.isArray(parsed)) return undefined;
-    const ids = parsed.flatMap((t) =>
-      t && typeof t.id === "string" ? [t.id] : [],
-    );
-    return ids.length ? ids : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** Asking first, then working, then done, then settled. */
 const standing = (c: ChatSummary) =>

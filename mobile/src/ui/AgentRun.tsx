@@ -40,6 +40,7 @@ import {
   thinkingWord,
   turnHeading,
 } from "../../../shared/agent-trace";
+import { isStartThreads } from "../../../shared/started-threads";
 import { useRemote } from "../remote/RemoteProvider";
 import { ReadPreview, ReadSwatch } from "./images/Images";
 import { Markdown } from "./Markdown";
@@ -271,7 +272,8 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
       <Progress activity={a} />
     </>
   );
-  if (!a.detail && !calls.length)
+  // Its threads list under the turn; the ids it returned say nothing to a reader.
+  if ((!a.detail || isStartThreads(a)) && !calls.length)
     return (
       <View>
         <View style={styles.step}>{heading}</View>
