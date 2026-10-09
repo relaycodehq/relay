@@ -37,6 +37,7 @@ import {
 } from "../../../shared/started-families";
 import { agentsSince } from "../../../shared/waiting";
 import { useRemote } from "../remote/RemoteProvider";
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { useUnread } from "../remote/seen";
 import { useNow } from "./motion";
 import { ProjectBadge } from "./ProjectIcon";
@@ -549,7 +550,7 @@ function CardState({
   now: number;
   t: Palette;
 }) {
-  if (chat.waiting)
+  if (inputBlocksThread(chat))
     return (
       <View style={styles.state}>
         <View style={[styles.dot, { backgroundColor: waitingColor }]} />
@@ -569,6 +570,7 @@ function CardState({
         />
         <Text style={[styles.stateText, { color: t.accent }]}>
           {chat.running && chat.goal?.status === "active" ? "Goal" : "Working"}
+          {chat.waiting && " · needs input"}
           {since ? <Elapsed since={since} /> : null}
         </Text>
       </View>

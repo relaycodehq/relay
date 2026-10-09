@@ -67,6 +67,7 @@ export function chatSummary({
   carriedIds,
   // Worked out below; a stale copy on the thread itself doesn't count.
   queueMark: _staleMark,
+  asking,
   ...summary
 }: ProjectChat): ChatSummary {
   const provider = [...messages]
@@ -84,6 +85,9 @@ export function chatSummary({
   ];
   const next = nextSend(scheduled);
   const mark = queueMark({ queue, queuePaused, scheduled });
+  const open = messages.some((m) =>
+    m.questions?.some((group) => !group.answers && !group.dismissed),
+  );
   return {
     ...summary,
     providers,
@@ -91,6 +95,7 @@ export function chatSummary({
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
     ...(mark ? { queueMark: mark } : {}),
+    ...(open ? { asking: true as const } : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }

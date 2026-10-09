@@ -92,9 +92,14 @@ it("answers async Codex questions inside the running turn without interrupting o
   expect(message.status).toBe("streaming");
   expect(message.trace?.some((e) => e.id === "after-question")).toBe(true);
   expect(current.requests).toEqual([]);
+  // Needs the user, but the agent can keep working without this answer.
+  const waiting = () =>
+    chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
+  // Listed from the saved summary, which a running answer writes each second.
+  await vi.waitFor(() => expect(waiting()).toBe(true), { timeout: 3000 });
   expect(
-    (await chats.list(projectId)).find((c) => c.id === chat.id)?.waiting,
-  ).toBe(false);
+    chats.list(projectId).find((c) => c.id === chat.id)?.blocked,
+  ).toBeUndefined();
   const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
@@ -107,6 +112,7 @@ it("answers async Codex questions inside the running turn without interrupting o
   expect(
     answered.messages.find((m) => m.id === message.id)?.questions?.[0].answers,
   ).toEqual(answers);
+  expect(waiting()).toBeFalsy();
   expect(
     answered.messages.some(
       (m) => m.role === "user" && m.steered && m.body.includes("fixture-owner"),
@@ -163,6 +169,21 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect((await chats.get(chat.id)).messages[1].questions).toEqual(
     message.questions,
   );
+  // The turn is over and Relay restarted: the list still says it waits.
+  const waiting = () =>
+    chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
+  expect(waiting()).toBe(true);
+  const dismiss = (dismissed: boolean) =>
+    chats.setQuestionDismissed(
+      chat.id,
+      message.id,
+      "fixture-async-question",
+      dismissed,
+    );
+  await dismiss(true);
+  expect(waiting()).toBeFalsy();
+  await dismiss(false);
+  expect(waiting()).toBe(true);
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
     answers: { "0": ["An unlisted choice"], "1": ["fixture-owner"] },
@@ -170,6 +191,7 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
+  expect(waiting()).toBeFalsy();
   const calls = (await agentCalls())
     .split("\n")
     .filter(Boolean)

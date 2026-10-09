@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import { Check } from "lucide-react-native";
 import type {
   AgentDecision,
+  AgentQuestion,
   AgentRequest,
   AgentResponse,
 } from "../../../shared/agent-modes";
@@ -83,7 +84,7 @@ export function RequestCard({
     >
       {request.kind === "question" && request.questions?.length ? (
         <Questions
-          request={request}
+          questions={request.questions}
           head={head}
           busy={busy}
           onAnswer={(answers) => respond({ kind: "question", answers })}
@@ -129,19 +130,22 @@ function Body({ children }: { children: ReactNode }) {
   );
 }
 
-function Questions({
-  request,
+export function Questions({
+  questions,
   head,
   busy,
+  deferred,
   onAnswer,
 }: {
-  request: AgentRequest;
-  head: ReactNode;
+  questions: AgentQuestion[];
+  /** Scrolls with the question, above it. */
+  head?: ReactNode;
   busy: boolean;
+  /** The agent keeps working, so nothing goes out until Send; a tap only picks. */
+  deferred?: boolean;
   onAnswer: (answers: Record<string, string[]>) => void;
 }) {
   const t = useTheme();
-  const questions = request.questions!;
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -168,7 +172,8 @@ function Questions({
     setAnswers(next);
     clearTimeout(timer.current);
     // A single choice answers it; the short pause shows which one was picked.
-    if (!question.multiple) timer.current = setTimeout(() => advance(next), 200);
+    if (!question.multiple && !deferred)
+      timer.current = setTimeout(() => advance(next), 200);
   };
   const answered = chosen.some((a) => a.trim());
   return (
@@ -230,7 +235,7 @@ function Questions({
         }}
         style={[styles.input, { color: t.text, borderColor: t.border }]}
       />
-      {(question.multiple || !question.options?.length || typed) && (
+      {(deferred || question.multiple || !question.options?.length || typed) && (
         <Button
           label={index < questions.length - 1 ? "Next" : "Send answer"}
           primary

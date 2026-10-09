@@ -103,8 +103,10 @@ export interface RemoteChatSummary {
   provider?: AgentProvider;
   running?: boolean;
   runningSince?: number;
-  /** The agent asked something and is waiting for an answer. */
+  /** Needs the user; the agent may still be working on an async question. */
   waiting?: boolean;
+  asking?: true;
+  blocked?: true;
   settledAt?: number;
   /** A computed shelf position rather than a saved settle mark. */
   autoSettled?: true;

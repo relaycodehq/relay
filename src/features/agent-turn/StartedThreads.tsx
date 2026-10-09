@@ -1,6 +1,7 @@
 // The threads a turn's agent started with Relay's tools, beside the call that
 // started them: an icon and how many are done, and on hover a card like the
 // subagents one, each thread's task and latest line, a click to open it.
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { createContext, useContext, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +52,7 @@ const standing = (c: ChatSummary) =>
 function StartedStatus({ chat }: { chat: ChatSummary }) {
   return (
     <span className="subagent-status">
-      {chat.waiting ? (
+      {inputBlocksThread(chat) ? (
         <span className="started-ask" aria-label="Needs input" />
       ) : chat.running ? (
         <span className="subagent-dot" aria-label="Working" />

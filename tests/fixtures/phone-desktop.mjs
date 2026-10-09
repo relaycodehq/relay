@@ -14,6 +14,8 @@
 // --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` instead and starts a
 // thread where it sends three agents off, eight times slower than the spec's;
 // each message there sends three more.
+// --asks starts threads that end on what the phone has to tell: an open
+// question, a provider error envelope, a lost login and a page shown with show_html.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -47,6 +49,7 @@ const seed = process.argv.includes("--seed");
 const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
 const subagents = process.argv.includes("--subagents");
+const asks = process.argv.includes("--asks");
 if (claude && subagents) {
   console.error(
     "--claude and --subagents each bring their own `claude`; pick one.",
@@ -238,7 +241,7 @@ if (images) {
 }
 const pairing = await page
   .evaluate(
-    async ({ seed, images, repo, claude, subagents }) => {
+    async ({ seed, images, repo, claude, subagents, asks }) => {
       const project = await window.relay.addProject();
       if (claude) {
         // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
@@ -254,7 +257,7 @@ const pairing = await page
           interactionMode: "default",
         });
       }
-      if (seed || images || subagents) {
+      if (seed || images || subagents || asks) {
         const settings = await window.relay.aiSettings();
         const start = async (body, provider = "codex") => {
           const chat = await window.relay.createProjectChat(project.id, {
@@ -283,6 +286,29 @@ const pairing = await page
               "fixture echo: I looked at the welcome screen and the sidebar.",
           );
         if (subagents) await start("Fan out", "claude");
+        if (asks) {
+          const page = (label, color) =>
+            `<div style="padding:16px;border-radius:12px;background:${color}">${label} card</div>`;
+          for (const [title, body] of [
+            [
+              "Shows a page",
+              "fixture relay show_html " +
+                JSON.stringify({
+                  title: "Card density",
+                  variants: [
+                    { label: "Compact", html: page("Compact", "#334") },
+                    { label: "Roomy", html: page("Roomy", "#343") },
+                  ],
+                }),
+            ],
+            ["Signed out", "fixture codex signed out"],
+            ["Fails with an envelope", "fixture error envelope"],
+            ["Asks a question", "fixture async question finished"],
+          ]) {
+            await window.relay.renameProjectChat(await start(body), title);
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
         if (seed) {
           await start("fixture edit files in the cache");
           await new Promise((r) => setTimeout(r, 2500));
@@ -292,7 +318,7 @@ const pairing = await page
       await window.relay.setPhoneRemote(true);
       return window.relay.phonePairing();
     },
-    { seed, images, repo, claude, subagents },
+    { seed, images, repo, claude, subagents, asks },
   )
   .catch(async (e) => {
     console.error(e);

@@ -127,7 +127,7 @@ export class ThreadTriage {
         this.core.sessions.pending(child.id).length > 0 ||
         (!!child.queue?.length && !child.queuePaused) ||
         !!nextSend(child.scheduled);
-      if (going || child.settledAt) continue;
+      if (going || chatSummary(child).asking || child.settledAt) continue;
       // The settle overlay wins while present; keep the snooze underneath for Undo.
       child.settledAt = now;
       await this.core.storage.save(child);

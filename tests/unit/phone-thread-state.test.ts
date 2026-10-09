@@ -105,3 +105,29 @@ it("files a whole chain whose start is gone under its first surviving message", 
     ]),
   );
 });
+
+it("syncs question dismissal and desktop answers without accepting an older event", () => {
+  const open = {
+    ...message("a", "Question", 1, 1),
+    questions: [{ id: "ask", questions: [{ id: "q", question: "Which?" }] }],
+  };
+  let held = applyPatch(undefined, chat([open]));
+  const dismissed = {
+    ...open,
+    version: 2,
+    questions: [{ ...open.questions[0], dismissed: true }],
+  };
+  held = applyMessage(held, dismissed);
+  expect(held.messages[0].questions![0].dismissed).toBe(true);
+  const answered = {
+    ...open,
+    version: 3,
+    questions: [{ ...open.questions[0], answers: { q: ["Desktop's answer"] } }],
+  };
+  held = applyMessage(held, answered);
+  expect(held.messages[0].questions![0].answers).toEqual({
+    q: ["Desktop's answer"],
+  });
+  expect(held.messages[0].questions![0].dismissed).toBeUndefined();
+  expect(applyMessage(held, dismissed)).toBe(held);
+});

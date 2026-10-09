@@ -250,7 +250,7 @@ export type RelayToolArgs<N extends RelayToolName> = z.infer<
 const descriptions: Record<RelayToolName, string> = {
   start_threads: `Start new Relay threads in this project, or with \`project\` in another one, each working on its own task while you go on. Each is an ordinary thread the user sees under yours and can talk to directly. Up to ${STARTED_LIMIT} of yours can work at once. Returns their ids; then use wait_for_threads, read_thread and send_to_thread.`,
   list_threads:
-    "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer.",
+    "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer. A working thread may have async questions in asks; those do not block its turn.",
   find_threads:
     "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, and which thread started it. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread:
@@ -258,7 +258,7 @@ const descriptions: Record<RelayToolName, string> = {
   send_to_thread:
     "Send a message to a thread you started, as its user would. It answers in its own turn. The first message to a thread in another project needs the user's go-ahead.",
   wait_for_threads:
-    "Wait until the threads stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working.",
+    "Wait until the threads stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
   stop_thread: "Stop the answer a thread you started is working on.",
   settle_thread:
     "Settle a thread you started once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user.",
