@@ -663,7 +663,14 @@ if (args.includes("--permission-prompt-tool")) {
         return;
       }
       if (
-        m.params.input[0].text.split("\n\n")[0].includes("fixture ask question")
+        // A started thread's prompt comes after Relay's note about who started it.
+        m.params.input.some(
+          (i) =>
+            i.type === "text" &&
+            i.text.split("\n\n")[0].includes("fixture ask question") &&
+            // A lead's start_threads input names what its threads will ask.
+            !i.text.includes("fixture relay "),
+        )
       ) {
         send({
           id: "fixture-question",
