@@ -180,7 +180,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const agents = useSubagents(id, {
     enabled: !rootId,
     running,
-    pending: thread?.pending?.length ?? 0,
+    pending: thread?.pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
   });
   const agentBatch = runningBatch(agents.runs);
   const root = thread?.root;

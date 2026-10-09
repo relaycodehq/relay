@@ -34,7 +34,7 @@ import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
-import type { SubagentDetail } from "../../shared/subagents";
+import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
 
@@ -122,6 +122,7 @@ const diffSourceSchema = z.discriminatedUnion("kind", [
     .object({ kind: z.literal("worktree"), chatId: idSchema, path: pathSchema })
     .strict(),
 ]);
+const signatureSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const maxDiffLines = 3000;
 /** Streaming answers go out at most this often; the phone doesn't need every token. */
 const streamMs = 150;
@@ -254,6 +255,24 @@ export class RemoteBridge {
         (await this.host.dispatch(method, args)) as FilePair,
       );
     },
+    subagents: async (chatId, known) => {
+      const runs = (
+        (await this.host.dispatch("projectChatAgents", [
+          chatId,
+        ])) as SubagentRun[]
+      ).map(({ brief: _, ...run }) => run);
+      const signature = digest(runs);
+      return signature === known ? null : { signature, runs };
+    },
+    subagentRun: async (chatId, agentId, known) => {
+      const value = (await this.host.dispatch("projectChatAgent", [
+        chatId,
+        agentId,
+      ])) as SubagentDetail | null;
+      const run = value ? forPhoneRun(value) : null;
+      const signature = digest(run);
+      return signature === known ? null : { signature, run };
+    },
     desktop: async (method, args) => {
       let value = await this.host.dispatch(method, args);
       if (method === "projectChatAgent" && value)
@@ -312,6 +331,17 @@ export class RemoteBridge {
         return a.image(
           imageSourceSchema.parse(args[0]),
           z.number().int().min(16).max(4096).parse(args[1]),
+        );
+      case "subagents":
+        return a.subagents(
+          idSchema.parse(args[0]),
+          args[1] == null ? undefined : signatureSchema.parse(args[1]),
+        );
+      case "subagentRun":
+        return a.subagentRun(
+          idSchema.parse(args[0]),
+          activityIdSchema.parse(args[1]),
+          args[2] == null ? undefined : signatureSchema.parse(args[2]),
         );
       case "desktop":
         return a.desktop(
@@ -438,6 +468,10 @@ export function forPhone(m: ChatMessage): ChatMessage {
     };
   if (m.activity) return { ...m, activity: m.activity.map(cutDetail) };
   return m;
+}
+
+function digest(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 /** An agent's run, its tool output cut as a thread's; the phone has no `activityDetail` for it. */
