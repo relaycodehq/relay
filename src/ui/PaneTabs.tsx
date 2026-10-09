@@ -9,6 +9,8 @@ export interface PaneTab {
   /** Kept open, like Files over an unsaved edit. */
   closeDisabled?: boolean;
   closeLabel?: string;
+  /** Opened for the user, who hasn't looked at it yet: a dot. */
+  unseen?: boolean;
 }
 
 /** Tabs along a pane's header; each closes on its own, + adds one. */
@@ -42,6 +44,7 @@ export function PaneTabs({
           >
             {tab.icon}
             <span>{tab.label}</span>
+            {tab.unseen && <span className="unseen-dot" aria-hidden="true" />}
           </button>
           <button
             type="button"

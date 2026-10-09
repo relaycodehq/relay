@@ -106,7 +106,7 @@ export default function ProjectShell() {
   const everyThread = useEveryThread(realProjects);
   const terminal = useThreadTerminal(nav);
   const folder = useThreadFolder(nav);
-  const panel = usePanelTabs(panes.layout.thread);
+  const panel = usePanelTabs(panes.layout.thread, panes.layout.open.panel);
   const opens = usePaneOpens(nav, panel, view, folder, lock, setError);
   const links = useIncomingLinks(boot.data, nav, signIn, lock, setError);
   const prs = usePullThreads(nav, lock, setError);
@@ -255,6 +255,7 @@ export default function ProjectShell() {
                   pull={pull}
                   lines={folder.tree?.lines}
                   filesOpen={panel.has("files")}
+                  unseen={!panes.layout.open.panel && !!panel.unseen}
                   onToggle={opens.togglePane}
                 />
                 <span className="header-strip-sep" aria-hidden="true" />

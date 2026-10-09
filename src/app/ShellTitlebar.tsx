@@ -198,11 +198,14 @@ export function ThreadPaneToggles({
   pull,
   lines,
   filesOpen,
+  unseen,
   onToggle,
 }: {
   panes: WorkspacePanes;
   /** The panel has Files open, which may hold an unsaved edit. */
   filesOpen: boolean;
+  /** The closed panel holds something the agent opened. */
+  unseen?: boolean;
   plain?: boolean;
   pull: PullRef | null;
   /** Lines the working tree changed, beside Changes. */
@@ -225,7 +228,7 @@ export function ThreadPaneToggles({
         ...(id === "chat"
           ? { label: "Chat", icon: <MessageSquare size={14} /> }
           : id === "panel"
-            ? { label: "Panel", icon: <PanelRight size={14} /> }
+            ? { label: "Panel", icon: <PanelRight size={14} />, unseen }
             : pull
               ? {
                   label: `PR #${pull.number}`,

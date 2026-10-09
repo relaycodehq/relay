@@ -158,6 +158,7 @@
   background: var(--toolbar);
 }
 .header-strip > .pane-toggles {
+  gap: 6px;
   padding: 0;
   border: 0;
   background: none;
@@ -168,18 +169,14 @@
   margin: 4px 2px;
   background: var(--border);
 }
-/* Set by useHeaderFit as the title runs out of room. Hidden labels stay
-   readable to screen readers. */
-.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
-  .pane-toggle:not(.active),
-.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle {
+/* Pane toggles are icon-only; their labels stay readable to screen readers
+   and the button title. Push's label gives way only when the title runs out
+   of room (data-fit, set by fitHeader). */
+.header-strip .pane-toggle {
   padding: 5px 7px;
 }
-.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
-  .pane-toggle:not(.active)
-  .pane-toggle-label,
-.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle-label,
-.project-titlebar-main[data-fit="3"] .git-actions-label {
+.pane-toggle-label,
+.project-titlebar-main[data-fit="1"] .git-actions-label {
   position: absolute;
   width: 1px;
   height: 1px;

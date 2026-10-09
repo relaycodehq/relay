@@ -18,6 +18,8 @@ interface PanelState {
   tabs: PanelTab[];
   /** The tab in front; null shows the picker. */
   front: string | null;
+  /** A tab the agent opened that the user hasn't looked at yet. */
+  unseen?: string | null;
 }
 
 const STORAGE_KEY = "relay-thread-panel";
@@ -48,13 +50,16 @@ const byThread = (() => {
                 typeof entry[0] === "string" &&
                 Array.isArray(entry[1]?.tabs),
             )
-            .map(([thread, { tabs, front }]) => {
+            .map(([thread, { tabs, front, unseen }]) => {
               const kept = tabs.filter(isTab);
+              const has = (key?: string | null) =>
+                kept.some((t) => t.key === key);
               return [
                 thread,
                 {
                   tabs: kept,
-                  front: kept.some((t) => t.key === front) ? front : null,
+                  front: has(front) ? front : null,
+                  unseen: has(unseen) ? unseen : null,
                 },
               ];
             })
@@ -65,10 +70,10 @@ const byThread = (() => {
   }
 })();
 
-function remember({ thread, tabs, front }: PanelState) {
+function remember({ thread, tabs, front, unseen }: PanelState) {
   if (!thread) return;
   byThread.delete(thread);
-  byThread.set(thread, { tabs, front });
+  byThread.set(thread, { tabs, front, unseen });
   for (const oldest of byThread.keys()) {
     if (byThread.size <= REMEMBERED) break;
     byThread.delete(oldest);
@@ -87,16 +92,17 @@ function recall(thread: string): Omit<PanelState, "thread"> | undefined {
   const legacy = legacyTabs(thread);
   if (!legacy.length) return;
   const tabs = legacy.map(tabFor);
-  return { tabs, front: tabs[tabs.length - 1]!.key };
+  return { tabs, front: tabs[tabs.length - 1]!.key, unseen: null };
 }
 
-/** A Browser tab for the thread, in front only when nothing else is. */
+/** A Browser tab for the thread, in front only when nothing else is, and unseen. */
 function withBrowser(s: Omit<PanelState, "thread">) {
   const had = s.tabs.find((t) => t.surface === "browser");
   const tab = had ?? tabFor("browser");
   return {
     tabs: had ? s.tabs : [...s.tabs, tab],
     front: s.front ?? tab.key,
+    unseen: tab.key,
   };
 }
 
@@ -120,8 +126,9 @@ export type PanelTabs = ReturnType<typeof usePanelTabs>;
 /**
  * Which surfaces the thread's panel has open as tabs, and which is in front.
  * A thread never seen keeps the tabs on screen, like a draft once sent.
+ * `shown`: the panel is open, so the tab in front counts as seen.
  */
-export function usePanelTabs(thread: string) {
+export function usePanelTabs(thread: string, shown: boolean) {
   const [state, setState] = useState<PanelState>(() => ({
     thread,
     ...(recall(thread) ?? { tabs: [], front: null }),
@@ -134,6 +141,10 @@ export function usePanelTabs(thread: string) {
     [thread],
   );
   useEffect(() => remember(state), [state]);
+  const seen = shown && !!state.unseen && state.unseen === state.front;
+  useEffect(() => {
+    if (seen) setState((s) => ({ ...s, unseen: null }));
+  }, [seen]);
   useEffect(() => {
     followReveals();
     const reveal = () => setState((s) => ({ ...s, ...withBrowser(s) }));
@@ -171,6 +182,7 @@ export function usePanelTabs(thread: string) {
             s.front === key
               ? (tabs[Math.min(at, tabs.length - 1)]?.key ?? null)
               : s.front,
+          unseen: s.unseen === key ? null : s.unseen,
         };
       }),
     [],
@@ -178,6 +190,8 @@ export function usePanelTabs(thread: string) {
   return {
     tabs: state.tabs,
     front: state.tabs.find((t) => t.key === state.front) ?? null,
+    /** The tab the agent opened that the user hasn't looked at yet. */
+    unseen: seen ? null : (state.unseen ?? null),
     has: (surface: Surface) => state.tabs.some((t) => t.surface === surface),
     show,
     bring,

@@ -1,7 +1,7 @@
 /** Below this the thread title is too clipped to read; the controls give first. */
 const MIN_TITLE = 160;
-/** 1: closed panes lose their labels; 2: every pane does; 3: so does Push. */
-const STEPS = 3;
+/** 1: Push loses its label. */
+const STEPS = 1;
 
 /**
  * Steps the header controls' labels away (data-fit on the element) only when
