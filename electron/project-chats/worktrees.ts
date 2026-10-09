@@ -28,10 +28,15 @@ import { chatSummary } from "./storage";
 import { WorktreeSetup } from "./worktree-setup";
 import {
   agentWorktreeKey,
+  agentWorktreeUnavailableError,
   selectedAgentWorktree,
   threadWorktree,
 } from "../../shared/projects";
-import { recoverAgentWorktrees, threadWorktreePaths } from "./agent-worktrees";
+import {
+  activeAfter,
+  recoverAgentWorktrees,
+  threadWorktreePaths,
+} from "./agent-worktrees";
 import { sentAgent } from "../../shared/recipient";
 
 /** What an agent asks for when it moves its thread into a worktree. */
@@ -75,17 +80,7 @@ export class ThreadWorktrees {
           return undefined;
         });
       if (!worktrees) return;
-      const selected = selectedAgentWorktree({
-        ...chat,
-        agentWorktrees: worktrees,
-      });
-      const active = selected
-        ? {
-            path: selected.path,
-            gitdir: selected.gitdir,
-            branch: selected.branch,
-          }
-        : chat.activeAgentWorktree;
+      const active = activeAfter(chat, worktrees);
       if (
         JSON.stringify(worktrees) ===
           JSON.stringify(chat.agentWorktrees ?? []) &&
@@ -95,6 +90,7 @@ export class ThreadWorktrees {
       if (worktrees.length) chat.agentWorktrees = worktrees;
       else delete chat.agentWorktrees;
       if (active) chat.activeAgentWorktree = active;
+      else delete chat.activeAgentWorktree;
       await this.core.storage.save(chat);
     })().catch((error) => {
       this.refreshed.delete(chat.id);
@@ -116,9 +112,7 @@ export class ThreadWorktrees {
       if (!chat.activeAgentWorktree) return root;
       const selected = selectedAgentWorktree(chat);
       if (!selected || !(await worktreeExists(selected)))
-        throw new Error(
-          "The selected worktree is unavailable. Choose another workspace.",
-        );
+        throw new Error(agentWorktreeUnavailableError);
       return selected.path;
     }
     if (await worktreeExists(worktree)) return worktree.path!;
@@ -540,9 +534,7 @@ export class ThreadWorktrees {
       if (!chat.activeAgentWorktree) return this.core.projects.root(projectId);
       const agent = selectedAgentWorktree(chat);
       if (!agent || !(await worktreeExists(agent)))
-        throw new Error(
-          "The selected worktree is unavailable. Choose another workspace.",
-        );
+        throw new Error(agentWorktreeUnavailableError);
       return agent.path!;
     }
     if (
@@ -657,9 +649,7 @@ export class ThreadWorktrees {
         );
       const agent = selectedAgentWorktree(chat);
       if (!agent || !(await worktreeExists(agent)))
-        throw new Error(
-          "The selected worktree is unavailable. Choose another workspace.",
-        );
+        throw new Error(agentWorktreeUnavailableError);
       return agent.path!;
     }
     return this.path(id);

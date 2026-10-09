@@ -61,7 +61,10 @@ export interface AgentWorktree {
 export type ActiveAgentWorktree = Pick<
   AgentWorktree,
   "path" | "gitdir" | "branch"
->;
+> & {
+  /** Relay moved the thread in after its agent made it; once that worktree is gone the thread goes back to the project folder. */
+  followed?: true;
+};
 type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
@@ -80,6 +83,10 @@ export function selectedAgentWorktree(chat: ThreadWorkspace | undefined) {
     )
   );
 }
+
+/** Why a send or action refuses while `agentWorktreeUnavailable`; phones match it to offer the project folder. */
+export const agentWorktreeUnavailableError =
+  "The selected worktree is unavailable. Choose another workspace.";
 
 export const agentWorktreeUnavailable = (chat: ThreadWorkspace | undefined) =>
   !chat?.worktree &&

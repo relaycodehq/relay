@@ -15,7 +15,7 @@ import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
-import { remoteHistory, titleBridge, markedUnreadBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
+import { remoteHistory, titleBridge, markedUnreadBridge, workspaceBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
 import { sentSettings, takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
@@ -846,6 +846,14 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           if (!restored) throw new Error("The composer isn't ready yet.");
           drop(o.send.id);
         }}
+        onUseProjectFolder={
+          (remote.overview?.bridge ?? 1) >= workspaceBridge
+            ? async (o) => {
+                await remote.desktop("selectAgentWorktree", id, null);
+                retry(remote.desktop, o.send.id);
+              }
+            : undefined
+        }
       />
       {request && (
         <RequestCard

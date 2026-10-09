@@ -152,7 +152,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 15;
+export const remoteBridgeVersion = 16;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -178,6 +178,8 @@ export const subagentsBridge = 15;
 export const titleBridge = 15;
 /** From here thread summaries carry manual unread marks. */
 export const markedUnreadBridge = 15;
+/** From here phones may call `selectAgentWorktree`, to take a thread off a worktree that is gone. */
+export const workspaceBridge = 16;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -361,6 +363,7 @@ export const phoneDesktopMethods = [
   "compactProjectChat",
   "reloadProjectChatSession",
   "rerunWorktreeSetup",
+  "selectAgentWorktree",
   "resolveStoppedWork",
   "stopProjectChatPending",
   "projectChatAgents",

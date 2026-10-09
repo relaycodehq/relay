@@ -16,7 +16,7 @@ import {
 import { presentGoal, type ThreadGoal } from "../../../shared/goal";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
-import type { ChatPending, LimitResume } from "../../../shared/projects";
+import { agentWorktreeUnavailableError, type ChatPending, type LimitResume } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
 import type { RemoteQueued } from "../../../shared/remote";
 import { alertFailure } from "./failure";
@@ -392,18 +392,26 @@ export function QueueList({
   );
 }
 
-/** Messages the desktop didn't take: send again, or back into the composer. */
+/**
+ * Messages the desktop didn't take: send again, or back into the composer.
+ * One refused because the thread's worktree is gone would only fail again,
+ * so it offers the project folder instead, the way out the desktop's
+ * workspace menu gives.
+ */
 export function UnsentStrip({
   unsent,
   online,
   onRetry,
   onEdit,
+  onUseProjectFolder,
 }: {
   unsent: Outgoing[];
   /** Offline, Edit waits for the computer before it can tell whether one arrived. */
   online: boolean;
   onRetry: (o: Outgoing) => void;
   onEdit: (o: Outgoing) => Promise<void> | void;
+  /** Absent when the computer can't switch workspace for a phone. */
+  onUseProjectFolder?: (o: Outgoing) => Promise<void>;
 }) {
   const t = useTheme();
   if (!unsent.length) return null;
@@ -420,7 +428,16 @@ export function UnsentStrip({
             failed="Couldn't take it back yet"
             onPress={async () => onEdit(o)}
           />
-          <Action label="Try again" primary onPress={async () => onRetry(o)} />
+          {onUseProjectFolder && o.error === agentWorktreeUnavailableError ? (
+            <Action
+              label="Use project folder"
+              primary
+              failed="Couldn't switch to the project folder"
+              onPress={() => onUseProjectFolder(o)}
+            />
+          ) : (
+            <Action label="Try again" primary onPress={async () => onRetry(o)} />
+          )}
         </View>
       ))}
     </View>

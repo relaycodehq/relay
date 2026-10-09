@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  activeAfter,
   addsWorktree,
   ownAgentWorktrees,
   watchAgentWorktrees,
@@ -305,6 +306,19 @@ it("goes back to the project folder when the turn removes the worktree it moved 
   expect(thread.activeAgentWorktree?.path).toBe(made);
   git("worktree", "remove", made);
   await run(`git worktree remove ${made}`);
+  expect(thread.agentWorktrees).toBeUndefined();
+  expect(thread.activeAgentWorktree).toBeUndefined();
+});
+
+it("goes back to the project folder when a later turn, or a check after a restart, finds the followed worktree gone", async () => {
+  const { thread, run } = projectTurn();
+  const made = join(temp, "relay-goal-e2e");
+  git("worktree", "add", "-q", "--detach", made);
+  await run(`W=${made}; git worktree add --detach "$W" HEAD`);
+  expect(thread.activeAgentWorktree).toMatchObject({ path: made, followed: true });
+  git("worktree", "remove", made);
+  expect(activeAfter(thread, [])).toBeUndefined();
+  await projectTurn(thread as never).run(`git worktree remove --force ${made}`);
   expect(thread.agentWorktrees).toBeUndefined();
   expect(thread.activeAgentWorktree).toBeUndefined();
 });

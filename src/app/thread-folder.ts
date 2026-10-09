@@ -6,6 +6,7 @@ import type {
 } from "../../shared/projects";
 import {
   agentWorktreeUnavailable,
+  agentWorktreeUnavailableError,
   threadWorktree,
 } from "../../shared/projects";
 
@@ -41,7 +42,7 @@ export function terminalBlocked(
   draftWorkspace: ChatWorkspace,
 ) {
   if (agentWorktreeUnavailable(chat))
-    return "The selected worktree is unavailable. Choose another workspace.";
+    return agentWorktreeUnavailableError;
   return chat?.worktree
     ? chat.worktree.removedAt
       ? "This thread's worktree was removed. Its next message makes a new one"
