@@ -809,9 +809,14 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       )}
       <UnsentStrip
         unsent={outgoing.filter((o) => o.error && (o.send.parentId ?? undefined) === rootId)}
+        online={remote.status === "online"}
         onRetry={(o) => retry(remote.desktop, o.send.id)}
         onEdit={async (o) => {
           // Unanswered, it may be on the computer already: sent again it would go twice.
+          if (o.unsure && !(await remote.whenOnline(20_000)))
+            throw new Error(
+              `${remote.name} isn't connected yet, so the phone can't tell whether this one arrived. It isn't lost: once connected, the phone checks and it arrives only once.`,
+            );
           if (o.unsure && (await reached(remote.call, o, knownOf(thread)))) {
             void reload();
             return Alert.alert("The computer received it", `${remote.name} already accepted this send or is still processing it, so it can't be taken back here.`);

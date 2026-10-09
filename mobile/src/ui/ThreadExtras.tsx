@@ -395,10 +395,13 @@ export function QueueList({
 /** Messages the desktop didn't take: send again, or back into the composer. */
 export function UnsentStrip({
   unsent,
+  online,
   onRetry,
   onEdit,
 }: {
   unsent: Outgoing[];
+  /** Offline, Edit waits for the computer before it can tell whether one arrived. */
+  online: boolean;
   onRetry: (o: Outgoing) => void;
   onEdit: (o: Outgoing) => Promise<void> | void;
 }) {
@@ -411,7 +414,12 @@ export function UnsentStrip({
           <Text numberOfLines={1} style={[styles.text, { color: t.text }]}>
             {withoutMention(o.send.body)}
           </Text>
-          <Action label="Edit" failed="Couldn't take it back" onPress={async () => onEdit(o)} />
+          <Action
+            label="Edit"
+            busyLabel={o.unsure && !online ? "Connecting…" : undefined}
+            failed="Couldn't take it back yet"
+            onPress={async () => onEdit(o)}
+          />
           <Action label="Try again" primary onPress={async () => onRetry(o)} />
         </View>
       ))}

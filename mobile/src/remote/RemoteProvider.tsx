@@ -76,6 +76,8 @@ interface Remote {
   pair(link: PairingLink): Promise<void>;
   /** Forgets one computer, the active one by default, and moves on to the next. */
   forget(id?: string): Promise<void>;
+  /** Resolves true once the computer is reached, or false after `timeoutMs` without it. */
+  whenOnline(timeoutMs: number): Promise<boolean>;
   onMessage(chatId: string, listener: (e: MessageEvent) => void): () => void;
   /** Every thread's message events, e.g. to tell of finished answers. */
   onAnyMessage(listener: (e: MessageEvent) => void): () => void;
@@ -121,6 +123,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
   const [pairing] = useState(() => new PendingPairing<RemoteClient>());
+  const onlineWaiters = useRef(new Set<() => void>());
 
   const connect = useCallback(
     (start: ConstructorParameters<typeof RemoteClient>[0]["start"]) => {
@@ -134,6 +137,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setDetail(why);
           if (s === "online") {
             if (active.current) reachedComputer(active.current);
+            for (const waiter of onlineWaiters.current) waiter();
             newModelConnection();
             setName(next.name);
             pairing.online(next);
@@ -299,6 +303,22 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             )) as RemoteClient["desktop"]),
     [client],
   );
+  const whenOnline = useCallback<Remote["whenOnline"]>(
+    (timeoutMs) => {
+      if (live.relayClient?.status === "online") return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const done = (online: boolean) => {
+          clearTimeout(timer);
+          onlineWaiters.current.delete(reached);
+          resolve(online);
+        };
+        const reached = () => done(true);
+        const timer = setTimeout(() => done(false), timeoutMs);
+        onlineWaiters.current.add(reached);
+      });
+    },
+    [],
+  );
   const onMessage = useCallback<Remote["onMessage"]>((chatId, listener) => {
     const set = listeners.current.get(chatId) ?? new Set();
     set.add(listener);
@@ -392,6 +412,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
         void forgetIcons(id);
         await clearCredentials(id);
       },
+      whenOnline,
       onMessage,
       onAnyMessage,
     }),
@@ -409,6 +430,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       switchTo,
       call,
       desktop,
+      whenOnline,
       onMessage,
       onAnyMessage,
       pairing,
