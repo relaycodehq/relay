@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  FlatList,
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
@@ -54,6 +53,7 @@ export function Lightbox({
   const [bar, setBar] = useState(true);
   const toggleBar = useCallback(() => setBar((shown) => !shown), []);
   const list = useRef<FlatList<LightboxImage>>(null);
+  const paging = useMemo(() => Gesture.Native(), []);
   const drop = useSharedValue(0);
 
   // A turned phone keeps the same image in view.
@@ -101,37 +101,40 @@ export function Lightbox({
             }}
           >
             {size && (
-              <FlatList
-                ref={list}
-                data={images}
-                keyExtractor={(item) => keyOf(item.source)}
-                horizontal
-                pagingEnabled
-                scrollEnabled={!zoomed}
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={first}
-                getItemLayout={(_, i) => ({ length: size.width, offset: size.width * i, index: i })}
-                // Each page holds a whole data URL; only it and its neighbours stay drawn.
-                windowSize={3}
-                initialNumToRender={1}
-                maxToRenderPerBatch={1}
-                onMomentumScrollEnd={(e) => {
-                  const next = Math.round(e.nativeEvent.contentOffset.x / size.width);
-                  if (next !== index) {
-                    setIndex(next);
-                    setZoomed(false);
-                  }
-                }}
-                renderItem={({ item, index: i }) => (
-                  <Page
-                    image={item}
-                    size={size}
-                    active={i === index}
-                    onZoom={setZoomed}
-                    onTap={toggleBar}
-                  />
-                )}
-              />
+              <GestureDetector gesture={paging}>
+                <FlatList
+                  ref={list}
+                  data={images}
+                  keyExtractor={(item) => keyOf(item.source)}
+                  horizontal
+                  pagingEnabled
+                  scrollEnabled={!zoomed}
+                  showsHorizontalScrollIndicator={false}
+                  initialScrollIndex={first}
+                  getItemLayout={(_, i) => ({ length: size.width, offset: size.width * i, index: i })}
+                  // Each page holds a whole data URL; only it and its neighbours stay drawn.
+                  windowSize={3}
+                  initialNumToRender={1}
+                  maxToRenderPerBatch={1}
+                  onMomentumScrollEnd={(e) => {
+                    const next = Math.round(e.nativeEvent.contentOffset.x / size.width);
+                    if (next !== index) {
+                      setIndex(next);
+                      setZoomed(false);
+                    }
+                  }}
+                  renderItem={({ item, index: i }) => (
+                    <Page
+                      image={item}
+                      size={size}
+                      pager={paging}
+                      active={i === index}
+                      onZoom={setZoomed}
+                      onTap={toggleBar}
+                    />
+                  )}
+                />
+              </GestureDetector>
             )}
           </Animated.View>
         </GestureDetector>
@@ -203,12 +206,14 @@ function Dots({ count, index }: { count: number; index: number }) {
 function Page({
   image,
   size,
+  pager,
   active,
   onZoom,
   onTap,
 }: {
   image: LightboxImage;
   size: Size;
+  pager: ReturnType<typeof Gesture.Native>;
   active: boolean;
   onZoom: (zoomed: boolean) => void;
   onTap: () => void;
@@ -277,7 +282,11 @@ function Page({
   };
 
   const pinch = Gesture.Pinch()
+    .blocksExternalGesture(pager)
     .enabled(!!uri)
+    .onTouchesMove((event, manager) => {
+      if (event.numberOfTouches < 2) manager.fail();
+    })
     .onStart((e) => {
       pinching.set(true);
       start.set({ scale: scale.get(), x: x.get(), y: y.get() });
