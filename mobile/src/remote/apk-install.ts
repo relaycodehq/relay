@@ -123,8 +123,8 @@ export function prefetchApk(offer: ApkOffer) {
 }
 
 /** Downloads `offer` and asks Android to install it; without the native side, the browser does. */
-export function installApk(offer: ApkOffer): Promise<void> {
-  return (requested ??= requestInstall(offer)
+export function installApk(offer: ApkOffer, { browser = false } = {}): Promise<void> {
+  return (requested ??= requestInstall(offer, browser)
     .catch((e) => {
       waitingForAllow?.remove();
       waitingForAllow = undefined;
@@ -135,8 +135,8 @@ export function installApk(offer: ApkOffer): Promise<void> {
     }));
 }
 
-async function requestInstall(offer: ApkOffer) {
-  if (!native) {
+async function requestInstall(offer: ApkOffer, browser: boolean) {
+  if (browser || !native) {
     await Linking.openURL(offer.url);
     return;
   }

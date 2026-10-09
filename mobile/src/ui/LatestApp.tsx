@@ -1,4 +1,3 @@
-import { Linking } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Download, RefreshCw } from "lucide-react-native";
 import { installApk, installsApks, useApkInstall } from "../remote/apk-install";
@@ -36,11 +35,13 @@ export function LatestAppRows() {
     (!here
       ? {
           label: `Download Relay ${offer.version}`,
-          hint: expoGo
-            ? "Expo Go can't install Relay; this opens the download in the browser."
-            : !installsApks
-              ? "This app can't install it itself; this opens the download in the browser."
-              : "A development build: Android won't put the release app over it. This opens the download in the browser.",
+          hint: mine?.kind === "failed"
+            ? apkPrompt(offer.version, undefined, mine)
+            : expoGo
+              ? "Expo Go can't install Relay; this opens the download in the browser."
+              : !installsApks
+                ? "This app can't install it itself; this opens the download in the browser."
+                : "A development build: Android won't put the release app over it. This opens the download in the browser.",
         }
       : mine?.kind === "downloading" && !mine.quiet
         ? { label: `Downloading Relay ${offer.version}… ${Math.round(mine.done * 100)}%` }
@@ -73,7 +74,7 @@ export function LatestAppRows() {
           label={install.label}
           hint={install.hint}
           icon={<Download size={18} color={t.text} />}
-          onPress={() => void (here ? installApk(offer) : Linking.openURL(offer.url))}
+          onPress={() => void installApk(offer, { browser: !here })}
         />
       )}
       <MenuRow

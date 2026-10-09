@@ -147,6 +147,15 @@ it("uses the browser in Expo Go and handles an unavailable browser", async () =>
   expect(mocks.native.download).not.toHaveBeenCalled();
 });
 
+it("uses the browser for a development build even when its native installer exists", async () => {
+  const { installApk, useApkInstall } = await import("./apk-install");
+  mocks.openURL.mockRejectedValueOnce(new Error("no browser"));
+  await installApk(feed, { browser: true });
+  expect(mocks.openURL).toHaveBeenCalledWith(feed.url);
+  expect(useApkInstall()).toMatchObject({ kind: "failed", message: "no browser" });
+  expect(mocks.native.download).not.toHaveBeenCalled();
+});
+
 it("refuses an APK when newer desktop code arrived during its download", async () => {
   const { installApk, useApkInstall } = await import("./apk-install");
   mocks.native.download.mockImplementationOnce(async () => {
