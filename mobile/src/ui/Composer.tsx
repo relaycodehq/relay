@@ -21,6 +21,7 @@ import { agents, agentProviders, type AgentProvider } from "../../../shared/agen
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
+import { modelName } from "../../../shared/model-fit";
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ModelChoice } from "../../../shared/settings";
@@ -169,7 +170,7 @@ export const Composer = forwardRef<
   }, [settings]);
   useEffect(() => setError(undefined), [text]);
 
-  const { overview, desktop } = useRemote();
+  const { overview, desktop, status } = useRemote();
   // Desktops from before phone dictation don't say, and can't.
   const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
   const [dictationOwner] = useState(() => ({}));
@@ -257,6 +258,7 @@ export const Composer = forwardRef<
   };
   const switchTo = (next: RemoteSettings, to: AgentProvider) => onSettings(switched(next, to));
   // Held for the connection, and saved, so the toolbar names the model at once.
+  const online = status === "online";
   const [lists, setLists] = useState(() => ({ from: desktop, lists: knownModels(desktop) }));
   const loadCatalogs = async (wanted: readonly AgentProvider[]) => {
     const known = await loadModelLists(desktop, wanted);
@@ -271,12 +273,11 @@ export const Composer = forwardRef<
     return () => {
       live = false;
     };
-  }, [desktop, provider]);
-  // Claude's ids are aliases ("opus"); the list carries the full name.
+    // A reconnect asks again, for a list the last connection didn't get.
+  }, [desktop, provider, online]);
   const catalogs = lists.from === desktop ? lists.lists : knownModels(desktop);
-  const models = catalogs[provider];
   const modelLabel = settings.choice.model
-    ? (models?.find((m) => m.id === settings.choice.model)?.name ?? settings.choice.model)
+    ? modelName(provider, catalogs[provider], settings.choice.model)
     : "Default";
   /** The desktop's runCommand for a composer setting; with no value, its picker opens. */
   const setting = async (name: ComposerCommand, args: string): Promise<CommandResult> => {

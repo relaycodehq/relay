@@ -25,6 +25,7 @@ import {
   saveCredentials,
 } from "./credentials";
 import { cameBack } from "./computer-update";
+import { newModelConnection } from "./model-catalogs";
 import {
   dropLooseCopy,
   forgetOffline,
@@ -127,6 +128,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setStatus(s);
           setDetail(why);
           if (s === "online") {
+            newModelConnection();
             setName(next.name);
             pairing.current?.resolve();
             pairing.current = undefined;
@@ -180,6 +182,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     ) => {
       // Last seen lists to read while it connects, or can't; never a wait.
       const cached = await loadOverview(id);
+      // Retire in-flight model requests before changing the offline folder.
+      newModelConnection();
       active.current = id;
       setActiveId(id);
       setOfflineComputer(id);

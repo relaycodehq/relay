@@ -3,14 +3,13 @@ import {
   type AgentModel,
   type AgentProvider,
 } from "./agents";
-import { fastFor } from "./model-fit";
+import { fastFor, listedModel } from "./model-fit";
 import type { InteractionMode } from "./agent-modes";
 import {
   claudeArgs,
   claudeContextWindow,
   effortLabels,
   type ModelChoice,
-  withClaudeContextWindow,
   type ReasoningEffort,
 } from "./settings";
 
@@ -43,10 +42,7 @@ export function resolveTurnModel(
   const claude = provider === "claude";
   const picked = input.choice.model;
   const id = picked || defaults?.model || "";
-  // Claude ids may carry the `[1m]` window suffix; the list names each model once.
-  const bare = (model: string) =>
-    claude ? withClaudeContextWindow(model, "200k") : model;
-  const listed = models.find((m) => bare(m.id) === bare(id));
+  const listed = listedModel(provider, models, id);
   const chosen = claude
     ? claudeArgs(input.choice).effort
     : input.choice.reasoningEffort;

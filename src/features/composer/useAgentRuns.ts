@@ -9,7 +9,6 @@ import {
   findClaudeModel,
   reasoningEffortsFor,
   supportedChoice,
-  withClaudeContextWindow,
   type ModelChoice,
   type ReasoningEffort,
 } from "../../../shared/settings";
@@ -25,6 +24,7 @@ import {
   pickAgents,
   withModel,
 } from "../agents/composer-models";
+import { onWindow } from "../../../shared/model-fit";
 import { stepEffort } from "../quick-switch/effort-shortcut";
 import type { ComposerRun, QuickPreset } from "../quick-switch/quick-switch";
 import type { ComposerState } from "./useComposerSettings";
@@ -252,23 +252,7 @@ export function useAgentRuns(
      * which accounts without 1M by default still need.
      */
     setContextWindow(size: "200k" | "1m") {
-      change("claude", ({ choice }) =>
-        size === "200k"
-          ? {
-              choice: {
-                ...choice,
-                model: withClaudeContextWindow(choice.model, "200k"),
-              },
-              contextWindow: "200k",
-            }
-          : {
-              choice: {
-                ...choice,
-                model:
-                  choice.model && withClaudeContextWindow(choice.model, "1m"),
-              },
-            },
-      );
+      change("claude", (current) => onWindow(current, size));
     },
     fastOf: (to: AgentProvider) =>
       agentChoice(to, models, pickOf(to), codex).fast,
