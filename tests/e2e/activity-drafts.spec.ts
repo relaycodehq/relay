@@ -114,6 +114,29 @@ test("keeps several new-thread drafts in Activity and sends them from their card
       page.locator(".project-messages").getByText("First idea"),
     ).toBeVisible();
 
+    // A thread's draft tints its own card, which rises as it's typed.
+    const cards = page.locator(".sb-cards .sb-card");
+    // By id: agents answering reorder the cards under a click by place.
+    const followed = await page
+      .locator(".sb-cards .sb-card:not(.selected)")
+      .getAttribute("data-card");
+    const thread = page.locator(`.sb-card[data-card="${followed}"]`);
+    await thread.click();
+    await expect(thread).toHaveClass(/selected/);
+    await prompt.fill("Follow-up");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toHaveAttribute("data-card", followed!);
+    await expect(cards.first()).toHaveClass(/draft/);
+    await expect(cards.first()).toHaveClass(/selected/);
+    await expect(cards.first()).toContainText("Follow-up");
+    // It goes out through the open composer, and the card keeps its place.
+    await sendFrom("Follow-up");
+    await expect.poll(async () => (await prompts()).length).toBe(3);
+    expect((await prompts())[2]).toContain("Follow-up");
+    await expect(drafts).toHaveCount(0);
+    await expect(prompt).toHaveText("");
+    await expect(cards.first()).toHaveAttribute("data-card", followed!);
+
     // With nothing written, new threads don't pile up slots.
     await newThread();
     await newThread();

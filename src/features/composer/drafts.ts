@@ -203,14 +203,12 @@ export interface ActivityDraft {
 /**
  * Activity's drafts, from `chat-draft:<chat>[:<reply>]` and
  * `chat-draft:new:<project>[:<slot>]` keys: one per thread, its main draft
- * first. The open thread's draft is on its own card already; an open new
- * thread's stays, so its card doesn't come and go as it's typed.
+ * first. The open thread's is listed too, so its card rises as it's typed.
  */
 export function activityDrafts(
   keys: string[],
   projects: Map<string, Project>,
   chats: Map<string, ChatSummary>,
-  openChat: string | undefined,
 ): ActivityDraft[] {
   const drafts: ActivityDraft[] = [];
   const seen = new Set<string>();
@@ -226,7 +224,7 @@ export function activityDrafts(
     const chat = chats.get(chatId);
     const project = chat && projects.get(chat.projectId);
     // Sorted keys put a thread's main draft before its replies.
-    if (!project || chatId === openChat || seen.has(chatId)) continue;
+    if (!project || seen.has(chatId)) continue;
     seen.add(chatId);
     drafts.push({ key, id: chatId, project, chat, reply: !!reply });
   }

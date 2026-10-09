@@ -79,7 +79,7 @@ it("ignores a saved new thread from another project", () => {
   expect(currentNewThread("p1")).toBe(newThreadId("p1"));
 });
 
-it("lists one card per thread and keeps an open new thread's draft", () => {
+it("lists one draft per thread, the open thread's too", () => {
   const project = { id: "p1", name: "Relay" } as Project;
   const chat = (id: string) => ({ id, projectId: "p1" }) as ChatSummary;
   const chats = new Map(["c1", "c2", "c3"].map((id) => [id, chat(id)]));
@@ -93,15 +93,13 @@ it("lists one card per thread and keeps an open new thread's draft", () => {
     "chat-draft:new:p1:k2",
     "chat-draft:new:other",
   ].sort();
-  const drafts = activityDrafts(
-    keys,
-    new Map([["p1", project]]),
-    chats,
-    "c3",
-  ).map(({ key, id, reply }) => ({ key, id, reply }));
+  const drafts = activityDrafts(keys, new Map([["p1", project]]), chats).map(
+    ({ key, id, reply }) => ({ key, id, reply }),
+  );
   expect(drafts).toEqual([
     { key: "chat-draft:c1", id: "c1", reply: false },
     { key: "chat-draft:c2:reply", id: "c2", reply: true },
+    { key: "chat-draft:c3", id: "c3", reply: false },
     { key: "chat-draft:new:p1", id: "new:p1", reply: false },
     { key: "chat-draft:new:p1:k2", id: "new:p1:k2", reply: false },
   ]);

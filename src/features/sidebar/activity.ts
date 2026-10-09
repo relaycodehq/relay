@@ -1,7 +1,10 @@
 // Activity's rules for the sidebar: how triage shows before the desktop has
 // it, where settling the open thread moves on to, and what the bell counts.
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
-import { setTriageState } from "../../../shared/chat-activity";
+import {
+  setTriageState,
+  type ChatActivitySection,
+} from "../../../shared/chat-activity";
 
 /** `chat` as `action` leaves it, at `now`. */
 export function triaged(
@@ -58,4 +61,43 @@ export function attention(
       ? "unread"
       : undefined;
   return { count, mark };
+}
+
+/**
+ * Activity with the threads holding unsent text first, newest first as
+ * `all` lists them, settled and snoozed ones included: the draft waits on you.
+ * One whose draft is gone, sent or cleared, keeps its place by
+ * when it last had one (`raised`), until newer activity passes it or it's
+ * settled or snoozed since.
+ */
+export function draftsFirst<C extends ChatSummary>(
+  sections: Record<ChatActivitySection, C[]>,
+  all: C[],
+  drafted: ReadonlySet<string>,
+  raised: ReadonlyMap<string, number>,
+): Record<ChatActivitySection, C[]> {
+  if (!drafted.size && !raised.size) return sections;
+  const kept = (c: C) => {
+    const at = raised.get(c.id);
+    return (
+      at !== undefined &&
+      !drafted.has(c.id) &&
+      (c.settledAt ?? 0) < at &&
+      (c.snoozedAt ?? 0) < at
+    );
+  };
+  const active = new Set(sections.active);
+  const key = (c: C) => Math.max(c.updated, raised.get(c.id) ?? 0);
+  const clean = (list: C[]) =>
+    list.filter((c) => !drafted.has(c.id) && !kept(c));
+  return {
+    active: [
+      ...all.filter((c) => drafted.has(c.id)),
+      ...all
+        .filter((c) => !drafted.has(c.id) && (active.has(c) || kept(c)))
+        .sort((a, b) => key(b) - key(a)),
+    ],
+    snoozed: clean(sections.snoozed),
+    settled: clean(sections.settled),
+  };
 }

@@ -18,7 +18,7 @@ import {
 import type { HandoffView } from "../../../shared/handoff";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import type { KeyCombo } from "../../../shared/shortcuts";
-import { activityDrafts, useDraftKeys } from "../composer/drafts";
+import type { ActivityDraft } from "../composer/drafts";
 import { mac } from "../../lib/mod-key";
 import { modifiersLabel, useBindings } from "../../lib/shortcuts";
 import { awayStopped } from "./useAwayViews";
@@ -29,7 +29,13 @@ import {
 } from "../../../shared/started-families";
 import { SHELF_PAGE, type Shelves } from "./useShelves";
 import { AwayPeek, AwayWhere } from "./AwayCard";
-import { DraftCard } from "./DraftCard";
+import {
+  DraftCard,
+  DraftLine,
+  DraftSendButton,
+  useDraftSend,
+} from "./DraftCard";
+import { useCardSlide } from "./useCardSlide";
 import { ProjectBadge } from "../projects/ProjectBadge";
 import {
   ThreadRename,
@@ -44,9 +50,9 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 export function ActivityView({
   rows,
-  threads,
   sections,
   families,
+  drafts,
   away,
   hints,
   shelves,
@@ -55,11 +61,11 @@ export function ActivityView({
   onSendDraft,
 }: {
   rows: SidebarRows;
-  /** Every listed thread, to find the ones drafts are written in. */
-  threads: ChatSummary[];
   sections: Record<ChatActivitySection, ChatSummary[]>;
   /** The active threads as cards, started ones under their lead. */
   families: StartedFamilies<ChatSummary>;
+  /** Unsent text: new threads' get cards of their own, threads' tint theirs. */
+  drafts: ActivityDraft[];
   away: Record<string, HandoffView>;
   /** The jump-thread shortcuts show on the first cards. */
   hints: boolean;
@@ -71,8 +77,6 @@ export function ActivityView({
   /** Sends the open unsent thread's draft from its composer. */
   onSendDraft: () => void;
 }) {
-  // Follows drafts as they gain or lose text; each card follows its own.
-  const draftKeys = useDraftKeys();
   // A family opens or folds by itself; a click on its line overrides that.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(
     new Map(),
@@ -80,12 +84,10 @@ export function ActivityView({
   const fold = (id: string, open: boolean) =>
     setToggled((was) => new Map(was).set(id, !open));
   const jumpBinding = useBindings("jump-thread")[0];
-  const { projects, chatId, actions } = rows;
-  const drafts = activityDrafts(
-    draftKeys,
-    projects,
-    new Map(threads.map((c) => [c.id, c])),
-    chatId,
+  const list = useCardSlide();
+  const unsent = drafts.filter((d) => !d.chat);
+  const draftOf = new Map(
+    drafts.flatMap((d) => (d.chat ? [[d.chat.id, d] as const] : [])),
   );
   return (
     <>
@@ -95,15 +97,13 @@ export function ActivityView({
           {families.top.length ? `${families.top.length} open` : "All settled"}
         </small>
       </div>
-      <div className={`sb-cards ${hints ? "shortcuts" : ""}`}>
-        {drafts.map((d) => (
+      <div ref={list} className={`sb-cards ${hints ? "shortcuts" : ""}`}>
+        {unsent.map((d) => (
           <DraftCard
             key={d.key}
             draft={d}
             selected={d.id === draftId}
-            onOpen={() =>
-              d.chat ? actions.open(d.chat) : onDraft(d.project, d.id)
-            }
+            onOpen={() => onDraft(d.project, d.id)}
             onSendOpen={onSendDraft}
           />
         ))}
@@ -119,6 +119,8 @@ export function ActivityView({
                       key={s.id}
                       chat={s}
                       rows={rows}
+                      draft={draftOf.get(s.id)}
+                      onSendOpen={onSendDraft}
                       away={away[s.id]}
                       jump={undefined}
                       index={i}
@@ -137,6 +139,8 @@ export function ActivityView({
               <ThreadCard
                 chat={c}
                 rows={rows}
+                draft={draftOf.get(c.id)}
+                onSendOpen={onSendDraft}
                 away={away[c.id]}
                 jump={
                   hints && jumpBinding && index < 9 ? jumpBinding : undefined
@@ -155,6 +159,8 @@ export function ActivityView({
                       key={s.id}
                       chat={s}
                       rows={rows}
+                      draft={draftOf.get(s.id)}
+                      onSendOpen={onSendDraft}
                       away={away[s.id]}
                       jump={undefined}
                       index={i}
@@ -198,6 +204,8 @@ export function ActivityView({
 function ThreadCard({
   chat: c,
   rows,
+  draft,
+  onSendOpen,
   away,
   jump,
   index,
@@ -206,6 +214,10 @@ function ThreadCard({
 }: {
   chat: ChatSummary;
   rows: SidebarRows;
+  /** Sends its draft from the composer, when it's the thread open. */
+  onSendOpen: () => void;
+  /** Text written in it and not sent: the card tints and shows it. */
+  draft: ActivityDraft | undefined;
   /** Where it was handed off to. */
   away: HandoffView | undefined;
   jump: KeyCombo | undefined;
@@ -221,6 +233,12 @@ function ThreadCard({
   const selected = chatId === c.id;
   // A question in a started thread is the lead's to bring up while they're folded together.
   const asking = !!family?.started.some((s) => s.waiting);
+  const unsent = useDraftSend(
+    draft,
+    selected,
+    () => actions.open(c),
+    onSendOpen,
+  );
   const state = (
     <CardState
       chat={asking ? { ...c, waiting: true } : c}
@@ -239,13 +257,15 @@ function ThreadCard({
             "sb-card",
             selected && "selected",
             isUnread && "unread",
-            // Only the open thread, finished-but-unread ones and open
-            // questions stay bright; everything else, running included, dims.
-            !selected && !isUnread && !c.waiting && !asking && "dim",
+            // Only the open thread, finished-but-unread ones, open questions
+            // and unsent text stay bright; everything else, running included, dims.
+            !selected && !isUnread && !c.waiting && !asking && !draft && "dim",
             compact && "compact",
+            draft && "draft",
           ]
             .filter(Boolean)
             .join(" ")}
+          data-card={c.id}
           onClick={() => actions.open(c)}
           onKeyDown={rowKeys(() => actions.open(c))}
         >
@@ -265,26 +285,33 @@ function ThreadCard({
               </span>
               {state}
               <div className="sb-card-actions">
-                {!c.waiting && (
-                  <SnoozeMenu
-                    now={now}
-                    onSnooze={(until) =>
-                      void actions.triage(c, { kind: "snooze", until })
-                    }
-                  />
-                )}
-                {!c.running && !c.waiting && (
-                  <button
-                    className="sb-card-action"
-                    title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      actions.settle(c);
-                    }}
-                  >
-                    <Check size={13} />
-                    Settle
-                  </button>
+                {/* Its draft keeps it here: settling or snoozing would change nothing. */}
+                {draft ? (
+                  <DraftSendButton send={unsent} title={`Send to ${c.title}`} />
+                ) : (
+                  <>
+                    {!c.waiting && (
+                      <SnoozeMenu
+                        now={now}
+                        onSnooze={(until) =>
+                          void actions.triage(c, { kind: "snooze", until })
+                        }
+                      />
+                    )}
+                    {!c.running && !c.waiting && (
+                      <button
+                        className="sb-card-action"
+                        title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          actions.settle(c);
+                        }}
+                      >
+                        <Check size={13} />
+                        Settle
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -329,6 +356,8 @@ function ThreadCard({
                 )}
                 {familyLine(family.started)}
               </button>
+            ) : draft ? (
+              <DraftLine draftKey={draft.key} />
             ) : c.running && c.goal?.status === "active" ? (
               <span className="sb-card-goal" title={c.goal.objective}>
                 {c.goal.objective}
@@ -342,7 +371,12 @@ function ThreadCard({
             )}
             <AwayWhere view={away} />
             {compact && state}
-            {compact && !c.running && !c.waiting && (
+            {compact && draft && (
+              <div className="sb-card-actions">
+                <DraftSendButton send={unsent} title={`Send to ${c.title}`} />
+              </div>
+            )}
+            {compact && !draft && !c.running && !c.waiting && (
               <div className="sb-card-actions">
                 <button
                   className="sb-card-action icon"
@@ -359,6 +393,11 @@ function ThreadCard({
             )}
             <CardAgents chat={c} />
           </div>
+          {unsent.error && (
+            <div className="sb-draft-error" role="alert">
+              {unsent.error}
+            </div>
+          )}
         </ContextMenu.Trigger>
       </AwayPeek>
       <ThreadRowMenu chat={c} rows={rows} />

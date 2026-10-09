@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attention, nextAfterSettle, triaged } from "./activity";
+import { attention, draftsFirst, nextAfterSettle, triaged } from "./activity";
 import { chatActivitySection } from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
 
@@ -73,5 +73,58 @@ describe("attention", () => {
       count: 0,
       mark: undefined,
     });
+  });
+});
+
+describe("draftsFirst", () => {
+  it("puts threads with unsent text first, off the shelves too", () => {
+    const [a, b, c, d] = ["a", "b", "c", "d"].map((id) => chat({ id }));
+    const sections = { active: [a, b], snoozed: [c], settled: [d] };
+    const moved = draftsFirst(
+      sections,
+      [a, b, c, d],
+      new Set(["b", "d"]),
+      new Map(),
+    );
+    expect(moved.active.map((x) => x.id)).toEqual(["b", "d", "a"]);
+    expect(moved.snoozed).toEqual([c]);
+    expect(moved.settled).toEqual([]);
+  });
+
+  it("keeps a thread on top once its draft is gone, until something passes it", () => {
+    const a = chat({ id: "a", updated: 9_000 });
+    const b = chat({ id: "b", updated: 5_000 });
+    const c = chat({ id: "c", updated: 4_000, settledAt: 4_500 });
+    const sections = {
+      active: [a, b],
+      snoozed: [] as ChatSummary[],
+      settled: [c],
+    };
+    const raised = new Map([
+      ["b", 8_000],
+      ["c", 8_000],
+    ]);
+    const order = (s: typeof sections) => s.active.map((x) => x.id);
+    expect(order(draftsFirst(sections, [a, b, c], new Set(), raised))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    raised.set("b", 9_500);
+    expect(order(draftsFirst(sections, [a, b, c], new Set(), raised))).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
+    // Settled again since it rose, it goes back on the shelf.
+    const resettled = { ...c, settledAt: 9_000 };
+    const shelved = draftsFirst(
+      { ...sections, settled: [resettled] },
+      [a, b, resettled],
+      new Set(),
+      raised,
+    );
+    expect(order(shelved)).toEqual(["b", "a"]);
+    expect(shelved.settled).toEqual([resettled]);
   });
 });

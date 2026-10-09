@@ -18,6 +18,9 @@ import { useUnread } from "./useUnread";
 import { useThreadSearch } from "./useThreadSearch";
 import { useThreadActions } from "./useThreadActions";
 import { useActivityKeys } from "./useActivityKeys";
+import { draftsFirst } from "./activity";
+import { useDraftRaise } from "./useDraftRaise";
+import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
@@ -104,7 +107,20 @@ export function ProjectSidebar({
   const { all, away } = useSidebarThreads(realProjects, chatId);
   const unread = useUnread(chatId, all);
   const search = useThreadSearch(all, byId);
-  const sections = chatActivitySections(all, now);
+  // Follows drafts as they gain or lose text; each card follows its own.
+  const draftKeys = useDraftKeys();
+  const drafts = activityDrafts(
+    draftKeys,
+    byId,
+    new Map(all.map((c) => [c.id, c])),
+  );
+  const drafted = new Set(drafts.flatMap((d) => (d.chat ? [d.chat.id] : [])));
+  const sections = draftsFirst(
+    chatActivitySections(all, now),
+    all,
+    drafted,
+    useDraftRaise(drafted),
+  );
   const families = startedFamilies(sections.active, sections.settled);
   const actions = useThreadActions({
     chatId,
@@ -174,9 +190,9 @@ export function ProjectSidebar({
         ) : activity ? (
           <ActivityView
             rows={rows}
-            threads={all}
             sections={sections}
             families={families}
+            drafts={drafts}
             away={away}
             hints={cmdHeld}
             shelves={shelves}
