@@ -10,6 +10,9 @@
 // and starts a thread last sent on "opus[1m]".
 // --images starts one whose answer embeds two screenshots, a missing file and a web image,
 // and one whose agent looks at both screenshots on its way.
+// --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` instead and starts a
+// thread where it sends three agents off, eight times slower than the spec's;
+// each message there sends three more.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -41,6 +44,11 @@ const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
 const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
+const subagents = process.argv.includes("--subagents");
+if (claude && subagents) {
+  console.error("--claude and --subagents each bring their own `claude`; pick one.");
+  process.exit(2);
+}
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
@@ -79,10 +87,15 @@ const agentPaths = Object.fromEntries(
   agentProviders.map((provider) => [provider, join(bin, `disabled-${provider}`)]),
 );
 agentPaths.codex = codexPath;
-if (claude) {
+if (claude || subagents) {
   agentPaths.claude = await fakeCli(
     join(bin, "claude"),
-    await readFile(resolve("tests/fixtures/slow-claude.cjs"), "utf8"),
+    await readFile(
+      resolve(
+        `tests/fixtures/${subagents ? "subagent-claude" : "slow-claude"}.cjs`,
+      ),
+      "utf8",
+    ),
   );
 }
 await mkdir(join(root, "data"));
@@ -156,6 +169,7 @@ const app = await electron.launch({
     RELAY_AGENT_TURN_MS: process.env.RELAY_AGENT_TURN_MS ?? "1500",
     SLOW_CLAUDE_MS: "20",
     SLOW_CLAUDE_MODELS: JSON.stringify(claudeModels),
+    ...(subagents ? { RELAY_FIXTURE_AGENTS_SLOWER: "8" } : {}),
   },
 });
 const stop = async () => {
@@ -201,7 +215,7 @@ if (images) {
   );
 }
 const pairing = await page.evaluate(
-  async ({ seed, images, repo, claude }) => {
+  async ({ seed, images, repo, claude, subagents }) => {
     const project = await window.relay.addProject();
     if (claude) {
       // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
@@ -217,16 +231,16 @@ const pairing = await page.evaluate(
         interactionMode: "default",
       });
     }
-    if (seed || images) {
+    if (seed || images || subagents) {
       const settings = await window.relay.aiSettings();
-      const start = async (body) => {
+      const start = async (body, provider = "codex") => {
         const chat = await window.relay.createProjectChat(project.id, {
           kind: "project",
         });
         await window.relay.sendProjectChat(chat.id, {
           id: crypto.randomUUID(),
-          body: "@codex " + body,
-          provider: "codex",
+          body: `@${provider} ${body}`,
+          provider,
           choice: settings.questions,
           runtimeMode: "full-access",
           interactionMode: "default",
@@ -245,6 +259,7 @@ const pairing = await page.evaluate(
           `fixture view images ${repo}/docs/shot.png ${repo}/docs/sidebar.png\n\n` +
             "fixture echo: I looked at the welcome screen and the sidebar.",
         );
+      if (subagents) await start("Fan out", "claude");
       if (seed) {
         await start("fixture edit files in the cache");
         await new Promise((r) => setTimeout(r, 2500));
@@ -254,7 +269,7 @@ const pairing = await page.evaluate(
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed, images, repo, claude },
+  { seed, images, repo, claude, subagents },
 );
 let url = pairing.url;
 if (host) {

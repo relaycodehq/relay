@@ -1,6 +1,7 @@
 // A Claude Code stand-in that sends three agents into the background and
 // ends its turn, as Claude does by default. They keep working between turns:
-// one reports back quickly, one later, one only stops when told to.
+// one reports back quickly, one later, one only stops when told to. Each
+// message sends three more, with ids of their own.
 const session_id = "fixture-claude";
 let count = 0;
 const emit = (value) =>
@@ -8,7 +9,9 @@ const emit = (value) =>
     JSON.stringify({ uuid: `fixture-${++count}`, session_id, ...value }) + "\n",
   );
 const root = process.cwd();
-const agents = [
+// Stretches the agents' work, for watching them by hand on a phone.
+const slower = Number(process.env.RELAY_FIXTURE_AGENTS_SLOWER) || 1;
+const kinds = [
   {
     id: "toolu_render",
     task: "task-render",
@@ -63,8 +66,11 @@ const agents = [
     ms: Infinity,
   },
 ];
+/** Every agent sent so far; the first round keeps the ids above. */
+const agents = [];
 const timers = new Map();
-const running = new Set(agents.map((a) => a.task));
+const running = new Set();
+let round = 0;
 const live = () =>
   emit({
     type: "system",
@@ -108,7 +114,7 @@ const result = (parent, toolUseId, text, extra = {}) =>
   });
 const later = (agent, ms, fn) => {
   if (!Number.isFinite(ms)) return;
-  const timer = setTimeout(fn, ms);
+  const timer = setTimeout(fn, ms * slower);
   timers.set(agent.task, [...(timers.get(agent.task) ?? []), timer]);
 };
 function end(agent, status) {
@@ -156,7 +162,7 @@ function work(agent) {
       description: agent.description,
       usage: { total_tokens: 100, tool_uses: 2, duration_ms: 600 },
       last_tool_name: second[0],
-      summary: `Working on ${agent.description.toLowerCase()}`,
+      summary: agent.description,
     });
   });
   later(agent, agent.ms - 300, () =>
@@ -168,9 +174,16 @@ function work(agent) {
   later(agent, agent.ms, () => end(agent, "completed"));
 }
 function fanOut() {
-  said(null, "fixture-plan", [
+  round++;
+  const batch = kinds.map((a) =>
+    round === 1 ? a : { ...a, id: `${a.id}_${round}`, task: `${a.task}-${round}` },
+  );
+  agents.push(...batch);
+  for (const a of batch) running.add(a.task);
+  const suffix = round === 1 ? "" : `-${round}`;
+  said(null, `fixture-plan${suffix}`, [
     { type: "text", text: "Three things to learn first. One agent each." },
-    ...agents.map((a) => ({
+    ...batch.map((a) => ({
       type: "tool_use",
       id: a.id,
       name: "Agent",
@@ -182,7 +195,7 @@ function fanOut() {
     })),
   ]);
   live();
-  for (const a of agents) {
+  for (const a of batch) {
     emit({
       type: "system",
       subtype: "task_started",
@@ -204,7 +217,7 @@ function fanOut() {
       },
     });
   }
-  said(null, "fixture-answer", [
+  said(null, `fixture-answer${suffix}`, [
     { type: "text", text: "Three agents are on it." },
   ]);
   emit({
@@ -220,7 +233,7 @@ function fanOut() {
     modelUsage: {},
     permission_denials: [],
   });
-  for (const a of agents) work(a);
+  for (const a of batch) work(a);
 }
 require("node:readline")
   .createInterface({ input: process.stdin })

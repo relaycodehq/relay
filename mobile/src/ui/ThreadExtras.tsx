@@ -1,7 +1,7 @@
 // What docks above the composer on the desktop (WaitingStrip, StoppedStrip,
 // the queue), worded the same, with the phone's thumb-sized actions.
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   AlarmClock,
   ChevronDown,
@@ -410,24 +410,40 @@ export function Action({
   label,
   busyLabel,
   primary,
+  confirm,
   onPress,
 }: {
   label: string;
   busyLabel?: string;
   primary?: boolean;
+  /** Asked first; the button only turns busy once it says yes. */
+  confirm?: () => Promise<boolean>;
   onPress: () => Promise<void>;
 }) {
   const t = useTheme();
   const [busy, setBusy] = useState(false);
+  const claimed = useRef(false);
   return (
     <Pressable
       accessibilityRole="button"
       disabled={busy}
       hitSlop={8}
-      onPress={() => {
-        setBusy(true);
-        void onPress().finally(() => setBusy(false));
-      }}
+      onPress={() =>
+        void (async () => {
+          if (claimed.current) return;
+          claimed.current = true;
+          try {
+            if (confirm && !(await confirm())) return;
+            setBusy(true);
+            await onPress();
+          } catch (e) {
+            Alert.alert("Couldn't complete that", e instanceof Error ? e.message : String(e));
+          } finally {
+            claimed.current = false;
+            setBusy(false);
+          }
+        })()
+      }
       style={[
         styles.action,
         { borderColor: primary ? t.accent : t.border },

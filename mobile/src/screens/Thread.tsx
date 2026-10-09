@@ -22,8 +22,10 @@ import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
 import { contextAgent } from "../../../shared/recipient";
 import { latestSetup } from "../../../shared/worktree-command";
+import { outsideBatch, runningBatch } from "../../../shared/subagents";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
+import { useSubagents } from "../remote/subagents";
 import { markSeen } from "../remote/seen";
 import { clearThreadNotice } from "../remote/watch";
 import { clearHandedBack, handBack, peekHandedBack } from "../remote/taken-back";
@@ -57,6 +59,7 @@ import { KeyboardAware } from "../ui/KeyboardAware";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
+import { SubagentStrip, SubagentsSheet } from "../ui/Subagents";
 import {
   GoalStrip,
   LimitStrip,
@@ -87,7 +90,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   }, [id, updated, foreground]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
-    "thread" | "snooze" | "rename" | "sides"
+    "thread" | "snooze" | "rename" | "sides" | "agents"
   >();
   const [acting, setActing] = useState<ChatMessage>();
   const composer = useRef<ComposerHandle>(null);
@@ -173,6 +176,23 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     (thread.worktree?.path && !thread.worktree.removedAt
       ? workspaceId(thread.projectId, id)
       : thread.projectId);
+  // Subagents belong to the thread's session, shown on its main conversation.
+  const agents = useSubagents(id, {
+    enabled: !rootId,
+    running,
+    pending: thread?.pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
+  });
+  const agentBatch = runningBatch(agents.runs);
+  const root = thread?.root;
+  const display = useCallback(
+    (text: string) => {
+      const prefix = root && root.replace(/\/+$/, "") + "/";
+      return prefix ? text.split(prefix).join("") : text;
+    },
+    [root],
+  );
+  // The strip shows the fan-out's agents and stops them; the waiting strip keeps the rest.
+  const waiting = thread?.pending && outsideBatch(thread.pending, agentBatch);
   const settled = !!summary?.settledAt && summary.settledAt >= summary.updated;
   const snoozed = !!summary?.snoozedUntil && summary.snoozedUntil > Date.now();
 
@@ -708,9 +728,18 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           }}
         />
       )}
-      {!rootId && !!thread?.pending?.length && !running && (
+      {!rootId && (
+        <SubagentStrip
+          batch={agentBatch}
+          display={display}
+          onPress={() => setSheet("agents")}
+          error={agents.error}
+          onRetry={agents.refresh}
+        />
+      )}
+      {!rootId && !!waiting?.length && !running && (
         <WaitingStrip
-          pending={thread.pending}
+          pending={waiting}
           onStop={async (item) => {
             await remote.desktop("stopProjectChatPending", id, item.id);
             await reload();
@@ -817,6 +846,22 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           hint: `${m.side ? "Asked beside the conversation" : m.role === "user" ? "Your message" : "An answer"} · ${counts.get(m.id) ?? 0} ${counts.get(m.id) === 1 ? "reply" : "replies"}`,
           onPress: () => openReplies(m),
         }))}
+      />
+      <SubagentsSheet
+        open={sheet === "agents"}
+        batch={agentBatch}
+        runs={agents.runs}
+        display={display}
+        onClose={() => setSheet(undefined)}
+        onOpen={(agent) =>
+          router.push({
+            pathname: "/chat/[id]/agent/[agent]",
+            params: { id, agent, ...(root ? { root } : {}) },
+          })
+        }
+        onStop={agents.stop}
+        error={agents.error}
+        onRetry={agents.refresh}
       />
       <RenameSheet
         open={sheet === "rename"}

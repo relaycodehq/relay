@@ -140,6 +140,10 @@ function Screens() {
                 name="chat/[id]/reply/[root]"
                 options={{ title: "Replies" }}
               />
+              <Stack.Screen
+                name="chat/[id]/agent/[agent]"
+                options={{ title: "Agent" }}
+              />
               <Stack.Screen name="project/[id]" options={{ title: "" }} />
               <Stack.Screen name="turn" options={{ title: "Changes" }} />
               <Stack.Screen name="diff" options={{ title: "Diff" }} />
@@ -161,11 +165,12 @@ function Screens() {
 /** Screens that show the connection their own way. */
 const ownLine = new Set(["settings", "pair"]);
 
-/** Screens whose composer already keeps clear of the navigation bar. */
+/** Screens whose composer or footer already keeps clear of the navigation bar. */
 const ownsBottom = new Set([
   "new",
   "chat/[id]/index",
   "chat/[id]/reply/[root]",
+  "chat/[id]/agent/[agent]",
 ]);
 
 const styles = StyleSheet.create({

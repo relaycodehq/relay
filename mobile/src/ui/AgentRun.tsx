@@ -79,19 +79,22 @@ export function AgentRun({
   message,
   root,
   onOpenImage,
+  open,
 }: {
   chatId: string;
   message: ChatMessage;
   root?: string;
   /** Opens an image the turn looked at, by its path, among the others it looked at. */
   onOpenImage?: (path: string) => void;
+  /** Starts unfolded even once it's ended, e.g. as a subagent's whole run. */
+  open?: boolean;
 }) {
   const t = useTheme();
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
   // Open while the turn runs; folds back once it ends unless the reader toggled it.
   const [toggled, setToggled] = useState<boolean>();
-  const expanded = toggled ?? live;
+  const expanded = toggled ?? (open || live);
   if (!live && !entries.length) return null;
   const prefix = root && root.replace(/\/+$/, "") + "/";
   const display = (text: string) => (prefix ? text.split(prefix).join("") : text);
