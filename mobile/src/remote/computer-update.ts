@@ -24,6 +24,8 @@ const dismissed = new Map<string, string>();
 const timers = new Map<string, ReturnType<typeof setInterval>>();
 /** When each running update was asked for, so a watch picked up again still gives up in time. */
 const started = new Map<string, number>();
+/** The live client; async update replies must not revive a replaced one. */
+let following: { computer: string; call: RemoteClient["call"] } | undefined;
 const listeners = new Set<() => void>();
 let version = 0;
 
@@ -73,12 +75,14 @@ export async function updateComputer(
   }
   if (updates.get(computer)?.kind !== "updating") return;
   started.set(computer, Date.now());
-  watch(computer, call);
+  if (following?.computer === computer) watch(following);
 }
 
 /** Asks how the update goes every few seconds, over this connection. */
-function watch(computer: string, call: RemoteClient["call"]) {
+function watch(connection: NonNullable<typeof following>) {
+  const { computer, call } = connection;
   clearInterval(timers.get(computer));
+  let pending = false;
   timers.set(
     computer,
     setInterval(() => {
@@ -90,13 +94,17 @@ function watch(computer: string, call: RemoteClient["call"]) {
           message: "It hasn't come back on a new version. Check on it there.",
         });
       // Gone quiet while it restarts; the next connection says how it went.
+      if (pending) return;
+      pending = true;
       void call("computerInfo")
-        .then((info) =>
-          info.version !== update.from
+        .then((info) => {
+          if (following !== connection || updates.get(computer) !== update) return;
+          return info.version !== update.from
             ? set(computer, undefined)
-            : settle(computer, update.from, info.update),
-        )
-        .catch(() => {});
+            : settle(computer, update.from, info.update);
+        })
+        .catch(() => {})
+        .finally(() => { pending = false; });
     }, watchMs),
   );
 }
@@ -110,12 +118,10 @@ export function followUpdates(
   computer: string | undefined,
   call?: RemoteClient["call"],
 ) {
-  for (const [id, timer] of timers)
-    if (id !== computer) {
-      clearInterval(timer);
-      timers.delete(id);
-    }
-  if (computer && call && started.has(computer)) watch(computer, call);
+  following = computer && call ? { computer, call } : undefined;
+  for (const timer of timers.values()) clearInterval(timer);
+  timers.clear();
+  if (following && started.has(following.computer)) watch(following);
 }
 
 /** The computer answered on this version: an update that got it there is over. */

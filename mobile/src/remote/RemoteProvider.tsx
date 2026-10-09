@@ -33,6 +33,7 @@ import {
   setOfflineComputer,
 } from "./offline";
 import { PendingPairing } from "./pairing";
+import { MissingProjects } from "./missing-projects";
 import { forgetIcons } from "./project-icons";
 import { runningVersion } from "./self-update";
 
@@ -98,8 +99,6 @@ function deviceName() {
  */
 const live = globalThis as typeof globalThis & { relayClient?: RemoteClient };
 const pairingTimeout = 15_000;
-/** Long enough for a new thread's burst of list pushes to settle. */
-const newProjectsMs = 1_000;
 
 export function RemoteProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -116,9 +115,6 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
   const [pairing] = useState(() => new PendingPairing<RemoteClient>());
-  /** Projects a thread list named that the project list didn't have, asked about once each. */
-  const askedProjects = useRef(new Set<string>());
-  const projectsDue = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const connect = useCallback(
     (start: ConstructorParameters<typeof RemoteClient>[0]["start"]) => {
@@ -224,6 +220,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       if (live.relayClient === client) {
         client?.close();
         live.relayClient = undefined;
+        followUpdates(undefined);
       }
     },
     [client],
@@ -247,19 +244,14 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   // Thread lists come pushed, projects only with the overview: a thread in a
   // project the phone hasn't heard of (every new Scratchpad thread has a
   // folder of its own) asks for the overview again.
+  const missingProjects = useMemo(
+    () => status === "online" ? new MissingProjects(refresh) : undefined,
+    [status, refresh],
+  );
+  useEffect(() => () => missingProjects?.stop(), [missingProjects]);
   useEffect(() => {
-    if (!overview || status !== "online" || projectsDue.current) return;
-    const known = new Set(overview.projects.map((p) => p.id));
-    const unknown = overview.chats
-      .map((c) => c.projectId)
-      .filter((id) => !known.has(id) && !askedProjects.current.has(id));
-    if (!unknown.length) return;
-    for (const id of unknown) askedProjects.current.add(id);
-    projectsDue.current = setTimeout(() => {
-      projectsDue.current = undefined;
-      void refresh().catch(() => {});
-    }, newProjectsMs);
-  }, [overview, status, refresh]);
+    if (overview) missingProjects?.observe(overview);
+  }, [overview, missingProjects]);
 
   // Stable for a connection, so screens fetch again on reconnects rather than
   // on every thread update.
