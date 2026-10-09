@@ -791,7 +791,8 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       {!rootId && (
         <SubagentStrip
           batch={agentBatch}
-          reserve={running}
+          // Only Claude sends agents off; a Codex turn would hold an empty line.
+          reserve={running && lastSent?.provider === "claude"}
           display={display}
           onPress={() => setSheet("agents")}
           error={agents.error}
