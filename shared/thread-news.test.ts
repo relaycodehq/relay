@@ -66,7 +66,7 @@ describe("threadNews", () => {
         chatId: "a",
         kind: "finished",
         title: "Thread a",
-        body: "Done Fixed the race in turn-run.ts.",
+        body: "Done: Fixed the race in turn-run.ts.",
       },
       {
         chatId: "b",
@@ -131,6 +131,15 @@ describe("preview", () => {
       "Run this: then look.",
     );
     expect(preview("word ".repeat(100))).toHaveLength(240);
+  });
+
+  it("runs a heading into its text with a colon, and cuts where asked", () => {
+    expect(preview("## Proposed plan\n\n1. Add **retries** to `sync`")).toBe(
+      "Proposed plan: Add retries to sync",
+    );
+    expect(preview("# Done?\nYes.")).toBe("Done? Yes.");
+    expect(preview("## Summary")).toBe("Summary");
+    expect(preview("word ".repeat(100), 80)).toHaveLength(80);
   });
 });
 

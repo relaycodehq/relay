@@ -97,17 +97,23 @@ export function threadsRead(
 const read = (c: Pick<RemoteChatSummary, "seenAt" | "updated"> | undefined) =>
   !!c?.seenAt && c.seenAt >= c.updated;
 
-/** The start of an answer as plain words: no fences, marks or link targets. */
-export function preview(markdown: string) {
+/**
+ * The start of an answer as plain words: no fences, marks or link targets. A
+ * heading runs into what follows it, so it gets a colon.
+ */
+export function preview(markdown: string, length = previewLength) {
   const text = markdown
     .replace(/```[^\n]*\n[\s\S]*?(```|$)/g, " ")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$(?=\n\s*\S)/gm, (_, heading: string) =>
+      /[.:!?]$/.test(heading) ? heading : `${heading}:`,
+    )
     .replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/gm, "")
     .replace(/(\*\*|__|\*|_|~~|`)(?=\S)([^\n]*?\S)\1/g, "$2")
     .replace(/\s+/g, " ")
     .trim();
-  return text.length > previewLength
-    ? `${text.slice(0, previewLength - 1).trimEnd()}…`
+  return text.length > length
+    ? `${text.slice(0, length - 1).trimEnd()}…`
     : text;
 }

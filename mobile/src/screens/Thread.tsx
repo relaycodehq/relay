@@ -21,6 +21,7 @@ import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
 import { openPlan } from "../../../shared/open-plan";
+import { preview } from "../../../shared/thread-news";
 import { contextAgent } from "../../../shared/recipient";
 import { latestSetup } from "../../../shared/worktree-command";
 import { outsideBatch, runningBatch } from "../../../shared/subagents";
@@ -904,9 +905,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         title="Side conversations"
         onClose={() => setSheet(undefined)}
         items={sides.map((m) => ({
-          label:
-            withoutMention(m.body).split("\n")[0]!.slice(0, 80) ||
-            "Side conversation",
+          label: preview(withoutMention(m.body), 80) || "Side conversation",
           hint: `${m.side ? "Asked beside the conversation" : m.role === "user" ? "Your message" : "An answer"} · ${counts.get(m.id) ?? 0} ${counts.get(m.id) === 1 ? "reply" : "replies"}`,
           onPress: () => openReplies(m),
         }))}
