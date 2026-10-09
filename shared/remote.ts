@@ -106,6 +106,10 @@ export interface RemoteChatSummary {
   /** The agent asked something and is waiting for an answer. */
   waiting?: boolean;
   settledAt?: number;
+  /** A computed shelf position rather than a saved settle mark. */
+  autoSettled?: true;
+  /** Marked unread by hand, until someone opens it; older desktops leave it out. */
+  markedUnread?: true;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** Read up to this `updated`, on the desktop or any phone. */
@@ -168,6 +172,10 @@ export const imageBridge = 14;
  * output cut as a thread's is) and stop one, with conditional reads.
  */
 export const subagentsBridge = 15;
+/** From here a desktop takes `regenerateProjectChatTitle` from phones. */
+export const titleBridge = 15;
+/** From here thread summaries carry manual unread marks. */
+export const markedUnreadBridge = 15;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -358,6 +366,7 @@ export const phoneDesktopMethods = [
   "stopProjectChatAgent",
   "triageProjectChat",
   "renameProjectChat",
+  "regenerateProjectChatTitle",
   "markProjectChatSeen",
   "forkProjectChat",
   "rewindProjectTurn",
@@ -590,6 +599,7 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "projectMergeBranch",
   "projectCiStatus",
   "providerUsage",
+  "regenerateProjectChatTitle",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */

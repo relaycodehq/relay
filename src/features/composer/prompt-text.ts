@@ -1,5 +1,5 @@
 import type { Fragment, Node as PMNode } from "@tiptap/pm/model";
-import { quoteMarkdown } from "./composer-quotes";
+import { quoteMarkdown } from "../../../shared/composer-quotes";
 import { imageToken } from "../../../shared/image-refs";
 import { pasteMarkdown, type PastedText } from "../../../shared/pasted-texts";
 

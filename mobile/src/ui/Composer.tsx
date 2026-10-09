@@ -16,6 +16,7 @@ import { randomUUID } from "expo-crypto";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
+import { appendQuote } from "../../../shared/composer-quotes";
 import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
 import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
@@ -76,6 +77,8 @@ export interface ComposerHandle {
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
   focus(): void;
+  /** Adds a Markdown blockquote after the draft and puts the cursor under it. */
+  quote(markdown: string): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -130,6 +133,15 @@ export const Composer = forwardRef<
   const keyboard = useKeyboardShown();
   const [text, setText] = useState("");
   const input = useRef<TextInput>(null);
+  const [dictationOwner] = useState(() => ({}));
+  const quoteCursor = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const end = quoteCursor.current;
+    if (end === undefined) return;
+    quoteCursor.current = undefined;
+    input.current?.focus();
+    input.current?.setSelection(end, end);
+  }, [text]);
   useDraft(draftKey, text, setText);
   const [images, setImages] = useState<Attachment[]>([]);
   const held = useRef(images);
@@ -178,6 +190,17 @@ export const Composer = forwardRef<
     },
     settingsOn: (to) => switched(settings, to),
     focus: () => input.current?.focus(),
+    quote: async (markdown) => {
+      const now = dictationSnapshot();
+      const finishing = now.owner === dictationOwner && now.phase !== "idle";
+      // Keep the words already spoken; a dictation update mustn't overwrite the quote.
+      if (finishing && !(await stopDictation())) return;
+      // Set the cursor after React has handed the new value to the native input.
+      const next = appendQuote(finishing ? dictated.current : typed.current, markdown);
+      quoteCursor.current = next.end;
+      typed.current = next.text;
+      setText(next.text);
+    },
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});
@@ -200,7 +223,6 @@ export const Composer = forwardRef<
   const retryingScheduled = retrying && !!failedSend.sendAt;
   // Desktops from before phone dictation don't say, and can't.
   const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
-  const [dictationOwner] = useState(() => ({}));
   const dictation = useDictation();
   const dictating = dictation.owner === dictationOwner && dictation.phase !== "idle";
   const dictationError = dictation.owner === dictationOwner ? dictation.error : undefined;
