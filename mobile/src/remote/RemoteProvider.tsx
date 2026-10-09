@@ -37,6 +37,7 @@ import { readPairingsAtLaunch } from "./launch-pairings";
 import { PendingPairing } from "./pairing";
 import { MissingProjects } from "./missing-projects";
 import { forgetIcons } from "./project-icons";
+import { forgetComputerSeen, reachedComputer } from "./computer-seen";
 import { runningVersion } from "./self-update";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
@@ -45,6 +46,8 @@ type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
 export interface PairedComputer {
   id: string;
   name: string;
+  /** Where the phone reaches it, to tell apart pairings that share a name. */
+  address: string;
 }
 
 interface Remote {
@@ -130,6 +133,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setStatus(s);
           setDetail(why);
           if (s === "online") {
+            if (active.current) reachedComputer(active.current);
             newModelConnection();
             setName(next.name);
             pairing.online(next);
@@ -332,7 +336,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       outdated: !!overview && (overview.bridge ?? 1) < remoteBridgeVersion,
       behind:
         !!overview?.version && newerVersion(runningVersion, overview.version),
-      computers: saved.map((c) => ({ id: c.key, name: c.name })),
+      computers: saved.map((c) => ({
+        id: c.key,
+        name: c.name,
+        address: `${c.hosts[0] ?? "?"}:${c.port}`,
+      })),
       active: activeId,
       switchTo,
       pair: (link) => {
@@ -380,6 +388,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           }
         }
         forgetOffline(id);
+        forgetComputerSeen(id);
         void forgetIcons(id);
         await clearCredentials(id);
       },

@@ -225,6 +225,8 @@ export interface MenuItem {
   destructive?: boolean;
   checked?: boolean;
   disabled?: boolean;
+  /** A second action at the row's end, such as forgetting what the row stands for. */
+  trailing?: ReactNode;
   onPress: () => void;
 }
 
@@ -267,7 +269,7 @@ export function MenuSheet({
   );
 }
 
-export function MenuRow({ label, hint, icon, destructive, checked, disabled, onPress }: MenuItem) {
+export function MenuRow({ label, hint, icon, destructive, checked, disabled, trailing, onPress }: MenuItem) {
   const t = useTheme();
   return (
     <Pressable
@@ -289,6 +291,7 @@ export function MenuRow({ label, hint, icon, destructive, checked, disabled, onP
         </Text>
         {!!hint && <Text style={[styles.hint, { color: t.muted }]}>{hint}</Text>}
       </View>
+      {trailing}
     </Pressable>
   );
 }
