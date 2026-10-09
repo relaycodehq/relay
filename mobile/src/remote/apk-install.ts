@@ -5,6 +5,8 @@
 import { useSyncExternalStore } from "react";
 import { AppState, Linking } from "react-native";
 import { requireOptionalNativeModule } from "expo";
+import { newerVersion } from "../../../shared/phone-app";
+import { pendingVersion } from "./self-update";
 
 /** modules/relay-apk; missing in Expo Go, on iOS, and in APKs from before it. */
 interface RelayApk {
@@ -15,7 +17,10 @@ interface RelayApk {
   download(url: string, version: string, sha512?: string): Promise<string>;
   /** Shows Android's update prompt; on success Android closes the app. */
   install(path: string): Promise<"installed" | "cancelled">;
-  addListener(event: "onProgress", listener: (e: { done: number }) => void): { remove(): void };
+  addListener(
+    event: "onProgress",
+    listener: (e: { done: number }) => void,
+  ): { remove(): void };
   /** APKs from before the phone read the feed itself lack these two. */
   checksums?: boolean;
   metered?(): boolean;
@@ -52,26 +57,39 @@ const set = (next: ApkInstall) => {
   for (const listener of listeners) listener();
 };
 
-let fetching: { version: string; path: Promise<string | undefined> } | undefined;
+let fetching:
+  { offer: ApkOffer; path: Promise<string | undefined> } | undefined;
+let requested: Promise<void> | undefined;
 let waitingForAllow: { remove(): void } | undefined;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-function download(offer: ApkOffer, quiet: boolean): Promise<string | undefined> {
+async function download(
+  offer: ApkOffer,
+  quiet: boolean,
+): Promise<string | undefined> {
   if (!native) return Promise.resolve(undefined);
   if (fetching) {
-    if (fetching.version !== offer.version) return Promise.resolve(undefined);
+    const active = fetching;
     // Asked for while it was coming down unasked: from now on it's the user's.
     if (!quiet && state.kind === "downloading") set({ ...state, quiet: false });
-    return fetching.path;
+    const path = await active.path;
+    if (
+      active.offer.version === offer.version &&
+      (!offer.sha512 || active.offer.sha512 === offer.sha512)
+    )
+      return path;
+    // Re-enter native download to verify a same-version cache against the feed's checksum.
+    return download(offer, quiet);
   }
   const { version } = offer;
-  const path = (async () => {
+  const path = Promise.resolve().then(async () => {
     set({ kind: "downloading", version, done: 0, quiet });
-    const progress = native.addListener("onProgress", ({ done }) => {
-      if (state.kind === "downloading") set({ ...state, done });
-    });
+    let progress: { remove(): void } | undefined;
     try {
+      progress = native.addListener("onProgress", ({ done }) => {
+        if (state.kind === "downloading") set({ ...state, done });
+      });
       const path = native.checksums
         ? await native.download(offer.url, version, offer.sha512 ?? "")
         : await native.download(offer.url, version);
@@ -84,29 +102,54 @@ function download(offer: ApkOffer, quiet: boolean): Promise<string | undefined> 
       } else set({ kind: "failed", version, message: message(e) });
       return undefined;
     } finally {
-      progress.remove();
+      progress?.remove();
       fetching = undefined;
     }
-  })();
-  fetching = { version, path };
+  });
+  fetching = { offer, path };
   return path;
 }
 
 /** Downloads the APK without installing it, so a tap later goes straight to Android's prompt. */
 export function prefetchApk(offer: ApkOffer) {
-  if ("version" in state && (state.version === offer.version || state.kind === "installing" || state.kind === "allow"))
+  if (
+    "version" in state &&
+    (state.version === offer.version ||
+      state.kind === "installing" ||
+      state.kind === "allow")
+  )
     return;
   void download(offer, true);
 }
 
 /** Downloads `offer` and asks Android to install it; without the native side, the browser does. */
-export async function installApk(offer: ApkOffer) {
-  if (!native) return void Linking.openURL(offer.url);
+export function installApk(offer: ApkOffer): Promise<void> {
+  return (requested ??= requestInstall(offer)
+    .catch((e) => {
+      waitingForAllow?.remove();
+      waitingForAllow = undefined;
+      set({ kind: "failed", version: offer.version, message: message(e) });
+    })
+    .finally(() => {
+      requested = undefined;
+    }));
+}
+
+async function requestInstall(offer: ApkOffer) {
+  if (!native) {
+    await Linking.openURL(offer.url);
+    return;
+  }
   if (state.kind === "installing") return;
+  if (state.kind === "allow" && state.version === offer.version) {
+    native.allowInstalls();
+    return;
+  }
   waitingForAllow?.remove();
   waitingForAllow = undefined;
   const path = await download(offer, false);
   if (!path) return;
+  checkVersion(offer.version);
   if (native.canInstall()) return install(offer.version, path);
   set({ kind: "allow", version: offer.version });
   // Carries on by itself once the user comes back with the switch on.
@@ -121,14 +164,21 @@ export async function installApk(offer: ApkOffer) {
 
 async function install(version: string, path: string) {
   if (!native || state.kind === "installing") return;
-  set({ kind: "installing", version });
   try {
+    checkVersion(version);
+    set({ kind: "installing", version });
     // "cancelled" leaves it downloaded for the next tap.
     await native.install(path);
     set({ kind: "downloaded", version });
   } catch (e) {
     set({ kind: "failed", version, message: message(e) });
   }
+}
+
+function checkVersion(version: string) {
+  const pending = pendingVersion();
+  if (newerVersion(pending, version))
+    throw new Error(`This app would replace Relay ${pending} with older code. Look for a new app again.`);
 }
 
 export function useApkInstall() {

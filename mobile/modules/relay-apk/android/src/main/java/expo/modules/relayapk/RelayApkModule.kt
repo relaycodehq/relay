@@ -75,7 +75,10 @@ class RelayApkModule : Module() {
     val dir = File(context.cacheDir, "apk").apply { mkdirs() }
     val file = File(dir, "Relay-$version.apk")
     if (file.exists()) {
-      if (sha512.isEmpty() || digestOf(file) == sha512) return file.path
+      if (sha512.isEmpty() || digestOf(file) == sha512) {
+        check(file, version)
+        return file.path
+      }
       file.delete()
     }
     // Older versions' downloads, and a half-finished one.
@@ -109,16 +112,15 @@ class RelayApkModule : Module() {
         }
       }
       if (total > 0 && done != total) throw ApkException("The download stopped early.")
+      if (sha512.isNotEmpty() && Base64.encodeToString(digest.digest(), Base64.NO_WRAP) != sha512)
+        throw ApkException("The download doesn't match the release's checksum.")
+      check(part, version)
+      if (!part.renameTo(file)) throw ApkException("Couldn't keep the downloaded app.")
+      return file.path
     } finally {
       connection.disconnect()
-    }
-    if (sha512.isNotEmpty() && Base64.encodeToString(digest.digest(), Base64.NO_WRAP) != sha512) {
       part.delete()
-      throw ApkException("The download doesn't match the release's checksum.")
     }
-    check(part, version)
-    part.renameTo(file)
-    return file.path
   }
 
   private fun digestOf(file: File): String {

@@ -35,6 +35,9 @@ export type SelfUpdate =
   | { kind: "apk"; version: string; url: string };
 
 let state: SelfUpdate = { kind: "none" };
+/** Installing an APK drops the staged bundle too; don't offer older code than that. */
+export const pendingVersion = () =>
+  state.kind === "ready" || state.kind === "downloading" ? state.version : runningVersion;
 const listeners = new Set<() => void>();
 const set = (next: SelfUpdate) => {
   state = next;
