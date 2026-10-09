@@ -20,6 +20,12 @@ export function useThread(id: string) {
   const [error, setError] = useState<Error>();
   const current = useRef<Thread | undefined>(undefined);
   current.current = thread;
+  const life = useRef({ active: true });
+  useEffect(() => {
+    const scope = { active: true };
+    life.current = scope;
+    return () => { scope.active = false; };
+  }, [remote.call, id]);
   // One fetch at a time; a request during one runs once more after it.
   const [oneFetch] = useState(oneAtATime);
   // When the fetch the thread last came from started, against the outbox's sends.
@@ -43,13 +49,15 @@ export function useThread(id: string) {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, remote.active]);
 
   const load = useCallback(
-    () =>
-      oneFetch(async () => {
+    () => {
+      const scope = life.current;
+      return oneFetch(async () => {
         try {
           await cacheRead.current;
+          if (!scope.active) return;
           const started = stamp();
           const patch = await remote.call(
             "chat",
@@ -57,6 +65,7 @@ export function useThread(id: string) {
             knownOf(current.current),
             history,
           );
+          if (!scope.active) return;
           let next: Thread;
           try {
             next = applyPatch(current.current, patch);
@@ -67,14 +76,17 @@ export function useThread(id: string) {
               await remote.call("chat", id, undefined, history),
             );
           }
+          if (!scope.active) return;
           setThread((held) => keepNewer(next, held));
           setFetched(started);
           saveThread(id, next);
           setError(undefined);
         } catch (e) {
+          if (!scope.active) return;
           setError(e instanceof Error ? e : new Error(String(e)));
         }
-      }),
+      });
+    },
     [oneFetch, remote.call, id, history],
   );
 

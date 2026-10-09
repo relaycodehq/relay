@@ -185,6 +185,7 @@ export class RemoteBridge {
       const patch = await this.host.chat(id, known);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
+      const sendPending = inFlight || (sendId !== undefined && sending());
       return {
         id: patch.id,
         projectId: patch.projectId,
@@ -192,9 +193,9 @@ export class RemoteBridge {
         scope: patch.scope,
         ...(sendId !== undefined
           ? {
+              sendPending,
               hasSend:
-                inFlight ||
-                sending() ||
+                sendPending ||
                 patch.messages.some(
                   (m) => (typeof m === "string" ? m : m.id) === sendId,
                 ) ||

@@ -39,20 +39,32 @@ it("lets go of a quick second send the desktop queued instead of showing it twic
   const first = outgoing("first", { sent: stamp() });
   const second = outgoing("second", { sent: stamp() });
   const fetched = stamp();
-  const thread = { messages: [message("first")], queue: [queued("second")], scheduled: [] };
-  expect(settled([first, second], chatId, heldIds(thread), fetched)).toEqual([first, second]);
+  const thread = {
+    messages: [message("first")],
+    queue: [queued("second")],
+    scheduled: [],
+  };
+  expect(
+    settled([first, second], "mac", chatId, heldIds(thread), fetched),
+  ).toEqual([first, second]);
 });
 
 it("lets go of one sent with Send later once the thread lists it", () => {
   const later = outgoing("later");
-  const thread = { messages: [], queue: [], scheduled: [{ ...queued("later"), at: 9 }] };
-  expect(settled([later], chatId, heldIds(thread), 0)).toEqual([later]);
+  const thread = {
+    messages: [],
+    queue: [],
+    scheduled: [{ ...queued("later"), at: 9 }],
+  };
+  expect(settled([later], "mac", chatId, heldIds(thread), 0)).toEqual([later]);
 });
 
 it("lets go of a send taken back out of the queue before the phone saw it there", () => {
   const taken = outgoing("taken", { sent: stamp() });
   const fetched = stamp();
-  expect(settled([taken], chatId, heldIds({ messages: [] }), fetched)).toEqual([taken]);
+  expect(
+    settled([taken], "mac", chatId, heldIds({ messages: [] }), fetched),
+  ).toEqual([taken]);
 });
 
 it("keeps a send the fetch began before the desktop took it, and those still failing", () => {
@@ -62,26 +74,48 @@ it("keeps a send the fetch began before the desktop took it, and those still fai
   const elsewhere = outgoing("elsewhere", { chatId: "chat-2", sent: 1 });
   const going = outgoing("going");
   expect(
-    settled([late, failed, elsewhere, going], chatId, heldIds({ messages: [] }), fetched + 10),
+    settled(
+      [late, failed, elsewhere, going],
+      "mac",
+      chatId,
+      heldIds({ messages: [] }),
+      fetched + 10,
+    ),
   ).toEqual([late]);
-  expect(settled([late, failed, elsewhere, going], chatId, heldIds({ messages: [] }), fetched)).toEqual(
-    [],
-  );
+  expect(
+    settled(
+      [late, failed, elsewhere, going],
+      "mac",
+      chatId,
+      heldIds({ messages: [] }),
+      fetched,
+    ),
+  ).toEqual([]);
 });
 
 it("reads ids from a patch that only names the messages the phone holds", () => {
-  expect([...heldIds({ messages: ["a", message("b")], queue: [queued("c")] })]).toEqual([
-    "a",
-    "b",
-    "c",
-  ]);
+  expect([
+    ...heldIds({ messages: ["a", message("b")], queue: [queued("c")] }),
+  ]).toEqual(["a", "b", "c"]);
+});
+
+it("never settles another computer's copy of a handed-over thread, or another thread's send", () => {
+  const here = outgoing("same", { sent: 1 });
+  const there = outgoing("same", { computer: "mini", sent: 1 });
+  const otherThread = outgoing("same", { chatId: "other", sent: 1 });
+  expect(
+    settled([here, there, otherThread], "mac", chatId, new Set(["same"]), 10),
+  ).toEqual([here]);
 });
 
 it("says a send that got no answer may have gone out", () => {
-  expect(outgoingMessage(outgoing("x", { error: "Mac didn't answer in time." })).error).toBe(
-    "Not sent: Mac didn't answer in time.",
-  );
   expect(
-    outgoingMessage(outgoing("x", { error: "Mac didn't answer in time.", unsure: true })).error,
+    outgoingMessage(outgoing("x", { error: "Mac didn't answer in time." }))
+      .error,
+  ).toBe("Not sent: Mac didn't answer in time.");
+  expect(
+    outgoingMessage(
+      outgoing("x", { error: "Mac didn't answer in time.", unsure: true }),
+    ).error,
   ).toBe("Maybe not sent: Mac didn't answer in time.");
 });

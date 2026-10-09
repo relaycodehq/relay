@@ -43,14 +43,16 @@ export function heldIds(thread: Holding | undefined): ReadonlySet<string> {
  */
 export const settled = (
   items: readonly Outgoing[],
+  computer: string,
   chatId: string,
   held: ReadonlySet<string>,
   fetched: number,
 ) =>
   items.filter(
     (o) =>
-      held.has(o.send.id) ||
-      (o.chatId === chatId && !!o.sent && o.sent < fetched),
+      o.computer === computer &&
+      o.chatId === chatId &&
+      (held.has(o.send.id) || (!!o.sent && o.sent < fetched)),
   );
 
 /** How the thread shows one until the desktop's copy arrives. */

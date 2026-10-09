@@ -74,6 +74,12 @@ import { type, useTheme } from "../ui/theme";
 /** A thread, or with `rootId` one of its side conversations. */
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const remote = useRemote();
+  // A handed-over thread keeps its id on another computer; none of the old screen's state follows it.
+  return <ThreadBody key={`${remote.active}:${id}:${rootId ?? ""}`} id={id} rootId={rootId} />;
+}
+
+function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
+  const remote = useRemote();
   const t = useTheme();
   const { thread, fetched, error, reload, summary, loadEarlier } = useThread(id);
   // Open on the phone counts as read, for the Activity list's unread marks,
@@ -97,10 +103,11 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const composer = useRef<ComposerHandle>(null);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
-  const outbox = useOutbox(id);
+  const computer = remote.active ?? "";
+  const outbox = useOutbox(computer, id);
   // Queued and scheduled ones show in the queue instead; those it lost go.
   const held = useMemo(() => heldIds(thread), [thread]);
-  useEffect(() => arrived(id, held, fetched), [id, held, fetched]);
+  useEffect(() => arrived(computer, id, held, fetched), [computer, id, held, fetched]);
   const outgoing = useMemo(
     () => outbox.filter((o) => !held.has(o.send.id)),
     [outbox, held],
@@ -113,7 +120,8 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     return mine.length ? [...own, ...mine] : own;
   }, [all, rootId, outgoing]);
   // The desktop took one the thread doesn't show yet: ask for it.
-  const fetchSent = outgoing.some((o) => o.sent);
+  // Each acknowledgement asks again, even if another acknowledged send is still pending.
+  const fetchSent = outgoing.filter((o) => o.sent).map((o) => o.sent).join(":");
   useEffect(() => {
     if (fetchSent) void reload();
   }, [fetchSent, reload]);
@@ -374,11 +382,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         })),
       },
     );
-    // A plain send shows in the thread at once; queued and scheduled ones
-    // land in the queue, which only the desktop's answer fills.
-    if (!delivery && !sendAt) return deliver(remote.desktop, remote.active ?? "", id, message);
-    await remote.desktop("sendProjectChat", id, message);
-    await reload();
+    return deliver(remote.desktop, computer, id, message);
   };
 
   const threadItems: MenuItem[] = where
@@ -723,19 +727,20 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         />
       )}
       <UnsentStrip
-        unsent={outgoing.filter((o) => o.error)}
+        unsent={outgoing.filter((o) => o.error && (o.send.parentId ?? undefined) === rootId)}
         onRetry={(o) => retry(remote.desktop, o.send.id)}
         onEdit={async (o) => {
           // Unanswered, it may be on the computer already: sent again it would go twice.
           if (o.unsure && (await reached(remote.call, o, knownOf(thread)))) {
             void reload();
-            return Alert.alert("It went out after all", `${remote.name} has it, so it stays sent.`);
+            return Alert.alert("The computer has it", `${remote.name} has this send or is still processing it. Wait for it to finish before editing.`);
           }
-          drop(o.send.id);
-          composer.current?.restore({
-            body: withoutMention(o.send.body),
+          const restored = composer.current?.restore({
+            body: `${o.send.side ? "/btw " : ""}${withoutMention(o.send.body)}`,
             images: o.send.images ?? [],
           });
+          if (!restored) throw new Error("The composer isn't ready yet.");
+          drop(o.send.id);
         }}
       />
       {request && (
@@ -763,13 +768,8 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
               // On the planner's own model, as the composer would switch to it.
               const on = composer.current?.settingsOn(planProvider) ?? settings;
               const { send: message, nextSettings } = remotePlanGoAhead(on, planProvider, randomUUID());
-              remote
-                .desktop("sendProjectChat", id, { ...message, ...(rootId ? { parentId: rootId } : {}) })
-                .then(() => {
-                  setSettings(nextSettings);
-                  return reload();
-                })
-                .catch((e) => Alert.alert("Couldn't send it", String(e?.message ?? e)));
+              deliver(remote.desktop, computer, id, { ...message, ...(rootId ? { parentId: rootId } : {}) });
+              setSettings(nextSettings);
             }}
           />
         </View>

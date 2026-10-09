@@ -88,7 +88,8 @@ function run(desktop: Desktop, item: Outgoing) {
     (e) =>
       update(item.send.id, {
         error: e instanceof Error ? e.message : String(e),
-        unsure: e instanceof Unanswered,
+        // A refused retry doesn't prove that an earlier unanswered copy failed.
+        unsure: item.unsure || e instanceof Unanswered,
       }),
   );
 }
@@ -109,7 +110,7 @@ export function deliver(
 export function retry(desktop: Desktop, id: string) {
   const item = items.find((o) => o.send.id === id);
   if (!item) return;
-  update(id, { error: undefined, unsure: undefined });
+  update(id, { error: undefined });
   run(desktop, { ...item, error: undefined });
 }
 
@@ -128,8 +129,8 @@ export function drop(id: string) {
  * Forgets the ones thread `chatId` now holds itself, or no longer does,
  * reading as `held` from a fetch made at `fetched`.
  */
-export function arrived(chatId: string, held: ReadonlySet<string>, fetched: number) {
-  const done = new Set(settled(items, chatId, held, fetched));
+export function arrived(computer: string, chatId: string, held: ReadonlySet<string>, fetched: number) {
+  const done = new Set(settled(items, computer, chatId, held, fetched));
   if (!done.size) return;
   for (const o of done) unkeep(o.send.id);
   set(items.filter((o) => !done.has(o)));
@@ -147,6 +148,8 @@ export async function reached(
   const thread = await call("chat", o.chatId, known, remoteHistory, o.send.id);
   if (thread.hasSend === undefined)
     throw new Error("Update Relay on the computer before taking back an unanswered send.");
+  // A receipt covers the full history, including an accepted send outside this page.
+  if (thread.hasSend && !thread.sendPending) drop(o.send.id);
   return thread.hasSend;
 }
 
@@ -156,9 +159,9 @@ const subscribe = (listener: () => void) => {
 };
 const snapshot = () => items;
 
-export function useOutbox(chatId: string) {
+export function useOutbox(computer: string, chatId: string) {
   const all = useSyncExternalStore(subscribe, snapshot);
-  return all.filter((o) => o.chatId === chatId);
+  return all.filter((o) => o.computer === computer && o.chatId === chatId);
 }
 
 /** A pasted image of one still on its way, which the desktop can't hand back yet. */

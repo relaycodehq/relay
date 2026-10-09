@@ -294,6 +294,8 @@ export interface RemoteChat extends Pick<
   lastParentId?: string | null;
   /** Receipt for the requested send, including one still being processed; older desktops omit it. */
   hasSend?: boolean;
+  /** The requested send is still in dispatch, so its eventual failure must stay in the outbox. */
+  sendPending?: boolean;
 }
 
 export const remoteHistory = 100;

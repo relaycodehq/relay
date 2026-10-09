@@ -444,7 +444,10 @@ it("checks unanswered sends while dispatch runs, after reconnect, and outside th
   await vi.waitFor(() => expect(dispatched).toHaveLength(1));
   const receipt = (client: RemoteClient, id = send.id) =>
     client.call("chat", chatId, undefined, 1, id);
-  expect((await receipt(p.client)).hasSend).toBe(true);
+  expect(await receipt(p.client)).toMatchObject({
+    hasSend: true,
+    sendPending: true,
+  });
   p.client.close();
   expect(await unanswered).toBeInstanceOf(Unanswered);
   const again = phone(p.credentials()!);
@@ -467,6 +470,7 @@ it("checks unanswered sends while dispatch runs, after reconnect, and outside th
   finishRetry();
   await retry;
   const checked = await receipt(again.client);
+  expect(checked.sendPending).toBe(false);
   expect(checked.messages).toHaveLength(1);
   expect(checked.messages[0]).not.toMatchObject({ id: send.id });
   expect(checked.hasSend).toBe(true);
