@@ -50,7 +50,7 @@ function relay(cwd: string, args: string[], { headless = true } = {}) {
     try {
       return { ...run, app: readFileSync(join(dir, "app.log"), "utf8") };
     } catch {
-      spawnSync("sleep", ["0.05"]);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
   }
   return { ...run, app: undefined };
@@ -67,7 +67,8 @@ it("hands commands to the headless Relay, even with a folder of that name", () =
   const run = relay(dir, ["logs", "-f"]);
   expect(run.stdout).toBe("logs\n-f\n");
   expect(run.app).toBeUndefined();
-});
+  // Proving the app stayed shut waits out the whole poll.
+}, 10000);
 
 it("says how to install the headless Relay when it isn't", () => {
   const run = relay(dir, ["status"], { headless: false });
