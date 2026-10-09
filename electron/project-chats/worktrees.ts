@@ -31,7 +31,7 @@ import {
   selectedAgentWorktree,
   threadWorktree,
 } from "../../shared/projects";
-import { recoverAgentWorktrees } from "./agent-worktrees";
+import { recoverAgentWorktrees, threadWorktreePaths } from "./agent-worktrees";
 import { sentAgent } from "../../shared/recipient";
 
 /** What an agent asks for when it moves its thread into a worktree. */
@@ -63,7 +63,13 @@ export class ThreadWorktrees {
       // Git can be unavailable while the conversation itself remains readable.
       const worktrees = await this.core.projects
         .root(chat.projectId)
-        .then((root) => recoverAgentWorktrees(root, this.folder, chat))
+        .then((root) =>
+          recoverAgentWorktrees(
+            root,
+            threadWorktreePaths(this.core.store.get().chats),
+            chat,
+          ),
+        )
         .catch((error) => {
           if (force) throw error;
           return undefined;

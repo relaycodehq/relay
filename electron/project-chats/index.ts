@@ -177,7 +177,7 @@ export class ProjectChats {
           computer,
         ),
     });
-    this.runner = new TurnRunner(core, this.titles, this.worktrees.folder, {
+    this.runner = new TurnRunner(core, this.titles, {
       unprompted: (chat, root, provider, parentId) =>
         this.turns.unprompted(chat, root, provider, parentId),
       limited: (id, messageId, limit) =>

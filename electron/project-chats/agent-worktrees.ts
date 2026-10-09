@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { basename, join, relative, isAbsolute } from "node:path";
+import { basename, join } from "node:path";
 import { git } from "../git/git";
 import {
   agentWorktreeKey,
   selectedAgentWorktree,
   type AgentActivity,
   type AgentWorktree,
+  type ChatWorktree,
   type ProjectChat,
 } from "../../shared/projects";
 
@@ -18,6 +19,18 @@ import {
 // it says whose it is.
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const unquote = (text: string) => text.replace(/^(['"])(.*)\1$/, "$2");
+
+/** The shell variables `before` sets, like `WT="$HOME/…/name"`, the last one winning. */
+function assigned(before: string) {
+  const vars = new Map<string, string>();
+  for (const [, name, value] of before.matchAll(
+    /(?:^|[\s;&|(])(?:export\s+|local\s+)?([A-Za-z_]\w*)=("[^"]*"|'[^']*'|[^\s;&|)'"]*)/g,
+  ))
+    vars.set(name, unquote(value));
+  return vars;
+}
 
 /** Whether a command is a `git worktree add` naming `path`, by its folder name since agents write it relative or without macOS's /private. */
 export function addsWorktree(command: string, path: string) {
@@ -46,7 +59,14 @@ export function addsWorktree(command: string, path: string) {
       }
       if (options && arg.startsWith("-")) continue;
       // The first positional argument is the folder; branch names aren't ownership evidence.
-      return target.test(arg.replace(/^(['"])(.*)\1$/, "$2"));
+      const vars = assigned(command.slice(0, match.index));
+      const folder = arg.startsWith("'")
+        ? unquote(arg)
+        : unquote(arg).replace(
+            /\$\{?([A-Za-z_]\w*)\}?/g,
+            (whole, name: string) => vars.get(name) ?? whole,
+          );
+      return target.test(folder);
     }
     return false;
   });
@@ -118,8 +138,21 @@ export function turnWorkspace(chat: ProjectChat) {
 
 type Live = Map<string, { branch?: string; gitdir?: string }>;
 
-/** The repository's worktrees still on disk, other than `root` and those under `skip`. */
-async function liveWorktrees(root: string, skip: string): Promise<Live> {
+/**
+ * The folders of threads' own worktrees. Relay made those, whatever an
+ * agent's command says; any other folder, in Relay's worktrees folder too,
+ * may be an agent's.
+ */
+export const threadWorktreePaths = (
+  chats: { worktree?: ChatWorktree }[] = [],
+): ReadonlySet<string> =>
+  new Set(chats.flatMap((c) => (c.worktree?.path ? [c.worktree.path] : [])));
+
+/** The repository's worktrees still on disk, other than `root` and threads' own. */
+async function liveWorktrees(
+  root: string,
+  relayMade: ReadonlySet<string>,
+): Promise<Live> {
   const live: Live = new Map();
   const out = await git(root, ["worktree", "list", "--porcelain"]);
   for (const block of out.split("\n\n")) {
@@ -127,9 +160,12 @@ async function liveWorktrees(root: string, skip: string): Promise<Live> {
     const path = lines
       .find((l) => l.startsWith("worktree "))
       ?.slice("worktree ".length);
-    if (!path || lines.some((l) => l.startsWith("prunable"))) continue;
-    const inside = relative(skip, path);
-    if (!inside.startsWith("..") && !isAbsolute(inside)) continue;
+    if (
+      !path ||
+      relayMade.has(path) ||
+      lines.some((l) => l.startsWith("prunable"))
+    )
+      continue;
     const branch = lines
       .find((l) => l.startsWith("branch "))
       ?.slice("branch ".length)
@@ -178,7 +214,7 @@ function reconcile(
 /** Backfills missed creation events, including a worktree recovered at another path. */
 export async function recoverAgentWorktrees(
   root: string,
-  relayWorktrees: string,
+  relayMade: ReadonlySet<string>,
   chat: ProjectChat,
 ) {
   const commands = chat.messages.flatMap((m) =>
@@ -193,7 +229,7 @@ export async function recoverAgentWorktrees(
   );
   if (!commands.length && !chat.agentWorktrees?.length) return [];
   return reconcile(
-    await liveWorktrees(root, relayWorktrees),
+    await liveWorktrees(root, relayMade),
     chat.agentWorktrees ?? [],
     commands,
   );
@@ -206,16 +242,16 @@ export async function recoverAgentWorktrees(
  */
 export function watchAgentWorktrees(
   root: string,
-  relayWorktrees: string,
+  relayMade: () => ReadonlySet<string>,
   recorded: () => AgentWorktree[],
   onChange: (worktrees: AgentWorktree[]) => void | Promise<void>,
 ) {
-  const before = liveWorktrees(root, relayWorktrees).catch(() => null);
+  const before = liveWorktrees(root, relayMade()).catch(() => null);
   let queue = Promise.resolve();
   const check = async (command: string) => {
     const known = await before;
     if (!known) return;
-    const live = await liveWorktrees(root, relayWorktrees);
+    const live = await liveWorktrees(root, relayMade());
     const next = reconcile(
       live,
       recorded(),
