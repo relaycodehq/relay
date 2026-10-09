@@ -68,6 +68,7 @@ import { ReadingBack } from "../ui/AgentRun";
 import { messageExtras, threadExtras } from "../ui/menu-extras";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
+import { SelectText } from "../ui/SelectText";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
 import { SubagentStrip, SubagentsSheet } from "../ui/Subagents";
 import { openThread, useStartedSlot } from "../ui/StartedThreads";
@@ -123,6 +124,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     "thread" | "snooze" | "rename" | "sides" | "agents"
   >();
   const [acting, setActing] = useState<ChatMessage>();
+  const [selecting, setSelecting] = useState<string>();
   const composer = useRef<ComposerHandle>(null);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
@@ -575,6 +577,12 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           m.role === "user" ? withoutMention(m.body) : m.body,
         ),
     },
+    {
+      label: "Select text",
+      hint: "The whole message, to copy any part of it",
+      onPress: () =>
+        setSelecting(m.role === "user" ? withoutMention(m.body) : m.body),
+    },
     ...(!rootId
       ? [
           {
@@ -978,6 +986,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         items={acting ? messageItems(acting) : []}
         onClose={() => setActing(undefined)}
       />
+      <SelectText text={selecting} onClose={() => setSelecting(undefined)} />
     </KeyboardAware>
   );
 }
