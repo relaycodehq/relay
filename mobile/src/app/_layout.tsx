@@ -7,6 +7,7 @@ import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
+import { useLatestAppChecks } from "../remote/latest-app";
 import { useThreadNotifications } from "../remote/watch";
 import {
   FullWidthContext,
@@ -52,6 +53,7 @@ function Screens() {
   useOrientationPolicy();
   useOfflineCopies();
   useThreadNotifications();
+  useLatestAppChecks();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);

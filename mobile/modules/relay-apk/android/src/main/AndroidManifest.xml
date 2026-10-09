@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <application>
     <!-- Not exported: only the system, through Relay's own PendingIntent, reports an install. -->
     <receiver android:name="expo.modules.relayapk.InstallReceiver" android:exported="false" />
