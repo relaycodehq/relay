@@ -1,4 +1,5 @@
 import type { AgentActivity } from "../../../shared/projects";
+import { patchPaths } from "../activity";
 import type { ToolPart } from "./events";
 
 /** OpenCode's tools that write files, by the input field that names the file. */
@@ -94,13 +95,7 @@ export function editedPaths(part: ToolPart): string[] {
         : typeof input.patch === "string"
           ? input.patch
           : "";
-    return [
-      ...patch.matchAll(
-        /^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm,
-      ),
-    ]
-      .map((m) => (m[1] ?? m[2]).trim())
-      .slice(0, 30);
+    return patchPaths(patch);
   }
   return [];
 }

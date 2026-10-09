@@ -159,3 +159,13 @@ export function claudeEditedPaths(name: string, value: unknown): string[] {
   const path = (value as Record<string, unknown>)[claudeFileTools[name]];
   return typeof path === "string" && path ? [path] : [];
 }
+
+/** Every file an apply_patch-style patch adds, changes, deletes or moves to. */
+export const patchPaths = (patch: string) =>
+  [
+    ...patch.matchAll(
+      /^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm,
+    ),
+  ]
+    .map((m) => (m[1] ?? m[2])!.trim())
+    .slice(0, 30);
