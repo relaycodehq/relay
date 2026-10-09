@@ -9,6 +9,8 @@ const emit = (value) =>
     JSON.stringify({ uuid: `fixture-${++count}`, session_id, ...value }) + "\n",
   );
 const root = process.cwd();
+// Stretches the agents' work, for watching them by hand on a phone.
+const slower = Number(process.env.RELAY_FIXTURE_AGENTS_SLOWER) || 1;
 const kinds = [
   {
     id: "toolu_render",
@@ -112,7 +114,7 @@ const result = (parent, toolUseId, text, extra = {}) =>
   });
 const later = (agent, ms, fn) => {
   if (!Number.isFinite(ms)) return;
-  const timer = setTimeout(fn, ms);
+  const timer = setTimeout(fn, ms * slower);
   timers.set(agent.task, [...(timers.get(agent.task) ?? []), timer]);
 };
 function end(agent, status) {

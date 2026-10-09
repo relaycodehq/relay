@@ -8,7 +8,8 @@
 // for this computer. --seed starts two threads so the phone has something to show.
 // --images starts one whose answer embeds two screenshots, a missing file and a web image.
 // --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` and starts a
-// thread where it sends three agents off; each message there sends three more.
+// thread where it sends three agents off, eight times slower than the spec's;
+// each message there sends three more.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -122,6 +123,7 @@ const app = await electron.launch({
     // reaches it as 10.0.2.2.
     RELAY_REMOTE_TAILNET: "127.0.0.1",
     RELAY_AGENT_TURN_MS: process.env.RELAY_AGENT_TURN_MS ?? "1500",
+    ...(subagents ? { RELAY_FIXTURE_AGENTS_SLOWER: "8" } : {}),
   },
 });
 const stop = async () => {
