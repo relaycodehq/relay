@@ -94,12 +94,12 @@ export function SurfacePicker({
   return (
     <div className="surface-picker">
       <h3>Open a surface</h3>
-      <div className="surface-picker-list" role="menu">
+      {/* No menu role: popupOpen() would take it for a popup and mute every shortcut. */}
+      <div className="surface-picker-list">
         {items.map((item) => (
           <button
             key={item.id}
             type="button"
-            role="menuitem"
             className="surface-picker-item"
             disabled={item.disabled}
             aria-keyshortcuts={item.letter}

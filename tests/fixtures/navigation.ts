@@ -97,7 +97,9 @@ export async function openSurface(
           .getByRole("tab")
       : panel.getByRole("tab", { name, exact: true });
   if (name !== "Terminal" && (await tab.isVisible())) return tab.click();
-  const item = panel.getByRole("menuitem", { name, exact: true });
+  const item = panel
+    .locator(".surface-picker")
+    .getByRole("button", { name, exact: true });
   if (!(await item.isVisible()))
     await panel
       .getByRole("button", { name: "Open another surface", exact: true })

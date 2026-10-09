@@ -77,8 +77,16 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     // and is remembered.
     await toggle("Panel").click();
     await expect(
-      page.getByRole("menuitem", { name: "Files", exact: true }),
+      page
+        .locator(".surface-picker")
+        .getByRole("button", { name: "Files", exact: true }),
     ).toBeVisible();
+    // The picker is no popup, so the app's shortcuts still work beside it.
+    const collapsed = page.locator(".titlebar.sidebar-collapsed");
+    await page.keyboard.press("ControlOrMeta+b");
+    await expect(collapsed).toHaveCount(1);
+    await page.keyboard.press("ControlOrMeta+b");
+    await expect(collapsed).toHaveCount(0);
     await page.keyboard.press("f");
     await openInFileTree(page, "src/b.ts");
     await expect(
