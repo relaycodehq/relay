@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import { pickApk } from "../../../shared/phone-release";
+import { newerVersion } from "../../../shared/phone-app";
 import { installApk, useApkInstall, type ApkInstall } from "../remote/apk-install";
 import { latestOffer, releaseBuild, useLatestApp } from "../remote/latest-app";
 import { useRemote } from "../remote/RemoteProvider";
@@ -22,11 +23,13 @@ export function UpdateBanner() {
         Getting Relay {update.version} from {name}… {Math.round(update.done * 100)}%
       </Text>
     );
-  const ready = update.kind === "ready" ? update : undefined;
+  const feedOffer = releaseBuild ? latestOffer(latest) : undefined;
+  const ready = update.kind === "ready" && !newerVersion(feedOffer?.version ?? "0.0.0", update.version)
+    ? update : undefined;
   const fromDesktop = update.kind === "apk" ? update : undefined;
   const offer = ready
     ? undefined
-    : pickApk(fromDesktop, releaseBuild ? latestOffer(latest) : undefined);
+    : pickApk(fromDesktop, feedOffer);
   if (!ready && !offer) return null;
   const mine = offer && "version" in apk && apk.version === offer.version ? apk : undefined;
   if ((mine?.kind === "downloading" && !mine.quiet) || mine?.kind === "installing")

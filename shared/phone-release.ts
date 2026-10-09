@@ -4,7 +4,12 @@ import { z } from "zod";
 import { newerVersion } from "./phone-app";
 import { decodeUtf8Bytes } from "./remote-crypto";
 import { signedByAny } from "./update-signature";
-import { releasesRepo, updateFeed, updateFileSchema, updateKeys } from "./updates";
+import {
+  releasesRepo,
+  updateFeed,
+  updateFileSchema,
+  updateKeys,
+} from "./updates";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+$/);
 
@@ -13,6 +18,7 @@ const phoneFeedSchema = z.object({
   version,
   android: updateFileSchema
     .extend({
+      url: z.url({ protocol: /^https$/ }),
       /** The APK's own version; a release that left the native side alone carries the last APK on. */
       version,
       runtime: z.string().optional(),
@@ -31,7 +37,13 @@ export interface NewestApp {
   size?: number;
 }
 
-type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{
+/** The verified offer kept between launches; reject damaged local cache entries. */
+export const newestAppSchema = updateFileSchema
+  .omit({ name: true })
+  .partial({ sha512: true, size: true })
+  .extend({ release: version, version, url: z.url({ protocol: /^https$/ }) });
+
+type Fetch = (url: string) => Promise<{
   ok: boolean;
   status: number;
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -41,14 +53,19 @@ type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{
 /** Reads the release feed and its signature; throws unless the feed is signed by a pinned key. */
 export async function fetchNewestApp(
   fetch: Fetch,
-  { feed = updateFeed, keys = updateKeys, signal }: { feed?: string; keys?: readonly string[]; signal?: AbortSignal } = {},
+  {
+    feed = updateFeed,
+    keys = updateKeys,
+  }: { feed?: string; keys?: readonly string[] } = {},
 ): Promise<NewestApp> {
   const [response, signed] = await Promise.all([
-    fetch(feed, { signal }),
-    fetch(`${feed}.sig`, { signal }),
+    fetch(feed),
+    fetch(`${feed}.sig`),
   ]);
-  if (!response.ok) throw new Error(`The release feed answered ${response.status}.`);
-  if (!signed.ok) throw new Error(`The release feed's signature answered ${signed.status}.`);
+  if (!response.ok)
+    throw new Error(`The release feed answered ${response.status}.`);
+  if (!signed.ok)
+    throw new Error(`The release feed's signature answered ${signed.status}.`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (!signedByAny(bytes, await signed.text(), keys))
     throw new Error("The release feed's signature doesn't check out.");
@@ -57,7 +74,8 @@ export async function fetchNewestApp(
     data = JSON.parse(decodeUtf8Bytes(bytes));
   } catch {}
   const parsed = phoneFeedSchema.safeParse(data);
-  if (!parsed.success) throw new Error("The release feed sent something Relay can't read.");
+  if (!parsed.success)
+    throw new Error("The release feed sent something Relay can't read.");
   const { android } = parsed.data;
   if (android)
     return {
@@ -93,10 +111,10 @@ export const offersNewer = (
  * One APK to offer when the desktop and the feed both have one: the newer, and
  * the feed's at the same version since its download carries a checksum.
  */
-export function pickApk<A extends { version: string }, B extends { version: string }>(
-  desktop: A | undefined,
-  feed: B | undefined,
-): A | B | undefined {
+export function pickApk<
+  A extends { version: string },
+  B extends { version: string },
+>(desktop: A | undefined, feed: B | undefined): A | B | undefined {
   if (!desktop) return feed;
   if (!feed) return desktop;
   return newerVersion(desktop.version, feed.version) ? desktop : feed;

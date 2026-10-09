@@ -65,6 +65,8 @@ describe("the newest app, from the release feed", () => {
   it("refuses an APK on plain HTTP even when signed", async () => {
     const feed = { version: "0.10.2", files: {}, android: { ...apk, url: apk.url.replace("https", "http") } };
     await expect(fetchNewestApp(serve(feed), { keys: [key] })).rejects.toThrow(/can't read/);
+    const local = { ...feed, android: { ...apk, url: "http://127.0.0.1/Relay.apk" } };
+    await expect(fetchNewestApp(serve(local), { keys: [key] })).rejects.toThrow(/can't read/);
   });
 });
 

@@ -74,4 +74,31 @@ describe("update feed signature", () => {
       expect(ed25519.utils.isValidPublicKey(raw, false)).toBe(true);
     }
   });
+
+  it("verifies without Node Buffer or Web Crypto, as Hermes does", () => {
+    const bytes = new Uint8Array(feed);
+    const buffer = globalThis.Buffer;
+    const crypto = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+    let valid: boolean;
+    try {
+      Object.defineProperty(globalThis, "Buffer", {
+        value: undefined,
+        configurable: true,
+      });
+      Object.defineProperty(globalThis, "crypto", {
+        value: undefined,
+        configurable: true,
+      });
+      valid = signedByAny(bytes, signature, [release.key]);
+    } finally {
+      Object.defineProperty(globalThis, "Buffer", {
+        value: buffer,
+        configurable: true,
+        writable: true,
+      });
+      if (crypto) Object.defineProperty(globalThis, "crypto", crypto);
+      else Reflect.deleteProperty(globalThis, "crypto");
+    }
+    expect(valid!).toBe(true);
+  });
 });

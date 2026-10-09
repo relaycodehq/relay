@@ -14,6 +14,7 @@ import { apkPrompt } from "./UpdateBanner";
 import { MenuRow } from "./Sheet";
 import { ago } from "./ThreadRow";
 import { useTheme } from "./theme";
+import { runningVersion, useSelfUpdate } from "../remote/self-update";
 
 const expoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -22,6 +23,7 @@ export function LatestAppRows() {
   const t = useTheme();
   const latest = useLatestApp();
   const apk = useApkInstall();
+  useSelfUpdate();
   if (!checksLatestApp) return null;
   const { newest } = latest;
   const offer = latestOffer(latest);
@@ -59,7 +61,9 @@ export function LatestAppRows() {
         ? `${
             offer
               ? `The newest app is ${newest.version}`
-              : `This app (${installedApp}) is the newest`
+              : newest.version === installedApp
+                ? `This app (${installedApp}) matches the newest APK`
+                : `The newest APK is ${newest.version}; this app runs ${runningVersion} (installed as ${installedApp})`
           }${newest.release !== newest.version ? `; Relay ${newest.release} kept it` : ""}. Looked ${ago(latest.checkedAt ?? 0)}.`
         : "Relay looks on GitHub every few hours.";
   return (
