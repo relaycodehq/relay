@@ -39,9 +39,9 @@ export function queueMark({
 }: Pick<ProjectChat, "queue" | "queuePaused" | "scheduled">) {
   if (!queue?.length && !scheduled?.length) return undefined;
   const waiting = JSON.stringify([
-    queue?.map((q) => [q.input.id, q.error ?? ""]),
+    (queue ?? []).map((q) => [q.input.id, q.error ?? ""]),
     !!queuePaused,
-    scheduled?.map((s) => [s.input.id, s.at, s.error ?? ""]),
+    (scheduled ?? []).map((s) => [s.input.id, s.at, s.error ?? ""]),
   ]);
   return createHash("sha1").update(waiting).digest("base64url").slice(0, 10);
 }

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../app/store";
-import { chatSummary, ChatStorage } from "./storage";
+import { chatSummary, ChatStorage, queueMark } from "./storage";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 let root: string, store: Store, storage: ChatStorage, changed: string[];
@@ -126,6 +126,44 @@ it("tells listeners when only the queue moves, so phones fetch it", async () => 
   chat.queue = [];
   await storage.save(chat);
   expect(listed(chat).queueMark).toBeUndefined();
+});
+
+it("changes the queue mark for pause, errors and schedules, but stays quiet during streaming", async () => {
+  const chat = thread();
+  chat.messages.push(answer("Working"));
+  const input = {
+    id: "queued",
+    body: "Next",
+    images: [{ dataUrl: "large screenshot" }],
+  } as never;
+  chat.queue = [{ input, created: 1 }];
+  await storage.add(chat);
+  const initial = queueMark(chat);
+  changed.length = 0;
+  const update = vi.spyOn(store, "update");
+  chat.messages[0].body += " token";
+  chat.messages[0].version++;
+  await storage.save(chat);
+  expect(queueMark(chat)).toBe(initial);
+  expect(changed).toEqual([]);
+  expect(update).not.toHaveBeenCalled();
+
+  const marks = [initial];
+  chat.queuePaused = true;
+  marks.push(queueMark(chat));
+  chat.queue[0].error = "Couldn't send";
+  marks.push(queueMark(chat));
+  chat.scheduled = [{ input, at: 123, created: 1 }];
+  marks.push(queueMark(chat));
+  chat.scheduled[0].at++;
+  marks.push(queueMark(chat));
+  chat.scheduled[0].error = "Failed";
+  marks.push(queueMark(chat));
+  expect(new Set(marks).size).toBe(marks.length);
+  delete chat.queue;
+  const noQueue = queueMark(chat);
+  chat.queue = [];
+  expect(queueMark(chat)).toBe(noQueue);
 });
 
 it("holds the summary back until it is synced", async () => {
