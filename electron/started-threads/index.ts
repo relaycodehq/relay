@@ -1,8 +1,9 @@
 // What Relay's tools do: a thread's agent starts threads of its own and
 // drives them, in its project or another the user has or lets it add. A
 // started thread is an ordinary thread that remembers who started it. Any
-// thread may read any other; a lead drives only its own, and a started thread
-// only reads, so nothing starts threads of threads.
+// thread may read any other; a lead drives its own, and any other once the
+// user lets it, and a started thread only reads, so nothing starts threads of
+// threads.
 import { inputBlocksThread } from "../../shared/thread-state";
 import { randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
@@ -60,13 +61,15 @@ const settled = new Set<StartedStatus>([
 ]);
 
 const ANSWER_TAIL = 4000;
+const DRIVE_ALWAYS =
+  "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 const POLL_MS = 1000;
 
 type Chats = Pick<
   ProjectChats,
   | "list"
   | "startedThreads"
-  | "allowLeadSends"
+  | "allowDriving"
   | "get"
   | "create"
   | "send"
@@ -229,13 +232,10 @@ export class StartedThreads {
         return this.sendTo(lead, input, signal);
       case "wait_for_threads":
         return this.wait(lead, input, signal);
-      case "stop_thread": {
-        await this.own(lead, input.id);
-        await this.chats.cancel(input.id);
-        return toolText("Stopped.");
-      }
+      case "stop_thread":
+        return this.stop(lead, input.id, signal);
       case "settle_thread":
-        return this.settle(lead, input.id);
+        return this.settle(lead, input.id, signal);
       case "usage_limits":
         return json(await this.usage(lead));
       case "move_to_worktree":
@@ -273,9 +273,9 @@ export class StartedThreads {
   }
 
   /**
-   * Whether the user lets the lead start or message a thread: a new turn
-   * spends usage and may edit the project. A lead with full access may,
-   * unless `always`: its full access was given for its own project.
+   * Whether the user lets the lead start or message a thread of its own: a
+   * new turn spends usage and may edit the project. A lead with full access
+   * or leave to drive threads may, unless `always`.
    */
   private async approve(
     lead: ProjectChat,
@@ -284,7 +284,7 @@ export class StartedThreads {
     signal: AbortSignal,
     always = false,
   ) {
-    if (!always && this.fullAccess(lead)) return true;
+    if (!always && (lead.drivesThreads || this.fullAccess(lead))) return true;
     const response = await this.chats.askInTurn(
       lead.id,
       {
@@ -296,6 +296,36 @@ export class StartedThreads {
       signal,
     );
     return response.kind === "approval" && response.decision === "accept";
+  }
+
+  /**
+   * Whether the user lets the lead drive a thread beyond its own in its
+   * project. Full access doesn't: it was given for the lead's own folder.
+   * Always keeps the leave on the lead, so it asks only once.
+   */
+  private async drive(
+    lead: ProjectChat,
+    title: string,
+    detail: string,
+    signal: AbortSignal,
+  ) {
+    if (lead.drivesThreads) return true;
+    const response = await this.chats.askInTurn(
+      lead.id,
+      {
+        kind: "approval",
+        title,
+        detail: [detail, DRIVE_ALWAYS].filter(Boolean).join("\n\n"),
+        decisions: ["accept", "acceptForSession", "decline", "cancel"],
+      },
+      signal,
+    );
+    if (response.kind !== "approval") return false;
+    if (response.decision === "acceptForSession")
+      await this.chats.allowDriving(lead.id, true);
+    return (
+      response.decision === "accept" || response.decision === "acceptForSession"
+    );
   }
 
   private fullAccess(lead: ProjectChat) {
@@ -402,14 +432,61 @@ export class StartedThreads {
     });
   }
 
-  private async own(lead: ProjectChat, id: string) {
-    const summary = this.children(lead).find((c) => c.id === id);
-    if (!summary) throw new Error("That isn't a thread you started.");
-    return { summary, chat: await this.chats.get(id) };
+  /** Any listed thread, as list() shows it. */
+  private async thread(id: string) {
+    const chat = await this.chats.get(id).catch(() => {
+      throw new Error("There's no such thread; see find_threads.");
+    });
+    const summary = this.chats
+      .list(chat.projectId)
+      .find((c) => c.id === id && !c.archivedAt);
+    if (!summary) throw new Error("There's no such thread; see find_threads.");
+    return { summary, chat };
   }
 
-  private async settle(lead: ProjectChat, id: string) {
-    const { summary, chat } = await this.own(lead, id);
+  /**
+   * A thread the lead may drive. `mine`: it started it. `sends`: it may
+   * message it as freely as one in its own project.
+   */
+  private async target(lead: ProjectChat, id: string) {
+    if (id === lead.id)
+      throw new Error("That's this thread; these tools drive other threads.");
+    const mine = this.children(lead).some((c) => c.id === id);
+    const found = await this.thread(id);
+    const elsewhere =
+      found.chat.projectId !== lead.projectId
+        ? ((await this.realProjects()).find(
+            (p) => p.id === found.chat.projectId,
+          )?.name ?? "another project")
+        : undefined;
+    return {
+      ...found,
+      mine,
+      sends: mine && (!elsewhere || !!found.chat.startedBy?.sendsApproved),
+      where: elsewhere ? ` in “${elsewhere}”` : "",
+    };
+  }
+
+  private refused(what: string) {
+    return toolText(
+      `The user didn't let you ${what}. Ask them what they want instead.`,
+      true,
+    );
+  }
+
+  private async stop(lead: ProjectChat, id: string, signal: AbortSignal) {
+    const { chat, mine, where } = await this.target(lead, id);
+    if (
+      !mine &&
+      !(await this.drive(lead, `Stop “${chat.title}”${where}?`, "", signal))
+    )
+      return this.refused("stop it");
+    await this.chats.cancel(id);
+    return toolText("Stopped.");
+  }
+
+  private async settle(lead: ProjectChat, id: string, signal: AbortSignal) {
+    const { summary, chat, mine, where } = await this.target(lead, id);
     const status = startedStatus(summary, chat);
     if (status === "working" || status === "needs-input")
       return toolText(
@@ -419,6 +496,11 @@ export class StartedThreads {
         true,
       );
     if (summary.settledAt) return toolText("Already settled.");
+    if (
+      !mine &&
+      !(await this.drive(lead, `Settle “${chat.title}”${where}?`, "", signal))
+    )
+      return this.refused("settle it");
     await this.chats.triage(id, { kind: "settle" });
     return toolText("Settled.");
   }
@@ -439,7 +521,7 @@ export class StartedThreads {
 
   private async start(
     lead: ProjectChat,
-    { project, threads }: RelayToolArgs<"start_threads">,
+    { project, detached, threads }: RelayToolArgs<"start_threads">,
     signal: AbortSignal,
   ) {
     const elsewhere =
@@ -455,7 +537,7 @@ export class StartedThreads {
         true,
       );
     const working = this.children(lead).filter((c) => c.running).length;
-    if (working + threads.length > STARTED_LIMIT)
+    if (!detached && working + threads.length > STARTED_LIMIT)
       return toolText(
         `${working} of your threads are working; at most ${STARTED_LIMIT} may at once. Wait for some to finish first.`,
         true,
@@ -468,15 +550,18 @@ export class StartedThreads {
           `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
       )
       .join("\n\n");
-    const approved = await this.approve(
-      lead,
-      elsewhere ? `Start ${count} in “${elsewhere.name}”?` : `Start ${count}?`,
-      elsewhere
-        ? `In ${elsewhere.path}${this.fullAccess(lead) ? ", with full access: edits and commands run without asking" : ""}.\n\n${listed}`
-        : listed,
-      signal,
-      !!elsewhere,
-    );
+    const title = `Start ${count}${detached ? " of their own" : ""}${elsewhere ? ` in “${elsewhere.name}”` : ""}?`;
+    const approved =
+      elsewhere || detached
+        ? await this.drive(
+            lead,
+            title,
+            elsewhere
+              ? `In ${elsewhere.path}${this.fullAccess(lead) ? ", with full access: edits and commands run without asking" : ""}.\n\n${listed}`
+              : listed,
+            signal,
+          )
+        : await this.approve(lead, title, listed, signal);
     if (!approved)
       return toolText(
         "The user didn't start these threads. Ask them what they want instead.",
@@ -536,7 +621,7 @@ export class StartedThreads {
           lead,
           elsewhere?.id ?? lead.projectId,
           spec.worktree,
-          caller,
+          detached ? undefined : caller,
         );
         // A worktree made from the commit alone would miss the work in progress it's about.
         const copied =
@@ -550,6 +635,7 @@ export class StartedThreads {
           agent,
           ...(spec.plan ? { plan: true } : {}),
           ...(elsewhere ? { project: elsewhere.name } : {}),
+          ...(detached ? { detached: true } : {}),
           worktree: !!chat.worktree,
           ...(copied ? { uncommittedFilesCopied: copied } : {}),
         });
@@ -592,14 +678,17 @@ export class StartedThreads {
     );
   }
 
-  /** A worktree unless asked otherwise or the project isn't a repository. */
+  /**
+   * A worktree unless asked otherwise or the project isn't a repository.
+   * Without the starting agent it's a thread of its own, not under the lead.
+   */
   private async create(
     lead: ProjectChat,
     projectId: string,
     worktree: boolean | undefined,
-    agent: AgentProvider,
+    agent: AgentProvider | undefined,
   ) {
-    const startedBy = { chatId: lead.id, agent };
+    const startedBy = agent ? { chatId: lead.id, agent } : undefined;
     const scope = { kind: "project" } as const;
     if (worktree === false)
       return this.chats.create(projectId, scope, "checkout", startedBy);
@@ -612,9 +701,11 @@ export class StartedThreads {
   }
 
   private async list(lead: ProjectChat, ids?: string[]) {
-    const listed = this.children(lead).filter(
-      (c) => !ids || ids.includes(c.id),
-    );
+    const listed = ids
+      ? await Promise.all(
+          ids.map(async (id) => (await this.thread(id)).summary),
+        )
+      : this.children(lead);
     const names = listed.some((c) => c.projectId !== lead.projectId)
       ? new Map((await this.realProjects()).map((p) => [p.id, p.name]))
       : undefined;
@@ -719,29 +810,14 @@ export class StartedThreads {
     { id, message, steer }: RelayToolArgs<"send_to_thread">,
     signal: AbortSignal,
   ) {
-    const { chat } = await this.own(lead, id);
+    const { chat, sends, where } = await this.target(lead, id);
     const previous = chat.lastInput;
     if (!previous) return toolText("That thread hasn't started yet.", true);
-    // Another project's thread asks until the user approves a message to it once.
-    const elsewhere =
-      chat.projectId !== lead.projectId && !chat.startedBy?.sendsApproved
-        ? ((await this.realProjects()).find((p) => p.id === chat.projectId)
-            ?.name ?? "another project")
-        : undefined;
-    const approved = await this.approve(
-      lead,
-      `${steer ? "Steer" : "Send to"} “${chat.title}”${elsewhere ? ` in “${elsewhere}”` : ""}?`,
-      elsewhere
-        ? `${head(message)}\n\nApproving once lets it message this thread from now on as freely as one in its own project.`
-        : head(message),
-      signal,
-      !!elsewhere,
-    );
-    if (!approved)
-      return toolText(
-        "The user didn't send this. Ask them what they want instead.",
-        true,
-      );
+    const title = `${steer ? "Steer" : "Send to"} “${chat.title}”${where}?`;
+    const approved = sends
+      ? await this.approve(lead, title, head(message), signal)
+      : await this.drive(lead, title, head(message), signal);
+    if (!approved) return this.refused("send this");
     const { from } = this.leadSide(lead);
     const agent = sentAgent(previous);
     await this.chats.send(id, {
@@ -758,7 +834,6 @@ export class StartedThreads {
       ...(steer ? { delivery: "steer" as const } : {}),
       fromThread: from,
     });
-    if (elsewhere) await this.chats.allowLeadSends(id);
     return toolText(
       steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
     );
@@ -769,7 +844,6 @@ export class StartedThreads {
     { ids, timeoutSeconds = 300 }: RelayToolArgs<"wait_for_threads">,
     signal: AbortSignal,
   ) {
-    if (ids) for (const id of ids) await this.own(lead, id);
     const until = Date.now() + timeoutSeconds * 1000;
     for (;;) {
       const threads = await this.list(lead, ids);

@@ -49,6 +49,7 @@ const methods = [
   "setProjectChatLinks",
   "promoteProjectChatLink",
   "detachProjectChat",
+  "stopProjectChatDriving",
   "markProjectChatSeen",
   "forkProjectChat",
   "terminalSessions",

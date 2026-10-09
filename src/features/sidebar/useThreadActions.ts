@@ -21,6 +21,7 @@ export type ThreadMenuAction =
   | { kind: "regenerate" }
   | { kind: "reload" }
   | { kind: "detach" }
+  | { kind: "stop-driving" }
   | { kind: "move-worktree" }
   | { kind: "project-settings" }
   | { kind: "triage"; triage: ChatTriage };
@@ -206,6 +207,17 @@ export function useThreadActions({
       void refresh(c);
     }
   };
+  const stopDriving = async (c: ChatSummary) => {
+    setError(undefined);
+    patch(c, (entry) => ({ ...entry, drivesThreads: undefined }));
+    try {
+      await api.stopProjectChatDriving(c.id);
+    } catch (e) {
+      failed(e);
+    } finally {
+      void refresh(c);
+    }
+  };
   /** Forks from the latest answer and opens the fork on that answer's agent. */
   const fork = async (c: ChatSummary) => {
     setError(undefined);
@@ -249,6 +261,8 @@ export function useThreadActions({
           return void reload(c);
         case "detach":
           return void detach(c);
+        case "stop-driving":
+          return void stopDriving(c);
         case "move-worktree":
           return setMoving(c.id);
         case "project-settings":

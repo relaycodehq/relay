@@ -169,11 +169,19 @@ test("an agent adds a project only through the user, then starts and messages th
         .evaluate((el) => el.scrollHeight <= el.clientHeight),
     ).toBe(true);
     await screenshot(page, { path: "test-results/agent-start-elsewhere.png" });
-    await start.getByRole("button", { name: "Approve", exact: true }).click();
-    const [child] = JSON.parse(await started());
-    expect(child).toMatchObject({ project: project.name, worktree: true });
+    await expect(
+      start.getByRole("button", { name: "Always", exact: true }),
+    ).toBeVisible();
+    await start.getByRole("button", { name: "Once", exact: true }).click();
+    expect(await started()).toMatch(/^Started 1 threads/);
+    const [child] = JSON.parse(
+      await (
+        await callTool(page, "list_threads", {})
+      )(),
+    );
+    expect(child).toMatchObject({ project: project.name });
 
-    // The first message there asks once; approving it lets the next one through.
+    // Once let only that through; Always lets it drive any thread from now on.
     const sent = await callTool(page, "send_to_thread", {
       id: child.id,
       message: "fixture echo: Again.",
@@ -183,9 +191,9 @@ test("an agent adds a project only through the user, then starts and messages th
     });
     await expect(send).toBeVisible({ timeout: 15000 });
     await expect(send).toContainText(
-      "Approving once lets it message this thread",
+      "Always lets this thread start, message, stop and settle any thread",
     );
-    await send.getByRole("button", { name: "Approve", exact: true }).click();
+    await send.getByRole("button", { name: "Always", exact: true }).click();
     expect(await sent()).toBe("Sent.");
     const again = await (
       await callTool(page, "send_to_thread", {
@@ -194,7 +202,45 @@ test("an agent adds a project only through the user, then starts and messages th
       })
     )();
     expect(again).toBe("Sent.");
-    await expect(send).toHaveCount(0);
+    await (
+      await callTool(page, "start_threads", {
+        detached: true,
+        threads: [{ prompt: "fixture echo: Own thread done." }],
+      })
+    )();
+    // Not the lead's: neither listed under it nor started by it.
+    const all: { id: string; you?: true; startedBy?: string }[] = JSON.parse(
+      await (
+        await callTool(page, "find_threads", {})
+      )(),
+    );
+    const own = all.find((t) => !t.you && !t.startedBy)!;
+    expect(own).toBeDefined();
+    await (
+      await callTool(page, "wait_for_threads", {
+        ids: [own.id],
+        timeoutSeconds: 30,
+      })
+    )();
+    expect(
+      await (
+        await callTool(page, "settle_thread", { id: own.id })
+      )(),
+    ).toBe("Settled.");
+    await expect(page.getByRole("region", { name: /\?$/ })).toHaveCount(0);
+
+    // Taken back from the thread's menu, it asks again.
+    await page
+      .locator(".sb-thread-row", { has: page.locator(".sb-thread.selected") })
+      .click({ button: "right" });
+    await page
+      .getByRole("menuitem", { name: "Stop letting it drive threads" })
+      .click();
+    const stopped = await callTool(page, "stop_thread", { id: own.id });
+    const stop = page.getByRole("region", { name: /^Stop “.*”\?$/ });
+    await expect(stop).toBeVisible({ timeout: 15000 });
+    await stop.getByRole("button", { name: "Decline", exact: true }).click();
+    expect(await stopped()).toMatch(/^The user didn't let you stop it/);
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });

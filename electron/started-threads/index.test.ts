@@ -68,8 +68,9 @@ function fakeChats() {
         [...chats.values()].filter(
           (c) => c.startedBy?.chatId === leadId,
         ) as ChatSummary[],
-      allowLeadSends: async (id: string) => {
-        chats.get(id)!.startedBy!.sendsApproved = true;
+      allowDriving: async (id: string, on: boolean) => {
+        if (on) chats.get(id)!.drivesThreads = true;
+        else delete chats.get(id)!.drivesThreads;
       },
       get: async (id: string) => {
         const chat = chats.get(id);
@@ -137,6 +138,8 @@ const call = (
   args: unknown,
 ) => threads.handle(chatId, name, args, new AbortController().signal);
 const parse = (result: ToolResult) => JSON.parse(resultText(result));
+const ALWAYS =
+  "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 
 test("starts threads on the lead's agent and settings, each saying who sent it", async () => {
   const { lead, sent, chats, api } = fakeChats();
@@ -179,8 +182,8 @@ test("starts threads on the lead's agent and settings, each saying who sent it",
   });
 });
 
-test("any thread finds and reads every other, but a lead drives only its own", async () => {
-  const { lead, chats, api } = fakeChats();
+test("any thread finds and reads every other without asking", async () => {
+  const { lead, chats, api, asked } = fakeChats();
   const site = "00000000-0000-4000-8000-0000000000b1";
   const threads = new StartedThreads(api, {
     projects: {
@@ -245,11 +248,14 @@ test("any thread finds and reads every other, but a lead drives only its own", a
   expect(
     await call(threads, mine.id, "read_thread", { id: stranger.id }),
   ).not.toHaveProperty("isError");
-  const refused = await call(threads, lead.id, "send_to_thread", {
-    id: stranger.id,
-    message: "Hi",
-  });
-  expect(refused).toMatchObject({ isError: true });
+  expect(
+    await call(threads, mine.id, "send_to_thread", {
+      id: stranger.id,
+      message: "Hi",
+    }),
+  ).toMatchObject({ isError: true });
+  // Only starting its own thread asked.
+  expect(asked).toHaveLength(1);
 });
 
 test("a started thread can't start threads of its own, only read usage", async () => {
@@ -706,8 +712,8 @@ test("threads in another project always ask, start there, and stay the lead's", 
     {
       kind: "approval",
       title: "Start 1 thread in “site”?",
-      detail: `In ${join(home, "site")}, with full access: edits and commands run without asking.\n\n1. Claude\nMatch the new header`,
-      decisions: ["accept", "decline", "cancel"],
+      detail: `In ${join(home, "site")}, with full access: edits and commands run without asking.\n\n1. Claude\nMatch the new header\n\n${ALWAYS}`,
+      decisions: ["accept", "acceptForSession", "decline", "cancel"],
     },
   ]);
   expect(child).toMatchObject({ project: "site", worktree: true });
@@ -743,7 +749,7 @@ test("another project's threads can't take the lead's uncommitted work, nor star
   expect(asked).toEqual([]);
 });
 
-test("messaging a thread in another project asks in full access until approved once", async () => {
+test("messaging a thread in another project asks in full access until always allowed", async () => {
   const { lead, api, asked, answer, chats } = fakeChats();
   lead.lastInput!.runtimeMode = "full-access";
   const { home, projects } = await fakeProjects();
@@ -763,22 +769,147 @@ test("messaging a thread in another project asks in full access until approved o
     });
   answer.decision = "decline";
   expect(await send()).toMatchObject({ isError: true });
-  expect(chats.get(child.id)!.startedBy).not.toHaveProperty("sendsApproved");
-  // Approved but never sent: the next message asks again.
   answer.decision = "accept";
-  const deliver = api.send;
-  api.send = async () => {
-    throw new Error("The thread can't take messages now.");
-  };
-  expect(await send()).toMatchObject({ isError: true });
-  expect(chats.get(child.id)!.startedBy).not.toHaveProperty("sendsApproved");
-  api.send = deliver;
+  await send();
+  await send();
+  expect(lead.drivesThreads).toBeUndefined();
+  answer.decision = "acceptForSession";
+  await send();
+  expect(chats.get(lead.id)!.drivesThreads).toBe(true);
   await send();
   expect(
     asked.slice(1).map((a) => (a.request as { title: string }).title),
-  ).toEqual(Array(3).fill("Send to “Header” in “site”?"));
+  ).toEqual(Array(4).fill("Send to “Header” in “site”?"));
+  // Saved before drivesThreads, a message leave still counts.
+  delete chats.get(lead.id)!.drivesThreads;
+  chats.get(child.id)!.startedBy!.sendsApproved = true;
   await send();
+  expect(asked).toHaveLength(5);
+});
+
+test("any other thread asks once to drive, then never again", async () => {
+  const { lead, sent, chats, api, asked, answer } = fakeChats();
+  const { home, projects } = await fakeProjects();
+  const other = await projects.add(join(home, "api"));
+  const threads = new StartedThreads(api, { projects });
+  const fix = await api.create(other.id, { kind: "project" });
+  Object.assign(chats.get(fix.id)!, { title: "Fix login", running: true });
+  await api.send(fix.id, { ...lead.lastInput!, id: "m1", body: "Fix it" });
+  const docs = await api.create("p", { kind: "project" });
+  chats.get(docs.id)!.title = "Docs";
+  const before = sent.length;
+
+  answer.decision = "decline";
+  expect(
+    await call(threads, lead.id, "stop_thread", { id: fix.id }),
+  ).toMatchObject({ isError: true });
+  expect(asked.at(-1)!.request).toEqual({
+    kind: "approval",
+    title: "Stop “Fix login” in “api”?",
+    detail: ALWAYS,
+    decisions: ["accept", "acceptForSession", "decline", "cancel"],
+  });
+  // Once lets this call through and asks again next time.
+  answer.decision = "accept";
+  expect(
+    await call(threads, lead.id, "stop_thread", { id: fix.id }),
+  ).not.toHaveProperty("isError");
+  chats.get(fix.id)!.running = false;
+  expect(
+    await call(threads, lead.id, "settle_thread", { id: docs.id }),
+  ).not.toHaveProperty("isError");
+  expect(asked).toHaveLength(3);
+  expect(asked.at(-1)!.request).toMatchObject({ title: "Settle “Docs”?" });
+
+  answer.decision = "acceptForSession";
+  await call(threads, lead.id, "send_to_thread", {
+    id: fix.id,
+    message: "Go on",
+  });
   expect(asked).toHaveLength(4);
+  expect(sent).toHaveLength(before + 1);
+  chats.get(fix.id)!.messages.push({
+    id: "answer",
+    role: "assistant",
+    body: "Done.",
+    status: "complete",
+    created: 4,
+    provider: "claude",
+    version: 1,
+  });
+  answer.decision = "decline";
+  expect(
+    await call(threads, lead.id, "settle_thread", { id: fix.id }),
+  ).not.toHaveProperty("isError");
+  await call(threads, lead.id, "start_threads", {
+    project: other.id,
+    detached: true,
+    threads: [{ prompt: "Bump deps" }],
+  });
+  expect(asked).toHaveLength(4);
+  expect(chats.get(fix.id)!.settledAt).toBeDefined();
+  // Adding a folder is still its own decision.
+  const folder = join(home, "new");
+  await mkdir(folder);
+  expect(await call(threads, lead.id, "add_project", { folder })).toMatchObject(
+    { isError: true },
+  );
+  expect(asked).toHaveLength(5);
+});
+
+test("a thread doesn't drive itself, and waits on any thread without asking", async () => {
+  const { lead, chats, api, asked } = fakeChats();
+  const threads = new StartedThreads(api);
+  const stranger = await api.create("p", { kind: "project" });
+  await api.send(stranger.id, { ...lead.lastInput!, id: "m1", body: "Go" });
+  for (const tool of ["stop_thread", "settle_thread"])
+    expect(
+      resultText(await call(threads, lead.id, tool, { id: lead.id })),
+    ).toMatch(/That's this thread/);
+  chats.get(stranger.id)!.messages.push({
+    id: "answer",
+    role: "assistant",
+    body: "Done.",
+    status: "complete",
+    created: 4,
+    provider: "claude",
+    version: 1,
+  });
+  const waited = parse(
+    await call(threads, lead.id, "wait_for_threads", {
+      ids: [stranger.id],
+      timeoutSeconds: 1,
+    }),
+  );
+  expect(waited.threads).toMatchObject([{ id: stranger.id, status: "done" }]);
+  expect(asked).toEqual([]);
+});
+
+test("threads of their own aren't the lead's and don't count toward its limit", async () => {
+  const { lead, chats, api, asked, sent } = fakeChats();
+  const threads = new StartedThreads(api);
+  await call(threads, lead.id, "start_threads", {
+    threads: Array.from({ length: 6 }, (_, i) => ({ prompt: `Task ${i}` })),
+  });
+  for (const chat of chats.values()) if (chat.startedBy) chat.running = true;
+  const [own] = parse(
+    await call(threads, lead.id, "start_threads", {
+      detached: true,
+      threads: [{ prompt: "Write the release notes" }],
+    }),
+  );
+  expect(own).toMatchObject({ detached: true });
+  expect(chats.get(own.id)!.startedBy).toBeUndefined();
+  expect(sent.at(-1)!.input.fromThread).toMatchObject({ id: lead.id });
+  expect(asked.at(-1)!.request).toMatchObject({
+    title: "Start 1 thread of their own?",
+    decisions: ["accept", "acceptForSession", "decline", "cancel"],
+  });
+  expect(
+    parse(await call(threads, lead.id, "list_threads", {})).map(
+      (t: any) => t.id,
+    ),
+  ).not.toContain(own.id);
 });
 
 test("a folder swapped for a link while the card waits isn't added", async () => {

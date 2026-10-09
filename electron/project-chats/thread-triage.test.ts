@@ -119,6 +119,46 @@ it("a detached thread stands alone: settling its old lead leaves it be", async (
   expect((await chats.get(child.id)).settledAt).toBeUndefined();
 });
 
+it("leave to drive threads stays with the thread until taken back, and a fork starts without it", async () => {
+  const lead = await chats.create(projectId, scope);
+  const storage = (chats as unknown as { core: import("./core").ChatCore }).core
+    .storage;
+  const chat = await storage.load(lead.id);
+  chat.messages.push(
+    {
+      id: "ask",
+      role: "user",
+      provider: "claude",
+      status: "complete",
+      body: "Go",
+      created: 1,
+      version: 1,
+    },
+    {
+      id: "answer",
+      role: "assistant",
+      provider: "claude",
+      status: "complete",
+      body: "Done.",
+      created: 2,
+      version: 1,
+    },
+  );
+  await storage.save(chat);
+
+  expect((await chats.allowDriving(lead.id, true)).drivesThreads).toBe(true);
+  expect(chats.list(projectId).find((c) => c.id === lead.id)).toMatchObject({
+    drivesThreads: true,
+  });
+  const fork = await chats.fork(lead.id);
+  expect((await chats.get(fork.id)).drivesThreads).toBeUndefined();
+
+  expect(
+    (await chats.allowDriving(lead.id, false)).drivesThreads,
+  ).toBeUndefined();
+  expect((await chats.get(lead.id)).drivesThreads).toBeUndefined();
+});
+
 it("a lead sees a started thread that settled by itself as settled", async () => {
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };

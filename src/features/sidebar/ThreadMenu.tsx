@@ -12,6 +12,7 @@ import {
   RefreshCw,
   RotateCcw,
   Settings2,
+  ShieldOff,
   Sparkles,
   Split,
   SquarePen,
@@ -180,6 +181,14 @@ export function ThreadMenu({
           onClick={() => onAction({ kind: "detach" })}
         >
           Detach from lead
+        </MenuAction>
+      )}
+      {chat.drivesThreads && (
+        <MenuAction
+          icon={<ShieldOff size={13} />}
+          onClick={() => onAction({ kind: "stop-driving" })}
+        >
+          Stop letting it drive threads
         </MenuAction>
       )}
       <Menu.Separator className="sb-menu-separator" />

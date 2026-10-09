@@ -101,6 +101,8 @@ export interface ChatSummary {
   thinker?: ThinkerTask;
   /** Started by another thread's agent through Relay's tools; listed under that thread. */
   startedBy?: StartedBy;
+  /** The user let this thread's agent start, message, stop and settle any thread, in any project, without asking. */
+  drivesThreads?: true;
   /** Continues a Claude Code or Codex session started in a terminal. */
   fromTerminal?: FromTerminal;
   /** An async question is still open: neither answered nor dismissed. It needs the user even while the agent continues. */
@@ -121,7 +123,7 @@ export interface StartedBy {
   chatId: string;
   /** The agent that started it. */
   agent: AgentProvider;
-  /** The user let the lead message it, in another project than the lead's. */
+  /** The user let the lead message it, in another project than the lead's. Saved before drivesThreads; still honoured. */
   sendsApproved?: true;
 }
 export interface HeldWakeup {

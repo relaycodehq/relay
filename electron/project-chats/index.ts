@@ -282,8 +282,8 @@ export class ProjectChats {
   startedThreads(leadId: string) {
     return this.threads.started(leadId);
   }
-  allowLeadSends(id: string) {
-    return this.triaging.allowLeadSends(id);
+  allowDriving(id: string, on: boolean) {
+    return this.triaging.allowDriving(id, on);
   }
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
