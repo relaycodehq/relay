@@ -17,6 +17,7 @@ import type {
   AgentResponse,
 } from "../../../shared/agent-modes";
 import { Button } from "./Button";
+import { focusWithKeyboard } from "./KeyboardAware";
 import { mono, type, useTheme } from "./theme";
 
 // The desktop's wording, from src/features/thread/AgentRequestCard.tsx.
@@ -151,7 +152,13 @@ export function Questions({
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
+  const input = useRef<TextInput>(null);
   const question = questions[index]!;
+  // Moved on to one only words answer: the field is ready to type in, keyboard and all.
+  const writeOnly = !question.options?.length;
+  useEffect(() => {
+    if (index > 0 && writeOnly && input.current) focusWithKeyboard(input.current);
+  }, [index, writeOnly]);
   const chosen = answers[question.id] ?? [];
   const labelsOf = new Set(question.options?.map((o) => o.label));
   const typed = chosen.filter((a) => !labelsOf.has(a)).join(", ");
@@ -224,6 +231,7 @@ export function Questions({
         })}
       </Body>
       <TextInput
+        ref={input}
         accessibilityLabel={question.question}
         editable={!busy}
         secureTextEntry={question.isSecret}

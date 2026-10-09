@@ -42,12 +42,13 @@ export function useKeyboardShown() {
 }
 
 /**
- * Focuses an input as a sheet's Modal goes, so the keyboard comes back. Android
- * shows the keyboard only to a focused window, which returns a moment after
- * the Modal unmounts: focused before then, the input takes the cursor and no
- * keyboard comes. So it tries again until the keyboard shows.
+ * Focuses an input so the keyboard shows, e.g. as a sheet's Modal goes or a
+ * tap elsewhere just put it away. Android shows the keyboard only to a focused
+ * window, which returns a moment after a Modal unmounts, and drops a focus
+ * that comes while the last tap still dismisses it: the input takes the
+ * cursor and no keyboard comes. So it tries again until the keyboard shows.
  */
-export function focusAfterModal(input: { focus(): void; blur(): void }) {
+export function focusWithKeyboard(input: { focus(): void; blur(): void }) {
   if (Platform.OS !== "android") return input.focus();
   let tries = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
