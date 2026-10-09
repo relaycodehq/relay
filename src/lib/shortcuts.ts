@@ -225,6 +225,29 @@ export function isTypingTarget(e: Event) {
   );
 }
 
+/** Presses a rich text field left to the app's shortcuts, though it prevented their default. */
+const handedOver = new WeakSet<Event>();
+
+/**
+ * Lets a window-wide shortcut through a ProseMirror field, which prevents ⌘B,
+ * ⌘I, ⌘Y and ⌘Z outright (against the browser's own bold and undo), so ⌘B
+ * would never reach the sidebar. Composer and editor keys stay the field's:
+ * their own handlers hear them first. True when ProseMirror should keep out.
+ */
+export function handOver(e: KeyboardEvent) {
+  if (e.isComposing || e.defaultPrevented) return false;
+  const app = shortcutIds.some((id) => {
+    const { bare, outsideFields, menu, group, digits } = command(id);
+    if (bare || outsideFields || menu) return false;
+    if (group === "Composer" || group === "Editor") return false;
+    return digits ? !!digitOf(id, e) : matches(id, e);
+  });
+  if (!app) return false;
+  e.preventDefault();
+  handedOver.add(e);
+  return true;
+}
+
 /** Modal `<dialog>`s have no role attribute; popovers and menus do. Settings is a page over the thread that keeps the keyboard too. */
 export const POPUPS = `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`;
 
@@ -263,7 +286,8 @@ export function useShortcut(
     if (!enabled) return;
     const { bare, outsideFields } = command(id);
     const down = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || (e.repeat && !repeat)) return;
+      if (e.defaultPrevented && !handedOver.has(e)) return;
+      if (e.isComposing || (e.repeat && !repeat)) return;
       if (!matches(id, e)) return;
       const field = isTypingTarget(e);
       if (bare && field) return;

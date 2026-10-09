@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, type Transaction } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import { handOver } from "../../../lib/shortcuts";
 import { promptText } from "../prompt-text";
 import { ComposerDictation } from "./dictation";
 import { ImageTag } from "./image-pill";
@@ -41,6 +42,16 @@ export const promptExtensions = () => [
       return [
         new Plugin({
           filterTransaction: withinLimit,
+        }),
+      ];
+    },
+  }),
+  Extension.create({
+    name: "appShortcuts",
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          props: { handleDOMEvents: { keydown: (_view, e) => handOver(e) } },
         }),
       ];
     },
