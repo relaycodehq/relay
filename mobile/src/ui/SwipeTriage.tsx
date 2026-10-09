@@ -1,6 +1,6 @@
 // Activity cards triaged with one thumb: swipe right to settle, left to snooze,
 // and a moment to take it back.
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -8,7 +8,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, type ScrollView } from "react-native-gesture-handler";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -46,7 +46,8 @@ export function SwipeTriage({
   t,
   children,
 }: {
-  scrollGesture: ReturnType<typeof Gesture.Native>;
+  /** The list the row sits in, which keeps scrolling while the row decides. */
+  scrollGesture: RefObject<ScrollView | null>;
   blocked: boolean;
   /** Left out where the thread cannot be settled. */
   settle?: SwipeAction;

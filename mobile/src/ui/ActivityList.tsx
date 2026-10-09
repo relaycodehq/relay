@@ -1,16 +1,15 @@
 // The desktop sidebar's Activity view: one card per open thread, the ones that
 // need nothing from you faded back, and Snoozed and Settled folded away below.
-import { Fragment, useCallback, useMemo, useState, type ReactElement } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   type RefreshControlProps,
 } from "react-native";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView, RefreshControl, ScrollView } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
 import {
   CalendarClock,
@@ -89,7 +88,7 @@ export function ActivityList({
   const [shelves, setShelves] = useState({ snoozed: 0, settled: 0 });
   // A family's fold as the user left it; until then open while any of it needs a look.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const scrollGesture = useMemo(() => Gesture.Native(), []);
+  const scrollGesture = useRef<ScrollView>(null);
   const [undo, setUndo] = useState<Undo>();
   const closeUndo = useCallback(() => setUndo(undefined), []);
 
@@ -221,100 +220,102 @@ export function ActivityList({
   return (
     // Swipes need a gesture root; the app has none above its screens.
     <GestureHandlerRootView style={styles.root}>
-      <GestureDetector gesture={scrollGesture}>
-        <ScrollView
-          refreshControl={refreshControl}
-          contentContainerStyle={[styles.list, { paddingBottom: bottom }]}
-        >
-          <View style={styles.heading}>
-            <Text style={[styles.headingText, { color: t.muted }]}>Activity</Text>
-            <Text style={[styles.headingCount, { color: t.muted }]}>
-              {families.top.length ? `${families.top.length} open` : "All settled"}
-            </Text>
-          </View>
-          {families.top.map((c) => {
-            const started = families.started.get(c.id) ?? [];
-            const children = (
-              <View style={[styles.started, { borderColor: t.border }]}>
-                {started.map((s) => (
-                  <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} key={s.id} {...swipes(s)} radius={10} t={t}>
-                    <Card
-                      chat={s}
-                      project={project(s)}
-                      unread={unread(s)}
-                      selected={s.id === selected}
-                      now={now}
-                      t={t}
-                      compact
-                      onPress={() => onOpen(s)}
-                      onLongPress={() => setActing(s)}
-                    />
-                  </SwipeTriage>
-                ))}
-              </View>
-            );
-            if (families.headers.has(c.id))
-              return (
-                <Fragment key={c.id}>
-                  <SettledLead
-                    chat={c}
-                    project={project(c)}
-                    selected={c.id === selected}
-                    t={t}
-                    onPress={() => onOpen(c)}
-                    onUnsettle={() => onTriage(c, { kind: "unsettle" })}
-                  />
-                  {children}
-                </Fragment>
-              );
-            const open =
-              started.length > 0 &&
-              (toggled.get(c.id) ?? !familySettled(started, unread));
-            return (
-              <Fragment key={c.id}>
-                <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} {...swipes(c)} radius={12} t={t}>
+      {/* The handler's own list and pull-to-refresh: a plain ScrollView under a
+          refresh control is cancelled once a row's drag starts, so the list
+          wouldn't scroll from a card. */}
+      <ScrollView
+        ref={scrollGesture}
+        refreshControl={<RefreshControl {...refreshControl.props} />}
+        contentContainerStyle={[styles.list, { paddingBottom: bottom }]}
+      >
+        <View style={styles.heading}>
+          <Text style={[styles.headingText, { color: t.muted }]}>Activity</Text>
+          <Text style={[styles.headingCount, { color: t.muted }]}>
+            {families.top.length ? `${families.top.length} open` : "All settled"}
+          </Text>
+        </View>
+        {families.top.map((c) => {
+          const started = families.started.get(c.id) ?? [];
+          const children = (
+            <View style={[styles.started, { borderColor: t.border }]}>
+              {started.map((s) => (
+                <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} key={s.id} {...swipes(s)} radius={10} t={t}>
                   <Card
-                    chat={c}
-                    project={project(c)}
-                    unread={unread(c)}
-                    selected={c.id === selected}
+                    chat={s}
+                    project={project(s)}
+                    unread={unread(s)}
+                    selected={s.id === selected}
                     now={now}
                     t={t}
-                    family={
-                      started.length
-                        ? {
-                            started,
-                            open,
-                            onFold: () =>
-                              setToggled((m) => new Map(m).set(c.id, !open)),
-                          }
-                        : undefined
-                    }
-                    onPress={() => onOpen(c)}
-                    onLongPress={() => setActing(c)}
+                    compact
+                    onPress={() => onOpen(s)}
+                    onLongPress={() => setActing(s)}
                   />
                 </SwipeTriage>
-                {open && children}
+              ))}
+            </View>
+          );
+          if (families.headers.has(c.id))
+            return (
+              <Fragment key={c.id}>
+                <SettledLead
+                  chat={c}
+                  project={project(c)}
+                  selected={c.id === selected}
+                  t={t}
+                  onPress={() => onOpen(c)}
+                  onUnsettle={() => onTriage(c, { kind: "unsettle" })}
+                />
+                {children}
               </Fragment>
             );
-          })}
-          {!sections.active.length && (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIcon, { backgroundColor: t.accentSoft }]}>
-                <Check size={18} color={t.accent} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: t.text }]}>
-                Inbox zero
-              </Text>
-              <Text style={[styles.emptyText, { color: t.muted }]}>
-                Threads come back here when an agent replies or needs you.
-              </Text>
+          const open =
+            started.length > 0 &&
+            (toggled.get(c.id) ?? !familySettled(started, unread));
+          return (
+            <Fragment key={c.id}>
+              <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} {...swipes(c)} radius={12} t={t}>
+                <Card
+                  chat={c}
+                  project={project(c)}
+                  unread={unread(c)}
+                  selected={c.id === selected}
+                  now={now}
+                  t={t}
+                  family={
+                    started.length
+                      ? {
+                          started,
+                          open,
+                          onFold: () =>
+                            setToggled((m) => new Map(m).set(c.id, !open)),
+                        }
+                      : undefined
+                  }
+                  onPress={() => onOpen(c)}
+                  onLongPress={() => setActing(c)}
+                />
+              </SwipeTriage>
+              {open && children}
+            </Fragment>
+          );
+        })}
+        {!sections.active.length && (
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: t.accentSoft }]}>
+              <Check size={18} color={t.accent} />
             </View>
-          )}
-          {shelf("snoozed", "Snoozed")}
-          {shelf("settled", "Settled")}
-        </ScrollView>
-      </GestureDetector>
+            <Text style={[styles.emptyTitle, { color: t.text }]}>
+              Inbox zero
+            </Text>
+            <Text style={[styles.emptyText, { color: t.muted }]}>
+              Threads come back here when an agent replies or needs you.
+            </Text>
+          </View>
+        )}
+        {shelf("snoozed", "Snoozed")}
+        {shelf("settled", "Settled")}
+      </ScrollView>
       <UndoBar undo={undo} bottom={Math.max(12, bottom - 32)} t={t} onClose={closeUndo} />
       <MenuSheet
         open={!!acting}
