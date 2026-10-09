@@ -91,7 +91,8 @@ details.agent-step > .agent-step-heading:hover {
   flex: none;
   opacity: 0.75;
 }
-.agent-step-heading > span {
+/* Not the spinner: it turns its own span, and stretched it would orbit the row. */
+.agent-step-heading > span:where(:not(.spinner)) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
