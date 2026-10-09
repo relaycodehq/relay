@@ -42,7 +42,8 @@ import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
-import { isStartThreads, StartedChip, startedIds } from "./StartedThreads";
+import { isStartThreads, startedIds } from "../../../shared/started-threads";
+import { StartedChip } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
 

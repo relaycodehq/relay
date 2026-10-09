@@ -271,6 +271,9 @@ it("sends a thread's latest hundred messages, and older pages on request", async
 it("sends a phone a long tool output's ends, and the whole of it when asked", async () => {
   const messageId = randomUUID();
   const output = `${"a".repeat(1000)}${"b".repeat(1000)}`;
+  const started = JSON.stringify(
+    Array.from({ length: 6 }, () => ({ id: randomUUID(), title: "A task".repeat(10) })),
+  );
   const message: ChatMessage = {
     id: messageId,
     role: "assistant",
@@ -303,6 +306,18 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
           detail: "short",
         },
       },
+      {
+        kind: "activity",
+        id: "t3",
+        activity: {
+          id: "t3",
+          kind: "tool",
+          label: "Started threads",
+          mcp: { server: "relay", tool: "start_threads" },
+          status: "complete",
+          detail: started,
+        },
+      },
     ],
   };
   const host = {
@@ -325,9 +340,11 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
   const chat = (await b.handle("chat", [chatId])) as {
     messages: ChatMessage[];
   };
-  const [long, short] = chat.messages[0]!.trace!.flatMap((e) =>
+  const [long, short, start] = chat.messages[0]!.trace!.flatMap((e) =>
     e.kind === "activity" ? [e.activity] : [],
   );
+  // The phone reads which threads a turn started from these ids.
+  expect(start!.detail).toBe(started);
   expect(long!.detail).toBe(`${"a".repeat(300)}\n…\n${"b".repeat(300)}`);
   expect(long!.detailCut).toBe(1400);
   expect(short).toEqual(
