@@ -897,8 +897,32 @@ if (args.includes("--permission-prompt-tool")) {
           });
           return text;
         };
+        // start_threads shows in the trace as the call Codex makes, as the phone lists its threads there.
+        const call = {
+          id: "fixture-relay-call",
+          type: "mcpToolCall",
+          server: "relay",
+          tool,
+        };
+        if (tool === "start_threads")
+          send({
+            method: "item/started",
+            params: { threadId: "fixture-thread", item: call },
+          });
         callRelayTool(tool, JSON.parse(input))
           .then(editMoved)
+          .then((text) => {
+            if (tool !== "start_threads") return text;
+            send({
+              method: "item/completed",
+              params: {
+                threadId: "fixture-thread",
+                item: { ...call, status: "completed" },
+              },
+            });
+            const n = JSON.parse(input).threads.length;
+            return `Started ${n} threads; I'll check on them as they finish.`;
+          })
           .then(answer, (e) => answer(`Failed: ${e.message}`));
         return;
       }
