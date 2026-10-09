@@ -73,15 +73,18 @@ export const stopping = (stop: () => Promise<void>) => () =>
  * One line over the composer while a fan-out works: how many are out, how
  * many are back, and what the newest working one is on. It's the same
  * height whatever it says, so the thread above doesn't move as calls come
- * and go.
+ * and go. An idle thread with no agents out gives the screen back.
  */
 export function SubagentStrip({
   batch,
+  reserve,
   display,
   onPress,
   error,
   onRetry,
 }: {
+  /** Holds its height with no agents out, e.g. while a turn runs that may send some. */
+  reserve: boolean;
   error?: string;
   onRetry: () => Promise<unknown>;
   batch: SubagentRun[];
@@ -94,8 +97,8 @@ export function SubagentStrip({
     (a, r) => (!a || r.started >= a.started ? r : a),
     undefined,
   );
-  // Reserve this on every main thread, including before the first agent starts.
-  if (!latest)
+  if (!latest) {
+    if (!reserve && !error) return null;
     return (
       <View style={styles.slot}>
         {error && (
@@ -114,6 +117,7 @@ export function SubagentStrip({
         )}
       </View>
     );
+  }
   const back = batch.length - working.length;
   return (
     <View style={styles.slot}>

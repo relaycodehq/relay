@@ -731,6 +731,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       {!rootId && (
         <SubagentStrip
           batch={agentBatch}
+          reserve={running}
           display={display}
           onPress={() => setSheet("agents")}
           error={agents.error}
