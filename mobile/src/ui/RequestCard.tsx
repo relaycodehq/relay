@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -17,6 +17,7 @@ import type {
   AgentResponse,
 } from "../../../shared/agent-modes";
 import { Button } from "./Button";
+import { RevealField } from "./KeyboardAware";
 import { mono, type, useTheme } from "./theme";
 
 // The desktop's wording, from src/features/thread/AgentRequestCard.tsx.
@@ -150,6 +151,7 @@ export function Questions({
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
+  const reveal = useContext(RevealField);
   const question = questions[index]!;
   const chosen = answers[question.id] ?? [];
   const labelsOf = new Set(question.options?.map((o) => o.label));
@@ -223,6 +225,7 @@ export function Questions({
         })}
       </Body>
       <TextInput
+        onFocus={reveal}
         accessibilityLabel={question.question}
         editable={!busy}
         secureTextEntry={question.isSecret}

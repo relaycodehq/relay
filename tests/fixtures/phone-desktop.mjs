@@ -14,6 +14,9 @@
 // --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` instead and starts a
 // thread where it sends three agents off, eight times slower than the spec's;
 // each message there sends three more.
+// --family N starts a lead thread that starts N threads of its own through
+// Relay's start_threads tool, two of them still streaming, so the phone lists
+// a started family under its lead (at most 6, the tool's limit).
 // --asks starts threads that end on what the phone has to tell: an open
 // question, a provider error envelope, a lost login and a page shown with show_html.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
@@ -50,6 +53,7 @@ const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
 const subagents = process.argv.includes("--subagents");
 const asks = process.argv.includes("--asks");
+const family = Math.min(6, Number(arg("--family") ?? 0));
 if (claude && subagents) {
   console.error(
     "--claude and --subagents each bring their own `claude`; pick one.",
@@ -241,7 +245,7 @@ if (images) {
 }
 const pairing = await page
   .evaluate(
-    async ({ seed, images, repo, claude, subagents, asks }) => {
+    async ({ seed, images, repo, claude, subagents, asks, family }) => {
       const project = await window.relay.addProject();
       if (claude) {
         // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
@@ -257,7 +261,7 @@ const pairing = await page
           interactionMode: "default",
         });
       }
-      if (seed || images || subagents || asks) {
+      if (seed || images || subagents || asks || family) {
         const settings = await window.relay.aiSettings();
         const start = async (body, provider = "codex") => {
           const chat = await window.relay.createProjectChat(project.id, {
@@ -309,6 +313,20 @@ const pairing = await page
             await new Promise((r) => setTimeout(r, 500));
           }
         }
+        if (family) {
+          const threads = Array.from({ length: family }, (_, i) => ({
+            prompt:
+              i < 2
+                ? `fixture stream long answer, started thread ${i + 1}`
+                : `fixture echo: Started thread ${i + 1} is done.`,
+          }));
+          await window.relay.renameProjectChat(
+            await start(
+              `fixture relay start_threads ${JSON.stringify({ threads })}`,
+            ),
+            "Mobile app polish pass",
+          );
+        }
         if (seed) {
           await start("fixture edit files in the cache");
           await new Promise((r) => setTimeout(r, 2500));
@@ -318,7 +336,7 @@ const pairing = await page
       await window.relay.setPhoneRemote(true);
       return window.relay.phonePairing();
     },
-    { seed, images, repo, claude, subagents, asks },
+    { seed, images, repo, claude, subagents, asks, family },
   )
   .catch(async (e) => {
     console.error(e);

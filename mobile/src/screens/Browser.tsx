@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, type Href } from "expo-router";
+import { router, usePathname, type Href } from "expo-router";
 import { Plus, Search, X } from "lucide-react-native";
 import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
@@ -100,7 +100,9 @@ export function Browser({
       [overview?.projects],
     ),
   );
-  const open = (href: Href) => (pane ? openInPane(href) : router.push(href));
+  const pathname = usePathname();
+  const open = (href: Href) =>
+    pane ? openInPane(href, pathname) : router.push(href);
   const openChat = (c: RemoteChatSummary) => open(`/chat/${c.id}`);
   const refresh = (
     <RefreshControl

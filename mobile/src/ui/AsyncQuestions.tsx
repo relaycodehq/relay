@@ -1,12 +1,13 @@
 // The desktop's AsyncQuestionCards (src/features/thread): questions an agent
 // left in its answer while it kept working. They stay answerable after the
 // turn ends; dismissing one hides it without telling the agent anything.
-import { useRef, useState, type ReactNode } from "react";
+import { useContext, useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ChevronDown, ChevronRight, MessageCircleQuestion } from "lucide-react-native";
 import type { AsyncAgentQuestions, ChatMessage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
+import { RevealField, RevealMessage } from "./KeyboardAware";
 import { agentNames } from "./ProviderIcon";
 import { Questions } from "./RequestCard";
 import { type, useTheme } from "./theme";
@@ -33,6 +34,7 @@ function Open({
 }) {
   const t = useTheme();
   const { desktop } = useRemote();
+  const revealMessage = useContext(RevealMessage);
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -81,21 +83,23 @@ function Open({
           </Pressable>
         </View>
         <Text style={[styles.hint, { color: t.muted }]}>{"Answer whenever you're ready."}</Text>
-        <Questions
-          questions={group.questions}
-          busy={busy}
-          deferred
-          onAnswer={(answers) =>
-            void run(() =>
-              desktop("answerProjectChatQuestion", chatId, message.id, group.id, {
-                kind: "question",
-                answers,
-              }),
-            ).then((sent) => {
-              if (sent) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            })
-          }
-        />
+        <RevealField.Provider value={() => revealMessage(message.id)}>
+          <Questions
+            questions={group.questions}
+            busy={busy}
+            deferred
+            onAnswer={(answers) =>
+              void run(() =>
+                desktop("answerProjectChatQuestion", chatId, message.id, group.id, {
+                  kind: "question",
+                  answers,
+                }),
+              ).then((sent) => {
+                if (sent) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              })
+            }
+          />
+        </RevealField.Provider>
         {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
       </View>
       {group.dismissed && (

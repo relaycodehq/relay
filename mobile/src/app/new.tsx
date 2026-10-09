@@ -184,7 +184,12 @@ function NewThreadComposer() {
     else deliver(desktop, remote.active ?? "", chatId, message);
     made.current = undefined;
     void remote.refresh().catch(() => {});
-    if (focused.current) router.replace(`/chat/${chatId}`);
+    if (!focused.current) return;
+    // Put away before the composer goes: beside the list, Android would hand
+    // the keyboard to the list's search field, and the thread's composer
+    // would open under it.
+    Keyboard.dismiss();
+    router.replace(`/chat/${chatId}`);
   };
 
   return (
