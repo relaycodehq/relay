@@ -1,3 +1,5 @@
+import * as Clipboard from "expo-clipboard";
+import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
@@ -46,7 +48,28 @@ export async function pickImages(
   return Promise.all(result.assets.slice(0, limit).map(prepare));
 }
 
-async function prepare(asset: ImagePicker.ImagePickerAsset): Promise<Attachment> {
+/**
+ * The clipboard's image, if it holds one. React Native's text field can't take
+ * an image from the paste menu or the keyboard, so the composer offers this
+ * instead. Android shows nothing for asking whether there is one; it only
+ * tells the user when the image itself is read.
+ */
+export async function pasteImage(): Promise<Attachment | undefined> {
+  const image = await Clipboard.getImageAsync({ format: "png" });
+  if (!image) return undefined;
+  // The manipulator, like Android's image loader, won't open a data: URI.
+  const file = new File(Paths.cache, `pasted-${Date.now()}.png`);
+  file.write(image.data.slice(image.data.indexOf(",") + 1), { encoding: "base64" });
+  try {
+    return await prepare({ uri: file.uri, ...image.size, fileName: "pasted" });
+  } finally {
+    file.delete();
+  }
+}
+
+async function prepare(
+  asset: Pick<ImagePicker.ImagePickerAsset, "uri" | "width" | "height" | "fileName">,
+): Promise<Attachment> {
   const long = Math.max(asset.width, asset.height);
   for (const [side, compress] of steps) {
     const context = ImageManipulator.manipulate(asset.uri);

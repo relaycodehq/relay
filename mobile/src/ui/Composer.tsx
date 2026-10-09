@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDraft } from "../remote/drafts";
 import * as Haptics from "expo-haptics";
 import { randomUUID } from "expo-crypto";
-import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
+import { ArrowUp, ChevronDown, ClipboardPaste, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
@@ -38,7 +38,8 @@ import {
   useDictation,
   type DictationTarget,
 } from "../remote/dictation";
-import { maxImages, pickImages, type Attachment } from "../remote/images";
+import { maxImages, pasteImage, pickImages, type Attachment } from "../remote/images";
+import { useClipboardImage } from "./clipboard-image";
 import { knownModels, loadModelLists, savedModelsRead } from "../remote/model-catalogs";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
@@ -148,6 +149,8 @@ export const Composer = forwardRef<
   const held = useRef(images);
   held.current = images;
   const takenBackCount = useRef(0);
+  const [typing, setTyping] = useState(false);
+  const clipboard = useClipboardImage(typing && images.length < maxImages);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [failedSend, setFailedSend] = useState<Outgoing>();
@@ -432,6 +435,15 @@ export const Composer = forwardRef<
     void pickImages(from, maxImages - images.length)
       .then((picked) => setImages((old) => [...old, ...picked].slice(0, maxImages)))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  const paste = () => {
+    clipboard.used();
+    void pasteImage()
+      .then((image) => {
+        if (image) setImages((old) => [...old, image].slice(0, maxImages));
+        else setError("There's no image to paste.");
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  };
   const stop = running && empty && onStop;
   const plan = settings.interactionMode === "plan";
   return (
@@ -469,8 +481,13 @@ export const Composer = forwardRef<
         </Pressable>
       )}
       <View style={[styles.box, { borderColor: t.border, backgroundColor: t.raised }]}>
-        {images.length > 0 && (
-          <ScrollView horizontal style={styles.thumbs} contentContainerStyle={styles.thumbsRow}>
+        {(images.length > 0 || clipboard.offered) && (
+          <ScrollView
+            horizontal
+            keyboardShouldPersistTaps="always"
+            style={styles.thumbs}
+            contentContainerStyle={styles.thumbsRow}
+          >
             {images.map((image, i) => (
               <View key={image.id ?? image.uri}>
                 <Image source={{ uri: image.uri }} style={[styles.thumb, { borderColor: t.border }]} />
@@ -485,6 +502,22 @@ export const Composer = forwardRef<
                 </Pressable>
               </View>
             ))}
+            {clipboard.offered && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Paste the copied image"
+                onPress={paste}
+                style={({ pressed }) => [
+                  styles.thumb,
+                  styles.pasteThumb,
+                  { borderColor: t.border },
+                  pressed && { backgroundColor: t.hover },
+                ]}
+              >
+                <ClipboardPaste size={16} color={t.muted} />
+                <Text style={[styles.pasteLabel, { color: t.muted }]}>Paste</Text>
+              </Pressable>
+            )}
           </ScrollView>
         )}
         <TextInput
@@ -497,6 +530,8 @@ export const Composer = forwardRef<
           editable={!live}
           value={live ? undefined : text}
           onChangeText={edit}
+          onFocus={() => setTyping(true)}
+          onBlur={() => setTyping(false)}
           onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
           placeholder={placeholder ?? `Message ${agentName(provider)}`}
           placeholderTextColor={t.faint}
@@ -642,6 +677,7 @@ export const Composer = forwardRef<
         items={[
           { label: "Photo library", onPress: () => attach("library") },
           { label: "Take a photo", onPress: () => attach("camera") },
+          { label: "Paste image", hint: "The image you copied last", onPress: paste },
         ]}
       />
       <MenuSheet
@@ -716,6 +752,14 @@ const styles = StyleSheet.create({
   thumbs: { flexGrow: 0 },
   thumbsRow: { gap: 8, padding: 6 },
   thumb: { width: 56, height: 56, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
+  pasteThumb: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    borderStyle: "dashed",
+    borderWidth: 1,
+  },
+  pasteLabel: { fontSize: type.tiny },
   unthumb: {
     position: "absolute",
     top: -6,
