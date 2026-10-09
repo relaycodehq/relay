@@ -1,6 +1,6 @@
 // The sidebar's Activity view: drafts and open threads as cards, Snoozed
 // and Settled folded away below.
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   Check,
@@ -46,6 +46,8 @@ import {
 import { SnoozeMenu } from "./SnoozeMenu";
 import { CardAgents, CardState } from "./ThreadStatus";
 import { rowKeys } from "../../ui/ui";
+import { useStoredState } from "../../lib/persisted-store";
+import { parseFamilyFolds, withFamilyFold } from "../../../shared/family-folds";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 export function ActivityView({
@@ -77,12 +79,11 @@ export function ActivityView({
   /** Sends the open unsent thread's draft from its composer. */
   onSendDraft: () => void;
 }) {
-  // A family opens or folds by itself; a click on its line overrides that.
-  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(
-    new Map(),
-  );
+  // A family opens or folds by itself; a click on its line overrides that,
+  // and stays when Activity is left and opened again.
+  const [toggled, setToggled] = useStoredState("relay-family-folds", parseFamilyFolds);
   const fold = (id: string, open: boolean) =>
-    setToggled((was) => new Map(was).set(id, !open));
+    setToggled((was) => withFamilyFold(was, id, !open));
   const jumpBinding = useBindings("jump-thread")[0];
   const list = useCardSlide();
   const unsent = drafts.filter((d) => !d.chat);
@@ -133,7 +134,7 @@ export function ActivityView({
           const index = families.cards.indexOf(c);
           const open =
             started.length > 0 &&
-            (toggled.get(c.id) ?? !familySettled(started, rows.unread));
+            (toggled[c.id] ?? !familySettled(started, rows.unread));
           return (
             <Fragment key={c.id}>
               <ThreadCard

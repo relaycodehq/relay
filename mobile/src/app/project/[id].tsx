@@ -20,6 +20,7 @@ import { useTheme } from "../../ui/theme";
 export default function ProjectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const remote = useRemote();
+  const { desktop, status } = remote;
   const t = useTheme();
   const project = remote.overview?.projects.find((p) => p.id === id);
   const chats = remote.overview?.chats.filter((c) => c.projectId === id) ?? [];
@@ -28,14 +29,14 @@ export default function ProjectScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const git = !!project && !project.plain;
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     const [working, running] = await Promise.all([
-      git ? remote.desktop("projectWorkingTree", id).catch(() => null) : null,
-      remote.desktop("projectTasks", id).catch(() => undefined),
+      git ? desktop("projectWorkingTree", id).catch(() => null) : null,
+      desktop("projectTasks", id).catch(() => undefined),
     ]);
     setTree(working);
     setTasks(running);
-  }, [remote, id, git]);
+  }, [desktop, status, id, git]);
   // Fresh each time the screen comes back, e.g. after a commit.
   useFocusEffect(
     useCallback(() => {

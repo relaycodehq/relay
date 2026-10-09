@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Image,
@@ -12,15 +12,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDraft } from "../remote/drafts";
 import * as Haptics from "expo-haptics";
+import { randomUUID } from "expo-crypto";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
+import { appendQuote } from "../../../shared/composer-quotes";
 import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
-import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
+import { modelName } from "../../../shared/model-fit";
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ModelChoice } from "../../../shared/settings";
@@ -39,6 +42,7 @@ import { maxImages, pickImages, type Attachment } from "../remote/images";
 import { knownModels, loadModelLists, savedModelsRead } from "../remote/model-catalogs";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
+import { composeAttempt, sameDraft, type ComposeAttempt } from "../remote/compose-attempt";
 import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from "./CommandMenu";
 import { DictationButton, dictationShrinkMs } from "./DictationButton";
 import { useKeyboardShown } from "./KeyboardAware";
@@ -48,15 +52,7 @@ import { MenuSheet } from "./Sheet";
 import { UsageBar, UsageSheet, useUsage } from "./Usage";
 import { mono, type, useTheme } from "./theme";
 
-export interface Outgoing {
-  body: string;
-  settings: RemoteSettings;
-  images: Attachment[];
-  /** While an answer runs: a turn after it, or steered into it. */
-  delivery?: "queue" | "steer";
-  /** Send later: held until then. */
-  sendAt?: number;
-}
+export type Outgoing = ComposeAttempt<Attachment>;
 
 /** Dictated words going into `base` in place of `from`–`to`; they sit at `start`–`end`, the last `tentative` characters still unsure. */
 interface Live {
@@ -80,6 +76,10 @@ export interface ComposerHandle {
   restore(back: Pick<TakenBack, "body" | "images">): () => void;
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
+  focus(): void;
+  blur(): void;
+  /** Adds a Markdown blockquote after the draft and puts the cursor under it. */
+  quote(markdown: string): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -100,11 +100,32 @@ export const Composer = forwardRef<
     onCommand?: (name: RelayCommand, args: string) => CommandResult | Promise<CommandResult>;
     /** Where unsent text is kept between visits: the thread, or the reply's root. */
     draftKey?: string;
+    /** A new thread's destination, including its workspace, for retrying a send. */
+    sendTarget?: string;
     /** A new thread's models, per agent, for switching to one not picked here yet. */
     remembered?: NewThreadModels;
+    /** Over the message box, inside the dock. */
+    above?: ReactNode;
+    autoFocus?: boolean;
   }
 >(function Composer(
-  { projectId, settings, onSettings, placeholder, running, disabled, context, onSend, onStop, onCommand, draftKey, remembered },
+  {
+    projectId,
+    settings,
+    onSettings,
+    placeholder,
+    running,
+    disabled,
+    context,
+    onSend,
+    onStop,
+    onCommand,
+    draftKey,
+    sendTarget,
+    remembered,
+    above,
+    autoFocus,
+  },
   ref,
 ) {
   const t = useTheme();
@@ -113,6 +134,15 @@ export const Composer = forwardRef<
   const keyboard = useKeyboardShown();
   const [text, setText] = useState("");
   const input = useRef<TextInput>(null);
+  const [dictationOwner] = useState(() => ({}));
+  const quoteCursor = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const end = quoteCursor.current;
+    if (end === undefined) return;
+    quoteCursor.current = undefined;
+    input.current?.focus();
+    input.current?.setSelection(end, end);
+  }, [text]);
   useDraft(draftKey, text, setText);
   const [images, setImages] = useState<Attachment[]>([]);
   const held = useRef(images);
@@ -120,6 +150,7 @@ export const Composer = forwardRef<
   const takenBackCount = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [failedSend, setFailedSend] = useState<Outgoing>();
   const [sheet, setSheet] = useState<"model" | "mode" | "attach" | "later" | "usage">();
   const [dismissed, setDismissed] = useState<string>();
   const { usage, reload: reloadUsage } = useUsage(settings.provider);
@@ -137,6 +168,7 @@ export const Composer = forwardRef<
         id: i.id ?? i.uri,
         ...(i.n === undefined ? {} : { n: i.n }),
       }));
+      setError(undefined);
       const merged = returnedDraft(before.text, mine, back, true, () => `taken-back-${takenBackCount.current++}`);
       setText(merged.body);
       setImages(
@@ -158,6 +190,19 @@ export const Composer = forwardRef<
       };
     },
     settingsOn: (to) => switched(settings, to),
+    focus: () => input.current?.focus(),
+    blur: () => input.current?.blur(),
+    quote: async (markdown) => {
+      const now = dictationSnapshot();
+      const finishing = now.owner === dictationOwner && now.phase !== "idle";
+      // Keep the words already spoken; a dictation update mustn't overwrite the quote.
+      if (finishing && !(await stopDictation())) return;
+      // Set the cursor after React has handed the new value to the native input.
+      const next = appendQuote(finishing ? dictated.current : typed.current, markdown);
+      quoteCursor.current = next.end;
+      typed.current = next.text;
+      setText(next.text);
+    },
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});
@@ -167,12 +212,19 @@ export const Composer = forwardRef<
       ...(settings.contextWindow ? { contextWindow: settings.contextWindow } : {}),
     };
   }, [settings]);
-  useEffect(() => setError(undefined), [text]);
+  // Only the reader's own edits clear it: a failed send puts the draft back
+  // in `text`, which mustn't take its error with it.
+  const edit = (next: string) => {
+    setText(next);
+    setError(undefined);
+  };
 
-  const { overview, desktop } = useRemote();
+  const { overview, desktop, status, active } = useRemote();
+  const target = `${active ?? ""}:${sendTarget ?? draftKey ?? projectId}`;
+  const retrying = failedSend && sameDraft(failedSend, { target, body: text.trim(), settings, images });
+  const retryingScheduled = retrying && !!failedSend.sendAt;
   // Desktops from before phone dictation don't say, and can't.
   const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
-  const [dictationOwner] = useState(() => ({}));
   const dictation = useDictation();
   const dictating = dictation.owner === dictationOwner && dictation.phase !== "idle";
   const dictationError = dictation.owner === dictationOwner ? dictation.error : undefined;
@@ -205,6 +257,7 @@ export const Composer = forwardRef<
   const dictationTarget = (): DictationTarget => ({
     begin: () => {
       const base = typed.current;
+      setError(undefined);
       // At the cursor while typing; after the draft otherwise.
       const at = input.current?.isFocused() ? selection.current : { start: base.length, end: base.length };
       const from = Math.min(at.start, base.length),
@@ -257,6 +310,7 @@ export const Composer = forwardRef<
   };
   const switchTo = (next: RemoteSettings, to: AgentProvider) => onSettings(switched(next, to));
   // Held for the connection, and saved, so the toolbar names the model at once.
+  const online = status === "online";
   const [lists, setLists] = useState(() => ({ from: desktop, lists: knownModels(desktop) }));
   const loadCatalogs = async (wanted: readonly AgentProvider[]) => {
     const known = await loadModelLists(desktop, wanted);
@@ -271,12 +325,11 @@ export const Composer = forwardRef<
     return () => {
       live = false;
     };
-  }, [desktop, provider]);
-  // Claude's ids are aliases ("opus"); the list carries the full name.
+    // A reconnect asks again, for a list the last connection didn't get.
+  }, [desktop, provider, online]);
   const catalogs = lists.from === desktop ? lists.lists : knownModels(desktop);
-  const models = catalogs[provider];
   const modelLabel = settings.choice.model
-    ? (models?.find((m) => m.id === settings.choice.model)?.name ?? settings.choice.model)
+    ? modelName(provider, catalogs[provider], settings.choice.model)
     : "Default";
   /** The desktop's runCommand for a composer setting; with no value, its picker opens. */
   const setting = async (name: ComposerCommand, args: string): Promise<CommandResult> => {
@@ -309,16 +362,17 @@ export const Composer = forwardRef<
   const pick = (item: CommandItem) => {
     if (item.kind === "relay") {
       // Required values are picked or typed after it; the rest run now.
-      if (item.name === "btw") return setText("/btw ");
-      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return setText(`/${item.name} `);
+      if (item.name === "btw") return edit("/btw ");
+      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return edit(`/${item.name} `);
       return void run(item.name, "");
     }
-    if (item.kind === "command") return setText(`/${item.name} `);
+    if (item.kind === "command") return edit(`/${item.name} `);
     // A skill goes in where it was typed, as `$name`.
-    setText(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
+    edit(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
   };
 
   const empty = !text.trim() && !images.length;
+  const steering = running && !empty;
   /** `written` is the draft when it hasn't reached `text` yet. */
   const send = async (delivery?: "queue" | "steer", sendAt?: number, written = text) => {
     // Sending mid-dictation waits for the last words to land in the draft.
@@ -337,13 +391,20 @@ export const Composer = forwardRef<
       if (command && command.name !== "btw" && command.name !== "goal") return void run(command.name, command.args);
       if (command?.name === "btw" && !command.args) return setError("Add a question after /btw.");
       const name = /^\/([^\s]+)/.exec(draft)?.[1];
-      const agentCommand = agents[provider].commandsAlone && commands.some((c) => c.name === name);
-      const skill = agents[provider].skills && /^\/skill:[^\s]+(?:\s|$)/.test(draft);
+      const agentCommand = agentInfo(provider)?.commandsAlone && commands.some((c) => c.name === name);
+      const skill = agentInfo(provider)?.skills && /^\/skill:[^\s]+(?:\s|$)/.test(draft);
       if (!command && !agentCommand && !skill)
         return setError(
           "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or an agent's command.",
         );
     }
+    const attempt = composeAttempt(
+      { target, body: draft, settings, images },
+      sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {},
+      delivery === undefined && sendAt === undefined ? failedSend : undefined,
+      randomUUID,
+    );
+    setFailedSend(undefined);
     setBusy(true);
     setError(undefined);
     // Cleared as it goes, so leaving mid-send doesn't keep it as a draft;
@@ -351,16 +412,16 @@ export const Composer = forwardRef<
     setText("");
     try {
       // Screenshots taken back with their tokens go out in token order, the tokens renumbered to match.
-      const numbered = numberImages(draft, images);
+      const numbered = numberImages(attempt.body, attempt.images);
       const sent = await onSend({
+        ...attempt,
         body: numbered.text,
-        settings,
         images: numbered.images,
-        ...(sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {}),
       });
       if (sent === false) setText((typed) => typed || draft);
       else setImages([]);
     } catch (e) {
+      setFailedSend(attempt);
       setText((typed) => typed || draft);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -384,6 +445,7 @@ export const Composer = forwardRef<
         },
       ]}
     >
+      {above}
       {items && (
         <CommandMenu
           items={items}
@@ -393,8 +455,17 @@ export const Composer = forwardRef<
         />
       )}
       {!!(error ?? dictationError) && (
-        <Pressable onPress={() => (error ? setDismissed(text) : clearDictationError())}>
-          <Text style={[styles.note, { color: t.danger }]}>{error ?? dictationError}</Text>
+        <Pressable
+          onPress={() => {
+            if (!error) return clearDictationError();
+            setError(undefined);
+            setDismissed(text);
+          }}
+        >
+          <Text style={[styles.note, { color: t.danger }]}>
+            {error ?? dictationError}
+            {error && retryingScheduled ? " Tap send to retry at the original time." : ""}
+          </Text>
         </Pressable>
       )}
       <View style={[styles.box, { borderColor: t.border, backgroundColor: t.raised }]}>
@@ -420,11 +491,12 @@ export const Composer = forwardRef<
           ref={input}
           accessibilityLabel="Message"
           multiline
+          autoFocus={autoFocus}
           // Typing goes on while it reconnects; only sending waits. Dictated
           // words hold it still until they settle.
           editable={!live}
           value={live ? undefined : text}
-          onChangeText={setText}
+          onChangeText={edit}
           onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
           placeholder={placeholder ?? `Message ${agentNames[provider]}`}
           placeholderTextColor={t.faint}
@@ -442,23 +514,25 @@ export const Composer = forwardRef<
           <Tool label="Attach a photo" disabled={images.length >= maxImages} onPress={() => setSheet("attach")}>
             <ImagePlus size={17} color={t.muted} />
           </Tool>
-          <Tool label="Agent and model" onPress={() => setSheet("model")}>
+          <Tool label="Agent and model" shrink onPress={() => setSheet("model")}>
             <ProviderIcon provider={provider} color={t.muted} size={13} />
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
               {modelLabel}
               {settings.choice.reasoningEffort ? ` · ${effortLabel(settings.choice.reasoningEffort)}` : ""}
-              {agents[provider].fast && settings.choice.fast ? " · Fast" : ""}
+              {agentInfo(provider)?.fast && settings.choice.fast ? " · Fast" : ""}
             </Text>
             <ChevronDown size={12} color={t.faint} />
           </Tool>
           {/* Room for the waveform on a narrow phone. */}
           {!dictating && !shrinking && (
             <>
-              <Tool label="Permissions" onPress={() => setSheet("mode")}>
-                <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
-                  {modeLabel(settings.runtimeMode)}
-                </Text>
-              </Tool>
+              {!steering && (
+                <Tool label="Permissions" shrink onPress={() => setSheet("mode")}>
+                  <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
+                    {modeLabel(settings.runtimeMode)}
+                  </Text>
+                </Tool>
+              )}
               <Tool
                 label={plan ? "Plan mode on" : "Plan mode off"}
                 onPress={() => onSettings({ ...settings, interactionMode: plan ? "default" : "plan" })}
@@ -477,14 +551,14 @@ export const Composer = forwardRef<
             <Tool
               label="Commands"
               onPress={() => {
-                setText("/");
+                edit("/");
                 input.current?.focus();
               }}
             >
               <Text style={[styles.slash, { color: t.muted }]}>/</Text>
             </Tool>
           )}
-          {running && !empty && (
+          {steering && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Steer now"
@@ -505,8 +579,8 @@ export const Composer = forwardRef<
           )}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={stop ? "Stop" : running ? "Queue" : "Send"}
-            accessibilityHint={empty ? undefined : "Hold to send later"}
+            accessibilityLabel={stop ? "Stop" : retryingScheduled ? "Retry scheduled send" : running ? "Queue" : "Send"}
+            accessibilityHint={empty ? undefined : retryingScheduled ? "Retries the same message at its original time" : "Hold to send later"}
             disabled={disabled || busy || (!stop && empty)}
             onPress={stop ? onStop : () => void send()}
             onLongPress={empty ? undefined : () => setSheet("later")}
@@ -602,11 +676,14 @@ export const Composer = forwardRef<
 function Tool({
   label,
   disabled,
+  shrink,
   onPress,
   children,
 }: {
   label: string;
   disabled?: boolean;
+  /** Gives up width, its label cut short, so the send buttons always fit. */
+  shrink?: boolean;
   onPress: () => void;
   children: React.ReactNode;
 }) {
@@ -618,7 +695,12 @@ function Tool({
       disabled={disabled}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => [styles.tool, pressed && { backgroundColor: t.hover }, disabled && { opacity: 0.4 }]}
+      style={({ pressed }) => [
+        styles.tool,
+        shrink && styles.shrink,
+        pressed && { backgroundColor: t.hover },
+        disabled && { opacity: 0.4 },
+      ]}
     >
       {children}
     </Pressable>
@@ -626,7 +708,8 @@ function Tool({
 }
 
 const styles = StyleSheet.create({
-  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6 },
+  // Short of room (keyboard up, a long command list), only the command menu gives way.
+  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6, flexShrink: 1 },
   note: { fontSize: type.tiny, paddingHorizontal: 6 },
   box: { borderWidth: 1, borderRadius: 18, paddingTop: 4, paddingBottom: 6, paddingHorizontal: 6 },
   thumbs: { flexGrow: 0 },
@@ -645,6 +728,7 @@ const styles = StyleSheet.create({
   input: { fontSize: type.body, lineHeight: 21, maxHeight: 132, minHeight: 38, paddingHorizontal: 8, paddingVertical: 8 },
   toolbar: { flexDirection: "row", alignItems: "center", gap: 2 },
   tool: { flexDirection: "row", alignItems: "center", gap: 4, height: 32, paddingHorizontal: 6, borderRadius: 8, maxWidth: 140 },
+  shrink: { flexShrink: 1, minWidth: 0 },
   toolText: { fontSize: type.tiny, flexShrink: 1 },
   spacer: { flex: 1 },
   slash: { fontFamily: mono, fontSize: 15, width: 18, textAlign: "center" },

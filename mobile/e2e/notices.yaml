@@ -1,0 +1,60 @@
+# What an answer leaves for the user, against the fixture desktop's --asks
+# threads: an open question (dismiss, reopen, answer), a provider error
+# envelope, a lost login and a page shown with show_html.
+appId: host.exp.exponent
+---
+- openLink: ${PAIR_LINK}
+- extendedWaitUntil:
+    visible: "Pair this phone with.*"
+    timeout: 180000
+# A tap before the bundle settles goes nowhere.
+- waitForAnimationToEnd
+- tapOn: "Pair"
+- extendedWaitUntil:
+    visible: "Asks a question"
+    timeout: 30000
+- takeScreenshot: ${OUT}/1-list
+- tapOn: "Asks a question"
+- extendedWaitUntil:
+    visible: "Codex has questions"
+    timeout: 20000
+- takeScreenshot: ${OUT}/2-question
+- tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Dismissed questions"
+    timeout: 20000
+- takeScreenshot: ${OUT}/3-dismissed
+- tapOn: "Reopen"
+- extendedWaitUntil:
+    visible: "Codex has questions"
+    timeout: 20000
+- tapOn: "Private while preparing"
+- tapOn: "Next"
+- tapOn: "Your answer…"
+- inputText: "fixture-owner"
+- hideKeyboard
+- takeScreenshot: ${OUT}/4-second-question
+- tapOn: "Send answer"
+- extendedWaitUntil:
+    visible: "Answered questions"
+    timeout: 30000
+- takeScreenshot: ${OUT}/5-answered
+- back
+- tapOn: "Fails with an envelope"
+- extendedWaitUntil:
+    visible: "gpt-6.1-sol isn't available.*"
+    timeout: 20000
+- tapOn: "Technical details"
+- takeScreenshot: ${OUT}/6-error
+- back
+- tapOn: "Signed out"
+- extendedWaitUntil:
+    visible: "Codex is signed out"
+    timeout: 20000
+- takeScreenshot: ${OUT}/7-signed-out
+- back
+- tapOn: "Shows a page"
+- extendedWaitUntil:
+    visible: "Card density"
+    timeout: 20000
+- takeScreenshot: ${OUT}/8-render

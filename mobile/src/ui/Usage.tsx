@@ -20,6 +20,7 @@ import type { ContextUsage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "./Button";
 import { agentNames } from "./ProviderIcon";
+import { useForeground } from "./motion";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
 
@@ -39,13 +40,14 @@ const lastUsage = new Map<string, ProviderUsage>();
 /** The agent's plan usage, looked up now and every few minutes while a thread is open. */
 export function useUsage(provider: AgentProvider) {
   const { desktop, status, active } = useRemote();
+  const foreground = useForeground();
   const key = `${active ?? ""}:${provider}`;
   const [usage, setUsage] = useState(() => ({ key, value: lastUsage.get(key) }));
   // Keyed by the connection and agent, not every thread update: each look asks
   // the provider's usage service.
   const load = useCallback(
     (force = false) => {
-      if (!hasUsage(provider) || status !== "online") return;
+      if (!hasUsage(provider) || status !== "online" || !foreground) return;
       void desktop("providerUsage", provider as "claude" | "codex", force)
         .then((value) => {
           lastUsage.set(key, value);
@@ -53,13 +55,15 @@ export function useUsage(provider: AgentProvider) {
         })
         .catch(() => {});
     },
-    [desktop, status, provider, key],
+    [desktop, status, foreground, provider, key],
   );
+  // Not with the phone in a pocket: relay-watch keeps the app alive there.
   useEffect(() => {
+    if (!foreground) return;
     load();
     const timer = setInterval(() => load(), 180_000);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [load, foreground]);
   return {
     usage: usage.key === key ? usage.value : lastUsage.get(key),
     reload: load,

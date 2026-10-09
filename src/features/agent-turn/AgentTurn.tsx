@@ -22,11 +22,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import {
-  isImagePath,
-  type AgentActivity,
-  type ChatMessage,
-} from "../../../shared/projects";
+import type { AgentActivity, ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import {
   doneLabel,
@@ -37,6 +33,7 @@ import {
 import {
   batchHead,
   groupTrace,
+  imageRead,
   readTurn,
   thinkingWord,
   turnHeading,
@@ -45,7 +42,8 @@ import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
-import { isStartThreads, StartedChip, startedIds } from "./StartedThreads";
+import { isStartThreads, startedIds } from "../../../shared/started-threads";
+import { StartedChip } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -86,13 +84,8 @@ const TurnImages = createContext<ReadImages | undefined>(undefined);
 /** A finished read of an image the viewer can open. */
 function useImageRead(a: AgentActivity) {
   const images = useContext(TurnImages);
-  const image =
-    images &&
-    a.kind === "read" &&
-    a.status === "complete" &&
-    isImagePath(a.label)
-      ? images.find(a.label)
-      : undefined;
+  const path = imageRead(a);
+  const image = images && path ? images.find(path) : undefined;
   return images && image
     ? { image, open: () => images.open(image) }
     : undefined;

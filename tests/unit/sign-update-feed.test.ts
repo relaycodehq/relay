@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { signedByAny } from "../../electron/app/update-signature";
+import { signedByAny } from "../../shared/update-signature";
 
 const run = promisify(execFile);
 const script = "scripts/sign-update-feed.mjs";

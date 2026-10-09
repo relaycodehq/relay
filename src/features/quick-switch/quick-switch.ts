@@ -6,7 +6,7 @@ import {
   agentProviderSchema,
   type AgentProvider,
 } from "../../../shared/agents";
-import { fastFor } from "../../../shared/model-fit";
+import { fastFor, modelName } from "../../../shared/model-fit";
 import {
   effortLabels,
   reasoningEffortSchema,
@@ -83,13 +83,15 @@ export interface QuickItem {
 /** Presets by their listed model names; an unlisted model shows its id. */
 export const quickItems = (
   presets: QuickPreset[],
-  modelsOf: (p: AgentProvider) => { id: string; name: string }[] | undefined,
+  modelsOf: (
+    p: AgentProvider,
+  ) => { id: string; name: string; resolved?: string }[] | undefined,
 ): QuickItem[] =>
   presets.map((p) => ({
     id: p.id,
     provider: p.provider,
     name: p.model
-      ? (modelsOf(p.provider)?.find((m) => m.id === p.model)?.name ?? p.model)
+      ? modelName(p.provider, modelsOf(p.provider), p.model)
       : `${agentName(p.provider)} default`,
     effort: p.reasoningEffort ? effortLabels[p.reasoningEffort] : "Default",
     fast: fastFor(p.provider, p.fast),

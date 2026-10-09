@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { strToU8, zipSync } from "fflate";
 import {
   manifestSchema,
   newerVersion,
@@ -59,6 +60,39 @@ describe("update feed", () => {
     expect(manifest.files["win-x64"]?.url).toBe(
       "https://github.com/relaycodehq/relay/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
     );
+  });
+
+  it("puts the phone's APK beside the files, with the version inside it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "relay-release-"));
+    for (const name of [
+      "Relay-0.1.8-mac-arm64.zip",
+      "Relay-0.1.8-win-x64.exe",
+      "Relay-0.1.8-linux-x86_64.AppImage",
+      "Relay-0.1.8-omarchy-x86_64.tar.gz",
+    ])
+      await writeFile(join(dir, name), name);
+    // A release that left the native side alone carries the last APK on.
+    const config = { version: "0.1.7", extra: { relayRuntime: "abc123" } };
+    await writeFile(
+      join(dir, "Relay-Android.apk"),
+      zipSync({ "assets/app.config": strToU8(JSON.stringify(config)) }),
+    );
+    await run(process.execPath, [
+      "scripts/release-manifest.mjs",
+      dir,
+      "0.1.8",
+      "relaycodehq/relay",
+    ]);
+    const feed = JSON.parse(await readFile(join(dir, "latest.json"), "utf8"));
+    expect(feed.android).toMatchObject({
+      name: "Relay-Android.apk",
+      url: "https://github.com/relaycodehq/relay/releases/download/v0.1.8/Relay-Android.apk",
+      version: "0.1.7",
+      runtime: "abc123",
+    });
+    expect(feed.android.sha512).toMatch(/^[A-Za-z0-9+/]{86}==$/);
+    // Desktops don't see it among their targets.
+    expect(Object.keys(manifestSchema.parse(feed).files)).not.toContain("android");
   });
 
   it("accepts the manifest the release workflow writes and rejects insecure links", () => {

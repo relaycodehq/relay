@@ -1,6 +1,6 @@
 import type { ModelChoice } from "../../shared/settings";
 import type { ChatMessage } from "../../shared/projects";
-import { pastedTexts, replacePastedTexts } from "../../shared/pasted-texts";
+import { replacePastedTexts } from "../../shared/pasted-texts";
 import { agentRuntime } from "./index";
 import { emptyCwd, unfence } from "./helper-output";
 import type { AgentProvider } from "../../shared/agents";
@@ -8,20 +8,7 @@ import { agentMentionPattern } from "../../shared/agents";
 
 // A name the harness provides wins; otherwise a separate helper run makes one.
 // It stays out of the answer session so its JSON never shows up in the thread.
-export function promptTitle(body: string): string {
-  const pastes = pastedTexts(body);
-  const text = replacePastedTexts(body, () => "\n\n");
-  // A message that is only a paste is named after the paste's first line;
-  // one that is only screenshots waits for a generated title as "Screenshot".
-  return (
-    (
-      text.replace(agentMentionPattern, "").trim() ||
-      (pastes[0]?.text.trimStart().split("\n", 1)[0] ?? "")
-    )
-      .trim()
-      .slice(0, 65) || "Screenshot"
-  );
-}
+export { promptTitle } from "../../shared/prompt-title";
 
 export function cleanTitle(value: unknown): string | null {
   if (typeof value !== "string") return null;

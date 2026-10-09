@@ -1,7 +1,7 @@
 // What docks above the composer on the desktop (WaitingStrip, StoppedStrip,
 // the queue), worded the same, with the phone's thumb-sized actions.
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   AlarmClock,
   ChevronDown,
@@ -19,6 +19,7 @@ import type { ChatPending, LimitResume } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
 import type { RemoteQueued } from "../../../shared/remote";
 import { agentNames } from "./ProviderIcon";
+import { alertFailure } from "./failure";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
@@ -61,6 +62,12 @@ export function WaitingStrip({
     <Action
       label={item.kind === "task" ? "Stop" : "Cancel"}
       busyLabel={item.kind === "task" ? "Stopping…" : "Cancelling…"}
+      failed={item.kind === "task" ? "Couldn't stop it" : "Couldn't cancel it"}
+      unsure={
+        item.kind === "task"
+          ? "Stop may still go through"
+          : "Cancel may still go through"
+      }
       onPress={() => onStop(item)}
     />
   );
@@ -189,10 +196,17 @@ export function StoppedStrip({
         </Text>
       </View>
       <View style={styles.actions}>
-        <Action label="Dismiss" onPress={() => onResolve("dismiss")} />
+        <Action
+          label="Dismiss"
+          failed="Couldn't dismiss it"
+          unsure="Dismiss may still go through"
+          onPress={() => onResolve("dismiss")}
+        />
         <Action
           label="Pick it back up"
           primary
+          failed="Couldn't pick it back up"
+          unsure="It may still pick back up"
           onPress={() => onResolve("resume")}
         />
       </View>
@@ -381,12 +395,15 @@ export function QueueList({
 /** Messages the desktop didn't take: send again, or back into the composer. */
 export function UnsentStrip({
   unsent,
+  online,
   onRetry,
   onEdit,
 }: {
   unsent: Outgoing[];
+  /** Offline, Edit waits for the computer before it can tell whether one arrived. */
+  online: boolean;
   onRetry: (o: Outgoing) => void;
-  onEdit: (o: Outgoing) => void;
+  onEdit: (o: Outgoing) => Promise<void> | void;
 }) {
   const t = useTheme();
   if (!unsent.length) return null;
@@ -397,7 +414,12 @@ export function UnsentStrip({
           <Text numberOfLines={1} style={[styles.text, { color: t.text }]}>
             {withoutMention(o.send.body)}
           </Text>
-          <Action label="Edit" onPress={async () => onEdit(o)} />
+          <Action
+            label="Edit"
+            busyLabel={o.unsure && !online ? "Connecting…" : undefined}
+            failed="Couldn't take it back yet"
+            onPress={async () => onEdit(o)}
+          />
           <Action label="Try again" primary onPress={async () => onRetry(o)} />
         </View>
       ))}
@@ -405,29 +427,51 @@ export function UnsentStrip({
   );
 }
 
-/** A small text action that stays pressed until its work is done. */
+/** A small text action that stays pressed until its work is done, and says when that failed. */
 export function Action({
   label,
   busyLabel,
+  failed = "That didn't work",
+  unsure,
   primary,
+  confirm,
   onPress,
 }: {
   label: string;
   busyLabel?: string;
+  /** The alert's title when the work fails. */
+  failed?: string;
+  /** The alert's title when the request went out but no answer came back. */
+  unsure?: string;
   primary?: boolean;
+  /** Asked first; the button only turns busy once it says yes. */
+  confirm?: () => Promise<boolean>;
   onPress: () => Promise<void>;
 }) {
   const t = useTheme();
   const [busy, setBusy] = useState(false);
+  const claimed = useRef(false);
   return (
     <Pressable
       accessibilityRole="button"
       disabled={busy}
       hitSlop={8}
-      onPress={() => {
-        setBusy(true);
-        void onPress().finally(() => setBusy(false));
-      }}
+      onPress={() =>
+        void (async () => {
+          if (claimed.current) return;
+          claimed.current = true;
+          try {
+            if (confirm && !(await confirm())) return;
+            setBusy(true);
+            await onPress();
+          } catch (e) {
+            alertFailure(e, failed, unsure);
+          } finally {
+            claimed.current = false;
+            setBusy(false);
+          }
+        })()
+      }
       style={[
         styles.action,
         { borderColor: primary ? t.accent : t.border },

@@ -1,15 +1,16 @@
 // The desktop sidebar's Activity view: one card per open thread, the ones that
 // need nothing from you faded back, and Snoozed and Settled folded away below.
-import { Fragment, useMemo, useState, type ReactElement } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   type RefreshControlProps,
 } from "react-native";
+import { GestureHandlerRootView, RefreshControl, ScrollView } from "react-native-gesture-handler";
+import * as Clipboard from "expo-clipboard";
 import {
   CalendarClock,
   Check,
@@ -25,30 +26,33 @@ import {
   snoozePresets,
   wakeLabel,
 } from "../../../shared/chat-activity";
-import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
+import type { ChatSummary, ChatTriage } from "../../../shared/projects";
+import { markedUnreadBridge, type RemoteChatSummary, type RemoteProject } from "../../../shared/remote";
+import { undoTriage } from "../../../shared/remote-triage";
 import {
   familyLine,
   familySettled,
   startedFamilies,
 } from "../../../shared/started-families";
 import { agentsSince } from "../../../shared/waiting";
+import { useRemote } from "../remote/RemoteProvider";
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { useUnread } from "../remote/seen";
+import { foldFamily, useFamilyFolds } from "../remote/family-folds";
 import { useNow } from "./motion";
 import { ProjectBadge } from "./ProjectIcon";
 import { ProviderIcon } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
-import { mix, type, useTheme, type Palette } from "./theme";
+import { SwipeTriage, UndoBar, type Undo } from "./SwipeTriage";
+import { mix, type, useTheme, waitingColor, type Palette } from "./theme";
 
-/** The desktop's colour for threads waiting on you. */
-const waitingColor = "#d99a2b";
 const shelfPage = 5;
 
+/** Resolves the thread as the desktop left it, or nothing when it refused (and said why). */
 type Triage = (
   chat: RemoteChatSummary,
-  action:
-    | { kind: "settle" | "unsettle" | "wake" }
-    | { kind: "snooze"; until: number },
-) => void;
+  action: ChatTriage,
+) => Promise<ChatSummary | undefined>;
 
 export function ActivityList({
   chats,
@@ -69,7 +73,8 @@ export function ActivityList({
   bottom: number;
 }) {
   const t = useTheme();
-  const unread = useUnread();
+  const unread = useUnread(selected);
+  const { overview } = useRemote();
   // Ages and "Sends at" labels move with the clock.
   const now = useNow(30_000);
   const byId = useMemo(
@@ -81,7 +86,44 @@ export function ActivityList({
   const [acting, setActing] = useState<RemoteChatSummary>();
   const [shelves, setShelves] = useState({ snoozed: 0, settled: 0 });
   // A family's fold as the user left it; until then open while any of it needs a look.
-  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const toggled = useFamilyFolds();
+  const scrollGesture = useRef<ScrollView>(null);
+  const [undo, setUndo] = useState<Undo>();
+  const closeUndo = useCallback(() => setUndo(undefined), []);
+
+  /** The same guards as the hold menu: nothing settles while working or asking. */
+  const swipes = (c: RemoteChatSummary) => {
+    const swiped = async (action: ChatTriage, done: string) => {
+      const after = await onTriage(c, action);
+      if (after)
+        setUndo({
+          done,
+          title: c.title,
+          run: () => void onTriage(c, undoTriage(c, after)),
+        });
+      return !!after;
+    };
+    const preset = snoozePresets(new Date(now))[0]!;
+    return {
+      settle:
+        !c.running && !c.waiting
+          ? { label: "Settle", run: () => swiped({ kind: "settle" }, "Settled") }
+          : undefined,
+      snooze: !c.waiting
+        ? {
+            label: `Snooze · ${preset.label}`,
+            run: () => {
+              // Taken now: `now` only ticks every half minute.
+              const until = snoozePresets(new Date())[0]!.until;
+              return swiped(
+                { kind: "snooze", until },
+                `Snoozed until ${wakeLabel(until, new Date())}`,
+              );
+            },
+          }
+        : undefined,
+    };
+  };
 
   const project = (c: RemoteChatSummary) =>
     byId.get(c.projectId) ?? { id: c.projectId, name: "?" };
@@ -175,9 +217,14 @@ export function ActivityList({
   };
 
   return (
-    <>
+    // Swipes need a gesture root; the app has none above its screens.
+    <GestureHandlerRootView style={styles.root}>
+      {/* The handler's own list and pull-to-refresh: a plain ScrollView under a
+          refresh control is cancelled once a row's drag starts, so the list
+          wouldn't scroll from a card. */}
       <ScrollView
-        refreshControl={refreshControl}
+        ref={scrollGesture}
+        refreshControl={<RefreshControl {...refreshControl.props} />}
         contentContainerStyle={[styles.list, { paddingBottom: bottom }]}
       >
         <View style={styles.heading}>
@@ -191,18 +238,19 @@ export function ActivityList({
           const children = (
             <View style={[styles.started, { borderColor: t.border }]}>
               {started.map((s) => (
-                <Card
-                  key={s.id}
-                  chat={s}
-                  project={project(s)}
-                  unread={unread(s)}
-                  selected={s.id === selected}
-                  now={now}
-                  t={t}
-                  compact
-                  onPress={() => onOpen(s)}
-                  onLongPress={() => setActing(s)}
-                />
+                <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} key={s.id} {...swipes(s)} radius={10} t={t}>
+                  <Card
+                    chat={s}
+                    project={project(s)}
+                    unread={unread(s)}
+                    selected={s.id === selected}
+                    now={now}
+                    t={t}
+                    compact
+                    onPress={() => onOpen(s)}
+                    onLongPress={() => setActing(s)}
+                  />
+                </SwipeTriage>
               ))}
             </View>
           );
@@ -222,29 +270,30 @@ export function ActivityList({
             );
           const open =
             started.length > 0 &&
-            (toggled.get(c.id) ?? !familySettled(started, unread));
+            (toggled[c.id] ?? !familySettled(started, unread));
           return (
             <Fragment key={c.id}>
-              <Card
-                chat={c}
-                project={project(c)}
-                unread={unread(c)}
-                selected={c.id === selected}
-                now={now}
-                t={t}
-                family={
-                  started.length
-                    ? {
-                        started,
-                        open,
-                        onFold: () =>
-                          setToggled((m) => new Map(m).set(c.id, !open)),
-                      }
-                    : undefined
-                }
-                onPress={() => onOpen(c)}
-                onLongPress={() => setActing(c)}
-              />
+              <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} {...swipes(c)} radius={12} t={t}>
+                <Card
+                  chat={c}
+                  project={project(c)}
+                  unread={unread(c)}
+                  selected={c.id === selected}
+                  now={now}
+                  t={t}
+                  family={
+                    started.length
+                      ? {
+                          started,
+                          open,
+                          onFold: () => foldFamily(c.id, !open),
+                        }
+                      : undefined
+                  }
+                  onPress={() => onOpen(c)}
+                  onLongPress={() => setActing(c)}
+                />
+              </SwipeTriage>
               {open && children}
             </Fragment>
           );
@@ -265,6 +314,7 @@ export function ActivityList({
         {shelf("snoozed", "Snoozed")}
         {shelf("settled", "Settled")}
       </ScrollView>
+      <UndoBar undo={undo} bottom={Math.max(12, bottom - 32)} t={t} onClose={closeUndo} />
       <MenuSheet
         open={!!acting}
         title={acting?.title}
@@ -290,11 +340,24 @@ export function ActivityList({
                         onTriage(acting, { kind: "snooze", until: p.until }),
                     }))
                   : []),
+                ...((overview?.bridge ?? 1) >= markedUnreadBridge ? [{
+                  label: "Mark as unread",
+                  onPress: () => void onTriage(acting, { kind: "unread" }),
+                }] : []),
+                ...(acting.branch
+                  ? [
+                      {
+                        label: "Copy branch name",
+                        hint: acting.branch,
+                        onPress: () => void Clipboard.setStringAsync(acting.branch!),
+                      },
+                    ]
+                  : []),
               ]
             : []
         }
       />
-    </>
+    </GestureHandlerRootView>
   );
 }
 
@@ -340,7 +403,7 @@ function Card({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={chat.title}
-        accessibilityHint="Hold to settle or snooze"
+        accessibilityHint="Swipe right to settle, left to snooze, or hold for more"
         onPress={onPress}
         onLongPress={onLongPress}
         style={({ pressed }) => [
@@ -486,7 +549,7 @@ function CardState({
   now: number;
   t: Palette;
 }) {
-  if (chat.waiting)
+  if (inputBlocksThread(chat))
     return (
       <View style={styles.state}>
         <View style={[styles.dot, { backgroundColor: waitingColor }]} />
@@ -506,6 +569,7 @@ function CardState({
         />
         <Text style={[styles.stateText, { color: t.accent }]}>
           {chat.running && chat.goal?.status === "active" ? "Goal" : "Working"}
+          {chat.waiting && " · needs input"}
           {since ? <Elapsed since={since} /> : null}
         </Text>
       </View>
@@ -549,6 +613,7 @@ function Elapsed({ since }: { since: number }) {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   list: { paddingHorizontal: 8, paddingTop: 4 },
   heading: {
     flexDirection: "row",

@@ -1,6 +1,7 @@
 import type { ThreadGoal } from "./goal";
 import type { DictationModelState } from "./dictation";
 import type { ComputerInfo, HandBack, HandoffRemoteStatus } from "./handoff";
+import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
 import type { PhoneAppReport } from "./phone-app";
 /**
@@ -102,9 +103,15 @@ export interface RemoteChatSummary {
   provider?: AgentProvider;
   running?: boolean;
   runningSince?: number;
-  /** The agent asked something and is waiting for an answer. */
+  /** Needs the user; the agent may still be working on an async question. */
   waiting?: boolean;
+  asking?: true;
+  blocked?: true;
   settledAt?: number;
+  /** A computed shelf position rather than a saved settle mark. */
+  autoSettled?: true;
+  /** Marked unread by hand, until someone opens it; older desktops leave it out. */
+  markedUnread?: true;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** Read up to this `updated`, on the desktop or any phone. */
@@ -114,6 +121,8 @@ export interface RemoteChatSummary {
   pending?: ChatPending[];
   /** When its next scheduled message goes out. */
   nextSend?: number;
+  /** Changes with its queue and Send later list; older desktops leave it out. */
+  queueMark?: string;
   empty?: boolean;
   /** Its native `/goal`; older desktops leave it out. */
   goal?: ThreadGoal;
@@ -143,7 +152,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 14;
+export const remoteBridgeVersion = 15;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -159,6 +168,16 @@ export const activityDetailBridge = 13;
 export const phoneDetailPreview = 600;
 /** From here a desktop sends a thread's images shrunk to the size a phone shows them (`image`). */
 export const imageBridge = 14;
+
+/**
+ * From here phones may list a thread's subagents, read one's run (its tool
+ * output cut as a thread's is) and stop one, with conditional reads.
+ */
+export const subagentsBridge = 15;
+/** From here a desktop takes `regenerateProjectChatTitle` from phones. */
+export const titleBridge = 15;
+/** From here thread summaries carry manual unread marks. */
+export const markedUnreadBridge = 15;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -290,6 +309,10 @@ export interface RemoteChat extends Pick<
   settings?: RemoteSettings;
   /** The conversation the last message went to: the main one, or a reply's root. */
   lastParentId?: string | null;
+  /** Receipt for the requested send, including one still being processed; older desktops omit it. */
+  hasSend?: boolean;
+  /** The requested send is still in dispatch, so its eventual failure must stay in the outbox. */
+  sendPending?: boolean;
 }
 
 export const remoteHistory = 100;
@@ -320,7 +343,7 @@ export type RemoteDiffSource =
 /**
  * Desktop calls a paired phone makes as they are, validated by the desktop's
  * own dispatch: threads, models, Git (stage, commit, push, pull, fetch,
- * branches), read-only files, history and background tasks; only what the
+ * branches), read-only files, history, background tasks and subagents; only what the
  * phone app uses. Terminals, file saves, settings (bar the agent new threads
  * start on), sharing and anything that opens a desktop dialog are not on the
  * list and stay out of reach.
@@ -340,8 +363,12 @@ export const phoneDesktopMethods = [
   "rerunWorktreeSetup",
   "resolveStoppedWork",
   "stopProjectChatPending",
+  "projectChatAgents",
+  "projectChatAgent",
+  "stopProjectChatAgent",
   "triageProjectChat",
   "renameProjectChat",
+  "regenerateProjectChatTitle",
   "markProjectChatSeen",
   "forkProjectChat",
   "rewindProjectTurn",
@@ -429,7 +456,19 @@ export interface RemoteApi {
     id: string,
     known?: KnownMessages,
     history?: number,
+    sendId?: string,
   ): Promise<RemoteChat>;
+  /** Null when unchanged; lists omit briefs, which belong in the run. */
+  subagents(
+    chatId: string,
+    known?: string,
+  ): Promise<{ signature: string; runs: SubagentRun[] } | null>;
+  /** Null when unchanged; a missing session returns a signed `run: null`. */
+  subagentRun(
+    chatId: string,
+    agentId: string,
+    known?: string,
+  ): Promise<{ signature: string; run: SubagentDetail | null } | null>;
   diff(source: RemoteDiffSource): Promise<RemoteDiff>;
   desktop(method: PhoneDesktopMethod, args: unknown[]): Promise<unknown>;
   /** Icons that differ from the phone's `known` hashes, by project id. */
@@ -496,6 +535,8 @@ export const remoteMethods = [
   "diff",
   "desktop",
   "projectIcons",
+  "subagents",
+  "subagentRun",
   "phoneAppFile",
   "reportApp",
   "dictate",
@@ -547,16 +588,20 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
 
 /**
  * Calls that wait on the network, git or a model: pushes, pulls and merges,
- * written commit messages, CI and plan usage. The phone gives them the
- * desktop's two minutes instead of its usual quarter.
+ * written commit messages, CI and plan usage, and sends, which may carry
+ * screenshots over a slow link and make a worktree first. The phone gives
+ * them the desktop's two minutes instead of its usual quarter.
  */
 export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
+  "sendProjectChat",
+  "createProjectChat",
   "projectGitAction",
   "projectCommitMessage",
   "projectMergePlan",
   "projectMergeBranch",
   "projectCiStatus",
   "providerUsage",
+  "regenerateProjectChatTitle",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */

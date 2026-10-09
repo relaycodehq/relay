@@ -85,16 +85,32 @@ export const withClaudeContextWindow = (
   model: string,
   contextWindow: ClaudeContextWindow,
 ) => model.replace(/\[1m\]$/, "") + (contextWindow === "1m" ? "[1m]" : "");
-/** The listed model an id refers to, whichever context window it asks for. */
-export const findClaudeModel = <M extends { id: string }>(
+/**
+ * The listed model an id refers to, whichever context window it asks for:
+ * the CLI lists aliases ("opus") while threads may keep "opus[1m]" or the
+ * full id the alias stands for ("claude-opus-5-5[1m]").
+ */
+export function findClaudeModel<M extends { id: string; resolved?: string }>(
   models: readonly M[] | undefined,
   id: string,
-) =>
-  models?.find(
-    (m) =>
-      withClaudeContextWindow(m.id, "200k") ===
-      withClaudeContextWindow(id, "200k"),
+): M | undefined {
+  if (!models || !id) return undefined;
+  const bare = withClaudeContextWindow(id, "200k");
+  const listed =
+    models.find((m) => m.id === id) ??
+    models.find((m) => withClaudeContextWindow(m.id, "200k") === bare);
+  if (listed) return listed;
+  const aliases = models.filter(
+    (m) => !!m.resolved && withClaudeContextWindow(m.resolved, "200k") === bare,
   );
+  // Separate alias rows can resolve to the same full id. Prefer the requested
+  // window before falling back to the only spelling the CLI lists.
+  return (
+    aliases.find(
+      (m) => claudeContextWindow(m.id) === claudeContextWindow(id),
+    ) ?? aliases[0]
+  );
+}
 /** Levels accepted by `claude --effort` and the Agent SDK. */
 export const claudeEfforts: ReasoningEffort[] = [
   "low",

@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { RemoteBridge, toRemoteDiff, type RemoteHost } from "./bridge";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
+import type { SubagentDetail } from "../../shared/subagents";
 import type { RemoteDiff, RemoteEvent } from "../../shared/remote";
 
 afterEach(() => vi.useRealTimers());
@@ -270,6 +271,9 @@ it("sends a thread's latest hundred messages, and older pages on request", async
 it("sends a phone a long tool output's ends, and the whole of it when asked", async () => {
   const messageId = randomUUID();
   const output = `${"a".repeat(1000)}${"b".repeat(1000)}`;
+  const started = JSON.stringify(
+    Array.from({ length: 6 }, () => ({ id: randomUUID(), title: "A task".repeat(10) })),
+  );
   const message: ChatMessage = {
     id: messageId,
     role: "assistant",
@@ -302,6 +306,18 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
           detail: "short",
         },
       },
+      {
+        kind: "activity",
+        id: "t3",
+        activity: {
+          id: "t3",
+          kind: "tool",
+          label: "Started threads",
+          mcp: { server: "relay", tool: "start_threads" },
+          status: "complete",
+          detail: started,
+        },
+      },
     ],
   };
   const host = {
@@ -324,9 +340,11 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
   const chat = (await b.handle("chat", [chatId])) as {
     messages: ChatMessage[];
   };
-  const [long, short] = chat.messages[0]!.trace!.flatMap((e) =>
+  const [long, short, start] = chat.messages[0]!.trace!.flatMap((e) =>
     e.kind === "activity" ? [e.activity] : [],
   );
+  // The phone reads which threads a turn started from these ids.
+  expect(start!.detail).toBe(started);
   expect(long!.detail).toBe(`${"a".repeat(300)}\n…\n${"b".repeat(300)}`);
   expect(long!.detailCut).toBe(1400);
   expect(short).toEqual(
@@ -338,6 +356,46 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
   expect(
     await b.handle("activityDetail", [chatId, messageId, "gone"]),
   ).toBeNull();
+});
+
+it("lets a phone read a subagent's run with its tool output cut, as a thread's", async () => {
+  const run = {
+    id: "toolu_a",
+    description: "Map the SDK",
+    status: "running",
+    started: 1,
+    calls: 1,
+    recent: [],
+    trace: [
+      {
+        kind: "activity",
+        id: "t1",
+        activity: {
+          id: "t1",
+          kind: "read",
+          label: "Read sdk.d.ts",
+          status: "complete",
+          detail: "x".repeat(5000),
+        },
+      },
+    ],
+  };
+  const host = {
+    projects: async () => [],
+    chats: () => [],
+    dispatch: async () => run,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const b = new RemoteBridge(host, () => {});
+  const sent = (await b.handle("desktop", [
+    "projectChatAgent",
+    [chatId, "toolu_a"],
+  ])) as typeof run;
+  const activity = sent.trace[0]!.activity as Record<string, unknown>;
+  expect(activity.detail).toBe(`${"x".repeat(300)}\n…\n${"x".repeat(300)}`);
+  // There's no message to fetch the rest from.
+  expect(activity).not.toHaveProperty("detailCut");
+  expect(run.trace[0]!.activity.detail).toHaveLength(5000);
 });
 
 it("tells a phone what a queued message needs to be taken back, but leaves its screenshots on the desktop", async () => {
@@ -432,4 +490,133 @@ it("sends a thread's image shrunk to what the phone shows, through the desktop's
   await expect(
     b.handle("image", [{ kind: "attached", chatId, imageId }, 1e6]),
   ).rejects.toThrow();
+});
+
+it("only sends subagents when their phone-visible list or run changes", async () => {
+  const run: SubagentDetail = {
+    id: "toolu_a",
+    description: "Map the SDK",
+    status: "running",
+    started: 1,
+    calls: 1,
+    recent: [],
+    brief: "x".repeat(20_000),
+    trace: [
+      { kind: "commentary", id: "text:a", text: "Reading the types" },
+      {
+        kind: "activity",
+        id: "call:a",
+        activity: {
+          id: "call:a",
+          kind: "read",
+          label: "Read SDK",
+          status: "complete",
+          detail: "x".repeat(5000),
+        },
+      },
+    ],
+  };
+  let gone = false;
+  const dispatch = vi.fn(async (method: string) =>
+    method === "projectChatAgents" ? [run] : gone ? null : run,
+  );
+  const b = new RemoteBridge({ dispatch } as unknown as RemoteHost, () => {});
+  const list = (await b.handle("subagents", [chatId])) as {
+    signature: string;
+    runs: SubagentDetail[];
+  };
+  expect(list.runs[0]).not.toHaveProperty("brief");
+  expect(run.brief).toHaveLength(20_000);
+  expect(await b.handle("subagents", [chatId, list.signature])).toBeNull();
+  run.brief = "a different brief";
+  expect(await b.handle("subagents", [chatId, list.signature])).toBeNull();
+  run.summary = "Reading the types";
+  expect(await b.handle("subagents", [chatId, list.signature])).toMatchObject({
+    runs: [{ summary: run.summary }],
+  });
+
+  const detail = (await b.handle("subagentRun", [chatId, run.id])) as {
+    signature: string;
+    run: SubagentDetail;
+  };
+  expect(detail.run.brief).toBe(run.brief);
+  expect(detail.run.trace[1]).toMatchObject({
+    activity: { detail: `${"x".repeat(300)}\n…\n${"x".repeat(300)}` },
+  });
+  expect(
+    await b.handle("subagentRun", [chatId, run.id, detail.signature]),
+  ).toBeNull();
+  // A change inside the elided tool output needn't send the run again.
+  if (run.trace[1]?.kind === "activity")
+    run.trace[1].activity.detail = "x".repeat(2000) + "new" + "x".repeat(2000);
+  expect(
+    await b.handle("subagentRun", [chatId, run.id, detail.signature]),
+  ).toBeNull();
+  run.status = "completed";
+  run.report = "Here is the map.";
+  expect(
+    await b.handle("subagentRun", [chatId, run.id, detail.signature]),
+  ).toMatchObject({ run: { status: "completed", report: run.report } });
+  gone = true;
+  const missing = (await b.handle("subagentRun", [
+    chatId,
+    run.id,
+    detail.signature,
+  ])) as { signature: string; run: null };
+  expect(missing.run).toBeNull();
+  expect(
+    await b.handle("subagentRun", [chatId, run.id, missing.signature]),
+  ).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith("projectChatAgent", [chatId, run.id]);
+  await expect(b.handle("subagents", ["../bad"])).rejects.toThrow();
+  await expect(
+    b.handle("subagents", [chatId, "x".repeat(500)]),
+  ).rejects.toThrow();
+  await expect(
+    b.handle("subagentRun", [chatId, "a".repeat(201)]),
+  ).rejects.toThrow();
+});
+
+it("carries async attention and blocking state separately to the phone", async () => {
+  const chat: ChatSummary = {
+    id: chatId,
+    projectId,
+    title: "T",
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+    running: true,
+    waiting: true,
+    asking: true,
+  };
+  const events: RemoteEvent[] = [];
+  const b = new RemoteBridge(
+    {
+      projects: async () => [{ id: projectId }],
+      chats: () => [chat],
+      name: () => "Studio",
+    } as unknown as RemoteHost,
+    (event) => events.push(event),
+  );
+  await b.handle("overview", []);
+  b.refresh();
+  const first = events.at(-1);
+  expect(first?.kind === "chats" && first.chats[0]).toMatchObject({
+    running: true,
+    waiting: true,
+    asking: true,
+  });
+  chat.blocked = true;
+  b.refresh();
+  const blocked = events.at(-1);
+  expect(blocked?.kind === "chats" && blocked.chats[0].blocked).toBe(true);
+  delete chat.asking;
+  delete chat.blocked;
+  chat.waiting = false;
+  b.refresh();
+  const answered = events.at(-1);
+  expect(
+    answered?.kind === "chats" && answered.chats[0].waiting,
+  ).toBeUndefined();
+  b.dispose();
 });

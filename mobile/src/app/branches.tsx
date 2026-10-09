@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Check, GitBranch } from "lucide-react-native";
 import type { BranchList, BranchRef } from "../../../shared/branches";
 import { useRemote } from "../remote/RemoteProvider";
@@ -12,7 +12,7 @@ import { type, useTheme } from "../ui/theme";
 /** The checkout's branches: switch to one, or start a new one from here. */
 export default function BranchesScreen() {
   const { project } = useLocalSearchParams<{ project: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [list, setList] = useState<BranchList>();
   const [error, setError] = useState<string>();
@@ -20,22 +20,22 @@ export default function BranchesScreen() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setList(await remote.desktop("projectBranches", project));
+      setList(await desktop("projectBranches", project));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, project]);
-  useEffect(() => {
+  }, [desktop, status, project]);
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   const change = async (kind: "switch" | "create", branch: string) => {
     if (!list) return;
     setBusy(true);
     try {
       setList(
-        await remote.desktop("projectChangeBranch", project, {
+        await desktop("projectChangeBranch", project, {
           kind,
           name: branch,
           current: list.current,

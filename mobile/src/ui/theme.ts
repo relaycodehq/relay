@@ -51,6 +51,9 @@ const light: Palette = {
 };
 export const builtIn = { dark, light };
 
+/** The desktop's colour for threads waiting on you. */
+export const waitingColor = "#d99a2b";
+
 /** `a` blended into `b`; `amount` of `a`. */
 export function mix(a: string, b: string, amount: number) {
   const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));

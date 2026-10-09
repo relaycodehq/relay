@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ProjectTask } from "../../../shared/tasks";
 import { useRemote } from "../remote/RemoteProvider";
+import { alertFailure } from "../ui/failure";
 import { rowStyles } from "../ui/Rows";
 import { Action } from "../ui/ThreadExtras";
 import { ago } from "../ui/ThreadRow";
@@ -19,29 +20,29 @@ const origins: Record<ProjectTask["origin"], string> = {
 /** Dev servers and processes the project's agents left running; stop or restart them. */
 export default function TasksScreen() {
   const { project } = useLocalSearchParams<{ project: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const foreground = useForeground();
   const [tasks, setTasks] = useState<ProjectTask[]>();
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setTasks(await remote.desktop("projectTasks", project));
+      setTasks(await desktop("projectTasks", project));
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, project]);
+  }, [desktop, status, project]);
   // Processes come and go on their own; look again every few seconds while open.
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!foreground) return;
     void load();
     const timer = setInterval(() => void load(), 3000);
     return () => clearInterval(timer);
-  }, [load, foreground]);
-  const run = (what: string, job: Promise<void>) =>
-    job.then(load).catch((e) => Alert.alert(what, e instanceof Error ? e.message : String(e)));
+  }, [load, foreground]));
+  const run = (what: string, job: Promise<void>, unsure?: string) =>
+    job.then(load).catch((e) => alertFailure(e, what, unsure));
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "Tasks" }} />
@@ -78,7 +79,7 @@ export default function TasksScreen() {
                 <Action
                   label="Restart"
                   busyLabel="Restarting…"
-                  onPress={() => run("Couldn't restart it", remote.desktop("restartProjectTask", project, task.id))}
+                  onPress={() => run("Couldn't restart it", desktop("restartProjectTask", project, task.id))}
                 />
                 <Action
                   label="Stop"
@@ -91,7 +92,7 @@ export default function TasksScreen() {
                           text: "Stop",
                           style: "destructive",
                           onPress: () =>
-                            void run("Couldn't stop it", remote.desktop("stopProjectTask", project, task.id)).finally(resolve),
+                            void run("Couldn't stop it", desktop("stopProjectTask", project, task.id), "Stop may still go through").finally(resolve),
                         },
                       ]),
                     )

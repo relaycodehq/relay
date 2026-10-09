@@ -118,7 +118,14 @@ export const agents = {
   },
 } as const satisfies Record<AgentProvider, AgentInfo>;
 
-export const agentName = (provider: AgentProvider) => agents[provider].name;
+/**
+ * An agent's profile, or nothing for one this build doesn't know: a newer
+ * desktop can run agents an older phone (or desktop build) has never heard of.
+ */
+export const agentInfo = (provider: string) =>
+  isAgentProvider(provider) ? agents[provider] : undefined;
+
+export const agentName = (provider: AgentProvider) => agentInfo(provider)?.name ?? provider;
 
 /** The agents with `AgentInfo` field `K` on, as a type. */
 type AgentsWith<K extends keyof AgentInfo> = {
@@ -201,8 +208,9 @@ export interface AgentModel {
   group?: string;
   /** Its context window in tokens, where the agent says. */
   contextWindow?: number;
+  /** The model id an alias stands for, e.g. `claude-opus-5-5` for Claude's `opus`. */
+  resolved?: string;
 }
-/** What an agent runs where a thread leaves the model or effort on Default. */
 /** What an agent runs where a thread leaves the model or effort on Default. */
 export interface AgentDefaults {
   /** The listed model Default runs; "" when the agent doesn't say. */

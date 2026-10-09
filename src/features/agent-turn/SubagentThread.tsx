@@ -9,6 +9,7 @@ import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { plural } from "../../../shared/activity-labels";
 import {
+  agentKind,
   batchOf,
   modelName,
   type SubagentDetail,
@@ -16,7 +17,7 @@ import {
 } from "../../../shared/subagents";
 import { AgentTurn } from "./AgentTurn";
 import { RichText } from "../../ui/RichText";
-import { SubagentStatus, agentKind } from "./Subagents";
+import { SubagentStatus } from "./Subagents";
 import { POPUPS } from "../../lib/shortcuts";
 
 export function SubagentThread({

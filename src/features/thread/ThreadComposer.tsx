@@ -4,6 +4,7 @@ import { GitBranch, X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
+import { openPlan } from "../../../shared/open-plan";
 import type { ChatScope, Project } from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
@@ -164,7 +165,7 @@ export function ThreadComposer({
   handle: { chat, id, busy, setError },
   project,
   scope,
-  thread: { root, shown, running },
+  thread: { root, messages, shown, running },
   councils: { reviewing, planning },
   background: { agentBatch, pending, stopped, leftBehind },
   session: { runCommand, context, compacting, showContext, compact },
@@ -267,12 +268,7 @@ export function ThreadComposer({
         running: waiting,
         busy: held,
         agent: chat && threadContextAgent(chat),
-        planner:
-          !running &&
-          shown.at(-1)?.status === "complete" &&
-          shown.at(-1)?.proposedPlan
-            ? shown.at(-1)?.provider
-            : undefined,
+        planner: running ? undefined : openPlan(messages, shown),
         ultraplan: !root && scope.kind !== "review",
         chatId: chat?.id,
         accounts: chat?.accounts,

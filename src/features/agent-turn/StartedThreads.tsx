@@ -1,11 +1,12 @@
 // The threads a turn's agent started with Relay's tools, beside the call that
 // started them: an icon and how many are done, and on hover a card like the
 // subagents one, each thread's task and latest line, a click to open it.
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { createContext, useContext, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, MessagesSquare } from "lucide-react";
-import type { AgentActivity, ChatSummary } from "../../../shared/projects";
+import type { ChatSummary } from "../../../shared/projects";
 import { agentName } from "../../../shared/agents";
 import { chatSettled } from "../../../shared/chat-activity";
 import { chatKey, fetchChat } from "../../lib/chat-events";
@@ -25,24 +26,6 @@ export const StartedThreadsContext = createContext<
 >(undefined);
 export const useStartedThreads = () => useContext(StartedThreadsContext);
 
-/** A call to Relay's start_threads tool. */
-export const isStartThreads = (a: AgentActivity) =>
-  a.mcp?.server === "relay" && a.mcp.tool === "start_threads";
-
-/** The ids a start_threads call's result names, when it can be read. */
-export function startedIds(result: string | undefined) {
-  try {
-    const parsed = JSON.parse(result ?? "");
-    if (!Array.isArray(parsed)) return undefined;
-    const ids = parsed.flatMap((t) =>
-      t && typeof t.id === "string" ? [t.id] : [],
-    );
-    return ids.length ? ids : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Asking first, then working, then done, then settled. */
 const standing = (c: ChatSummary) =>
   c.waiting ? 0 : c.running ? 1 : chatSettled(c) ? 3 : 2;
@@ -51,7 +34,7 @@ const standing = (c: ChatSummary) =>
 function StartedStatus({ chat }: { chat: ChatSummary }) {
   return (
     <span className="subagent-status">
-      {chat.waiting ? (
+      {inputBlocksThread(chat) ? (
         <span className="started-ask" aria-label="Needs input" />
       ) : chat.running ? (
         <span className="subagent-dot" aria-label="Working" />

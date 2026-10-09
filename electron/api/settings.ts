@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { z } from "zod";
 import {
   agentProviderSchema,
+  isAgentProvider,
   agents,
   isCliProvider,
   usageProviderSchema,
@@ -141,7 +142,11 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return settings;
     }),
-    newThreadAgent: () => store.get().newThreadAgent ?? null,
+    // Another Relay build on the same data may have saved an agent this one doesn't know.
+    newThreadAgent: () => {
+      const provider = store.get().newThreadAgent;
+      return isAgentProvider(provider) ? provider : null;
+    },
     saveNewThreadAgent: takes([agentProviderSchema], async (provider) => {
       await store.update((s) => {
         s.newThreadAgent = provider;

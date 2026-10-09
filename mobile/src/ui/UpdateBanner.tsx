@@ -1,54 +1,67 @@
 import { Pressable, StyleSheet, Text } from "react-native";
+import { pickApk } from "../../../shared/phone-release";
 import { installApk, useApkInstall, type ApkInstall } from "../remote/apk-install";
+import { latestOffer, releaseBuild, useLatestApp } from "../remote/latest-app";
 import { useRemote } from "../remote/RemoteProvider";
 import { restartIntoUpdate, useSelfUpdate } from "../remote/self-update";
 import { type, useTheme } from "./theme";
 
-/** The desktop's newer version of this app: arriving, ready to restart into, or needing a new APK. */
+/**
+ * A newer version of this app: the desktop's arriving or ready to restart
+ * into, or a new APK, the desktop's or the release feed's, whichever is newer.
+ */
 export function UpdateBanner() {
   const t = useTheme();
   const { name } = useRemote();
   const update = useSelfUpdate();
   const apk = useApkInstall();
-  if (update.kind === "none") return null;
+  const latest = useLatestApp();
   if (update.kind === "downloading")
     return (
       <Text style={[styles.banner, { color: t.muted }]}>
         Getting Relay {update.version} from {name}… {Math.round(update.done * 100)}%
       </Text>
     );
-  if (update.kind === "apk" && (apk.kind === "downloading" || apk.kind === "installing"))
+  const feedOffer = releaseBuild ? latestOffer(latest) : undefined;
+  const ready = update.kind === "ready" && !feedOffer ? update : undefined;
+  const fromDesktop = update.kind === "apk" ? update : undefined;
+  const offer = ready
+    ? undefined
+    : pickApk(fromDesktop, feedOffer);
+  if (!ready && !offer) return null;
+  const mine = offer && "version" in apk && apk.version === offer.version ? apk : undefined;
+  if ((mine?.kind === "downloading" && !mine.quiet) || mine?.kind === "installing")
     return (
       <Text style={[styles.banner, { color: t.muted }]}>
-        {apk.kind === "downloading"
-          ? `Downloading Relay ${update.version}… ${Math.round(apk.done * 100)}%`
-          : `Installing Relay ${update.version}. It closes when it's done; open it again.`}
+        {mine.kind === "downloading"
+          ? `Downloading Relay ${mine.version}… ${Math.round(mine.done * 100)}%`
+          : `Installing Relay ${mine.version}. It closes when it's done; open it again.`}
       </Text>
     );
-  const ready = update.kind === "ready";
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() =>
-        void (ready ? restartIntoUpdate() : installApk(update.version, update.url))
-      }
+      onPress={() => void (ready ? restartIntoUpdate() : offer && installApk(offer))}
       style={({ pressed }) => [{ backgroundColor: pressed ? t.hover : t.accentSoft }]}
     >
       <Text style={[styles.banner, { color: t.text }]}>
         {ready
-          ? `Relay ${update.version} is ready. Tap to restart into it.`
-          : apkPrompt(update.version, name, apk)}
+          ? `Relay ${ready.version} is ready. Tap to restart into it.`
+          : offer && apkPrompt(offer.version, offer === fromDesktop ? name : undefined, mine)}
       </Text>
     </Pressable>
   );
 }
 
-function apkPrompt(version: string, desktop: string, apk: ApkInstall) {
-  if (apk.kind === "allow")
+/** `desktop` names the computer whose version needs the APK; without it, the feed has a newer app. */
+export function apkPrompt(version: string, desktop: string | undefined, apk: ApkInstall | undefined) {
+  if (apk?.kind === "allow")
     return `Allow Relay to install apps to update to ${version}, then come back. Tap to open the switch again.`;
-  if (apk.kind === "failed")
+  if (apk?.kind === "failed")
     return `Couldn't update to Relay ${version}: ${apk.message.replace(/\.?$/, ".")} Tap to try again.`;
-  return `Relay ${version} needs a new app; ${desktop} can't send this one. Tap to install it.`;
+  if (apk?.kind === "downloaded") return `Relay ${version} is downloaded. Tap to install it.`;
+  if (desktop) return `Relay ${version} needs a new app; ${desktop} can't send this one. Tap to install it.`;
+  return `A new Relay app, ${version}, is out. Tap to install it.`;
 }
 
 const styles = StyleSheet.create({

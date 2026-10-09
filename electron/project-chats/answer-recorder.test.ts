@@ -38,3 +38,33 @@ it("keeps the agent's own calls once the trace is full, dropping subagent ones f
   answer.end();
   vi.useRealTimers();
 });
+
+it("makes a fresh async question unread activity without doing so again on replay", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(2000);
+    const message = streamingAnswer("codex");
+    const chat = {
+      id: "c",
+      updated: 1000,
+      seenAt: 1000,
+      messages: [message],
+    } as ProjectChat;
+    const answer = new AnswerRecorder(
+      chat,
+      message,
+      () => {},
+      () => {},
+    );
+    const questions = [{ id: "q", question: "Which?" }];
+    answer.questions("item", questions);
+    expect(chat.updated).toBeGreaterThan(chat.seenAt!);
+    vi.setSystemTime(3000);
+    answer.questions("item", questions);
+    expect(chat.updated).toBe(2000);
+    expect(message.questions).toHaveLength(1);
+    answer.end();
+  } finally {
+    vi.useRealTimers();
+  }
+});
