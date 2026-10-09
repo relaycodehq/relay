@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
+import { promptTitle } from "../../../shared/prompt-title";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
@@ -177,7 +178,8 @@ function NewThreadComposer() {
     if (sendAt) await desktop("sendProjectChat", chatId, message);
     else deliver(desktop, remote.active ?? "", chatId, message);
     made.current = undefined;
-    madeHere(chat);
+    // Titled as the desktop titles it once the message is in.
+    madeHere({ ...chat, title: sendAt ? chat.title : promptTitle(message.body) });
     void remote.refresh().catch(() => {});
     if (!focused.current) return;
     // Put away before the composer goes: beside the list, Android would hand
