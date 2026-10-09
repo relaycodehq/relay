@@ -77,6 +77,7 @@ export interface ComposerHandle {
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
   focus(): void;
+  blur(): void;
   /** Adds a Markdown blockquote after the draft and puts the cursor under it. */
   quote(markdown: string): void;
 }
@@ -190,6 +191,7 @@ export const Composer = forwardRef<
     },
     settingsOn: (to) => switched(settings, to),
     focus: () => input.current?.focus(),
+    blur: () => input.current?.blur(),
     quote: async (markdown) => {
       const now = dictationSnapshot();
       const finishing = now.owner === dictationOwner && now.phase !== "idle";

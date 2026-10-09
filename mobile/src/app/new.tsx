@@ -18,7 +18,7 @@ import {
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
-import { KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
+import { focusAfterModal, KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
 import {
   WhereIntro,
   WhereLine,
@@ -142,7 +142,8 @@ function NewThreadComposer() {
   const restoreFocus = () => {
     const resume = typing.current;
     typing.current = false;
-    if (resume && focused.current) composer.current?.focus();
+    const input = composer.current;
+    if (resume && focused.current && input) focusAfterModal(input);
   };
 
   // A thread made for a scheduled message that then failed to go, used again on the next try.

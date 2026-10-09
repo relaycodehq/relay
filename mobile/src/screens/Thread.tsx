@@ -60,6 +60,7 @@ import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
 import { KeyboardAware } from "../ui/KeyboardAware";
+import { ReadingBack } from "../ui/AgentRun";
 import { messageExtras, threadExtras } from "../ui/menu-extras";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
@@ -164,7 +165,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
-  const scroll = useThreadScroll(shown);
+  const { pinned, ...scroll } = useThreadScroll(shown);
   const counts = useMemo(() => replyCounts(all), [all]);
   const setupId = useMemo(
     () => (rootId ? undefined : latestSetup(listed)?.id),
@@ -201,11 +202,14 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     (thread.worktree?.path && !thread.worktree.removedAt
       ? workspaceId(thread.projectId, id)
       : thread.projectId);
+  // The pushed summary's copy, which a turn's ending doesn't wait for: the
+  // loaded thread's goes stale as agents finish between turns.
+  const pending = summary ? summary.pending : thread?.pending;
   // Subagents belong to the thread's session, shown on its main conversation.
   const agents = useSubagents(id, {
     enabled: !rootId,
     running,
-    pending: thread?.pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
+    pending: pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
   });
   const agentBatch = runningBatch(agents.runs);
   const root = thread?.root;
@@ -217,7 +221,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     [root],
   );
   // The strip shows the fan-out's agents and stops them; the waiting strip keeps the rest.
-  const waiting = thread?.pending && outsideBatch(thread.pending, agentBatch);
+  const waiting = pending && outsideBatch(pending, agentBatch);
   const settled = !!summary?.settledAt && summary.settledAt >= summary.updated;
   const snoozed = !!summary?.snoozedUntil && summary.snoozedUntil > Date.now();
 
@@ -642,117 +646,123 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           )}
         </View>
       ) : (
-        <FlatList
-          inverted
-          data={shown}
-          keyExtractor={(m) => m.id}
-          renderItem={({ item }) => (
-            <MessageView
-              chatId={id}
-              message={item}
-              root={thread?.root}
-              where={where}
-              replies={rootId ? undefined : counts.get(item.id)}
-              onOpenFile={openFile}
-              onActions={setActing}
-              onReplies={openReplies}
-              onReply={rootId ? undefined : (m) => openReplies(rootOf(all, m))}
-              onFork={rootId ? undefined : fork}
-              onOpenTurn={openTurn}
-              onRewind={rewind}
-              onRerunSetup={!running && item.id === setupId ? rerunSetup : undefined}
-              onSteer={rootId ? undefined : steerFromNote}
-            />
-          )}
-          ListHeaderComponent={
-            <View>
-              {canResume && (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() =>
-                    act("Couldn't resume", async () => {
-                      if (!(await confirmAgentSwitch(settings?.provider, holder))) return;
-                      await remote.desktop(
-                        "resumeProjectChat",
-                        id,
-                        settings && {
-                          provider: settings.provider,
-                          choice: settings.choice,
-                          runtimeMode: settings.runtimeMode,
-                          interactionMode: settings.interactionMode,
-                          ...(settings.contextWindow
-                            ? { contextWindow: settings.contextWindow }
-                            : {}),
-                        },
-                      );
-                    })
-                  }
-                  style={styles.resume}
-                >
-                  <RotateCcw size={14} color={t.accent} />
-                  <Text style={[styles.resumeText, { color: t.accent }]}>
-                    Resume answer
-                  </Text>
-                </Pressable>
-              )}
-              {!rootId && thread && (
-                <QueueList
-                  queue={thread.queue}
-                  scheduled={thread.scheduled ?? []}
-                  running={running}
-                  compacting={thread.messages.some(
-                    (m) => m.compaction && m.status === "streaming",
-                  )}
-                  paused={thread.queuePaused}
-                  onSteer={async (messageId) =>
-                    void (await queueAction("steer", messageId))
-                  }
-                  onRemove={async (messageId) =>
-                    void (await queueAction("remove", messageId))
-                  }
-                  onMove={async (messageId, index) =>
-                    void (await queueAction("move", messageId, index))
-                  }
-                  onEdit={editQueued}
-                />
-              )}
-            </View>
-          }
-          ListFooterComponent={
-            <View>
-              {thread?.earlier && !rootId ? (
-                loadEarlier ? (
+        <ReadingBack.Provider value={!pinned}>
+          <FlatList
+            inverted
+            // Basis 0, not its content's height: otherwise a long thread and the
+            // composer share every shortfall and the composer is squeezed under
+            // the navigation bar, where only the command list should give way.
+            style={styles.thread}
+            data={shown}
+            keyExtractor={(m) => m.id}
+            renderItem={({ item }) => (
+              <MessageView
+                chatId={id}
+                message={item}
+                root={thread?.root}
+                where={where}
+                replies={rootId ? undefined : counts.get(item.id)}
+                onOpenFile={openFile}
+                onActions={setActing}
+                onReplies={openReplies}
+                onReply={rootId ? undefined : (m) => openReplies(rootOf(all, m))}
+                onFork={rootId ? undefined : fork}
+                onOpenTurn={openTurn}
+                onRewind={rewind}
+                onRerunSetup={!running && item.id === setupId ? rerunSetup : undefined}
+                onSteer={rootId ? undefined : steerFromNote}
+              />
+            )}
+            ListHeaderComponent={
+              <View>
+                {canResume && (
                   <Pressable
                     accessibilityRole="button"
-                    onPress={loadEarlier}
-                    style={styles.earlierButton}
+                    onPress={() =>
+                      act("Couldn't resume", async () => {
+                        if (!(await confirmAgentSwitch(settings?.provider, holder))) return;
+                        await remote.desktop(
+                          "resumeProjectChat",
+                          id,
+                          settings && {
+                            provider: settings.provider,
+                            choice: settings.choice,
+                            runtimeMode: settings.runtimeMode,
+                            interactionMode: settings.interactionMode,
+                            ...(settings.contextWindow
+                              ? { contextWindow: settings.contextWindow }
+                              : {}),
+                          },
+                        );
+                      })
+                    }
+                    style={styles.resume}
                   >
-                    <Text style={[styles.earlier, { color: t.accent }]}>
-                      Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
-                      {thread.earlier === 1 ? "message" : "messages"}
-                      {thread.earlier > remoteHistory
-                        ? ` of ${thread.earlier}`
-                        : ""}
+                    <RotateCcw size={14} color={t.accent} />
+                    <Text style={[styles.resumeText, { color: t.accent }]}>
+                      Resume answer
                     </Text>
                   </Pressable>
-                ) : (
-                  <Text style={[styles.earlier, { color: t.faint }]}>
-                    {thread.earlier} earlier{" "}
-                    {thread.earlier === 1 ? "message is" : "messages are"} on your
-                    computer
-                  </Text>
-                )
-              ) : null}
-            </View>
-          }
-          contentContainerStyle={styles.list}
-          {...scroll}
-          // Reading back or tapping an answer puts the keyboard away. Android
-          // has no "interactive" mode, which left it open there.
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          onTouchStart={Keyboard.dismiss}
-        />
+                )}
+                {!rootId && thread && (
+                  <QueueList
+                    queue={thread.queue}
+                    scheduled={thread.scheduled ?? []}
+                    running={running}
+                    compacting={thread.messages.some(
+                      (m) => m.compaction && m.status === "streaming",
+                    )}
+                    paused={thread.queuePaused}
+                    onSteer={async (messageId) =>
+                      void (await queueAction("steer", messageId))
+                    }
+                    onRemove={async (messageId) =>
+                      void (await queueAction("remove", messageId))
+                    }
+                    onMove={async (messageId, index) =>
+                      void (await queueAction("move", messageId, index))
+                    }
+                    onEdit={editQueued}
+                  />
+                )}
+              </View>
+            }
+            ListFooterComponent={
+              <View>
+                {thread?.earlier && !rootId ? (
+                  loadEarlier ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={loadEarlier}
+                      style={styles.earlierButton}
+                    >
+                      <Text style={[styles.earlier, { color: t.accent }]}>
+                        Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
+                        {thread.earlier === 1 ? "message" : "messages"}
+                        {thread.earlier > remoteHistory
+                          ? ` of ${thread.earlier}`
+                          : ""}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.earlier, { color: t.faint }]}>
+                      {thread.earlier} earlier{" "}
+                      {thread.earlier === 1 ? "message is" : "messages are"} on your
+                      computer
+                    </Text>
+                  )
+                ) : null}
+              </View>
+            }
+            contentContainerStyle={styles.list}
+            {...scroll}
+            // Reading back or tapping an answer puts the keyboard away. Android
+            // has no "interactive" mode, which left it open there.
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            onTouchStart={Keyboard.dismiss}
+          />
+        </ReadingBack.Provider>
       )}
       {!rootId && summary?.goal && (
         <GoalStrip goal={summary.goal} running={running} />
@@ -781,7 +791,8 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       {!rootId && (
         <SubagentStrip
           batch={agentBatch}
-          reserve={running}
+          // Only Claude sends agents off; a Codex turn would hold an empty line.
+          reserve={running && lastSent?.provider === "claude"}
           display={display}
           onPress={() => setSheet("agents")}
           error={agents.error}
@@ -1002,6 +1013,7 @@ const styles = StyleSheet.create({
   },
   note: { fontSize: type.small, textAlign: "center" },
   grow0: { flexGrow: 0 },
+  thread: { flex: 1 },
   list: { paddingVertical: 8 },
   earlier: { fontSize: type.tiny, textAlign: "center", padding: 16 },
   earlierButton: { paddingVertical: 4 },

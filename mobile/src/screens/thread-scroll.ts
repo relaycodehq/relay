@@ -10,6 +10,8 @@ export function useThreadScroll(messages: readonly ChatMessage[]) {
   const height = useRef<number>(undefined);
   const [pinned, setPinned] = useState(true);
   return {
+    /** At the bottom, following the latest text. */
+    pinned,
     ref: list,
     // Native anchor indexes require mounted children, even an empty footer
     // outside the viewport. FlatList still virtualizes its rendered rows.

@@ -31,6 +31,8 @@ export interface LightboxImage {
 
 const MAX_SCALE = 5;
 const TAP_SCALE = 2.5;
+// How far a finger may move and still tap, in dp.
+const TAP_SLOP = 10;
 
 type Size = { width: number; height: number };
 
@@ -370,16 +372,19 @@ function Page({
       x.set(withDecay({ velocity: e.velocityX, clamp: [-limit.x, limit.x] }));
       y.set(withDecay({ velocity: e.velocityY, clamp: [-limit.y, limit.y] }));
     });
+  // A tap has no distance limit of its own, so a quick swipe to the next
+  // image would count as one.
   const doubleTap = Gesture.Tap()
     .enabled(!!uri)
     .numberOfTaps(2)
+    .maxDistance(TAP_SLOP)
     .onEnd((e) => {
       if (scale.get() > 1.01) zoomTo(1, 0, 0);
       // Zooms in on the point tapped.
       else zoomTo(TAP_SCALE, -(e.x - width / 2) * (TAP_SCALE - 1), -(e.y - height / 2) * (TAP_SCALE - 1));
     });
   // Waits out a second tap, so it only fires when a double tap didn't.
-  const tap = Gesture.Tap().onEnd(() => scheduleOnRN(onTap));
+  const tap = Gesture.Tap().maxDistance(TAP_SLOP).onEnd(() => scheduleOnRN(onTap));
 
   const transform = useAnimatedStyle(() => ({
     transform: [{ translateX: x.get() }, { translateY: y.get() }, { scale: scale.get() }],
@@ -434,6 +439,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     justifyContent: "center",
+    alignItems: "center",
     gap: 7,
   },
   // The outline keeps them visible over a white screenshot.
@@ -445,5 +451,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.3)",
     backgroundColor: "rgba(255,255,255,0.4)",
   },
-  current: { backgroundColor: "#fff" },
+  // Bigger, solid and darker-ringed, so it stands out from the rest on white as on black.
+  current: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "#fff",
+  },
 });
