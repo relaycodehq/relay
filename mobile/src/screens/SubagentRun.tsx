@@ -163,7 +163,7 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
           )}
         </View>
       )}
-      {/* Its tool output comes cut, as a thread's does; there's no fold to fetch the rest from. */}
+      {/* Its tool output comes cut, as a thread's does, and there's no turn to fetch the rest or its pictures from. */}
       <AgentRun chatId="" message={message} root={root} open />
       {!live && !!run.report && (
         <>

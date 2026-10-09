@@ -59,7 +59,8 @@ const icons = {
 
 /**
  * Each agent call's own tool calls, how to show their paths, whose turn they're
- * in, and how to open an image the turn looked at.
+ * in, and how to open an image the turn looked at. Without a chatId (a
+ * subagent's own run) there's no turn to fetch pictures or whole output from.
  */
 const Subagents = createContext<{
   calls: Map<string, AgentActivity[]>;
@@ -223,8 +224,9 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
   const t = useTheme();
   // A failed call looks like any other: commands fail as part of the work.
   const Icon = icons[a.kind];
-  const calls = useContext(Subagents).calls.get(a.id) ?? [];
-  const preview = looksAtImage(a) && (
+  const { calls: subagents, chatId } = useContext(Subagents);
+  const calls = subagents.get(a.id) ?? [];
+  const preview = looksAtImage(a) && !!chatId && (
     <View style={styles.under}>
       <Preview activity={a} name={label} />
     </View>
@@ -319,11 +321,11 @@ function SubagentRows({ calls }: { calls: AgentActivity[] }) {
 /** A run of tool calls between two commentary lines, folded into "Ran 6 commands". */
 function ActivityGroup({ activity }: { activity: AgentActivity[] }) {
   const t = useTheme();
-  const { display } = useContext(Subagents);
+  const { display, chatId } = useContext(Subagents);
   const kinds = new Set(activity.map((a) => a.kind));
   const Icon = kinds.size === 1 ? icons[activity[0]!.kind] : Wrench;
   // Closed, the pictures its calls looked at still show; open, each sits under its own row.
-  const looked = activity.filter(looksAtImage);
+  const looked = chatId ? activity.filter(looksAtImage) : [];
   return (
     <Fold
       under={(open) =>
@@ -370,7 +372,7 @@ function OpenBatch({ activity }: { activity: AgentActivity[] }) {
   const text = display(running ? liveLabel(head) : doneLabel(head));
   // This row changes with every call, so a picture it looked at stays icon-sized
   // here; with nothing folded behind the row, tapping it opens the picture.
-  const looked = imageRead(head);
+  const looked = chatId ? imageRead(head) : undefined;
   const view = !folded && looked && openImage ? () => openImage(looked) : undefined;
   return (
     <View>
@@ -402,7 +404,7 @@ function OpenBatch({ activity }: { activity: AgentActivity[] }) {
           />
         )}
       </Pressable>
-      {open && looksAtImage(head) && (
+      {open && looked && (
         <View style={styles.under}>
           <Preview activity={head} name={display(head.label)} />
         </View>
