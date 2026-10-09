@@ -86,8 +86,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     markSeen(id, updated);
     clearThreadNotice(id);
     // The desktop keeps the shared mark; an older one just doesn't know the call.
-    void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
-  }, [id, updated, foreground]);
+    if (remote.status === "online")
+      void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
+  }, [id, updated, foreground, remote.status]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
     "thread" | "snooze" | "rename" | "sides"
