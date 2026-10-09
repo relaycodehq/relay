@@ -5,7 +5,7 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { AsyncQuestions } from "./async-questions";
+import { AsyncQuestions, supersedeQuestions } from "./async-questions";
 import { ActiveTurns } from "./active";
 import { threadControl } from "./control";
 import type { ChatCore } from "./core";
@@ -215,4 +215,43 @@ it("leaves a failed follow-up answerable and never silently loses the reply", as
     f.questions.answer("chat", "message", "item", answer),
   ).rejects.toThrow("Queue full");
   expect(f.message.questions![0].answers).toBeUndefined();
+});
+
+it("folds away the agent's open questions in the conversation a new turn is typed into", () => {
+  const asked = (
+    id: string,
+    provider: "codex" | "claude",
+    parentId?: string,
+    answers?: Record<string, string[]>,
+  ): ChatMessage => ({
+    id,
+    role: "assistant",
+    body: "",
+    provider,
+    status: "complete",
+    created: 1,
+    version: 1,
+    ...(parentId ? { parentId } : {}),
+    questions: [
+      {
+        id: id + "-q",
+        questions: [{ id: "0", question: "?" }],
+        ...(answers && { answers }),
+      },
+    ],
+  });
+  const stale = asked("stale", "codex");
+  const answered = asked("answered", "codex", undefined, { "0": ["Yes"] });
+  const otherAgent = asked("other-agent", "claude");
+  const aside = asked("aside", "codex", "root");
+  const changed = supersedeQuestions(
+    [stale, answered, otherAgent, aside],
+    "codex",
+    undefined,
+  );
+  expect(changed).toEqual([stale]);
+  expect(stale).toMatchObject({ version: 2, questions: [{ dismissed: true }] });
+  expect(answered.questions![0].dismissed).toBeUndefined();
+  expect(otherAgent.questions![0].dismissed).toBeUndefined();
+  expect(aside.questions![0].dismissed).toBeUndefined();
 });

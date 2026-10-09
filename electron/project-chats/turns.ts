@@ -29,6 +29,7 @@ import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { assertHere } from "./handoff";
 import type { ChatQueue } from "./queue";
+import { supersedeQuestions } from "./async-questions";
 import { interrupt } from "./revive";
 import { agentSession, parseSessionKey, sessionInput } from "./sessions";
 import type { ThreadTitles } from "./titles";
@@ -244,6 +245,10 @@ export class ChatTurns {
         ...sentBy(input),
       };
       chat.messages.push(user);
+      const superseded =
+        asked && !resumed && !input.fromThread
+          ? supersedeQuestions(chat.messages, asked.provider, input.parentId)
+          : [];
       // Anything said after a limit stopped the answer replaces carrying it on.
       delete chat.limitResume;
       // A goal that ended shows until the conversation moves on.
@@ -261,6 +266,8 @@ export class ChatTurns {
       this.core.storage.keep(chat);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: user });
+      for (const message of superseded)
+        this.core.emit({ chatId: id, message: structuredClone(message) });
       if (chat.messages.length === 1) this.titles.generate(chat, input.choice);
       if (!asked) {
         this.core.active.release(id, active);

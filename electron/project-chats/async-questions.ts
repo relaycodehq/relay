@@ -3,11 +3,36 @@ import {
   agentResponseSchema,
   type AgentResponse,
 } from "../../shared/agent-modes";
+import type { AgentProvider } from "../../shared/agents";
 import type { ChatMessage, ProjectChatSend } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
 import type { ChatCore } from "./core";
 import { assertHere } from "./handoff";
 import { sessionInput } from "./sessions";
+
+/**
+ * A new turn typed to the agent answers its open questions in that
+ * conversation, so they stop asking for input. They fold away dismissed,
+ * so they can still be reopened and answered. Returns the messages it changed.
+ */
+export function supersedeQuestions(
+  messages: ChatMessage[],
+  provider: AgentProvider,
+  parentId: string | null | undefined,
+) {
+  return messages.filter((m) => {
+    if (
+      m.role !== "assistant" ||
+      m.provider !== provider ||
+      (m.parentId ?? null) !== (parentId ?? null)
+    )
+      return false;
+    const open = (m.questions ?? []).filter((g) => !g.answers && !g.dismissed);
+    for (const group of open) group.dismissed = true;
+    if (open.length) m.version++;
+    return open.length > 0;
+  });
+}
 
 /** Answers message-based questions through the active turn, or a normal follow-up. */
 export class AsyncQuestions {
