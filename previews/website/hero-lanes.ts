@@ -33,13 +33,27 @@ export function startLanes(canvas: HTMLCanvasElement, colors: { line: string; ru
 
   const size = () => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const stretch = width ? canvas.clientWidth / width : 1;
     width = canvas.clientWidth;
     height = canvas.clientHeight;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    lanes = [];
-    for (let y = LANE_GAP / 2; y < height; y += LANE_GAP) lanes.push(fresh(y + 0.5, Math.random() * width));
+    // A resize fires every frame of a window drag: runs that restarted at random
+    // on each one strobed, so they keep going, stretched to the new width.
+    const kept: Lane[] = [];
+    for (let i = 0, y = LANE_GAP / 2; y < height; i++, y += LANE_GAP) {
+      const lane = lanes[i];
+      if (!lane) {
+        kept.push(fresh(y + 0.5, Math.random() * width));
+        continue;
+      }
+      lane.head *= stretch;
+      lane.nextTick *= stretch;
+      lane.ticks = lane.ticks.map((tick) => tick * stretch);
+      kept.push(lane);
+    }
+    lanes = kept;
     draw(0);
   };
 
