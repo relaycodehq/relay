@@ -89,14 +89,24 @@ export function ComputerSheet() {
     return `Can't reach it right now · ${lastReached(c)}`;
   };
   // Pairings that share a name, e.g. the same computer paired again, say where they point.
-  const hint = (c: PairedComputer) =>
-    remote.computers.some((o) => o.id !== c.id && o.name === c.name)
+  // Paired again at the same name and address since: Relay there has a new key, this one is dead.
+  const replaced = (c: PairedComputer, index: number) =>
+    remote.computers
+      .slice(index + 1)
+      .some((o) => o.name === c.name && o.address === c.address);
+  const hint = (c: PairedComputer, index: number) => {
+    if (c.id !== remote.active && replaced(c, index))
+      return `Paired again since · ${lastReached(c)}`;
+    return remote.computers.some((o) => o.id !== c.id && o.name === c.name)
       ? `${status(c)} · ${c.address}`
       : status(c);
-  const forget = (c: PairedComputer) =>
+  };
+  const forget = (c: PairedComputer, index: number) =>
     Alert.alert(
       `Forget ${c.name}?`,
-      `${lastReached(c)}. Pairing again needs a new code from Relay there.`,
+      replaced(c, index)
+        ? "This phone paired with it again since, so this older pairing can't connect."
+        : `${lastReached(c)}. Pairing again needs a new code from Relay there.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -113,11 +123,11 @@ export function ComputerSheet() {
       onClose={() => setOpen(false)}
       onDismiss={run}
     >
-      {remote.computers.map((c) => (
+      {remote.computers.map((c, index) => (
         <MenuRow
           key={c.id}
           label={c.name}
-          hint={hint(c)}
+          hint={hint(c, index)}
           checked={c.id === remote.active}
           icon={
             <Monitor
@@ -132,7 +142,7 @@ export function ComputerSheet() {
                 accessibilityRole="button"
                 accessibilityLabel={`Forget ${c.name}`}
                 hitSlop={10}
-                onPress={() => forget(c)}
+                onPress={() => forget(c, index)}
               >
                 <Text style={[styles.forget, { color: t.muted }]}>Forget</Text>
               </Pressable>
