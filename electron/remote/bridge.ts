@@ -4,6 +4,7 @@ import { z } from "zod";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import {
   knownMessagesSchema,
+  projectChatSendSchema,
   type AgentActivity,
   type ChatMessage,
   type ChatSummary,
@@ -126,6 +127,7 @@ const signatureSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const maxDiffLines = 3000;
 /** Streaming answers go out at most this often; the phone doesn't need every token. */
 const streamMs = 150;
+const sendKey = (chatId: string, id: string) => JSON.stringify([chatId, id]);
 
 /** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 export class RemoteBridge {
@@ -134,6 +136,10 @@ export class RemoteBridge {
     { timer: NodeJS.Timeout; event: Extract<RemoteEvent, { kind: "message" }> }
   >();
   private lastChats = "";
+  // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
+  private sends = new Map<string, Promise<unknown>>();
+  // A taken-back queue item no longer holds its id. Its lost answer still counts as a receipt.
+  private acceptedSends = new Set<string>();
   private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
@@ -177,15 +183,32 @@ export class RemoteBridge {
         chats: this.summaries(),
       };
     },
-    chat: async (id, known, history = remoteHistory) => {
+    chat: async (id, known, history = remoteHistory, sendId) => {
+      const key = sendId === undefined ? undefined : sendKey(id, sendId);
+      const sending = () => key !== undefined && this.sends.has(key);
+      const inFlight = sendId !== undefined && sending();
       const patch = await this.host.chat(id, known);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
+      const sendPending = inFlight || (sendId !== undefined && sending());
       return {
         id: patch.id,
         projectId: patch.projectId,
         title: patch.title,
         scope: patch.scope,
+        ...(sendId !== undefined
+          ? {
+              sendPending,
+              hasSend:
+                sendPending ||
+                (key !== undefined && this.acceptedSends.has(key)) ||
+                patch.messages.some(
+                  (m) => (typeof m === "string" ? m : m.id) === sendId,
+                ) ||
+                patch.queue?.some((q) => q.input.id === sendId) === true ||
+                patch.scheduled?.some((s) => s.input.id === sendId) === true,
+            }
+          : {}),
         messages: patch.messages
           .slice(-history)
           .map((m) => (typeof m === "string" ? m : forPhone(m))),
@@ -274,12 +297,32 @@ export class RemoteBridge {
       return signature === known ? null : { signature, run };
     },
     desktop: async (method, args) => {
-      let value = await this.host.dispatch(method, args);
-      if (method === "projectChatAgent" && value)
-        value = forPhoneRun(value as SubagentDetail);
-      // Sends, stops and triage move thread states; phones hear before the call returns.
-      this.refresh();
-      return value;
+      const send =
+        method === "sendProjectChat"
+          ? {
+              chatId: idSchema.parse(args[0]),
+              id: projectChatSendSchema.parse(args[1]).id,
+            }
+          : undefined;
+      const key = send && sendKey(send.chatId, send.id);
+      if (key && this.acceptedSends.has(key)) return;
+      // A reconnect may retry before worktree creation finishes: both await the same send.
+      let job = key ? this.sends.get(key) : undefined;
+      if (!job) {
+        job = this.host.dispatch(method, args);
+        if (key) this.sends.set(key, job);
+      }
+      try {
+        let value = await job;
+        if (key) this.acceptedSends.add(key);
+        if (method === "projectChatAgent" && value)
+          value = forPhoneRun(value as SubagentDetail);
+        // Sends, stops and triage move thread states; phones hear before the call returns.
+        this.refresh();
+        return value;
+      } finally {
+        if (key && this.sends.get(key) === job) this.sends.delete(key);
+      }
     },
     phoneAppFile: async (path, offset) => {
       if (!this.host.phoneApp)
@@ -318,6 +361,7 @@ export class RemoteBridge {
           args[2] == null
             ? undefined
             : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
+          args[3] == null ? undefined : idSchema.parse(args[3]),
         );
       case "activityDetail":
         return a.activityDetail(
@@ -506,6 +550,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.worktree ? { worktree: true } : {}),
     ...(c.pending?.length ? { pending: c.pending } : {}),
     ...(c.nextSend ? { nextSend: c.nextSend } : {}),
+    ...(c.queueMark ? { queueMark: c.queueMark } : {}),
     ...(c.empty ? { empty: true } : {}),
     ...(c.goal ? { goal: c.goal } : {}),
     ...(c.startedBy ? { startedBy: c.startedBy } : {}),

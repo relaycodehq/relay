@@ -6,23 +6,12 @@
 // next launch instead of vanishing with the composer already cleared.
 import { useSyncExternalStore } from "react";
 import { Directory, File, Paths } from "expo-file-system";
-import {
-  projectChatSendSchema,
-  type ChatMessage,
-  type ProjectChatSend,
-} from "../../../shared/projects";
-import type { RemoteClient } from "../../../shared/remote-client";
+import { projectChatSendSchema, type ProjectChatSend } from "../../../shared/projects";
+import { remoteHistory } from "../../../shared/remote";
+import { Unanswered, type RemoteClient } from "../../../shared/remote-client";
+import { settled, stamp, type Outgoing } from "./outbox-state";
 
-export interface Outgoing {
-  /** The paired computer it's for; it only ever goes to that one. */
-  computer: string;
-  chatId: string;
-  send: ProjectChatSend;
-  created: number;
-  /** The desktop took it; it goes once the thread holds it. */
-  sent?: boolean;
-  error?: string;
-}
+export { heldIds, outgoingMessage, type Outgoing } from "./outbox-state";
 
 type Desktop = RemoteClient["desktop"];
 
@@ -68,6 +57,7 @@ function kept(): Outgoing[] {
               send: send.data,
               created: Number(o.created) || Date.now(),
               error: "Relay closed before it went out",
+              unsure: true,
             },
           ];
         } catch {
@@ -93,9 +83,14 @@ function run(desktop: Desktop, item: Outgoing) {
   desktop("sendProjectChat", item.chatId, item.send).then(
     () => {
       unkeep(item.send.id);
-      update(item.send.id, { sent: true, error: undefined });
+      update(item.send.id, { sent: stamp(), error: undefined, unsure: undefined });
     },
-    (e) => update(item.send.id, { error: e instanceof Error ? e.message : String(e) }),
+    (e) =>
+      update(item.send.id, {
+        error: e instanceof Error ? e.message : String(e),
+        // A refused retry doesn't prove that an earlier unanswered copy failed.
+        unsure: item.unsure || e instanceof Unanswered,
+      }),
   );
 }
 
@@ -130,11 +125,32 @@ export function drop(id: string) {
   set(items.filter((o) => o.send.id !== id));
 }
 
-/** Forgets the ones the thread now holds itself. */
-export function arrived(ids: ReadonlySet<string>) {
-  if (!items.some((o) => ids.has(o.send.id))) return;
-  for (const o of items) if (ids.has(o.send.id)) unkeep(o.send.id);
-  set(items.filter((o) => !ids.has(o.send.id)));
+/**
+ * Forgets the ones thread `chatId` now holds itself, or no longer does,
+ * reading as `held` from a fetch made at `fetched`.
+ */
+export function arrived(computer: string, chatId: string, held: ReadonlySet<string>, fetched: number) {
+  const done = new Set(settled(items, computer, chatId, held, fetched));
+  if (!done.size) return;
+  for (const o of done) unkeep(o.send.id);
+  set(items.filter((o) => !done.has(o)));
+}
+
+/**
+ * Whether the desktop has one it never answered for, as a message or waiting
+ * its turn: taken back to edit and sent again, it would go twice.
+ */
+export async function reached(
+  call: RemoteClient["call"],
+  o: Outgoing,
+  known?: Record<string, number>,
+) {
+  const thread = await call("chat", o.chatId, known, remoteHistory, o.send.id);
+  if (thread.hasSend === undefined)
+    throw new Error("Update Relay on the computer before taking back an unanswered send.");
+  // A receipt covers the full history, including an accepted send outside this page.
+  if (thread.hasSend && !thread.sendPending) drop(o.send.id);
+  return thread.hasSend;
 }
 
 const subscribe = (listener: () => void) => {
@@ -143,36 +159,11 @@ const subscribe = (listener: () => void) => {
 };
 const snapshot = () => items;
 
-export function useOutbox(chatId: string) {
+export function useOutbox(computer: string, chatId: string) {
   const all = useSyncExternalStore(subscribe, snapshot);
-  return all.filter((o) => o.chatId === chatId);
+  return all.filter((o) => o.computer === computer && o.chatId === chatId);
 }
 
 /** A pasted image of one still on its way, which the desktop can't hand back yet. */
 export const outgoingImage = (id: string, index: number) =>
   items.find((o) => o.send.id === id)?.send.images?.[index]?.dataUrl;
-
-/** How the thread shows one until the desktop's copy arrives. */
-export const outgoingMessage = (o: Outgoing): ChatMessage => ({
-  id: o.send.id,
-  role: "user",
-  body: o.send.body,
-  status: "complete",
-  created: o.created,
-  provider: o.send.provider,
-  version: 0,
-  pending: true,
-  ...(o.error ? { error: `Not sent: ${o.error}` } : {}),
-  ...(o.send.images?.length
-    ? {
-        images: o.send.images.map((image, i) => ({
-          id: `${o.send.id}:${i}`,
-          name: image.name,
-          mimeType: image.mimeType,
-          sizeBytes: Math.round((image.dataUrl.length * 3) / 4),
-        })),
-      }
-    : {}),
-  ...(o.send.parentId ? { parentId: o.send.parentId } : {}),
-  ...(o.send.side ? { side: true } : {}),
-});

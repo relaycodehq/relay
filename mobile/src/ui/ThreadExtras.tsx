@@ -61,6 +61,7 @@ export function WaitingStrip({
     <Action
       label={item.kind === "task" ? "Stop" : "Cancel"}
       busyLabel={item.kind === "task" ? "Stopping…" : "Cancelling…"}
+      failed={item.kind === "task" ? "Couldn't stop it" : "Couldn't cancel it"}
       onPress={() => onStop(item)}
     />
   );
@@ -189,10 +190,15 @@ export function StoppedStrip({
         </Text>
       </View>
       <View style={styles.actions}>
-        <Action label="Dismiss" onPress={() => onResolve("dismiss")} />
+        <Action
+          label="Dismiss"
+          failed="Couldn't dismiss it"
+          onPress={() => onResolve("dismiss")}
+        />
         <Action
           label="Pick it back up"
           primary
+          failed="Couldn't pick it back up"
           onPress={() => onResolve("resume")}
         />
       </View>
@@ -386,7 +392,7 @@ export function UnsentStrip({
 }: {
   unsent: Outgoing[];
   onRetry: (o: Outgoing) => void;
-  onEdit: (o: Outgoing) => void;
+  onEdit: (o: Outgoing) => Promise<void> | void;
 }) {
   const t = useTheme();
   if (!unsent.length) return null;
@@ -397,7 +403,7 @@ export function UnsentStrip({
           <Text numberOfLines={1} style={[styles.text, { color: t.text }]}>
             {withoutMention(o.send.body)}
           </Text>
-          <Action label="Edit" onPress={async () => onEdit(o)} />
+          <Action label="Edit" failed="Couldn't take it back" onPress={async () => onEdit(o)} />
           <Action label="Try again" primary onPress={async () => onRetry(o)} />
         </View>
       ))}
@@ -405,16 +411,19 @@ export function UnsentStrip({
   );
 }
 
-/** A small text action that stays pressed until its work is done. */
+/** A small text action that stays pressed until its work is done, and says when that failed. */
 export function Action({
   label,
   busyLabel,
+  failed = "That didn't work",
   primary,
   confirm,
   onPress,
 }: {
   label: string;
   busyLabel?: string;
+  /** The alert's title when the work fails. */
+  failed?: string;
   primary?: boolean;
   /** Asked first; the button only turns busy once it says yes. */
   confirm?: () => Promise<boolean>;
@@ -437,7 +446,7 @@ export function Action({
             setBusy(true);
             await onPress();
           } catch (e) {
-            Alert.alert("Couldn't complete that", e instanceof Error ? e.message : String(e));
+            Alert.alert(failed, e instanceof Error ? e.message : String(e));
           } finally {
             claimed.current = false;
             setBusy(false);

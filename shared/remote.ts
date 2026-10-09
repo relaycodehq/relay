@@ -115,6 +115,8 @@ export interface RemoteChatSummary {
   pending?: ChatPending[];
   /** When its next scheduled message goes out. */
   nextSend?: number;
+  /** Changes with its queue and Send later list; older desktops leave it out. */
+  queueMark?: string;
   empty?: boolean;
   /** Its native `/goal`; older desktops leave it out. */
   goal?: ThreadGoal;
@@ -297,6 +299,10 @@ export interface RemoteChat extends Pick<
   settings?: RemoteSettings;
   /** The conversation the last message went to: the main one, or a reply's root. */
   lastParentId?: string | null;
+  /** Receipt for the requested send, including one still being processed; older desktops omit it. */
+  hasSend?: boolean;
+  /** The requested send is still in dispatch, so its eventual failure must stay in the outbox. */
+  sendPending?: boolean;
 }
 
 export const remoteHistory = 100;
@@ -439,6 +445,7 @@ export interface RemoteApi {
     id: string,
     known?: KnownMessages,
     history?: number,
+    sendId?: string,
   ): Promise<RemoteChat>;
   /** Null when unchanged; lists omit briefs, which belong in the run. */
   subagents(
@@ -570,10 +577,13 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
 
 /**
  * Calls that wait on the network, git or a model: pushes, pulls and merges,
- * written commit messages, CI and plan usage. The phone gives them the
- * desktop's two minutes instead of its usual quarter.
+ * written commit messages, CI and plan usage, and sends, which may carry
+ * screenshots over a slow link and make a worktree first. The phone gives
+ * them the desktop's two minutes instead of its usual quarter.
  */
 export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
+  "sendProjectChat",
+  "createProjectChat",
   "projectGitAction",
   "projectCommitMessage",
   "projectMergePlan",

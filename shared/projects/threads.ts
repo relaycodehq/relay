@@ -89,6 +89,8 @@ export interface ChatSummary {
   abandonedHandoffs?: ChatAbandonedHandoff[];
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
+  /** Changes whenever its queue or Send later list does, so phones know to fetch them. */
+  queueMark?: string;
   /** The answer a usage limit stopped, resumed once the limit lifts; see limit-resume. */
   limitResume?: LimitResume;
   /** The main conversation's native `/goal`, as its agent last reported it; see shared/goal. */
