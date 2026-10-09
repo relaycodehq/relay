@@ -117,7 +117,11 @@ export function sessionConfig(
     // Allow rules in those settings skip canUseTool; this list they can't.
     ...(options.readOnly
       ? { disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit"] }
-      : {}),
+      : // Claude Code's own worktree moves its session where Relay can't
+        // follow; Relay's move_to_worktree takes the thread along.
+        options.relayTools
+        ? { disallowedTools: ["EnterWorktree", "ExitWorktree"] }
+        : {}),
     // A thread gets the MCP servers the terminal's `claude` would; a reviewer
     // works unattended, so it keeps to none.
     ...(options.readOnly

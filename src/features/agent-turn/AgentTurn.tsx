@@ -101,27 +101,47 @@ function ReadIcon({ image }: { image: PreviewImage }) {
 }
 
 /** A read image's picture grown above its row, once it has loaded. */
-function ReadPeek({ image }: { image: PreviewImage }) {
+function ReadPeek({
+  image,
+  onOpen,
+}: {
+  image: PreviewImage;
+  onOpen?: () => void;
+}) {
   const { data: source } = useImageSource(image);
-  return source ? <ImagePeek src={source} /> : null;
+  return source ? <ImagePeek src={source} onOpen={onOpen} /> : null;
 }
 
 /** A row that grows its read image above it on hover, as a sent image's pill does. */
 function ImageReadPeek({
   image,
+  onOpen,
   trigger,
   children,
 }: {
   image?: PreviewImage;
+  onOpen?: () => void;
   trigger: ReactElement;
   children: ReactNode;
 }) {
+  const peek = useRef<PreviewCard.Root.Actions>(null);
   return (
-    <PreviewCard.Root>
+    <PreviewCard.Root actionsRef={peek}>
       <PreviewCard.Trigger delay={PEEK_DELAY} closeDelay={0} render={trigger}>
         {children}
       </PreviewCard.Trigger>
-      {image && <ReadPeek image={image} />}
+      {image && (
+        <ReadPeek
+          image={image}
+          onOpen={
+            onOpen &&
+            (() => {
+              peek.current?.close();
+              onOpen();
+            })
+          }
+        />
+      )}
     </PreviewCard.Root>
   );
 }
@@ -190,6 +210,7 @@ function ToolRow({
         {read ? (
           <ImageReadPeek
             image={read.image}
+            onOpen={read.open}
             trigger={
               <button
                 type="button"
@@ -496,6 +517,7 @@ function OpenBatch({
     <div className={`agent-batch ${head.status}`}>
       <ImageReadPeek
         image={read?.image}
+        onOpen={read?.open}
         trigger={
           <button
             type="button"

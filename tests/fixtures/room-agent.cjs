@@ -876,9 +876,30 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         };
-        callRelayTool(tool, JSON.parse(input)).then(answer, (e) =>
-          answer(`Failed: ${e.message}`),
-        );
+        // An agent that moved its thread goes on to edit in the new worktree.
+        const editMoved = (text) => {
+          if (tool !== "move_to_worktree" || !text.startsWith("{")) return text;
+          const fs = require("node:fs"),
+            path = require("node:path");
+          const file = path.join(JSON.parse(text).folder, "moved.txt");
+          fs.writeFileSync(file, "Made in the worktree.\n");
+          send({
+            method: "item/completed",
+            params: {
+              threadId: "fixture-thread",
+              item: {
+                id: "fixture-moved-edit",
+                type: "fileChange",
+                status: "completed",
+                changes: [{ path: file, kind: { type: "add" }, diff: "" }],
+              },
+            },
+          });
+          return text;
+        };
+        callRelayTool(tool, JSON.parse(input))
+          .then(editMoved)
+          .then(answer, (e) => answer(`Failed: ${e.message}`));
         return;
       }
       const echo = said.indexOf("fixture echo:");

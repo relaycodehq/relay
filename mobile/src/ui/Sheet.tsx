@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
@@ -24,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { paneBreakpoint } from "./panes";
 import { type, useTheme } from "./theme";
 
 const settle = { damping: 40, stiffness: 400 };
@@ -33,6 +35,8 @@ const settle = { damping: 40, stiffness: 400 };
  * It drags like the platform's own: by its grip at any time, and by its
  * content once that's scrolled to the top, handing back to the scroll when
  * pushed up again. It closes past a third of its height or on a fling down.
+ * On a wide screen it's a card over the bottom middle instead, rather than
+ * a strip across both panes.
  */
 export function Sheet({
   open,
@@ -52,6 +56,7 @@ export function Sheet({
 }) {
   const t = useTheme();
   const reduced = useReducedMotion();
+  const card = useWindowDimensions().width >= paneBreakpoint;
   // Stays mounted while it slides away, after `open` has gone false.
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
@@ -70,6 +75,11 @@ export function Sheet({
   const offscreen = Dimensions.get("window").height;
   const y = useSharedValue(offscreen);
   const height = useSharedValue(offscreen);
+  // A card floats above the bottom edge, so it travels that much further to leave.
+  const gap = useSharedValue(0);
+  useEffect(() => {
+    if (!card) gap.set(0);
+  }, [card, gap]);
   const gripHeight = useSharedValue(0);
   const scrollY = useSharedValue(0);
   const fromGrip = useSharedValue(false);
@@ -94,14 +104,14 @@ export function Sheet({
   useEffect(() => {
     if (!open && shown)
       y.set(
-        withTiming(height.get(), { duration: reduced ? 0 : 200, easing: Easing.in(Easing.cubic) }, (done) => {
+        withTiming(height.get() + gap.get(), { duration: reduced ? 0 : 200, easing: Easing.in(Easing.cubic) }, (done) => {
           if (done) scheduleOnRN(hide);
         }),
       );
-  }, [open, shown, y, height, reduced, hide]);
+  }, [open, shown, y, height, gap, reduced, hide]);
 
   const slideIn = () => {
-    y.set(height.get());
+    y.set(height.get() + gap.get());
     y.set(withTiming(0, { duration: reduced ? 0 : 280, easing: Easing.out(Easing.cubic) }));
   };
 
@@ -146,7 +156,7 @@ export function Sheet({
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(y.get(), [0, height.get()], [1, 0], "clamp"),
+    opacity: interpolate(y.get(), [0, height.get() + gap.get()], [1, 0], "clamp"),
   }));
   return (
     <Modal
@@ -163,7 +173,7 @@ export function Sheet({
       <SafeAreaProvider>
         <GestureHandlerRootView style={styles.fill}>
           <KeyboardAvoidingView
-            style={styles.end}
+            style={[styles.end, card && styles.centered]}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
             <Animated.View style={[styles.backdrop, backdropStyle]}>
@@ -174,6 +184,7 @@ export function Sheet({
                 onLayout={(e) => height.set(e.nativeEvent.layout.height)}
                 style={[
                   styles.sheet,
+                  card && styles.card,
                   { backgroundColor: t.raised },
                   sheetStyle,
                 ]}
@@ -200,9 +211,10 @@ export function Sheet({
                 ) : (
                   children
                 )}
-                <Foot />
+                <Foot card={card} />
               </Animated.View>
             </GestureDetector>
+            {card && <Gap onHeight={(h) => gap.set(h)} />}
           </KeyboardAvoidingView>
         </GestureHandlerRootView>
       </SafeAreaProvider>
@@ -210,10 +222,22 @@ export function Sheet({
   );
 }
 
-/** Room under the content for the navigation bar, as measured inside the modal. */
-function Foot() {
+/** Room under the content for the navigation bar, as measured inside the modal; a card has it below instead. */
+function Foot({ card }: { card: boolean }) {
   const insets = useSafeAreaInsets();
-  return <View style={{ height: 12 + insets.bottom }} />;
+  return <View style={{ height: 12 + (card ? 0 : insets.bottom) }} />;
+}
+
+/** What a card floats above: the navigation bar and a little air. */
+function Gap({ onHeight }: { onHeight: (height: number) => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={(e) => onHeight(e.nativeEvent.layout.height)}
+      style={{ height: 16 + insets.bottom }}
+    />
+  );
 }
 
 export interface MenuItem {
@@ -304,6 +328,7 @@ export function MenuRow({ label, labelLines, hint, icon, destructive, checked, d
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   end: { flex: 1, justifyContent: "flex-end" },
+  centered: { alignItems: "center" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
     maxHeight: "85%",
@@ -311,6 +336,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     paddingTop: 2,
   },
+  card: { width: "100%", maxWidth: 560, borderRadius: 18 },
   // The whole strip is the grab area, not just the 4pt line.
   handle: { paddingTop: 6 },
   grip: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, marginBottom: 12 },

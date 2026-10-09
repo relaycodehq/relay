@@ -75,6 +75,7 @@ type Chats = Pick<
   | "worktreeFrom"
   | "triage"
   | "showRender"
+  | "enterWorktree"
 >;
 
 const defaultChoice: ModelChoice = {
@@ -237,6 +238,8 @@ export class StartedThreads {
         return this.settle(lead, input.id);
       case "usage_limits":
         return json(await this.usage(lead));
+      case "move_to_worktree":
+        return json(await this.chats.enterWorktree(lead.id, input));
       case "list_projects":
         return json(await this.listProjects(lead));
       case "add_project":

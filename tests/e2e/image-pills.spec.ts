@@ -199,9 +199,14 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     await expect(sentPills).toHaveCount(2);
     await expect(message).not.toContainText("[Image #");
     await expect(message.locator(".message-image")).toHaveCount(0);
-    // Resting on a pill grows its picture above it.
+    // Resting on a pill grows its picture above it; clicking that opens the viewer.
     await sentPills.first().hover();
-    await expect(page.locator(".image-chip-peek img")).toBeVisible();
+    await page.locator(".image-chip-peek img").click();
+    await expect(
+      page.getByRole("dialog", { name: /, image 1 of 2$/ }),
+    ).toBeVisible();
+    await expect(page.locator(".image-chip-peek")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await sentPills.nth(1).click();
     await expect(
       page.getByRole("dialog", { name: /, image 2 of 2$/ }),

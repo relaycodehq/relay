@@ -32,6 +32,13 @@ import {
   threadWorktree,
 } from "../../shared/projects";
 import { recoverAgentWorktrees } from "./agent-worktrees";
+import { sentAgent } from "../../shared/recipient";
+
+/** What an agent asks for when it moves its thread into a worktree. */
+export interface WorktreeRequest {
+  branch?: string;
+  uncommitted?: boolean;
+}
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
 export class ThreadWorktrees {
@@ -435,6 +442,84 @@ export class ThreadWorktrees {
       this.core.sessions.close(id);
       await this.core.storage.save(chat);
       return chatSummary(chat);
+    });
+  }
+
+  /**
+   * Moves a project-folder thread into a worktree of its own while its agent
+   * answers, at the agent's asking: from the checkout's commit, with a copy
+   * of its uncommitted edits when `uncommitted`. Unlike `move`, the project
+   * folder keeps its edits, since other threads may be at work there. The
+   * agent runs the project's setup itself, as nothing else may run in the
+   * middle of its answer.
+   */
+  enter(id: string, { branch, uncommitted: copy }: WorktreeRequest) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      if (chat.worktree)
+        throw new Error(
+          chat.worktree.path && !chat.worktree.removedAt
+            ? `This thread already works in its own worktree, ${chat.worktree.path}${chat.worktree.branch ? ` on ${chat.worktree.branch}` : ""}.`
+            : "This thread already has its own worktree.",
+        );
+      if (chat.scope.kind !== "project" || chat.reviewer || chat.thinker)
+        throw new Error("Only repository threads can work in a worktree.");
+      if ((await this.core.projects.inspect(chat.projectId)).plain)
+        throw new Error("Worktrees need a Git repository.");
+      if (chat.activeAgentWorktree)
+        throw new Error(
+          `This thread works in ${chat.activeAgentWorktree.path}, a worktree it made earlier. The user can switch it back to the project folder first.`,
+        );
+      const root = await this.core.projects.root(chat.projectId);
+      const problem = branch && (await newBranchProblem(root, branch));
+      if (problem) throw new Error(problem);
+      const { worktree, copied } = copy
+        ? await copyIntoWorktree(
+            root,
+            this.folder,
+            chat.title,
+            root,
+            id,
+            branch,
+          )
+        : {
+            worktree: await createWorktree(
+              root,
+              this.folder,
+              chat.title,
+              branch ? { named: branch } : undefined,
+            ),
+            copied: 0,
+          };
+      const { included: _, ...made } = worktree;
+      chat.worktree = { ...made, setup: "done" };
+      chat.branch = made.branch;
+      // The agent that asked knows; the thread's other agents hear it next time.
+      const active = this.core.active.get(id);
+      const caller = active?.input ?? chat.lastInput;
+      const asker = caller ? `${sentAgent(caller)}:main` : undefined;
+      const owed = Object.keys(chat.scopeHeard ?? {}).filter(
+        (key) => key !== asker,
+      );
+      if (owed.length)
+        chat.movedIn = {
+          from: root,
+          to: made.path,
+          owed,
+          ...(copy ? { copied: true as const } : { fresh: true as const }),
+        };
+      await this.core.storage.save(chat);
+      await active?.moved?.(made.path);
+      const setup = this.setup.command(chat);
+      const env = await this.setup.env(chat);
+      return {
+        folder: made.path,
+        branch: made.branch,
+        ...(made.from ? { from: made.from } : {}),
+        ...(copy ? { uncommittedFilesCopied: copied } : {}),
+        ...(setup ? { setupCommand: setup } : {}),
+        ...(Object.keys(env).length ? { environment: env } : {}),
+      };
     });
   }
 
