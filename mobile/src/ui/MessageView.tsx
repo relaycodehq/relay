@@ -14,6 +14,7 @@ import {
 } from "../../../shared/worktree-command";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
+import { AsyncQuestions } from "./AsyncQuestions";
 import { localImagePath } from "../../../shared/answer-images";
 import {
   AnswerImage,
@@ -205,6 +206,7 @@ export const MessageView = memo(function MessageView({
           onClose={() => setViewing(undefined)}
         />
       )}
+      {!user && <AsyncQuestions chatId={chatId} message={m} />}
       {!user && (
         <WatchNotes
           chatId={chatId}
