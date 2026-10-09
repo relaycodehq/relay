@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { FileText, Folder } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
 import { LoadFailed, Row, rowStyles } from "../ui/Rows";
@@ -22,9 +22,9 @@ export default function FilesScreen() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [desktop, status, where]);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   const entries = useMemo(() => {
     if (!files) return [];
     const q = query.trim().toLowerCase();

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Check, GitBranch } from "lucide-react-native";
 import type { BranchList, BranchRef } from "../../../shared/branches";
 import { useRemote } from "../remote/RemoteProvider";
@@ -27,9 +27,9 @@ export default function BranchesScreen() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [desktop, status, project]);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   const change = async (kind: "switch" | "create", branch: string) => {
     if (!list) return;
     setBusy(true);

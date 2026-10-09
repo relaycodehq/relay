@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { CommitLog } from "../../../shared/history";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "../ui/Button";
@@ -26,9 +26,9 @@ export default function HistoryScreen() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [desktop, status, where, limit]);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "History" }} />

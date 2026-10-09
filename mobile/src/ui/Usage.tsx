@@ -47,7 +47,7 @@ export function useUsage(provider: AgentProvider) {
   // the provider's usage service.
   const load = useCallback(
     (force = false) => {
-      if (!hasUsage(provider) || status !== "online") return;
+      if (!hasUsage(provider) || status !== "online" || !foreground) return;
       void desktop("providerUsage", provider as "claude" | "codex", force)
         .then((value) => {
           lastUsage.set(key, value);
@@ -55,7 +55,7 @@ export function useUsage(provider: AgentProvider) {
         })
         .catch(() => {});
     },
-    [desktop, status, provider, key],
+    [desktop, status, foreground, provider, key],
   );
   // Not with the phone in a pocket: relay-watch keeps the app alive there.
   useEffect(() => {

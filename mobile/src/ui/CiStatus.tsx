@@ -61,11 +61,11 @@ export function CiStatusButton({
   const now = useNow(60_000);
   const foreground = useForeground();
   const load = useCallback(() => {
-    if (status !== "online") return;
+    if (status !== "online" || !foreground) return;
     desktop("projectCiStatus", projectId, chatId)
       .then(setCi)
       .catch(() => setCi(null));
-  }, [desktop, status, projectId, chatId]);
+  }, [desktop, status, foreground, projectId, chatId]);
   // Now and every minute while this thread is on screen and the app in front.
   useFocusEffect(
     useCallback(() => {

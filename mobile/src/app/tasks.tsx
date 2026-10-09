@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ProjectTask } from "../../../shared/tasks";
 import { useRemote } from "../remote/RemoteProvider";
 import { rowStyles } from "../ui/Rows";
@@ -34,12 +34,12 @@ export default function TasksScreen() {
     }
   }, [desktop, status, project]);
   // Processes come and go on their own; look again every few seconds while open.
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!foreground) return;
     void load();
     const timer = setInterval(() => void load(), 3000);
     return () => clearInterval(timer);
-  }, [load, foreground]);
+  }, [load, foreground]));
   const run = (what: string, job: Promise<void>) =>
     job.then(load).catch((e) => Alert.alert(what, e instanceof Error ? e.message : String(e)));
   return (

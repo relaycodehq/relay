@@ -32,13 +32,25 @@ const sources: Record<NonNullable<ProviderCommand["source"]>, string> = {
 /** The agent's own commands, fetched once a menu first opens for it. */
 export function useProviderCommands(projectId: string, provider: AgentProvider, wanted: boolean) {
   const { desktop, status } = useRemote();
-  const [cache, setCache] = useState<Partial<Record<AgentProvider, ProviderCommand[] | "failed">>>({});
+  const [held, setHeld] = useState(() => ({
+    desktop, status, projectId,
+    cache: {} as Partial<Record<AgentProvider, ProviderCommand[] | "failed">>,
+  }));
+  // A new connection or project has its own commands; a reconnect retries failures.
+  const current = held.desktop === desktop && held.status === status && held.projectId === projectId;
+  if (!current) setHeld({ desktop, status, projectId, cache: {} });
+  const cache = held.cache;
   useEffect(() => {
     // A new Scratchpad thread has no folder until the computer makes one.
     if (!wanted || !projectId || cache[provider] || status !== "online") return;
+    let cancelled = false;
+    const save = (list: ProviderCommand[] | "failed") => {
+      if (!cancelled) setHeld((h) => ({ ...h, cache: { ...h.cache, [provider]: list } }));
+    };
     void desktop("projectCommands", projectId, provider)
-      .then((list) => setCache((c) => ({ ...c, [provider]: list })))
-      .catch(() => setCache((c) => ({ ...c, [provider]: "failed" })));
+      .then(save)
+      .catch(() => save("failed"));
+    return () => { cancelled = true; };
   }, [wanted, provider, projectId, cache, desktop, status]);
   const list = cache[provider];
   return { commands: Array.isArray(list) ? list : [], failed: list === "failed", loading: wanted && !list };
