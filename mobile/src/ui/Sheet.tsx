@@ -220,6 +220,8 @@ export interface MenuItem {
   /** Stable identity when labels can repeat, such as project names. */
   id?: string;
   label: string;
+  /** Cuts the label to this many lines, e.g. a message's first words. */
+  labelLines?: number;
   hint?: string;
   icon?: ReactNode;
   destructive?: boolean;
@@ -269,7 +271,7 @@ export function MenuSheet({
   );
 }
 
-export function MenuRow({ label, hint, icon, destructive, checked, disabled, trailing, onPress }: MenuItem) {
+export function MenuRow({ label, labelLines, hint, icon, destructive, checked, disabled, trailing, onPress }: MenuItem) {
   const t = useTheme();
   return (
     <Pressable
@@ -286,7 +288,10 @@ export function MenuRow({ label, hint, icon, destructive, checked, disabled, tra
     >
       {icon}
       <View style={styles.rowText}>
-        <Text style={[styles.label, { color: destructive ? t.danger : t.text }]}>
+        <Text
+          numberOfLines={labelLines}
+          style={[styles.label, { color: destructive ? t.danger : t.text }]}
+        >
           {label}
         </Text>
         {!!hint && <Text style={[styles.hint, { color: t.muted }]}>{hint}</Text>}

@@ -912,6 +912,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         onClose={() => setSheet(undefined)}
         items={sides.map((m) => ({
           label: preview(withoutMention(m.body), 80) || "Side conversation",
+          labelLines: 1,
           hint: `${m.side ? "Asked beside the conversation" : m.role === "user" ? "Your message" : "An answer"} · ${counts.get(m.id) ?? 0} ${counts.get(m.id) === 1 ? "reply" : "replies"}`,
           onPress: () => openReplies(m),
         }))}
