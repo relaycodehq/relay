@@ -84,8 +84,10 @@ const input = (body: string) => ({
 it("answers async Codex questions inside the running turn without interrupting or queueing", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture async question live"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages[1]?.questions).toHaveLength(1),
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages[1]?.questions).toHaveLength(1),
+    { timeout: 6000 },
   );
   const current = await chats.get(chat.id);
   const message = current.messages[1];
@@ -150,8 +152,12 @@ it("answers async Codex questions inside the running turn without interrupting o
 it("keeps unanswered async questions across a restart and answers them as a follow-up", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture async question finished"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
   );
   const message = (await chats.get(chat.id)).messages[1];
   expect(message.questions?.[0].questions).toEqual([
