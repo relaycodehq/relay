@@ -28,6 +28,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fakeCli } from "./fake-cli.ts";
+import { agentProviders } from "../../shared/agents.ts";
 
 const arg = (name) => {
   const at = process.argv.indexOf(name);
@@ -66,21 +68,27 @@ git(
   "-qm",
   "Start",
 );
-await writeFile(
+const codexPath = await fakeCli(
   join(bin, "codex"),
-  `#!${process.execPath}\n` +
-    (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-  { mode: 0o700 },
+  await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
 );
 
-// Through fakeCli, which answers --version: a silent stand-in loses to the real CLI.
+// Pin every agent: an absent or broken stand-in must never discover a real CLI.
+const agentPaths = Object.fromEntries(
+  agentProviders.map((provider) => [provider, join(bin, `disabled-${provider}`)]),
+);
+agentPaths.codex = codexPath;
 if (claude) {
-  const { fakeCli } = await import("./fake-cli.ts");
-  await fakeCli(
+  agentPaths.claude = await fakeCli(
     join(bin, "claude"),
     await readFile(resolve("tests/fixtures/slow-claude.cjs"), "utf8"),
   );
 }
+await mkdir(join(root, "data"));
+await writeFile(
+  join(root, "data", "state.json"),
+  JSON.stringify({ version: 1, folders: {}, progress: {}, agentPaths }),
+);
 // What Claude Code lists: aliases standing for full ids, no `[1m]` rows.
 const claudeModels = [
   [
