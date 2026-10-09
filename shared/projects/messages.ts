@@ -1,5 +1,5 @@
 import type { AgentProvider } from "../agents";
-import { isImagePath } from "../answer-images";
+import { imageRead } from "../agent-trace";
 import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
 import type { AgentQuestion } from "../agent-modes";
@@ -168,18 +168,7 @@ export function turnImages(message: ChatMessage): string[] {
   const calls = message.trace
     ? message.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
     : (message.activity ?? []);
-  return [
-    ...new Set(
-      calls
-        .filter(
-          (a) =>
-            a.kind === "read" &&
-            a.status === "complete" &&
-            isImagePath(a.label),
-        )
-        .map((a) => a.label),
-    ),
-  ];
+  return [...new Set(calls.flatMap((a) => imageRead(a) ?? []))];
 }
 /** Sequenced messages in the thread's order, then ones not yet sequenced by when they were made. */
 export const threadOrder = (a: ChatMessage, b: ChatMessage) =>

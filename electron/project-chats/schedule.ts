@@ -87,15 +87,16 @@ export class ChatSchedule {
   /** Holds a Send later message until its time; it then goes out like any other. */
   async add(id: string, { sendAt, delivery, ...input }: ProjectChatSend) {
     const at = sendAt!;
-    if (at <= Date.now()) throw new Error("Choose a time in the future.");
-    if (at > Date.now() + 366 * 86_400_000)
-      throw new Error("Schedule a message at most a year ahead.");
     const chat = await this.core.storage.load(id);
     if (
       chat.messages.some((m) => m.id === input.id) ||
       chat.scheduled?.some((s) => s.input.id === input.id)
     )
       return;
+    // A phone may retry after losing the reply, even after the message ran.
+    if (at <= Date.now()) throw new Error("Choose a time in the future.");
+    if (at > Date.now() + 366 * 86_400_000)
+      throw new Error("Schedule a message at most a year ahead.");
     if ((chat.scheduled?.length ?? 0) >= 20)
       throw new Error("This thread already has 20 scheduled messages.");
     if (

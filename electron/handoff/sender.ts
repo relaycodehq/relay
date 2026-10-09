@@ -1,3 +1,4 @@
+import { inputBlocksThread } from "../../shared/thread-state";
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -186,7 +187,7 @@ export class Handoffs {
           ? sentTo.state
           : !remote
             ? "unknown"
-            : remote.waiting
+            : inputBlocksThread(remote)
               ? "waiting"
               : remote.running
                 ? "working"

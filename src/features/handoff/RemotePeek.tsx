@@ -1,19 +1,20 @@
 // What a thread on another computer is up to: its last calls, and what its
 // agent last said or asks. Its strip and its activity card show it on hover.
 // Still, like the subagents card; the strip's own line is what changes.
+import { inputBlocksThread } from "../../../shared/thread-state";
 import type { HandoffView } from "../../../shared/handoff";
 import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
 import { agentName } from "../../../shared/agents";
-import { modelName } from "../../../shared/subagents";
+import { modelName, took } from "../../../shared/subagents";
 import { useNow } from "../../lib/useNow";
-import { activityIcons, took } from "../agent-turn/Subagents";
+import { activityIcons } from "../agent-turn/Subagents";
 import "./handoff.css";
 
 /** The call its agent is on, while it works. */
 export function remoteCall(view: HandoffView): AgentActivity | undefined {
   const remote = view.online ? view.remote : undefined;
-  if (!remote?.running || remote.waiting) return;
+  if (!remote?.running || inputBlocksThread(remote)) return;
   return [...(remote.recent ?? [])]
     .reverse()
     .find((c) => c.status === "running");
@@ -27,7 +28,7 @@ function heading(view: HandoffView) {
   const { remote, online } = view;
   const where = view.sentTo.computer;
   if (!online) return `On ${where}`;
-  if (remote?.waiting) return `Waiting for you on ${where}`;
+  if (remote && inputBlocksThread(remote)) return `Waiting for you on ${where}`;
   if (remote?.running) return `Working on ${where}`;
   if (remote?.failed) return `Stopped on ${where}`;
   return `${where} finished`;
@@ -37,7 +38,7 @@ export function RemotePeek({ view }: { view: HandoffView }) {
   const now = useNow(1000);
   const remote = view.remote!;
   const where = view.sentTo.computer;
-  const live = view.online && remote.running && !remote.waiting;
+  const live = view.online && remote.running && !inputBlocksThread(remote);
   // A Relay from before the peek says whether it works, and nothing more.
   if (remote.calls === undefined)
     return (
@@ -71,7 +72,7 @@ export function RemotePeek({ view }: { view: HandoffView }) {
           Can't reach {where} right now. This is where it was{" "}
           {took(now - remote.updated)} ago.
         </p>
-      ) : remote.waiting ? (
+      ) : inputBlocksThread(remote) ? (
         <p className="remote-peek-quote">
           {remote.question ?? "Its agent is waiting for an answer there."}
         </p>

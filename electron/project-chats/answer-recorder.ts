@@ -145,6 +145,8 @@ export class AnswerRecorder {
     // A reattached session can replay the completed item.
     if (groups.some((group) => group.id === id)) return;
     groups.push({ id, questions });
+    // A new question is unread activity even if someone read the turn earlier.
+    this.chat.updated = Date.now();
     this.changed();
   }
   /**

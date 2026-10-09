@@ -1,6 +1,6 @@
 import { Node } from "@tiptap/core";
 import type { Attrs, DOMOutputSpec } from "@tiptap/pm/model";
-import { quoteLabel, quoteMarkdown } from "../composer-quotes";
+import { quoteLabel, quoteMarkdown } from "../../../../shared/composer-quotes";
 import { fileMarkdown } from "../prompt-text";
 import {
   pastedLines,

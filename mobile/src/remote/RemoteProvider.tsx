@@ -24,7 +24,8 @@ import {
   savePaired,
   saveCredentials,
 } from "./credentials";
-import { cameBack } from "./computer-update";
+import { cameBack, followUpdates } from "./computer-update";
+import { newModelConnection } from "./model-catalogs";
 import {
   dropLooseCopy,
   forgetOffline,
@@ -32,6 +33,11 @@ import {
   saveOverview,
   setOfflineComputer,
 } from "./offline";
+import { readPairingsAtLaunch } from "./launch-pairings";
+import { PendingPairing } from "./pairing";
+import { MissingProjects } from "./missing-projects";
+import { forgetIcons } from "./project-icons";
+import { forgetComputerSeen, reachedComputer } from "./computer-seen";
 import { runningVersion } from "./self-update";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
@@ -40,6 +46,8 @@ type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
 export interface PairedComputer {
   id: string;
   name: string;
+  /** Where the phone reaches it, to tell apart pairings that share a name. */
+  address: string;
 }
 
 interface Remote {
@@ -51,7 +59,7 @@ interface Remote {
   /** The computer's name. */
   name: string;
   overview?: RemoteOverview;
-  refresh(): Promise<void>;
+  refresh(): Promise<RemoteOverview | undefined>;
   call: RemoteClient["call"];
   /** The desktop's own calls on the phone's allowlist. */
   desktop: RemoteClient["desktop"];
@@ -68,6 +76,8 @@ interface Remote {
   pair(link: PairingLink): Promise<void>;
   /** Forgets one computer, the active one by default, and moves on to the next. */
   forget(id?: string): Promise<void>;
+  /** Resolves true once the computer is reached, or false after `timeoutMs` without it. */
+  whenOnline(timeoutMs: number): Promise<boolean>;
   onMessage(chatId: string, listener: (e: MessageEvent) => void): () => void;
   /** Every thread's message events, e.g. to tell of finished answers. */
   onAnyMessage(listener: (e: MessageEvent) => void): () => void;
@@ -99,6 +109,7 @@ const pairingTimeout = 15_000;
 
 export function RemoteProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [client, setClient] = useState<RemoteClient>();
   const [status, setStatus] = useState<RemoteStatus>("offline");
   const [detail, setDetail] = useState<string>();
@@ -111,10 +122,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string>();
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
-  const pairing = useRef<{
-    resolve: () => void;
-    reject: (e: Error) => void;
-  }>(undefined);
+  const [pairing] = useState(() => new PendingPairing<RemoteClient>());
+  const onlineWaiters = useRef(new Set<() => void>());
 
   const connect = useCallback(
     (start: ConstructorParameters<typeof RemoteClient>[0]["start"]) => {
@@ -127,18 +136,17 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setStatus(s);
           setDetail(why);
           if (s === "online") {
+            if (active.current) reachedComputer(active.current);
+            for (const waiter of onlineWaiters.current) waiter();
+            newModelConnection();
             setName(next.name);
-            pairing.current?.resolve();
-            pairing.current = undefined;
+            pairing.online(next);
             // Every (re)connect starts from a fresh overview.
             void next
               .call("overview")
               .then((o) => current() && setOverview(o))
               .catch(() => {});
-          } else if (s === "denied" && pairing.current) {
-            pairing.current.reject(new Error(why ?? "Relay said no."));
-            pairing.current = undefined;
-          }
+          } else if (s === "denied") pairing.denied(next, why);
         },
         onPaired: (credentials) => {
           if (!current()) return;
@@ -166,10 +174,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       previous?.close();
       setName(next.name);
       setClient(next);
+      if ("link" in start) pairing.started(next);
       next.start();
       return next;
     },
-    [],
+    [pairing],
   );
 
   /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -180,34 +189,48 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     ) => {
       // Last seen lists to read while it connects, or can't; never a wait.
       const cached = await loadOverview(id);
+      // Retire in-flight model requests before changing the offline folder.
+      newModelConnection();
       active.current = id;
       setActiveId(id);
       setOfflineComputer(id);
       setOverview(cached);
-      connect(start);
+      const next = connect(start);
+      followUpdates(id, next.call.bind(next));
     },
     [connect],
   );
 
-  useEffect(() => {
-    void loadPaired().then(async ({ paired, computers }) => {
-      dropLooseCopy();
-      setSaved(computers);
-      const start = computers.find((c) => c.key === paired.active);
-      if (start) await attach(start.key, start);
-      setReady(true);
-    });
-  }, [attach]);
+  useEffect(
+    () =>
+      readPairingsAtLaunch(loadPaired, {
+        loaded: async ({ paired, computers }) => {
+          dropLooseCopy();
+          // One paired while a slow read went on stays beside the ones read.
+          setSaved((now) => [
+            ...computers,
+            ...now.filter((c) => !computers.some((k) => k.key === c.key)),
+          ]);
+          setLoaded(true);
+          const start = computers.find((c) => c.key === paired.active);
+          if (start && !active.current) await attach(start.key, start);
+        },
+        ready: () => setReady(true),
+      }),
+    [attach],
+  );
 
-  // Kept to the list and the active one as they change, once read.
+  // Kept to the list and the active one as they change, once read. Before a
+  // read that failed or hasn't finished, only a new pairing is written: an
+  // empty list then would wipe the ones the keystore still holds.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || (!loaded && !saved.length)) return;
     const current = saved.find((c) => c.key === activeId);
     void savePaired(
       { ids: saved.map((c) => c.key), active: current?.key },
       current,
     );
-  }, [ready, saved, activeId]);
+  }, [ready, loaded, saved, activeId]);
 
   useEffect(() => {
     if (overview && active.current) {
@@ -222,6 +245,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       if (live.relayClient === client) {
         client?.close();
         live.relayClient = undefined;
+        followUpdates(undefined);
       }
     },
     [client],
@@ -239,8 +263,23 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     if (!client || client.status !== "online") return;
     const fresh = await client.call("overview");
     // Switched away while it came.
-    if (live.relayClient === client) setOverview(fresh);
+    if (live.relayClient === client) {
+      setOverview(fresh);
+      return fresh;
+    }
   }, [client]);
+
+  // Thread lists come pushed, projects only with the overview: a thread in a
+  // project the phone hasn't heard of (every new Scratchpad thread has a
+  // folder of its own) asks for the overview again.
+  const missingProjects = useMemo(
+    () => status === "online" ? new MissingProjects(refresh) : undefined,
+    [status, refresh],
+  );
+  useEffect(() => () => missingProjects?.stop(), [missingProjects]);
+  useEffect(() => {
+    if (overview) missingProjects?.observe(overview);
+  }, [overview, missingProjects]);
 
   // Stable for a connection, so screens fetch again on reconnects rather than
   // on every thread update.
@@ -263,6 +302,22 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
               new Error("Pair with Relay first."),
             )) as RemoteClient["desktop"]),
     [client],
+  );
+  const whenOnline = useCallback<Remote["whenOnline"]>(
+    (timeoutMs) => {
+      if (live.relayClient?.status === "online") return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const done = (online: boolean) => {
+          clearTimeout(timer);
+          onlineWaiters.current.delete(reached);
+          resolve(online);
+        };
+        const reached = () => done(true);
+        const timer = setTimeout(() => done(false), timeoutMs);
+        onlineWaiters.current.add(reached);
+      });
+    },
+    [],
   );
   const onMessage = useCallback<Remote["onMessage"]>((chatId, listener) => {
     const set = listeners.current.get(chatId) ?? new Set();
@@ -301,27 +356,25 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       outdated: !!overview && (overview.bridge ?? 1) < remoteBridgeVersion,
       behind:
         !!overview?.version && newerVersion(runningVersion, overview.version),
-      computers: saved.map((c) => ({ id: c.key, name: c.name })),
+      computers: saved.map((c) => ({
+        id: c.key,
+        name: c.name,
+        address: `${c.hosts[0] ?? "?"}:${c.port}`,
+      })),
       active: activeId,
       switchTo,
-      pair: (link) =>
-        new Promise<void>((resolve, reject) => {
-          // An unreachable computer never answers; the client would retry forever.
-          const timer = setTimeout(() => {
-            pairing.current = undefined;
-            reject(
-              new Error(
-                `Couldn't reach ${link.name} at ${link.hosts.join(" or ")}:${link.port}. ` +
-                  "Check that Relay is open there and the phone is on the same network, or both on Tailscale.",
-              ),
-            );
-          }, pairingTimeout);
-          pairing.current = {
-            resolve: () => (clearTimeout(timer), resolve()),
-            reject: (e) => (clearTimeout(timer), reject(e)),
-          };
-          void attach(link.key, { link, device: deviceName() });
-        }).catch(async (e) => {
+      pair: (link) => {
+        // An unreachable computer never answers; the client would retry forever.
+        const paired = pairing.wait(
+          pairingTimeout,
+          () =>
+            new Error(
+              `Couldn't reach ${link.name} at ${link.hosts.join(" or ")}:${link.port}. ` +
+                "Check that Relay is open there and the phone is on the same network, or both on Tailscale.",
+            ),
+        );
+        void attach(link.key, { link, device: deviceName() });
+        return paired.catch(async (e) => {
           // A failed pairing leaves the phone as it was.
           const before = saved.find((c) => c.key === activeId);
           if (before) await attach(before.key, before);
@@ -332,9 +385,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             live.relayClient?.close();
             live.relayClient = undefined;
             setClient(undefined);
+            followUpdates(undefined);
           }
           throw e;
-        }),
+        });
+      },
       forget: async (id = activeId) => {
         if (!id) return;
         const rest = saved.filter((c) => c.key !== id);
@@ -349,11 +404,15 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             setClient(undefined);
             setOverview(undefined);
             setStatus("offline");
+            followUpdates(undefined);
           }
         }
         forgetOffline(id);
+        forgetComputerSeen(id);
+        void forgetIcons(id);
         await clearCredentials(id);
       },
+      whenOnline,
       onMessage,
       onAnyMessage,
     }),
@@ -371,8 +430,10 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       switchTo,
       call,
       desktop,
+      whenOnline,
       onMessage,
       onAnyMessage,
+      pairing,
     ],
   );
 

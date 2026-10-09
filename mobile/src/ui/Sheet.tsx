@@ -23,8 +23,10 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { type, useTheme } from "./theme";
+
+const settle = { damping: 40, stiffness: 400 };
 
 /**
  * A sheet from the bottom of the screen, for pickers, menus and small forms.
@@ -43,17 +45,28 @@ export function Sheet({
   open: boolean;
   title?: string;
   onClose: () => void;
-  /** iOS: the sheet has finished animating away. */
+  /** The sheet has finished animating away and released its modal. */
   onDismiss?: () => void;
   children: ReactNode;
   scroll?: boolean;
 }) {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   // Stays mounted while it slides away, after `open` has gone false.
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
+  const dismissed = useRef(onDismiss);
+  useEffect(() => { dismissed.current = onDismiss; }, [onDismiss]);
+  const wasShown = useRef(open);
+  useEffect(() => {
+    const closed = wasShown.current && !shown;
+    wasShown.current = shown;
+    // React Native's native onDismiss is iOS-only. On Android, wait for
+    // the invisible Modal to commit before focusing the underlying input.
+    if (!closed || Platform.OS === "ios") return;
+    const frame = requestAnimationFrame(() => dismissed.current?.());
+    return () => cancelAnimationFrame(frame);
+  }, [shown]);
   const offscreen = Dimensions.get("window").height;
   const y = useSharedValue(offscreen);
   const height = useSharedValue(offscreen);
@@ -64,6 +77,19 @@ export function Sheet({
   const anchor = useSharedValue(0);
   const list = useAnimatedRef<Animated.ScrollView>();
   const hide = useCallback(() => setShown(false), []);
+  // Dragged past closing, it asks; a parent that won't close yet (busy) gets
+  // the sheet back where it was, not left where the finger let go.
+  const [dragClosed, setDragClosed] = useState(0);
+  const answered = useRef(0);
+  const dragClose = useCallback(() => {
+    onClose();
+    setDragClosed((n) => n + 1);
+  }, [onClose]);
+  useEffect(() => {
+    if (dragClosed === answered.current) return;
+    answered.current = dragClosed;
+    if (open) y.set(withSpring(0, settle));
+  }, [dragClosed, open, y]);
 
   useEffect(() => {
     if (!open && shown)
@@ -109,10 +135,10 @@ export function Sheet({
           scrollTo(list, 0, 0, false);
         })
         .onEnd((e) => {
-          if (y.get() > height.get() / 3 || (y.get() > 0 && e.velocityY > 900)) scheduleOnRN(onClose);
-          else y.set(withSpring(0, { damping: 40, stiffness: 400 }));
+          if (y.get() > height.get() / 3 || (y.get() > 0 && e.velocityY > 900)) scheduleOnRN(dragClose);
+          else y.set(withSpring(0, settle));
         }),
-    [native, fromGrip, gripHeight, anchor, y, scrollY, list, height, onClose],
+    [native, fromGrip, gripHeight, anchor, y, scrollY, list, height, dragClose],
   );
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.set(e.contentOffset.y);
@@ -133,60 +159,76 @@ export function Sheet({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <GestureHandlerRootView style={styles.fill}>
-        <KeyboardAvoidingView
-          style={styles.end}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <Animated.View style={[styles.backdrop, backdropStyle]}>
-            <Pressable style={styles.fill} accessibilityLabel="Close" onPress={onClose} />
-          </Animated.View>
-          <GestureDetector gesture={pan}>
-            <Animated.View
-              onLayout={(e) => height.set(e.nativeEvent.layout.height)}
-              style={[
-                styles.sheet,
-                { backgroundColor: t.raised, paddingBottom: 12 + insets.bottom },
-                sheetStyle,
-              ]}
-            >
-              <View style={styles.handle} onLayout={(e) => gripHeight.set(e.nativeEvent.layout.height)}>
-                <View style={[styles.grip, { backgroundColor: t.border }]} />
-                {title && (
-                  <Text style={[styles.title, { color: t.text }]}>{title}</Text>
-                )}
-              </View>
-              {scroll ? (
-                <GestureDetector gesture={native}>
-                  <Animated.ScrollView
-                    ref={list}
-                    keyboardShouldPersistTaps="handled"
-                    onScroll={onScroll}
-                    scrollEventThrottle={16}
-                    overScrollMode="never"
-                    bounces={false}
-                  >
-                    {children}
-                  </Animated.ScrollView>
-                </GestureDetector>
-              ) : (
-                children
-              )}
+      {/* Its own provider: the modal draws under the system bars, the screen may not. */}
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={styles.fill}>
+          <KeyboardAvoidingView
+            style={styles.end}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <Animated.View style={[styles.backdrop, backdropStyle]}>
+              <Pressable style={styles.fill} accessibilityLabel="Close" onPress={onClose} />
             </Animated.View>
-          </GestureDetector>
-        </KeyboardAvoidingView>
-      </GestureHandlerRootView>
+            <GestureDetector gesture={pan}>
+              <Animated.View
+                onLayout={(e) => height.set(e.nativeEvent.layout.height)}
+                style={[
+                  styles.sheet,
+                  { backgroundColor: t.raised },
+                  sheetStyle,
+                ]}
+              >
+                <View style={styles.handle} onLayout={(e) => gripHeight.set(e.nativeEvent.layout.height)}>
+                  <View style={[styles.grip, { backgroundColor: t.border }]} />
+                  {title && (
+                    <Text style={[styles.title, { color: t.text }]}>{title}</Text>
+                  )}
+                </View>
+                {scroll ? (
+                  <GestureDetector gesture={native}>
+                    <Animated.ScrollView
+                      ref={list}
+                      keyboardShouldPersistTaps="handled"
+                      onScroll={onScroll}
+                      scrollEventThrottle={16}
+                      overScrollMode="never"
+                      bounces={false}
+                    >
+                      {children}
+                    </Animated.ScrollView>
+                  </GestureDetector>
+                ) : (
+                  children
+                )}
+                <Foot />
+              </Animated.View>
+            </GestureDetector>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
 
+/** Room under the content for the navigation bar, as measured inside the modal. */
+function Foot() {
+  const insets = useSafeAreaInsets();
+  return <View style={{ height: 12 + insets.bottom }} />;
+}
+
 export interface MenuItem {
+  /** Stable identity when labels can repeat, such as project names. */
+  id?: string;
   label: string;
+  /** Cuts the label to this many lines, e.g. a message's first words. */
+  labelLines?: number;
   hint?: string;
   icon?: ReactNode;
   destructive?: boolean;
   checked?: boolean;
   disabled?: boolean;
+  /** A second action at the row's end, such as forgetting what the row stands for. */
+  trailing?: ReactNode;
   onPress: () => void;
 }
 
@@ -196,30 +238,32 @@ export function MenuSheet({
   title,
   items,
   onClose,
+  onDismiss,
 }: {
   open: boolean;
   title?: string;
   items: MenuItem[];
   onClose: () => void;
+  onDismiss?: () => void;
 }) {
-  // iOS won't present a picker or dialog while this sheet is still leaving,
-  // so the picked action waits for it to be gone.
+  // The action and any focus restoration wait until the modal is gone.
   const picked = useRef<() => void>(undefined);
   const run = () => {
     const action = picked.current;
     picked.current = undefined;
     action?.();
+    onDismiss?.();
   };
   return (
     <Sheet open={open} title={title} onClose={onClose} onDismiss={run}>
-      {items.map((item) => (
+      {items.map((item, i) => (
         <MenuRow
-          key={item.label}
+          // Labels repeat, e.g. side conversations opening with the same line.
+          key={item.id ?? i}
           {...item}
           onPress={() => {
             picked.current = item.onPress;
             onClose();
-            if (Platform.OS !== "ios") run();
           }}
         />
       ))}
@@ -227,7 +271,7 @@ export function MenuSheet({
   );
 }
 
-export function MenuRow({ label, hint, icon, destructive, checked, disabled, onPress }: MenuItem) {
+export function MenuRow({ label, labelLines, hint, icon, destructive, checked, disabled, trailing, onPress }: MenuItem) {
   const t = useTheme();
   return (
     <Pressable
@@ -244,11 +288,15 @@ export function MenuRow({ label, hint, icon, destructive, checked, disabled, onP
     >
       {icon}
       <View style={styles.rowText}>
-        <Text style={[styles.label, { color: destructive ? t.danger : t.text }]}>
+        <Text
+          numberOfLines={labelLines}
+          style={[styles.label, { color: destructive ? t.danger : t.text }]}
+        >
           {label}
         </Text>
         {!!hint && <Text style={[styles.hint, { color: t.muted }]}>{hint}</Text>}
       </View>
+      {trailing}
     </Pressable>
   );
 }

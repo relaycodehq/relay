@@ -2,11 +2,23 @@
 // fixture agent as `codex`, phone access on. Prints the pairing link as JSON
 // and runs until interrupted. Build first (vite build + build-electron).
 //
-//   node tests/fixtures/phone-desktop.mjs [--host 10.0.2.2] [--port 47900] [--seed]
+//   node tests/fixtures/phone-desktop.mjs [--host 10.0.2.2] [--port 47900] [--seed] [--claude]
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
-// --images starts one whose answer embeds two screenshots, a missing file and a web image.
+// --projects N adds N more git projects, for screens that list them.
+// --claude puts a stand-in Claude on the PATH, listing models as the CLI does,
+// and starts a thread last sent on "opus[1m]".
+// --images starts one whose answer embeds two screenshots, a missing file and a web image,
+// and one whose agent looks at both screenshots on its way.
+// --subagents puts tests/fixtures/subagent-claude.cjs in as `claude` instead and starts a
+// thread where it sends three agents off, eight times slower than the spec's;
+// each message there sends three more.
+// --family N starts a lead thread that starts N threads of its own through
+// Relay's start_threads tool, two of them still streaming, so the phone lists
+// a started family under its lead (at most 6, the tool's limit).
+// --asks starts threads that end on what the phone has to tell: an open
+// question, a provider error envelope, a lost login and a page shown with show_html.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -18,6 +30,7 @@ import { execFileSync } from "node:child_process";
 import {
   mkdtemp,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -26,6 +39,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fakeCli } from "./fake-cli.ts";
+import { agentProviders } from "../../shared/agents.ts";
 
 const arg = (name) => {
   const at = process.argv.indexOf(name);
@@ -34,10 +49,21 @@ const arg = (name) => {
 const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
+const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
+const subagents = process.argv.includes("--subagents");
+const asks = process.argv.includes("--asks");
+const family = Math.min(6, Number(arg("--family") ?? 0));
+if (claude && subagents) {
+  console.error(
+    "--claude and --subagents each bring their own `claude`; pick one.",
+  );
+  process.exit(2);
+}
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
+const extraProjects = Number(arg("--projects") ?? 0);
 
 const root = await realpath(
   await mkdtemp(join(tmpdir(), "relay-phone-desktop-")),
@@ -63,12 +89,58 @@ git(
   "-qm",
   "Start",
 );
-await writeFile(
+const codexPath = await fakeCli(
   join(bin, "codex"),
-  `#!${process.execPath}\n` +
-    (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-  { mode: 0o700 },
+  await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
 );
+// Pin every agent: an absent or broken stand-in must never discover a real CLI,
+// and a linked path that's missing fails instead of searching PATH.
+const agentPaths = Object.fromEntries(
+  agentProviders.map((provider) => [
+    provider,
+    join(bin, `disabled-${provider}`),
+  ]),
+);
+agentPaths.codex = codexPath;
+if (claude || subagents) {
+  agentPaths.claude = await fakeCli(
+    join(bin, "claude"),
+    await readFile(
+      resolve(
+        `tests/fixtures/${subagents ? "subagent-claude" : "slow-claude"}.cjs`,
+      ),
+      "utf8",
+    ),
+  );
+}
+await mkdir(join(root, "data"));
+await writeFile(
+  join(root, "data", "state.json"),
+  JSON.stringify({ version: 1, folders: {}, progress: {}, agentPaths }),
+);
+// What Claude Code lists: aliases standing for full ids, no `[1m]` rows.
+const claudeModels = [
+  [
+    "opus",
+    "Opus 5.5",
+    "claude-opus-5-5",
+    "For complex work and everyday tasks",
+  ],
+  [
+    "sonnet",
+    "Sonnet 5.5",
+    "claude-sonnet-5-5",
+    "Most efficient for simpler tasks",
+  ],
+  ["haiku", "Haiku 5.5", "claude-haiku-5-5", "Fastest for quick answers"],
+].map(([value, displayName, resolvedModel, description]) => ({
+  value,
+  displayName,
+  resolvedModel,
+  description,
+  supportsEffort: true,
+  supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+}));
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
 if (modelDir) {
@@ -110,15 +182,32 @@ const app = await electron.launch({
     // reaches it as 10.0.2.2.
     RELAY_REMOTE_TAILNET: "127.0.0.1",
     RELAY_AGENT_TURN_MS: process.env.RELAY_AGENT_TURN_MS ?? "1500",
+    SLOW_CLAUDE_MS: "20",
+    SLOW_CLAUDE_MODELS: JSON.stringify(claudeModels),
+    ...(subagents ? { RELAY_FIXTURE_AGENTS_SLOWER: "8" } : {}),
   },
 });
-const stop = async () => {
-  await app.close().catch(() => {});
+// The agent host outlives the app on purpose, and app.close() can hang, so
+// both are put down here or they keep their stand-ins running for good.
+const stop = async (code = 0) => {
+  await Promise.race([
+    app.close().catch(() => {}),
+    new Promise((r) => setTimeout(r, 10_000)),
+  ]);
+  app.process().kill("SIGKILL");
+  for (const name of await readdir(join(root, "data", "agent-host")).catch(
+    () => [],
+  )) {
+    const pid = /^host-(\d+)\.json$/.exec(name)?.[1];
+    try {
+      if (pid) process.kill(Number(pid), "SIGTERM");
+    } catch {}
+  }
   await rm(root, { recursive: true, force: true });
-  process.exit(0);
+  process.exit(code);
 };
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
 
 if (name || version)
   await app.evaluate(
@@ -154,43 +243,146 @@ if (images) {
     await page.screenshot({ clip: { x: 0, y: 0, width: 280, height: 700 } }),
   );
 }
-const pairing = await page.evaluate(
-  async ({ seed, images }) => {
-    const project = await window.relay.addProject();
-    if (seed || images) {
-      const settings = await window.relay.aiSettings();
-      const start = async (body) => {
+const pairing = await page
+  .evaluate(
+    async ({ seed, images, repo, claude, subagents, asks, family }) => {
+      const project = await window.relay.addProject();
+      if (claude) {
+        // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
         const chat = await window.relay.createProjectChat(project.id, {
           kind: "project",
         });
         await window.relay.sendProjectChat(chat.id, {
           id: crypto.randomUUID(),
-          body: "@codex " + body,
-          provider: "codex",
-          choice: settings.questions,
+          body: "@claude Count to twenty",
+          provider: "claude",
+          choice: { model: "opus[1m]", reasoningEffort: "", fast: false },
           runtimeMode: "full-access",
           interactionMode: "default",
         });
-        return chat.id;
-      };
-      if (images)
-        await start(
-          "fixture echo: Before ![](docs/missing.png) after:\n\n" +
-            "![the welcome screen](docs/shot.png)\n\n" +
-            "![the sidebar](docs/sidebar.png)\n\n" +
-            "And a web one, ![logo](https://example.com/logo.png), stays a link.",
-        );
-      if (seed) {
-        await start("fixture edit files in the cache");
-        await new Promise((r) => setTimeout(r, 2500));
-        await start("fixture stream long answer about the cache guard");
       }
-    }
-    await window.relay.setPhoneRemote(true);
-    return window.relay.phonePairing();
-  },
-  { seed, images },
-);
+      if (seed || images || subagents || asks || family) {
+        const settings = await window.relay.aiSettings();
+        const start = async (body, provider = "codex") => {
+          const chat = await window.relay.createProjectChat(project.id, {
+            kind: "project",
+          });
+          await window.relay.sendProjectChat(chat.id, {
+            id: crypto.randomUUID(),
+            body: `@${provider} ${body}`,
+            provider,
+            choice: settings.questions,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+          });
+          return chat.id;
+        };
+        if (images)
+          await start(
+            "fixture echo: Before ![](docs/missing.png) after:\n\n" +
+              "![the welcome screen](docs/shot.png)\n\n" +
+              "![the sidebar](docs/sidebar.png)\n\n" +
+              "And a web one, ![logo](https://example.com/logo.png), stays a link.",
+          );
+        if (images)
+          await start(
+            `fixture view images ${repo}/docs/shot.png ${repo}/docs/sidebar.png\n\n` +
+              "fixture echo: I looked at the welcome screen and the sidebar.",
+          );
+        if (subagents) await start("Fan out", "claude");
+        if (asks) {
+          const page = (label, color) =>
+            `<div style="padding:16px;border-radius:12px;background:${color}">${label} card</div>`;
+          for (const [title, body] of [
+            [
+              "Shows a page",
+              "fixture relay show_html " +
+                JSON.stringify({
+                  title: "Card density",
+                  variants: [
+                    { label: "Compact", html: page("Compact", "#334") },
+                    { label: "Roomy", html: page("Roomy", "#343") },
+                  ],
+                }),
+            ],
+            ["Signed out", "fixture codex signed out"],
+            ["Fails with an envelope", "fixture error envelope"],
+            ["Asks a question", "fixture async question finished"],
+          ]) {
+            await window.relay.renameProjectChat(await start(body), title);
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+        if (family) {
+          const threads = Array.from({ length: family }, (_, i) => ({
+            prompt:
+              i < 2
+                ? `fixture stream long answer, started thread ${i + 1}`
+                : `fixture echo: Started thread ${i + 1} is done.`,
+          }));
+          await window.relay.renameProjectChat(
+            await start(
+              `fixture relay start_threads ${JSON.stringify({ threads })}`,
+            ),
+            "Mobile app polish pass",
+          );
+        }
+        if (seed) {
+          await start("fixture edit files in the cache");
+          await new Promise((r) => setTimeout(r, 2500));
+          await start("fixture stream long answer about the cache guard");
+        }
+      }
+      await window.relay.setPhoneRemote(true);
+      return window.relay.phonePairing();
+    },
+    { seed, images, repo, claude, subagents, asks, family },
+  )
+  .catch(async (e) => {
+    console.error(e);
+    await stop(1);
+  });
+const extraNames = [
+  "api",
+  "billing",
+  "docs-site",
+  "infra",
+  "ios-app",
+  "landing",
+  "mailer",
+  "metrics",
+  "search",
+  "shop",
+  "tools",
+  "web",
+];
+for (let i = 0; i < extraProjects; i++) {
+  const folder = join(
+    root,
+    extraNames[i % extraNames.length] + (i < extraNames.length ? "" : `-${i}`),
+  );
+  execFileSync("git", ["init", "-q", "-b", "main", folder]);
+  execFileSync("git", [
+    "-C",
+    folder,
+    "-c",
+    "user.name=Relay",
+    "-c",
+    "user.email=relay@example.com",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "Start",
+  ]);
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [folder],
+    });
+  }, folder);
+  await page.evaluate(() => window.relay.addProject());
+}
 let url = pairing.url;
 if (host) {
   const u = new URL(url);

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { maxRemoteHistory, remoteHistory } from "../../../shared/remote";
 import { useRemote } from "./RemoteProvider";
 import { loadThread, saveThread } from "./offline";
+import { oneAtATime } from "./one-at-a-time";
+import { stamp } from "./outbox-state";
 import {
   applyMessage,
   applyPatch,
@@ -18,8 +20,16 @@ export function useThread(id: string) {
   const [error, setError] = useState<Error>();
   const current = useRef<Thread | undefined>(undefined);
   current.current = thread;
-  const loading = useRef<Promise<void> | undefined>(undefined);
-  const again = useRef(false);
+  const life = useRef({ active: true });
+  useEffect(() => {
+    const scope = { active: true };
+    life.current = scope;
+    return () => { scope.active = false; };
+  }, [remote.call, id]);
+  // One fetch at a time; a request during one runs once more after it.
+  const [oneFetch] = useState(oneAtATime);
+  // When the fetch the thread last came from started, against the outbox's sends.
+  const [fetched, setFetched] = useState(0);
   // How many of the latest messages to hold; "Load earlier" asks for a page more.
   const [history, setHistory] = useState(remoteHistory);
 
@@ -39,49 +49,46 @@ export function useThread(id: string) {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, remote.active]);
 
-  const load = useCallback(async () => {
-    // One fetch at a time; a request during one runs once more after it.
-    if (loading.current) {
-      again.current = true;
-      return loading.current;
-    }
-    const run = async () => {
-      try {
-        await cacheRead.current;
-        const patch = await remote.call(
-          "chat",
-          id,
-          knownOf(current.current),
-          history,
-        );
-        let next: Thread;
+  const load = useCallback(
+    () => {
+      const scope = life.current;
+      return oneFetch(async () => {
         try {
-          next = applyPatch(current.current, patch);
-        } catch (e) {
-          if (!(e instanceof MissingMessage)) throw e;
-          next = applyPatch(
-            undefined,
-            await remote.call("chat", id, undefined, history),
+          await cacheRead.current;
+          if (!scope.active) return;
+          const started = stamp();
+          const patch = await remote.call(
+            "chat",
+            id,
+            knownOf(current.current),
+            history,
           );
+          if (!scope.active) return;
+          let next: Thread;
+          try {
+            next = applyPatch(current.current, patch);
+          } catch (e) {
+            if (!(e instanceof MissingMessage)) throw e;
+            next = applyPatch(
+              undefined,
+              await remote.call("chat", id, undefined, history),
+            );
+          }
+          if (!scope.active) return;
+          setThread((held) => keepNewer(next, held));
+          setFetched(started);
+          saveThread(id, next);
+          setError(undefined);
+        } catch (e) {
+          if (!scope.active) return;
+          setError(e instanceof Error ? e : new Error(String(e)));
         }
-        setThread((held) => keepNewer(next, held));
-        saveThread(id, next);
-        setError(undefined);
-      } catch (e) {
-        setError(e instanceof Error ? e : new Error(String(e)));
-      }
-    };
-    loading.current = (async () => {
-      do {
-        again.current = false;
-        await run();
-      } while (again.current);
-      loading.current = undefined;
-    })();
-    return loading.current;
-  }, [remote.call, id, history]);
+      });
+    },
+    [oneFetch, remote.call, id, history],
+  );
 
   // Loads on open, and after every reconnect.
   useEffect(() => {
@@ -100,7 +107,7 @@ export function useThread(id: string) {
   // Running, waiting and queue changes arrive as thread summaries.
   const summary = remote.overview?.chats.find((c) => c.id === id);
   const signature = summary
-    ? `${summary.running}:${summary.waiting}:${summary.updated}:${summary.title}`
+    ? `${summary.running}:${summary.waiting}:${summary.updated}:${summary.title}:${summary.queueMark}`
     : "";
   useEffect(() => {
     if (signature && current.current) void load();
@@ -113,6 +120,7 @@ export function useThread(id: string) {
 
   return {
     thread,
+    fetched,
     error,
     reload: load,
     summary,

@@ -3,6 +3,7 @@
 // started thread is an ordinary thread that remembers who started it. Any
 // thread may read any other; a lead drives only its own, and a started thread
 // only reads, so nothing starts threads of threads.
+import { inputBlocksThread } from "../../shared/thread-state";
 import { randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 import {
@@ -97,7 +98,7 @@ export function startedStatus(
   summary: ChatSummary,
   chat: ProjectChat,
 ): StartedStatus {
-  if (summary.waiting) return "needs-input";
+  if (inputBlocksThread(summary)) return "needs-input";
   if (summary.running || summary.pending?.length) return "working";
   if (chat.queue?.length && !chat.queuePaused) return "working";
   const last = answers(chat).at(-1);
@@ -621,7 +622,16 @@ export class StartedThreads {
       listed.map(async (summary) => {
         const chat = await this.chats.get(summary.id);
         const last = answers(chat).at(-1);
-        const asks = chat.requests?.map((r) => r.title) ?? [];
+        const asks = [
+          ...(chat.requests?.map((r) => r.title) ?? []),
+          ...chat.messages.flatMap((m) =>
+            (m.questions ?? []).flatMap((group) =>
+              !group.answers && !group.dismissed
+                ? group.questions.map((q) => q.question)
+                : [],
+            ),
+          ),
+        ];
         return {
           id: summary.id,
           title: summary.title,
@@ -667,7 +677,7 @@ export class StartedThreads {
         title: c.title,
         project: p.scratch ? "Scratchpad" : p.name,
         ...(c.id === lead.id ? { you: true } : {}),
-        status: c.waiting
+        status: inputBlocksThread(c)
           ? "needs-input"
           : c.running
             ? "working"

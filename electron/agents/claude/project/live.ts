@@ -31,9 +31,15 @@ export function claudeAgentRun(
 /** Stops one agent, foreground or background; Claude hears it was stopped. */
 export async function stopClaudeAgent(key: string, id: string) {
   const session = sessions.get(key);
-  const taskId = session?.agents.taskId(id);
-  if (!session || !taskId || session.frames.ended)
+  if (!session || session.frames.ended)
     throw new Error("That agent has already finished.");
+  const taskId = session.agents.taskId(id);
+  if (!taskId)
+    throw new Error(
+      session.agents.detail(id)?.status === "running"
+        ? "That agent isn't ready to stop yet. Try again shortly."
+        : "That agent has already finished.",
+    );
   await session.stream.stopTask(taskId);
 }
 /**

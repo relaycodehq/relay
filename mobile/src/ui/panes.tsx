@@ -54,8 +54,13 @@ export function useOrientationPolicy() {
 export const sidebarWidth = (window: number) =>
   Math.round(Math.min(360, Math.max(280, window * 0.36)));
 
-/** Opens something from the sidebar as the whole pane, instead of on top of what's there. */
-export function openInPane(href: Href) {
+/**
+ * Opens something from the sidebar as the whole pane, instead of on top of
+ * what's there. What's already `showing` stays as it is: opened again, it
+ * would leave the pane and come back.
+ */
+export function openInPane(href: Href, showing?: string) {
+  if (href === showing) return;
   if (router.canDismiss()) router.dismissAll();
   router.push(href);
 }

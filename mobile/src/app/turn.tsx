@@ -14,6 +14,7 @@ import { Redo2, Undo2 } from "lucide-react-native";
 import type { TurnFileChange, WorktreeStatus } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
+import { deliver } from "../remote/outbox";
 import { composeSend, desktopNewThreadSettings } from "../../../shared/remote-compose";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
@@ -291,8 +292,9 @@ export default function TurnScreen() {
           onClose={() => setMerging(false)}
           onMerged={loadStatus}
           onAskAgent={async (text) => {
-            await desktop(
-              "sendProjectChat",
+            deliver(
+              desktop,
+              remote.active ?? "",
               chat,
               composeSend(
                 thread.settings ??

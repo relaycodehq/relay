@@ -140,6 +140,8 @@ export interface HandoffRemoteStatus {
   title: string;
   running: boolean;
   waiting: boolean;
+  asking?: true;
+  blocked?: true;
   settled: boolean;
   updated: number;
   /** The start of the latest answer written there, for the strip. */

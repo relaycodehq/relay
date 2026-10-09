@@ -34,10 +34,15 @@ describe("threadNews", () => {
     const before = list(
       chat("a", { running: true }),
       chat("b", { running: true }),
+      chat("c", { running: true }),
     );
     const news = threadNews(
       before,
-      [chat("a", { updated: 20 }), chat("b", { updated: 20 })],
+      [
+        chat("a", { updated: 20 }),
+        chat("b", { updated: 20 }),
+        chat("c", { updated: 20 }),
+      ],
       new Map([
         [
           "a",
@@ -46,6 +51,14 @@ describe("threadNews", () => {
           }),
         ],
         ["b", answer({ status: "failed", error: "Claude's login expired." })],
+        [
+          "c",
+          answer({
+            status: "failed",
+            error:
+              'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+          }),
+        ],
       ]),
     );
     expect(news).toEqual([
@@ -53,7 +66,7 @@ describe("threadNews", () => {
         chatId: "a",
         kind: "finished",
         title: "Thread a",
-        body: "Done Fixed the race in turn-run.ts.",
+        body: "Done: Fixed the race in turn-run.ts.",
       },
       {
         chatId: "b",
@@ -61,13 +74,15 @@ describe("threadNews", () => {
         title: "Thread b",
         body: "Claude's login expired.",
       },
+      // The provider's words, not the envelope around them.
+      { chatId: "c", kind: "failed", title: "Thread c", body: "Overloaded" },
     ]);
   });
 
   it("tells of a question at once, even while the agent still runs", () => {
     const news = threadNews(
       list(chat("a", { running: true })),
-      [chat("a", { running: true, waiting: true })],
+      [chat("a", { running: true, waiting: true, asking: true })],
       new Map(),
     );
     expect(news).toEqual([
@@ -117,4 +132,33 @@ describe("preview", () => {
     );
     expect(preview("word ".repeat(100))).toHaveLength(240);
   });
+
+  it("runs a heading into its text with a colon, and cuts where asked", () => {
+    expect(preview("## Proposed plan\n\n1. Add **retries** to `sync`")).toBe(
+      "Proposed plan: Add retries to sync",
+    );
+    expect(preview("# Done?\nYes.")).toBe("Done? Yes.");
+    expect(preview("## Summary")).toBe("Summary");
+    expect(preview("word ".repeat(100), 80)).toHaveLength(80);
+  });
+});
+
+it("still reports a failed turn while an earlier async question remains open", () => {
+  expect(
+    threadNews(
+      list(chat("a", { running: true, waiting: true, asking: true })),
+      [chat("a", { waiting: true, asking: true, updated: 20 })],
+      new Map([
+        [
+          "a",
+          answer({
+            status: "failed",
+            error: 'API Error: 529 {"error":{"message":"Overloaded"}}',
+          }),
+        ],
+      ]),
+    ),
+  ).toEqual([
+    { chatId: "a", kind: "failed", title: "Thread a", body: "Overloaded" },
+  ]);
 });

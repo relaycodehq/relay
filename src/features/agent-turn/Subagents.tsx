@@ -19,7 +19,12 @@ import {
 } from "lucide-react";
 import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
-import { modelName, type SubagentRun } from "../../../shared/subagents";
+import {
+  modelName,
+  subagentNow,
+  took,
+  type SubagentRun,
+} from "../../../shared/subagents";
 import "./subagents.css";
 import "../changes/branch-picker.css";
 
@@ -33,22 +38,6 @@ export const activityIcons = {
   agent: Bot,
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
-
-/** "26s", "4m 05s", "1h 03m". */
-export function took(ms: number) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
-}
-
-/** "Explore agent", or just "Agent" for the default kind. */
-export function agentKind(run: SubagentRun) {
-  return run.type && run.type !== "general-purpose"
-    ? `${run.type} agent`
-    : "Agent";
-}
 
 /**
  * Still, even while it works: the turn's running row is what moves, and a
@@ -69,19 +58,6 @@ export function SubagentStatus({ run }: { run: SubagentRun }) {
       )}
     </span>
   );
-}
-
-/** What it's on now, from its ~30s summary, or how it ended. */
-function nowLine(run: SubagentRun, display: (text: string) => string) {
-  if (run.status === "running") {
-    const current = [...run.recent]
-      .reverse()
-      .find((c) => c.status === "running");
-    return run.summary ?? (current ? display(liveLabel(current)) : "Starting…");
-  }
-  const outcome = run.outcome?.split(/(?<=\.)\s/)[0];
-  if (run.status === "completed") return outcome ?? "Done";
-  return run.status === "failed" ? "Failed" : "Stopped";
 }
 
 export function SubagentsIndicator({
@@ -196,7 +172,7 @@ function Peek({
           </span>
         </div>
         {run.brief && <p className="subagents-brief">{run.brief}</p>}
-        <p className="subagents-now">{nowLine(run, display)}</p>
+        <p className="subagents-now">{subagentNow(run, display)}</p>
         <div className="subagents-calls">
           {run.recent.map((call) => {
             const Icon = activityIcons[call.kind];
