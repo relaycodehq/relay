@@ -187,12 +187,22 @@ function nextDay(day: number) {
   return d.getTime();
 }
 
-/** "claude-opus-5-5-20260901[1m]" reads "Opus 5.5"; other models keep their id. */
+const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+/**
+ * "claude-opus-5-5-20260901[1m]" reads "Opus 5.5", "gpt-6.1-sol" reads
+ * "GPT-6.1 Sol"; other models keep their id.
+ */
 export function modelLabel(model: string) {
   const bare = model.replace(/\[.*\]$/, "").replace(/-\d{8}$/, "");
   const claude = /^claude-([a-z]+)-(\d+)-(\d+)$/.exec(bare);
-  if (claude)
-    return `${claude[1][0].toUpperCase()}${claude[1].slice(1)} ${claude[2]}.${claude[3]}`;
+  if (claude) return `${cap(claude[1])} ${claude[2]}.${claude[3]}`;
+  const gpt = /^gpt-(\d+(?:\.\d+)?)((?:-[a-z]+)*)$/.exec(bare);
+  if (gpt)
+    return [
+      `GPT-${gpt[1]}`,
+      ...gpt[2].split("-").filter(Boolean).map(cap),
+    ].join(" ");
   return bare;
 }
 

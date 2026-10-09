@@ -172,6 +172,14 @@ describe("modelLabel", () => {
     expect(modelLabel("claude-opus-5-5-20260901[1m]")).toBe("Opus 5.5");
     expect(modelLabel("claude-sonnet-5-5")).toBe("Sonnet 5.5");
     expect(modelLabel("claude-fable-5-1")).toBe("Fable 5.1");
-    expect(modelLabel("gpt-5.1-codex")).toBe("gpt-5.1-codex");
+  });
+
+  it("names GPT models by version and name", () => {
+    expect(modelLabel("gpt-6.1-sol")).toBe("GPT-6.1 Sol");
+    expect(modelLabel("gpt-6-luna")).toBe("GPT-6 Luna");
+    expect(modelLabel("gpt-5.5")).toBe("GPT-5.5");
+    expect(modelLabel("opencode/deepseek-v4.1-flash")).toBe(
+      "opencode/deepseek-v4.1-flash",
+    );
   });
 });
