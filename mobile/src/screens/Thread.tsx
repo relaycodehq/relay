@@ -67,9 +67,16 @@ import {
 } from "../ui/ThreadExtras";
 import { useForeground } from "../ui/motion";
 import { type, useTheme } from "../ui/theme";
+import { useThreadScroll } from "./thread-scroll";
 
 /** A thread, or with `rootId` one of its side conversations. */
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
+  const remote = useRemote();
+  // A handed-over thread keeps its id on another computer; none of the old screen's state follows it.
+  return <ThreadBody key={`${remote.active}:${id}:${rootId ?? ""}`} id={id} rootId={rootId} />;
+}
+
+function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   const remote = useRemote();
   const t = useTheme();
   const { thread, error, reload, summary, loadEarlier } = useThread(id);
@@ -91,11 +98,6 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   >();
   const [acting, setActing] = useState<ChatMessage>();
   const composer = useRef<ComposerHandle>(null);
-  const list = useRef<FlatList<ChatMessage>>(null);
-  // How far the reader is from the latest message, and the list's height.
-  const offset = useRef(0);
-  const height = useRef(0);
-  const [pinned, setPinned] = useState(true);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
   const outbox = useOutbox(id);
@@ -139,6 +141,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
+  const scroll = useThreadScroll(shown);
   const counts = useMemo(() => replyCounts(all), [all]);
   const setupId = useMemo(
     () => (rootId ? undefined : latestSetup(listed)?.id),
@@ -576,7 +579,6 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         </View>
       ) : (
         <FlatList
-          ref={list}
           inverted
           data={shown}
           keyExtractor={(m) => m.id}
@@ -653,55 +655,34 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
             </View>
           }
           ListFooterComponent={
-            thread?.earlier && !rootId ? (
-              loadEarlier ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={loadEarlier}
-                  style={styles.earlierButton}
-                >
-                  <Text style={[styles.earlier, { color: t.accent }]}>
-                    Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
-                    {thread.earlier === 1 ? "message" : "messages"}
-                    {thread.earlier > remoteHistory
-                      ? ` of ${thread.earlier}`
-                      : ""}
+            <View>
+              {thread?.earlier && !rootId ? (
+                loadEarlier ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={loadEarlier}
+                    style={styles.earlierButton}
+                  >
+                    <Text style={[styles.earlier, { color: t.accent }]}>
+                      Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
+                      {thread.earlier === 1 ? "message" : "messages"}
+                      {thread.earlier > remoteHistory
+                        ? ` of ${thread.earlier}`
+                        : ""}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={[styles.earlier, { color: t.faint }]}>
+                    {thread.earlier} earlier{" "}
+                    {thread.earlier === 1 ? "message is" : "messages are"} on your
+                    computer
                   </Text>
-                </Pressable>
-              ) : (
-                <Text style={[styles.earlier, { color: t.faint }]}>
-                  {thread.earlier} earlier{" "}
-                  {thread.earlier === 1 ? "message is" : "messages are"} on your
-                  computer
-                </Text>
-              )
-            ) : null
+                )
+              ) : null}
+            </View>
           }
           contentContainerStyle={styles.list}
-          // New messages and a growing answer land at offset 0, the visual
-          // bottom of the inverted list, so at the bottom it follows them on
-          // its own. Read back, the list holds what you see still: Android
-          // anchors on the lowest message on screen, which never moves when
-          // it grows itself, so the anchor starts one above the newest one.
-          maintainVisibleContentPosition={
-            pinned ? undefined : { minIndexForVisible: 1 }
-          }
-          scrollEventThrottle={32}
-          onScroll={(e) => {
-            offset.current = e.nativeEvent.contentOffset.y;
-            const atBottom = offset.current <= pinSlack;
-            if (atBottom !== pinned) setPinned(atBottom);
-          }}
-          // The strips and composer under the list come and go as a turn
-          // runs; the offset counts from the bottom, so a shorter list would
-          // pull what you're reading down with it.
-          onLayout={(e) => {
-            const was = height.current;
-            height.current = e.nativeEvent.layout.height;
-            if (!was || was === height.current || offset.current <= pinSlack) return;
-            offset.current = Math.max(0, offset.current + was - height.current);
-            list.current?.scrollToOffset({ offset: offset.current, animated: false });
-          }}
+          {...scroll}
           // Reading back or tapping an answer puts the keyboard away. Android
           // has no "interactive" mode, which left it open there.
           keyboardDismissMode="on-drag"
@@ -873,9 +854,6 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     </KeyboardAware>
   );
 }
-
-/** Within this of the latest message, the thread follows new ones. */
-const pinSlack = 48;
 
 function RenameSheet({
   open,
