@@ -162,9 +162,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const lastAnswer = [...listed]
     .reverse()
     .find(isAnswer);
-  // The latest answer anywhere in the thread, side conversations too: what a turn's end buzzes for.
-  const latestAnswer = useMemo(() => all.findLast(isAnswer), [all]);
-  useTurnHaptics(summary, latestAnswer);
+  useTurnHaptics(id, summary, lastAnswer);
   const canResume =
     !running &&
     !!lastAnswer &&

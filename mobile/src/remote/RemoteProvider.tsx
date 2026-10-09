@@ -51,7 +51,7 @@ interface Remote {
   /** The computer's name. */
   name: string;
   overview?: RemoteOverview;
-  refresh(): Promise<void>;
+  refresh(): Promise<RemoteOverview | undefined>;
   call: RemoteClient["call"];
   /** The desktop's own calls on the phone's allowlist. */
   desktop: RemoteClient["desktop"];
@@ -239,7 +239,10 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     if (!client || client.status !== "online") return;
     const fresh = await client.call("overview");
     // Switched away while it came.
-    if (live.relayClient === client) setOverview(fresh);
+    if (live.relayClient === client) {
+      setOverview(fresh);
+      return fresh;
+    }
   }, [client]);
 
   // Stable for a connection, so screens fetch again on reconnects rather than

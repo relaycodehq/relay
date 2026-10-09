@@ -15,23 +15,48 @@ const buzz = {
   warning: Haptics.NotificationFeedbackType.Warning,
 } as const;
 
-/**
- * `summary` is the thread as the live list has it; `answer` its latest
- * answer. Only changes seen while connected count: going offline forgets how
- * it looked, and so does each fresh overview (on every connect and refresh),
- * so what happened while away arrives without a buzz.
- */
+/** Only transitions observed in the foreground's open thread deserve a buzz. */
 export function useTurnHaptics(
+  id: string,
   summary: RemoteChatSummary | undefined,
   answer: Pick<ChatMessage, "created" | "status"> | undefined,
 ) {
-  const { status, overview } = useRemote();
+  const { status, active, call, refresh } = useRemote();
   const focused = useIsFocused();
   const foreground = useForeground();
   const watch = useRef<TurnWatch>(undefined);
-  // A fresh overview brings new `projects`; pushed thread lists keep them.
-  const projects = overview?.projects;
-  const seenProjects = useRef(projects);
+  const observing = useRef(false);
+  const latestAnswer = useRef(answer);
+  useEffect(() => {
+    latestAnswer.current = answer;
+  }, [answer]);
+  // Baseline from a fresh snapshot whenever visibility or connection changes.
+  // Cached summaries and background/reconnect catch-up never count as transitions.
+  useEffect(() => {
+    observing.current = false;
+    watch.current = undefined;
+    if (status !== "online" || !focused || !foreground) return;
+    let live = true;
+    void refresh()
+      .then((overview) => {
+        if (!live || !overview) return;
+        const chat = overview.chats.find((c) => c.id === id);
+        if (!chat) return;
+        watch.current = watchTurn(undefined, {
+          running: !!chat.running,
+          since: chat.runningSince,
+          waiting: !!chat.waiting,
+          answer: latestAnswer.current,
+        }).watch;
+        observing.current = true;
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      observing.current = false;
+      watch.current = undefined;
+    };
+  }, [id, active, call, refresh, status, focused, foreground]);
   const listed = !!summary;
   const running = !!summary?.running;
   const since = summary?.runningSince;
@@ -39,11 +64,7 @@ export function useTurnHaptics(
   const created = answer?.created;
   const answerStatus = answer?.status;
   useEffect(() => {
-    if (status !== "online" || !listed || seenProjects.current !== projects) {
-      watch.current = undefined;
-      seenProjects.current = projects;
-      if (status !== "online" || !listed) return;
-    }
+    if (!observing.current || !listed) return;
     const step = watchTurn(watch.current, {
       running,
       since,
@@ -55,7 +76,16 @@ export function useTurnHaptics(
     });
     watch.current = step.watch;
     if (step.feedback && focused && foreground)
-      void Haptics.notificationAsync(buzz[step.feedback]);
+      void Haptics.notificationAsync(buzz[step.feedback]).catch(() => {});
     // Seeing the same thread again (focus, foreground) changes nothing in `watchTurn`.
-  }, [status, projects, listed, running, since, waiting, created, answerStatus, focused, foreground]);
+  }, [
+    listed,
+    running,
+    since,
+    waiting,
+    created,
+    answerStatus,
+    focused,
+    foreground,
+  ]);
 }

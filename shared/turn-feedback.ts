@@ -20,6 +20,8 @@ export interface TurnWatch {
   since?: number;
   /** A turn that stopped running whose answer hasn't arrived finished yet: when it started. */
   ended?: number;
+  /** A finished answer already present at the first look, possibly from a cached thread. */
+  ignoredAnswer?: number;
 }
 
 /**
@@ -38,13 +40,18 @@ export function watchTurn(
     running: sight.running,
     waiting: sight.waiting,
     since: sight.running ? (sight.since ?? last?.since) : undefined,
+    ignoredAnswer: last
+      ? last.ignoredAnswer
+      : sight.answer?.status !== "streaming"
+        ? sight.answer?.created
+        : undefined,
   };
   if (!last) return { watch };
   const asked = sight.waiting && !last.waiting;
   let ended = sight.running
     ? undefined
     : last.running
-      ? (last.since ?? 0)
+      ? last.since
       : last.ended;
   let end: TurnFeedback | undefined;
   const answer = sight.answer;
@@ -52,6 +59,7 @@ export function watchTurn(
     ended !== undefined &&
     answer &&
     answer.created >= ended &&
+    answer.created !== watch.ignoredAnswer &&
     answer.status !== "streaming"
   ) {
     if (answer.status === "complete") end = "success";

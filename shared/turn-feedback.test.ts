@@ -25,10 +25,24 @@ it("only takes note of the first look, however the thread stands", () => {
 });
 
 it("buzzes once when the turn's answer finishes or fails", () => {
-  const done = { ...idle, answer: { created: 150, status: "complete" as const } };
-  expect(buzzes([running, done, done])).toEqual([undefined, "success", undefined]);
-  const failed = { ...idle, answer: { created: 150, status: "failed" as const } };
-  expect(buzzes([running, failed, failed])).toEqual([undefined, "error", undefined]);
+  const done = {
+    ...idle,
+    answer: { created: 150, status: "complete" as const },
+  };
+  expect(buzzes([running, done, done])).toEqual([
+    undefined,
+    "success",
+    undefined,
+  ]);
+  const failed = {
+    ...idle,
+    answer: { created: 150, status: "failed" as const },
+  };
+  expect(buzzes([running, failed, failed])).toEqual([
+    undefined,
+    "error",
+    undefined,
+  ]);
 });
 
 it("waits for the answer's last state when the turn's end comes first", () => {
@@ -54,7 +68,10 @@ it("doesn't take an earlier turn's answer for this one's", () => {
 
 it("stays quiet for a stopped answer", () => {
   expect(
-    buzzes([running, { ...idle, answer: { created: 150, status: "cancelled" } }]),
+    buzzes([
+      running,
+      { ...idle, answer: { created: 150, status: "cancelled" } },
+    ]),
   ).toEqual([undefined, undefined]);
 });
 
@@ -67,4 +84,28 @@ it("warns when a question appears, once", () => {
     undefined,
     "warning",
   ]);
+});
+
+it("never mistakes an old answer for a turn whose start isn't known", () => {
+  expect(
+    buzzes([
+      {
+        running: true,
+        waiting: false,
+        answer: { created: 50, status: "complete" },
+      },
+      { ...idle, answer: { created: 50, status: "complete" } },
+    ]),
+  ).toEqual([undefined, undefined]);
+});
+
+it("ignores a finished cached answer even if its timestamp fits the fresh turn", () => {
+  const old = { created: 300, status: "complete" as const };
+  expect(
+    buzzes([
+      { ...running, answer: old },
+      { ...idle, answer: old },
+      { ...idle, answer: { created: 150, status: "failed" } },
+    ]),
+  ).toEqual([undefined, undefined, "error"]);
 });
