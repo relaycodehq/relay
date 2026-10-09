@@ -38,6 +38,7 @@ import { agentsSince } from "../../../shared/waiting";
 import { useRemote } from "../remote/RemoteProvider";
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { useUnread } from "../remote/seen";
+import { foldFamily, useFamilyFolds } from "../remote/family-folds";
 import { useNow } from "./motion";
 import { ProjectBadge } from "./ProjectIcon";
 import { ProviderIcon } from "./ProviderIcon";
@@ -85,7 +86,7 @@ export function ActivityList({
   const [acting, setActing] = useState<RemoteChatSummary>();
   const [shelves, setShelves] = useState({ snoozed: 0, settled: 0 });
   // A family's fold as the user left it; until then open while any of it needs a look.
-  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const toggled = useFamilyFolds();
   const scrollGesture = useRef<ScrollView>(null);
   const [undo, setUndo] = useState<Undo>();
   const closeUndo = useCallback(() => setUndo(undefined), []);
@@ -269,7 +270,7 @@ export function ActivityList({
             );
           const open =
             started.length > 0 &&
-            (toggled.get(c.id) ?? !familySettled(started, unread));
+            (toggled[c.id] ?? !familySettled(started, unread));
           return (
             <Fragment key={c.id}>
               <SwipeTriage scrollGesture={scrollGesture} blocked={!!acting} {...swipes(c)} radius={12} t={t}>
@@ -285,8 +286,7 @@ export function ActivityList({
                       ? {
                           started,
                           open,
-                          onFold: () =>
-                            setToggled((m) => new Map(m).set(c.id, !open)),
+                          onFold: () => foldFamily(c.id, !open),
                         }
                       : undefined
                   }
