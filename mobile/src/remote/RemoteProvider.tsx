@@ -33,6 +33,7 @@ import {
   setOfflineComputer,
 } from "./offline";
 import { PendingPairing } from "./pairing";
+import { forgetIcons } from "./project-icons";
 import { runningVersion } from "./self-update";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
@@ -364,6 +365,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           }
         }
         forgetOffline(id);
+        void forgetIcons(id);
         await clearCredentials(id);
       },
       onMessage,

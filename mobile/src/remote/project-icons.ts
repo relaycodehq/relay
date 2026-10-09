@@ -5,10 +5,16 @@ import { useEffect, useSyncExternalStore } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Directory, File, Paths } from "expo-file-system";
 import type { RemoteClient } from "../../../shared/remote-client";
+import {
+  applyIconUpdates,
+  iconsByProject,
+  knownHashes,
+  type IconIndex,
+} from "./project-icon-index";
 
-type Entry = { hash: string | null; uri?: string };
-
-const indexKey = "relay-project-icons";
+const indexKey = "relay-project-icons-by-computer";
+/** The index from before it was kept per computer; its files go with it. */
+const legacyKey = "relay-project-icons";
 /** Icons rarely change; a project the phone hasn't seen asks sooner. */
 const fresh = 10 * 60_000;
 const retry = 30_000;
@@ -20,16 +26,22 @@ const extensions: Record<string, string> = {
   "image/vnd.microsoft.icon": "ico",
 };
 
-let icons: Record<string, Entry> = {};
+let index: IconIndex = {};
+let icons = iconsByProject(index);
 let loading: Promise<void> | undefined;
-let checked = 0;
-/** Whose icons were last checked: another computer's are due at once. */
-let checkedWith: RemoteClient["call"] | undefined;
-let syncing = false;
+/** When each computer's icons were last checked. */
+const checked = new Map<string, number>();
+const syncing = new Set<string>();
 const listeners = new Set<() => void>();
-const changed = () => listeners.forEach((l) => l());
+
+function update(next: IconIndex) {
+  index = next;
+  icons = iconsByProject(next);
+  listeners.forEach((l) => l());
+}
 
 const folder = () => new Directory(Paths.document, "project-icons");
+const computerFolder = (computer: string) => new Directory(folder(), computer);
 
 function remove(uri: string | undefined) {
   if (!uri) return;
@@ -41,85 +53,105 @@ function remove(uri: string | undefined) {
 
 /** The saved index, minus anything whose file the system cleared away. */
 function load() {
-  loading ??= AsyncStorage.getItem(indexKey)
-    .then((saved) => {
-      const index = saved ? (JSON.parse(saved) as Record<string, Entry>) : {};
-      for (const [id, entry] of Object.entries(index))
-        if (entry.uri && !new File(entry.uri).exists) delete index[id];
-      icons = { ...index, ...icons };
-      changed();
-    })
-    .catch(() => {});
+  loading ??= (async () => {
+    if (await AsyncStorage.getItem(legacyKey)) {
+      try {
+        for (const item of folder().list()) if (item instanceof File) item.delete();
+      } catch {}
+      await AsyncStorage.removeItem(legacyKey);
+    }
+    const saved = await AsyncStorage.getItem(indexKey);
+    const stored = saved ? (JSON.parse(saved) as IconIndex) : {};
+    for (const mine of Object.values(stored))
+      for (const [id, entry] of Object.entries(mine))
+        if (entry.uri && !new File(entry.uri).exists) delete mine[id];
+    // Whatever a sync already brought in wins.
+    const merged = { ...stored };
+    for (const [computer, mine] of Object.entries(index))
+      merged[computer] = { ...stored[computer], ...mine };
+    update(merged);
+  })().catch(() => {});
   return loading;
 }
 
 async function sync(
+  computer: string,
   call: RemoteClient["call"],
   projectIds: string[],
 ): Promise<void> {
   await load();
-  const missing = projectIds.some((id) => !(id in icons));
-  if (call !== checkedWith) checked = 0;
-  if (syncing || Date.now() - checked < (missing ? retry : fresh)) return;
-  syncing = true;
-  checkedWith = call;
+  const missing = projectIds.some((id) => !(id in (index[computer] ?? {})));
+  if (
+    syncing.has(computer) ||
+    Date.now() - (checked.get(computer) ?? 0) < (missing ? retry : fresh)
+  )
+    return;
+  syncing.add(computer);
   try {
-    const known = Object.fromEntries(
-      projectIds.filter((id) => id in icons).map((id) => [id, icons[id]!.hash]),
+    const updates = await call(
+      "projectIcons",
+      knownHashes(index, computer, projectIds),
     );
-    const updates = await call("projectIcons", known);
-    const next = { ...icons };
-    for (const [id, icon] of Object.entries(updates)) {
-      const old = next[id]?.uri;
-      next[id] = icon.hash
-        ? { hash: icon.hash, uri: save(id, icon) }
-        : { hash: null };
-      remove(old);
-    }
-    // Projects removed on the computer take their icons with them.
-    for (const id of Object.keys(next))
-      if (!projectIds.includes(id)) {
-        remove(next[id]!.uri);
-        delete next[id];
-      }
-    icons = next;
-    changed();
-    await AsyncStorage.setItem(indexKey, JSON.stringify(icons));
+    const next = applyIconUpdates(index, computer, projectIds, updates, (id, icon) =>
+      save(computer, id, icon),
+    );
+    next.unused.forEach(remove);
+    update(next.index);
+    await AsyncStorage.setItem(indexKey, JSON.stringify(index));
   } catch {
     // An older desktop has no icons to give; the folders stay.
   } finally {
-    checked = Date.now();
-    syncing = false;
+    checked.set(computer, Date.now());
+    syncing.delete(computer);
   }
 }
 
-function save(id: string, icon: { hash: string; dataUrl: string }) {
+function save(
+  computer: string,
+  id: string,
+  icon: { hash: string; dataUrl: string },
+) {
   const [, mime, data] =
     icon.dataUrl.match(/^data:([^;,]+);base64,(.*)$/s) ?? [];
   const extension = mime && extensions[mime];
   if (!extension || !data) return undefined;
-  const dir = folder();
+  const dir = computerFolder(computer);
   dir.create({ idempotent: true, intermediates: true });
   const file = new File(dir, `${id}-${icon.hash}.${extension}`);
   file.write(data, { encoding: "base64" });
   return file.uri;
 }
 
-/** Keeps the icons of these projects current while the phone is connected. */
+/** Keeps the icons of this computer's projects current while the phone is connected to it. */
 export function useProjectIconSync(
+  computer: string | undefined,
   call: RemoteClient["call"],
   online: boolean,
   projectIds: string[],
 ) {
   const key = projectIds.join(",");
   useEffect(() => {
-    if (!online || !key) return;
+    if (!computer || !online || !key) return;
     const ids = key.split(",");
-    void sync(call, ids);
+    void sync(computer, call, ids);
     // sync() decides when it's due; this only gives it the chance.
-    const timer = setInterval(() => void sync(call, ids), retry);
+    const timer = setInterval(() => void sync(computer, call, ids), retry);
     return () => clearInterval(timer);
-  }, [call, online, key]);
+  }, [computer, call, online, key]);
+}
+
+/** A forgotten computer's icons go with it. */
+export async function forgetIcons(computer: string) {
+  await load();
+  if (!(computer in index)) return;
+  const { [computer]: _, ...rest } = index;
+  update(rest);
+  checked.delete(computer);
+  try {
+    const dir = computerFolder(computer);
+    if (dir.exists) dir.delete();
+  } catch {}
+  await AsyncStorage.setItem(indexKey, JSON.stringify(index)).catch(() => {});
 }
 
 /** The project's icon file, or undefined to show its folder. */
