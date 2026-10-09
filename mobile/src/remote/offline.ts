@@ -91,7 +91,41 @@ export function saveNewThread(start: NewThread, computer?: string) {
   later(file.uri, () => write(file, start));
 }
 
-export const loadThread = (id: string) => read<Thread>(threadFile(id));
+/**
+ * The threads read or saved last, so one opened again is there on its first
+ * frame, newer than a save still waiting out its pause. Few: a thread can
+ * hold its pictures.
+ */
+const remembered = new Map<string, Thread>();
+const rememberedCount = 8;
+function remember(file: File, thread: Thread) {
+  remembered.delete(file.uri);
+  remembered.set(file.uri, thread);
+  for (const uri of remembered.keys()) {
+    if (remembered.size <= rememberedCount) break;
+    remembered.delete(uri);
+  }
+}
+
+export const loadThread = async (id: string) => {
+  const file = threadFile(id);
+  return remembered.get(file.uri) ?? read<Thread>(file);
+};
+
+/** The saved copy, read before the screen's first frame instead of a spinner's. */
+export function threadNow(id: string): Thread | undefined {
+  const file = threadFile(id);
+  const held = remembered.get(file.uri);
+  if (held) return held;
+  try {
+    if (!file.exists) return undefined;
+    const thread = JSON.parse(file.textSync()) as Thread;
+    remember(file, thread);
+    return thread;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Whether the saved copy is missing or older than the thread's last change. */
 export function threadStale(id: string, updated: number) {
@@ -105,6 +139,7 @@ export function threadStale(id: string, updated: number) {
 
 export function saveThread(id: string, thread: Thread) {
   const file = threadFile(id);
+  remember(file, thread);
   later(file.uri, () => {
     write(file, thread);
     prune(file.parentDirectory);
@@ -131,6 +166,8 @@ export function forgetOffline(computer: string) {
       clearTimeout(timer);
       waiting.delete(key);
     }
+  for (const uri of remembered.keys())
+    if (uri.startsWith(dir.uri)) remembered.delete(uri);
   try {
     if (dir.exists) dir.delete();
   } catch {}

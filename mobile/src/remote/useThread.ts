@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { maxRemoteHistory, remoteHistory } from "../../../shared/remote";
 import { useRemote } from "./RemoteProvider";
-import { loadThread, saveThread } from "./offline";
+import { saveThread, threadNow } from "./offline";
 import { oneAtATime } from "./one-at-a-time";
 import { stamp } from "./outbox-state";
 import {
@@ -16,7 +16,8 @@ import {
 /** A thread kept current from the desktop's events, refetched when its state moves. */
 export function useThread(id: string) {
   const remote = useRemote();
-  const [thread, setThread] = useState<Thread>();
+  // The copy from the last visit, readable before (or without) the computer.
+  const [thread, setThread] = useState(() => threadNow(id));
   const [error, setError] = useState<Error>();
   const current = useRef<Thread | undefined>(undefined);
   current.current = thread;
@@ -33,31 +34,11 @@ export function useThread(id: string) {
   // How many of the latest messages to hold; "Load earlier" asks for a page more.
   const [history, setHistory] = useState(remoteHistory);
 
-  // The copy from the last visit, readable before (or without) the computer.
-  const cacheRead = useRef<Promise<void>>(undefined);
-  useEffect(() => {
-    let live = true;
-    cacheRead.current = loadThread(id).then(
-      (cached) => {
-        if (!live || !cached) return;
-        // Set before the render, so the first fetch asks only for what changed since.
-        current.current ??= cached;
-        setThread((t) => t ?? cached);
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [id, remote.active]);
-
   const load = useCallback(
     () => {
       const scope = life.current;
       return oneFetch(async () => {
         try {
-          await cacheRead.current;
-          if (!scope.active) return;
           const started = stamp();
           const patch = await remote.call(
             "chat",
