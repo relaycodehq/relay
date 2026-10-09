@@ -23,6 +23,8 @@ const commitAt = 96;
 /** Long enough to reach Undo, short enough not to linger. */
 const undoMs = 5_000;
 const snoozeColor = "#d99a2b";
+/** A plain function for worklets to call back, rather than the Haptics module itself. */
+const tick = () => void Haptics.selectionAsync();
 
 /** A swipe's job: resolves whether it went through, so a refused one slides back. */
 export type SwipeAction = { label: string; run: () => Promise<boolean> };
@@ -125,7 +127,7 @@ function Behind({
     () => Math.abs(drag.get()) >= commitAt,
     (past, before) => {
       if (before !== null && past !== before)
-        scheduleOnRN(Haptics.selectionAsync);
+        scheduleOnRN(tick);
     },
   );
   const shown = useAnimatedStyle(() => ({
