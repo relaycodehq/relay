@@ -69,6 +69,7 @@ import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
 import { SubagentStrip, SubagentsSheet } from "../ui/Subagents";
+import { openThread, useStartedSlot } from "../ui/StartedThreads";
 import {
   GoalStrip,
   LimitStrip,
@@ -213,6 +214,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     pending: pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
   });
   const agentBatch = runningBatch(agents.runs);
+  const started = useStartedSlot(id, pinned);
   const root = thread?.root;
   const display = useCallback(
     (text: string) => {
@@ -798,6 +800,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           onPress={() => setSheet("agents")}
           error={agents.error}
           onRetry={agents.refresh}
+          started={started.shown ? started.family : []}
         />
       )}
       {!rootId && !!waiting?.length && !running && (
@@ -934,6 +937,8 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         onStop={agents.stop}
         error={agents.error}
         onRetry={agents.refresh}
+        started={started}
+        onOpenThread={openThread}
       />
       <RenameSheet
         open={sheet === "rename"}

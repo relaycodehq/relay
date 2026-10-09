@@ -8,6 +8,7 @@ import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
 import { reloadNote } from "../../../shared/session-reload";
+import { startCalls } from "../../../shared/started-threads";
 import {
   copiedNote,
   setupCanRerun,
@@ -24,6 +25,7 @@ import { Lightbox, type LightboxImage } from "./images/Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
+import { StartedInTurn } from "./StartedThreads";
 import { AgentErrorNote, RenderNotes, SignInNote } from "./TurnNotices";
 import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
@@ -188,6 +190,7 @@ export const MessageView = memo(function MessageView({
           onExpanded={setTraceOpen}
         />
       )}
+      {!user && startCalls(m).length > 0 && <StartedInTurn chatId={chatId} message={m} />}
       {!!m.renders?.length && <RenderNotes renders={m.renders} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
