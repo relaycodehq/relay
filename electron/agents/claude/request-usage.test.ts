@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { UsageReport } from "../types";
 import { RequestUsage } from "./request-usage";
 
-const frame = (event: object) => ({ type: "stream_event", event });
+const frame = (event: Parameters<RequestUsage["observe"]>[0]["event"]) => ({
+  type: "stream_event",
+  event,
+});
 
 describe("RequestUsage", () => {
   it("marks a request Claude served in fast mode", () => {

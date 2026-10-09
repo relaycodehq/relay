@@ -9,6 +9,7 @@ import {
 } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { agentsSince } from "../../../shared/waiting";
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { useNow } from "../../lib/useNow";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { Spinner } from "../../ui/ui";
@@ -40,7 +41,7 @@ export function StatusMark({
   unread: boolean;
   now: number;
 }) {
-  if (chat.waiting)
+  if (inputBlocksThread(chat))
     return (
       <span className="sb-status waiting" title="Needs your input">
         <i />
@@ -54,7 +55,9 @@ export function StatusMark({
           chat.running
             ? chat.goal?.status === "active"
               ? `Working on its goal: ${chat.goal.objective}`
-              : "Working"
+              : chat.waiting
+                ? "Working · needs your input"
+                : "Working"
             : pendingTitle(chat.pending!)
         }
       >
@@ -106,7 +109,7 @@ export function CardState({
   /** Its turn on another computer ended in an error. */
   stopped?: boolean;
 }) {
-  if (chat.waiting)
+  if (inputBlocksThread(chat))
     return (
       <span className="sb-card-state waiting">
         <i />
@@ -130,6 +133,7 @@ export function CardState({
       >
         <Spinner size={11} steady />
         {goal ? "Goal" : "Working"}
+        {chat.waiting && " · needs input"}
         {since && <Elapsed since={since} />}
       </span>
     );

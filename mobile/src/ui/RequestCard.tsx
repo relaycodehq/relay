@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -6,15 +6,18 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Check } from "lucide-react-native";
 import type {
   AgentDecision,
+  AgentQuestion,
   AgentRequest,
   AgentResponse,
 } from "../../../shared/agent-modes";
 import { Button } from "./Button";
+import { focusWithKeyboard, RevealField } from "./KeyboardAware";
 import { mono, type, useTheme } from "./theme";
 
 // The desktop's wording, from src/features/thread/AgentRequestCard.tsx.
@@ -40,23 +43,24 @@ export function RequestCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const canRemember = request.decisions?.includes("acceptForSession");
+  // Room for the thread above it; with the keyboard up the card shrinks
+  // further and its body scrolls, leaving the answer field and Send in view.
+  const maxHeight = useWindowDimensions().height * 0.6;
   const respond = async (response: AgentResponse) => {
     setBusy(true);
     setError(undefined);
     try {
       await onRespond(response);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // A tap, not Success: that one is the turn's end, often a moment later.
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
-  return (
-    <View
-      accessibilityLabel={request.title}
-      style={[styles.card, { borderColor: t.accent, backgroundColor: t.raised }]}
-    >
+  const head = (
+    <>
       <Text style={[styles.title, { color: t.text }]}>{request.title}</Text>
       {more > 0 && (
         <Text style={[styles.hint, { color: t.muted }]}>
@@ -73,14 +77,23 @@ export function RequestCard({
           </Text>
         </ScrollView>
       )}
+    </>
+  );
+  return (
+    <View
+      accessibilityLabel={request.title}
+      style={[styles.card, { maxHeight, borderColor: t.accent, backgroundColor: t.raised }]}
+    >
       {request.kind === "question" && request.questions?.length ? (
         <Questions
-          request={request}
+          questions={request.questions}
+          head={head}
           busy={busy}
           onAnswer={(answers) => respond({ kind: "question", answers })}
         />
       ) : (
         <>
+          <Body>{head}</Body>
           <View style={styles.decisions}>
             {(["decline", "acceptForSession", "accept"] as const)
               .filter((d) => request.decisions?.includes(d))
@@ -105,22 +118,48 @@ export function RequestCard({
   );
 }
 
-function Questions({
-  request,
+/** The part of the card that scrolls when it doesn't fit. */
+function Body({ children }: { children: ReactNode }) {
+  return (
+    <ScrollView
+      style={styles.body}
+      contentContainerStyle={styles.bodyContent}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+export function Questions({
+  questions,
+  head,
   busy,
+  deferred,
   onAnswer,
 }: {
-  request: AgentRequest;
+  questions: AgentQuestion[];
+  /** Scrolls with the question, above it. */
+  head?: ReactNode;
   busy: boolean;
+  /** The agent keeps working, so nothing goes out until Send; a tap only picks. */
+  deferred?: boolean;
   onAnswer: (answers: Record<string, string[]>) => void;
 }) {
   const t = useTheme();
-  const questions = request.questions!;
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
+  const reveal = useContext(RevealField);
+  const input = useRef<TextInput>(null);
   const question = questions[index]!;
+  // Moved on to one only words answer: the field is ready to type in, keyboard and all.
+  const writeOnly = !question.options?.length;
+  useEffect(() => {
+    if (index > 0 && writeOnly && input.current) focusWithKeyboard(input.current);
+  }, [index, writeOnly]);
   const chosen = answers[question.id] ?? [];
   const labelsOf = new Set(question.options?.map((o) => o.label));
   const typed = chosen.filter((a) => !labelsOf.has(a)).join(", ");
@@ -142,53 +181,59 @@ function Questions({
     setAnswers(next);
     clearTimeout(timer.current);
     // A single choice answers it; the short pause shows which one was picked.
-    if (!question.multiple) timer.current = setTimeout(() => advance(next), 200);
+    if (!question.multiple && !deferred)
+      timer.current = setTimeout(() => advance(next), 200);
   };
   const answered = chosen.some((a) => a.trim());
   return (
-    <View style={styles.questions}>
-      <View style={styles.questionHead}>
-        <Text style={[styles.topic, { color: t.accent }]}>
-          {question.header || "Question"}
-        </Text>
-        {questions.length > 1 && (
-          <Text style={[styles.hint, { color: t.muted }]}>
-            {index + 1} of {questions.length}
+    <>
+      <Body>
+        {head}
+        <View style={styles.questionHead}>
+          <Text style={[styles.topic, { color: t.accent }]}>
+            {question.header || "Question"}
           </Text>
-        )}
-      </View>
-      <Text style={[styles.question, { color: t.text }]}>{question.question}</Text>
-      {question.options?.map((option) => {
-        const on = chosen.includes(option.label);
-        return (
-          <Pressable
-            key={option.label}
-            accessibilityRole={question.multiple ? "checkbox" : "radio"}
-            accessibilityState={{ checked: on, disabled: busy }}
-            onPress={() => select(option.label)}
-            style={({ pressed }) => [
-              styles.option,
-              { borderColor: on ? t.accent : t.border },
-              (pressed || on) && { backgroundColor: t.accentSoft },
-            ]}
-          >
-            <View style={[styles.check, { borderColor: on ? t.accent : t.faint }]}>
-              {on && <Check size={12} color={t.accent} strokeWidth={3} />}
-            </View>
-            <View style={styles.optionText}>
-              <Text style={[styles.optionLabel, { color: t.text }]}>
-                {option.label}
-              </Text>
-              {!!option.description && (
-                <Text style={[styles.hint, { color: t.muted }]}>
-                  {option.description}
+          {questions.length > 1 && (
+            <Text style={[styles.hint, { color: t.muted }]}>
+              {index + 1} of {questions.length}
+            </Text>
+          )}
+        </View>
+        <Text style={[styles.question, { color: t.text }]}>{question.question}</Text>
+        {question.options?.map((option) => {
+          const on = chosen.includes(option.label);
+          return (
+            <Pressable
+              key={option.label}
+              accessibilityRole={question.multiple ? "checkbox" : "radio"}
+              accessibilityState={{ checked: on, disabled: busy }}
+              onPress={() => select(option.label)}
+              style={({ pressed }) => [
+                styles.option,
+                { borderColor: on ? t.accent : t.border },
+                (pressed || on) && { backgroundColor: t.accentSoft },
+              ]}
+            >
+              <View style={[styles.check, { borderColor: on ? t.accent : t.faint }]}>
+                {on && <Check size={12} color={t.accent} strokeWidth={3} />}
+              </View>
+              <View style={styles.optionText}>
+                <Text style={[styles.optionLabel, { color: t.text }]}>
+                  {option.label}
                 </Text>
-              )}
-            </View>
-          </Pressable>
-        );
-      })}
+                {!!option.description && (
+                  <Text style={[styles.hint, { color: t.muted }]}>
+                    {option.description}
+                  </Text>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
+      </Body>
       <TextInput
+        onFocus={reveal}
+        ref={input}
         accessibilityLabel={question.question}
         editable={!busy}
         secureTextEntry={question.isSecret}
@@ -201,7 +246,7 @@ function Questions({
         }}
         style={[styles.input, { color: t.text, borderColor: t.border }]}
       />
-      {(question.multiple || !question.options?.length || typed) && (
+      {(deferred || question.multiple || !question.options?.length || typed) && (
         <Button
           label={index < questions.length - 1 ? "Next" : "Send answer"}
           primary
@@ -212,7 +257,7 @@ function Questions({
           }}
         />
       )}
-    </View>
+    </>
   );
 }
 
@@ -224,7 +269,10 @@ const styles = StyleSheet.create({
     gap: 10,
     marginHorizontal: 12,
     marginBottom: 8,
+    flexShrink: 1,
   },
+  body: { flexGrow: 0, flexShrink: 1 },
+  bodyContent: { gap: 8 },
   title: { fontSize: type.body, fontWeight: "600" },
   hint: { fontSize: type.tiny, lineHeight: 17 },
   detail: {
@@ -235,7 +283,6 @@ const styles = StyleSheet.create({
   },
   detailText: { fontFamily: mono, fontSize: 12, lineHeight: 17 },
   decisions: { flexDirection: "row", gap: 8 },
-  questions: { gap: 8 },
   questionHead: { flexDirection: "row", justifyContent: "space-between" },
   topic: { fontSize: type.tiny, fontWeight: "600", textTransform: "uppercase" },
   question: { fontSize: type.body, lineHeight: 21 },

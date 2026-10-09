@@ -7,7 +7,13 @@ import { tmpdir } from "node:os";
 import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
+import { undoTriage } from "../../shared/remote-triage";
+import { chatActivitySection } from "../../shared/chat-activity";
 import { triageState } from "../../shared/chat-activity";
+import type { ChatCore } from "./core";
+import type { ThreadWorktrees } from "./worktrees";
+import type { Councils } from "./councils";
+import { ThreadTriage } from "./thread-triage";
 import { StartedThreads } from "../started-threads";
 import { resultText } from "../relay-mcp";
 
@@ -36,6 +42,22 @@ it("settling a thread settles the threads it started that are done, and undo bri
   const done = await chats.create(projectId, scope, "checkout", startedBy);
   const scheduled = await chats.create(projectId, scope, "checkout", startedBy);
   const stranger = await chats.create(projectId, scope);
+  const asking = await chats.create(projectId, scope, "checkout", startedBy);
+  // Seed a saved child without starting a real agent.
+  const storage = (chats as unknown as { core: import("./core").ChatCore }).core
+    .storage;
+  const child = await storage.load(asking.id);
+  child.messages.push({
+    id: "question",
+    role: "assistant",
+    provider: "codex",
+    status: "complete",
+    body: "Which?",
+    created: 1,
+    version: 1,
+    questions: [{ id: "ask", questions: [{ id: "q", question: "Which?" }] }],
+  });
+  await storage.save(child);
   // A message sent later means it isn't done yet.
   await chats.send(scheduled.id, {
     id: randomUUID(),
@@ -55,6 +77,7 @@ it("settling a thread settles the threads it started that are done, and undo bri
   expect((await chats.get(done.id)).settledAt).toBe(settledAt);
   expect((await chats.get(scheduled.id)).settledAt).toBeUndefined();
   expect((await chats.get(stranger.id)).settledAt).toBeUndefined();
+  expect((await chats.get(asking.id)).settledAt).toBeUndefined();
 
   await chats.triage(lead.id, {
     kind: "restore",
@@ -200,4 +223,83 @@ it("persists thread link edits in state and keeps them through later chat writes
     () => {},
   );
   expect((await chats.get(made.id)).links).toBeUndefined();
+});
+
+it("phone Undo restores the snooze under both a lead and its started thread", async () => {
+  const lead = await chats.create(projectId, scope);
+  const child = await chats.create(projectId, scope, "checkout", {
+    chatId: lead.id,
+    agent: "codex",
+  });
+  const until = Date.now() + 3_600_000;
+  await chats.triage(lead.id, { kind: "snooze", until });
+  await chats.triage(child.id, { kind: "snooze", until });
+  const before = await chats.get(lead.id);
+  const after = await chats.triage(lead.id, { kind: "settle" });
+  expect(
+    chatActivitySection(
+      chats.list(projectId).find((c) => c.id === child.id)!,
+      Date.now(),
+    ),
+  ).toBe("settled");
+  await chats.triage(lead.id, undoTriage(before, after));
+  expect((await chats.get(lead.id)).snoozedUntil).toBe(until);
+  expect((await chats.get(child.id)).snoozedUntil).toBe(until);
+  expect((await chats.get(child.id)).settledAt).toBeUndefined();
+});
+
+it("rejects a stale phone Undo after another triage action", async () => {
+  const chat = await chats.create(projectId, scope);
+  const before = await chats.get(chat.id);
+  const after = await chats.triage(chat.id, { kind: "settle" });
+  const until = Date.now() + 3_600_000;
+  await chats.triage(chat.id, { kind: "snooze", until });
+  await expect(
+    chats.triage(chat.id, undoTriage(before, after)),
+  ).rejects.toThrow("changed since");
+  expect((await chats.get(chat.id)).snoozedUntil).toBe(until);
+});
+
+it("keeps a manual unread mark until the thread is opened again at the same update", async () => {
+  const chat = await chats.create(projectId, scope);
+  await chats.markSeen(chat.id, chat.updated);
+  await chats.triage(chat.id, { kind: "unread" });
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.markedUnread,
+  ).toBe(true);
+  await chats.markSeen(chat.id, chat.updated);
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.markedUnread,
+  ).toBeUndefined();
+});
+
+it("rejects settle and waiting snooze against live state without changing saved marks", async () => {
+  const chat = await chats.create(projectId, scope);
+  const save = vi.fn();
+  let working = true,
+    waiting = false;
+  const triage = new ThreadTriage(
+    {
+      storage: { load: async () => chat, save },
+      active: { has: () => working, requests: () => (waiting ? [{}] : []) },
+    } as unknown as ChatCore,
+    {} as ThreadWorktrees,
+    { busy: () => false } as unknown as Councils,
+  );
+  await expect(triage.triage(chat.id, { kind: "settle" })).rejects.toThrow(
+    "running answer",
+  );
+  working = false;
+  chat.waiting = true;
+  await expect(triage.triage(chat.id, { kind: "settle" })).rejects.toThrow(
+    "running answer",
+  );
+  delete chat.waiting;
+  waiting = true;
+  await expect(
+    triage.triage(chat.id, { kind: "snooze", until: Date.now() + 3_600_000 }),
+  ).rejects.toThrow("waiting request");
+  expect(save).not.toHaveBeenCalled();
+  expect(chat.settledAt).toBeUndefined();
+  expect(chat.snoozedAt).toBeUndefined();
 });

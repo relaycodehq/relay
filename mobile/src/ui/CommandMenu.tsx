@@ -31,18 +31,39 @@ const sources: Record<NonNullable<ProviderCommand["source"]>, string> = {
 
 /** The agent's own commands, fetched once a menu first opens for it. */
 export function useProviderCommands(projectId: string, provider: AgentProvider, wanted: boolean) {
-  const remote = useRemote();
-  const [cache, setCache] = useState<Partial<Record<AgentProvider, ProviderCommand[] | "failed">>>({});
+  const { desktop, status } = useRemote();
+  type Lists = Partial<Record<AgentProvider, ProviderCommand[] | "failed">>;
+  const [held, setHeld] = useState(() => ({ desktop, status, projectId, lists: {} as Lists }));
+  const sameProject = held.desktop === desktop && held.projectId === projectId;
+  if (!sameProject) setHeld({ desktop, status, projectId, lists: {} });
+  else if (held.status !== status)
+    // A reconnect retries the lists that failed; the ones it got still hold.
+    setHeld({
+      ...held,
+      status,
+      lists: Object.fromEntries(
+        Object.entries(held.lists).filter(([, list]) => list !== "failed"),
+      ) as Lists,
+    });
+  const list = sameProject && held.status === status ? held.lists[provider] : undefined;
   useEffect(() => {
     // A new Scratchpad thread has no folder until the computer makes one.
-    if (!wanted || !projectId || cache[provider] || remote.status !== "online") return;
-    void remote
-      .desktop("projectCommands", projectId, provider)
-      .then((list) => setCache((c) => ({ ...c, [provider]: list })))
-      .catch(() => setCache((c) => ({ ...c, [provider]: "failed" })));
-  }, [wanted, provider, projectId, cache, remote]);
-  const list = cache[provider];
-  return { commands: Array.isArray(list) ? list : [], failed: list === "failed", loading: wanted && !list };
+    if (!wanted || !projectId || list || status !== "online") return;
+    let live = true;
+    const keep = (commands: ProviderCommand[] | "failed") => {
+      if (!live) return;
+      setHeld((h) => h.desktop === desktop && h.projectId === projectId
+        ? { ...h, lists: { ...h.lists, [provider]: commands } }
+        : h);
+    };
+    void desktop("projectCommands", projectId, provider).then(keep, () => keep("failed"));
+    return () => { live = false; };
+  }, [wanted, provider, projectId, list, desktop, status]);
+  return {
+    commands: Array.isArray(list) ? list : [],
+    failed: list === "failed",
+    loading: wanted && !!projectId && status === "online" && !list,
+  };
 }
 
 /** What the menu offers for the text being typed, or null when it's closed. */
@@ -135,10 +156,10 @@ export function CommandMenu({
           <Text style={[styles.note, { color: t.muted }]}>No matching commands.</Text>
         )}
       </ScrollView>
-      {loading && <Text style={[styles.note, { color: t.muted }]}>Loading the agent's commands…</Text>}
+      {loading && <Text style={[styles.note, { color: t.muted }]}>Loading the agent&apos;s commands…</Text>}
       {failed && (
         <Text style={[styles.note, { color: t.muted }]}>
-          The agent's commands are unavailable. Relay's actions still work.
+          The agent&apos;s commands are unavailable. Relay&apos;s actions still work.
         </Text>
       )}
     </View>
@@ -146,8 +167,8 @@ export function CommandMenu({
 }
 
 const styles = StyleSheet.create({
-  menu: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: "hidden", maxHeight: 280 },
-  scroll: { flexGrow: 0 },
+  menu: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: "hidden", maxHeight: 280, flexShrink: 1 },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   item: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 9 },
   itemText: { flex: 1, gap: 1 },
   label: { fontFamily: mono, fontSize: 13 },

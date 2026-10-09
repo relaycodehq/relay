@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../app/store";
-import { chatSummary, ChatStorage } from "./storage";
+import { chatSummary, ChatStorage, queueMark } from "./storage";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 let root: string, store: Store, storage: ChatStorage, changed: string[];
@@ -107,6 +107,65 @@ it("writes the summary when a save changes what the sidebar lists, and only then
   expect(changed).toEqual(["p"]);
 });
 
+it("tells listeners when only the queue moves, so phones fetch it", async () => {
+  const chat = thread();
+  chat.messages.push(answer("Working on it"));
+  await storage.add(chat);
+  expect(listed(chat).queueMark).toBeUndefined();
+  const input = (id: string) => ({ ...answer(id), id, body: id }) as never;
+  const marks: (string | undefined)[] = [];
+  for (const queue of [["a"], ["a", "b"], ["b", "a"], ["b"]]) {
+    changed.length = 0;
+    chat.queue = queue.map((id) => ({ input: input(id), created: 1 }));
+    await storage.save(chat);
+    expect(changed).toEqual(["p"]);
+    marks.push(listed(chat).queueMark);
+  }
+  expect(new Set(marks).size).toBe(4);
+
+  chat.queue = [];
+  await storage.save(chat);
+  expect(listed(chat).queueMark).toBeUndefined();
+});
+
+it("changes the queue mark for pause, errors and schedules, but stays quiet during streaming", async () => {
+  const chat = thread();
+  chat.messages.push(answer("Working"));
+  const input = {
+    id: "queued",
+    body: "Next",
+    images: [{ dataUrl: "large screenshot" }],
+  } as never;
+  chat.queue = [{ input, created: 1 }];
+  await storage.add(chat);
+  const initial = queueMark(chat);
+  changed.length = 0;
+  const update = vi.spyOn(store, "update");
+  chat.messages[0].body += " token";
+  chat.messages[0].version++;
+  await storage.save(chat);
+  expect(queueMark(chat)).toBe(initial);
+  expect(changed).toEqual([]);
+  expect(update).not.toHaveBeenCalled();
+
+  const marks = [initial];
+  chat.queuePaused = true;
+  marks.push(queueMark(chat));
+  chat.queue[0].error = "Couldn't send";
+  marks.push(queueMark(chat));
+  chat.scheduled = [{ input, at: 123, created: 1 }];
+  marks.push(queueMark(chat));
+  chat.scheduled[0].at++;
+  marks.push(queueMark(chat));
+  chat.scheduled[0].error = "Failed";
+  marks.push(queueMark(chat));
+  expect(new Set(marks).size).toBe(marks.length);
+  delete chat.queue;
+  const noQueue = queueMark(chat);
+  chat.queue = [];
+  expect(queueMark(chat)).toBe(noQueue);
+});
+
 it("holds the summary back until it is synced", async () => {
   const chat = thread();
   await storage.add(chat);
@@ -171,4 +230,19 @@ it("puts right a summary a crash left behind its thread", async () => {
   });
   expect(listed(stale).title).toBe("Thread");
   expect(changed).toEqual(["p"]);
+});
+
+it("derives open questions from messages, clearing the flag after answers or dismissals", () => {
+  const chat = thread();
+  const group = { id: "ask", questions: [{ id: "q", question: "Which?" }] };
+  chat.messages = [
+    { ...answer("Question"), questions: [group], parentId: "side" },
+  ];
+  expect(chatSummary(chat).asking).toBe(true);
+  chat.asking = true; // A loaded or forked summary is never the source of truth.
+  chat.messages[0].questions![0].dismissed = true;
+  expect(chatSummary(chat).asking).toBeUndefined();
+  delete chat.messages[0].questions![0].dismissed;
+  chat.messages[0].questions![0].answers = { q: ["This"] };
+  expect(chatSummary(chat).asking).toBeUndefined();
 });

@@ -9,7 +9,7 @@ import {
   updateKeys,
   type UpdateState,
 } from "../../shared/updates";
-import { signedByAny } from "../app/update-signature";
+import { signedByAny } from "../../shared/update-signature";
 import { replaceInstallation } from "./install";
 import { download, extract } from "./archive";
 

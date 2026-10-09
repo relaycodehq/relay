@@ -13,6 +13,8 @@ import { phoneAppStatus } from "../../../shared/phone-app";
 import { describeUpdate } from "../remote/computer-update";
 import { useComputerUpdateAction } from "../ui/ComputerUpdate";
 import { ConnectionLine } from "../ui/ConnectionLine";
+import { LatestAppRows } from "../ui/LatestApp";
+import { checksLatestApp } from "../remote/latest-app";
 import { MenuRow } from "../ui/Sheet";
 import { SectionTitle, ToggleRow } from "../ui/Rows";
 import { phoneCanWatch, useNotifyPreference } from "../remote/watch";
@@ -88,10 +90,13 @@ export default function Settings() {
             {phoneAppStatus(app, offered)}.{" "}
             {runningUpdate
               ? `Came from ${source}; the app was installed as ${app.apk}.`
-              : `As installed; new versions come from ${source}.`}
+              : checksLatestApp
+                ? `As installed; new code comes from ${source}, new apps from GitHub.`
+                : `As installed; new versions come from ${source}.`}
           </Text>
         </View>
       </View>
+      <LatestAppRows />
       {runningUpdate && (
         <MenuRow
           label="Go back to the built-in version"

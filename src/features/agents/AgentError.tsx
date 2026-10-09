@@ -1,5 +1,5 @@
 import { CircleAlert } from "lucide-react";
-import { agentError } from "./agent-error";
+import { agentError } from "../../../shared/agent-error";
 import "./agent-error.css";
 
 export function AgentError({ error }: { error: string }) {

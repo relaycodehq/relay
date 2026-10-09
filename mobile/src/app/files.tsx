@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { FileText, Folder } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
 import { LoadFailed, Row, rowStyles } from "../ui/Rows";
@@ -9,22 +9,22 @@ import { type, useTheme } from "../ui/theme";
 /** The project's files, folder by folder, or all of them filtered by a search. Read-only on a phone. */
 export default function FilesScreen() {
   const { where, dir = "" } = useLocalSearchParams<{ where: string; dir?: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [files, setFiles] = useState<string[]>();
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setFiles(await remote.desktop("projectFiles", where));
+      setFiles(await desktop("projectFiles", where));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, where]);
-  useEffect(() => {
+  }, [desktop, status, where]);
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   const entries = useMemo(() => {
     if (!files) return [];
     const q = query.trim().toLowerCase();

@@ -27,7 +27,7 @@ import {
   type UpdateState,
   type UpdateTarget,
 } from "../../shared/updates";
-import { signedByAny } from "./update-signature";
+import { signedByAny } from "../../shared/update-signature";
 
 const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;

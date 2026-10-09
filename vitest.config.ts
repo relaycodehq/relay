@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     include: [
       "{src,electron,shared}/**/*.test.{ts,tsx}",
+      "mobile/src/**/*.test.{ts,tsx}",
       "tests/unit/**/*.test.{ts,tsx}",
       "scripts/dev-*.test.mjs",
     ],

@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { Folder, NotebookPen } from "lucide-react-native";
 import type { RemoteProject } from "../../../shared/remote";
 import { useProjectIcon } from "../remote/project-icons";
+import { useRemote } from "../remote/RemoteProvider";
 import { useTheme } from "./theme";
 
 /** The project's own icon, as the desktop's sidebar shows it; its folder otherwise. */
@@ -15,7 +16,8 @@ export function ProjectIcon({
   size?: number;
 }) {
   const t = useTheme();
-  const uri = useProjectIcon(project.id);
+  const { active } = useRemote();
+  const uri = useProjectIcon(active, project.id);
   // An icon the phone can't draw (some SVGs) falls back like a missing one.
   const [broken, setBroken] = useState<string>();
   if (project.scratch) return <NotebookPen size={size} color={t.muted} />;
@@ -48,7 +50,8 @@ export function ProjectBadge({
   project: Pick<RemoteProject, "id" | "name">;
   size?: number;
 }) {
-  const uri = useProjectIcon(project.id);
+  const { active } = useRemote();
+  const uri = useProjectIcon(active, project.id);
   const [broken, setBroken] = useState<string>();
   const box = { width: size, height: size, borderRadius: size * 0.3 };
   if (uri && uri !== broken)

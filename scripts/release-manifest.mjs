@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { strFromU8, unzipSync } from "fflate";
 
 const [dir, version, repo, notes = ""] = process.argv.slice(2);
 if (!dir || !/^\d+\.\d+\.\d+$/.test(version ?? "") || !repo)
@@ -52,6 +53,33 @@ const headless = present.has(headlessName)
     }
   : undefined;
 
+// The phone app sits beside `files` too, for phones that update without their
+// desktop. Its version is the APK's own: a release whose native side didn't
+// change carries the previous APK on.
+const androidName = "Relay-Android.apk";
+let android;
+if (present.has(androidName)) {
+  const path = join(dir, androidName);
+  const bytes = readFileSync(path);
+  const entry = unzipSync(bytes, {
+    filter: (file) => file.name === "assets/app.config",
+  })["assets/app.config"];
+  if (!entry) throw new Error(`${androidName} has no assets/app.config.`);
+  const config = JSON.parse(strFromU8(entry));
+  if (!/^\d+\.\d+\.\d+$/.test(config.version ?? ""))
+    throw new Error(`${androidName} has no version in assets/app.config.`);
+  android = {
+    name: androidName,
+    url: `https://github.com/${repo}/releases/download/v${version}/${androidName}`,
+    sha512: createHash("sha512").update(bytes).digest("base64"),
+    size: bytes.length,
+    version: config.version,
+    ...(config.extra?.relayRuntime
+      ? { runtime: config.extra.relayRuntime }
+      : {}),
+  };
+}
+
 writeFileSync(
   join(dir, "latest.json"),
   JSON.stringify(
@@ -61,11 +89,16 @@ writeFileSync(
       notes: notes.slice(0, 4000),
       files,
       ...(headless ? { headless } : {}),
+      ...(android ? { android } : {}),
     },
     null,
     2,
   ) + "\n",
 );
 console.log(
-  `latest.json → ${version}: ${[...Object.keys(files), ...(headless ? ["headless"] : [])].join(", ")}`,
+  `latest.json → ${version}: ${[
+    ...Object.keys(files),
+    ...(headless ? ["headless"] : []),
+    ...(android ? [`android ${android.version}`] : []),
+  ].join(", ")}`,
 );

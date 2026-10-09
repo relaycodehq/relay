@@ -7,6 +7,7 @@ import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
+import { useLatestAppChecks } from "../remote/latest-app";
 import { useThreadNotifications } from "../remote/watch";
 import {
   FullWidthContext,
@@ -52,6 +53,7 @@ function Screens() {
   useOrientationPolicy();
   useOfflineCopies();
   useThreadNotifications();
+  useLatestAppChecks();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);
@@ -106,26 +108,31 @@ function Screens() {
                   </View>
                 </ReportHeaderHeight>
               )}
-              screenOptions={({ navigation, route }) => ({
-                headerStyle: { backgroundColor: t.background },
-                headerTintColor: t.text,
-                headerTitleStyle: { fontSize: 16, fontWeight: "600" },
-                headerShadowVisible: false,
-                contentStyle: {
-                  backgroundColor: t.background,
-                  // Lists end above Android's navigation bar instead of under
-                  // it; screens with a composer pad it themselves.
-                  paddingBottom: ownsBottom.has(route.name) ? 0 : insets.bottom,
-                },
-                // Beside the list, the first screen has nothing to go back to.
-                headerBackVisible: !(
-                  panes && navigation.getState()?.routes[1]?.key === route.key
-                ),
-                headerLeft:
-                  panes && hidden && !fullWidth
-                    ? () => <SidebarToggle hidden onPress={toggleSidebar} />
-                    : undefined,
-              })}
+              screenOptions={({ navigation, route }) => {
+                // Beside the list, what the list opens fills the pane.
+                const first =
+                  panes && navigation.getState()?.routes[1]?.key === route.key;
+                return {
+                  headerStyle: { backgroundColor: t.background },
+                  headerTintColor: t.text,
+                  headerTitleStyle: { fontSize: 16, fontWeight: "600" },
+                  headerShadowVisible: false,
+                  contentStyle: {
+                    backgroundColor: t.background,
+                    // Lists end above Android's navigation bar instead of under
+                    // it; screens with a composer pad it themselves.
+                    paddingBottom: ownsBottom.has(route.name) ? 0 : insets.bottom,
+                  },
+                  // It has nothing to go back to, and it swaps in place: sliding
+                  // in, it would push the last one out beside a list that stays put.
+                  headerBackVisible: !first,
+                  ...(first ? { animation: "none" as const } : {}),
+                  headerLeft:
+                    panes && hidden && !fullWidth
+                      ? () => <SidebarToggle hidden onPress={toggleSidebar} />
+                      : undefined,
+                };
+              }}
             >
               <Stack.Screen name="index" options={{ title: "Relay" }} />
               <Stack.Screen
@@ -139,6 +146,10 @@ function Screens() {
               <Stack.Screen
                 name="chat/[id]/reply/[root]"
                 options={{ title: "Replies" }}
+              />
+              <Stack.Screen
+                name="chat/[id]/agent/[agent]"
+                options={{ title: "Agent" }}
               />
               <Stack.Screen name="project/[id]" options={{ title: "" }} />
               <Stack.Screen name="turn" options={{ title: "Changes" }} />
@@ -161,11 +172,12 @@ function Screens() {
 /** Screens that show the connection their own way. */
 const ownLine = new Set(["settings", "pair"]);
 
-/** Screens whose composer already keeps clear of the navigation bar. */
+/** Screens whose composer or footer already keeps clear of the navigation bar. */
 const ownsBottom = new Set([
   "new",
   "chat/[id]/index",
   "chat/[id]/reply/[root]",
+  "chat/[id]/agent/[agent]",
 ]);
 
 const styles = StyleSheet.create({

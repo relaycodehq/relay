@@ -1,14 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  Keyboard,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { randomUUID } from "expo-crypto";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Keyboard } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
@@ -20,195 +12,210 @@ import {
 } from "../../../shared/remote-compose";
 import { loadNewThread, saveNewThread } from "../remote/offline";
 import { deliver } from "../remote/outbox";
+import { availableWhere, projectsByUse, startingWhere, type Where } from "../remote/new-thread";
 import {
   sameModel,
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
-import { NotebookPen } from "lucide-react-native";
-import { Composer, type Outgoing } from "../ui/Composer";
-import { ProjectIcon } from "../ui/ProjectIcon";
-import { KeyboardAware } from "../ui/KeyboardAware";
-import { Segmented } from "../ui/Rows";
-import { type, useTheme } from "../ui/theme";
+import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
+import { focusWithKeyboard, KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
+import {
+  WhereIntro,
+  WhereLine,
+  WhereSheets,
+  type WhereSheet,
+} from "../ui/NewThreadWhere";
 
-/** Starts a thread the way the desktop's new-thread composer does, then opens it. */
+/**
+ * Starts a thread the way the desktop's new-thread composer does, then opens
+ * it. The composer has the keyboard from the start, on the project used last;
+ * the project and workspace are picked in sheets from the line over it.
+ */
 export default function NewThread() {
-  const { project, scratch } = useLocalSearchParams<{
-    project?: string;
-    scratch?: string;
-  }>();
+  const { active } = useRemote();
+  return <NewThreadComposer key={active} />;
+}
+
+function NewThreadComposer() {
+  const asked = useLocalSearchParams<{ project?: string; scratch?: string }>();
   const remote = useRemote();
-  const t = useTheme();
-  const overview = remote.overview;
-  const real = overview?.projects.filter((p) => !p.scratch) ?? [];
-  const last = overview?.chats[0]?.projectId;
-  const [picked, setPicked] = useState<string | "scratch" | undefined>(() =>
-    scratch
-      ? "scratch"
-      : (project ??
-        (real.some((p) => p.id === last) ? last : real[0]?.id) ??
-        "scratch"),
+  const { desktop, status, overview, active } = remote;
+  const composer = useRef<ComposerHandle>(null);
+  // Settled once, so a thread moving on the computer doesn't swap the project under a thumb.
+  const [picked, setPicked] = useState<Where | undefined>(() =>
+    startingWhere(overview, asked),
   );
-  // The desktop's New chat: an unused Scratchpad folder, or a fresh one.
-  const [scratchId, setScratchId] = useState<string>();
-  const [scratchError, setScratchError] = useState<string>();
+  const available = availableWhere(picked, overview, asked);
+  if (picked !== available) setPicked(available);
+  const projects = projectsByUse(
+    overview?.projects ?? [],
+    overview?.chats ?? [],
+  );
+  const chosen = projects.find((p) => p.id === picked);
+
+  // The desktop's New chat: an unused Scratchpad folder, or a fresh one. One
+  // ask per screen, shared with a send that comes before its answer; after a
+  // failure only a send or a tap asks again, as each ask may make a folder.
+  const [scratch, setScratch] = useState<{ id?: string; error?: string }>({});
+  const scratchAsk = useRef<Promise<string>>(undefined);
+  const askScratch = useCallback(() => {
+    scratchAsk.current ??= desktop("createScratch").then(
+      (p) => {
+        setScratch({ id: p.id });
+        return p.id;
+      },
+      (e: unknown) => {
+        scratchAsk.current = undefined;
+        const error = e instanceof Error ? e.message : String(e);
+        setScratch({ error });
+        throw new Error(error);
+      },
+    );
+    return scratchAsk.current;
+  }, [desktop]);
+  const askedScratch = useRef(false);
   useEffect(() => {
-    if (picked !== "scratch" || scratchId || remote.status !== "online") return;
-    remote
-      .desktop("createScratch")
-      .then((p) => setScratchId(p.id))
-      .catch((e) =>
-        setScratchError(e instanceof Error ? e.message : String(e)),
-      );
-  }, [picked, scratchId, remote]);
-  const projectId = picked === "scratch" ? scratchId : picked;
-  const chosen = real.find((p) => p.id === picked);
+    if (picked !== "scratch" || status !== "online" || askedScratch.current)
+      return;
+    askedScratch.current = true;
+    askScratch().catch(() => {});
+  }, [picked, status, askScratch]);
+  const projectId = picked === "scratch" ? scratch.id : picked;
+
   // Each project starts where its settings say; a pick here holds for it.
   const [workspaces, setWorkspaces] = useState<Record<string, ChatWorkspace>>(
     {},
   );
   const workspace =
     (picked && workspaces[picked]) || chosen?.workspace || "checkout";
-  const setWorkspace = (next: ChatWorkspace) => {
-    if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
-  };
+
   // The composer is there at once, on what the computer said last time; its
   // answer replaces that unless a pick here came first.
   const [settings, setSettings] = useState<RemoteSettings>();
   const [models, setModels] = useState<NewThreadModels>({});
   const chose = useRef(false);
-  const { desktop, status } = remote;
   useEffect(() => {
-    void loadNewThread().then((saved) => {
+    let live = true;
+    void loadNewThread(active).then((saved) => {
+      if (!live) return;
       setSettings((s) => s ?? saved?.settings ?? newThreadSettings(undefined));
       if (saved) setModels((m) => (Object.keys(m).length ? m : saved.models));
     });
-  }, []);
-  const asked = useRef(false);
+    return () => { live = false; };
+  }, [active]);
+  const askedDesktop = useRef(false);
   useEffect(() => {
     // Offline, each of its calls would fall back to a default.
-    if (status !== "online" || asked.current) return;
-    asked.current = true;
+    if (status !== "online" || askedDesktop.current) return;
+    askedDesktop.current = true;
+    let live = true;
     void desktopNewThread(desktop).then((s) => {
+      if (!live) return;
       if (!chose.current) setSettings(s.settings);
       setModels(s.models);
-      saveNewThread(s);
+      saveNewThread(s, active);
     });
-  }, [desktop, status]);
-  const start = async ({ body, settings: using, images, sendAt }: Outgoing) => {
-    if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
-    const where =
-      projectId ??
-      (picked === "scratch"
-        ? (await remote.desktop("createScratch")).id
-        : undefined);
-    if (!where) throw new Error("Pick a project first.");
-    const chat = await remote.desktop(
-      "createProjectChat",
-      where,
-      { kind: "project" },
-      !chosen || chosen.plain ? undefined : workspace,
-    );
-    // The thread opens now; the message follows it there, as making a
-    // worktree or carrying images over a slow link can take a while.
-    deliver(
-      remote.desktop,
-      remote.active ?? "",
-      chat.id,
-      composeSend(using, body, {
-        id: randomUUID(),
-        ...(sendAt ? { sendAt } : {}),
-        images: images.map(({ name, mimeType, dataUrl }) => ({
-          name,
-          mimeType,
-          dataUrl,
-        })),
-      }),
-    );
-    void remote.refresh();
-    router.replace(`/chat/${chat.id}`);
+    return () => {
+      live = false;
+      askedDesktop.current = false;
+    };
+  }, [desktop, status, active]);
+
+  const focused = useRef(false);
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    return () => { focused.current = false; };
+  }, []));
+
+  // A sheet takes the keyboard's room; it comes back after if it was up.
+  const keyboard = useKeyboardShown();
+  const [sheet, setSheet] = useState<WhereSheet>();
+  const typing = useRef(false);
+  const openSheet = (next: WhereSheet) => {
+    typing.current = keyboard;
+    Keyboard.dismiss();
+    setSheet(next);
   };
-  const choice = (on: boolean) => [
-    styles.choice,
-    { borderColor: on ? t.accent : t.border },
-    on && { backgroundColor: t.accentSoft },
-  ];
+  const closeSheet = () => {
+    setSheet(undefined);
+  };
+  const restoreFocus = () => {
+    const resume = typing.current;
+    typing.current = false;
+    const input = composer.current;
+    if (resume && focused.current && input) focusWithKeyboard(input);
+  };
+
+  // A thread made for a scheduled message that then failed to go, used again on the next try.
+  const made = useRef<{ key: string; id: string }>(undefined);
+  const start = async ({ id: messageId, body, settings: using, images, sendAt }: Outgoing) => {
+    if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
+    if (!picked)
+      throw new Error("Wait for your computer to list its projects.");
+    const where = picked === "scratch" ? await askScratch() : picked;
+    const space = !chosen || chosen.plain ? undefined : workspace;
+    const key = `${where}:${space ?? ""}`;
+    const chatId =
+      made.current?.key === key
+        ? made.current.id
+        : (
+            await desktop(
+              "createProjectChat",
+              where,
+              { kind: "project" },
+              space,
+            )
+          ).id;
+    made.current = { key, id: chatId };
+    const message = composeSend(using, body, {
+      id: messageId,
+      ...(sendAt ? { sendAt } : {}),
+      images: images.map(({ name, mimeType, dataUrl }) => ({
+        name,
+        mimeType,
+        dataUrl,
+      })),
+    });
+    // A scheduled message goes to the desktop's queue, which the thread
+    // shows; through the outbox it would also sit there as a pending send.
+    // A plain one follows the thread, as making a worktree or carrying
+    // images over a slow link can take a while.
+    if (sendAt) await desktop("sendProjectChat", chatId, message);
+    else deliver(desktop, remote.active ?? "", chatId, message);
+    made.current = undefined;
+    void remote.refresh().catch(() => {});
+    if (!focused.current) return;
+    // Put away before the composer goes: beside the list, Android would hand
+    // the keyboard to the list's search field, and the thread's composer
+    // would open under it.
+    Keyboard.dismiss();
+    router.replace(`/chat/${chatId}`);
+  };
+
   return (
     <KeyboardAware>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        onTouchStart={Keyboard.dismiss}
-      >
-        <Text style={[styles.label, { color: t.muted }]}>Where</Text>
-        <View style={styles.group}>
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ checked: picked === "scratch" }}
-            onPress={() => setPicked("scratch")}
-            style={choice(picked === "scratch")}
-          >
-            <View style={styles.choiceRow}>
-              <NotebookPen size={17} color={t.muted} />
-              <View style={styles.choiceBody}>
-                <Text style={[styles.choiceText, { color: t.text }]}>
-                  Scratchpad
-                </Text>
-                <Text style={[styles.hint, { color: t.muted }]}>
-                  {scratchError ?? "A chat of its own, outside your projects"}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-          {real.map((p) => (
-            <Pressable
-              key={p.id}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: p.id === picked }}
-              onPress={() => setPicked(p.id)}
-              style={choice(p.id === picked)}
-            >
-              <View style={styles.choiceRow}>
-                <ProjectIcon project={p} />
-                <View style={styles.choiceBody}>
-                  <Text style={[styles.choiceText, { color: t.text }]}>
-                    {p.name}
-                  </Text>
-                  {p.folder && (
-                    <Text style={[styles.hint, { color: t.muted }]}>
-                      {p.folder}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-        {chosen && !chosen.plain && (
-          <>
-            <Text style={[styles.label, { color: t.muted }]}>
-              Where it works
-            </Text>
-            <Segmented
-              value={workspace}
-              onChange={setWorkspace}
-              options={[
-                { value: "checkout", label: "Project folder" },
-                { value: "worktree", label: "Its own worktree" },
-              ]}
-            />
-            <Text style={[styles.hint, { color: t.muted }]}>
-              {workspace === "worktree"
-                ? "A branch and folder of its own, made from the checkout with the first message. Your checkout stays as it is."
-                : "Works in the checkout, on whatever branch it has."}
-            </Text>
-          </>
-        )}
-      </ScrollView>
+      <WhereIntro
+        project={chosen}
+        picked={picked}
+        workspace={workspace}
+        scratchError={picked === "scratch" ? scratch.error : undefined}
+        onOpen={openSheet}
+        onRetryScratch={() => void askScratch().catch(() => {})}
+      />
       {settings && (
         <Composer
+          ref={composer}
+          autoFocus
+          above={
+            <WhereLine
+              project={chosen}
+              picked={picked}
+              workspace={workspace}
+              onOpen={openSheet}
+            />
+          }
           projectId={projectId ?? ""}
+          sendTarget={`${picked ?? ""}:${workspace}`}
           settings={settings}
           onSettings={(s) => {
             // The next new thread, here or on the desktop, starts on it too.
@@ -223,7 +230,7 @@ export default function NewThread() {
             setSettings(s);
           }}
           running={false}
-          disabled={remote.status !== "online"}
+          disabled={status !== "online"}
           placeholder={
             picked === "scratch" ? "Ask anything" : "What should we work on?"
           }
@@ -232,23 +239,18 @@ export default function NewThread() {
           remembered={models}
         />
       )}
+      <WhereSheets
+        open={sheet}
+        projects={projects}
+        picked={picked}
+        workspace={workspace}
+        onPick={setPicked}
+        onWorkspace={(next) => {
+          if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
+        }}
+        onClose={closeSheet}
+        onDismiss={restoreFocus}
+      />
     </KeyboardAware>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { padding: 16, gap: 10, paddingBottom: 16 },
-  label: { fontSize: type.tiny, fontWeight: "600", marginTop: 8 },
-  group: { gap: 8 },
-  choice: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 3,
-  },
-  choiceRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  choiceBody: { flex: 1, gap: 3 },
-  choiceText: { fontSize: type.body },
-  hint: { fontSize: type.tiny, lineHeight: 17 },
-});
