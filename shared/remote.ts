@@ -144,7 +144,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 16;
+export const remoteBridgeVersion = 15;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -165,7 +165,7 @@ export const imageBridge = 14;
  * From here phones may list a thread's subagents, read one's run (its tool
  * output cut as a thread's is) and stop one, with conditional reads.
  */
-export const subagentsBridge = 16;
+export const subagentsBridge = 15;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
