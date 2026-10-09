@@ -386,7 +386,7 @@ export function UnsentStrip({
 }: {
   unsent: Outgoing[];
   onRetry: (o: Outgoing) => void;
-  onEdit: (o: Outgoing) => void;
+  onEdit: (o: Outgoing) => Promise<void> | void;
 }) {
   const t = useTheme();
   if (!unsent.length) return null;

@@ -31,11 +31,14 @@ import {
   arrived,
   deliver,
   drop,
+  heldIds,
   outgoingMessage,
+  reached,
   retry,
   useOutbox,
 } from "../remote/outbox";
 import {
+  knownOf,
   mainMessages,
   replyCounts,
   rootOf,
@@ -72,7 +75,7 @@ import { type, useTheme } from "../ui/theme";
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const remote = useRemote();
   const t = useTheme();
-  const { thread, error, reload, summary, loadEarlier } = useThread(id);
+  const { thread, fetched, error, reload, summary, loadEarlier } = useThread(id);
   // Open on the phone counts as read, for the Activity list's unread marks,
   // but only while the app is in front: answers that land in the background
   // are marked when it comes back.
@@ -94,8 +97,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
   const outbox = useOutbox(id);
-  const held = useMemo(() => new Set(all.map((m) => m.id)), [all]);
-  useEffect(() => arrived(held), [held]);
+  // Queued and scheduled ones show in the queue instead; those it lost go.
+  const held = useMemo(() => heldIds(thread), [thread]);
+  useEffect(() => arrived(id, held, fetched), [id, held, fetched]);
   const outgoing = useMemo(
     () => outbox.filter((o) => !held.has(o.send.id)),
     [outbox, held],
@@ -720,7 +724,12 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       <UnsentStrip
         unsent={outgoing.filter((o) => o.error)}
         onRetry={(o) => retry(remote.desktop, o.send.id)}
-        onEdit={(o) => {
+        onEdit={async (o) => {
+          // Unanswered, it may be on the computer already: sent again it would go twice.
+          if (o.unsure && (await reached(remote.call, o, knownOf(thread)))) {
+            void reload();
+            return Alert.alert("It went out after all", `${remote.name} has it, so it stays sent.`);
+          }
           drop(o.send.id);
           composer.current?.restore({
             body: withoutMention(o.send.body),

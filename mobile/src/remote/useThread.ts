@@ -3,6 +3,7 @@ import { maxRemoteHistory, remoteHistory } from "../../../shared/remote";
 import { useRemote } from "./RemoteProvider";
 import { loadThread, saveThread } from "./offline";
 import { oneAtATime } from "./one-at-a-time";
+import { stamp } from "./outbox-state";
 import {
   applyMessage,
   applyPatch,
@@ -21,6 +22,8 @@ export function useThread(id: string) {
   current.current = thread;
   // One fetch at a time; a request during one runs once more after it.
   const [oneFetch] = useState(oneAtATime);
+  // When the fetch the thread last came from started, against the outbox's sends.
+  const [fetched, setFetched] = useState(0);
   // How many of the latest messages to hold; "Load earlier" asks for a page more.
   const [history, setHistory] = useState(remoteHistory);
 
@@ -47,6 +50,7 @@ export function useThread(id: string) {
       oneFetch(async () => {
         try {
           await cacheRead.current;
+          const started = stamp();
           const patch = await remote.call(
             "chat",
             id,
@@ -64,6 +68,7 @@ export function useThread(id: string) {
             );
           }
           setThread((held) => keepNewer(next, held));
+          setFetched(started);
           saveThread(id, next);
           setError(undefined);
         } catch (e) {
@@ -103,6 +108,7 @@ export function useThread(id: string) {
 
   return {
     thread,
+    fetched,
     error,
     reload: load,
     summary,
