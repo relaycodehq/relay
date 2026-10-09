@@ -147,6 +147,7 @@ export function WhereSheets({
   onPick,
   onWorkspace,
   onClose,
+  onDismiss,
 }: {
   open?: WhereSheet;
   projects: RemoteProject[];
@@ -155,6 +156,7 @@ export function WhereSheets({
   onPick: (where: Where) => void;
   onWorkspace: (workspace: ChatWorkspace) => void;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   const t = useTheme();
   return (
@@ -163,8 +165,10 @@ export function WhereSheets({
         open={open === "project"}
         title="Start in"
         onClose={onClose}
+        onDismiss={onDismiss}
         items={[
           {
+            id: "scratch",
             label: "Scratchpad",
             hint: scratchHint,
             icon: <NotebookPen size={17} color={t.muted} />,
@@ -172,6 +176,7 @@ export function WhereSheets({
             onPress: () => onPick("scratch"),
           },
           ...projects.map((p) => ({
+            id: p.id,
             label: p.name,
             hint: p.folder,
             icon: <ProjectIcon project={p} />,
@@ -184,6 +189,7 @@ export function WhereSheets({
         open={open === "workspace"}
         title="Where it works"
         onClose={onClose}
+        onDismiss={onDismiss}
         items={workspaces.map((w) => ({
           label: w.label,
           hint: w.hint,

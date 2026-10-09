@@ -138,7 +138,11 @@ function NewThreadComposer() {
   };
   const closeSheet = () => {
     setSheet(undefined);
-    if (typing.current) composer.current?.focus();
+  };
+  const restoreFocus = () => {
+    const resume = typing.current;
+    typing.current = false;
+    if (resume && focused.current) composer.current?.focus();
   };
 
   // A thread made for a scheduled message that then failed to go, used again on the next try.
@@ -239,6 +243,7 @@ function NewThreadComposer() {
           if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
         }}
         onClose={closeSheet}
+        onDismiss={restoreFocus}
       />
     </KeyboardAware>
   );
