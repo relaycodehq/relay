@@ -30,7 +30,7 @@ export function NeedsYou({
   pane: boolean;
 }) {
   const t = useTheme();
-  const { overview } = useRemote();
+  const { overview, active } = useRemote();
   const waiting = useMemo(
     () =>
       (overview?.chats ?? [])
@@ -39,14 +39,15 @@ export function NeedsYou({
         .join(","),
     [overview?.chats],
   );
-  const [before, setBefore] = useState<string>();
+  const [before, setBefore] = useState<{ computer?: string; waiting: string }>();
   const [shown, setShown] = useState<string>();
   // Compared with the last render's, not in an effect: only threads that
-  // start waiting from now on count, not the ones already waiting on launch.
-  if (overview && waiting !== before) {
-    setBefore(waiting);
-    if (before !== undefined) {
-      const old = new Set(before.split(","));
+  // start waiting from now on count, not the ones already waiting on launch
+  // or on the computer just switched to.
+  if (overview && (before?.waiting !== waiting || before?.computer !== active)) {
+    setBefore({ computer: active, waiting });
+    if (before && before.computer === active) {
+      const old = new Set(before.waiting.split(","));
       const fresh = waiting
         .split(",")
         .find((id) => id && !old.has(id) && id !== openId);
