@@ -1,0 +1,141 @@
+/* AI models rework: only what the app's settings CSS doesn't already draw. */
+.settings-screen {
+  min-height: 0;
+}
+
+.aim-agents {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+.aim-agents .settings-card + .settings-card {
+  margin-top: 0;
+}
+.aim-version {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.aim-small {
+  padding: 4px 9px;
+}
+.aim-account {
+  grid-template-columns: minmax(0, 1fr) 29px;
+}
+.aim-account .accounts-pick[data-several] {
+  grid-template-columns: auto minmax(0, 1fr) 200px;
+  gap: 12px 14px;
+  cursor: pointer;
+}
+.aim-add {
+  padding: 4px 8px 6px;
+}
+.aim-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 8px 10px 8px 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.aim-footnote {
+  margin: 8px 2px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.aim-footnote button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11.5px;
+}
+
+.aim-helpers {
+  margin-top: 10px;
+}
+.aim-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.aim-helper .settings-row-text {
+  flex: 1 1 160px;
+}
+.aim-saved {
+  margin: 0;
+  padding: 9px 16px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.aim-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.aim-row-name .provider-glyph {
+  width: 15px;
+  height: 15px;
+}
+.settings-group > .settings-card:first-of-type,
+.settings-group > .accounts-settings {
+  margin-top: 10px;
+}
+
+/* C: sub-pages under AI models */
+.aim-nav-group {
+  display: grid;
+  gap: 1px;
+}
+.settings-nav nav .aim-nav-parent {
+  color: var(--text);
+}
+.settings-nav nav button.aim-sub {
+  height: 28px;
+  margin-left: 25px;
+  padding-left: 10px;
+  color: var(--muted);
+}
+.settings-nav nav button.aim-sub.active {
+  color: var(--text);
+}
+.aim-crumb {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.aim-how {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.settings-row .aim-how summary {
+  margin: 0;
+  padding: 0;
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text);
+}
+.aim-how ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.aim-how b,
+.aim-how i {
+  color: var(--text);
+  font-weight: 500;
+}
+.aim-how code {
+  font-size: 11px;
+}
+.aim-how p {
+  margin: 8px 0 0;
+}
