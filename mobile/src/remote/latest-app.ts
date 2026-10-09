@@ -115,8 +115,10 @@ export async function checkLatestApp(force = false) {
     const newest = await fetchNewestApp((url) =>
       fetch(url, { signal: abort.signal }),
     );
+    // Older feeds infer the APK's version from the release; only an Android entry pins it.
     if (state.newest && (
-      newerVersion(state.newest.release, newest.release) || newerVersion(state.newest.version, newest.version)
+      newerVersion(state.newest.release, newest.release) ||
+      (state.newest.sha512 && newerVersion(state.newest.version, newest.version))
     )) throw new Error("The release feed went back to an older release or app.");
     set({ newest, checkedAt: Date.now(), checking: false });
     await persist();

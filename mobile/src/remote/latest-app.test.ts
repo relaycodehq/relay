@@ -52,6 +52,7 @@ const newest = {
   release: "0.10.2",
   version: "0.10.0",
   url: "https://example.test/Relay.apk",
+  sha512: "A".repeat(86) + "==",
 };
 beforeEach(() => {
   vi.resetModules();
@@ -135,6 +136,17 @@ it("retains a newer known APK when a later feed names an older app", async () =>
   mocks.fetch.mockResolvedValueOnce({ ...newest, release: "0.11.0", version: "0.9.1" });
   await checkLatestApp(true);
   expect(useLatestApp()).toMatchObject({ newest, error: expect.stringContaining("older release or app") });
+});
+
+it("replaces a legacy feed's guessed APK version with a newer feed's exact Android entry", async () => {
+  const { checkLatestApp, useLatestApp } = await import("./latest-app");
+  mocks.fetch.mockResolvedValueOnce({ ...newest, version: "0.10.2", sha512: undefined });
+  await checkLatestApp();
+  const exact = { ...newest, release: "0.10.3" };
+  mocks.fetch.mockResolvedValueOnce(exact);
+  await checkLatestApp(true);
+  expect(useLatestApp()).toMatchObject({ newest: exact, checking: false });
+  expect(useLatestApp().error).toBeUndefined();
 });
 
 it.each([
