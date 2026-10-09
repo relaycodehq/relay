@@ -37,5 +37,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  text: { fontSize: type.tiny, flex: 1 },
+  // Two lines' room whatever it says, so "Connecting…" turning into a longer
+  // "Can't reach…" and back doesn't move everything under it.
+  text: { fontSize: type.tiny, lineHeight: 16, minHeight: 32, flex: 1, textAlignVertical: "center" },
 });
