@@ -20,6 +20,7 @@ import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
+import { openPlan } from "../../../shared/open-plan";
 import { contextAgent } from "../../../shared/recipient";
 import { latestSetup } from "../../../shared/worktree-command";
 import { outsideBatch, runningBatch } from "../../../shared/subagents";
@@ -189,11 +190,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     ["cancelled", "failed"].includes(lastAnswer.status) &&
     !!thread?.settings &&
     (thread.lastParentId ?? null) === (rootId ?? null);
-  const last = listed.at(-1);
-  const planProvider =
-    !running && last?.status === "complete" && last.proposedPlan
-      ? last.provider
-      : undefined;
+  const planProvider = running
+    ? undefined
+    : openPlan([...all, ...outgoing.map(outgoingMessage)], listed);
   // The go-ahead's send: its bubble hides the button once rendered, but a
   // double tap lands before that. Taken back from the outbox, it may go again.
   const goingAhead = useRef<string>(undefined);
