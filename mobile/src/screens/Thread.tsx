@@ -34,6 +34,7 @@ import {
   deliver,
   drop,
   heldIds,
+  isOut,
   outgoingMessage,
   reached,
   retry,
@@ -73,6 +74,7 @@ import {
 } from "../ui/ThreadExtras";
 import { useForeground } from "../ui/motion";
 import { type, useTheme } from "../ui/theme";
+import { useThreadScroll } from "./thread-scroll";
 
 /** A thread, or with `rootId` one of its side conversations. */
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
@@ -150,6 +152,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
+  const scroll = useThreadScroll(shown);
   const counts = useMemo(() => replyCounts(all), [all]);
   const setupId = useMemo(
     () => (rootId ? undefined : latestSetup(listed)?.id),
@@ -184,6 +187,9 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     !running && last?.status === "complete" && last.proposedPlan
       ? last.provider
       : undefined;
+  // The go-ahead's send: its bubble hides the button once rendered, but a
+  // double tap lands before that. Taken back from the outbox, it may go again.
+  const goingAhead = useRef<string>(undefined);
   const where =
     thread &&
     (thread.worktree?.path && !thread.worktree.removedAt
@@ -673,39 +679,34 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
             </View>
           }
           ListFooterComponent={
-            thread?.earlier && !rootId ? (
-              loadEarlier ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={loadEarlier}
-                  style={styles.earlierButton}
-                >
-                  <Text style={[styles.earlier, { color: t.accent }]}>
-                    Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
-                    {thread.earlier === 1 ? "message" : "messages"}
-                    {thread.earlier > remoteHistory
-                      ? ` of ${thread.earlier}`
-                      : ""}
+            <View>
+              {thread?.earlier && !rootId ? (
+                loadEarlier ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={loadEarlier}
+                    style={styles.earlierButton}
+                  >
+                    <Text style={[styles.earlier, { color: t.accent }]}>
+                      Load {Math.min(remoteHistory, thread.earlier)} earlier{" "}
+                      {thread.earlier === 1 ? "message" : "messages"}
+                      {thread.earlier > remoteHistory
+                        ? ` of ${thread.earlier}`
+                        : ""}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={[styles.earlier, { color: t.faint }]}>
+                    {thread.earlier} earlier{" "}
+                    {thread.earlier === 1 ? "message is" : "messages are"} on your
+                    computer
                   </Text>
-                </Pressable>
-              ) : (
-                <Text style={[styles.earlier, { color: t.faint }]}>
-                  {thread.earlier} earlier{" "}
-                  {thread.earlier === 1 ? "message is" : "messages are"} on your
-                  computer
-                </Text>
-              )
-            ) : null
+                )
+              ) : null}
+            </View>
           }
           contentContainerStyle={styles.list}
-          // New messages and a growing answer land at offset 0, the visual
-          // bottom of the inverted list. Without this, everything you were
-          // reading shifts away; with it the anchor holds still, and within
-          // 80px of the bottom the list follows, as the desktop does.
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 80,
-          }}
+          {...scroll}
           // Reading back or tapping an answer puts the keyboard away. Android
           // has no "interactive" mode, which left it open there.
           keyboardDismissMode="on-drag"
@@ -795,9 +796,11 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
             label="Implement plan"
             primary
             onPress={() => {
+              if (goingAhead.current && isOut(goingAhead.current)) return;
               // On the planner's own model, as the composer would switch to it.
               const on = composer.current?.settingsOn(planProvider) ?? settings;
               const { send: message, nextSettings } = remotePlanGoAhead(on, planProvider, randomUUID());
+              goingAhead.current = message.id;
               deliver(remote.desktop, computer, id, { ...message, ...(rootId ? { parentId: rootId } : {}) });
               setSettings(nextSettings);
             }}

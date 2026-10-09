@@ -120,6 +120,9 @@ export function resendFailed(desktop: Desktop, computer: string) {
     if (o.error && o.computer === computer) retry(desktop, o.send.id);
 }
 
+/** Still waiting here, unsent or failed: read at once, before any screen renders it. */
+export const isOut = (id: string) => items.some((o) => o.send.id === id);
+
 export function drop(id: string) {
   unkeep(id);
   set(items.filter((o) => o.send.id !== id));

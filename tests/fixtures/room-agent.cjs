@@ -1,6 +1,12 @@
 // Real subprocess transport; deterministic local provider for desktop integration tests.
 const fs = require("node:fs");
 const args = process.argv.slice(2);
+// Executable discovery skips candidates that do not report a version. A
+// fixture must win that probe rather than falling through to a real CLI.
+if (args.includes("--version")) {
+  process.stdout.write("codex 0.160.0\n");
+  process.exit(0);
+}
 // A deep review lead's answer: a summary, then its findings for Relay to list.
 const leadReport = (findings) =>
   [
@@ -1071,6 +1077,8 @@ if (args.includes("--permission-prompt-tool")) {
             },
           },
         });
+        if (streamed && said.includes("fixture stream tools"))
+          return streamTools(streamLong);
         if (streamed) return streamLong();
         send({
           method: "item/agentMessage/delta",
@@ -1083,7 +1091,64 @@ if (args.includes("--permission-prompt-tool")) {
       }, 100);
       // A long answer in small pieces, the way a real one streams, so a test
       // can scroll the thread while it grows.
-      const streamed = said.includes("fixture stream long");
+      const streamed =
+        said.includes("fixture stream long") ||
+        said.includes("fixture stream tools");
+      // Tool calls one after another, a commentary line every few, so the
+      // trace's rows come and go under a reader scrolled up in the thread.
+      function streamTools(then) {
+        let n = 0;
+        const timer = setInterval(() => {
+          const id = `fixture-tool-${n}`,
+            command = `rg -n guard src/part-${n}.ts`;
+          if (n % 4 === 3)
+            send({
+              method: "item/completed",
+              params: {
+                threadId: "fixture-thread",
+                item: {
+                  id: `fixture-note-${n}`,
+                  type: "agentMessage",
+                  phase: "commentary",
+                  text: `Checked part ${n} of the cache; moving on.`,
+                },
+              },
+            });
+          send({
+            method: "item/started",
+            params: {
+              threadId: "fixture-thread",
+              item: {
+                id,
+                type: "commandExecution",
+                command,
+                status: "inProgress",
+              },
+            },
+          });
+          setTimeout(
+            () =>
+              send({
+                method: "item/completed",
+                params: {
+                  threadId: "fixture-thread",
+                  item: {
+                    id,
+                    type: "commandExecution",
+                    command,
+                    status: "completed",
+                    exitCode: 0,
+                    aggregatedOutput: "src/cache.ts:1: guard",
+                  },
+                },
+              }),
+            300,
+          );
+          if (++n < 40) return;
+          clearInterval(timer);
+          setTimeout(then, 600);
+        }, 600);
+      }
       function streamLong() {
         // About 45 s of streaming, still going when a slow CI runner has
         // finished scrolling around in it.

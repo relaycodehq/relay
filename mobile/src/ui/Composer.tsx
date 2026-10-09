@@ -138,6 +138,7 @@ export const Composer = forwardRef<
         id: i.id ?? i.uri,
         ...(i.n === undefined ? {} : { n: i.n }),
       }));
+      setError(undefined);
       const merged = returnedDraft(before.text, mine, back, true, () => `taken-back-${takenBackCount.current++}`);
       setText(merged.body);
       setImages(
@@ -168,7 +169,12 @@ export const Composer = forwardRef<
       ...(settings.contextWindow ? { contextWindow: settings.contextWindow } : {}),
     };
   }, [settings]);
-  useEffect(() => setError(undefined), [text]);
+  // Only the reader's own edits clear it: a failed send puts the draft back
+  // in `text`, which mustn't take its error with it.
+  const edit = (next: string) => {
+    setText(next);
+    setError(undefined);
+  };
 
   const { overview, desktop, status } = useRemote();
   // Desktops from before phone dictation don't say, and can't.
@@ -206,6 +212,7 @@ export const Composer = forwardRef<
   const dictationTarget = (): DictationTarget => ({
     begin: () => {
       const base = typed.current;
+      setError(undefined);
       // At the cursor while typing; after the draft otherwise.
       const at = input.current?.isFocused() ? selection.current : { start: base.length, end: base.length };
       const from = Math.min(at.start, base.length),
@@ -310,16 +317,17 @@ export const Composer = forwardRef<
   const pick = (item: CommandItem) => {
     if (item.kind === "relay") {
       // Required values are picked or typed after it; the rest run now.
-      if (item.name === "btw") return setText("/btw ");
-      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return setText(`/${item.name} `);
+      if (item.name === "btw") return edit("/btw ");
+      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return edit(`/${item.name} `);
       return void run(item.name, "");
     }
-    if (item.kind === "command") return setText(`/${item.name} `);
+    if (item.kind === "command") return edit(`/${item.name} `);
     // A skill goes in where it was typed, as `$name`.
-    setText(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
+    edit(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
   };
 
   const empty = !text.trim() && !images.length;
+  const steering = running && !empty;
   /** `written` is the draft when it hasn't reached `text` yet. */
   const send = async (delivery?: "queue" | "steer", sendAt?: number, written = text) => {
     // Sending mid-dictation waits for the last words to land in the draft.
@@ -394,7 +402,13 @@ export const Composer = forwardRef<
         />
       )}
       {!!(error ?? dictationError) && (
-        <Pressable onPress={() => (error ? setDismissed(text) : clearDictationError())}>
+        <Pressable
+          onPress={() => {
+            if (!error) return clearDictationError();
+            setError(undefined);
+            setDismissed(text);
+          }}
+        >
           <Text style={[styles.note, { color: t.danger }]}>{error ?? dictationError}</Text>
         </Pressable>
       )}
@@ -425,7 +439,7 @@ export const Composer = forwardRef<
           // words hold it still until they settle.
           editable={!live}
           value={live ? undefined : text}
-          onChangeText={setText}
+          onChangeText={edit}
           onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
           placeholder={placeholder ?? `Message ${agentNames[provider]}`}
           placeholderTextColor={t.faint}
@@ -443,7 +457,7 @@ export const Composer = forwardRef<
           <Tool label="Attach a photo" disabled={images.length >= maxImages} onPress={() => setSheet("attach")}>
             <ImagePlus size={17} color={t.muted} />
           </Tool>
-          <Tool label="Agent and model" onPress={() => setSheet("model")}>
+          <Tool label="Agent and model" shrink onPress={() => setSheet("model")}>
             <ProviderIcon provider={provider} color={t.muted} size={13} />
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
               {modelLabel}
@@ -455,11 +469,13 @@ export const Composer = forwardRef<
           {/* Room for the waveform on a narrow phone. */}
           {!dictating && !shrinking && (
             <>
-              <Tool label="Permissions" onPress={() => setSheet("mode")}>
-                <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
-                  {modeLabel(settings.runtimeMode)}
-                </Text>
-              </Tool>
+              {!steering && (
+                <Tool label="Permissions" shrink onPress={() => setSheet("mode")}>
+                  <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
+                    {modeLabel(settings.runtimeMode)}
+                  </Text>
+                </Tool>
+              )}
               <Tool
                 label={plan ? "Plan mode on" : "Plan mode off"}
                 onPress={() => onSettings({ ...settings, interactionMode: plan ? "default" : "plan" })}
@@ -478,14 +494,14 @@ export const Composer = forwardRef<
             <Tool
               label="Commands"
               onPress={() => {
-                setText("/");
+                edit("/");
                 input.current?.focus();
               }}
             >
               <Text style={[styles.slash, { color: t.muted }]}>/</Text>
             </Tool>
           )}
-          {running && !empty && (
+          {steering && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Steer now"
@@ -603,11 +619,14 @@ export const Composer = forwardRef<
 function Tool({
   label,
   disabled,
+  shrink,
   onPress,
   children,
 }: {
   label: string;
   disabled?: boolean;
+  /** Gives up width, its label cut short, so the send buttons always fit. */
+  shrink?: boolean;
   onPress: () => void;
   children: React.ReactNode;
 }) {
@@ -619,7 +638,12 @@ function Tool({
       disabled={disabled}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => [styles.tool, pressed && { backgroundColor: t.hover }, disabled && { opacity: 0.4 }]}
+      style={({ pressed }) => [
+        styles.tool,
+        shrink && styles.shrink,
+        pressed && { backgroundColor: t.hover },
+        disabled && { opacity: 0.4 },
+      ]}
     >
       {children}
     </Pressable>
@@ -646,6 +670,7 @@ const styles = StyleSheet.create({
   input: { fontSize: type.body, lineHeight: 21, maxHeight: 132, minHeight: 38, paddingHorizontal: 8, paddingVertical: 8 },
   toolbar: { flexDirection: "row", alignItems: "center", gap: 2 },
   tool: { flexDirection: "row", alignItems: "center", gap: 4, height: 32, paddingHorizontal: 6, borderRadius: 8, maxWidth: 140 },
+  shrink: { flexShrink: 1, minWidth: 0 },
   toolText: { fontSize: type.tiny, flexShrink: 1 },
   spacer: { flex: 1 },
   slash: { fontFamily: mono, fontSize: 15, width: 18, textAlign: "center" },
