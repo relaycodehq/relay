@@ -24,7 +24,7 @@ import {
   savePaired,
   saveCredentials,
 } from "./credentials";
-import { cameBack } from "./computer-update";
+import { cameBack, followUpdates } from "./computer-update";
 import { newModelConnection } from "./model-catalogs";
 import {
   dropLooseCopy,
@@ -33,6 +33,9 @@ import {
   saveOverview,
   setOfflineComputer,
 } from "./offline";
+import { PendingPairing } from "./pairing";
+import { MissingProjects } from "./missing-projects";
+import { forgetIcons } from "./project-icons";
 import { runningVersion } from "./self-update";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
@@ -112,10 +115,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string>();
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
-  const pairing = useRef<{
-    resolve: () => void;
-    reject: (e: Error) => void;
-  }>(undefined);
+  const [pairing] = useState(() => new PendingPairing<RemoteClient>());
 
   const connect = useCallback(
     (start: ConstructorParameters<typeof RemoteClient>[0]["start"]) => {
@@ -130,17 +130,13 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           if (s === "online") {
             newModelConnection();
             setName(next.name);
-            pairing.current?.resolve();
-            pairing.current = undefined;
+            pairing.online(next);
             // Every (re)connect starts from a fresh overview.
             void next
               .call("overview")
               .then((o) => current() && setOverview(o))
               .catch(() => {});
-          } else if (s === "denied" && pairing.current) {
-            pairing.current.reject(new Error(why ?? "Relay said no."));
-            pairing.current = undefined;
-          }
+          } else if (s === "denied") pairing.denied(next, why);
         },
         onPaired: (credentials) => {
           if (!current()) return;
@@ -168,10 +164,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       previous?.close();
       setName(next.name);
       setClient(next);
+      if ("link" in start) pairing.started(next);
       next.start();
       return next;
     },
-    [],
+    [pairing],
   );
 
   /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -188,7 +185,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       setActiveId(id);
       setOfflineComputer(id);
       setOverview(cached);
-      connect(start);
+      const next = connect(start);
+      followUpdates(id, next.call.bind(next));
     },
     [connect],
   );
@@ -226,6 +224,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       if (live.relayClient === client) {
         client?.close();
         live.relayClient = undefined;
+        followUpdates(undefined);
       }
     },
     [client],
@@ -245,6 +244,18 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     // Switched away while it came.
     if (live.relayClient === client) setOverview(fresh);
   }, [client]);
+
+  // Thread lists come pushed, projects only with the overview: a thread in a
+  // project the phone hasn't heard of (every new Scratchpad thread has a
+  // folder of its own) asks for the overview again.
+  const missingProjects = useMemo(
+    () => status === "online" ? new MissingProjects(refresh) : undefined,
+    [status, refresh],
+  );
+  useEffect(() => () => missingProjects?.stop(), [missingProjects]);
+  useEffect(() => {
+    if (overview) missingProjects?.observe(overview);
+  }, [overview, missingProjects]);
 
   // Stable for a connection, so screens fetch again on reconnects rather than
   // on every thread update.
@@ -308,24 +319,18 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       computers: saved.map((c) => ({ id: c.key, name: c.name })),
       active: activeId,
       switchTo,
-      pair: (link) =>
-        new Promise<void>((resolve, reject) => {
-          // An unreachable computer never answers; the client would retry forever.
-          const timer = setTimeout(() => {
-            pairing.current = undefined;
-            reject(
-              new Error(
-                `Couldn't reach ${link.name} at ${link.hosts.join(" or ")}:${link.port}. ` +
-                  "Check that Relay is open there and the phone is on the same network, or both on Tailscale.",
-              ),
-            );
-          }, pairingTimeout);
-          pairing.current = {
-            resolve: () => (clearTimeout(timer), resolve()),
-            reject: (e) => (clearTimeout(timer), reject(e)),
-          };
-          void attach(link.key, { link, device: deviceName() });
-        }).catch(async (e) => {
+      pair: (link) => {
+        // An unreachable computer never answers; the client would retry forever.
+        const paired = pairing.wait(
+          pairingTimeout,
+          () =>
+            new Error(
+              `Couldn't reach ${link.name} at ${link.hosts.join(" or ")}:${link.port}. ` +
+                "Check that Relay is open there and the phone is on the same network, or both on Tailscale.",
+            ),
+        );
+        void attach(link.key, { link, device: deviceName() });
+        return paired.catch(async (e) => {
           // A failed pairing leaves the phone as it was.
           const before = saved.find((c) => c.key === activeId);
           if (before) await attach(before.key, before);
@@ -336,9 +341,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             live.relayClient?.close();
             live.relayClient = undefined;
             setClient(undefined);
+            followUpdates(undefined);
           }
           throw e;
-        }),
+        });
+      },
       forget: async (id = activeId) => {
         if (!id) return;
         const rest = saved.filter((c) => c.key !== id);
@@ -353,9 +360,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             setClient(undefined);
             setOverview(undefined);
             setStatus("offline");
+            followUpdates(undefined);
           }
         }
         forgetOffline(id);
+        void forgetIcons(id);
         await clearCredentials(id);
       },
       onMessage,
@@ -377,6 +386,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       desktop,
       onMessage,
       onAnyMessage,
+      pairing,
     ],
   );
 

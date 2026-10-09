@@ -22,6 +22,10 @@ const selfUpdating = new Map<string, boolean>();
 /** The version a computer ran when its banner was waved off, for this launch. */
 const dismissed = new Map<string, string>();
 const timers = new Map<string, ReturnType<typeof setInterval>>();
+/** When each running update was asked for, so a watch picked up again still gives up in time. */
+const started = new Map<string, number>();
+/** The live client; async update replies must not revive a replaced one. */
+let following: { computer: string; call: RemoteClient["call"] } | undefined;
 const listeners = new Set<() => void>();
 let version = 0;
 
@@ -36,6 +40,7 @@ function set(computer: string, update: ComputerUpdate | undefined) {
   if (update?.kind !== "updating" && update?.kind !== "asking") {
     clearInterval(timers.get(computer));
     timers.delete(computer);
+    started.delete(computer);
   }
   changed();
 }
@@ -69,25 +74,54 @@ export async function updateComputer(
     return set(computer, { kind: "error", message: message(e) });
   }
   if (updates.get(computer)?.kind !== "updating") return;
-  const started = Date.now();
+  started.set(computer, Date.now());
+  if (following?.computer === computer) watch(following);
+}
+
+/** Asks how the update goes every few seconds, over this connection. */
+function watch(connection: NonNullable<typeof following>) {
+  const { computer, call } = connection;
+  clearInterval(timers.get(computer));
+  let pending = false;
   timers.set(
     computer,
     setInterval(() => {
-      if (Date.now() - started > giveUpMs)
+      const update = updates.get(computer);
+      if (update?.kind !== "updating") return;
+      if (Date.now() - (started.get(computer) ?? 0) > giveUpMs)
         return set(computer, {
           kind: "error",
           message: "It hasn't come back on a new version. Check on it there.",
         });
       // Gone quiet while it restarts; the next connection says how it went.
+      if (pending) return;
+      pending = true;
       void call("computerInfo")
-        .then((info) =>
-          info.version !== from
+        .then((info) => {
+          if (following !== connection || updates.get(computer) !== update) return;
+          return info.version !== update.from
             ? set(computer, undefined)
-            : settle(computer, from, info.update),
-        )
-        .catch(() => {});
+            : settle(computer, update.from, info.update);
+        })
+        .catch(() => {})
+        .finally(() => { pending = false; });
     }, watchMs),
   );
+}
+
+/**
+ * The phone talks to this computer now, or to none: another computer's update
+ * stops being watched over a connection that's closed, and this one's goes on
+ * over the new one.
+ */
+export function followUpdates(
+  computer: string | undefined,
+  call?: RemoteClient["call"],
+) {
+  following = computer && call ? { computer, call } : undefined;
+  for (const timer of timers.values()) clearInterval(timer);
+  timers.clear();
+  if (following && started.has(following.computer)) watch(following);
 }
 
 /** The computer answered on this version: an update that got it there is over. */

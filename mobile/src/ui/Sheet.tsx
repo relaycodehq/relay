@@ -26,6 +26,8 @@ import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type, useTheme } from "./theme";
 
+const settle = { damping: 40, stiffness: 400 };
+
 /**
  * A sheet from the bottom of the screen, for pickers, menus and small forms.
  * It drags like the platform's own: by its grip at any time, and by its
@@ -64,6 +66,19 @@ export function Sheet({
   const anchor = useSharedValue(0);
   const list = useAnimatedRef<Animated.ScrollView>();
   const hide = useCallback(() => setShown(false), []);
+  // Dragged past closing, it asks; a parent that won't close yet (busy) gets
+  // the sheet back where it was, not left where the finger let go.
+  const [dragClosed, setDragClosed] = useState(0);
+  const answered = useRef(0);
+  const dragClose = useCallback(() => {
+    onClose();
+    setDragClosed((n) => n + 1);
+  }, [onClose]);
+  useEffect(() => {
+    if (dragClosed === answered.current) return;
+    answered.current = dragClosed;
+    if (open) y.set(withSpring(0, settle));
+  }, [dragClosed, open, y]);
 
   useEffect(() => {
     if (!open && shown)
@@ -109,10 +124,10 @@ export function Sheet({
           scrollTo(list, 0, 0, false);
         })
         .onEnd((e) => {
-          if (y.get() > height.get() / 3 || (y.get() > 0 && e.velocityY > 900)) scheduleOnRN(onClose);
-          else y.set(withSpring(0, { damping: 40, stiffness: 400 }));
+          if (y.get() > height.get() / 3 || (y.get() > 0 && e.velocityY > 900)) scheduleOnRN(dragClose);
+          else y.set(withSpring(0, settle));
         }),
-    [native, fromGrip, gripHeight, anchor, y, scrollY, list, height, onClose],
+    [native, fromGrip, gripHeight, anchor, y, scrollY, list, height, dragClose],
   );
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.set(e.contentOffset.y);
@@ -212,9 +227,10 @@ export function MenuSheet({
   };
   return (
     <Sheet open={open} title={title} onClose={onClose} onDismiss={run}>
-      {items.map((item) => (
+      {items.map((item, i) => (
         <MenuRow
-          key={item.label}
+          // Labels repeat, e.g. side conversations opening with the same line.
+          key={i}
           {...item}
           onPress={() => {
             picked.current = item.onPress;

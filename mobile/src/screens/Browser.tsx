@@ -91,6 +91,7 @@ export function Browser({
   );
 
   useProjectIconSync(
+    remote.active,
     remote.call,
     remote.status === "online",
     useMemo(

@@ -35,6 +35,7 @@ import { defaultAISettings } from "../../shared/settings";
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
+  vi.restoreAllMocks();
 });
 
 const projectId = randomUUID(),
@@ -111,7 +112,7 @@ async function desktop(
     await remote.close();
     await rm(dir, { recursive: true, force: true });
   });
-  return { remote, ...fake };
+  return { remote, store, ...fake };
 }
 
 function phone(
@@ -273,6 +274,86 @@ it("ends the session of a phone removed without being cut off", async () => {
   await p.until("denied");
   expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
   expect(dispatched).toEqual([]);
+});
+
+it("keeps a phone trying when its sign-in can't be checked, and says no only to a bad token", async () => {
+  const { remote, store } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  first.client.close();
+
+  // As when saving lastSeen fails for a moment.
+  const verify = vi.spyOn(remote.devices, "verify");
+  const save = vi.spyOn(store, "update").mockRejectedValueOnce(new Error("EBUSY"));
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  const again = phone(credentials);
+  await again.until("online");
+  expect(verify).toHaveBeenCalledTimes(2);
+  expect(again.statuses.map((s) => s.status)).not.toContain("denied");
+
+  save.mockClear().mockRejectedValue(new Error("EBUSY"));
+  const wrong = phone({ ...credentials, token: "not-the-token" });
+  await wrong.until("denied");
+  const missing = phone({ ...credentials, deviceId: randomUUID() });
+  await missing.until("denied");
+  expect(wrong.statuses.at(-1)?.detail).toBe(missing.statuses.at(-1)?.detail);
+  expect(save).not.toHaveBeenCalled();
+  const calls = verify.mock.calls.length;
+  await new Promise((r) => setTimeout(r, 1100));
+  expect(verify).toHaveBeenCalledTimes(calls);
+});
+
+it("does not retry or expose unexpected authentication failures", async () => {
+  const { remote } = await desktop();
+  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  await first.until("online");
+  first.client.close();
+  const verify = vi.spyOn(remote.devices, "verify").mockRejectedValue(new Error("private internal detail"));
+  const again = phone(first.credentials()!);
+  await again.until("denied");
+  expect(again.statuses.at(-1)?.detail).not.toContain("private internal detail");
+  again.client.wake();
+  await new Promise((r) => setTimeout(r, 1100));
+  expect(verify).toHaveBeenCalledTimes(1);
+});
+
+it("drops forged and cross-session replayed sign-ins before token verification", async () => {
+  const { remote } = await desktop();
+  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  first.client.close();
+  const verify = vi.spyOn(remote.devices, "verify");
+  let recorded!: Uint8Array;
+  const attack = (payload: (channel: ReturnType<ReturnType<typeof clientHandshake>["finish"]>) => Uint8Array | undefined) =>
+    new Promise<void>((resolve, reject) => {
+      const handshake = clientHandshake(fromBase64Url(credentials.key));
+      const socket = new WebSocket(`ws://127.0.0.1:${credentials.port}/`);
+      cleanup.push(async () => socket.close());
+      socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+      socket.onerror = () => reject(new Error("socket error"));
+      socket.onclose = () => resolve();
+      socket.onmessage = (message) => {
+        const channel = handshake.finish(JSON.parse(message.data));
+        const bytes = payload(channel);
+        if (bytes) socket.send(toBase64Url(bytes));
+        else socket.close();
+      };
+    });
+  const auth = JSON.stringify({ t: "auth", deviceId: credentials.deviceId, token: credentials.token });
+  await attack((channel) => {
+    const forged = channel.seal(auth);
+    forged[0]! ^= 1;
+    return forged;
+  });
+  await attack((channel) => {
+    recorded = channel.seal(auth);
+    return undefined;
+  });
+  await attack(() => recorded);
+  expect(verify).not.toHaveBeenCalled();
 });
 
 it("gives up on a quiet link at once, even when the socket never finishes closing", async () => {

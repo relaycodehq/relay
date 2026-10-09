@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { CommitLog } from "../../../shared/history";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "../ui/Button";
@@ -13,22 +13,22 @@ const page = 100;
 /** The checked-out branch's commits, newest first. */
 export default function HistoryScreen() {
   const { where } = useLocalSearchParams<{ where: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [log, setLog] = useState<CommitLog>();
   const [limit, setLimit] = useState(page);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setLog(await remote.desktop("projectHistory", where, "head", limit));
+      setLog(await desktop("projectHistory", where, "head", limit));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, where, limit]);
-  useEffect(() => {
+  }, [desktop, status, where, limit]);
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+  }, [load]));
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "History" }} />
