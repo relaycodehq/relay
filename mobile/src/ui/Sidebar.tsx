@@ -1,5 +1,6 @@
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePathname } from "expo-router";
 import { Settings2 } from "lucide-react-native";
 import { Browser } from "../screens/Browser";
 import { ComputerSwitch } from "./ComputerSwitch";
@@ -22,6 +23,7 @@ export function Sidebar({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   return (
     <View
       style={[
@@ -49,7 +51,7 @@ export function Sidebar({
           accessibilityRole="button"
           accessibilityLabel="Settings"
           hitSlop={10}
-          onPress={() => openInPane("/settings")}
+          onPress={() => openInPane("/settings", pathname)}
         >
           <Settings2 size={20} color={t.text} />
         </Pressable>
