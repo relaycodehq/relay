@@ -6,7 +6,8 @@
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
-// --images starts one whose answer embeds two screenshots, a missing file and a web image.
+// --images starts one whose answer embeds two screenshots, a missing file and a web image,
+// and one whose agent looks at both screenshots on its way.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -155,7 +156,7 @@ if (images) {
   );
 }
 const pairing = await page.evaluate(
-  async ({ seed, images }) => {
+  async ({ seed, images, repo }) => {
     const project = await window.relay.addProject();
     if (seed || images) {
       const settings = await window.relay.aiSettings();
@@ -180,6 +181,11 @@ const pairing = await page.evaluate(
             "![the sidebar](docs/sidebar.png)\n\n" +
             "And a web one, ![logo](https://example.com/logo.png), stays a link.",
         );
+      if (images)
+        await start(
+          `fixture view images ${repo}/docs/shot.png ${repo}/docs/sidebar.png\n\n` +
+            "fixture echo: I looked at the welcome screen and the sidebar.",
+        );
       if (seed) {
         await start("fixture edit files in the cache");
         await new Promise((r) => setTimeout(r, 2500));
@@ -189,7 +195,7 @@ const pairing = await page.evaluate(
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed, images },
+  { seed, images, repo },
 );
 let url = pairing.url;
 if (host) {

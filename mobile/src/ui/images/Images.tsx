@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -7,65 +7,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  View,
 } from "react-native";
-import { answerImagePaths } from "../../../shared/answer-images";
-import { turnImages, type ChatMessage } from "../../../shared/projects";
-import { imageBridge } from "../../../shared/remote";
-import { outgoingImage } from "../remote/outbox";
-import { useRemote } from "../remote/RemoteProvider";
+import { answerImagePaths } from "../../../../shared/answer-images";
+import { turnImages, type ChatMessage } from "../../../../shared/projects";
 import type { LightboxImage } from "./Lightbox";
-import { useTheme } from "./theme";
-
-export type Source =
-  | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string }
-  /** Pasted into a message still on its way; the outbox holds it. */
-  | { kind: "pending"; messageId: string; index: number };
-
-// Data URLs by source and size, so scrolling back doesn't fetch them again.
-const cache = new Map<string, string>();
-// Ones the desktop refused, so the lightbox skips them as the desktop's does.
-const failed = new Set<string>();
-export const keyOf = (s: Source) => JSON.stringify(s);
-export const imageFailed = (s: Source) => failed.has(keyOf(s));
-
-/**
- * The image as a data URL; with `max`, at most that many pixels on its longer
- * side, which the desktop shrinks it to from `imageBridge` on. Older desktops
- * send it whole.
- */
-export function useImage(source: Source, max?: number) {
-  const remote = useRemote();
-  const bridge = remote.overview?.bridge;
-  const shrunk = !!max && (bridge ?? 1) >= imageBridge;
-  const key = keyOf(source) + (shrunk ? `@${max}` : "");
-  const [uri, setUri] = useState(() =>
-    source.kind === "pending" ? outgoingImage(source.messageId, source.index) : cache.get(key),
-  );
-  const [error, setError] = useState(
-    failed.has(keyOf(source)) || (source.kind === "pending" && !uri),
-  );
-  useEffect(() => {
-    if (uri || error || source.kind === "pending" || remote.status !== "online") return;
-    // Until the overview says which bridge it is, a thumbnail could come whole.
-    if (max && bridge === undefined) return;
-    const load = shrunk
-      ? remote.call("image", source, max)
-      : source.kind === "attached"
-        ? remote.desktop("projectChatImage", source.chatId, source.imageId)
-        : remote.desktop("projectChatReadImage", source.chatId, source.messageId, source.path);
-    void load
-      .then((data) => {
-        cache.set(key, data);
-        setUri(data);
-      })
-      .catch(() => {
-        failed.add(keyOf(source));
-        setError(true);
-      });
-  }, [key, uri, error, remote.status, bridge]);
-  return { uri, failed: error };
-}
+import { useTheme } from "../theme";
+import { keyOf, useImage, type Source } from "./useImage";
 
 const thumbSize = 88;
 const answerHeight = 420;
@@ -102,6 +50,8 @@ export function messageImages(chatId: string, message: ChatMessage, root?: strin
   return {
     all: [...pasted, ...(message.status === "streaming" ? [] : shown.map(read)), ...unshown],
     strip: [...pasted, ...unshown],
+    /** What the agent has looked at so far, which its trace rows open among. */
+    looked: turnImages(message).map(read),
   };
 }
 
@@ -140,6 +90,90 @@ function Thumb({ image, onPress }: { image: LightboxImage; onPress: () => void }
         <ActivityIndicator color={t.muted} />
       )}
     </Pressable>
+  );
+}
+
+const traceHeight = 88;
+// Wider or taller than this, a picture is cropped to it rather than squeezed or stretched.
+const traceRatios = [0.75, 2] as const;
+
+/**
+ * The picture a trace row's agent looked at, under the row and big enough to
+ * tell what it is; tapped, it opens. Its height is held from the start, so a
+ * running call, the fetch and the decode don't move the trace.
+ */
+export function ReadPreview({
+  source,
+  name,
+  done,
+  onOpen,
+}: {
+  source: Extract<Source, { kind: "read" }>;
+  name: string;
+  /** While the call runs there's no picture yet, only its place. */
+  done: boolean;
+  onOpen?: () => void;
+}) {
+  const t = useTheme();
+  const [ratio, setRatio] = useState(4 / 3);
+  const box = [
+    styles.trace,
+    {
+      width: traceHeight * Math.min(traceRatios[1], Math.max(traceRatios[0], ratio)),
+      borderColor: t.border,
+      backgroundColor: t.raised,
+    },
+  ];
+  if (!done) return <View style={box} />;
+  return (
+    <Pressable
+      accessibilityRole="imagebutton"
+      accessibilityLabel={name}
+      disabled={!onOpen}
+      onPress={onOpen}
+      style={box}
+    >
+      <Picture
+        source={source}
+        max={pixels(traceHeight * traceRatios[1])}
+        onRatio={setRatio}
+      />
+    </Pressable>
+  );
+}
+
+/** A finished image read's row icon on the live row, which can't grow: the picture, icon-sized. */
+export function ReadSwatch({ source }: { source: Source }) {
+  const t = useTheme();
+  return (
+    <View style={[styles.swatch, { backgroundColor: t.raised }]}>
+      <Picture source={source} max={pixels(traceHeight * traceRatios[1])} />
+    </View>
+  );
+}
+
+/** The picture filling its box, cropped to it; nothing until it loads. */
+function Picture({
+  source,
+  max,
+  onRatio,
+}: {
+  source: Source;
+  max: number;
+  onRatio?: (ratio: number) => void;
+}) {
+  const { uri } = useImage(source, max);
+  if (!uri) return null;
+  return (
+    <Image
+      source={{ uri }}
+      style={StyleSheet.absoluteFill}
+      resizeMode="cover"
+      onLoad={(e) => {
+        const { width, height } = e.nativeEvent.source;
+        if (width && height) onRatio?.(width / height);
+      }}
+    />
   );
 }
 
@@ -203,4 +237,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   measure: { position: "absolute", width: 1, height: 1, opacity: 0 },
+  trace: {
+    height: traceHeight,
+    marginTop: 2,
+    marginBottom: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  swatch: { width: 14, height: 14, borderRadius: 3, overflow: "hidden" },
 });

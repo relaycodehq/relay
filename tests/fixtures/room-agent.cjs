@@ -1048,6 +1048,17 @@ if (args.includes("--permission-prompt-tool")) {
           },
         },
       });
+      // "fixture view images /abs/a.png /abs/b.png": the agent looks at each.
+      const viewed = /fixture view images ((?:\/\S+\s*)+)/.exec(said)?.[1];
+      for (const [i, path] of (viewed?.trim().split(/\s+/) ?? []).entries())
+        for (const method of ["item/started", "item/completed"])
+          send({
+            method,
+            params: {
+              threadId: "fixture-thread",
+              item: { id: `fixture-view-${i}`, type: "imageView", path },
+            },
+          });
       setTimeout(() => {
         send({
           method: "item/started",

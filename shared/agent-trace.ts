@@ -2,6 +2,7 @@
 // desktop's AgentTurn and the phone app so both tell a turn the same way.
 import type { AgentActivity, AgentTrace, ChatMessage } from "./projects";
 import { summarizeActivity } from "./activity-labels";
+import { isImagePath } from "./answer-images";
 
 /** A turn's events in order; saves from before traces kept only the calls. */
 function traceOf(message: ChatMessage): AgentTrace[] {
@@ -14,6 +15,14 @@ function traceOf(message: ChatMessage): AgentTrace[] {
     }))
   );
 }
+
+/** A call that looks at an image Relay can show; it's still running or done. */
+export const looksAtImage = (a: AgentActivity) =>
+  a.kind === "read" && a.status !== "failed" && isImagePath(a.label);
+
+/** The image a finished call looked at, which the desktop hands out for its turn. */
+export const imageRead = (a: AgentActivity) =>
+  looksAtImage(a) && a.status === "complete" ? a.label : undefined;
 
 /** Takes the calls subagents made out of the trace, keyed by the agent call that ran them. */
 function nestSubagents(entries: AgentTrace[]) {

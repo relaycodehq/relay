@@ -54,6 +54,11 @@ it("lists the images a turn read once each, in first-read order", () => {
         id: "6",
         activity: read("/tmp/d.png", { kind: "file" }),
       },
+      {
+        kind: "activity",
+        id: "7",
+        activity: read("/tmp/loading.png", { status: "running" }),
+      },
     ],
   });
   expect(turnImages(m)).toEqual(["/tmp/b.PNG", "/tmp/a.jpeg"]);

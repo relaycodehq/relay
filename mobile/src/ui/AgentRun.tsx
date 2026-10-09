@@ -34,11 +34,14 @@ import {
 import {
   batchHead,
   groupTrace,
+  imageRead,
+  looksAtImage,
   readTurn,
   thinkingWord,
   turnHeading,
 } from "../../../shared/agent-trace";
 import { useRemote } from "../remote/RemoteProvider";
+import { ReadPreview, ReadSwatch } from "./images/Images";
 import { Markdown } from "./Markdown";
 import { useReducedMotion, useTick } from "./motion";
 import { Shine } from "./Shine";
@@ -54,10 +57,19 @@ const icons = {
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
 
-/** Each agent call's own tool calls, how to show their paths, and whose turn they're in. */
-const Subagents = createContext({
-  calls: new Map<string, AgentActivity[]>(),
-  display: (text: string) => text,
+/**
+ * Each agent call's own tool calls, how to show their paths, whose turn they're
+ * in, and how to open an image the turn looked at.
+ */
+const Subagents = createContext<{
+  calls: Map<string, AgentActivity[]>;
+  display: (text: string) => string;
+  chatId: string;
+  messageId: string;
+  openImage?: (path: string) => void;
+}>({
+  calls: new Map(),
+  display: (text) => text,
   chatId: "",
   messageId: "",
 });
@@ -66,10 +78,13 @@ export function AgentRun({
   chatId,
   message,
   root,
+  onOpenImage,
 }: {
   chatId: string;
   message: ChatMessage;
   root?: string;
+  /** Opens an image the turn looked at, by its path, among the others it looked at. */
+  onOpenImage?: (path: string) => void;
 }) {
   const t = useTheme();
   const turn = readTurn(message);
@@ -135,7 +150,9 @@ export function AgentRun({
         />
       </Pressable>
       {expanded && (entries.length > 0 || thinking) && (
-        <Subagents.Provider value={{ calls, display, chatId, messageId: message.id }}>
+        <Subagents.Provider
+          value={{ calls, display, chatId, messageId: message.id, openImage: onOpenImage }}
+        >
           <View style={styles.trace} accessibilityLabel="Agent activity">
             {groupTrace(shown).map((part, index, parts) =>
               part.kind === "commentary" ? (
@@ -172,8 +189,16 @@ export function AgentRun({
   );
 }
 
-/** A fold that builds its body the first time it opens. */
-function Fold({ heading, children }: { heading: ReactNode; children: ReactNode }) {
+/** A fold that builds its body the first time it opens; `under` goes below its heading. */
+function Fold({
+  heading,
+  under,
+  children,
+}: {
+  heading: ReactNode;
+  under?: (open: boolean) => ReactNode;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <View>
@@ -185,6 +210,7 @@ function Fold({ heading, children }: { heading: ReactNode; children: ReactNode }
       >
         {heading}
       </Pressable>
+      {under?.(open)}
       {open && children}
     </View>
   );
@@ -195,6 +221,11 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
   // A failed call looks like any other: commands fail as part of the work.
   const Icon = icons[a.kind];
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
+  const preview = looksAtImage(a) && (
+    <View style={styles.under}>
+      <Preview activity={a} name={label} />
+    </View>
+  );
   const heading = (
     <>
       {a.status === "running" ? (
@@ -215,12 +246,32 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
       <Progress activity={a} />
     </>
   );
-  if (!a.detail && !calls.length) return <View style={styles.step}>{heading}</View>;
+  if (!a.detail && !calls.length)
+    return (
+      <View>
+        <View style={styles.step}>{heading}</View>
+        {preview}
+      </View>
+    );
   return (
-    <Fold heading={heading}>
+    <Fold heading={heading} under={() => preview}>
       {calls.length > 0 && <SubagentRows calls={calls} />}
       {!!a.detail && <Detail activity={a} />}
     </Fold>
+  );
+}
+
+/** The picture a call looked at, under its row. */
+function Preview({ activity: a, name }: { activity: AgentActivity; name: string }) {
+  const { chatId, messageId, openImage } = useContext(Subagents);
+  return (
+    <ReadPreview
+      key={a.label}
+      source={{ kind: "read", chatId, messageId, path: a.label }}
+      name={name}
+      done={a.status === "complete"}
+      onOpen={openImage && (() => openImage(a.label))}
+    />
   );
 }
 
@@ -268,8 +319,20 @@ function ActivityGroup({ activity }: { activity: AgentActivity[] }) {
   const { display } = useContext(Subagents);
   const kinds = new Set(activity.map((a) => a.kind));
   const Icon = kinds.size === 1 ? icons[activity[0]!.kind] : Wrench;
+  // Closed, the pictures its calls looked at still show; open, each sits under its own row.
+  const looked = activity.filter(looksAtImage);
   return (
     <Fold
+      under={(open) =>
+        !open &&
+        looked.length > 0 && (
+          <ScrollView horizontal style={styles.under} contentContainerStyle={styles.previews}>
+            {looked.map((a) => (
+              <Preview key={a.id} activity={a} name={display(a.label)} />
+            ))}
+          </ScrollView>
+        )
+      }
       heading={
         <>
           <Icon size={14} color={t.muted} style={styles.icon} />
@@ -294,7 +357,7 @@ function ActivityGroup({ activity }: { activity: AgentActivity[] }) {
  */
 function OpenBatch({ activity }: { activity: AgentActivity[] }) {
   const t = useTheme();
-  const { display, calls: subagents } = useContext(Subagents);
+  const { display, calls: subagents, chatId, messageId, openImage } = useContext(Subagents);
   const [open, setOpen] = useState(false);
   const { head, earlier } = batchHead(activity);
   const running = head.status === "running";
@@ -302,16 +365,24 @@ function OpenBatch({ activity }: { activity: AgentActivity[] }) {
   const calls = subagents.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
   const text = display(running ? liveLabel(head) : doneLabel(head));
+  // This row changes with every call, so a picture it looked at stays icon-sized
+  // here; with nothing folded behind the row, tapping it opens the picture.
+  const looked = imageRead(head);
+  const view = !folded && looked && openImage ? () => openImage(looked) : undefined;
   return (
     <View>
       <Pressable
         accessibilityRole="button"
         accessibilityState={folded ? { expanded: open } : undefined}
-        disabled={!folded}
-        onPress={() => setOpen(!open)}
+        disabled={!folded && !view}
+        onPress={view ?? (() => setOpen(!open))}
         style={styles.step}
       >
-        <Icon size={14} color={t.muted} style={styles.icon} />
+        {looked ? (
+          <ReadSwatch source={{ kind: "read", chatId, messageId, path: looked }} />
+        ) : (
+          <Icon size={14} color={t.muted} style={styles.icon} />
+        )}
         {running ? (
           <Shine style={styles.stepText}>{text}</Shine>
         ) : (
@@ -328,6 +399,11 @@ function OpenBatch({ activity }: { activity: AgentActivity[] }) {
           />
         )}
       </Pressable>
+      {open && looksAtImage(head) && (
+        <View style={styles.under}>
+          <Preview activity={head} name={display(head.label)} />
+        </View>
+      )}
       {open && calls.length > 0 && <SubagentRows calls={calls} />}
       {open && earlier.length > 0 && (
         <View style={styles.rows}>
@@ -439,6 +515,8 @@ const styles = StyleSheet.create({
   mono: { fontFamily: mono, fontSize: 12 },
   progress: { fontSize: 13, opacity: 0.6, flexShrink: 1000 },
   rows: { marginLeft: 21, marginBottom: 4 },
+  under: { marginLeft: 21, flexDirection: "row" },
+  previews: { gap: 6 },
   detail: { marginLeft: 21, marginTop: 2, marginBottom: 8, maxHeight: 220, borderRadius: 5, padding: 9 },
   detailText: { fontFamily: mono, fontSize: 11, lineHeight: 16 },
   glyph: { width: 14, fontSize: 13, textAlign: "center" },

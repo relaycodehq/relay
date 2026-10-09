@@ -13,17 +13,12 @@ import {
   worktreeCommandNote,
 } from "../../../shared/worktree-command";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
+import { useRemote } from "../remote/RemoteProvider";
 import { AgentRun } from "./AgentRun";
 import { localImagePath } from "../../../shared/answer-images";
-import {
-  AnswerImage,
-  MessageImages,
-  imageFailed,
-  keyOf,
-  messageImages,
-  type Source,
-} from "./Images";
-import { Lightbox, type LightboxImage } from "./Lightbox";
+import { AnswerImage, MessageImages, messageImages } from "./images/Images";
+import { imageFailed, keyOf, type Source } from "./images/useImage";
+import { Lightbox, type LightboxImage } from "./images/Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
@@ -78,6 +73,7 @@ export const MessageView = memo(function MessageView({
   onSteer?: (text: string) => void;
 }) {
   const t = useTheme();
+  const { active } = useRemote();
   const changes = m.changes;
   const openLink = useCallback<OpenLink>(
     (value, inline) => {
@@ -91,16 +87,19 @@ export const MessageView = memo(function MessageView({
   );
   const images = useMemo(() => messageImages(chatId, m, root), [chatId, m, root]);
   const [viewing, setViewing] = useState<{ images: LightboxImage[]; index: number }>();
-  const openImage = useCallback(
-    (source: Source) => {
-      // The list is fixed while it's open; ones that failed to load are left out.
-      const key = keyOf(source);
-      const shown = images.all.filter(
-        (image) => keyOf(image.source) === key || !imageFailed(image.source),
-      );
-      setViewing({ images: shown, index: shown.findIndex((image) => keyOf(image.source) === key) });
-    },
-    [images],
+  const view = useCallback((among: LightboxImage[], source: Source) => {
+    // The list is fixed while it's open; ones that failed to load are left out.
+    const key = keyOf(source);
+    const shown = among.filter(
+      (image) => keyOf(image.source) === key || !imageFailed(image.source, active),
+    );
+    const index = shown.findIndex((image) => keyOf(image.source) === key);
+    if (index >= 0) setViewing({ images: shown, index });
+  }, [active]);
+  const openImage = useCallback((source: Source) => view(images.all, source), [view, images]);
+  const openLooked = useCallback(
+    (path: string) => view(images.looked, { kind: "read", chatId, messageId: m.id, path }),
+    [view, images, chatId, m.id],
   );
   const showImage = useCallback<ShowImage>(
     (src, alt) => {
@@ -171,7 +170,7 @@ export const MessageView = memo(function MessageView({
           <Text style={[styles.meta, { color: t.muted }]}>started on its own</Text>
         )}
       </View>
-      {!user && <AgentRun chatId={chatId} message={m} root={root} />}
+      {!user && <AgentRun chatId={chatId} message={m} root={root} onOpenImage={openLooked} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (
