@@ -114,6 +114,21 @@ describe("rankModelQuery", () => {
     expect(at("ab.mini")).toBe(6 + 6 + 3);
   });
 
+  it("matches across spaces, hyphens and dots the user left out", () => {
+    const glm = [
+      row("GLM-5.3", "zai-coding-plan/glm-5.3", opencode),
+      row("GLM-5.3 Flash", "zai-coding-plan/glm-5.3-flash", opencode),
+      row("GLM-5", "zai-coding-plan/glm-5", opencode),
+    ];
+    for (const query of ["GLM5.3", "glm53", "glm 5.3", "GLM-5.3"]) {
+      const [exact, flash, five] = scores(glm, query);
+      expect(exact).toBeLessThan(flash!);
+      expect(exact).toBeLessThan(100);
+      expect(five).toBeNull();
+    }
+    expect(rankModelQuery(codexRows[0], "gpt55")).toBe(1);
+  });
+
   it("needs every word to match, in any field", () => {
     const [sonnet] = opencodeRows;
     expect(rankModelQuery(sonnet, "anthropic claude")).toBe(29);
