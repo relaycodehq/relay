@@ -15,6 +15,7 @@ const remote = vi.hoisted(() => ({
   call: vi.fn(),
   desktop: vi.fn(),
 }));
+const outgoing = vi.hoisted(() => vi.fn());
 vi.mock("react", () => ({
   useState: () => [
     hooks.state,
@@ -34,7 +35,7 @@ vi.mock("react", () => ({
   },
 }));
 vi.mock("../../remote/RemoteProvider", () => ({ useRemote: () => remote }));
-vi.mock("../../remote/outbox", () => ({ outgoingImage: () => "pending-image" }));
+vi.mock("../../remote/outbox", () => ({ outgoingImage: outgoing }));
 
 const render = (source: Source, max?: number) => {
   // eslint-disable-next-line react-hooks/rules-of-hooks -- This harness drives the mocked hook lifecycle.
@@ -68,6 +69,7 @@ beforeEach(() => {
   remote.overview = { bridge: 14 };
   remote.call.mockReset();
   remote.desktop.mockReset();
+  outgoing.mockReset().mockReturnValue("pending-image");
 });
 
 it("ignores an old row's reply when the live row changes images", async () => {
@@ -153,6 +155,17 @@ it("uses the outbox for pending attachments without fetching them", async () => 
     "pending-image",
   );
   await Promise.resolve();
+  expect(remote.call).not.toHaveBeenCalled();
+  expect(remote.desktop).not.toHaveBeenCalled();
+});
+
+it("keeps an open pending image after its acknowledged send leaves the outbox", () => {
+  const pending: Source = { kind: "pending", messageId: "sending", index: 0 };
+  expect(render(pending, 264).uri).toBe("pending-image");
+  outgoing.mockReturnValue(undefined);
+  expect(render(pending, 528).uri).toBe("pending-image");
+  expect(render(pending).uri).toBe("pending-image");
+  expect(render({ ...pending, index: 1 }).uri).toBeUndefined();
   expect(remote.call).not.toHaveBeenCalled();
   expect(remote.desktop).not.toHaveBeenCalled();
 });

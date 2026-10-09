@@ -29,7 +29,7 @@ export function useImage(source: Source, max?: number) {
   const remote = useRemote();
   const bridge = remote.overview?.bridge;
   const known = !!remote.overview;
-  const shrunk = !!max && (bridge ?? 1) >= imageBridge;
+  const shrunk = source.kind !== "pending" && !!max && (bridge ?? 1) >= imageBridge;
   const sourceKey = keyOf(source);
   const computer = remote.active;
   const key = scopedKey(source, computer) + (shrunk ? `@${max}` : "");
@@ -72,7 +72,10 @@ export function useImage(source: Source, max?: number) {
     };
   }, [key, sourceKey, computer, status, bridge, known, shrunk, max, call, desktop]);
   if (source.kind === "pending") {
-    const uri = outgoingImage(source.messageId, source.index);
+    const uri = outgoingImage(source.messageId, source.index) ??
+      (result?.key === key ? result.uri : undefined);
+    // An open gallery keeps the picture after the desktop acknowledges its send.
+    if (uri && (result?.key !== key || result.uri !== uri)) setResult({ key, uri });
     return { uri, failed: !uri };
   }
   return result?.key === key
