@@ -91,6 +91,11 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   >();
   const [acting, setActing] = useState<ChatMessage>();
   const composer = useRef<ComposerHandle>(null);
+  const list = useRef<FlatList<ChatMessage>>(null);
+  // How far the reader is from the latest message, and the list's height.
+  const offset = useRef(0);
+  const height = useRef(0);
+  const [pinned, setPinned] = useState(true);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
   const outbox = useOutbox(id);
@@ -568,6 +573,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         </View>
       ) : (
         <FlatList
+          ref={list}
           inverted
           data={shown}
           keyExtractor={(m) => m.id}
@@ -670,12 +676,28 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           }
           contentContainerStyle={styles.list}
           // New messages and a growing answer land at offset 0, the visual
-          // bottom of the inverted list. Without this, everything you were
-          // reading shifts away; with it the anchor holds still, and within
-          // 80px of the bottom the list follows, as the desktop does.
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 80,
+          // bottom of the inverted list, so at the bottom it follows them on
+          // its own. Read back, the list holds what you see still: Android
+          // anchors on the lowest message on screen, which never moves when
+          // it grows itself, so the anchor starts one above the newest one.
+          maintainVisibleContentPosition={
+            pinned ? undefined : { minIndexForVisible: 1 }
+          }
+          scrollEventThrottle={32}
+          onScroll={(e) => {
+            offset.current = e.nativeEvent.contentOffset.y;
+            const atBottom = offset.current <= pinSlack;
+            if (atBottom !== pinned) setPinned(atBottom);
+          }}
+          // The strips and composer under the list come and go as a turn
+          // runs; the offset counts from the bottom, so a shorter list would
+          // pull what you're reading down with it.
+          onLayout={(e) => {
+            const was = height.current;
+            height.current = e.nativeEvent.layout.height;
+            if (!was || was === height.current || offset.current <= pinSlack) return;
+            offset.current = Math.max(0, offset.current + was - height.current);
+            list.current?.scrollToOffset({ offset: offset.current, animated: false });
           }}
           // Reading back or tapping an answer puts the keyboard away. Android
           // has no "interactive" mode, which left it open there.
@@ -836,6 +858,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     </KeyboardAware>
   );
 }
+
+/** Within this of the latest message, the thread follows new ones. */
+const pinSlack = 48;
 
 function RenameSheet({
   open,
