@@ -52,3 +52,31 @@ it("keeps going after a job that throws", async () => {
   await fetch(async () => void (ran = true));
   expect(ran).toBe(true);
 });
+
+it("doesn't lose a waiting rerun when the current job fails", async () => {
+  const fetch = oneAtATime();
+  const first = gate();
+  const running = fetch(async () => {
+    await first.opened;
+    throw new Error("Link lost");
+  });
+  await Promise.resolve();
+  let ran = false;
+  const next = fetch(async () => void (ran = true));
+  first.open();
+  await expect(running).rejects.toThrow("Link lost");
+  await expect(next).rejects.toThrow("Link lost");
+  expect(ran).toBe(true);
+});
+
+it("can run again after a job throws synchronously", async () => {
+  const fetch = oneAtATime();
+  await expect(
+    fetch(() => {
+      throw new Error("Bad request");
+    }),
+  ).rejects.toThrow("Bad request");
+  let ran = false;
+  await fetch(async () => void (ran = true));
+  expect(ran).toBe(true);
+});

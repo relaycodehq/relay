@@ -9,17 +9,31 @@ export function oneAtATime() {
   let next: (() => Promise<void>) | undefined;
   return (job: () => Promise<void>) => {
     next = job;
-    running ??= (async () => {
+    // Start in the next microtask, so even a synchronous throw can't leave
+    // the rejected promise assigned to running after finally cleared it.
+    if (running) return running;
+    const first = next;
+    next = undefined;
+    running = Promise.resolve().then(async () => {
+      let failed = false;
+      let failure: unknown;
       try {
-        while (next) {
-          const run = next;
+        let run: (() => Promise<void>) | undefined = first;
+        while (run) {
+          try {
+            await run();
+          } catch (e) {
+            failed = true;
+            failure = e;
+          }
+          run = next;
           next = undefined;
-          await run();
         }
+        if (failed) throw failure;
       } finally {
         running = undefined;
       }
-    })();
+    });
     return running;
   };
 }
