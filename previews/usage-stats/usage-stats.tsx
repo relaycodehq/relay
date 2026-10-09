@@ -78,7 +78,7 @@ function App() {
             </nav>
           </div>
         </aside>
-        <UsagePage />
+        <UsagePage onOpenChat={() => {}} />
       </div>
     </div>
   );

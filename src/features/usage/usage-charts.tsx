@@ -12,16 +12,18 @@ import {
   agents,
   type AgentProvider,
 } from "../../../shared/agents";
-import type { UsageSummary } from "../../../shared/usage";
+import type { UsageMeasure, UsageSlot } from "../../../shared/usage";
 import { ClaudeAI, OpenAI, OpenCode } from "../agents/ProviderLogos";
 import { CursorGlyph } from "../agents/CursorGlyph";
 import {
-  compact,
+  clock,
   dayLabel,
   dayTotal,
   longDay,
+  measured,
   type UsageColumn,
 } from "./format";
+import { average, inStretch, weekdayNames } from "./rhythm";
 
 export const providerLogos = {
   claude: ClaudeAI,
@@ -65,368 +67,246 @@ function useWidth<T extends HTMLElement>() {
   return [ref, width] as const;
 }
 
-type Tip = { x: number; y: number; body: ReactNode } | null;
-
-function Tooltip({ tip }: { tip: Tip }) {
-  if (!tip) return null;
-  return (
-    <div className="us-tip" style={{ left: tip.x, top: tip.y }} role="status">
-      {tip.body}
-    </div>
-  );
-}
-
 /** A rounded data end on top, square at the baseline. */
-export function topRounded(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
+function topRounded(x: number, y: number, w: number, h: number, r: number) {
   const rr = Math.min(r, h / 2, w / 2);
   return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
 }
 
-/** One column a day, one colour; the split by harness lives in the tooltip. */
-export function Columns({
-  days,
-  height = 120,
+const AXIS = 18;
+const BUSY = 12;
+
+/**
+ * Columns with a readout on hover. `lit` picks the ones worth looking at, in
+ * the accent; `busy` adds a thin grey track of agent-minutes, scaled on its own.
+ */
+function Bars({
+  values,
+  height,
+  label,
+  tick,
+  lit = () => true,
+  tip,
+  busy,
 }: {
-  days: UsageColumn[];
-  height?: number;
+  values: number[];
+  height: number;
+  label: string;
+  tick: (i: number) => string | null;
+  lit?: (i: number) => boolean;
+  tip: (i: number) => ReactNode;
+  busy?: number[];
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
-  const [tip, setTip] = useState<Tip>(null);
   const [hover, setHover] = useState(-1);
-  const plotH = height - 18;
-  const max = Math.max(1, ...days.map(dayTotal));
-  const slot = width / days.length;
-  const barW = Math.min(14, slot * 0.6);
-  const labelEvery = Math.ceil(days.length / 6);
+  const max = Math.max(1e-9, ...values);
+  const busyMax = Math.max(1e-9, ...(busy ?? []));
+  const slot = width / values.length;
+  const barW = Math.min(28, slot * 0.72);
+  const total = height + AXIS + (busy ? BUSY + 6 : 0);
   return (
-    <div
-      className="us-chart"
-      ref={ref}
-      onMouseLeave={() => {
-        setTip(null);
-        setHover(-1);
-      }}
-    >
+    <div className="us-chart" ref={ref} onMouseLeave={() => setHover(-1)}>
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label="Tokens a day">
-          <line x1={0} x2={width} y1={plotH} y2={plotH} className="us-grid" />
-          {days.map((d, i) => {
-            const h = (dayTotal(d) / max) * (plotH - 4);
+        <svg width={width} height={total} role="img" aria-label={label}>
+          <line x1={0} x2={width} y1={height} y2={height} className="us-grid" />
+          {values.map((v, i) => {
+            const h = (v / max) * (height - 4);
             const x = i * slot + (slot - barW) / 2;
+            const on = hover < 0 ? lit(i) : hover === i;
             return (
-              <g
-                key={d.day}
-                onMouseEnter={() => {
-                  setHover(i);
-                  setTip({
-                    x: Math.max(0, Math.min(x - 70, width - 170)),
-                    y: -8,
-                    body: <DayTip day={d} />,
-                  });
-                }}
-              >
+              <g key={i} onMouseEnter={() => setHover(i)}>
                 <rect
                   x={i * slot}
                   y={0}
                   width={slot}
-                  height={height}
+                  height={total}
                   fill="transparent"
                 />
                 {h > 0 && (
                   <path
-                    d={topRounded(x, plotH - h, barW, h, 3)}
-                    className={hover === i ? "us-col on" : "us-col"}
+                    d={topRounded(x, height - h, barW, Math.max(h, 2), 3)}
+                    className={on ? "us-col on" : "us-col"}
                   />
                 )}
-                {i % labelEvery === 0 && (
+                {tick(i) && (
                   <text
                     x={x + barW / 2}
-                    y={height - 3}
+                    y={height + 13}
                     className="us-axis"
                     textAnchor="middle"
                   >
-                    {dayLabel(d.day)}
+                    {tick(i)}
                   </text>
+                )}
+                {busy && busy[i] > 0 && (
+                  <rect
+                    className="us-busy"
+                    x={x}
+                    y={total - (busy[i] / busyMax) * BUSY}
+                    width={barW}
+                    height={Math.max(1, (busy[i] / busyMax) * BUSY)}
+                    rx={1}
+                  />
                 )}
               </g>
             );
           })}
         </svg>
       )}
-      <Tooltip tip={tip} />
+      {busy && <div className="us-busy-label">agents busy</div>}
+      {hover >= 0 && (
+        <div
+          className="us-tip"
+          role="status"
+          style={{
+            left: Math.max(
+              0,
+              Math.min(hover * slot + slot / 2 - 80, width - 170),
+            ),
+            top: -8,
+          }}
+        >
+          {tip(hover)}
+        </div>
+      )}
     </div>
   );
 }
 
-function DayTip({ day }: { day: UsageColumn }) {
+/** One column a day, or a week once the period is long; the split by harness lives in the tooltip. */
+export function DayColumns({
+  days,
+  measure,
+  height = 56,
+}: {
+  days: UsageColumn[];
+  measure: UsageMeasure;
+  height?: number;
+}) {
+  const every = Math.ceil(days.length / 6);
+  return (
+    <Bars
+      values={days.map((d) => dayTotal(d, measure))}
+      height={height}
+      label="Day by day"
+      tick={(i) => (i % every === 0 ? dayLabel(days[i].day) : null)}
+      tip={(i) => {
+        const day = days[i];
+        return (
+          <>
+            <strong>
+              {day.last === day.day
+                ? longDay(day.day)
+                : `${dayLabel(day.day)} – ${dayLabel(day.last)}`}
+            </strong>
+            {agentProviders
+              .filter((p) => day[measure][p] > 0)
+              .sort((a, b) => day[measure][b] - day[measure][a])
+              .map((p) => (
+                <span key={p}>
+                  <HarnessMark id={p} size={11} />
+                  {agents[p].name}
+                  <b>{measured(day[measure][p], measure)}</b>
+                </span>
+              ))}
+            <span className="us-tip-total">
+              {day.answers} answers
+              <b>{measured(dayTotal(day, measure), measure)}</b>
+            </span>
+          </>
+        );
+      }}
+    />
+  );
+}
+
+function SlotTip({
+  title,
+  slot,
+  measure,
+}: {
+  title: string;
+  slot: UsageSlot;
+  measure: UsageMeasure;
+}) {
+  const busy = slot.days ? slot.minutes / slot.days : 0;
   return (
     <>
-      <strong>
-        {day.last === day.day
-          ? longDay(day.day)
-          : `${dayLabel(day.day)} – ${dayLabel(day.last)}`}
-      </strong>
-      {agentProviders
-        .filter((p) => day.tokens[p] > 0)
-        .sort((a, b) => day.tokens[b] - day.tokens[a])
-        .map((p) => (
-          <span key={p}>
-            <HarnessMark id={p} size={11} />
-            {agents[p].name}
-            <b>{compact(day.tokens[p])}</b>
-          </span>
-        ))}
-      <span className="us-tip-total">
-        {day.answers} answers<b>{compact(dayTotal(day))}</b>
+      <strong>{title}</strong>
+      <span>
+        On average<b>{measured(average(slot, measure), measure)}</b>
+      </span>
+      <span>
+        Agents busy
+        <b>
+          {busy >= 90
+            ? `${(busy / 60).toFixed(1)} h`
+            : `${Math.round(busy)} min`}
+        </b>
       </span>
     </>
   );
 }
 
-export const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/** Five steps up to the busiest hour, and an empty step. */
-export function heatLevel(v: number, max: number) {
-  return v <= 0 || max <= 0 ? 0 : Math.max(1, Math.ceil((v / max) * 5));
-}
-
-/** Agent-busy minutes by weekday and hour, surface to accent. */
-export function Heatmap({ heat }: { heat: number[][] }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const [tip, setTip] = useState<Tip>(null);
-  const max = Math.max(...heat.flat());
-  const left = 30;
-  const cell = Math.max(8, Math.min(18, (width - left) / 24 - 3));
-  const step = cell + 3;
-  const height = 7 * step + 16;
-  return (
-    <div className="us-chart" ref={ref} onMouseLeave={() => setTip(null)}>
-      {width > 0 && (
-        <svg
-          width={width}
-          height={height}
-          role="img"
-          aria-label="When agents were working"
-        >
-          {heat.map((row, wd) => (
-            <g key={wd}>
-              <text
-                x={left - 8}
-                y={wd * step + cell - 2}
-                className="us-axis"
-                textAnchor="end"
-              >
-                {weekdays[wd][0]}
-              </text>
-              {row.map((v, h) => (
-                <rect
-                  key={h}
-                  x={left + h * step}
-                  y={wd * step}
-                  width={cell}
-                  height={cell}
-                  rx={3}
-                  className={`us-heat l${heatLevel(v, max)}`}
-                  onMouseEnter={() =>
-                    setTip({
-                      x: Math.min(left + h * step + cell + 6, width - 150),
-                      y: wd * step,
-                      body: (
-                        <>
-                          <strong>
-                            {weekdays[wd]} {String(h).padStart(2, "0")}:00
-                          </strong>
-                          <span>
-                            Agents busy<b>{v} min</b>
-                          </span>
-                        </>
-                      ),
-                    })
-                  }
-                />
-              ))}
-            </g>
-          ))}
-          {[0, 6, 12, 18].map((h) => (
-            <text
-              key={h}
-              x={left + h * step}
-              y={height - 2}
-              className="us-axis"
-            >
-              {String(h).padStart(2, "0")}
-            </text>
-          ))}
-        </svg>
-      )}
-      <Tooltip tip={tip} />
-    </div>
-  );
-}
-
-type LimitPoint = UsageSummary["weekly"][number];
-const limitSeries = [
-  { id: "claude", label: "Claude", cls: "us-line-a" },
-  { id: "codex", label: "Codex", cls: "us-line-b" },
-] as const;
-
-/**
- * Weekly limit, Claude in the accent and Codex in grey, labelled at the ends.
- * Readings come only while Relay is open, so x is time, not reading count.
- */
-export function WeeklyLimit({
-  points,
-  height = 130,
+/** An average day, midnight to midnight, its busiest stretch in the accent. */
+export function HourColumns({
+  hours,
+  measure,
+  stretch,
+  height,
 }: {
-  points: LimitPoint[];
-  height?: number;
+  hours: UsageSlot[];
+  measure: UsageMeasure;
+  stretch: number | null;
+  height: number;
 }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const [at, setAt] = useState(-1);
-  const series = limitSeries.filter((s) => points.some((p) => p[s.id] != null));
-  if (points.length < 2 || !series.length)
-    return <p className="us-empty">No limit readings in this period yet.</p>;
-  const top = 6;
-  const right = 78;
-  const plotH = height - top - 18;
-  const plotW = Math.max(1, width - right);
-  const first = points[0].at;
-  const span = Math.max(1, points[points.length - 1].at - first);
-  const x = (t: number) => ((t - first) / span) * plotW;
-  const y = (v: number) => top + plotH - (Math.min(100, v) / 100) * plotH;
-  // A reading holds until the next one: the limit only moves while agents
-  // work, and a reset shows as a drop rather than a slope across the night.
-  const path = (id: "claude" | "codex") => {
-    let d = "";
-    for (const p of points) {
-      const v = p[id];
-      if (v == null) continue;
-      d += d
-        ? `H${x(p.at).toFixed(1)}V${y(v).toFixed(1)}`
-        : `M${x(p.at).toFixed(1)},${y(v).toFixed(1)}`;
-    }
-    return d;
-  };
-  const lastOf = (id: "claude" | "codex") =>
-    [...points].reverse().find((p) => p[id] != null)?.[id] ?? 0;
-  const ends = Object.fromEntries(
-    series.map((s) => [s.id, y(lastOf(s.id)) + 4]),
-  );
-  if (series.length === 2) {
-    // End labels sit on their lines, pushed apart when the lines end close.
-    const mid = (ends.claude + ends.codex) / 2;
-    const apart = Math.max(Math.abs(ends.claude - ends.codex), 14) / 2;
-    const claudeAbove = lastOf("claude") >= lastOf("codex");
-    ends.claude = mid + (claudeAbove ? -apart : apart);
-    ends.codex = mid + (claudeAbove ? apart : -apart);
-  }
-  const p = at >= 0 ? points[at] : null;
   return (
-    <div
-      className="us-chart"
-      ref={ref}
-      onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        const t = first + ((e.clientX - r.left) / plotW) * span;
-        if (t > first + span) return setAt(-1);
-        let best = 0;
-        for (let i = 1; i < points.length; i++)
-          if (Math.abs(points[i].at - t) < Math.abs(points[best].at - t))
-            best = i;
-        setAt(best);
-      }}
-      onMouseLeave={() => setAt(-1)}
-    >
-      {width > 0 && (
-        <svg
-          width={width}
-          height={height}
-          role="img"
-          aria-label="Weekly limit used"
-        >
-          <line x1={0} x2={plotW} y1={y(100)} y2={y(100)} className="us-grid" />
-          <line x1={0} x2={plotW} y1={y(0)} y2={y(0)} className="us-grid" />
-          <text x={0} y={y(100) - 4} className="us-axis">
-            100%
-          </text>
-          {series.map((s) => (
-            <path key={s.id} d={path(s.id)} className={s.cls} />
-          ))}
-          {series.map((s) => (
-            <text
-              key={s.id}
-              x={plotW + 8}
-              y={ends[s.id]}
-              className="us-end-label"
-            >
-              {s.label} {Math.round(lastOf(s.id))}%
-            </text>
-          ))}
-          <text x={0} y={height - 2} className="us-axis">
-            {dayLabel(first)}
-          </text>
-          <text x={plotW} y={height - 2} className="us-axis" textAnchor="end">
-            {dayLabel(first + span)}
-          </text>
-          {p && (
-            <g>
-              <line
-                x1={x(p.at)}
-                x2={x(p.at)}
-                y1={top}
-                y2={top + plotH}
-                className="us-crosshair"
-              />
-              {series.map((s) => {
-                const v = p[s.id];
-                return (
-                  v != null && (
-                    <circle
-                      key={s.id}
-                      cx={x(p.at)}
-                      cy={y(v)}
-                      r={4}
-                      className={`us-dot ${s.cls}`}
-                    />
-                  )
-                );
-              })}
-            </g>
-          )}
-        </svg>
-      )}
-      {p && (
-        <Tooltip
-          tip={{
-            x: Math.min(x(p.at) + 10, width - 160),
-            y: 0,
-            body: (
-              <>
-                <strong>
-                  {longDay(p.at)},{" "}
-                  {new Date(p.at).toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </strong>
-                {series.map((s) => (
-                  <span key={s.id}>
-                    {s.label}
-                    <b>{p[s.id] == null ? "–" : `${Math.round(p[s.id]!)}%`}</b>
-                  </span>
-                ))}
-              </>
-            ),
-          }}
+    <Bars
+      values={hours.map((h) => average(h, measure))}
+      busy={hours.map((h) => h.minutes)}
+      height={height}
+      label="An average day"
+      tick={(i) => (i % 6 === 0 ? clock(i) : null)}
+      lit={(i) => stretch !== null && inStretch(i, stretch)}
+      tip={(i) => (
+        <SlotTip
+          title={`${clock(i)}–${clock(i + 1)}`}
+          slot={hours[i]}
+          measure={measure}
         />
       )}
-    </div>
+    />
+  );
+}
+
+/** An average week, Monday first, its busiest day in the accent. */
+export function WeekdayColumns({
+  weekdays,
+  measure,
+  busiest,
+  height,
+}: {
+  weekdays: UsageSlot[];
+  measure: UsageMeasure;
+  busiest: number | null;
+  height: number;
+}) {
+  return (
+    <Bars
+      values={weekdays.map((d) => average(d, measure))}
+      busy={weekdays.map((d) => (d.days ? d.minutes / d.days : 0))}
+      height={height}
+      label="An average week"
+      tick={(i) => weekdayNames[i].slice(0, 3)}
+      lit={(i) => i === busiest}
+      tip={(i) => (
+        <SlotTip
+          title={`${weekdayNames[i]}s · ${weekdays[i].days} counted`}
+          slot={weekdays[i]}
+          measure={measure}
+        />
+      )}
+    />
   );
 }
 

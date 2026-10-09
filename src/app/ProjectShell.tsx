@@ -157,6 +157,23 @@ export default function ProjectShell() {
       }
     });
   }
+  /** A thread known only by its ids, as Settings and Usage name one. */
+  function openChatById(projectId: string, chatId: string, then?: () => void) {
+    const p = projects.data?.find((p) => p.id === projectId);
+    if (!p) return;
+    void qc
+      .fetchQuery({
+        queryKey: ["project-chats", projectId],
+        queryFn: () => api.projectChats(projectId),
+      })
+      .then((list) => {
+        const next = list.find((c) => c.id === chatId);
+        if (!next) return;
+        navigate(p, next);
+        then?.();
+      })
+      .catch(setError);
+  }
   const frame = (id: PaneId) => ({
     ...paneFrame(panes.layout, id),
     onResize: panes.resize,
@@ -332,7 +349,7 @@ export default function ProjectShell() {
           </div>
         ) : usage ? (
           <div className="project-legacy" hidden={settings.open}>
-            <UsagePage />
+            <UsagePage onOpenChat={openChatById} />
           </div>
         ) : !project ? (
           <NoProject
@@ -493,22 +510,9 @@ export default function ProjectShell() {
               settings.close();
               void signIn.withAccount();
             }}
-            onOpenChat={(projectId, chatId) => {
-              const p = projects.data?.find((p) => p.id === projectId);
-              if (!p) return;
-              void qc
-                .fetchQuery({
-                  queryKey: ["project-chats", projectId],
-                  queryFn: () => api.projectChats(projectId),
-                })
-                .then((list) => {
-                  const next = list.find((c) => c.id === chatId);
-                  if (!next) return;
-                  navigate(p, next);
-                  settings.close();
-                })
-                .catch(setError);
-            }}
+            onOpenChat={(projectId, chatId) =>
+              openChatById(projectId, chatId, settings.close)
+            }
             onDisconnect={async () => {
               await signIn.signOut();
               settings.close();

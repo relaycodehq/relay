@@ -1,26 +1,25 @@
 // What the agents burned, counted from the threads on this computer and never
-// sent anywhere. Reads like Settings: figures as text, one lavender chart a
-// day, hairline rows for the rest; the share card is the same page in brief.
+// sent anywhere. Leads with when you work, then how much and on what; one
+// switch between dollars and fresh tokens drives every figure.
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChartColumn, ImageDown } from "lucide-react";
-import { agents } from "../../../shared/agents";
-import {
-  relayJobLabels,
-  type UsageJob,
-  type UsageRange,
-  type UsageSummary,
+import type {
+  UsageMeasure,
+  UsageRange,
+  UsageSummary,
 } from "../../../shared/usage";
 import { api } from "../../lib/api";
 import { ErrorBox, Loading } from "../../ui/ui";
-import { columnsOf, compact, dayLabel, hours, usd } from "./format";
+import { columnsOf, dayLabel, hours, measured } from "./format";
+import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
 import { ShareDialog } from "./ShareDialog";
 import {
-  Columns,
+  DayColumns,
   HarnessMark,
-  Heatmap,
+  HourColumns,
   Rows,
-  WeeklyLimit,
+  WeekdayColumns,
 } from "./usage-charts";
 import "./usage.css";
 
@@ -39,10 +38,59 @@ const ranges: { value: UsageRange; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-export function UsagePage() {
-  const [range, setRange] = useState<UsageRange>(
-    () =>
-      (localStorage.getItem("relay-usage-range") as UsageRange | null) ?? "30d",
+const measures: { value: UsageMeasure; label: string }[] = [
+  { value: "usd", label: "$" },
+  { value: "fresh", label: "Tokens" },
+];
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="us-range" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function useStored<T extends string>(key: string, fallback: T) {
+  const [value, setValue] = useState<T>(
+    () => (localStorage.getItem(key) as T | null) ?? fallback,
+  );
+  const set = (v: T) => {
+    localStorage.setItem(key, v);
+    setValue(v);
+  };
+  return [value, set] as const;
+}
+
+export function UsagePage({
+  onOpenChat,
+}: {
+  onOpenChat: (projectId: string, chatId: string) => void;
+}) {
+  const [range, setRange] = useStored<UsageRange>("relay-usage-range", "30d");
+  const [measure, setMeasure] = useStored<UsageMeasure>(
+    "relay-usage-measure",
+    "usd",
   );
   const [sharing, setSharing] = useState(false);
   const query = useQuery({
@@ -51,42 +99,42 @@ export function UsagePage() {
     placeholderData: (previous) => previous,
   });
   const summary = query.data;
-  const pick = (r: UsageRange) => {
-    localStorage.setItem("relay-usage-range", r);
-    setRange(r);
-  };
+  const counted =
+    summary?.since !== undefined &&
+    new Date(summary.since).setHours(0, 0, 0, 0) > summary.from;
   return (
     <div className="us-page">
       <header className="us-head">
         <div>
           <h1>Usage</h1>
           <p>
-            {summary && `${dayLabel(summary.from)} – ${dayLabel(summary.to)}. `}
-            Counted from the threads on this computer; nothing leaves it.
+            {summary &&
+              `${dayLabel(summary.days[0]?.day ?? summary.from)} – ${dayLabel(summary.to)}${counted ? `, counted since ${dayLabel(summary.since!)}` : ""}. `}
+            Only on this computer; nothing leaves it.
           </p>
         </div>
         <div className="us-tools">
-          <div className="us-range" role="radiogroup" aria-label="Period">
-            {ranges.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                role="radio"
-                aria-checked={r.value === range}
-                onClick={() => pick(r.value)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Measure"
+            value={measure}
+            options={measures}
+            onChange={setMeasure}
+          />
+          <Segmented
+            label="Period"
+            value={range}
+            options={ranges}
+            onChange={setRange}
+          />
           <button
             type="button"
             className="us-share-button"
+            title="Share image…"
+            aria-label="Share image…"
             disabled={!summary?.totals.tokens}
             onClick={() => setSharing(true)}
           >
-            <ImageDown size={14} />
-            Share image…
+            <ImageDown size={15} />
           </button>
         </div>
       </header>
@@ -100,10 +148,14 @@ export function UsagePage() {
           titles, commit messages and checks it asks agents for.
         </p>
       ) : (
-        <Quiet summary={summary} />
+        <Rhythmic summary={summary} measure={measure} onOpenChat={onOpenChat} />
       )}
       {sharing && summary && (
-        <ShareDialog summary={summary} onClose={() => setSharing(false)} />
+        <ShareDialog
+          summary={summary}
+          measure={measure}
+          onClose={() => setSharing(false)}
+        />
       )}
     </div>
   );
@@ -129,175 +181,164 @@ function Block({
   );
 }
 
-/** Dollars at list prices, or a note when some of the tokens had none. */
-function priced(dollars: number, unpriced: boolean) {
-  if (!unpriced) return usd(dollars);
-  return dollars ? `${usd(dollars)} + unpriced` : "no list price";
-}
+const OTHERS_AFTER = 4;
 
-function Quiet({ summary }: { summary: UsageSummary }) {
-  const { totals, cards, perThread, windows, since = summary.from } = summary;
-  const relayShare = totals.usd ? (totals.relayUsd / totals.usd) * 100 : 0;
-  // Relay's jobs by dollars, unless nothing it ran had a price.
-  const relayBy = totals.relayUsd ? "usd" : "tokens";
+function Rhythmic({
+  summary,
+  measure: m,
+  onOpenChat,
+}: {
+  summary: UsageSummary;
+  measure: UsageMeasure;
+  onOpenChat: (projectId: string, chatId: string) => void;
+}) {
+  const { totals } = summary;
+  const line = rhythmLine(summary, m);
+  const counted = summary.days.length;
+  const models = [...summary.models]
+    .filter((x) => x[m] > 0)
+    .sort((a, b) => b[m] - a[m]);
+  // One leftover model is shown, not folded into "1 other".
+  const shown = models.slice(
+    0,
+    models.length === OTHERS_AFTER + 1 ? models.length : OTHERS_AFTER,
+  );
+  const rest = models.slice(shown.length).reduce((n, x) => n + x[m], 0);
+  const threads = [...summary.threads]
+    .filter((t) => t[m] > 0)
+    .sort((a, b) => b[m] - a[m])
+    .slice(0, 3);
+  const relay = m === "usd" ? totals.relayUsd : totals.relayFresh;
   return (
-    <div className="us-quiet">
-      {new Date(since).setHours(0, 0, 0, 0) > summary.from && (
-        <p className="us-since">
-          Counting since {dayLabel(since)}; earlier days weren’t recorded.
-        </p>
-      )}
-      <div className="us-top">
-        <div className="us-figure">
-          <strong>{compact(totals.tokens)}</strong>
-          <span>tokens</span>
+    <div className="us-rhythmic">
+      <p className="us-lede">
+        {line.stretch ? (
+          <>
+            You vibe hardest <em>{line.stretch}</em>
+            {line.weekdays && (
+              <>
+                , and most on <em>{line.weekdays}</em>
+              </>
+            )}
+            .
+          </>
+        ) : (
+          "A quiet stretch: nothing counted in these days."
+        )}
+      </p>
+      <p className="us-lede-facts">
+        {headline(summary, m)} · {totals.answers.toLocaleString("en-US")}{" "}
+        answers · {hours(totals.agentMs)} of agents working
+      </p>
+
+      <div className="us-rhythm">
+        <div>
+          <h3>An average day</h3>
+          <HourColumns
+            hours={summary.hours}
+            measure={m}
+            stretch={line.start}
+            height={170}
+          />
         </div>
-        <dl className="us-facts">
-          <div>
-            <dt>At API prices</dt>
-            <dd>{usd(totals.usd)}</dd>
-          </div>
-          <div>
-            <dt>Answers</dt>
-            <dd>{totals.answers.toLocaleString("en-US")}</dd>
-          </div>
-          <div>
-            <dt>Threads</dt>
-            <dd>{cards.started.toLocaleString("en-US")}</dd>
-          </div>
-          <div>
-            <dt>Agents working</dt>
-            <dd>{hours(totals.agentMs)}</dd>
-          </div>
-        </dl>
+        <div>
+          <h3>
+            An average week
+            {counted < DAYS_FOR_A_WEEKDAY && (
+              <small>
+                {counted} {counted === 1 ? "day" : "days"} so far; names a day
+                after two weeks
+              </small>
+            )}
+          </h3>
+          <WeekdayColumns
+            weekdays={summary.weekdays}
+            measure={m}
+            busiest={line.weekday}
+            height={170}
+          />
+        </div>
       </div>
-      <Columns days={columnsOf(summary.days)} height={110} />
 
-      <Block title="Harnesses">
-        <Rows
-          rows={summary.harnesses}
-          value={(h) => h.tokens}
-          label={(h) => (
-            <>
-              <HarnessMark id={h.provider} />
-              {agents[h.provider].name}
-            </>
-          )}
-          detail={(h) =>
-            `${h.answers.toLocaleString("en-US")} answers · ${priced(
-              h.usd,
-              summary.models.some(
-                (m) => m.provider === h.provider && m.unpriced,
-              ),
-            )}`
-          }
-          format={compact}
-          strong={(_, i) => i === 0}
-        />
+      <Block title="Day by day">
+        <DayColumns days={columnsOf(summary.days)} measure={m} />
       </Block>
 
-      <Block title="Models" aside={`${summary.models.length} used`}>
-        <Rows
-          rows={summary.models}
-          value={(m) => m.tokens}
-          label={(m) => (
-            <>
-              <HarnessMark id={m.provider} />
-              {m.model}
-            </>
-          )}
-          detail={(m) =>
-            `${m.answers.toLocaleString("en-US")} answers · ${priced(m.usd, m.unpriced)}`
-          }
-          format={compact}
-          strong={(_, i) => i === 0}
-        />
-      </Block>
+      {models.length > 0 && (
+        <Block title="Where it went">
+          <div className="us-stack" role="img" aria-label="Share by model">
+            {shown.map((x, i) => (
+              <span
+                key={`${x.provider}|${x.model}`}
+                style={{ flex: x[m], opacity: 1 - i * 0.2 }}
+              />
+            ))}
+            {rest > 0 && <span className="rest" style={{ flex: rest }} />}
+          </div>
+          <ul className="us-legend">
+            {shown.map((x) => (
+              <li key={`${x.provider}|${x.model}`}>
+                <HarnessMark id={x.provider} />
+                {x.model}
+                <b>
+                  {measured(x[m], m)}
+                  {m === "usd" && x.unpriced && " + unpriced"}
+                </b>
+              </li>
+            ))}
+            {rest > 0 && (
+              <li
+                className="muted"
+                title={models
+                  .slice(shown.length)
+                  .map((x) => `${x.model}: ${measured(x[m], m)}`)
+                  .join("\n")}
+              >
+                {models.length - shown.length} others<b>{measured(rest, m)}</b>
+              </li>
+            )}
+          </ul>
+        </Block>
+      )}
 
-      <div className="us-pair">
-        <Block
-          title="Weekly limit"
-          aside={
-            windows.opened > 0 &&
-            `${windows.opened} five-hour ${windows.opened === 1 ? "window" : "windows"}, ${windows.ranOut} ran out`
-          }
-        >
-          <WeeklyLimit points={summary.weekly} />
-        </Block>
-        <Block title="When agents worked">
-          <Heatmap heat={summary.heat} />
-        </Block>
-      </div>
-
-      <div className="us-pair">
-        <Block title="Threads">
-          <dl className="us-list">
-            <div>
-              <dt>Started</dt>
-              <dd>{cards.started}</dd>
-            </div>
-            <div>
-              <dt>Started by agents</dt>
-              <dd>{cards.byAgents}</dd>
-            </div>
-            <div>
-              <dt>Settled</dt>
-              <dd>{cards.settled}</dd>
-            </div>
-            <div>
-              <dt>Tokens per thread</dt>
-              <dd>
-                {compact(perThread.tokensAvg)}{" "}
-                <small>median {compact(perThread.tokensMedian)}</small>
-              </dd>
-            </div>
-            <div>
-              <dt>Answers per thread</dt>
-              <dd>{perThread.answersAvg.toFixed(1)}</dd>
-            </div>
-          </dl>
-        </Block>
-        <Block
-          title="Relay’s own work"
-          aside={
-            totals.relayUsd > 0 &&
-            `${usd(totals.relayUsd)}, ${relayShare.toFixed(1)}% of the total`
-          }
-        >
-          {summary.jobs.length ? (
-            <Rows
-              rows={summary.jobs}
-              value={(j) => j[relayBy]}
-              label={(j) =>
-                relayJobLabels[j.job as Exclude<UsageJob, "thread">]
-              }
-              detail={(j) => (j.runs ? `${j.runs} runs` : undefined)}
-              format={relayBy === "usd" ? usd : compact}
-            />
-          ) : (
-            <p className="us-empty">
-              Nothing yet: no titles, commit messages or checks.
-            </p>
-          )}
-        </Block>
-      </div>
-
-      {summary.threads.length > 0 && (
+      {threads.length > 0 && (
         <Block title="Busiest threads">
           <Rows
-            rows={summary.threads}
-            value={(t) => t.tokens}
+            rows={threads}
+            value={(t) => t[m]}
             label={(t) => (
               <>
                 <HarnessMark id={t.provider} />
-                {t.title}
+                {t.projectId ? (
+                  <button
+                    type="button"
+                    className="us-link"
+                    onClick={() => onOpenChat(t.projectId, t.chat)}
+                  >
+                    {t.title}
+                  </button>
+                ) : (
+                  t.title
+                )}
               </>
             )}
-            detail={(t) => [t.project, usd(t.usd)].filter(Boolean).join(" · ")}
-            format={compact}
+            detail={(t) => t.project}
+            format={(v) => measured(v, m)}
             strong={(_, i) => i === 0}
           />
         </Block>
+      )}
+
+      {relay > 0 && (
+        <p className="us-footnote">
+          Relay’s own work, titles, commit messages and watcher checks, came to{" "}
+          {measured(relay, m)}
+          {m === "fresh" && " tokens"},{" "}
+          {((relay / (m === "usd" ? totals.usd : totals.fresh)) * 100).toFixed(
+            1,
+          )}
+          % of it.
+        </p>
       )}
     </div>
   );
