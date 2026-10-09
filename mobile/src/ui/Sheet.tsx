@@ -45,7 +45,7 @@ export function Sheet({
   open: boolean;
   title?: string;
   onClose: () => void;
-  /** iOS: the sheet has finished animating away. */
+  /** The sheet has finished animating away and released its modal. */
   onDismiss?: () => void;
   children: ReactNode;
   scroll?: boolean;
@@ -56,6 +56,18 @@ export function Sheet({
   // Stays mounted while it slides away, after `open` has gone false.
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
+  const dismissed = useRef(onDismiss);
+  useEffect(() => { dismissed.current = onDismiss; }, [onDismiss]);
+  const wasShown = useRef(open);
+  useEffect(() => {
+    const closed = wasShown.current && !shown;
+    wasShown.current = shown;
+    // React Native's native onDismiss is iOS-only. On Android, wait for
+    // the invisible Modal to commit before focusing the underlying input.
+    if (!closed || Platform.OS === "ios") return;
+    const frame = requestAnimationFrame(() => dismissed.current?.());
+    return () => cancelAnimationFrame(frame);
+  }, [shown]);
   const offscreen = Dimensions.get("window").height;
   const y = useSharedValue(offscreen);
   const height = useSharedValue(offscreen);
@@ -196,6 +208,8 @@ export function Sheet({
 }
 
 export interface MenuItem {
+  /** Stable identity when labels can repeat, such as project names. */
+  id?: string;
   label: string;
   hint?: string;
   icon?: ReactNode;
@@ -211,31 +225,32 @@ export function MenuSheet({
   title,
   items,
   onClose,
+  onDismiss,
 }: {
   open: boolean;
   title?: string;
   items: MenuItem[];
   onClose: () => void;
+  onDismiss?: () => void;
 }) {
-  // iOS won't present a picker or dialog while this sheet is still leaving,
-  // so the picked action waits for it to be gone.
+  // The action and any focus restoration wait until the modal is gone.
   const picked = useRef<() => void>(undefined);
   const run = () => {
     const action = picked.current;
     picked.current = undefined;
     action?.();
+    onDismiss?.();
   };
   return (
     <Sheet open={open} title={title} onClose={onClose} onDismiss={run}>
       {items.map((item, i) => (
         <MenuRow
           // Labels repeat, e.g. side conversations opening with the same line.
-          key={i}
+          key={item.id ?? i}
           {...item}
           onPress={() => {
             picked.current = item.onPress;
             onClose();
-            if (Platform.OS !== "ios") run();
           }}
         />
       ))}

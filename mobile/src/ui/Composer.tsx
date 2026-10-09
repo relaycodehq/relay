@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Image,
@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDraft } from "../remote/drafts";
 import * as Haptics from "expo-haptics";
+import { randomUUID } from "expo-crypto";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
@@ -40,6 +41,7 @@ import { maxImages, pickImages, type Attachment } from "../remote/images";
 import { knownModels, loadModelLists, savedModelsRead } from "../remote/model-catalogs";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
+import { composeAttempt, sameDraft, type ComposeAttempt } from "../remote/compose-attempt";
 import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from "./CommandMenu";
 import { DictationButton, dictationShrinkMs } from "./DictationButton";
 import { useKeyboardShown } from "./KeyboardAware";
@@ -49,15 +51,7 @@ import { MenuSheet } from "./Sheet";
 import { UsageBar, UsageSheet, useUsage } from "./Usage";
 import { mono, type, useTheme } from "./theme";
 
-export interface Outgoing {
-  body: string;
-  settings: RemoteSettings;
-  images: Attachment[];
-  /** While an answer runs: a turn after it, or steered into it. */
-  delivery?: "queue" | "steer";
-  /** Send later: held until then. */
-  sendAt?: number;
-}
+export type Outgoing = ComposeAttempt<Attachment>;
 
 /** Dictated words going into `base` in place of `from`–`to`; they sit at `start`–`end`, the last `tentative` characters still unsure. */
 interface Live {
@@ -81,6 +75,7 @@ export interface ComposerHandle {
   restore(back: Pick<TakenBack, "body" | "images">): () => void;
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
+  focus(): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -101,11 +96,32 @@ export const Composer = forwardRef<
     onCommand?: (name: RelayCommand, args: string) => CommandResult | Promise<CommandResult>;
     /** Where unsent text is kept between visits: the thread, or the reply's root. */
     draftKey?: string;
+    /** A new thread's destination, including its workspace, for retrying a send. */
+    sendTarget?: string;
     /** A new thread's models, per agent, for switching to one not picked here yet. */
     remembered?: NewThreadModels;
+    /** Over the message box, inside the dock. */
+    above?: ReactNode;
+    autoFocus?: boolean;
   }
 >(function Composer(
-  { projectId, settings, onSettings, placeholder, running, disabled, context, onSend, onStop, onCommand, draftKey, remembered },
+  {
+    projectId,
+    settings,
+    onSettings,
+    placeholder,
+    running,
+    disabled,
+    context,
+    onSend,
+    onStop,
+    onCommand,
+    draftKey,
+    sendTarget,
+    remembered,
+    above,
+    autoFocus,
+  },
   ref,
 ) {
   const t = useTheme();
@@ -121,6 +137,7 @@ export const Composer = forwardRef<
   const takenBackCount = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [failedSend, setFailedSend] = useState<Outgoing>();
   const [sheet, setSheet] = useState<"model" | "mode" | "attach" | "later" | "usage">();
   const [dismissed, setDismissed] = useState<string>();
   const { usage, reload: reloadUsage } = useUsage(settings.provider);
@@ -160,6 +177,7 @@ export const Composer = forwardRef<
       };
     },
     settingsOn: (to) => switched(settings, to),
+    focus: () => input.current?.focus(),
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});
@@ -176,7 +194,10 @@ export const Composer = forwardRef<
     setError(undefined);
   };
 
-  const { overview, desktop, status } = useRemote();
+  const { overview, desktop, status, active } = useRemote();
+  const target = `${active ?? ""}:${sendTarget ?? draftKey ?? projectId}`;
+  const retrying = failedSend && sameDraft(failedSend, { target, body: text.trim(), settings, images });
+  const retryingScheduled = retrying && !!failedSend.sendAt;
   // Desktops from before phone dictation don't say, and can't.
   const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
   const [dictationOwner] = useState(() => ({}));
@@ -353,6 +374,13 @@ export const Composer = forwardRef<
           "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or an agent's command.",
         );
     }
+    const attempt = composeAttempt(
+      { target, body: draft, settings, images },
+      sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {},
+      delivery === undefined && sendAt === undefined ? failedSend : undefined,
+      randomUUID,
+    );
+    setFailedSend(undefined);
     setBusy(true);
     setError(undefined);
     // Cleared as it goes, so leaving mid-send doesn't keep it as a draft;
@@ -360,16 +388,16 @@ export const Composer = forwardRef<
     setText("");
     try {
       // Screenshots taken back with their tokens go out in token order, the tokens renumbered to match.
-      const numbered = numberImages(draft, images);
+      const numbered = numberImages(attempt.body, attempt.images);
       const sent = await onSend({
+        ...attempt,
         body: numbered.text,
-        settings,
         images: numbered.images,
-        ...(sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {}),
       });
       if (sent === false) setText((typed) => typed || draft);
       else setImages([]);
     } catch (e) {
+      setFailedSend(attempt);
       setText((typed) => typed || draft);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -393,6 +421,7 @@ export const Composer = forwardRef<
         },
       ]}
     >
+      {above}
       {items && (
         <CommandMenu
           items={items}
@@ -409,7 +438,10 @@ export const Composer = forwardRef<
             setDismissed(text);
           }}
         >
-          <Text style={[styles.note, { color: t.danger }]}>{error ?? dictationError}</Text>
+          <Text style={[styles.note, { color: t.danger }]}>
+            {error ?? dictationError}
+            {error && retryingScheduled ? " Tap send to retry at the original time." : ""}
+          </Text>
         </Pressable>
       )}
       <View style={[styles.box, { borderColor: t.border, backgroundColor: t.raised }]}>
@@ -435,6 +467,7 @@ export const Composer = forwardRef<
           ref={input}
           accessibilityLabel="Message"
           multiline
+          autoFocus={autoFocus}
           // Typing goes on while it reconnects; only sending waits. Dictated
           // words hold it still until they settle.
           editable={!live}
@@ -522,8 +555,8 @@ export const Composer = forwardRef<
           )}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={stop ? "Stop" : running ? "Queue" : "Send"}
-            accessibilityHint={empty ? undefined : "Hold to send later"}
+            accessibilityLabel={stop ? "Stop" : retryingScheduled ? "Retry scheduled send" : running ? "Queue" : "Send"}
+            accessibilityHint={empty ? undefined : retryingScheduled ? "Retries the same message at its original time" : "Hold to send later"}
             disabled={disabled || busy || (!stop && empty)}
             onPress={stop ? onStop : () => void send()}
             onLongPress={empty ? undefined : () => setSheet("later")}
@@ -651,7 +684,8 @@ function Tool({
 }
 
 const styles = StyleSheet.create({
-  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6 },
+  // Short of room (keyboard up, a long command list), only the command menu gives way.
+  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6, flexShrink: 1 },
   note: { fontSize: type.tiny, paddingHorizontal: 6 },
   box: { borderWidth: 1, borderRadius: 18, paddingTop: 4, paddingBottom: 6, paddingHorizontal: 6 },
   thumbs: { flexGrow: 0 },
