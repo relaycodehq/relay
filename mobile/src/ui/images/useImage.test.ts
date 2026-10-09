@@ -11,7 +11,7 @@ const hooks = vi.hoisted(() => ({
 const remote = vi.hoisted(() => ({
   active: "one",
   status: "online",
-  overview: { bridge: 14 as number | undefined },
+  overview: { bridge: 14 } as { bridge?: number } | undefined,
   call: vi.fn(),
   desktop: vi.fn(),
 }));
@@ -65,7 +65,7 @@ beforeEach(() => {
   hooks.state = hooks.dependencies = hooks.effect = hooks.cleanup = undefined;
   remote.active = "one";
   remote.status = "online";
-  remote.overview.bridge = 14;
+  remote.overview = { bridge: 14 };
   remote.call.mockReset();
   remote.desktop.mockReset();
 });
@@ -105,12 +105,12 @@ it("doesn't keep a loaded thumbnail when opening full size or switching computer
 
 it("waits for the bridge version and fetches once on older desktops", async () => {
   const image = source();
-  remote.overview.bridge = undefined;
+  remote.overview = undefined;
   render(image, 264);
   await Promise.resolve();
   expect(remote.desktop).not.toHaveBeenCalled();
   expect(remote.call).not.toHaveBeenCalled();
-  remote.overview.bridge = 13;
+  remote.overview = { bridge: 13 };
   remote.desktop.mockResolvedValue("legacy-full");
   render(image, 264);
   await vi.waitFor(() => expect(render(image, 264).uri).toBe("legacy-full"));
@@ -136,6 +136,16 @@ it("retries a transient failure when the connection returns", async () => {
   remote.call.mockResolvedValue("retried");
   render(image, 264);
   await vi.waitFor(() => expect(render(image, 264).uri).toBe("retried"));
+});
+
+it("uses the legacy image call when the overview omits its bridge version", async () => {
+  const image = source();
+  remote.overview = {};
+  remote.desktop.mockResolvedValue("legacy-full");
+  render(image, 264);
+  await vi.waitFor(() => expect(render(image, 264).uri).toBe("legacy-full"));
+  expect(remote.call).not.toHaveBeenCalled();
+  expect(remote.desktop).toHaveBeenCalledTimes(1);
 });
 
 it("uses the outbox for pending attachments without fetching them", async () => {

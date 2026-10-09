@@ -28,6 +28,7 @@ export const imageFailed = (s: Source, computer?: string) =>
 export function useImage(source: Source, max?: number) {
   const remote = useRemote();
   const bridge = remote.overview?.bridge;
+  const known = !!remote.overview;
   const shrunk = !!max && (bridge ?? 1) >= imageBridge;
   const sourceKey = keyOf(source);
   const computer = remote.active;
@@ -41,8 +42,8 @@ export function useImage(source: Source, max?: number) {
   useEffect(() => {
     const source: Source = JSON.parse(sourceKey);
     if (source.kind === "pending" || status !== "online") return;
-    // Until the overview says which bridge it is, a thumbnail could come whole.
-    if (max && bridge === undefined) return;
+    // Wait for the overview; a missing bridge field on an older desktop means bridge 1.
+    if (max && !known) return;
     let live = true;
     failed.delete(scopedKey(source, computer));
     void cache
@@ -69,7 +70,7 @@ export function useImage(source: Source, max?: number) {
     return () => {
       live = false;
     };
-  }, [key, sourceKey, computer, status, bridge, shrunk, max, call, desktop]);
+  }, [key, sourceKey, computer, status, bridge, known, shrunk, max, call, desktop]);
   if (source.kind === "pending") {
     const uri = outgoingImage(source.messageId, source.index);
     return { uri, failed: !uri };
