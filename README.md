@@ -1,4 +1,4 @@
-![Relay: one workspace for your coding agents. Claude, Codex, OpenCode and Cursor. Open source, MIT, on macOS, Windows and Linux with an Android remote. Next to it, the app with a finished Claude thread and its changed files.](docs/media/relay-preview.png)
+![Relay: one workspace for your coding agents. Claude, Codex, OpenCode, Cursor, Amp, Antigravity and any ACP agent. Open source, MIT, on macOS, Windows and Linux with an Android remote. Next to it, the app with a finished Claude thread and its changed files.](docs/media/relay-preview.png)
 
 <p align="center">
   <a href="https://relaycode.io/download/"><strong>Download Relay</strong></a>
@@ -32,7 +32,7 @@ curl -fsSL https://relaycode.io/install.sh | sh
 
 Then:
 
-1. Install and sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), or [OpenCode](https://opencode.ai). Or use Cursor: under **Settings → AI models**, choose **Set up…** to download Cursor's SDK and sign in.
+1. Sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://opencode.ai) or [Amp](https://ampcode.com); Relay installs a missing one. Or use Cursor: under **Settings → AI models**, choose **Set up…** to download Cursor's SDK and sign in. Antigravity and agents from the ACP registry are added there too.
 2. Open Relay and add a project folder.
 3. Type what you want done, pick the agent and model, and press **Send**.
 
@@ -53,7 +53,7 @@ Relay runs the agents on your computer with your own subscriptions. No Relay acc
 
 | | |
 |---|---|
-| **Talk to your agents** | Claude, Codex, OpenCode and Cursor in one place. Pick the model and effort per thread, and switch agents mid-thread with a handoff note. |
+| **Talk to your agents** | Claude, Codex, OpenCode, Cursor, Amp, Antigravity and any agent from the [ACP registry](https://agentclientprotocol.com) in one place. Pick the model and effort per thread, and switch agents mid-thread with a handoff note. |
 | **Run many threads at once** | The Activity list shows which thread is working, which is done and which needs you. Jump between them with ⌘1–9. |
 | **Watch every step** | Commands, file reads, edits and subagents appear live, then fold away behind **Worked for…** when the answer lands. |
 | **Review every edit** | See the working tree side by side next to the conversation. Stage, commit and push without leaving the thread, and browse history in a commit graph. |
@@ -85,7 +85,7 @@ Automated tests do not cover real agent accounts, OS credential prompts, signing
 - Saved tokens are encrypted with the OS credential store (Keychain on macOS). Chat history and folder paths are not encrypted.
 - Relay never checks out, resets, pulls, force-pushes or stages files on its own. Git actions that change your checkout or remote happen only when you click them.
 - Pull request review works with GitHub through your `gh` CLI login, or with a Gitea server. Everything else works with any local folder, Git or not.
-- Relay is an independent project and is not affiliated with OpenAI, Anthropic, OpenCode or Cursor (Anysphere). Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
+- Relay is an independent project and is not affiliated with OpenAI, Anthropic, Google, OpenCode, Cursor (Anysphere), Amp or the makers of other agents it runs. Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
 
 ## More documentation
 

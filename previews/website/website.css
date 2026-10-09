@@ -232,7 +232,6 @@ body {
 }
 .hero-word > span {
   display: block;
-  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .hero-word > span > span {
   display: flex;
@@ -241,15 +240,30 @@ body {
   gap: 0.22em;
   height: 1.2em;
   opacity: 0.25;
-  transition: opacity 0.4s;
 }
 .hero-word > span > span[data-on] {
   opacity: 1;
 }
-.hero-word svg {
+/* A moving reel lights every name; only the one it rests on stays lit after. */
+.hero-word > span[data-spinning] > span {
+  opacity: 1;
+}
+.hero-word-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.hero-word > span svg,
+.hero-word .registry-glyph {
   width: 0.62em;
   height: 0.62em;
   flex: none;
+}
+.hero-word .registry-glyph {
+  background-color: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
 }
 .hero-actions {
   display: flex;
@@ -1758,14 +1772,20 @@ body {
 
 /* Hero: the way to the other platforms. */
 .hero-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: -10px;
+  font-size: 13.5px;
+}
+.hero-more a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: -10px;
-  font-size: 13.5px;
   color: var(--muted) !important;
 }
-.hero-more:hover {
+.hero-more a:hover {
   color: var(--text) !important;
 }
 

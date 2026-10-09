@@ -71,6 +71,9 @@
   align-items: center;
   gap: 7px;
 }
+.rh-agents .rh-acp {
+  color: var(--muted);
+}
 .rh-agents svg,
 .rh-agents img {
   width: 17px;

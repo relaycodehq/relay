@@ -60,6 +60,8 @@ const stub: Partial<Api> = {
   saveSidebarView: async () => {},
   onReadAloudState: () => () => {},
   onDevBuild: () => () => {},
+  registryAgents: async () => ({ installed: [], busy: {} }),
+  onRegistryAgents: () => () => {},
   agentModels: (async (provider: string) =>
     provider === "claude"
       ? claudeModels

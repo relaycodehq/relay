@@ -148,7 +148,10 @@ export function installStubs() {
     projectChat: async (id: string) => reviewerChat(id),
     scratchChats: async () => [],
     projectGroups: async () => [],
-    updateState: async () => ({ status: "off", current: VERSION }),
+    updateState: async () =>
+      VERSION === "dev"
+        ? { status: "off", current: VERSION }
+        : { status: "idle", current: VERSION },
     onUpdate: () => () => {},
     agentVersions: async () => ({ agents: [], checking: false }),
     onAgentVersions: () => () => {},

@@ -1,0 +1,266 @@
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.tuner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  font-size: 13px;
+}
+.tuner button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.tuner button:hover,
+.tuner button[data-on] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tuner-stage {
+  position: relative;
+  padding: 44px 0 40px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.tuner-sample {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tuner-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
+.tuner .tuner-play {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  color: var(--text);
+}
+.tuner-rate {
+  display: flex;
+  gap: 4px;
+}
+.tuner-clock,
+.tuner-stats {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tuner-clock {
+  min-width: 250px;
+}
+.tuner-stats {
+  color: var(--muted);
+}
+.tuner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.tuner .tuner-copy {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tuner-loop {
+  position: relative;
+  display: flex;
+  height: 26px;
+  margin-left: 104px;
+  margin-right: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+.tuner-loop > [data-phase] {
+  flex-basis: 0;
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  border-right: 1px solid var(--surface);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 26px;
+  white-space: nowrap;
+}
+.tuner-loop > [data-phase="spin"] {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--text);
+}
+.tuner-loop-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--danger);
+  pointer-events: none;
+}
+
+.tuner-graph {
+  margin-top: 8px;
+  user-select: none;
+}
+.tuner-graph svg {
+  display: block;
+  overflow: visible;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.lane-bed {
+  fill: color-mix(in srgb, var(--muted) 6%, transparent);
+  cursor: crosshair;
+  touch-action: none;
+}
+.lane-grid line {
+  stroke: var(--border);
+  stroke-dasharray: 2 4;
+}
+.lane-grid text,
+.ruler text {
+  fill: var(--muted);
+}
+.lane-guide line {
+  stroke: var(--danger);
+  stroke-dasharray: 5 4;
+  opacity: 0.6;
+}
+.lane-guide text {
+  fill: var(--danger);
+  opacity: 0.8;
+}
+.lane-label {
+  fill: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-anchor: end;
+}
+.lane-curve,
+.lane-position {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  pointer-events: none;
+}
+.lane-position {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+.lane-point {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: grab;
+  touch-action: none;
+}
+.lane-point[data-end] {
+  cursor: ns-resize;
+}
+.lane-point:hover,
+.lane-point[data-active] {
+  fill: var(--accent);
+}
+.lane-readout {
+  fill: var(--text);
+  pointer-events: none;
+}
+.crossing {
+  stroke: var(--border);
+  pointer-events: none;
+}
+.ruler line {
+  stroke: var(--border);
+}
+.ruler text {
+  text-anchor: middle;
+}
+.ruler .crossing-name {
+  text-anchor: start;
+  fill: var(--text);
+  opacity: 0.75;
+}
+.graph-head {
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.graph-head[data-away="true"] {
+  opacity: 0.25;
+}
+
+.tuner-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px 28px;
+  margin-top: 18px;
+  padding-left: 104px;
+}
+.field {
+  display: grid;
+  grid-template-columns: 110px 1fr 86px;
+  align-items: center;
+  gap: 10px;
+}
+.field > span {
+  color: var(--muted);
+}
+.field input {
+  accent-color: var(--accent);
+}
+.field output {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tuner-help {
+  margin: 20px 0 0 104px;
+  color: var(--muted);
+}
+.lane-handle line {
+  stroke: var(--muted);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.lane-handle rect {
+  fill: var(--muted);
+  cursor: move;
+  touch-action: none;
+}
+.lane-handle rect[data-auto] {
+  fill: var(--surface);
+  stroke: var(--muted);
+}
+.lane-handle rect:hover,
+.lane-handle rect[data-active] {
+  fill: var(--accent);
+  stroke: var(--accent);
+}

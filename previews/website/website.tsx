@@ -16,8 +16,6 @@ import "./website.css";
 import { initSiteTheme, useSiteTheme } from "./theme";
 import { ThemesSection } from "./themes";
 import { initWindowFocus } from "../../src/lib/window-focus";
-import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
-import { agentName, type AgentProvider } from "../../shared/agents";
 import { AppWindow, scriptMs, type Stop } from "./app-window";
 import {
   PhoneSync,
@@ -26,6 +24,7 @@ import {
   WorktreeGraph,
 } from "./sections";
 import { startLanes } from "./hero-lanes";
+import { AgentWord } from "./agent-word";
 import { Reveal, reducedMotion, useActive } from "./motion";
 import { Faq, GitHubMark, SiteFooter, SiteHeader } from "./parts";
 import { installStubs } from "./stubs";
@@ -45,39 +44,6 @@ initSiteTheme();
 initWindowFocus();
 
 installStubs();
-
-const agentOrder: AgentProvider[] = ["claude", "codex", "opencode", "cursor"];
-
-/** The headline's last line: the four agents, turning like the quick-switch drum. */
-function AgentWord() {
-  const [index, setIndex] = useState(0);
-  useEffect(() => {
-    if (reducedMotion()) return;
-    const timer = window.setInterval(
-      () => setIndex((value) => (value + 1) % agentOrder.length),
-      2300,
-    );
-    return () => window.clearInterval(timer);
-  }, []);
-  return (
-    <span
-      className="hero-word"
-      aria-label={agentOrder.map(agentName).join(", ")}
-    >
-      <span
-        style={{ transform: `translateY(${-index * 1.2}em)` }}
-        aria-hidden="true"
-      >
-        {agentOrder.map((agent, i) => (
-          <span key={agent} data-on={i === index || undefined}>
-            <ProviderIcon provider={agent} />
-            {agentName(agent)}
-          </span>
-        ))}
-      </span>
-    </span>
-  );
-}
 
 function Lanes() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -264,10 +230,16 @@ function HeroDownload() {
           View on GitHub
         </a>
       </div>
-      <a className="hero-more" href="download/">
-        Also for {list}
-        <ArrowRight size={12} />
-      </a>
+      <div className="hero-more">
+        <a href="download/">
+          Also for {list}
+          <ArrowRight size={12} />
+        </a>
+        <a href="download/#headless">
+          Server or a spare computer? Install headless
+          <ArrowRight size={12} />
+        </a>
+      </div>
     </>
   );
 }
@@ -303,7 +275,7 @@ function Site() {
           </p>
           <HeroDownload />
           <ul className="hero-facts">
-            <li>4 agents</li>
+            <li>6 agents + ACP</li>
             <li>No Relay account</li>
             <li>No API keys</li>
             <li>Open source, MIT</li>

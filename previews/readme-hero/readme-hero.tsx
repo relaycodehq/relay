@@ -1,7 +1,8 @@
 // The README's hero image: the website's Relay window on sample data, with the
 // name and what it is next to it, on a 1280×640 stage (GitHub's social preview
 // size). ?shot drops the switcher so a headless browser can photograph it;
-// ?w=1200&h=630 sizes the stage for the website's link preview.
+// ?w=1200&h=630 sizes the stage for the website's link preview;
+// ?version=0.10.0 puts the release it is shot for in the sidebar footer.
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -33,7 +34,17 @@ type Layout = (typeof layouts)[number]["id"];
 
 const params = new URLSearchParams(location.search);
 const shot = params.has("shot");
-const agents: AgentProvider[] = ["claude", "codex", "opencode", "cursor"];
+const version = params.get("version");
+if (version)
+  window.relay.updateState = async () => ({ status: "idle", current: version });
+const agents: AgentProvider[] = [
+  "claude",
+  "codex",
+  "opencode",
+  "cursor",
+  "amp",
+  "antigravity",
+];
 
 function Lanes() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -68,6 +79,7 @@ function Words() {
             {agentName(agent)}
           </span>
         ))}
+        <span className="rh-acp">+ any ACP agent</span>
       </div>
       <div className="rh-fine">
         Open source · MIT · macOS, Windows, Linux · Android remote

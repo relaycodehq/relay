@@ -230,7 +230,8 @@ export function SiteFooter({ home }: { home: string }) {
       </div>
       <p className="footer-base">
         Relay {VERSION} · Relay is an independent project. It has no affiliation
-        with OpenAI, Anthropic, OpenCode or Cursor.
+        with OpenAI, Anthropic, Google, OpenCode, Cursor, Amp or other agent
+        makers.
       </p>
     </footer>
   );

@@ -26,8 +26,8 @@ export const releaseNotes =
 
 export const features: { title: string; text: string; detail: string }[] = [
   {
-    title: "Four agents",
-    text: "Relay runs Claude, Codex, OpenCode and Cursor. You select the model and the effort for each thread.",
+    title: "Your agents",
+    text: "Relay runs Claude, Codex, OpenCode, Cursor, Amp and Antigravity. You add more from the ACP registry. You select the model and the effort for each thread.",
     detail: "model · effort",
   },
   {
@@ -194,7 +194,7 @@ export const firstStart: {
 ];
 
 export const steps: string[] = [
-  "Install one agent CLI and sign in: Claude Code, Codex or OpenCode. For Cursor, use Settings → AI models in Relay.",
+  "Sign in to one agent CLI: Claude Code, Codex, OpenCode or Amp. Relay installs a missing CLI. Settings → AI models adds Cursor, Antigravity and ACP agents.",
   "Open Relay and add a project folder.",
   "Type a task, select the agent and the model, and press Send.",
 ];
@@ -234,7 +234,7 @@ export const openSource: {
 export const faq: { q: string; a: string }[] = [
   {
     q: "Which agents does Relay run?",
-    a: "Relay runs Claude Code, Codex, OpenCode and Cursor. Install one of the CLIs and sign in. For Cursor, Settings → AI models downloads the Cursor SDK.",
+    a: "Relay runs Claude Code, Codex, OpenCode, Cursor, Amp and Google's Antigravity. Settings → AI models adds any agent from the ACP registry. You sign in with your own subscription.",
   },
   {
     q: "Do I need a Relay account or an API key?",

@@ -1,7 +1,7 @@
 // The website's download page: each build of the current release, what to do
 // at the first start, and the ways around a package (all releases, source).
 // Open http://127.0.0.1:5177/previews/website/download/
-import { StrictMode, type CSSProperties } from "react";
+import { StrictMode, useEffect, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowDownToLine, ArrowUpRight, Sparkles } from "lucide-react";
 import "../../src/styles.css";
@@ -82,6 +82,11 @@ function DownloadPage() {
   const live = release?.version === VERSION ? release : null;
   const yours = platforms.find((p) => p.os === os);
   const size = yours && live?.assets[yours.file];
+  // The page renders after load, too late for the browser to follow #headless.
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, []);
   return (
     <div className="site">
       <SiteHeader home="../" />
@@ -130,7 +135,7 @@ function DownloadPage() {
           <Files builds={otherBuilds} os={os} release={live} />
         </section>
 
-        <section className="block dl-headless">
+        <section className="block dl-headless" id="headless">
           <span className="eyebrow">Headless</span>
           <h2>A computer you never sit at</h2>
           <p className="lede">
