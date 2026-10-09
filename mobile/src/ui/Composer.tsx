@@ -558,6 +558,10 @@ export const Composer = forwardRef<
               <Text style={[styles.slash, { color: t.muted }]}>/</Text>
             </Tool>
           )}
+          {/* The two sends stay side by side, as on the desktop. */}
+          {canDictate && (
+            <DictationButton owner={dictationOwner} target={dictationTarget} disabled={disabled || busy} />
+          )}
           {steering && (
             <Pressable
               accessibilityRole="button"
@@ -573,9 +577,6 @@ export const Composer = forwardRef<
             >
               <Zap size={15} color={t.accent} />
             </Pressable>
-          )}
-          {canDictate && (
-            <DictationButton owner={dictationOwner} target={dictationTarget} disabled={disabled || busy} />
           )}
           <Pressable
             accessibilityRole="button"
