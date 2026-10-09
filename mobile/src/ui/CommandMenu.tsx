@@ -146,8 +146,8 @@ export function CommandMenu({
 }
 
 const styles = StyleSheet.create({
-  menu: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: "hidden", maxHeight: 280 },
-  scroll: { flexGrow: 0 },
+  menu: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: "hidden", maxHeight: 280, flexShrink: 1 },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   item: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 9 },
   itemText: { flex: 1, gap: 1 },
   label: { fontFamily: mono, fontSize: 13 },

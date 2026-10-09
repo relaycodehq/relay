@@ -648,7 +648,8 @@ function Tool({
 }
 
 const styles = StyleSheet.create({
-  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6 },
+  // Short of room (keyboard up, a long command list), only the command menu gives way.
+  dock: { paddingHorizontal: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 6, flexShrink: 1 },
   note: { fontSize: type.tiny, paddingHorizontal: 6 },
   box: { borderWidth: 1, borderRadius: 18, paddingTop: 4, paddingBottom: 6, paddingHorizontal: 6 },
   thumbs: { flexGrow: 0 },
