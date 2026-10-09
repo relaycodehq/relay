@@ -92,11 +92,14 @@ it("answers async Codex questions inside the running turn without interrupting o
   expect(message.status).toBe("streaming");
   expect(message.trace?.some((e) => e.id === "after-question")).toBe(true);
   expect(current.requests).toEqual([]);
-  // Not a live request, but the agent still waits on the user for it.
+  // Needs the user, but the agent can keep working without this answer.
   const waiting = () =>
     chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
   // Listed from the saved summary, which a running answer writes each second.
   await vi.waitFor(() => expect(waiting()).toBe(true), { timeout: 3000 });
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.blocked,
+  ).toBeUndefined();
   const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",

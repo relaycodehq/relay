@@ -96,10 +96,10 @@ export class ThreadList {
             at: w.at,
           })),
         ];
-        // A question left in an answer waits on the user like a live
-        // request, the turn running or not; away, it's answered there.
-        const waiting =
-          !!active?.requests.list().length || (!!c.asking && !c.sentTo);
+        // Open questions need the user even while the agent continues.
+        // A thread handed away is answered on that computer.
+        const blocked = crew.some((a) => a.requests.list().length > 0);
+        const waiting = blocked || (!!c.asking && !c.sentTo);
         return active || pending.length || waiting
           ? {
               ...c,
@@ -109,6 +109,7 @@ export class ThreadList {
                     runningSince: active.started,
                     runningAgents: running,
                     waiting,
+                    ...(blocked ? { blocked: true as const } : {}),
                   }
                 : waiting
                   ? { waiting }

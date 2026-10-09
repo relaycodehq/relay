@@ -101,14 +101,17 @@ export interface ChatSummary {
   startedBy?: StartedBy;
   /** Continues a Claude Code or Codex session started in a terminal. */
   fromTerminal?: FromTerminal;
-  /** An agent's question in it is still open: neither answered nor dismissed. It waits on the user like a live request. */
+  /** An async question is still open: neither answered nor dismissed. It needs the user even while the agent continues. */
   asking?: true;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
   /** The thread's own agent first, then its reviewers or thinkers, one per provider. */
   runningAgents?: AgentProvider[];
+  /** Needs the user, even if an async question lets the agent continue. */
   waiting?: boolean;
+  /** Live: a request blocks the running turn. */
+  blocked?: true;
   /** Work Claude left running that will start its next turn by itself. */
   pending?: ChatPending[];
 }

@@ -60,6 +60,9 @@ describe("familyLine", () => {
         chat(),
       ]),
     ).toBe("4 threads · 1 working · 1 needs you");
+    expect(
+      familyLine([chat({ running: true, waiting: true, asking: true })]),
+    ).toBe("1 thread · 1 working · 1 needs you");
     expect(familyLine([chat()])).toBe("1 thread · all done");
   });
 });

@@ -855,3 +855,52 @@ test("times for agents are local with their offset and the same instant", () => 
     process.env.TZ = tz;
   }
 });
+
+test("an async question does not finish wait_for_threads while its agent continues", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  const chat = chats.get(child.id)!;
+  chat.running = true;
+  chat.waiting = true;
+  chat.asking = true;
+  chat.messages.push({
+    id: "ask-message",
+    role: "assistant",
+    provider: "codex",
+    status: "streaming",
+    body: "",
+    created: 1,
+    version: 1,
+    questions: [{ id: "ask", questions: [{ id: "q", question: "Which?" }] }],
+  });
+  expect(
+    parse(await call(threads, lead.id, "list_threads", {}))[0].asks,
+  ).toEqual(["Which?"]);
+  expect(
+    parse(await call(threads, lead.id, "list_threads", {}))[0].status,
+  ).toBe("working");
+  const waiting = call(threads, lead.id, "wait_for_threads", {
+    timeoutSeconds: 1,
+  });
+  const result = parse(await waiting);
+  expect(result.timedOut).toBe(true);
+  expect(result.threads[0].status).toBe("working");
+  chat.blocked = true;
+  expect(
+    parse(
+      await call(threads, lead.id, "wait_for_threads", { timeoutSeconds: 1 }),
+    ).threads[0].status,
+  ).toBe("needs-input");
+  delete chat.blocked;
+  chat.running = false;
+  expect(
+    parse(
+      await call(threads, lead.id, "wait_for_threads", { timeoutSeconds: 1 }),
+    ).threads[0].status,
+  ).toBe("needs-input");
+});

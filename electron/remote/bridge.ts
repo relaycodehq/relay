@@ -448,6 +448,8 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.provider ? { provider: c.provider } : {}),
     ...(c.running ? { running: true, runningSince: c.runningSince } : {}),
     ...(c.waiting ? { waiting: true } : {}),
+    ...(c.asking ? { asking: true } : {}),
+    ...(c.blocked ? { blocked: true } : {}),
     ...(c.settledAt ? { settledAt: c.settledAt } : {}),
     ...(c.seenAt ? { seenAt: c.seenAt } : {}),
     ...(c.snoozedUntil

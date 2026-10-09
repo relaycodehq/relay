@@ -172,3 +172,18 @@ it("puts right a summary a crash left behind its thread", async () => {
   expect(listed(stale).title).toBe("Thread");
   expect(changed).toEqual(["p"]);
 });
+
+it("derives open questions from messages, clearing the flag after answers or dismissals", () => {
+  const chat = thread();
+  const group = { id: "ask", questions: [{ id: "q", question: "Which?" }] };
+  chat.messages = [
+    { ...answer("Question"), questions: [group], parentId: "side" },
+  ];
+  expect(chatSummary(chat).asking).toBe(true);
+  chat.asking = true; // A loaded or forked summary is never the source of truth.
+  chat.messages[0].questions![0].dismissed = true;
+  expect(chatSummary(chat).asking).toBeUndefined();
+  delete chat.messages[0].questions![0].dismissed;
+  chat.messages[0].questions![0].answers = { q: ["This"] };
+  expect(chatSummary(chat).asking).toBeUndefined();
+});

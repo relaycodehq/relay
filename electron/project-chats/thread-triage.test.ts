@@ -36,6 +36,22 @@ it("settling a thread settles the threads it started that are done, and undo bri
   const done = await chats.create(projectId, scope, "checkout", startedBy);
   const scheduled = await chats.create(projectId, scope, "checkout", startedBy);
   const stranger = await chats.create(projectId, scope);
+  const asking = await chats.create(projectId, scope, "checkout", startedBy);
+  // Seed a saved child without starting a real agent.
+  const storage = (chats as unknown as { core: import("./core").ChatCore }).core
+    .storage;
+  const child = await storage.load(asking.id);
+  child.messages.push({
+    id: "question",
+    role: "assistant",
+    provider: "codex",
+    status: "complete",
+    body: "Which?",
+    created: 1,
+    version: 1,
+    questions: [{ id: "ask", questions: [{ id: "q", question: "Which?" }] }],
+  });
+  await storage.save(child);
   // A message sent later means it isn't done yet.
   await chats.send(scheduled.id, {
     id: randomUUID(),
@@ -55,6 +71,7 @@ it("settling a thread settles the threads it started that are done, and undo bri
   expect((await chats.get(done.id)).settledAt).toBe(settledAt);
   expect((await chats.get(scheduled.id)).settledAt).toBeUndefined();
   expect((await chats.get(stranger.id)).settledAt).toBeUndefined();
+  expect((await chats.get(asking.id)).settledAt).toBeUndefined();
 
   await chats.triage(lead.id, {
     kind: "restore",

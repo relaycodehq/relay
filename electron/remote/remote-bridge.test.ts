@@ -433,3 +433,47 @@ it("sends a thread's image shrunk to what the phone shows, through the desktop's
     b.handle("image", [{ kind: "attached", chatId, imageId }, 1e6]),
   ).rejects.toThrow();
 });
+
+it("carries async attention and blocking state separately to the phone", async () => {
+  const chat: ChatSummary = {
+    id: chatId,
+    projectId,
+    title: "T",
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+    running: true,
+    waiting: true,
+    asking: true,
+  };
+  const events: RemoteEvent[] = [];
+  const b = new RemoteBridge(
+    {
+      projects: async () => [{ id: projectId }],
+      chats: () => [chat],
+      name: () => "Studio",
+    } as unknown as RemoteHost,
+    (event) => events.push(event),
+  );
+  await b.handle("overview", []);
+  b.refresh();
+  const first = events.at(-1);
+  expect(first?.kind === "chats" && first.chats[0]).toMatchObject({
+    running: true,
+    waiting: true,
+    asking: true,
+  });
+  chat.blocked = true;
+  b.refresh();
+  const blocked = events.at(-1);
+  expect(blocked?.kind === "chats" && blocked.chats[0].blocked).toBe(true);
+  delete chat.asking;
+  delete chat.blocked;
+  chat.waiting = false;
+  b.refresh();
+  const answered = events.at(-1);
+  expect(
+    answered?.kind === "chats" && answered.chats[0].waiting,
+  ).toBeUndefined();
+  b.dispose();
+});

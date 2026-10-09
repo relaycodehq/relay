@@ -112,7 +112,7 @@ export class ThreadTriage {
         this.core.sessions.pending(child.id).length > 0 ||
         (!!child.queue?.length && !child.queuePaused) ||
         !!nextSend(child.scheduled);
-      if (going || child.settledAt) continue;
+      if (going || chatSummary(child).asking || child.settledAt) continue;
       delete child.snoozedAt;
       delete child.snoozedUntil;
       child.settledAt = now;

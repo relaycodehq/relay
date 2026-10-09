@@ -26,10 +26,12 @@ export function withAway(chat: ChatSummary, view?: HandoffView): ChatSummary {
   return {
     ...chat,
     updated: Math.max(chat.updated, remote.updated),
+    waiting: remote.waiting,
+    asking: remote.asking,
+    blocked: remote.blocked,
     ...(remote.running
       ? {
           running: true,
-          waiting: remote.waiting,
           ...(remote.runningSince ? { runningSince: remote.runningSince } : {}),
           ...(remote.provider ? { runningAgents: [remote.provider] } : {}),
         }
