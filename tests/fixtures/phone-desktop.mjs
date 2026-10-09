@@ -7,6 +7,8 @@
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
 // --images starts one whose answer embeds two screenshots, a missing file and a web image.
+// --asks starts threads that end on what the phone has to tell: an open
+// question, a provider error envelope, a lost login and a page shown with show_html.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -36,6 +38,7 @@ const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
 const images = process.argv.includes("--images");
+const asks = process.argv.includes("--asks");
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
@@ -155,9 +158,9 @@ if (images) {
   );
 }
 const pairing = await page.evaluate(
-  async ({ seed, images }) => {
+  async ({ seed, images, asks }) => {
     const project = await window.relay.addProject();
-    if (seed || images) {
+    if (seed || images || asks) {
       const settings = await window.relay.aiSettings();
       const start = async (body) => {
         const chat = await window.relay.createProjectChat(project.id, {
@@ -180,6 +183,29 @@ const pairing = await page.evaluate(
             "![the sidebar](docs/sidebar.png)\n\n" +
             "And a web one, ![logo](https://example.com/logo.png), stays a link.",
         );
+      if (asks) {
+        const page = (label, color) =>
+          `<div style="padding:16px;border-radius:12px;background:${color}">${label} card</div>`;
+        for (const [title, body] of [
+          [
+            "Shows a page",
+            "fixture relay show_html " +
+              JSON.stringify({
+                title: "Card density",
+                variants: [
+                  { label: "Compact", html: page("Compact", "#334") },
+                  { label: "Roomy", html: page("Roomy", "#343") },
+                ],
+              }),
+          ],
+          ["Signed out", "fixture codex signed out"],
+          ["Fails with an envelope", "fixture error envelope"],
+          ["Asks a question", "fixture async question finished"],
+        ]) {
+          await window.relay.renameProjectChat(await start(body), title);
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
       if (seed) {
         await start("fixture edit files in the cache");
         await new Promise((r) => setTimeout(r, 2500));
@@ -189,7 +215,7 @@ const pairing = await page.evaluate(
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed, images },
+  { seed, images, asks },
 );
 let url = pairing.url;
 if (host) {

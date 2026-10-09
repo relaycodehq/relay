@@ -810,6 +810,25 @@ if (args.includes("--permission-prompt-tool")) {
         );
         return;
       }
+      // The provider's own error envelope, as Codex passes it on.
+      if (asked.includes("fixture error envelope")) {
+        failTurn({
+          message:
+            "unexpected status 400 Bad Request: " +
+            JSON.stringify({
+              type: "error",
+              status: 400,
+              error: {
+                type: "invalid_request_error",
+                message:
+                  "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.",
+              },
+            }),
+          codexErrorInfo: null,
+          additionalDetails: null,
+        });
+        return;
+      }
       // Codex's login expired or was revoked.
       if (asked.includes("fixture codex signed out")) {
         failTurn({
