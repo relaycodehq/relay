@@ -73,13 +73,14 @@ await writeFile(
   { mode: 0o700 },
 );
 
-if (claude)
-  await writeFile(
+// Through fakeCli, which answers --version: a silent stand-in loses to the real CLI.
+if (claude) {
+  const { fakeCli } = await import("./fake-cli.ts");
+  await fakeCli(
     join(bin, "claude"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/slow-claude.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/slow-claude.cjs"), "utf8"),
   );
+}
 // What Claude Code lists: aliases standing for full ids, no `[1m]` rows.
 const claudeModels = [
   [
