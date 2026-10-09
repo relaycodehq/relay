@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { pasteBlock, type PastedText } from "../../../shared/pasted-texts";
 import type { ChatImage } from "../../../shared/projects";
@@ -107,8 +107,9 @@ function ImagePill({
 }) {
   const { data: source } = useImageSource(preview);
   const pasted = isPastedImageName(image.name);
+  const peek = useRef<PreviewCard.Root.Actions>(null);
   return (
-    <PreviewCard.Root>
+    <PreviewCard.Root actionsRef={peek}>
       <PreviewCard.Trigger
         delay={PEEK_DELAY}
         closeDelay={0}
@@ -129,7 +130,15 @@ function ImagePill({
         )}
         {!pasted && <span>{shortImageName(image.name)}</span>}
       </PreviewCard.Trigger>
-      {source && <ImagePeek src={source} />}
+      {source && (
+        <ImagePeek
+          src={source}
+          onOpen={() => {
+            peek.current?.close();
+            onOpen(preview.key);
+          }}
+        />
+      )}
     </PreviewCard.Root>
   );
 }

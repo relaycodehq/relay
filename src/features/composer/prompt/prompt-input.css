@@ -145,6 +145,9 @@
   max-width: min(320px, calc(100vw - 24px));
   max-height: 240px;
 }
+.image-chip-peek img.opens {
+  cursor: zoom-in;
+}
 /* The same pill in a sent message, as a button that opens the viewer. */
 .message-image-chip {
   font: inherit;
