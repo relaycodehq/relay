@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
-import { modelEfforts } from "../../../shared/composer-commands";
+import { listedModel, onWindow } from "../../../shared/model-fit";
+import { withComposerChange } from "../../../shared/remote-compose";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ReasoningEffort } from "../../../shared/settings";
 import type { ModelCatalogs } from "../../../shared/composer-commands";
@@ -32,55 +33,55 @@ export function ModelSheet({
   onClose: () => void;
 }) {
   const t = useTheme();
-  const remote = useRemote();
+  // Not the whole `remote`, which every overview push replaces: the sheet would ask again while open.
+  const { desktop, status } = useRemote();
   const provider = settings.provider;
-  const [models, setModels] = useState<Partial<Record<AgentProvider, AgentModel[]>>>({});
-  const [defaults, setDefaults] = useState<Partial<Record<AgentProvider, AgentDefaults | null>>>({});
-  const [error, setError] = useState<string>();
+  const online = status === "online";
+  const [loaded, setLoaded] = useState<{
+    desktop: typeof desktop;
+    provider: AgentProvider;
+    projectId: string;
+    list?: AgentModel[];
+    fallback?: AgentDefaults | null;
+    error?: string;
+  }>();
   useEffect(() => {
-    if (!open || models[provider]) return;
-    setError(undefined);
+    if (!open) return;
+    let live = true;
     Promise.all([
-      remote.desktop("agentModels", provider),
-      remote.desktop("agentDefaults", projectId, provider).catch(() => null),
+      desktop("agentModels", provider),
+      desktop("agentDefaults", projectId, provider).catch(() => null),
     ])
       .then(([list, fallback]) => {
-        setModels((m) => ({ ...m, [provider]: list }));
-        setDefaults((d) => ({ ...d, [provider]: fallback }));
+        if (!live) return;
+        setLoaded({ desktop, provider, projectId, list, fallback });
       })
       .catch((e) => {
         // Default and the thread's own model still work without the list.
-        setModels((m) => ({ ...m, [provider]: [] }));
-        setError(e instanceof Error ? e.message : String(e));
+        if (live) setLoaded({ desktop, provider, projectId, error: e instanceof Error ? e.message : String(e) });
       });
-  }, [open, provider, projectId, models, remote]);
-  const list = models[provider] ?? known?.[provider];
-  const model = list?.find((m) => m.id === settings.choice.model);
-  const fallback = defaults[provider];
-  const fallbackName = fallback?.model
-    ? (list?.find((m) => m.id === fallback.model)?.name ?? fallback.model)
-    : undefined;
+    return () => {
+      live = false;
+    };
+    // Defaults are project-specific; reconnecting or reopening refreshes both.
+  }, [open, provider, projectId, desktop, online]);
+  const result = loaded?.desktop === desktop && loaded.provider === provider && loaded.projectId === projectId ? loaded : undefined;
+  const error = result?.error;
+  const list = result?.list?.length ? result.list : known?.[provider] ?? (result ? [] : undefined);
+  const model = listedModel(provider, list, settings.choice.model);
+  const fallback = result?.fallback;
+  const fallbackModel = fallback?.model ? listedModel(provider, list, fallback.model) : undefined;
+  const fallbackName = fallback?.model ? (fallbackModel?.name ?? fallback.model) : undefined;
   // On Default, the effort applies to whichever model the agent falls back to.
-  const effortModel = model ?? (settings.choice.model ? undefined : list?.find((m) => m.id === fallback?.model));
+  const effortModel = model ?? (settings.choice.model ? undefined : fallbackModel);
   const efforts = effortModel?.efforts ?? [];
   // What Default runs, as the agent's own settings say, like the desktop's label.
   const defaultEffort =
-    (settings.choice.model ? fallback?.efforts?.[settings.choice.model] : fallback?.effort) ||
-    effortModel?.defaultEffort;
+    (settings.choice.model
+      ? fallback?.efforts?.[model?.id ?? settings.choice.model]
+      : fallback?.effort) || effortModel?.defaultEffort;
   const pick = (id: string) =>
-    onChange({
-      ...settings,
-      choice: {
-        ...settings.choice,
-        model: id,
-        // Only an effort the new model lacks goes back to its default, as on the desktop.
-        reasoningEffort: modelEfforts(provider, id, { [provider]: list }).includes(
-          settings.choice.reasoningEffort,
-        )
-          ? settings.choice.reasoningEffort
-          : "",
-      },
-    });
+    onChange(withComposerChange(settings, { command: "model", provider, model: id }, { [provider]: list }));
   const current = (list ?? []).filter((m) => !m.legacy);
   const legacy = (list ?? []).filter((m) => m.legacy);
   return (
@@ -123,7 +124,7 @@ export function ModelSheet({
       )}
       {error && (
         <Text style={[styles.note, { color: t.muted }]}>
-          Couldn't list {agentNames[provider]}'s models: {error}
+          {`Couldn't list ${agentNames[provider]}'s models: ${error}`}
         </Text>
       )}
       {!list ? (
@@ -152,7 +153,7 @@ export function ModelSheet({
               provider={provider}
               label={m.name}
               hint={m.group ? `${m.group} · ${m.description}` : m.description}
-              checked={m.id === settings.choice.model}
+              checked={m === model}
               onPress={() => pick(m.id)}
             />
           ))}
@@ -165,7 +166,7 @@ export function ModelSheet({
               provider={provider}
               label={m.name}
               hint={m.description}
-              checked={m.id === settings.choice.model}
+              checked={m === model}
               onPress={() => pick(m.id)}
             />
           ))}
@@ -179,15 +180,12 @@ export function ModelSheet({
           onChange={(fast) => onChange({ ...settings, choice: { ...settings.choice, fast } })}
         />
       )}
-      {provider === "claude" && (
+      {provider === "claude" && effortModel?.longContext && (
         <ToggleRow
           label="200k context window"
           hint="Off leaves Claude on its default window, 1M on most models."
           value={settings.contextWindow === "200k"}
-          onChange={(on) => {
-            const { contextWindow: _, ...rest } = settings;
-            onChange(on ? { ...rest, contextWindow: "200k" } : rest);
-          }}
+          onChange={(on) => onChange(onWindow(settings, on ? "200k" : "1m"))}
         />
       )}
     </Sheet>

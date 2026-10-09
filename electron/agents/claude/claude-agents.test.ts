@@ -262,8 +262,10 @@ it("names models the way the picker does", () => {
   expect(modelName("haiku")).toBe("Haiku");
 });
 
-it("keeps following agents after the turn that started them ends", async () => {
+it("waits for an agent's task before stopping it and follows it between turns", async () => {
   const stopTask = vi.fn(async () => {});
+  let start!: () => void;
+  const ready = new Promise<void>((resolve) => (start = resolve));
   let later!: () => void;
   const after = new Promise<void>((resolve) => (later = resolve));
   let options!: NonNullable<Parameters<typeof query>[0]["options"]>;
@@ -282,6 +284,7 @@ it("keeps following agents after the turn that started them ends", async () => {
           session_id,
         };
         yield call("agent", "Agent", { description: "Map the SDK" });
+        await ready;
         yield live("t1");
         yield started("agent", "t1", true);
         yield done("agent", "Async agent launched successfully.");
@@ -313,7 +316,7 @@ it("keeps following agents after the turn that started them ends", async () => {
     ) as unknown as ReturnType<typeof query>;
   });
   const key = crypto.randomUUID();
-  await runClaudeProject({
+  const turn = runClaudeProject({
     job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Map the SDK with an agent.",
@@ -324,6 +327,15 @@ it("keeps following agents after the turn that started them ends", async () => {
     onText() {},
     session: { key, id: session_id, async onId() {} },
   });
+  await vi.waitFor(() =>
+    expect(claudeAgentRun(key, "agent")).toMatchObject({ status: "running" }),
+  );
+  await expect(stopClaudeAgent(key, "agent")).rejects.toThrow(
+    "That agent isn't ready to stop yet. Try again shortly.",
+  );
+  expect(stopTask).not.toHaveBeenCalled();
+  start();
+  await turn;
   // Without it the SDK sends a subagent's calls but none of its text.
   expect(options.forwardSubagentText).toBe(true);
   expect(claudeAgents(key)).toMatchObject([{ id: "agent", status: "running" }]);
@@ -340,4 +352,5 @@ it("keeps following agents after the turn that started them ends", async () => {
   await expect(stopClaudeAgent(key, "agent")).rejects.toThrow(
     "That agent has already finished.",
   );
+  expect(stopTask).toHaveBeenCalledTimes(1);
 });

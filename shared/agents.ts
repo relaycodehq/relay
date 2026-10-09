@@ -201,8 +201,9 @@ export interface AgentModel {
   group?: string;
   /** Its context window in tokens, where the agent says. */
   contextWindow?: number;
+  /** The model id an alias stands for, e.g. `claude-opus-5-5` for Claude's `opus`. */
+  resolved?: string;
 }
-/** What an agent runs where a thread leaves the model or effort on Default. */
 /** What an agent runs where a thread leaves the model or effort on Default. */
 export interface AgentDefaults {
   /** The listed model Default runs; "" when the agent doesn't say. */

@@ -1,6 +1,7 @@
 // What a phone tells you about while it's in your pocket: a thread that
 // finished, failed or asked you something since the last list, worded for a
 // notification.
+import { agentError } from "./agent-error";
 import { agentName } from "./agents";
 import { wakeLabel } from "./chat-activity";
 import type { ChatMessage } from "./projects";
@@ -56,10 +57,12 @@ export function threadNews(
       });
       continue;
     }
-    if (!was.running || c.running || c.waiting) continue;
+    if (!was.running || c.running) continue;
     // Snoozed: it comes back by itself when you said.
     if (c.snoozedUntil && c.snoozedUntil > at) continue;
     const answer = answers.get(c.id);
+    // An optional question must not hide a failure after the agent kept working.
+    if (c.waiting && answer?.status !== "failed") continue;
     // Someone stopped it, so someone knows.
     if (answer?.status === "cancelled") continue;
     news.push(
@@ -68,7 +71,9 @@ export function threadNews(
             chatId: c.id,
             kind: "failed",
             title: c.title,
-            body: answer.error || `${agent}'s answer failed`,
+            body: answer.error?.trim()
+              ? agentError(answer.error).message
+              : `${agent}'s answer failed`,
           }
         : {
             chatId: c.id,

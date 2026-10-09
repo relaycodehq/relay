@@ -3,6 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
+import { agentError } from "../../../shared/agent-error";
 import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
@@ -13,20 +14,17 @@ import {
   worktreeCommandNote,
 } from "../../../shared/worktree-command";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
+import { useRemote } from "../remote/RemoteProvider";
 import { AgentRun } from "./AgentRun";
+import { AsyncQuestions } from "./AsyncQuestions";
 import { localImagePath } from "../../../shared/answer-images";
-import {
-  AnswerImage,
-  MessageImages,
-  imageFailed,
-  keyOf,
-  messageImages,
-  type Source,
-} from "./Images";
-import { Lightbox, type LightboxImage } from "./Lightbox";
+import { AnswerImage, MessageImages, messageImages } from "./images/Images";
+import { imageFailed, keyOf, type Source } from "./images/useImage";
+import { Lightbox, type LightboxImage } from "./images/Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
+import { AgentErrorNote, RenderNotes, SignInNote } from "./TurnNotices";
 import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
 
@@ -78,6 +76,7 @@ export const MessageView = memo(function MessageView({
   onSteer?: (text: string) => void;
 }) {
   const t = useTheme();
+  const { active } = useRemote();
   const changes = m.changes;
   const openLink = useCallback<OpenLink>(
     (value, inline) => {
@@ -91,16 +90,19 @@ export const MessageView = memo(function MessageView({
   );
   const images = useMemo(() => messageImages(chatId, m, root), [chatId, m, root]);
   const [viewing, setViewing] = useState<{ images: LightboxImage[]; index: number }>();
-  const openImage = useCallback(
-    (source: Source) => {
-      // The list is fixed while it's open; ones that failed to load are left out.
-      const key = keyOf(source);
-      const shown = images.all.filter(
-        (image) => keyOf(image.source) === key || !imageFailed(image.source),
-      );
-      setViewing({ images: shown, index: shown.findIndex((image) => keyOf(image.source) === key) });
-    },
-    [images],
+  const view = useCallback((among: LightboxImage[], source: Source) => {
+    // The list is fixed while it's open; ones that failed to load are left out.
+    const key = keyOf(source);
+    const shown = among.filter(
+      (image) => keyOf(image.source) === key || !imageFailed(image.source, active),
+    );
+    const index = shown.findIndex((image) => keyOf(image.source) === key);
+    if (index >= 0) setViewing({ images: shown, index });
+  }, [active]);
+  const openImage = useCallback((source: Source) => view(images.all, source), [view, images]);
+  const openLooked = useCallback(
+    (path: string) => view(images.looked, { kind: "read", chatId, messageId: m.id, path }),
+    [view, images, chatId, m.id],
   );
   const showImage = useCallback<ShowImage>(
     (src, alt) => {
@@ -129,15 +131,20 @@ export const MessageView = memo(function MessageView({
     );
   if (m.compaction)
     return (
-      <StatusRow failed={m.status === "failed"}>
-        {m.status === "streaming"
-          ? "Compacting context…"
-          : m.status === "complete"
-            ? "Context compacted"
-            : m.status === "cancelled"
-              ? "Compaction stopped"
-              : (m.error ?? "Compaction failed")}
-      </StatusRow>
+      <>
+        <StatusRow failed={m.status === "failed"}>
+          {m.status === "streaming"
+            ? "Compacting context…"
+            : m.status === "complete"
+              ? "Context compacted"
+              : m.status === "cancelled"
+                ? "Compaction stopped"
+                : m.error && !m.signIn
+                  ? agentError(m.error).message
+                  : "Compaction failed"}
+        </StatusRow>
+        {m.signIn && <SignInNote provider={m.signIn} />}
+      </>
     );
   const user = m.role === "user";
   return (
@@ -171,7 +178,8 @@ export const MessageView = memo(function MessageView({
           <Text style={[styles.meta, { color: t.muted }]}>started on its own</Text>
         )}
       </View>
-      {!user && <AgentRun chatId={chatId} message={m} root={root} />}
+      {!user && <AgentRun chatId={chatId} message={m} root={root} onOpenImage={openLooked} />}
+      {!!m.renders?.length && <RenderNotes renders={m.renders} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (
@@ -205,6 +213,7 @@ export const MessageView = memo(function MessageView({
           onClose={() => setViewing(undefined)}
         />
       )}
+      {!user && <AsyncQuestions chatId={chatId} message={m} />}
       {!user && (
         <WatchNotes
           chatId={chatId}
@@ -228,8 +237,11 @@ export const MessageView = memo(function MessageView({
           Stopped · partial output kept
         </Text>
       )}
-      {!!m.error && m.status !== "cancelled" && (
-        <Text style={[styles.note, { color: t.danger }]}>{m.error}</Text>
+      {/* A lost login's error only says to sign in again, which the note says better from here. */}
+      {m.signIn ? (
+        <SignInNote provider={m.signIn} />
+      ) : (
+        !!m.error && m.status !== "cancelled" && <AgentErrorNote error={m.error} />
       )}
       {!user && m.status !== "streaming" && (
         <MessageActions

@@ -9,6 +9,7 @@ import { router } from "expo-router";
 import { CircleHelp } from "lucide-react-native";
 import type { RemoteChatSummary } from "../../../shared/remote";
 import { agentsSince } from "../../../shared/waiting";
+import { inputBlocksThread } from "../../../shared/thread-state";
 import { ProviderIcon } from "./ProviderIcon";
 import { type, useTheme } from "./theme";
 
@@ -51,10 +52,11 @@ export function ThreadRow({
   // A native /goal keeps the agent going across turns until it's met.
   const goal =
     chat.running && chat.goal?.status === "active" ? chat.goal : undefined;
-  const state = chat.waiting
+  const blocked = inputBlocksThread(chat);
+  const state = blocked
     ? "Waiting for you"
     : working
-      ? `${goal ? "Goal" : "Working"} · ${ago(agents ?? chat.runningSince ?? chat.updated)}`
+      ? `${goal ? "Goal" : "Working"}${chat.waiting ? " · needs input" : ""} · ${ago(agents ?? chat.runningSince ?? chat.updated)}`
       : ago(chat.updated);
   return (
     <Pressable
@@ -70,7 +72,7 @@ export function ThreadRow({
       ]}
     >
       <View style={styles.glyph}>
-        {chat.waiting ? (
+        {blocked ? (
           <CircleHelp size={17} color={t.accent} />
         ) : working ? (
           <ActivityIndicator size="small" color={t.muted} />

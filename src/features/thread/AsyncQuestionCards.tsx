@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { agentName, type AgentProvider } from "../../../shared/agents";
 import type {
   AsyncAgentQuestions,
   ChatMessage,
@@ -27,7 +28,9 @@ export function AsyncQuestionCards({
               <p key={q.id}>
                 <strong>{q.question}</strong>
                 <br />
-                {group.answers![q.id]?.join(", ")}
+                {q.isSecret
+                  ? "Hidden answer"
+                  : group.answers![q.id]?.join(", ")}
               </p>
             ))}
           </details>
@@ -36,6 +39,7 @@ export function AsyncQuestionCards({
             key={group.id}
             group={group}
             messageId={message.id}
+            provider={message.provider}
             chatId={chatId}
           />
         ),
@@ -47,10 +51,12 @@ export function AsyncQuestionCards({
 function AsyncQuestionCard({
   group,
   messageId,
+  provider,
   chatId,
 }: {
   group: AsyncAgentQuestions;
   messageId: string;
+  provider: AgentProvider;
   chatId: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -80,7 +86,7 @@ function AsyncQuestionCard({
           request={{
             id: group.id,
             kind: "question",
-            title: "Codex has a question",
+            title: `${agentName(provider)} has ${group.questions.length === 1 ? "a question" : "questions"}`,
             questions: group.questions,
           }}
           onRespond={(response) =>

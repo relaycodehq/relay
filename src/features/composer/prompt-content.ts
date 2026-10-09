@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import { quoteBlock, unquote } from "./composer-quotes";
+import { quoteBlock, unquote } from "../../../shared/composer-quotes";
 import { pasteBlock } from "../../../shared/pasted-texts";
 
 /**

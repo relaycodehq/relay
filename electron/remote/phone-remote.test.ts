@@ -6,7 +6,11 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../app/store";
 import { PhoneRemote } from "./phone-remote";
 import type { RemoteHost } from "./bridge";
-import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
+import {
+  RemoteClient,
+  Unanswered,
+  type RemoteStatus,
+} from "../../shared/remote-client";
 import {
   clientHandshake,
   fromBase64Url,
@@ -31,6 +35,7 @@ import { defaultAISettings } from "../../shared/settings";
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
+  vi.restoreAllMocks();
 });
 
 const projectId = randomUUID(),
@@ -80,7 +85,7 @@ function fakeHost(respond?: (method: string) => Promise<unknown>) {
       return respond?.(method);
     },
   };
-  return { host, dispatched, summary };
+  return { host, dispatched, summary, chat };
 }
 
 async function desktop(
@@ -107,7 +112,7 @@ async function desktop(
     await remote.close();
     await rm(dir, { recursive: true, force: true });
   });
-  return { remote, ...fake };
+  return { remote, store, ...fake };
 }
 
 function phone(
@@ -271,6 +276,86 @@ it("ends the session of a phone removed without being cut off", async () => {
   expect(dispatched).toEqual([]);
 });
 
+it("keeps a phone trying when its sign-in can't be checked, and says no only to a bad token", async () => {
+  const { remote, store } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  first.client.close();
+
+  // As when saving lastSeen fails for a moment.
+  const verify = vi.spyOn(remote.devices, "verify");
+  const save = vi.spyOn(store, "update").mockRejectedValueOnce(new Error("EBUSY"));
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  const again = phone(credentials);
+  await again.until("online");
+  expect(verify).toHaveBeenCalledTimes(2);
+  expect(again.statuses.map((s) => s.status)).not.toContain("denied");
+
+  save.mockClear().mockRejectedValue(new Error("EBUSY"));
+  const wrong = phone({ ...credentials, token: "not-the-token" });
+  await wrong.until("denied");
+  const missing = phone({ ...credentials, deviceId: randomUUID() });
+  await missing.until("denied");
+  expect(wrong.statuses.at(-1)?.detail).toBe(missing.statuses.at(-1)?.detail);
+  expect(save).not.toHaveBeenCalled();
+  const calls = verify.mock.calls.length;
+  await new Promise((r) => setTimeout(r, 1100));
+  expect(verify).toHaveBeenCalledTimes(calls);
+});
+
+it("does not retry or expose unexpected authentication failures", async () => {
+  const { remote } = await desktop();
+  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  await first.until("online");
+  first.client.close();
+  const verify = vi.spyOn(remote.devices, "verify").mockRejectedValue(new Error("private internal detail"));
+  const again = phone(first.credentials()!);
+  await again.until("denied");
+  expect(again.statuses.at(-1)?.detail).not.toContain("private internal detail");
+  again.client.wake();
+  await new Promise((r) => setTimeout(r, 1100));
+  expect(verify).toHaveBeenCalledTimes(1);
+});
+
+it("drops forged and cross-session replayed sign-ins before token verification", async () => {
+  const { remote } = await desktop();
+  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  first.client.close();
+  const verify = vi.spyOn(remote.devices, "verify");
+  let recorded!: Uint8Array;
+  const attack = (payload: (channel: ReturnType<ReturnType<typeof clientHandshake>["finish"]>) => Uint8Array | undefined) =>
+    new Promise<void>((resolve, reject) => {
+      const handshake = clientHandshake(fromBase64Url(credentials.key));
+      const socket = new WebSocket(`ws://127.0.0.1:${credentials.port}/`);
+      cleanup.push(async () => socket.close());
+      socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+      socket.onerror = () => reject(new Error("socket error"));
+      socket.onclose = () => resolve();
+      socket.onmessage = (message) => {
+        const channel = handshake.finish(JSON.parse(message.data));
+        const bytes = payload(channel);
+        if (bytes) socket.send(toBase64Url(bytes));
+        else socket.close();
+      };
+    });
+  const auth = JSON.stringify({ t: "auth", deviceId: credentials.deviceId, token: credentials.token });
+  await attack((channel) => {
+    const forged = channel.seal(auth);
+    forged[0]! ^= 1;
+    return forged;
+  });
+  await attack((channel) => {
+    recorded = channel.seal(auth);
+    return undefined;
+  });
+  await attack(() => recorded);
+  expect(verify).not.toHaveBeenCalled();
+});
+
 it("gives up on a quiet link at once, even when the socket never finishes closing", async () => {
   const { remote } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;
@@ -390,7 +475,7 @@ it("lets a phone see the desktop's version and update it, but not take threads",
   expect(asked).toEqual(["computerInfo", "updateNow"]);
 });
 
-it("waits longer for calls that push or write, and not for the rest", async () => {
+it("waits longer for calls that push, write or send, and not for the rest", async () => {
   // Everything the desktop is asked takes a moment longer than a normal call may.
   const { remote } = await desktop(async (method) => {
     await new Promise((r) => setTimeout(r, 800));
@@ -405,9 +490,133 @@ it("waits longer for calls that push or write, and not for the rest", async () =
   await expect(
     p.client.desktop("projectCommitMessage", projectId, ["a.ts"]),
   ).resolves.toBe("Fix the flaky test");
-  await expect(p.client.desktop("projectFiles", projectId)).rejects.toThrow(
-    "didn't answer in time",
+  // A first send makes the worktree and may carry screenshots: no "Not sent" while it does.
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  await expect(
+    p.client.desktop("sendProjectChat", chatId, send),
+  ).resolves.toBeDefined();
+  // Gone unanswered, it may have run all the same, and says so.
+  const late = p.client.desktop("projectFiles", projectId);
+  await expect(late).rejects.toThrow("didn't answer in time");
+  await expect(late).rejects.toBeInstanceOf(Unanswered);
+});
+
+it("checks unanswered sends while dispatch runs, after reconnect, and outside the history page", async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => (finish = resolve));
+  const { remote, dispatched, chat } = await desktop(async () => gate);
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  const sending = p.client.desktop("sendProjectChat", chatId, send);
+  const unanswered = sending.catch((e: unknown) => e);
+  await vi.waitFor(() => expect(dispatched).toHaveLength(1));
+  const receipt = (client: RemoteClient, id = send.id) =>
+    client.call("chat", chatId, undefined, 1, id);
+  expect(await receipt(p.client)).toMatchObject({
+    hasSend: true,
+    sendPending: true,
+  });
+  p.client.close();
+  expect(await unanswered).toBeInstanceOf(Unanswered);
+  const again = phone(p.credentials()!);
+  await again.until("online");
+  expect((await receipt(again.client)).hasSend).toBe(true);
+  // Two requests with this id share one dispatch, even across a reconnect.
+  const retry = again.client.desktop("sendProjectChat", chatId, send);
+  expect((await receipt(again.client)).hasSend).toBe(true);
+  expect(dispatched).toHaveLength(1);
+  chat.messages = Array.from({ length: 102 }, (_, i): ChatMessage => ({
+    id: i === 0 ? send.id : randomUUID(),
+    role: "user",
+    body: "hi",
+    provider: "codex",
+    status: "complete",
+    created: i,
+    version: 1,
+  }));
+  finish();
+  await retry;
+  const checked = await receipt(again.client);
+  expect(checked.sendPending).toBe(false);
+  expect(checked.messages).toHaveLength(1);
+  expect(checked.messages[0]).not.toMatchObject({ id: send.id });
+  expect(checked.hasSend).toBe(true);
+  // An old accepted send that predates this bridge session is checked through the full history too.
+  const old = randomUUID();
+  chat.messages[0].id = old;
+  expect((await receipt(again.client, old)).hasSend).toBe(true);
+  expect((await receipt(again.client, randomUUID())).hasSend).toBe(false);
+  chat.queue = [{ input: { ...send, id: randomUUID() }, created: 1 }];
+  chat.scheduled = [
+    {
+      input: { ...send, id: randomUUID() },
+      created: 1,
+      at: Date.now() + 60000,
+    },
+  ];
+  expect((await receipt(again.client, chat.queue[0].input.id)).hasSend).toBe(
+    true,
   );
+  expect(
+    (await receipt(again.client, chat.scheduled[0].input.id)).hasSend,
+  ).toBe(true);
+});
+
+it("doesn't revive a taken-back queue item when its phone retries after reconnecting", async () => {
+  const { remote, dispatched, chat } = await desktop();
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "queued", {
+    id: randomUUID(),
+  });
+  chat.queue = [{ input: send, created: 1 }];
+  await p.client.desktop("sendProjectChat", chatId, send);
+  chat.queue = [];
+  p.client.close();
+  const again = phone(p.credentials()!);
+  await again.until("online");
+  expect(
+    await again.client.call("chat", chatId, undefined, 1, send.id),
+  ).toMatchObject({ hasSend: true, sendPending: false });
+  await again.client.desktop("sendProjectChat", chatId, send);
+  expect(dispatched).toHaveLength(1);
+  // The receipt belongs to this thread, not every thread that might carry the same message id.
+  await again.client.desktop("sendProjectChat", randomUUID(), send);
+  expect(dispatched).toHaveLength(2);
+});
+
+it("keeps a desktop rejection distinct from an unanswered call and releases its receipt", async () => {
+  const { remote } = await desktop(async () => {
+    throw new Error("The queue is full.");
+  });
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  const error = await p.client
+    .desktop("sendProjectChat", chatId, send)
+    .catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect(error).not.toBeInstanceOf(Unanswered);
+  expect((error as Error).message).toBe("The queue is full.");
+  expect(
+    (await p.client.call("chat", chatId, undefined, 1, send.id)).hasSend,
+  ).toBe(false);
 });
 
 it("says who answers in `to` only to desktops that take it", async () => {
@@ -425,7 +634,10 @@ it("says who answers in `to` only to desktops that take it", async () => {
   // A desktop from before `to` names no version in its handshake, and
   // refuses fields it doesn't know; the body's mention tells it the same.
   Reflect.set(p.client, "bridge", undefined);
-  await p.client.desktop("sendProjectChat", chatId, send);
+  await p.client.desktop("sendProjectChat", chatId, {
+    ...send,
+    id: randomUUID(),
+  });
   const older = dispatched.at(-1)?.args[1];
   expect(older).not.toHaveProperty("to");
   expect(
@@ -554,4 +766,20 @@ it("headless startup watches initially disconnected Tailscale and respects saved
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("carries manual unread marks in overview and live summaries, and clears them", async () => {
+  const { remote, summary } = await desktop();
+  summary.markedUnread = true;
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  expect((await p.client.call("overview")).chats[0].markedUnread).toBe(true);
+  delete summary.markedUnread;
+  remote.chatsEvent({ projectId, chats: [summary] });
+  await vi.waitFor(() =>
+    expect(
+      p.events.some((e) => e.kind === "chats" && !e.chats[0].markedUnread),
+    ).toBe(true),
+  );
 });

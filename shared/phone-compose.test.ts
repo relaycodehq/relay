@@ -11,8 +11,60 @@ import {
 } from "./remote-compose";
 import { projectChatSendSchema } from "./projects";
 import { defaultAISettings } from "./settings";
+import { onWindow } from "./model-fit";
 
 const id = "0b9e9a42-5f0e-4f3b-9d7a-9d6b3b0f4c11";
+
+it("sends Claude's selected window and follows desktop model-picking rules", () => {
+  const settings = {
+    ...newThreadSettings(defaultAISettings, "claude"),
+    choice: {
+      model: "opus[1m]",
+      fast: false,
+      reasoningEffort: "high" as const,
+    },
+  };
+  const catalogs = {
+    claude: [
+      {
+        id: "sonnet",
+        name: "Sonnet",
+        description: "",
+        efforts: ["high" as const],
+        longContext: true,
+      },
+    ],
+  };
+  const pick = {
+    command: "model",
+    provider: "claude",
+    model: "sonnet",
+  } as const;
+  // Choosing a bare model leaves its window to Claude, exactly as the desktop picker does.
+  expect(withComposerChange(settings, pick, catalogs).choice.model).toBe(
+    "sonnet",
+  );
+  const small = onWindow(settings, "200k");
+  expect(composeSend(small, "hello", { id })).toMatchObject({
+    choice: { model: "opus" },
+    contextWindow: "200k",
+  });
+  expect(withComposerChange(small, pick, catalogs)).toMatchObject({
+    choice: { model: "sonnet", reasoningEffort: "high" },
+    contextWindow: "200k",
+  });
+  const large = onWindow(small, "1m");
+  const sent = composeSend(large, "hello", { id });
+  expect(sent.choice?.model).toBe("opus[1m]");
+  expect(sent).not.toHaveProperty("contextWindow");
+  const explicit = withComposerChange(
+    small,
+    { ...pick, model: "sonnet[1m]" },
+    catalogs,
+  );
+  expect(explicit.choice.model).toBe("sonnet[1m]");
+  expect(explicit).not.toHaveProperty("contextWindow");
+});
 
 it("addresses the picked agent, as only a leading mention makes one answer", () => {
   const codex = newThreadSettings({

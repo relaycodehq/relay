@@ -6,7 +6,7 @@ import {
   selectionQuote,
   quoteLabel,
   unquote,
-} from "./composer-quotes";
+} from "../../../shared/composer-quotes";
 import { Quote } from "./prompt/pills";
 import { promptContent } from "./prompt-content";
 import { promptText } from "./prompt-text";

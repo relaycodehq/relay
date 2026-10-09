@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  FlatList,
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
@@ -10,6 +9,7 @@ import Animated, {
   FadeIn,
   FadeOut,
   interpolate,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDecay,
@@ -18,8 +18,11 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
-import { keyOf, useImage, type Source } from "./Images";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import { Check, Copy, X } from "lucide-react-native";
+import { keyOf, useImage, type Source } from "./useImage";
+import { imageLimits } from "./lightbox-geometry";
 
 export interface LightboxImage {
   source: Source;
@@ -28,6 +31,8 @@ export interface LightboxImage {
 
 const MAX_SCALE = 5;
 const TAP_SCALE = 2.5;
+// How far a finger may move and still tap, in dp.
+const TAP_SLOP = 10;
 
 type Size = { width: number; height: number };
 
@@ -52,6 +57,7 @@ export function Lightbox({
   const [bar, setBar] = useState(true);
   const toggleBar = useCallback(() => setBar((shown) => !shown), []);
   const list = useRef<FlatList<LightboxImage>>(null);
+  const paging = useMemo(() => Gesture.Native(), []);
   const drop = useSharedValue(0);
 
   // A turned phone keeps the same image in view.
@@ -73,6 +79,9 @@ export function Lightbox({
     .onEnd((e) => {
       if (Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 1000) scheduleOnRN(onClose);
       else drop.set(withSpring(0));
+    })
+    .onFinalize((_, success) => {
+      if (!success) drop.set(withSpring(0));
     });
 
   const image = images[index];
@@ -96,37 +105,40 @@ export function Lightbox({
             }}
           >
             {size && (
-              <FlatList
-                ref={list}
-                data={images}
-                keyExtractor={(item) => keyOf(item.source)}
-                horizontal
-                pagingEnabled
-                scrollEnabled={!zoomed}
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={first}
-                getItemLayout={(_, i) => ({ length: size.width, offset: size.width * i, index: i })}
-                // Each page holds a whole data URL; only it and its neighbours stay drawn.
-                windowSize={3}
-                initialNumToRender={1}
-                maxToRenderPerBatch={1}
-                onMomentumScrollEnd={(e) => {
-                  const next = Math.round(e.nativeEvent.contentOffset.x / size.width);
-                  if (next !== index) {
-                    setIndex(next);
-                    setZoomed(false);
-                  }
-                }}
-                renderItem={({ item, index: i }) => (
-                  <Page
-                    image={item}
-                    size={size}
-                    active={i === index}
-                    onZoom={setZoomed}
-                    onTap={toggleBar}
-                  />
-                )}
-              />
+              <GestureDetector gesture={paging}>
+                <FlatList
+                  ref={list}
+                  data={images}
+                  keyExtractor={(item) => keyOf(item.source)}
+                  horizontal
+                  pagingEnabled
+                  scrollEnabled={!zoomed}
+                  showsHorizontalScrollIndicator={false}
+                  initialScrollIndex={first}
+                  getItemLayout={(_, i) => ({ length: size.width, offset: size.width * i, index: i })}
+                  // Each page holds a whole data URL; only it and its neighbours stay drawn.
+                  windowSize={3}
+                  initialNumToRender={1}
+                  maxToRenderPerBatch={1}
+                  onMomentumScrollEnd={(e) => {
+                    const next = Math.round(e.nativeEvent.contentOffset.x / size.width);
+                    if (next !== index) {
+                      setIndex(next);
+                      setZoomed(false);
+                    }
+                  }}
+                  renderItem={({ item, index: i }) => (
+                    <Page
+                      image={item}
+                      size={size}
+                      pager={paging}
+                      active={i === index}
+                      onZoom={setZoomed}
+                      onTap={toggleBar}
+                    />
+                  )}
+                />
+              </GestureDetector>
             )}
           </Animated.View>
         </GestureDetector>
@@ -134,10 +146,14 @@ export function Lightbox({
         <SafeAreaProvider style={styles.over} pointerEvents="box-none">
           {bar && (
             <Bar
+              image={image}
               name={image?.name}
               count={images.length > 1 ? `${index + 1} of ${images.length}` : undefined}
               onClose={onClose}
             />
+          )}
+          {bar && images.length > 1 && images.length <= maxDots && (
+            <Dots count={images.length} index={index} />
           )}
         </SafeAreaProvider>
       </GestureHandlerRootView>
@@ -145,7 +161,17 @@ export function Lightbox({
   );
 }
 
-function Bar({ name, count, onClose }: { name?: string; count?: string; onClose: () => void }) {
+function Bar({
+  image,
+  name,
+  count,
+  onClose,
+}: {
+  image?: LightboxImage;
+  name?: string;
+  count?: string;
+  onClose: () => void;
+}) {
   const insets = useSafeAreaInsets();
   return (
     <Animated.View
@@ -159,6 +185,7 @@ function Bar({ name, count, onClose }: { name?: string; count?: string; onClose:
         </Text>
         {count && <Text style={styles.count}>{count}</Text>}
       </View>
+      {image && <CopyImage key={keyOf(image.source)} source={image.source} />}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
@@ -172,16 +199,71 @@ function Bar({ name, count, onClose }: { name?: string; count?: string; onClose:
   );
 }
 
+const maxDots = 12;
+
+/** Where the swipe is, down by the thumb that swipes; past `maxDots` only the bar's count says. */
+function Dots({ count, index }: { count: number; index: number }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Animated.View
+      entering={FadeIn.duration(150)}
+      exiting={FadeOut.duration(150)}
+      pointerEvents="none"
+      style={[styles.dots, { bottom: insets.bottom + 20 }]}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={[styles.dot, i === index && styles.current]} />
+      ))}
+    </Animated.View>
+  );
+}
+
+/**
+ * Puts the image on the clipboard to paste into another app: sharing it would
+ * need a native module the app doesn't have, and React Native's Share carries
+ * only text on Android.
+ */
+function CopyImage({ source }: { source: Source }) {
+  // The page already fetched it; this finds it in the cache.
+  const { uri } = useImage(source);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1_500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const base64 = uri?.startsWith("data:") ? uri.slice(uri.indexOf(",") + 1) : undefined;
+  if (!base64) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copied ? "Image copied" : "Copy image"}
+      hitSlop={12}
+      style={styles.close}
+      onPress={() =>
+        void Clipboard.setImageAsync(base64).then(() => {
+          void Haptics.selectionAsync().catch(() => {});
+          setCopied(true);
+        }, (e) => Alert.alert("Couldn't copy the image", e instanceof Error ? e.message : String(e)))
+      }
+    >
+      {copied ? <Check size={20} color="#fff" /> : <Copy size={20} color="#fff" />}
+    </Pressable>
+  );
+}
+
 /** One image, fitted to the screen, that zooms around the fingers and drags within its edges. */
 function Page({
   image,
   size,
+  pager,
   active,
   onZoom,
   onTap,
 }: {
   image: LightboxImage;
   size: Size;
+  pager: ReturnType<typeof Gesture.Native>;
   active: boolean;
   onZoom: (zoomed: boolean) => void;
   onTap: () => void;
@@ -189,12 +271,15 @@ function Page({
   const { uri, failed } = useImage(image.source);
   const { width, height } = size;
   const [zoomed, setZoomed] = useState(false);
-  // The image's size once fitted, so a drag stops at its edges.
-  const fit = useSharedValue({ width, height });
+  // Width over height once loaded; fitted to the size of the moment, so a drag
+  // stops at its edges after the phone unfolds or turns too.
+  const ratio = useSharedValue(0);
   const scale = useSharedValue(1);
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   const start = useSharedValue({ scale: 1, x: 0, y: 0 });
+  const focal = useSharedValue({ x: 0, y: 0 });
+  const pinching = useSharedValue(false);
   const wasZoomed = useSharedValue(false);
 
   // Swiped away from, it's fitted again for when it comes back.
@@ -221,16 +306,22 @@ function Page({
   };
   const edge = (s: number) => {
     "worklet";
-    const f = fit.get();
-    return {
-      x: Math.max(0, (f.width * s - width) / 2),
-      y: Math.max(0, (f.height * s - height) / 2),
-    };
+    return imageLimits(ratio.get(), width, height, s);
   };
   const within = (value: number, limit: number) => {
     "worklet";
     return Math.min(limit, Math.max(-limit, value));
   };
+  // Clamp on the UI thread, including when the natural ratio arrives mid-zoom.
+  useAnimatedReaction(
+    () => ({ ratio: ratio.get(), width, height }),
+    (next, previous) => {
+      if (previous && next.ratio === previous.ratio && next.width === previous.width && next.height === previous.height) return;
+      const limit = imageLimits(next.ratio, next.width, next.height, scale.get());
+      x.set(within(x.get(), limit.x));
+      y.set(within(y.get(), limit.y));
+    },
+  );
   const zoomTo = (s: number, toX: number, toY: number) => {
     "worklet";
     const limit = edge(s);
@@ -241,18 +332,29 @@ function Page({
   };
 
   const pinch = Gesture.Pinch()
-    .onStart(() => start.set({ scale: scale.get(), x: x.get(), y: y.get() }))
+    .blocksExternalGesture(pager)
+    .enabled(!!uri)
+    .onTouchesMove((event, manager) => {
+      if (event.numberOfTouches < 2) manager.fail();
+    })
+    .onStart((e) => {
+      pinching.set(true);
+      start.set({ scale: scale.get(), x: x.get(), y: y.get() });
+      focal.set({ x: e.focalX - width / 2, y: e.focalY - height / 2 });
+    })
     .onUpdate((e) => {
       const from = start.get();
       const s = Math.min(MAX_SCALE, Math.max(0.8, from.scale * e.scale));
       // The point between the fingers stays under them.
       const fx = e.focalX - width / 2;
       const fy = e.focalY - height / 2;
-      x.set(fx - (fx - from.x) * (s / from.scale));
-      y.set(fy - (fy - from.y) * (s / from.scale));
+      x.set(fx - (focal.get().x - from.x) * (s / from.scale));
+      y.set(fy - (focal.get().y - from.y) * (s / from.scale));
       scale.set(s);
     })
-    .onEnd(() => {
+    .onFinalize(() => {
+      if (!pinching.get()) return;
+      pinching.set(false);
       const s = Math.min(MAX_SCALE, Math.max(1, scale.get()));
       zoomTo(s, s === 1 ? 0 : x.get(), s === 1 ? 0 : y.get());
     });
@@ -270,15 +372,19 @@ function Page({
       x.set(withDecay({ velocity: e.velocityX, clamp: [-limit.x, limit.x] }));
       y.set(withDecay({ velocity: e.velocityY, clamp: [-limit.y, limit.y] }));
     });
+  // A tap has no distance limit of its own, so a quick swipe to the next
+  // image would count as one.
   const doubleTap = Gesture.Tap()
+    .enabled(!!uri)
     .numberOfTaps(2)
+    .maxDistance(TAP_SLOP)
     .onEnd((e) => {
       if (scale.get() > 1.01) zoomTo(1, 0, 0);
       // Zooms in on the point tapped.
       else zoomTo(TAP_SCALE, -(e.x - width / 2) * (TAP_SCALE - 1), -(e.y - height / 2) * (TAP_SCALE - 1));
     });
   // Waits out a second tap, so it only fires when a double tap didn't.
-  const tap = Gesture.Tap().onEnd(() => scheduleOnRN(onTap));
+  const tap = Gesture.Tap().maxDistance(TAP_SLOP).onEnd(() => scheduleOnRN(onTap));
 
   const transform = useAnimatedStyle(() => ({
     transform: [{ translateX: x.get() }, { translateY: y.get() }, { scale: scale.get() }],
@@ -296,10 +402,7 @@ function Page({
             style={[{ width, height }, transform]}
             onLoad={(e) => {
               const natural = e.nativeEvent.source;
-              if (!natural.width || !natural.height) return;
-              const ratio = natural.width / natural.height;
-              const fitted = Math.min(width, height * ratio);
-              fit.set({ width: fitted, height: fitted / ratio });
+              if (natural.width && natural.height) ratio.set(natural.width / natural.height);
             }}
           />
         ) : failed ? (
@@ -330,4 +433,31 @@ const styles = StyleSheet.create({
   count: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
   close: { padding: 4 },
   failed: { color: "rgba(255,255,255,0.7)", fontSize: 14 },
+  dots: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 7,
+  },
+  // The outline keeps them visible over a white screenshot.
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(255,255,255,0.4)",
+  },
+  // Bigger, solid and darker-ringed, so it stands out from the rest on white as on black.
+  current: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "#fff",
+  },
 });

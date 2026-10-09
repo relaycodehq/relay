@@ -21,6 +21,13 @@ const maxFailures = 5;
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("base64url");
 
+/** A valid token could not finish sign-in because saving lastSeen failed. */
+export class SignInUnavailable extends Error {
+  constructor(cause: unknown) {
+    super("Couldn't check the phone's sign-in.", { cause });
+  }
+}
+
 /**
  * Paired phones and computers, the bridge's key, and the one pairing code
  * that may be open at a time. Whoever holds the code says which it is; a
@@ -114,10 +121,16 @@ export class RemoteDevices {
   /** The device the token belongs to, or undefined. */
   async verify(deviceId: string, token: string) {
     if (!this.holding(deviceId, token)) return;
-    await this.store.update((s) => {
-      const saved = s.phoneRemote?.devices?.find((d) => d.id === deviceId);
-      if (saved) saved.lastSeen = this.now();
-    });
+    try {
+      await this.store.update((s) => {
+        const saved = s.phoneRemote?.devices?.find((d) => d.id === deviceId);
+        if (saved) saved.lastSeen = this.now();
+      });
+    } catch (cause) {
+      // A removal that landed while saving still wins, even on failure.
+      if (!this.holding(deviceId, token)) return;
+      throw new SignInUnavailable(cause);
+    }
     // A removal saved while this update waited its turn wins.
     return this.holding(deviceId, token);
   }

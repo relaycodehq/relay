@@ -7,6 +7,7 @@ import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
+import { useLatestAppChecks } from "../remote/latest-app";
 import { useThreadNotifications } from "../remote/watch";
 import {
   FullWidthContext,
@@ -52,6 +53,7 @@ function Screens() {
   useOrientationPolicy();
   useOfflineCopies();
   useThreadNotifications();
+  useLatestAppChecks();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);
@@ -140,6 +142,10 @@ function Screens() {
                 name="chat/[id]/reply/[root]"
                 options={{ title: "Replies" }}
               />
+              <Stack.Screen
+                name="chat/[id]/agent/[agent]"
+                options={{ title: "Agent" }}
+              />
               <Stack.Screen name="project/[id]" options={{ title: "" }} />
               <Stack.Screen name="turn" options={{ title: "Changes" }} />
               <Stack.Screen name="diff" options={{ title: "Diff" }} />
@@ -161,11 +167,12 @@ function Screens() {
 /** Screens that show the connection their own way. */
 const ownLine = new Set(["settings", "pair"]);
 
-/** Screens whose composer already keeps clear of the navigation bar. */
+/** Screens whose composer or footer already keeps clear of the navigation bar. */
 const ownsBottom = new Set([
   "new",
   "chat/[id]/index",
   "chat/[id]/reply/[root]",
+  "chat/[id]/agent/[agent]",
 ]);
 
 const styles = StyleSheet.create({

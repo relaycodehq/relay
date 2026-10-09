@@ -355,6 +355,8 @@ export class HandoffReceiver {
         title: live.title,
         running: !!live.running,
         waiting: !!live.waiting,
+        ...(live.asking ? { asking: true as const } : {}),
+        ...(live.blocked ? { blocked: true as const } : {}),
         settled: !!live.settledAt,
         updated: live.updated,
         ...(await this.host.chats.latestTurn(found.id)),

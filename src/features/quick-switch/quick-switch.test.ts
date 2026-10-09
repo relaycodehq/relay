@@ -3,6 +3,7 @@ import {
   parseQuickSwitch,
   presetIndex,
   stepPreset,
+  quickItems,
   type QuickPreset,
 } from "./quick-switch";
 
@@ -21,6 +22,20 @@ const presets = [
   preset("d", "codex", "gpt-6-astra", "xhigh"),
 ];
 const run = (p: QuickPreset) => ({ ...p });
+
+it("names Claude alias presets without rewriting their model or window", () => {
+  const picks = [
+    preset("alias", "claude", "opus[1m]", "max"),
+    preset("full", "claude", "claude-opus-5-5[1m]", "high"),
+  ];
+  const before = structuredClone(picks);
+  expect(
+    quickItems(picks, () => [
+      { id: "opus", name: "Opus 5.5", resolved: "claude-opus-5-5" },
+    ]).map((p) => p.name),
+  ).toEqual(["Opus 5.5", "Opus 5.5"]);
+  expect(picks).toEqual(before);
+});
 
 describe("presetIndex", () => {
   it("finds the exact preset, telling Codex's Fast apart", () => {

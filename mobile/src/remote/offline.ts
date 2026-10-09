@@ -84,10 +84,10 @@ export function saveModels(lists: ModelCatalogs) {
 
 /** What a new thread starts on, so its composer is there before the computer answers. */
 type NewThread = { settings: RemoteSettings; models: NewThreadModels };
-const newThreadFile = () => new File(folder(), "new-thread.json");
-export const loadNewThread = () => read<NewThread>(newThreadFile());
-export function saveNewThread(start: NewThread) {
-  const file = newThreadFile();
+const newThreadFile = (computer?: string) => new File(folder(computer), "new-thread.json");
+export const loadNewThread = (computer?: string) => read<NewThread>(newThreadFile(computer));
+export function saveNewThread(start: NewThread, computer?: string) {
+  const file = newThreadFile(computer);
   later(file.uri, () => write(file, start));
 }
 

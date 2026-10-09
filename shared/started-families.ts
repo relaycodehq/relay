@@ -1,14 +1,13 @@
 // Threads another thread's agent started through Relay's tools, grouped under
 // that lead the same way in the desktop's Activity and the phone's.
 import type { StartedBy } from "./projects";
+import { inputBlocksThread, type ThreadInputState } from "./thread-state";
 
 /** What grouping reads; the phone's thread summaries carry just these. */
-export interface FamilyMember {
+export interface FamilyMember extends ThreadInputState {
   id: string;
   created: number;
   startedBy?: StartedBy;
-  running?: boolean;
-  waiting?: boolean;
   pending?: readonly unknown[];
 }
 
@@ -57,7 +56,9 @@ export type StartedFamilies<C extends FamilyMember = FamilyMember> = ReturnType<
 /** "4 threads · 1 working · 1 needs you", on the lead's card. */
 export function familyLine(started: readonly FamilyMember[]) {
   const asking = started.filter((c) => c.waiting).length;
-  const working = started.filter((c) => c.running && !c.waiting).length;
+  const working = started.filter(
+    (c) => c.running && !inputBlocksThread(c),
+  ).length;
   return [
     `${started.length} thread${started.length === 1 ? "" : "s"}`,
     working && `${working} working`,

@@ -19,6 +19,7 @@ import { useProjectIconSync } from "../remote/project-icons";
 import { ActivityList } from "../ui/ActivityList";
 import { Button } from "../ui/Button";
 import { ConnectionLine } from "../ui/ConnectionLine";
+import { HeldWhileCovered } from "../ui/HeldWhileCovered";
 import { ComputerUpdateBanner } from "../ui/ComputerUpdate";
 import { UpdateBanner } from "../ui/UpdateBanner";
 import { ProjectIcon } from "../ui/ProjectIcon";
@@ -91,6 +92,7 @@ export function Browser({
   );
 
   useProjectIconSync(
+    remote.active,
     remote.call,
     remote.status === "online",
     useMemo(
@@ -119,10 +121,16 @@ export function Browser({
     chat,
     action,
   ) =>
-    void remote
+    remote
       .desktop("triageProjectChat", chat.id, action)
-      .then(() => remote.refresh())
-      .catch((e) => Alert.alert("Couldn't change it", String(e?.message ?? e)));
+      .then((after) => {
+        void remote.refresh().catch(() => {});
+        return after;
+      })
+      .catch((e) => {
+        Alert.alert("Couldn't change it", String(e?.message ?? e));
+        return undefined;
+      });
 
   const projectsView = overview && (
     <ScrollView refreshControl={refresh} contentContainerStyle={styles.list}>
@@ -197,9 +205,11 @@ export function Browser({
 
   return (
     <View style={styles.screen}>
-      <ConnectionLine />
-      <ComputerUpdateBanner />
-      <UpdateBanner />
+      <HeldWhileCovered>
+        <ConnectionLine />
+        <ComputerUpdateBanner />
+        <UpdateBanner />
+      </HeldWhileCovered>
       {remote.status === "denied" ? (
         <View style={styles.empty}>
           <Text style={[rowStyles.empty, { color: t.muted }]}>

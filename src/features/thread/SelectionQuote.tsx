@@ -2,7 +2,7 @@
 import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { TextQuote } from "lucide-react";
-import { selectionQuote } from "../composer/composer-quotes";
+import { selectionQuote } from "../../../shared/composer-quotes";
 import {
   ariaShortcut,
   useShortcut,

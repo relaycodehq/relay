@@ -48,7 +48,7 @@ function blocker(tree: WorkingTree) {
 /** The desktop's Changes pane: commit and push everything in one go, or stage and commit a part. */
 export default function ChangesScreen() {
   const { where } = useLocalSearchParams<{ where: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [tree, setTree] = useState<WorkingTree>();
   const [error, setError] = useState<string>();
@@ -59,12 +59,14 @@ export default function ChangesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const generation = useRef(0);
   const asked = useRef(false);
+  // Bumped by every tree shown, so a look that set out before a commit can't put its older tree back.
+  const shown = useRef(0);
   const write = useCallback(
     async (paths: string[], quiet?: boolean) => {
       const id = ++generation.current;
       setWriting(true);
       try {
-        const text = await remote.desktop("projectCommitMessage", where, paths);
+        const text = await desktop("projectCommitMessage", where, paths);
         if (id === generation.current) setDraft((d) => (d.typed ? d : { text, typed: false }));
       } catch (e) {
         if (id === generation.current && !quiet) Alert.alert("Couldn't write it", errorText(e));
@@ -72,10 +74,11 @@ export default function ChangesScreen() {
         if (id === generation.current) setWriting(false);
       }
     },
-    [remote, where],
+    [desktop, where],
   );
   const show = useCallback(
     (next: WorkingTree) => {
+      shown.current++;
       setTree(next);
       // Written once for each round of changes, as the desktop's commit sheet does when it opens.
       const paths = everyPath(next);
@@ -87,14 +90,16 @@ export default function ChangesScreen() {
     [write],
   );
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
+    const since = shown.current;
     try {
-      show(await remote.desktop("projectWorkingTree", where));
+      const next = await desktop("projectWorkingTree", where);
+      if (since === shown.current) show(next);
       setError(undefined);
     } catch (e) {
       setError(errorText(e));
     }
-  }, [remote, where, show]);
+  }, [desktop, status, where, show]);
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -103,7 +108,7 @@ export default function ChangesScreen() {
   const act = async (label: string, action: GitAction) => {
     setBusy(label);
     try {
-      show(await remote.desktop("projectGitAction", where, action));
+      show(await desktop("projectGitAction", where, action));
     } catch (e) {
       Alert.alert("Git said no", errorText(e));
       void load();
@@ -124,7 +129,7 @@ export default function ChangesScreen() {
     try {
       let next: WorkingTree;
       try {
-        next = await remote.desktop("projectGitAction", where, {
+        next = await desktop("projectGitAction", where, {
           kind: "commit",
           revision: tree.revision,
           message: draft.text,
@@ -143,7 +148,7 @@ export default function ChangesScreen() {
       if (!push) return;
       setBusy("push");
       try {
-        show(await remote.desktop("projectGitAction", where, { kind: "push", revision: next.revision }));
+        show(await desktop("projectGitAction", where, { kind: "push", revision: next.revision }));
       } catch (e) {
         Alert.alert(
           "Committed, but the push failed",

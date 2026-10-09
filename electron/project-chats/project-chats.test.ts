@@ -92,9 +92,14 @@ it("answers async Codex questions inside the running turn without interrupting o
   expect(message.status).toBe("streaming");
   expect(message.trace?.some((e) => e.id === "after-question")).toBe(true);
   expect(current.requests).toEqual([]);
+  // Needs the user, but the agent can keep working without this answer.
+  const waiting = () =>
+    chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
+  // Listed from the saved summary, which a running answer writes each second.
+  await vi.waitFor(() => expect(waiting()).toBe(true), { timeout: 3000 });
   expect(
-    (await chats.list(projectId)).find((c) => c.id === chat.id)?.waiting,
-  ).toBe(false);
+    chats.list(projectId).find((c) => c.id === chat.id)?.blocked,
+  ).toBeUndefined();
   const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
@@ -107,6 +112,7 @@ it("answers async Codex questions inside the running turn without interrupting o
   expect(
     answered.messages.find((m) => m.id === message.id)?.questions?.[0].answers,
   ).toEqual(answers);
+  expect(waiting()).toBeFalsy();
   expect(
     answered.messages.some(
       (m) => m.role === "user" && m.steered && m.body.includes("fixture-owner"),
@@ -163,6 +169,21 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect((await chats.get(chat.id)).messages[1].questions).toEqual(
     message.questions,
   );
+  // The turn is over and Relay restarted: the list still says it waits.
+  const waiting = () =>
+    chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
+  expect(waiting()).toBe(true);
+  const dismiss = (dismissed: boolean) =>
+    chats.setQuestionDismissed(
+      chat.id,
+      message.id,
+      "fixture-async-question",
+      dismissed,
+    );
+  await dismiss(true);
+  expect(waiting()).toBeFalsy();
+  await dismiss(false);
+  expect(waiting()).toBe(true);
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
     answers: { "0": ["An unlisted choice"], "1": ["fixture-owner"] },
@@ -170,6 +191,7 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
+  expect(waiting()).toBeFalsy();
   const calls = (await agentCalls())
     .split("\n")
     .filter(Boolean)
@@ -1162,7 +1184,8 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
       ),
     ).toBe(true),
   );
-  await chats.send(chat.id, input("@codex Another"));
+  const another = input("@codex Another");
+  await chats.send(chat.id, another);
   expect((await chats.get(chat.id)).queue).toHaveLength(1);
   chats.cancel(chat.id);
   await vi.waitFor(async () =>
@@ -1175,8 +1198,22 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
   expect((await chats.get(chat.id)).queuePaused).toBe(true);
-  // Asking again by hand lets the paused queue follow that answer.
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  // Retrying the accepted first send mustn't unpause and drain the waiting follow-up.
+  const accepted = (await chats.get(chat.id)).messages.find(
+    (m) => m.role === "user" && m.body.startsWith("@codex"),
+  )!;
+  await chats.send(chat.id, {
+    ...another,
+    id: accepted.id,
+    body: accepted.body,
+  });
+  expect((await chats.get(chat.id)).queuePaused).toBe(true);
+  // A phone that never heard back sends it again: it still waits in the queue, once.
+  await chats.send(chat.id, another);
+  expect(chats.hasActiveProject(projectId)).toBe(false);
+  expect((await chats.get(chat.id)).queue).toHaveLength(1);
+  // Asking again by hand lets the paused queue follow that answer.
   await chats.send(chat.id, input("@codex Asked by hand"));
   await vi.waitFor(
     async () => {
@@ -1190,6 +1227,9 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
     },
     { timeout: 15000 },
   );
+  expect(
+    (await chats.get(chat.id)).messages.filter((m) => m.id === another.id),
+  ).toHaveLength(1);
 });
 it("lets a message's `to` decide who answers over its body's mention", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2033,9 +2073,12 @@ it("drops the planned resume when the thread moves on, and resumes nothing it no
 it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const soon = input("Check the deploy.");
-  await chats.send(chat.id, { ...soon, sendAt: Date.now() + 400 });
+  const scheduled = { ...soon, sendAt: Date.now() + 400 };
+  await chats.send(chat.id, scheduled);
+  await chats.send(chat.id, scheduled);
   let saved = await chats.get(chat.id);
   expect(saved.messages).toHaveLength(0);
+  expect(saved.scheduled).toHaveLength(1);
   expect(saved.scheduled?.[0]).toMatchObject({ input: { id: soon.id } });
   expect(saved.scheduled?.[0].input.sendAt).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBe(saved.scheduled?.[0].at);
@@ -2049,12 +2092,21 @@ it("holds a Send later message until its time, sends it now on request, and keep
   expect((await chats.get(chat.id)).scheduled).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBeUndefined();
 
+  // A lost acknowledgement can be retried after the original time passed.
+  await expect(chats.send(chat.id, scheduled)).resolves.toBeUndefined();
+  expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([soon.id]);
+
   await expect(
     chats.send(chat.id, { ...input("Too late"), sendAt: Date.now() - 1000 }),
   ).rejects.toThrow("future");
   const now = input("Send me early."),
     dropped = input("Never mind.");
   await chats.send(chat.id, { ...now, sendAt: Date.now() + 3_600_000 });
+  // A retry without sendAt must leave a scheduled message waiting, not start it early.
+  await chats.send(chat.id, now);
+  expect((await chats.get(chat.id)).messages.some((m) => m.id === now.id)).toBe(
+    false,
+  );
   const shot = {
     name: "s.png",
     mimeType: "image/png" as const,
