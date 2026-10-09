@@ -202,11 +202,14 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     (thread.worktree?.path && !thread.worktree.removedAt
       ? workspaceId(thread.projectId, id)
       : thread.projectId);
+  // The pushed summary's copy, which a turn's ending doesn't wait for: the
+  // loaded thread's goes stale as agents finish between turns.
+  const pending = summary ? summary.pending : thread?.pending;
   // Subagents belong to the thread's session, shown on its main conversation.
   const agents = useSubagents(id, {
     enabled: !rootId,
     running,
-    pending: thread?.pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
+    pending: pending?.filter((p) => p.kind === "task" && p.agent).length ?? 0,
   });
   const agentBatch = runningBatch(agents.runs);
   const root = thread?.root;
@@ -218,7 +221,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     [root],
   );
   // The strip shows the fan-out's agents and stops them; the waiting strip keeps the rest.
-  const waiting = thread?.pending && outsideBatch(thread.pending, agentBatch);
+  const waiting = pending && outsideBatch(pending, agentBatch);
   const settled = !!summary?.settledAt && summary.settledAt >= summary.updated;
   const snoozed = !!summary?.snoozedUntil && summary.snoozedUntil > Date.now();
 
