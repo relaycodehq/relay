@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { useImage, type Source } from "./useImage";
+import { imageFailed, useImage, type Source } from "./useImage";
 
 // Drive render/effect cleanup separately so late bridge replies can be tested deterministically.
 const hooks = vi.hoisted(() => ({
@@ -145,4 +145,16 @@ it("uses the outbox for pending attachments without fetching them", async () => 
   await Promise.resolve();
   expect(remote.call).not.toHaveBeenCalled();
   expect(remote.desktop).not.toHaveBeenCalled();
+});
+
+it("skips failed previews in galleries while still allowing a full-size retry", async () => {
+  const image = source();
+  remote.call.mockRejectedValue(new Error("This turn didn't read that image."));
+  render(image, 264);
+  await vi.waitFor(() => expect(render(image, 264).failed).toBe(true));
+  expect(imageFailed(image, "one")).toBe(true);
+  remote.desktop.mockResolvedValue("full");
+  render(image);
+  await vi.waitFor(() => expect(render(image).uri).toBe("full"));
+  expect(imageFailed(image, "one")).toBe(false);
 });

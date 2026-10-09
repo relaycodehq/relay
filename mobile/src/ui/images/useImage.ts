@@ -63,8 +63,7 @@ export function useImage(source: Source, max?: number) {
       })
       .catch(() => {
         if (!live) return;
-        // A refused thumbnail mustn't prevent a full-size image from being tried.
-        if (!max) failed.add(scopedKey(source, computer));
+        failed.add(scopedKey(source, computer));
         setResult({ key, failed: true });
       });
     return () => {
