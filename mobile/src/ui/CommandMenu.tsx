@@ -31,16 +31,15 @@ const sources: Record<NonNullable<ProviderCommand["source"]>, string> = {
 
 /** The agent's own commands, fetched once a menu first opens for it. */
 export function useProviderCommands(projectId: string, provider: AgentProvider, wanted: boolean) {
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const [cache, setCache] = useState<Partial<Record<AgentProvider, ProviderCommand[] | "failed">>>({});
   useEffect(() => {
     // A new Scratchpad thread has no folder until the computer makes one.
-    if (!wanted || !projectId || cache[provider] || remote.status !== "online") return;
-    void remote
-      .desktop("projectCommands", projectId, provider)
+    if (!wanted || !projectId || cache[provider] || status !== "online") return;
+    void desktop("projectCommands", projectId, provider)
       .then((list) => setCache((c) => ({ ...c, [provider]: list })))
       .catch(() => setCache((c) => ({ ...c, [provider]: "failed" })));
-  }, [wanted, provider, projectId, cache, remote]);
+  }, [wanted, provider, projectId, cache, desktop, status]);
   const list = cache[provider];
   return { commands: Array.isArray(list) ? list : [], failed: list === "failed", loading: wanted && !list };
 }

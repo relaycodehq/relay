@@ -12,7 +12,7 @@ import { type, useTheme } from "../ui/theme";
 /** The checkout's branches: switch to one, or start a new one from here. */
 export default function BranchesScreen() {
   const { project } = useLocalSearchParams<{ project: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [list, setList] = useState<BranchList>();
   const [error, setError] = useState<string>();
@@ -20,13 +20,13 @@ export default function BranchesScreen() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setList(await remote.desktop("projectBranches", project));
+      setList(await desktop("projectBranches", project));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, project]);
+  }, [desktop, status, project]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -35,7 +35,7 @@ export default function BranchesScreen() {
     setBusy(true);
     try {
       setList(
-        await remote.desktop("projectChangeBranch", project, {
+        await desktop("projectChangeBranch", project, {
           kind,
           name: branch,
           current: list.current,

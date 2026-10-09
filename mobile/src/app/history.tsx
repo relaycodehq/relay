@@ -13,19 +13,19 @@ const page = 100;
 /** The checked-out branch's commits, newest first. */
 export default function HistoryScreen() {
   const { where } = useLocalSearchParams<{ where: string }>();
-  const remote = useRemote();
+  const { desktop, status } = useRemote();
   const t = useTheme();
   const [log, setLog] = useState<CommitLog>();
   const [limit, setLimit] = useState(page);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
-    if (remote.status !== "online") return;
+    if (status !== "online") return;
     try {
-      setLog(await remote.desktop("projectHistory", where, "head", limit));
+      setLog(await desktop("projectHistory", where, "head", limit));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [remote, where, limit]);
+  }, [desktop, status, where, limit]);
   useEffect(() => {
     void load();
   }, [load]);
