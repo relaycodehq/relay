@@ -83,7 +83,6 @@ export const stopping = (stop: () => Promise<void>) => () =>
  */
 export function SubagentStrip({
   batch,
-  reserve,
   display,
   onPress,
   error,
@@ -92,8 +91,6 @@ export function SubagentStrip({
 }: {
   /** The started threads to tell of, while any works or asks. */
   started: RemoteChatSummary[];
-  /** Holds its height with no agents out, e.g. while a turn runs that may send some. */
-  reserve: boolean;
   error?: string;
   onRetry: () => Promise<unknown>;
   batch: SubagentRun[];
@@ -131,7 +128,7 @@ export function SubagentStrip({
     );
   }
   if (!latest) {
-    if (!reserve && !error) return null;
+    if (!error) return null;
     return (
       <View style={styles.slot}>
         {error && (
