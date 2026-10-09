@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, FolderGit2, GitBranch, NotebookPen } from "lucide-react-native";
 import type { ChatWorkspace } from "../../../shared/projects";
-import type { RemoteProject } from "../../../shared/remote";
+import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
 import type { Where } from "../remote/new-thread";
 import { ProjectIcon } from "./ProjectIcon";
 import { MenuSheet } from "./Sheet";
+import { ThreadRow } from "./ThreadRow";
 import { type, useTheme } from "./theme";
 
 export type WhereSheet = "project" | "workspace";
@@ -138,6 +139,32 @@ export function WhereIntro({
   );
 }
 
+/**
+ * The project's latest open threads in place of the intro, for when the
+ * thread to go on with already exists. Short lists sit by the composer.
+ */
+export function RecentThreads({
+  chats,
+  onOpen,
+}: {
+  chats: RemoteChatSummary[];
+  onOpen: (chat: RemoteChatSummary) => void;
+}) {
+  const t = useTheme();
+  return (
+    <ScrollView
+      style={styles.recent}
+      contentContainerStyle={styles.recentList}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={[styles.recentLabel, { color: t.faint }]}>Recent threads</Text>
+      {chats.map((c) => (
+        <ThreadRow key={c.id} chat={c} onPress={() => onOpen(c)} />
+      ))}
+    </ScrollView>
+  );
+}
+
 /** The project list and the workspace choice, as sheets over the screen. */
 export function WhereSheets({
   open,
@@ -231,6 +258,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     overflow: "hidden",
   },
+  recent: { flex: 1 },
+  recentList: { flexGrow: 1, justifyContent: "flex-end", paddingBottom: 8 },
+  recentLabel: { fontSize: type.tiny, paddingHorizontal: 16, paddingBottom: 4 },
   introTitle: { fontSize: type.title, fontWeight: "600", marginTop: 4 },
   introHint: { fontSize: type.small, lineHeight: 19, textAlign: "center", marginTop: 4 },
 });

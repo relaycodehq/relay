@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { chatSettled } from "../../../shared/chat-activity";
 import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
 import { promptTitle } from "../../../shared/prompt-title";
 import type { ChatWorkspace } from "../../../shared/projects";
@@ -21,6 +22,7 @@ import {
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
 import { focusWithKeyboard, KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
 import {
+  RecentThreads,
   WhereIntro,
   WhereLine,
   WhereSheets,
@@ -53,6 +55,11 @@ function NewThreadComposer() {
     overview?.chats ?? [],
   );
   const chosen = projects.find((p) => p.id === picked);
+  const recent = chosen
+    ? (overview?.chats ?? [])
+        .filter((c) => c.projectId === chosen.id && !chatSettled(c))
+        .slice(0, 5)
+    : [];
 
   // The desktop's New chat: an unused Scratchpad folder, or a fresh one. One
   // ask per screen, shared with a send that comes before its answer; after a
@@ -191,14 +198,24 @@ function NewThreadComposer() {
 
   return (
     <KeyboardAware>
-      <WhereIntro
-        project={chosen}
-        picked={picked}
-        workspace={workspace}
-        scratchError={picked === "scratch" ? scratch.error : undefined}
-        onOpen={openSheet}
-        onRetryScratch={() => void askScratch().catch(() => {})}
-      />
+      {recent.length ? (
+        <RecentThreads
+          chats={recent}
+          onOpen={(chat) => {
+            Keyboard.dismiss();
+            router.replace(`/chat/${chat.id}`);
+          }}
+        />
+      ) : (
+        <WhereIntro
+          project={chosen}
+          picked={picked}
+          workspace={workspace}
+          scratchError={picked === "scratch" ? scratch.error : undefined}
+          onOpen={openSheet}
+          onRetryScratch={() => void askScratch().catch(() => {})}
+        />
+      )}
       {settings && (
         <Composer
           ref={composer}
