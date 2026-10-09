@@ -11,7 +11,7 @@ import { agentKind, modelName, type SubagentDetail } from "../../../shared/subag
 import { useSubagentRun } from "../remote/subagents";
 import { AgentRun } from "../ui/AgentRun";
 import { Markdown } from "../ui/Markdown";
-import { SubagentMark, confirmStop } from "../ui/Subagents";
+import { SubagentMark, confirmStop, stopping } from "../ui/Subagents";
 import { Action } from "../ui/ThreadExtras";
 import { type, useTheme } from "../ui/theme";
 
@@ -78,7 +78,12 @@ export function SubagentRun({
           Read-only. Agents take instructions from Claude, not from you.
         </Text>
         {run?.status === "running" && (
-          <Action label="Stop agent" busyLabel="Stopping…" onPress={() => confirmStop(run, stop)} />
+          <Action
+            label="Stop agent"
+            busyLabel="Stopping…"
+            confirm={() => confirmStop(run)}
+            onPress={stopping(stop)}
+          />
         )}
       </View>
     </View>

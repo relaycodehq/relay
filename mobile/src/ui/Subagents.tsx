@@ -44,28 +44,25 @@ export function SubagentMark({ run }: { run: SubagentRun }) {
 }
 
 /** Asks before stopping one: the turn and the other agents carry on. */
-export function confirmStop(run: SubagentRun, stop: () => Promise<void>) {
-  return new Promise<void>((done) =>
+export function confirmStop(run: SubagentRun) {
+  return new Promise<boolean>((answer) =>
     Alert.alert(
       "Stop this agent?",
       `“${run.description}” stops where it is. Claude hears it was stopped and carries on; the rest keep working.`,
       [
-        { text: "Keep it", style: "cancel", onPress: () => done() },
-        {
-          text: "Stop agent",
-          style: "destructive",
-          onPress: () =>
-            void stop()
-              .catch((e) =>
-                Alert.alert("Couldn't stop it", e instanceof Error ? e.message : String(e)),
-              )
-              .finally(done),
-        },
+        { text: "Keep it", style: "cancel", onPress: () => answer(false) },
+        { text: "Stop agent", style: "destructive", onPress: () => answer(true) },
       ],
-      { cancelable: true, onDismiss: () => done() },
+      { cancelable: true, onDismiss: () => answer(false) },
     ),
   );
 }
+
+/** Stops it, saying so when it couldn't. */
+export const stopping = (stop: () => Promise<void>) => () =>
+  stop().catch((e) =>
+    Alert.alert("Couldn't stop it", e instanceof Error ? e.message : String(e)),
+  );
 
 /**
  * One line over the composer while a fan-out works: how many are out, how
@@ -107,7 +104,10 @@ export function SubagentStrip({
         {working.length === 1 ? "1 agent working" : `${working.length} agents working`}
         <Text style={{ color: t.muted }}>
           {" · "}
-          {latest.description}: {subagentNow(latest, display)}
+          {/* What it's doing says more than its name on a phone's width; the sheet has both. */}
+          {latest.summary || latest.recent.some((c) => c.status === "running")
+            ? subagentNow(latest, display)
+            : latest.description}
         </Text>
       </Text>
       {batch.length > 1 && (
@@ -179,7 +179,7 @@ export function SubagentsSheet({
             onClose();
             if (Platform.OS !== "ios") openRun();
           }}
-          onStop={() => confirmStop(run, () => onStop(run.id))}
+          onStop={() => onStop(run.id)}
         />
       ))}
       <Text style={[styles.foot, { color: t.muted }]}>
@@ -230,7 +230,12 @@ function Row({
         </Text>
       </View>
       {run.status === "running" && (
-        <Action label="Stop" busyLabel="Stopping…" onPress={onStop} />
+        <Action
+          label="Stop"
+          busyLabel="Stopping…"
+          confirm={() => confirmStop(run)}
+          onPress={stopping(onStop)}
+        />
       )}
     </Pressable>
   );

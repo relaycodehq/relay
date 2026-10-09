@@ -410,11 +410,14 @@ export function Action({
   label,
   busyLabel,
   primary,
+  confirm,
   onPress,
 }: {
   label: string;
   busyLabel?: string;
   primary?: boolean;
+  /** Asked first; the button only turns busy once it says yes. */
+  confirm?: () => Promise<boolean>;
   onPress: () => Promise<void>;
 }) {
   const t = useTheme();
@@ -424,10 +427,13 @@ export function Action({
       accessibilityRole="button"
       disabled={busy}
       hitSlop={8}
-      onPress={() => {
-        setBusy(true);
-        void onPress().finally(() => setBusy(false));
-      }}
+      onPress={() =>
+        void (async () => {
+          if (confirm && !(await confirm())) return;
+          setBusy(true);
+          await onPress().finally(() => setBusy(false));
+        })()
+      }
       style={[
         styles.action,
         { borderColor: primary ? t.accent : t.border },
