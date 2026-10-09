@@ -33,6 +33,9 @@ const MAX_SCALE = 5;
 const TAP_SCALE = 2.5;
 // How far a finger may move and still tap, in dp.
 const TAP_SLOP = 10;
+// Fingers never land together: a lone finger only swipes once it clearly
+// moves, so a second one has time to join it for a pinch.
+const LONE_SLOP = 24;
 
 type Size = { width: number; height: number };
 
@@ -72,7 +75,8 @@ export function Lightbox({
     opacity: interpolate(Math.abs(drop.get()), [0, 400], [1, 0.2], "clamp"),
   }));
   const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: drop.get() }] }));
-  const dismiss = Gesture.Pan()
+  // Kept across renders: each page's pinch holds it off by reference.
+  const dismiss = useMemo(() => Gesture.Pan()
     .enabled(!zoomed)
     .maxPointers(1)
     .activeOffsetY([-14, 14])
@@ -90,7 +94,7 @@ export function Lightbox({
     })
     .onFinalize((_, success) => {
       if (!success) drop.set(withSpring(0));
-    });
+    }), [zoomed, onClose, drop, pinched]);
 
   const image = images[index];
   return (
@@ -140,6 +144,7 @@ export function Lightbox({
                       image={item}
                       size={size}
                       pager={paging}
+                      swipeDown={dismiss}
                       active={i === index}
                       onZoom={setZoomed}
                       onTap={toggleBar}
@@ -265,6 +270,7 @@ function Page({
   image,
   size,
   pager,
+  swipeDown,
   active,
   onZoom,
   onTap,
@@ -272,6 +278,7 @@ function Page({
   image: LightboxImage;
   size: Size;
   pager: ReturnType<typeof Gesture.Native>;
+  swipeDown: ReturnType<typeof Gesture.Pan>;
   active: boolean;
   onZoom: (zoomed: boolean) => void;
   onTap: () => void;
@@ -292,6 +299,8 @@ function Page({
   // at its start (past the touch slop) and again once a pinch hands it back.
   const dragFrom = useSharedValue({ x: 0, y: 0 });
   const handBack = useSharedValue(false);
+  // Where the first finger landed, to tell a swipe from a pinch's start.
+  const lone = useSharedValue({ x: 0, y: 0 });
   const wasZoomed = useSharedValue(false);
 
   // Swiped away from, it's fitted again for when it comes back.
@@ -344,10 +353,17 @@ function Page({
   };
 
   const pinch = Gesture.Pinch()
-    .blocksExternalGesture(pager)
+    .blocksExternalGesture(pager, swipeDown)
     .enabled(!!uri)
+    .onTouchesDown((event) => {
+      const t = event.allTouches[0];
+      if (event.numberOfTouches === 1 && t) lone.set({ x: t.absoluteX, y: t.absoluteY });
+    })
     .onTouchesMove((event, manager) => {
-      if (event.numberOfTouches < 2) manager.fail();
+      const t = event.allTouches[0];
+      if (event.numberOfTouches > 1 || !t) return;
+      const from = lone.get();
+      if (Math.hypot(t.absoluteX - from.x, t.absoluteY - from.y) > LONE_SLOP) manager.fail();
     })
     .onStart((e) => {
       pinching.set(true);
