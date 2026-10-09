@@ -227,9 +227,10 @@ export function MenuSheet({
   };
   return (
     <Sheet open={open} title={title} onClose={onClose} onDismiss={run}>
-      {items.map((item) => (
+      {items.map((item, i) => (
         <MenuRow
-          key={item.label}
+          // Labels repeat, e.g. side conversations opening with the same line.
+          key={i}
           {...item}
           onPress={() => {
             picked.current = item.onPress;
