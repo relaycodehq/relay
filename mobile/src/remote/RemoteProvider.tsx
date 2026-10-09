@@ -33,6 +33,7 @@ import {
   saveOverview,
   setOfflineComputer,
 } from "./offline";
+import { readPairingsAtLaunch } from "./launch-pairings";
 import { PendingPairing } from "./pairing";
 import { MissingProjects } from "./missing-projects";
 import { forgetIcons } from "./project-icons";
@@ -103,6 +104,7 @@ const pairingTimeout = 15_000;
 
 export function RemoteProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [client, setClient] = useState<RemoteClient>();
   const [status, setStatus] = useState<RemoteStatus>("offline");
   const [detail, setDetail] = useState<string>();
@@ -191,25 +193,36 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     [connect],
   );
 
-  useEffect(() => {
-    void loadPaired().then(async ({ paired, computers }) => {
-      dropLooseCopy();
-      setSaved(computers);
-      const start = computers.find((c) => c.key === paired.active);
-      if (start) await attach(start.key, start);
-      setReady(true);
-    });
-  }, [attach]);
+  useEffect(
+    () =>
+      readPairingsAtLaunch(loadPaired, {
+        loaded: async ({ paired, computers }) => {
+          dropLooseCopy();
+          // One paired while a slow read went on stays beside the ones read.
+          setSaved((now) => [
+            ...computers,
+            ...now.filter((c) => !computers.some((k) => k.key === c.key)),
+          ]);
+          setLoaded(true);
+          const start = computers.find((c) => c.key === paired.active);
+          if (start && !active.current) await attach(start.key, start);
+        },
+        ready: () => setReady(true),
+      }),
+    [attach],
+  );
 
-  // Kept to the list and the active one as they change, once read.
+  // Kept to the list and the active one as they change, once read. Before a
+  // read that failed or hasn't finished, only a new pairing is written: an
+  // empty list then would wipe the ones the keystore still holds.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || (!loaded && !saved.length)) return;
     const current = saved.find((c) => c.key === activeId);
     void savePaired(
       { ids: saved.map((c) => c.key), active: current?.key },
       current,
     );
-  }, [ready, saved, activeId]);
+  }, [ready, loaded, saved, activeId]);
 
   useEffect(() => {
     if (overview && active.current) {

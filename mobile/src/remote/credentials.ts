@@ -50,13 +50,17 @@ export async function loadPaired(): Promise<{
     if (legacy) await saveCredentials(legacy);
     await savePaired(paired);
   }
-  const computers: RemoteCredentials[] = [];
-  for (const id of paired.ids) {
-    const saved = parse<RemoteCredentials>(
-      await SecureStore.getItemAsync(computerKey(id)),
-    );
-    if (saved) computers.push(saved);
-  }
+  // At once: each read decrypts on Android's keystore, slow on a busy phone,
+  // and every pairing adds one to the launch.
+  const computers = (
+    await Promise.all(
+      paired.ids.map(async (id) =>
+        parse<RemoteCredentials>(
+          await SecureStore.getItemAsync(computerKey(id)),
+        ),
+      ),
+    )
+  ).filter((saved): saved is RemoteCredentials => !!saved);
   const ids = computers.map((c) => c.key);
   return {
     paired: {
