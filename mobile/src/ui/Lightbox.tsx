@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   FlatList,
   Gesture,
@@ -210,9 +210,9 @@ function CopyImage({ source }: { source: Source }) {
       style={styles.close}
       onPress={() =>
         void Clipboard.setImageAsync(base64).then(() => {
-          void Haptics.selectionAsync();
+          void Haptics.selectionAsync().catch(() => {});
           setCopied(true);
-        }, () => {})
+        }, (e) => Alert.alert("Couldn't copy the image", e instanceof Error ? e.message : String(e)))
       }
     >
       {copied ? <Check size={20} color="#fff" /> : <Copy size={20} color="#fff" />}

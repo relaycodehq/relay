@@ -77,7 +77,7 @@ export function messageExtras(
       ? [
           {
             label: "Quote",
-            hint: "Into your reply, as a quote",
+            hint: "The start of this message, into your reply",
             onPress: () =>
               composer.current?.quote(quoteMarkdown(quoteExcerpt(text(m)))),
           },
@@ -87,7 +87,10 @@ export function messageExtras(
       label: "Share…",
       onPress: () =>
         void Share.share({ message: text(m) }).catch((e) =>
-          Alert.alert("Couldn't share it", e instanceof Error ? e.message : String(e)),
+          Alert.alert(
+            "Couldn't share it",
+            e instanceof Error ? e.message : String(e),
+          ),
         ),
     },
   ];

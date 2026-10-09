@@ -43,9 +43,32 @@ export function quoteLabel(text: string, max: number) {
  * " …" where it was cut.
  */
 export function quoteExcerpt(text: string, lines = 8, chars = 600) {
-  const whole = selectionQuote(text);
+  const whole = text.replace(/\r\n?/g, "\n").replace(/^\n+|\s+$/g, "");
   let cut = whole.split("\n").slice(0, lines).join("\n");
   if (cut.length > chars) cut = cut.slice(0, chars).replace(/\s+\S*$/, "");
-  cut = cut.replace(/\s+$/, "");
-  return cut.length < whole.length ? cut + " …" : cut;
+  // Avoid half a surrogate pair when a long unbroken line meets the limit.
+  cut = cut.replace(/[\uD800-\uDBFF]$/, "").trimEnd();
+  const truncated = cut.length < whole.length;
+  // Close a fenced code block before the truncation mark, including nested quotes.
+  let fence: { marker: string; prefix: string } | undefined;
+  for (const line of cut.split("\n")) {
+    const match = line.match(/^((?: {0,3}> ?)* {0,3})(`{3,}|~{3,})(.*)$/);
+    if (!match) continue;
+    if (!fence) fence = { marker: match[2], prefix: match[1] };
+    else if (
+      match[2][0] === fence.marker[0] &&
+      match[2].length >= fence.marker.length &&
+      !match[3].trim()
+    )
+      fence = undefined;
+  }
+  if (fence)
+    return `${cut}\n${fence.prefix}${fence.marker}${truncated ? "\n\n…" : ""}`;
+  return truncated ? cut + " …" : cut;
+}
+
+/** Adds a quote after a phone draft; the returned end is where replying starts. */
+export function appendQuote(draft: string, markdown: string) {
+  const text = draft.trim() ? `${draft.trimEnd()}\n\n${markdown}` : markdown;
+  return { text, end: text.length };
 }
