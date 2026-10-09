@@ -84,28 +84,8 @@ const codexPath = await fakeCli(
   join(bin, "codex"),
   await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
 );
-// Pin every CLI this fixture can reach before Relay starts. Discovery may
-// otherwise skip a broken mock and find the user's installed agent.
-for (const cli of ["claude", "opencode"])
-  await writeFile(
-    join(bin, cli),
-    '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "fixture 1.0.0"; exit 0; fi\nexit 1\n',
-    { mode: 0o700 },
-  );
-await mkdir(join(root, "data"), { recursive: true });
-await writeFile(
-  join(root, "data", "state.json"),
-  JSON.stringify({
-    version: 1,
-    folders: {},
-    progress: {},
-    agentPaths: Object.fromEntries(
-      ["codex", "claude", "opencode"].map((cli) => [cli, join(bin, cli)]),
-    ),
-  }),
-);
-
-// Pin every agent: an absent or broken stand-in must never discover a real CLI.
+// Pin every agent: an absent or broken stand-in must never discover a real CLI,
+// and a linked path that's missing fails instead of searching PATH.
 const agentPaths = Object.fromEntries(
   agentProviders.map((provider) => [
     provider,
