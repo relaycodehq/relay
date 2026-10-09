@@ -26,6 +26,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fakeCli } from "./fake-cli.ts";
 
 const arg = (name) => {
   const at = process.argv.indexOf(name);
@@ -63,11 +64,10 @@ git(
   "-qm",
   "Start",
 );
-await writeFile(
+// It answers --version: Relay passes over a CLI that doesn't, to the real one.
+await fakeCli(
   join(bin, "codex"),
-  `#!${process.execPath}\n` +
-    (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-  { mode: 0o700 },
+  await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
 );
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
