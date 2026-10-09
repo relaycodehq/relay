@@ -59,6 +59,8 @@ export function Lightbox({
   const list = useRef<FlatList<LightboxImage>>(null);
   const paging = useMemo(() => Gesture.Native(), []);
   const drop = useSharedValue(0);
+  // A second finger makes it a pinch, never a swipe down.
+  const pinched = useSharedValue(false);
 
   // A turned phone keeps the same image in view.
   useEffect(() => {
@@ -75,9 +77,15 @@ export function Lightbox({
     .maxPointers(1)
     .activeOffsetY([-14, 14])
     .failOffsetX([-14, 14])
-    .onUpdate((e) => drop.set(e.translationY))
+    .onStart(() => pinched.set(false))
+    .onUpdate((e) => {
+      // maxPointers only stops a swipe that hasn't started yet.
+      if (e.numberOfPointers > 1) pinched.set(true);
+      drop.set(pinched.get() ? 0 : e.translationY);
+    })
     .onEnd((e) => {
-      if (Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 1000) scheduleOnRN(onClose);
+      const flung = Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 1000;
+      if (flung && !pinched.get()) scheduleOnRN(onClose);
       else drop.set(withSpring(0));
     })
     .onFinalize((_, success) => {
@@ -280,6 +288,10 @@ function Page({
   const start = useSharedValue({ scale: 1, x: 0, y: 0 });
   const focal = useSharedValue({ x: 0, y: 0 });
   const pinching = useSharedValue(false);
+  // The drag's translation when it last took over from the image's position:
+  // at its start (past the touch slop) and again once a pinch hands it back.
+  const dragFrom = useSharedValue({ x: 0, y: 0 });
+  const handBack = useSharedValue(false);
   const wasZoomed = useSharedValue(false);
 
   // Swiped away from, it's fitted again for when it comes back.
@@ -343,6 +355,8 @@ function Page({
       focal.set({ x: e.focalX - width / 2, y: e.focalY - height / 2 });
     })
     .onUpdate((e) => {
+      // As a finger lifts, the focal point jumps to the one still down.
+      if (e.numberOfPointers < 2) return;
       const from = start.get();
       const s = Math.min(MAX_SCALE, Math.max(0.8, from.scale * e.scale));
       // The point between the fingers stays under them.
@@ -361,13 +375,30 @@ function Page({
   const pan = Gesture.Pan()
     .enabled(zoomed)
     .maxPointers(1)
-    .onStart(() => start.set({ scale: scale.get(), x: x.get(), y: y.get() }))
+    .onStart((e) => {
+      start.set({ scale: scale.get(), x: x.get(), y: y.get() });
+      dragFrom.set({ x: e.translationX, y: e.translationY });
+      handBack.set(false);
+    })
     .onUpdate((e) => {
+      // A drag that began before the second finger stays active through the
+      // pinch: it leaves the image to the pinch, then picks up where it ended.
+      if (pinching.get()) {
+        handBack.set(true);
+        return;
+      }
+      if (handBack.get()) {
+        handBack.set(false);
+        start.set({ scale: scale.get(), x: x.get(), y: y.get() });
+        dragFrom.set({ x: e.translationX, y: e.translationY });
+        return;
+      }
       const limit = edge(scale.get());
-      x.set(within(start.get().x + e.translationX, limit.x));
-      y.set(within(start.get().y + e.translationY, limit.y));
+      x.set(within(start.get().x + e.translationX - dragFrom.get().x, limit.x));
+      y.set(within(start.get().y + e.translationY - dragFrom.get().y, limit.y));
     })
     .onEnd((e) => {
+      if (pinching.get() || handBack.get()) return;
       const limit = edge(scale.get());
       x.set(withDecay({ velocity: e.velocityX, clamp: [-limit.x, limit.x] }));
       y.set(withDecay({ velocity: e.velocityY, clamp: [-limit.y, limit.y] }));
