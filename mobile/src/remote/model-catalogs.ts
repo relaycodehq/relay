@@ -59,6 +59,7 @@ export async function loadModelLists(
   wanted: readonly AgentProvider[],
 ): Promise<ModelCatalogs> {
   const h = heldFor(desktop);
+  const requestedOn = connection;
   await Promise.all(
     wanted
       .filter((p) => !h.lists[p])
@@ -69,7 +70,9 @@ export async function loadModelLists(
           desktop("agentModels", p)
             .then(
               (list) => {
-                if (!list.length) return;
+                // A previous connection can finish after its replacement,
+                // including before heldFor has reset this entry.
+                if (requestedOn !== connection || !list.length) return;
                 h.lists[p] = list;
                 h.saved = { ...h.saved, [p]: list };
                 saveModels(h.saved);

@@ -182,6 +182,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     ) => {
       // Last seen lists to read while it connects, or can't; never a wait.
       const cached = await loadOverview(id);
+      // Retire in-flight model requests before changing the offline folder.
+      newModelConnection();
       active.current = id;
       setActiveId(id);
       setOfflineComputer(id);
