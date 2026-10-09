@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import { pickApk } from "../../../shared/phone-release";
-import { newerVersion } from "../../../shared/phone-app";
 import { installApk, useApkInstall, type ApkInstall } from "../remote/apk-install";
 import { latestOffer, releaseBuild, useLatestApp } from "../remote/latest-app";
 import { useRemote } from "../remote/RemoteProvider";
@@ -24,8 +23,7 @@ export function UpdateBanner() {
       </Text>
     );
   const feedOffer = releaseBuild ? latestOffer(latest) : undefined;
-  const ready = update.kind === "ready" && !newerVersion(feedOffer?.version ?? "0.0.0", update.version)
-    ? update : undefined;
+  const ready = update.kind === "ready" && !feedOffer ? update : undefined;
   const fromDesktop = update.kind === "apk" ? update : undefined;
   const offer = ready
     ? undefined
