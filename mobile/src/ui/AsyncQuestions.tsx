@@ -5,10 +5,10 @@ import { useContext, useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ChevronDown, ChevronRight, MessageCircleQuestion } from "lucide-react-native";
+import { agentName } from "../../../shared/agents";
 import type { AsyncAgentQuestions, ChatMessage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { RevealField, RevealMessage } from "./KeyboardAware";
-import { agentNames } from "./ProviderIcon";
 import { Questions } from "./RequestCard";
 import { type, useTheme } from "./theme";
 
@@ -55,7 +55,7 @@ function Open({
     }
   };
   const many = group.questions.length > 1;
-  const title = `${agentNames[message.provider]} has ${many ? "questions" : "a question"}`;
+  const title = `${agentName(message.provider)} has ${many ? "questions" : "a question"}`;
   const dismiss = (dismissed: boolean) =>
     run(() => desktop("setProjectChatQuestionDismissed", chatId, message.id, group.id, dismissed));
   return (

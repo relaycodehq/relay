@@ -13,7 +13,11 @@ import { ModelField } from "../../src/features/agents/ModelField";
 import { ComposerSelect } from "../../src/ui/ComposerSelect";
 import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { useCatalogs } from "../../src/features/agents/useCatalogs";
-import { agentProviders, reviewerProviders, agents } from "../../shared/agents";
+import {
+  agentProviders,
+  reviewerProviders,
+  agentInfo,
+} from "../../shared/agents";
 import { effortLabels } from "../../shared/settings";
 import {
   ago,
@@ -204,7 +208,7 @@ export function useModelName() {
   const catalogs = useCatalogs();
   return (a: Reviewer | Lead) =>
     catalogs.modelsOf(a.provider)?.find((m) => m.id === a.choice.model)?.name ??
-    (a.choice.model || agents[a.provider].defaultModel);
+    (a.choice.model || agentInfo(a.provider).defaultModel);
 }
 
 /** How a past setup's prompt reads in a line of text. */

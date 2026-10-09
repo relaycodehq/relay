@@ -1,6 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import type { AgentModel, AgentProvider } from "../../../shared/agents";
 import { pickAgents } from "./composer-models";
+import { useRunnableAgents } from "./registry-agents";
 import { api } from "../../lib/api";
 import { errorMessage } from "../../lib/error-message";
 
@@ -21,9 +22,11 @@ export const agentModelsQuery = (provider: AgentProvider) => ({
  * once a minute at most; opening the picker asks again.
  */
 export function useAgentPicks() {
-  const models = useQueries({ queries: pickAgents.map(agentModelsQuery) });
+  useRunnableAgents();
+  const agents = pickAgents();
+  const models = useQueries({ queries: agents.map(agentModelsQuery) });
   const catalogs = Object.fromEntries(
-    pickAgents.map((provider, i) => [
+    agents.map((provider, i) => [
       provider,
       models[i].isError
         ? { models: [], error: errorMessage(models[i].error) }

@@ -15,9 +15,9 @@ import {
   useTrackableProjects,
 } from "./plugins";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
-import { agentProviders } from "../../../shared/agents";
 import { useSaveAISettings } from "../agents/useAISettings";
 import { ModelField } from "../agents/ModelField";
+import { useRunnableAgents } from "../agents/registry-agents";
 import { ErrorBox } from "../../ui/ui";
 import { ClockifyProjectMap } from "./ClockifyProjectMap";
 import { PluginStatus, usePluginSaved } from "./plugin-ui";
@@ -61,6 +61,7 @@ export function ClockifySettings() {
   const qc = useQueryClient();
   const saved = usePluginSaved();
   const status = useClockifyStatus();
+  const runnable = useRunnableAgents();
   const [token, setToken] = useState("");
   const [replacing, setReplacing] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -270,7 +271,7 @@ export function ClockifySettings() {
                 label="Timesheets"
                 value={ai.values.timesheet}
                 provider={ai.values.timesheetProvider}
-                providers={agentProviders}
+                providers={runnable}
                 allowDefault
                 onChange={async (timesheet, timesheetProvider) => {
                   setError(undefined);

@@ -46,6 +46,13 @@ const limitedModes: Partial<
       "Cursor can't ask. Edits stay in the project and MCP tools are off.",
     auto: "Cursor's safety review approves routine actions and blocks risky ones.",
   },
+  amp: {
+    "approval-required":
+      "Amp asks only where your Amp permission rules say to; otherwise it runs tools without asking.",
+    "auto-accept-edits":
+      "Amp asks only where your Amp permission rules say to; edits always go through.",
+    auto: "Amp asks only where your Amp permission rules say to; otherwise it runs tools without asking.",
+  },
 };
 /** The modes as `provider` honors them: the same four, described truthfully. */
 export const runtimeModesFor = (provider?: AgentProvider) =>

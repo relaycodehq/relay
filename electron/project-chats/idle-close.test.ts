@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const closed: string[] = [];
 const pending = new Map<string, unknown[]>();
 vi.mock("../agents", () => ({
-  agentRuntimes: {
-    claude: { closeSession: async (key: string) => void closed.push(key) },
-  },
+  everyAgentRuntime: () => [
+    { closeSession: async (key: string) => void closed.push(key) },
+  ],
 }));
 vi.mock("../agents/claude/project", () => ({
   claudePending: (key: string) => pending.get(key) ?? [],

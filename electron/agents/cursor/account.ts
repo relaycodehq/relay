@@ -1,4 +1,4 @@
-import type { CursorSdkIo } from "../agent-updates";
+import type { SdkIo } from "../agent-updates";
 import { cursorCall } from "./connection";
 import { forgetCursorModels } from "./catalog";
 import { currentSdk, ensureSdk, newestSdk, updateSdk } from "./sdk";
@@ -7,7 +7,8 @@ import { currentSdk, ensureSdk, newestSdk, updateSdk } from "./sdk";
 const signInTimeout = 5 * 60_000;
 
 /** What Settings' agent rows ask of Cursor: the SDK Relay downloaded, and who is signed in. */
-export const cursorSdkIo: CursorSdkIo = {
+export const cursorSdkIo: SdkIo = {
+  source: "npm",
   installed: async () => (await currentSdk())?.version,
   newest: newestSdk,
   install: async (version) => {

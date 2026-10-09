@@ -6,12 +6,12 @@ import {
   isUpdating,
   type AgentVersion,
 } from "../../../shared/agent-updates";
-import { agents } from "../../../shared/agents";
+import { agentInfo } from "../../../shared/agents";
 import { Spinner } from "../../ui/ui";
 import "./agent-updates.css";
 
 const names = (list: AgentVersion[]) =>
-  list.length === 1 ? agents[list[0].provider].name : "agents";
+  list.length === 1 ? agentInfo(list[0].provider).name : "agents";
 
 /**
  * Sidebar footer control, hidden until an agent CLI has a newer release. It
@@ -36,7 +36,7 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
         type="button"
         className="sb-agent-update busy"
         disabled
-        title={`Updating ${updating.map((a) => agents[a.provider].cli).join(" and ")}`}
+        title={`Updating ${updating.map((a) => agentInfo(a.provider).cli).join(" and ")}`}
       >
         <Spinner size={12} />
         Updating…
@@ -67,7 +67,7 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
         title={[
           ...behind.map(
             (a) =>
-              `${agents[a.provider].cli} ${a.latest} is available (you have ${a.current})${a.command ? "" : ", update it yourself"}`,
+              `${agentInfo(a.provider).cli} ${a.latest} is available (you have ${a.current})${a.command ? "" : ", update it yourself"}`,
           ),
           updatable.length ? "" : "Opens Settings.",
         ]

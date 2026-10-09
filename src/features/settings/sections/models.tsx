@@ -1,17 +1,24 @@
 import {
   agentName,
-  agentProviders,
+  isCliProvider,
   type AgentProvider,
 } from "../../../../shared/agents";
+import { isUpdating } from "../../../../shared/agent-updates";
 import { accountProviders } from "../../../../shared/agent-accounts";
 import type { AISettings } from "../../../../shared/settings";
 import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
 import { useRecent } from "../../updates/useRecent";
+import { updateAgent, useAgentVersions } from "../../updates/agent-updates";
 import { AccountRows } from "../../accounts/AccountRows";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { ModelField } from "../../agents/ModelField";
+import { useRunnableAgents } from "../../agents/registry-agents";
+import {
+  AcpRegistrySettings,
+  type MissingAgent,
+} from "../../agents/AcpRegistrySettings";
 import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
 import { SettingsCard, SettingsSelect } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
@@ -21,6 +28,29 @@ type AISave = ReturnType<typeof useSaveAISettings>;
 
 const hasAccounts = (provider: AgentProvider) =>
   (accountProviders as readonly AgentProvider[]).includes(provider);
+
+/** The registry's agents, after Relay's own that this computer doesn't have. */
+function MoreAgents() {
+  const versions = useAgentVersions();
+  const missing = (versions?.agents ?? []).flatMap((agent): MissingAgent[] =>
+    isCliProvider(agent.provider) && !agent.path && agent.installer === "relay"
+      ? [
+          {
+            provider: agent.provider,
+            command: agent.command,
+            installing: isUpdating(agent),
+            failed:
+              agent.update?.status === "failed"
+                ? agent.update.message
+                : undefined,
+          },
+        ]
+      : [],
+  );
+  return (
+    <AcpRegistrySettings missing={missing} onInstallMissing={updateAgent} />
+  );
+}
 
 /** Settings → AI models: Agents, Used by Relay and Quick switch. */
 export function useModelEntries(
@@ -57,6 +87,17 @@ export function useModelEntries(
           }
         />
       ),
+    },
+    {
+      id: "acp-registry",
+      category: "agents",
+      title: "More agents",
+      description:
+        "Install any agent from the ACP registry. Relay downloads it into its own folder, keeps it up to date with the agents above, and it shows up in the composer.",
+      keywords:
+        "acp agent client protocol registry install download add remove goose kimi qwen mistral vibe auggie droid kilo junie copilot plugin marketplace",
+      block: true,
+      render: () => <MoreAgents />,
     },
     {
       id: "review-models",
@@ -128,6 +169,7 @@ const reviewRows: {
 
 function ReviewModelsCard({ ai }: { ai: AISave }) {
   const saved = useRecent(ai.savedAt, 2000);
+  const runnable = useRunnableAgents();
   const { values } = ai;
   if (!values)
     return ai.settings.error ? (
@@ -150,7 +192,7 @@ function ReviewModelsCard({ ai }: { ai: AISave }) {
             label={row.label}
             value={values[row.kind]}
             provider={values[`${row.kind}Provider`]}
-            providers={row.anyAgent ? agentProviders : undefined}
+            providers={row.anyAgent ? runnable : undefined}
             allowDefault={row.allowDefault}
             onChange={(value, provider) =>
               void ai.save({
@@ -171,14 +213,17 @@ function ReviewModelsCard({ ai }: { ai: AISave }) {
 }
 
 function AgentSelect({ ai }: { ai: AISave }) {
+  const runnable = useRunnableAgents();
   if (!ai.values) return null;
   const value = ai.values.threadProvider;
+  // An agent removed since stays listed while it's the one picked.
+  const offered = runnable.includes(value) ? runnable : [...runnable, value];
   return (
     <SettingsSelect<AgentProvider>
       label="New threads start on"
       value={value}
       icon={<ProviderIcon provider={value} />}
-      options={agentProviders.map((provider) => ({
+      options={offered.map((provider) => ({
         value: provider,
         label: agentName(provider),
         icon: <ProviderIcon provider={provider} />,

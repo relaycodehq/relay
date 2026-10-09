@@ -48,6 +48,17 @@ export const catalog: Record<
     ],
     efforts: [],
   },
+  amp: {
+    models: [
+      { id: "smart", name: "Smart" },
+      { id: "rush", name: "Rush" },
+    ],
+    efforts: [],
+  },
+  antigravity: {
+    models: [{ id: "gemini-3-pro", name: "Gemini 3 Pro" }],
+    efforts: [],
+  },
 };
 
 export const samplePresets: Preset[] = [

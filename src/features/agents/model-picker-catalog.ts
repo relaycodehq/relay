@@ -1,12 +1,12 @@
 import { modelSchema } from "../../../shared/settings";
 import {
   agentName,
-  agentProviders,
-  agents,
   type AgentModel,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 import { fuzzyBase, rankModelQuery } from "./model-search";
+import type { CustomModels } from "./useStoredModels";
 
 export type MessageProvider = AgentProvider | "message";
 export type Category = MessageProvider | "favorites";
@@ -29,12 +29,8 @@ export interface AgentCatalog {
   /** Why the agent couldn't list its models, as opposed to offering none. */
   error?: string;
 }
-export const providerNames: Record<MessageProvider, string> = {
-  ...(Object.fromEntries(
-    agentProviders.map((p) => [p, agentName(p)]),
-  ) as Record<AgentProvider, string>),
-  message: "No agent",
-};
+export const providerName = (provider: MessageProvider) =>
+  provider === "message" ? "No agent" : agentName(provider);
 const searchWords = (query: string) =>
   Math.max(1, query.trim().split(/\s+/).filter(Boolean).length);
 export const modelKey = (m: PickerModel) => JSON.stringify([m.provider, m.id]);
@@ -43,7 +39,7 @@ export const modelKey = (m: PickerModel) => JSON.stringify([m.provider, m.id]);
 export const isGrouped = (category: Category) =>
   category !== "favorites" &&
   category !== "message" &&
-  agents[category].modelGroups;
+  agentInfo(category).modelGroups;
 
 /**
  * Every row the picker could show. Each agent's listed models sit above its
@@ -52,12 +48,13 @@ export const isGrouped = (category: Category) =>
 export function pickerCatalog(
   offered: readonly AgentProvider[],
   catalogs: Partial<Record<AgentProvider, AgentCatalog>>,
-  customs: Record<AgentProvider, string[]>,
+  customs: CustomModels,
 ): PickerModel[] {
   return [
     ...offered.flatMap((p): PickerModel[] => {
       const listed = catalogs[p]!.models ?? [];
-      const unlisted = [...customs[p], catalogs[p]!.model].filter(
+      const typed = customs[p] ?? [];
+      const unlisted = [...typed, catalogs[p]!.model].filter(
         (id, i, all) =>
           id && all.indexOf(id) === i && !listed.some((m) => m.id === id),
       );
@@ -75,7 +72,7 @@ export function pickerCatalog(
           provider: p,
           id,
           name: id,
-          custom: customs[p].includes(id),
+          custom: typed.includes(id),
         })),
       ];
     }),
@@ -128,7 +125,7 @@ export function pickerRows(
       score: rankModelQuery(
         {
           driverKind: m.provider,
-          providerDisplayName: providerNames[m.provider],
+          providerDisplayName: providerName(m.provider),
           name: m.name,
           shortName: m.id,
           subProvider: [m.group, m.description].filter(Boolean).join(" "),

@@ -124,16 +124,38 @@ export const linkedTool = (name: string) => tools[name];
 
 export const linkedAgent = (provider: AgentProvider) => linked[provider];
 
+/** Where Relay installs the agent CLIs a user doesn't have: an npm prefix per agent. */
+let ownAgents: string | undefined;
+
+export function setOwnAgentsDir(dir: string) {
+  ownAgents = dir;
+  answered = new Map();
+}
+
+export const ownAgentsDir = () => ownAgents;
+
+/** Where `npm install -g --prefix` puts the commands of each of Relay's own installs. */
+async function ownBins() {
+  if (!ownAgents) return [];
+  const root = ownAgents;
+  const prefixes = await readdir(root).catch(() => [] as string[]);
+  return prefixes.map((prefix) =>
+    windows ? join(root, prefix) : join(root, prefix, "bin"),
+  );
+}
+
 /** Every program called `name` in the places the CLIs usually live, in the order to try them. */
 async function* candidates(name: string) {
   await pathReady();
   const extensions = windows ? [".exe", ".cmd", ".bat", ""] : [""];
   // Mise's installs come after the rest, so an activated shell's own choice
-  // wins, but ahead of its shims, which need mise itself to run.
+  // wins, but ahead of its shims, which need mise itself to run. Relay's own
+  // installs come last: one the user made is theirs to keep using.
   const dirs = [
     ...searchPaths(),
     ...(isAgent(name) ? await miseDirs(name) : []),
     join(miseData(), "shims"),
+    ...(await ownBins()),
   ];
   const seen = new Set<string>();
   for (const dir of dirs) {
@@ -172,7 +194,9 @@ async function locate(name: string) {
   }
   if (!found.length)
     throw new Error(
-      `${name} was not found. Install it and make sure it is on PATH.`,
+      isAgent(name) && ownAgents
+        ? `${name} was not found. Install it in Settings → AI models → Agents, or put it on PATH.`
+        : `${name} was not found. Install it and make sure it is on PATH.`,
     );
   return answering(name, found);
 }
@@ -198,8 +222,10 @@ async function answering(name: string, found: string[]) {
 
 /** Whether running `path --version` prints a version. */
 async function saysVersion(path: string) {
-  const run = await runExecutable(path, ["--version"], versionTimeout);
-  return run.code === 0 && !!parseVersion(run.stdout);
+  const run = await runExecutable(path, ["--version"], versionTimeout).catch(
+    () => undefined,
+  );
+  return run?.code === 0 && !!parseVersion(run.stdout);
 }
 
 /** The command line for a path from `findExecutable`: JavaScript entries run with Node. */

@@ -1,8 +1,7 @@
 import {
   agentName,
-  agents,
-  type AgentInfo,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 
 export type SignInOffer =
@@ -17,7 +16,7 @@ export type SignInOffer =
 /** How a signed-out agent signs in: its own CLI login in the thread's terminal, or Relay's browser sign-in. */
 export function signInOffer(provider: AgentProvider): SignInOffer {
   const name = agentName(provider);
-  const login = (agents[provider] as AgentInfo).login;
+  const login = agentInfo(provider).login;
   return login
     ? {
         via: "terminal",

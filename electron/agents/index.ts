@@ -1,4 +1,9 @@
-import type { AgentProvider } from "../../shared/agents";
+import {
+  isRegistryProvider,
+  type AgentProvider,
+  type BuiltinProvider,
+  type RegistryProvider,
+} from "../../shared/agents";
 import { claudeArgs } from "../../shared/settings";
 import { runCodex } from "./codex/codex";
 import {
@@ -28,11 +33,13 @@ import {
   reattachCursorSessions,
 } from "./cursor/connection";
 import { cursorCommands, cursorDefaults, cursorModels } from "./cursor/catalog";
+import { signInCursor, signOutCursor } from "./cursor/account";
 import {
   openCodeCommands,
   openCodeDefaults,
   openCodeModels,
 } from "./opencode/catalog";
+import { acpRegistry, acpRuntime, registryRuntime } from "./acp";
 import type { AgentRuntime } from "./types";
 import { counted } from "./usage-count";
 import {
@@ -95,6 +102,8 @@ const opencode: AgentRuntime = {
 const cursor: AgentRuntime = {
   run: runCursor,
   closeSession: closeCursorConnection,
+  signIn: () => signInCursor(),
+  signOut: signOutCursor,
   models: cursorModels,
   defaults: cursorDefaults,
   commands: cursorCommands,
@@ -103,13 +112,50 @@ const cursor: AgentRuntime = {
   reattach: (owns) => reattachCursorSessions(owns),
 };
 
-export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
+const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   codex: counted("codex", codex),
   claude: counted("claude", claude),
   opencode: counted("opencode", opencode),
   cursor: counted("cursor", cursor),
+  amp: counted("amp", acpRuntime("amp")),
+  antigravity: counted("antigravity", acpRuntime("antigravity")),
 };
-export const agentRuntime = (provider: AgentProvider) =>
-  agentRuntimes[provider];
+/** Registry agents' runtimes, made as threads or Relay's start ask for them. */
+const registryRuntimes = new Map<RegistryProvider, AgentRuntime>();
+
+export function agentRuntime(provider: AgentProvider): AgentRuntime {
+  if (!isRegistryProvider(provider)) return builtinRuntimes[provider];
+  let runtime = registryRuntimes.get(provider);
+  if (!runtime) {
+    runtime = counted(provider, registryRuntime(provider));
+    registryRuntimes.set(provider, runtime);
+  }
+  return runtime;
+}
+
+/**
+ * Every runtime that may have sessions: the built-in ones and each registry
+ * agent's. Startup makes the installed ones first, so their hosted sessions
+ * are reattached.
+ */
+export const agentRuntimes = (): [AgentProvider, AgentRuntime][] => [
+  ...(Object.entries(builtinRuntimes) as [AgentProvider, AgentRuntime][]),
+  ...registryRuntimes,
+];
+
+export const everyAgentRuntime = () =>
+  agentRuntimes().map(([, runtime]) => runtime);
+
+/** Reads the installed registry agents and makes their runtimes, so their sessions reattach. */
+export async function loadRegistryAgents() {
+  for (const agent of await acpRegistry().load()) agentRuntime(agent.provider);
+}
+
+/** Stops a registry agent's sessions before Relay deletes it. */
+export async function forgetRegistryRuntime(provider: RegistryProvider) {
+  await registryRuntimes.get(provider)?.dispose?.();
+  registryRuntimes.delete(provider);
+}
+
 export { hostAgents } from "./hosted-sessions";
 export { setOpenCodeEnvRoot } from "./opencode/worktree-env";

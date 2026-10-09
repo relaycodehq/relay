@@ -1,17 +1,15 @@
 import { useQueries } from "@tanstack/react-query";
-import {
-  agentProviders,
-  type AgentDefaults,
-  type AgentProvider,
-} from "../../../shared/agents";
+import type { AgentDefaults, AgentProvider } from "../../../shared/agents";
 import type { ReasoningEffort } from "../../../shared/settings";
 import { api } from "../../lib/api";
+import { useRunnableAgents } from "../agents/registry-agents";
 
 /** What each agent runs in this project where a thread leaves the model or effort on Default. */
 export function useAgentDefaults(projectId: string) {
+  const providers = useRunnableAgents();
   // Each read starts an agent CLI, and settings files rarely change.
   const queries = useQueries({
-    queries: agentProviders.map((provider) => ({
+    queries: providers.map((provider) => ({
       queryKey: ["agent-defaults", projectId, provider],
       queryFn: () => api.agentDefaults(projectId, provider),
       staleTime: 5 * 60_000,
@@ -20,7 +18,7 @@ export function useAgentDefaults(projectId: string) {
     })),
   });
   const of = (provider: AgentProvider): AgentDefaults | undefined =>
-    queries[agentProviders.indexOf(provider)]?.data ?? undefined;
+    queries[providers.indexOf(provider)]?.data ?? undefined;
   return {
     of,
     /** The effort Default runs with `model` picked ("" for Default's); "" when unknown. */

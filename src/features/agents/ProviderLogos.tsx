@@ -40,3 +40,17 @@ export const OpenCode: Logo = (props) => (
     <rect x="8" y="16" width="16" height="16" opacity="0.35" />
   </svg>
 );
+
+/** Antigravity's arch (Lobe Icons, MIT). */
+export const Antigravity: Logo = (props) => (
+  <svg {...props} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z" />
+  </svg>
+);
+
+/** Amp's three chevrons (Lobe Icons, MIT). */
+export const Amp: Logo = (props) => (
+  <svg {...props} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M15.087 23.18L12.03 24l-2.097-7.823-5.738 5.738-2.251-2.251 5.718-5.719-7.769-2.082.82-3.057 11.294 3.08 3.08 11.295zM19.505 18.762l-3.057.82-2.564-9.573-9.572-2.564.819-3.057 11.295 3.079 3.08 11.295zM23.893 14.374l-3.057.82-2.565-9.572L8.7 3.057 9.52 0l11.295 3.08 3.079 11.294z" />
+  </svg>
+);

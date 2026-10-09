@@ -1,6 +1,8 @@
 import {
   agentProviders,
   isAgentProvider,
+  isRegistryProvider,
+  runnableAgents,
   type AgentModel,
   type AgentProvider,
 } from "../../../shared/agents";
@@ -29,11 +31,16 @@ export type ComposerModels = NewThreadModels;
  * nothing more. Codex and Claude have settings of their own: Codex's models
  * come with its own efforts, Claude's with a context window.
  */
-export const pickAgents = agentProviders.filter(
-  (p) => p !== "codex" && p !== "claude",
-);
 export const isPickAgent = (provider: string): provider is AgentProvider =>
-  (pickAgents as string[]).includes(provider);
+  isAgentProvider(provider) && provider !== "codex" && provider !== "claude";
+let picks: { of: readonly AgentProvider[]; list: AgentProvider[] } | undefined;
+/** The agents in `isPickAgent` this Relay runs; the same array until that changes. */
+export function pickAgents() {
+  const runnable = runnableAgents();
+  if (picks?.of !== runnable)
+    picks = { of: runnable, list: runnable.filter(isPickAgent) };
+  return picks.list;
+}
 
 const blankChoice: ModelChoice = {
   model: "",
@@ -54,7 +61,7 @@ export const withModel = (
 
 /** Every agent's entry, filling in the Default for those with none. */
 export const newThreadModelsOf = (models: ComposerModels): NewThreadModels =>
-  Object.fromEntries(agentProviders.map((p) => [p, modelOf(models, p)]));
+  Object.fromEntries(runnableAgents().map((p) => [p, modelOf(models, p)]));
 
 /** `models` with each agent in `remembered` on its model there; the others keep theirs. */
 export function withNewThreadModels(
@@ -62,7 +69,7 @@ export function withNewThreadModels(
   remembered: NewThreadModels,
 ): ComposerModels {
   let next = models;
-  for (const provider of agentProviders) {
+  for (const provider of Object.keys(remembered).filter(isAgentProvider)) {
     const entry = remembered[provider];
     if (!entry) continue;
     const { choice } = entry;
@@ -103,7 +110,7 @@ export const claudeOn = (
   ...windowFor("claude", model, current.contextWindow),
 });
 
-/** The model and efforts an agent in `pickAgents` runs; "" is its Default. */
+/** The model and efforts an agent in `pickAgents()` runs; "" is its Default. */
 export function livePick(
   entry: NewThreadModel | undefined,
   models: AgentModel[] | undefined,
@@ -219,7 +226,11 @@ export function readComposerModels(saved: unknown): ComposerModels {
   if (!isRecord(saved)) return {};
   const current = isRecord(saved.models) ? saved.models : {};
   const models: ComposerModels = {};
-  for (const provider of agentProviders) {
+  // Registry agents came after the older keys, so only `models` has theirs.
+  const added = Object.keys(current).filter(
+    (p) => isAgentProvider(p) && isRegistryProvider(p),
+  ) as AgentProvider[];
+  for (const provider of [...agentProviders, ...added]) {
     const entry =
       readModel(provider, current[provider]) ??
       readLegacyModel(provider, saved);

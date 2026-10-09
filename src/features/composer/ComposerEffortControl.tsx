@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import { Zap } from "lucide-react";
 import { defaultEffortLabel } from "../../../shared/agent-defaults";
 import {
-  agents,
   type AgentModel,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 import {
   effortLabels,
@@ -91,7 +91,7 @@ export function ComposerEffortControl({
     ],
   );
   const fast = runs.fastOf(to);
-  const fastButton = agents[to].fast && (
+  const fastButton = agentInfo(to).fast && (
     <button
       type="button"
       className="composer-control composer-fast"

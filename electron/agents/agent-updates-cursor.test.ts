@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentUpdates,
   type AgentUpdatesIo,
-  type CursorSdkIo,
+  type SdkIo,
 } from "./agent-updates";
 import { isBehind } from "../../shared/agent-updates";
 import { agents, isCliProvider } from "../../shared/agents";
@@ -15,7 +15,8 @@ function cursorMachine(state: {
   install?: (version?: string) => Promise<void>;
 }) {
   const installs: (string | undefined)[] = [];
-  const cursor: CursorSdkIo = {
+  const cursor: SdkIo = {
+    source: "npm",
     installed: async () => state.installed,
     newest: async () => {
       if (state.newest instanceof Error) throw state.newest;
@@ -38,7 +39,7 @@ function cursorMachine(state: {
     exec: async () => ({ code: 1, stdout: "", output: "", timedOut: false }),
     fetch: async () => new Response("{}"),
     claudeChannel: async () => "latest",
-    cursor,
+    sdks: { cursor },
   };
   const updates = new AgentUpdates(() => {}, io);
   return {

@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { agentName, agentProviders, agents } from "../../../shared/agents";
+import {
+  agentName,
+  agentProviders,
+  agentInfo,
+} from "../../../shared/agents";
 import type { RelayCommand } from "../../../shared/commands";
 import { latestContext } from "../../../shared/context-usage";
 import type { ChatMessage } from "../../../shared/projects";
@@ -50,7 +54,7 @@ export function useSessionCommands({
       if (!chat || !context) return "There is no agent session to compact yet.";
       if (running || busy || compacting)
         return "Wait for the current answer before compacting.";
-      if (args && !agents[context.provider].compactInstructions)
+      if (args && !agentInfo(context.provider).compactInstructions)
         return `${agentName(context.provider)} compacts without custom instructions.`;
       compact(args || undefined);
       return true;

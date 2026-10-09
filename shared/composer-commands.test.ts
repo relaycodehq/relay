@@ -131,7 +131,7 @@ describe("composer commands", () => {
   });
   it("sends notes only where the composer offers them", () => {
     expect(composerCommand("provider", "message", phone())).toBe(
-      "Choose one of: codex, claude, opencode, cursor.",
+      "Choose one of: codex, claude, opencode, cursor, amp, antigravity.",
     );
     const desktop = { ...phone(), targets: composerTargets };
     expect(composerCommand("provider", "Message", desktop)).toEqual({

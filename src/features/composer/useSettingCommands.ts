@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { runtimeModes } from "../../../shared/agent-modes";
-import { agentName, agentProviders, agents } from "../../../shared/agents";
+import {
+  agentName,
+  runnableAgents,
+  agentInfo,
+} from "../../../shared/agents";
 import {
   isComposerCommand,
   type CommandOption,
@@ -62,7 +66,7 @@ export function useSettingCommands({
     fast: to !== "message" && runs.fastOf(to),
     plan: interactionMode === "plan",
     catalogs: Object.fromEntries(
-      agentProviders.map((p) => [p, catalogs.of(p)]),
+      runnableAgents().map((p) => [p, catalogs.of(p)]),
     ),
     defaultNames: catalogs.defaultNames,
   });
@@ -134,7 +138,7 @@ export function useSettingCommands({
           current: m.value === state.runtimeMode,
         }));
       if (command === "plan") return toggles(interactionMode === "plan");
-      if (command === "fast" && agents[to].fast)
+      if (command === "fast" && agentInfo(to).fast)
         return toggles(runs.fastOf(to));
       return undefined;
     },

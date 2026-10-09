@@ -8,13 +8,24 @@ import {
   type ReactNode,
 } from "react";
 import {
-  agentProviders,
-  agents,
+  agentName,
+  isRegistryProvider,
   type AgentProvider,
 } from "../../../shared/agents";
-import type { UsageMeasure, UsageSlot } from "../../../shared/usage";
-import { ClaudeAI, OpenAI, OpenCode } from "../agents/ProviderLogos";
+import {
+  providersIn,
+  type UsageMeasure,
+  type UsageSlot,
+} from "../../../shared/usage";
+import {
+  Amp,
+  Antigravity,
+  ClaudeAI,
+  OpenAI,
+  OpenCode,
+} from "../agents/ProviderLogos";
 import { CursorGlyph } from "../agents/CursorGlyph";
+import { RegistryGlyph } from "../agents/RegistryGlyph";
 import {
   clock,
   dayLabel,
@@ -30,6 +41,8 @@ export const providerLogos = {
   codex: OpenAI,
   opencode: OpenCode,
   cursor: CursorGlyph,
+  amp: Amp,
+  antigravity: Antigravity,
 };
 
 /** A provider's mark in the ink colour, never its brand colour. */
@@ -42,6 +55,15 @@ export function HarnessMark({
   size?: number;
   style?: CSSProperties;
 }) {
+  if (isRegistryProvider(id))
+    return (
+      <RegistryGlyph
+        provider={id}
+        className="us-mark"
+        size={size}
+        style={{ color: "currentColor", ...style }}
+      />
+    );
   const Logo = providerLogos[id];
   return (
     <Logo
@@ -199,14 +221,14 @@ export function DayColumns({
                 ? longDay(day.day)
                 : `${dayLabel(day.day)} – ${dayLabel(day.last)}`}
             </strong>
-            {agentProviders
-              .filter((p) => day[measure][p] > 0)
-              .sort((a, b) => day[measure][b] - day[measure][a])
+            {providersIn(day[measure])
+              .filter((p) => (day[measure][p] ?? 0) > 0)
+              .sort((a, b) => day[measure][b]! - day[measure][a]!)
               .map((p) => (
                 <span key={p}>
                   <HarnessMark id={p} size={11} />
-                  {agents[p].name}
-                  <b>{measured(day[measure][p], measure)}</b>
+                  {agentName(p)}
+                  <b>{measured(day[measure][p]!, measure)}</b>
                 </span>
               ))}
             <span className="us-tip-total">

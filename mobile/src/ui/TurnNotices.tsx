@@ -4,10 +4,9 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppWindow, CircleAlert, LogIn } from "lucide-react-native";
 import { agentError } from "../../../shared/agent-error";
-import type { AgentProvider } from "../../../shared/agents";
+import { agentName, type AgentProvider } from "../../../shared/agents";
 import type { HtmlRender } from "../../../shared/html-render";
 import { useRemote } from "../remote/RemoteProvider";
-import { agentNames } from "./ProviderIcon";
 import { mono, type, useTheme } from "./theme";
 
 /** The desktop's AgentError: the provider's message out of its envelope, the envelope on request. */
@@ -49,7 +48,7 @@ export function AgentErrorNote({ error }: { error: string }) {
 export function SignInNote({ provider }: { provider: AgentProvider }) {
   const t = useTheme();
   const { name } = useRemote();
-  const agent = agentNames[provider];
+  const agent = agentName(provider);
   return (
     <View
       accessibilityRole="text"

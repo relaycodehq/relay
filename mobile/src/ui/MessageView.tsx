@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
+import { agentName } from "../../../shared/agents";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
@@ -23,7 +24,7 @@ import { AnswerImage, MessageImages, messageImages } from "./images/Images";
 import { imageFailed, keyOf, type Source } from "./images/useImage";
 import { Lightbox, type LightboxImage } from "./images/Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
-import { ProviderIcon, agentNames } from "./ProviderIcon";
+import { ProviderIcon } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { StartedInTurn } from "./StartedThreads";
 import { AgentErrorNote, RenderNotes, SignInNote } from "./TurnNotices";
@@ -161,7 +162,7 @@ export const MessageView = memo(function MessageView({
       <View style={styles.header}>
         {!user && <ProviderIcon provider={m.provider} color={t.text} />}
         <Text style={[styles.author, { color: t.text }]}>
-          {user ? (m.author ?? "You") : agentNames[m.provider]}
+          {user ? (m.author ?? "You") : agentName(m.provider)}
         </Text>
         {user && (
           <Text style={[styles.meta, { color: t.muted }]}>
@@ -231,7 +232,7 @@ export const MessageView = memo(function MessageView({
           chatId={chatId}
           messageId={m.id}
           notes={m.notes}
-          agent={agentNames[m.provider]}
+          agent={agentName(m.provider)}
           onLink={openLink}
           onSteer={onSteer}
         />
@@ -355,7 +356,7 @@ function HandoffRow({ message: m }: { message: ChatMessage }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const { from, to } = m.handoff!;
-  const switched = `Switched from ${agentNames[from]} to ${agentNames[to]}`;
+  const switched = `Switched from ${agentName(from)} to ${agentName(to)}`;
   const note = m.status === "complete" && m.body.trim();
   return (
     <View>
@@ -363,7 +364,7 @@ function HandoffRow({ message: m }: { message: ChatMessage }) {
         action={note ? { label: open ? "Hide note" : "Show note", onPress: () => setOpen(!open) } : undefined}
       >
         {m.status === "streaming"
-          ? `${agentNames[from]} is writing a handoff note for ${agentNames[to]}…`
+          ? `${agentName(from)} is writing a handoff note for ${agentName(to)}…`
           : note
             ? switched
             : `${switched} · no handoff note`}

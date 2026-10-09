@@ -5,8 +5,8 @@
 import { createInterface, type Interface } from "node:readline/promises";
 import type { AgentVersion } from "../../shared/agent-updates";
 import {
-  agentProviders,
-  agents as agentInfo,
+  runnableAgents,
+  agentInfo,
   type AgentProvider,
 } from "../../shared/agents";
 import { dictationModelSize } from "../../shared/dictation";
@@ -52,7 +52,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const megabytes = (bytes: number) =>
   `${Math.round(bytes / 1_000_000).toLocaleString("en")} MB`;
 const cliName = (provider: string) =>
-  agentInfo[provider as AgentProvider]?.cli ?? provider;
+  agentInfo(provider as AgentProvider)?.cli ?? provider;
 
 function control(ctx: SettingsContext) {
   return headlessPaths(ctx.home).control;
@@ -218,13 +218,13 @@ const rows: Row[] = [
     label: "New threads start with",
     value: (s) =>
       s.newThreadAgent
-        ? agentInfo[s.newThreadAgent].name
+        ? agentInfo(s.newThreadAgent).name
         : dim("the last one used"),
   },
-  ...(["claude", "codex", "opencode"] as const).map((provider): Row => ({
+  ...(["claude", "codex", "opencode", "amp"] as const).map((provider): Row => ({
     key: provider,
     section: "Agents",
-    label: agentInfo[provider].cli,
+    label: agentInfo(provider).cli,
     value: (s) => agentValue(s.agents.find((a) => a.provider === provider)),
   })),
   {
@@ -382,13 +382,13 @@ export async function setValue(
       await call(ctx, "saveWorktreeCleanupDays", parseDays(value, 0));
       return;
     case "new-thread-agent": {
-      const provider = agentProviders.find(
+      const provider = runnableAgents().find(
         (p) =>
           p === value.toLowerCase() ||
-          agentInfo[p].name.toLowerCase() === value.toLowerCase(),
+          agentInfo(p).name.toLowerCase() === value.toLowerCase(),
       );
       if (!provider)
-        throw new Error(`Choose one of ${agentProviders.join(", ")}.`);
+        throw new Error(`Choose one of ${runnableAgents().join(", ")}.`);
       await call(ctx, "saveNewThreadAgent", provider);
       return;
     }
@@ -401,6 +401,7 @@ export async function setValue(
     case "claude":
     case "codex":
     case "opencode":
+    case "amp":
       if (!value || value === "auto") await call(ctx, "unlinkAgent", key);
       else await call(ctx, "linkAgent", key, value);
       return;
@@ -732,7 +733,7 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
     case "new-thread-agent": {
       const provider = await ask.pick(
         "New threads start with",
-        agentProviders.map((p) => ({ value: p, label: agentInfo[p].name })),
+        runnableAgents().map((p) => ({ value: p, label: agentInfo(p).name })),
       );
       return provider ? setValue(ctx, row.key, provider) : undefined;
     }
@@ -746,6 +747,7 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
     case "claude":
     case "codex":
     case "opencode":
+    case "amp":
     case "git": {
       const path = await ask.text(
         `Path to ${row.key === "git" ? "git" : cliName(row.key)} ${dim('(empty keeps it, "auto" finds it again)')}:`,

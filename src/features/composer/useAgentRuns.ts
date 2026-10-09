@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import { agents, type AgentProvider } from "../../../shared/agents";
+import {
+  type AgentProvider,
+  agentInfo,
+} from "../../../shared/agents";
 import type { NewThreadModel } from "../../../shared/new-thread-models";
 import type { SendSettings } from "../../../shared/compose-send";
 import type { ResumeSettings } from "../../../shared/projects";
@@ -77,7 +80,7 @@ export function useAgentRuns(
         error: claudeError,
       },
       ...Object.fromEntries(
-        pickAgents.map((p) => [
+        pickAgents().map((p) => [
           p,
           {
             models: catalogs.picks[p]?.models,
@@ -258,7 +261,7 @@ export function useAgentRuns(
       agentChoice(to, models, pickOf(to), codex).fast,
     /** Fast mode, for an agent that has it. */
     setFast(to: AgentProvider, fast: boolean) {
-      if (!agents[to].fast) return;
+      if (!agentInfo(to).fast) return;
       const choice = to === "codex" ? codex : modelOf(models, to).choice;
       if (choice) set(to, { choice: { ...choice, fast } });
     },

@@ -15,11 +15,10 @@ import {
   type ProviderUsage,
   type UsageMeter,
 } from "../../../shared/provider-usage";
-import type { AgentProvider } from "../../../shared/agents";
+import { agentName, type AgentProvider } from "../../../shared/agents";
 import type { ContextUsage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "./Button";
-import { agentNames } from "./ProviderIcon";
 import { useForeground } from "./motion";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
@@ -204,7 +203,7 @@ export function UsageSheet({
   return (
     <Sheet
       open={open}
-      title={`${agentNames[provider]} usage`}
+      title={`${agentName(provider)} usage`}
       onClose={onClose}
     >
       <View style={styles.body}>
@@ -253,7 +252,7 @@ export function UsageSheet({
         )}
         {!hasUsage(provider) ? (
           <Text style={[styles.hint, { color: t.muted }]}>
-            {agentNames[provider]} doesn't report plan limits.
+            {agentName(provider)} doesn't report plan limits.
           </Text>
         ) : !usage ? (
           <ActivityIndicator color={t.muted} />

@@ -5,10 +5,15 @@ import {
   agentProviders,
   agents,
   isCliProvider,
+  isRegistryProvider,
   type AgentProvider,
   type CliProvider,
+  type RegistryProvider,
+  type SdkProvider,
+  agentInfo,
 } from "../../shared/agents";
 import {
+  compareVersions,
   isBehind,
   isUpdating,
   parseVersion,
@@ -19,9 +24,12 @@ import {
 import {
   findExecutable,
   linkedAgent,
+  ownAgentsDir,
   runExecutable,
   type Exec,
 } from "../platform/executables";
+import { acpAccount } from "./acp";
+import { releasedBy, releaseTimes, type ReleaseTimes } from "./npm-release-age";
 
 const checkEvery = 4 * 60 * 60 * 1000;
 const latestLifetime = 60 * 60 * 1000;
@@ -32,6 +40,8 @@ interface AgentPackage {
   npm: string;
   /** Its own updater, for installs its own installer made. */
   native: { args: string[]; owns: (path: string) => boolean };
+  /** What Relay runs it through, installed beside it in Relay's own folder. */
+  with?: string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -66,6 +76,14 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
       owns: (path) =>
         /\/\.opencode\/bin\/opencode(\.exe)?$/.test(foldPath(path)),
     },
+  },
+  amp: {
+    npm: "@ampcode/cli",
+    native: {
+      args: ["update"],
+      owns: (path) => foldPath(path).includes("/.amp/bin/"),
+    },
+    with: ["amp-acp"],
   },
 };
 
@@ -123,12 +141,14 @@ export function installOf(
       installer: "npm",
       program: "npm",
       // npm 12 skips install scripts unless allowed and still exits 0, which
-      // leaves Claude's native binary uninstalled. Older npm warns and goes on.
+      // leaves Claude's native binary uninstalled. ignore-scripts=true in an
+      // .npmrc beats --allow-scripts, so it is turned off for this install.
       args: [
         "install",
         "-g",
         "--prefix",
         npmPrefix,
+        "--ignore-scripts=false",
         `--allow-scripts=${npm}`,
         `${npm}@${tag}`,
       ],
@@ -144,6 +164,43 @@ export function installOf(
     brew: keg,
   };
 }
+
+/**
+ * Installing a CLI the user doesn't have, with what it runs through, into
+ * Relay's own folder: an npm prefix per agent under `root`. Its install
+ * script runs even where npm's config turns them off: Claude, OpenCode and
+ * Amp fetch their native binary in it. A user's Amp that lacks amp-acp gets
+ * this whole install too, since amp-acp asks for `@ampcode/cli@latest`,
+ * which npm's `min-release-age` can't resolve without a pinned one beside it.
+ */
+export function ownInstall(
+  provider: CliProvider,
+  root: string,
+  spec = "latest",
+): Install {
+  const { npm, with: extras = [] } = agentPackages[provider];
+  const prefix = join(root, provider);
+  return {
+    installer: "relay",
+    program: "npm",
+    args: [
+      "install",
+      "-g",
+      "--prefix",
+      prefix,
+      "--no-audit",
+      "--no-fund",
+      "--ignore-scripts=false",
+      `--allow-scripts=${npm}`,
+      `${npm}@${spec}`,
+      ...extras.map((pkg) => `${pkg}@latest`),
+    ],
+    npmPrefix: prefix,
+  };
+}
+
+const isInside = (path: string, dir: string) =>
+  foldPath(path).startsWith(`${foldPath(dir).replace(/\/$/, "")}/`);
 
 type BrewKeg = NonNullable<Install["brew"]>;
 
@@ -227,15 +284,20 @@ function brewVersionIn(info: unknown, kind: BrewKeg["kind"]) {
 
 export type { Exec };
 
-/** Cursor's SDK, which Relay downloads itself; see electron/agents/cursor. */
-export interface CursorSdkIo {
+/**
+ * An agent Relay downloads itself: Cursor's SDK (electron/agents/cursor),
+ * Google's Antigravity server (electron/agents/acp).
+ */
+export interface SdkIo {
+  /** Where the download comes from, as the card says it. */
+  source: string;
   /** The version on disk; undefined when none is downloaded. */
   installed(): Promise<string | undefined>;
   /** The newest version Relay offers. */
   newest(): Promise<string | undefined>;
   /** Downloads `version` (the one Relay was made for by default) and switches to it. */
   install(version?: string): Promise<void>;
-  /** Who Cursor is signed in as; undefined when that can't be asked. */
+  /** Who it's signed in as; undefined when that can't be asked. */
   account(): Promise<{ signedIn: boolean; email?: string } | undefined>;
 }
 
@@ -251,8 +313,19 @@ export interface AgentUpdatesIo {
   fetch(url: string, init?: RequestInit): Promise<Response>;
   /** Claude's update channel, `latest` or `stable`. */
   claudeChannel(): Promise<string>;
-  /** Left out where Cursor isn't offered. */
-  cursor?: CursorSdkIo;
+  /** The downloaded agents this build offers. */
+  sdks?: Partial<Record<SdkProvider, SdkIo>>;
+  /** The agents installed from the ACP registry, which Relay keeps up to date too. */
+  registry?: {
+    providers(): RegistryProvider[];
+    sdk(provider: RegistryProvider): SdkIo;
+  };
+  /** Who a CLI agent Relay signs in is signed in as. */
+  account?(provider: AgentProvider): Promise<AgentVersion["account"]>;
+  /** npm's `min-release-age` in days, 0 when unset. */
+  npmReleaseAge?(): Promise<number>;
+  /** Where Relay installs the CLIs a user doesn't have; unset, it doesn't. */
+  ownAgents?(): string | undefined;
 }
 
 export const machineIo: AgentUpdatesIo = {
@@ -267,6 +340,17 @@ export const machineIo: AgentUpdatesIo = {
     ),
   exec: runExecutable,
   fetch: (url, init) => fetch(url, init),
+  account: acpAccount,
+  ownAgents: ownAgentsDir,
+  npmReleaseAge: async () => {
+    const config = await runExecutable(
+      await findExecutable("npm"),
+      ["config", "get", "min-release-age"],
+      probeTimeout,
+    );
+    const days = config.code === 0 ? Number(config.stdout.trim()) : 0;
+    return Number.isFinite(days) && days > 0 ? days : 0;
+  },
   claudeChannel: async () => {
     const dir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
     try {
@@ -285,19 +369,22 @@ export const machineIo: AgentUpdatesIo = {
  * newer one is out, and updating them with whatever installed them.
  */
 export class AgentUpdates {
-  private state: AgentVersions = {
-    agents: agentProviders.map((provider) => ({ provider })),
-    checking: false,
-  };
+  private state: AgentVersions;
   private checking?: Promise<AgentVersions>;
   /** Updates run one at a time; two npm installs at once fight over locks. */
   private queue: Promise<unknown> = Promise.resolve();
   private latestCache = new Map<string, { at: number; version?: string }>();
+  private timesCache = new Map<string, { at: number; times: ReleaseTimes }>();
 
   constructor(
     private readonly emit: (state: AgentVersions) => void,
     private readonly io: AgentUpdatesIo = machineIo,
-  ) {}
+  ) {
+    this.state = {
+      agents: this.providers().map((provider) => ({ provider })),
+      checking: false,
+    };
+  }
 
   get current() {
     return this.state;
@@ -328,11 +415,46 @@ export class AgentUpdates {
     return run.then(() => this.state);
   }
 
+  /**
+   * Follows registry agents being installed and removed: a new one is
+   * looked at at once, a removed one leaves the list.
+   */
+  async sync() {
+    const providers = this.providers();
+    const known = new Set(this.state.agents.map((a) => a.provider));
+    const added = providers.filter((p) => !known.has(p));
+    if (added.length === 0 && known.size === providers.length) return;
+    this.set({
+      ...this.state,
+      agents: providers.map(
+        (provider) =>
+          this.state.agents.find((a) => a.provider === provider) ?? {
+            provider,
+          },
+      ),
+    });
+    for (const agent of await Promise.all(
+      added.map((provider) => this.inspect(provider, false)),
+    ))
+      if (this.state.agents.some((a) => a.provider === agent.provider))
+        this.put(agent);
+  }
+
+  private providers(): AgentProvider[] {
+    return [...agentProviders, ...(this.io.registry?.providers() ?? [])];
+  }
+
+  private sdkOf(provider: SdkProvider) {
+    return isRegistryProvider(provider)
+      ? this.io.registry?.sdk(provider)
+      : this.io.sdks?.[provider];
+  }
+
   private async checkAll(fresh: boolean) {
     const started = Date.now();
     this.set({ ...this.state, checking: true });
     const found = await Promise.all(
-      agentProviders.map((provider) => this.inspect(provider, fresh)),
+      this.providers().map((provider) => this.inspect(provider, fresh)),
     );
     this.set({
       // An update running or finished since this check began knows better.
@@ -358,27 +480,51 @@ export class AgentUpdates {
     const path = await this.io.find(provider).catch(() => undefined);
     const linkedPath = this.io.linked?.(provider);
     const linked = !!linkedPath;
-    if (!path)
+    const tag =
+      provider === "claude" ? await this.io.claudeChannel() : "latest";
+    const root = this.io.ownAgents?.();
+    if (!path) {
+      if (linkedPath)
+        return {
+          provider,
+          linked,
+          error: `The ${cli} you linked is gone: ${linkedPath}`,
+        };
+      if (!root)
+        return {
+          provider,
+          linked,
+          error: `Relay couldn't find ${cli}. If it's installed, link it here.`,
+        };
       return {
         provider,
         linked,
-        error: linkedPath
-          ? `The ${cli} you linked is gone: ${linkedPath}`
-          : `Relay couldn't find ${cli}. If it's installed, link it here.`,
+        installer: "relay",
+        command: describeInstall(ownInstall(provider, root, tag)),
+        error: `Relay couldn't find ${cli}. Install it here, or link the one you have.`,
       };
-    const tag =
-      provider === "claude" ? await this.io.claudeChannel() : "latest";
-    const [probe, install] = await Promise.all([
-      this.io.exec(path, ["--version"], probeTimeout),
+    }
+    const [probe, install, missing] = await Promise.all([
+      // A stub left by blocked install scripts has no shebang: ENOEXEC.
+      this.io.exec(path, ["--version"], probeTimeout).catch((error): Exec => ({
+        code: null,
+        stdout: "",
+        output: error instanceof Error ? error.message : String(error),
+        timedOut: false,
+      })),
       this.installAt(provider, path, tag),
+      this.missing(provider),
     ]);
     const current = probe.code === 0 ? parseVersion(probe.stdout) : undefined;
+    const account = await this.io.account?.(provider).catch(() => undefined);
     const found: AgentVersion = {
       provider,
       path,
       linked,
       installer: install?.installer,
       command: install && describeInstall(install),
+      ...(account && { account }),
+      ...(missing.length && { missing }),
     };
     if (!current)
       return {
@@ -386,27 +532,107 @@ export class AgentUpdates {
         error: `${cli} didn't say which version it is.`,
         output: probe.output.trim() || undefined,
       };
-    return {
-      ...found,
-      current,
-      latest: await this.latest(provider, tag, install, fresh),
-    };
+    const latest = await this.latest(provider, tag, install, fresh);
+    const behind = latest && compareVersions(current, latest) < 0;
+    if (install?.installer !== "npm" || !behind)
+      return { ...found, current, latest };
+    return { ...found, current, ...(await this.aged(provider, latest, fresh)) };
+  }
+
+  /** What the CLI runs through that isn't on this computer, e.g. Amp's `amp-acp`. */
+  private async missing(provider: CliProvider) {
+    const extras = agentPackages[provider].with ?? [];
+    const found = await Promise.all(
+      extras.map((name) =>
+        this.io.find(name).then(
+          () => true,
+          () => false,
+        ),
+      ),
+    );
+    return extras.filter((_, i) => !found[i]);
+  }
+
+  /**
+   * Bun blocks the install scripts of packages it doesn't trust, Claude's and
+   * Amp's among them, which leaves a stub that can't run; `trustedDependencies`
+   * doesn't help where `ignoreScripts` is set. Runs the package's own
+   * postinstall instead. False when there was nothing to run or it failed.
+   */
+  private async bunPostinstall(
+    provider: CliProvider,
+    path: string,
+    bun: string,
+  ) {
+    const real = forwardSlashes(await this.io.realpath(path));
+    const dir = `/node_modules/${agentPackages[provider].npm}/`;
+    const at = foldPath(real).lastIndexOf(foldPath(dir));
+    if (at < 0) return false;
+    const result = await this.io.exec(
+      bun,
+      ["run", "--cwd", real.slice(0, at + dir.length - 1), "postinstall"],
+      updateTimeout,
+    );
+    return result.code === 0;
+  }
+
+  /**
+   * The version to ask npm for. Under `min-release-age` that's the release
+   * it lets in, by number: npm falls back from a tag that's too new only to
+   * a stable release, and Amp ships nothing but prereleases.
+   */
+  private async npmSpec(provider: CliProvider, tag: string) {
+    const days = (await this.io.npmReleaseAge?.().catch(() => 0)) ?? 0;
+    if (!days) return tag;
+    const latest = await this.latest(provider, tag, undefined, false);
+    if (!latest) return tag;
+    return (await this.aged(provider, latest, false)).latest ?? tag;
+  }
+
+  /**
+   * What npm installs when its `min-release-age` holds back `latest`: an
+   * update would otherwise "finish" and leave the same version behind.
+   */
+  private async aged(
+    provider: CliProvider,
+    latest: string,
+    fresh: boolean,
+  ): Promise<Pick<AgentVersion, "latest" | "held">> {
+    const days = (await this.io.npmReleaseAge?.().catch(() => 0)) ?? 0;
+    if (!days) return { latest };
+    const pkg = agentPackages[provider].npm;
+    let cached = this.timesCache.get(pkg);
+    if (fresh || !cached || Date.now() - cached.at >= latestLifetime) {
+      const times = await this.io
+        .fetch(`https://registry.npmjs.org/${encodeURIComponent(pkg)}`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(15_000),
+        })
+        .then((response) => (response.ok ? response.json() : undefined))
+        .then(releaseTimes)
+        .catch((): ReleaseTimes => ({}));
+      cached = { at: Date.now(), times };
+      this.timesCache.set(pkg, cached);
+    }
+    const { version, held } = releasedBy(cached.times, latest, days);
+    return { latest: version, ...(held && { held }) };
   }
 
   /** An agent that runs from an SDK Relay downloads: what's on disk, and what's newer. */
   private async inspectSdk(
-    provider: Exclude<AgentProvider, CliProvider>,
+    provider: SdkProvider,
     fresh: boolean,
   ): Promise<AgentVersion> {
+    const { cli } = agentInfo(provider);
+    const sdk = this.sdkOf(provider);
     const found: AgentVersion = {
       provider,
       installer: "relay",
-      command: "Download from npm",
+      command: sdk && `Download from ${sdk.source}`,
     };
-    const sdk = this.io.cursor;
-    if (!sdk) return { ...found, error: "This build has no Cursor SDK." };
+    if (!sdk) return { ...found, error: `This build has no ${cli}.` };
     const current = await sdk.installed().catch(() => undefined);
-    const key = "cursor-sdk";
+    const key = `${provider}-sdk`;
     const cached = this.latestCache.get(key);
     let latest = cached?.version;
     if (fresh || !cached || Date.now() - cached.at >= latestLifetime) {
@@ -417,7 +643,7 @@ export class AgentUpdates {
       return {
         ...found,
         latest,
-        error: "Cursor's SDK isn't downloaded yet.",
+        error: `${cli} isn't downloaded yet.`,
       };
     return {
       ...found,
@@ -427,7 +653,8 @@ export class AgentUpdates {
     };
   }
 
-  private async runSdkUpdate(provider: Exclude<AgentProvider, CliProvider>) {
+  private async runSdkUpdate(provider: SdkProvider) {
+    const { cli } = agentInfo(provider);
     const fail = (message: string) =>
       this.put({
         ...this.agent(provider),
@@ -435,25 +662,23 @@ export class AgentUpdates {
       });
     try {
       this.put({ ...this.agent(provider), update: { status: "running" } });
-      const sdk = this.io.cursor;
-      if (!sdk) return fail("This build has no Cursor SDK.");
+      const sdk = this.sdkOf(provider);
+      if (!sdk) return fail(`This build has no ${cli}.`);
       const before = this.agent(provider);
       if (before.current && !before.latest)
-        return fail("Relay couldn't look up the newest Cursor SDK.");
+        return fail(`Relay couldn't look up the newest ${cli}.`);
       // Setting up starts from the version Relay was made for; updating goes to the newest.
       await sdk.install(before.current ? before.latest : undefined);
       const after = await this.inspectSdk(provider, true);
       if (!after.current)
-        return fail("The download finished, but Cursor's SDK isn't there.");
+        return fail(`The download finished, but ${cli} isn't there.`);
       this.put({
         ...after,
         update: { status: "updated", version: after.current, at: Date.now() },
       });
     } catch (error) {
       fail(
-        error instanceof Error
-          ? error.message
-          : "Couldn't download Cursor's SDK.",
+        error instanceof Error ? error.message : `Couldn't download ${cli}.`,
       );
     }
   }
@@ -461,6 +686,9 @@ export class AgentUpdates {
   /** `installOf`, checked against the machine where the path alone can't prove it. */
   private async installAt(provider: CliProvider, path: string, tag: string) {
     const real = await this.io.realpath(path).catch(() => path);
+    const root = this.io.ownAgents?.();
+    if (root && [path, real].some((p) => isInside(p, join(root, provider))))
+      return ownInstall(provider, root, tag);
     const install = installOf(provider, path, real, tag, this.io.platform);
     if (install?.npmPrefix && this.io.platform === "win32") {
       // npm puts `<cmd>.cmd` beside a global prefix's node_modules; a
@@ -542,19 +770,41 @@ export class AgentUpdates {
     try {
       this.put({ ...this.agent(provider), update: { status: "running" } });
       // What installed it is read again now, not trusted from the last check.
-      const path = await this.io.find(provider);
+      const path = await this.io.find(provider).catch(() => undefined);
+      const linkedPath = this.io.linked?.(provider);
+      if (!path && linkedPath)
+        return fail(`The ${cli} you linked is gone: ${linkedPath}`);
       const tag =
         provider === "claude" ? await this.io.claudeChannel() : "latest";
-      const install = await this.installAt(provider, path, tag);
+      const root = this.io.ownAgents?.();
+      const missing = path ? await this.missing(provider) : [];
+      // A missing CLI, or what it runs through, goes into Relay's own folder.
+      const installing = !path || missing.length > 0;
+      const plan = async (spec: string) =>
+        installing
+          ? root && ownInstall(provider, root, spec)
+          : this.installAt(provider, path!, spec);
+      let install = await plan(tag);
       if (!install)
         return fail(
-          `Relay can't tell how ${cli} was installed. Update it the way you installed it.`,
+          path
+            ? `Relay can't tell how ${cli} was installed. Update it the way you installed it.`
+            : `Relay couldn't find ${cli}.`,
         );
+      if (install.installer === "npm" || install.installer === "relay") {
+        const spec = await this.npmSpec(provider, tag);
+        if (spec !== tag) install = (await plan(spec)) || install;
+      }
       const program =
         install.installer === "bun" ||
         install.installer === "pnpm" ||
-        install.installer === "npm"
-          ? await this.io.find(install.program)
+        install.installer === "npm" ||
+        install.installer === "relay"
+          ? await this.io.find(install.program).catch(() => {
+              throw new Error(
+                `Relay couldn't find ${install!.program}, which ${installing ? "installing" : "updating"} ${cli} needs.`,
+              );
+            })
           : install.program;
       const result = await this.io.exec(program, install.args, updateTimeout);
       const output = result.output.trim() || undefined;
@@ -565,18 +815,36 @@ export class AgentUpdates {
           `${describeInstall(install)} failed${result.code === null ? "" : ` with exit code ${result.code}`}.`,
           output,
         );
-      const after = await this.inspect(provider, true);
+      let after = await this.inspect(provider, true);
+      if (
+        !after.current &&
+        install.installer === "bun" &&
+        (await this.bunPostinstall(provider, path!, program))
+      )
+        after = await this.inspect(provider, true);
       if (!after.current)
         return this.put({
           ...after,
           update: {
             status: "failed",
-            message: `The update finished, but ${cli} doesn't run now.`,
+            message: installing
+              ? `The install finished, but ${cli} doesn't run.`
+              : `The update finished, but ${cli} doesn't run now.`,
             output,
             at: Date.now(),
           },
         });
-      if (isBehind(after))
+      if (after.missing?.length)
+        return this.put({
+          ...after,
+          update: {
+            status: "failed",
+            message: `The install finished, but ${after.missing.join(", ")} isn't there.`,
+            output,
+            at: Date.now(),
+          },
+        });
+      if (!installing && isBehind(after))
         return this.put({
           ...after,
           update: {
@@ -588,23 +856,34 @@ export class AgentUpdates {
         });
       this.put({
         ...after,
-        update: { status: "updated", version: after.current, at: Date.now() },
+        update: {
+          status: "updated",
+          version: after.current,
+          at: Date.now(),
+          ...(installing && { installed: true }),
+        },
       });
     } catch (error) {
       fail(error instanceof Error ? error.message : `Couldn't update ${cli}.`);
     }
   }
 
-  private agent(provider: AgentProvider) {
-    return this.state.agents.find((a) => a.provider === provider)!;
+  private agent(provider: AgentProvider): AgentVersion {
+    return (
+      this.state.agents.find((a) => a.provider === provider) ?? { provider }
+    );
   }
 
   private put(agent: AgentVersion) {
+    const known = this.state.agents.some((a) => a.provider === agent.provider);
+    if (!known && !this.providers().includes(agent.provider)) return;
     this.set({
       ...this.state,
-      agents: this.state.agents.map((a) =>
-        a.provider === agent.provider ? agent : a,
-      ),
+      agents: known
+        ? this.state.agents.map((a) =>
+            a.provider === agent.provider ? agent : a,
+          )
+        : [...this.state.agents, agent],
     });
   }
 

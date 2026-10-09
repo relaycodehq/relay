@@ -24,7 +24,10 @@ import {
   snoozePresets,
   wakeLabel,
 } from "../../../shared/chat-activity";
-import { agentName, agents } from "../../../shared/agents";
+import {
+  agentName,
+  agentInfo,
+} from "../../../shared/agents";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import type { ThreadMenuAction } from "./useThreadActions";
@@ -100,7 +103,7 @@ export function ThreadMenu({
       >
         Fork from last answer
       </MenuAction>
-      {holder && agents[holder].reload && (
+      {holder && agentInfo(holder).reload && (
         <MenuAction
           icon={<RefreshCw size={13} />}
           hint={agentName(holder)}

@@ -1,6 +1,7 @@
 // What docks above the composer on the desktop (WaitingStrip, StoppedStrip,
 // the queue), worded the same, with the phone's thumb-sized actions.
 import { useRef, useState } from "react";
+import { agentName } from "../../../shared/agents";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   AlarmClock,
@@ -18,7 +19,6 @@ import { summary, timing, wakeupTitle } from "../../../shared/waiting";
 import type { ChatPending, LimitResume } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
 import type { RemoteQueued } from "../../../shared/remote";
-import { agentNames } from "./ProviderIcon";
 import { alertFailure } from "./failure";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
@@ -238,7 +238,7 @@ export function LimitStrip({
       <View style={styles.item}>
         <Hourglass size={15} color={t.muted} />
         <Text style={[styles.text, { color: t.text }]}>
-          {agentNames[plan.provider]} hit its usage limit
+          {agentName(plan.provider)} hit its usage limit
           <Text style={{ color: t.muted }}>
             {plan.off
               ? ` · resets ${wakeLabel(plan.at, now)}`

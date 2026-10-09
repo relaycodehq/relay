@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { agentName } from "../../../shared/agents";
 import { randomUUID } from "expo-crypto";
 import {
   ActivityIndicator,
@@ -19,7 +20,6 @@ import { composeSend, desktopNewThreadSettings } from "../../../shared/remote-co
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { MergeSheet } from "../ui/MergeSheet";
-import { agentNames } from "../ui/ProviderIcon";
 import { rowStyles } from "../ui/Rows";
 import { mono, type, useTheme } from "../ui/theme";
 
@@ -112,7 +112,7 @@ export default function TurnScreen() {
   const title = worktree
     ? (status?.branch ?? "Worktree")
     : turn
-      ? `${agentNames[turn.provider]} · ${new Date(turn.ended ?? turn.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      ? `${agentName(turn.provider)} · ${new Date(turn.ended ?? turn.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
       : "Changes";
   const reverted = files?.filter((f) => f.revertedBy).length ?? 0;
   const all = files?.length ?? 0;

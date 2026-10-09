@@ -1,10 +1,7 @@
 import { useMemo } from "react";
-import {
-  agentProviders,
-  type AgentModel,
-  type AgentProvider,
-} from "../../../shared/agents";
+import type { AgentModel, AgentProvider } from "../../../shared/agents";
 import { modelName } from "../../../shared/model-fit";
+import { useRunnableAgents } from "../agents/registry-agents";
 import { useAgentDefaults } from "./useAgentDefaults";
 import { useAgentPicks } from "../agents/useAgentPicks";
 import { useClaudeModels } from "../agents/useClaudeModels";
@@ -21,6 +18,7 @@ export function useModelCatalogs(projectId: string) {
   const codexCatalog = useCodexModels();
   const codex = codexCatalog.models;
   const defaults = useAgentDefaults(projectId);
+  const agents = useRunnableAgents();
   const of = (p: AgentProvider): AgentModel[] | undefined =>
     p === "codex"
       ? codex
@@ -28,16 +26,16 @@ export function useModelCatalogs(projectId: string) {
         ? claude
         : agentPicks.catalogs[p]?.models;
   // The model each agent's Default runs, by its listed name.
-  const defaultModels = agentProviders.map((p) => defaults.of(p)?.model ?? "");
+  const defaultModels = agents.map((p) => defaults.of(p)?.model ?? "");
   const defaultNames = useMemo(
     (): Partial<Record<AgentProvider, string>> =>
       Object.fromEntries(
-        agentProviders.flatMap((p, i) => {
+        agents.flatMap((p, i) => {
           const runs = defaultModels[i];
           return runs ? [[p, modelName(p, of(p), runs)]] : [];
         }),
       ),
-    [defaultModels.join("\0"), codex, claude, agentPicks.catalogs],
+    [agents, defaultModels.join("\0"), codex, claude, agentPicks.catalogs],
   );
   const refresh = useStableCallback(() => {
     // Signing in or updating a CLI changes its list; ask again.
@@ -56,7 +54,7 @@ export function useModelCatalogs(projectId: string) {
         : p === "codex"
           ? undefined
           : agentPicks.catalogs[p]?.error,
-    /** The catalogs of the agents in `pickAgents`; see features/agents/composer-models. */
+    /** The catalogs of the agents in `pickAgents()`; see features/agents/composer-models. */
     picks: agentPicks.catalogs,
     defaults,
     of,

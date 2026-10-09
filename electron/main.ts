@@ -3,9 +3,16 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
-import { hostAgents, setOpenCodeEnvRoot } from "./agents";
+import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { configureCursor } from "./agents/cursor/sdk";
+import {
+  AcpRegistry,
+  antigravityIo,
+  configureAcpRegistry,
+  configureAntigravity,
+  registryUpdatesIo,
+} from "./agents/acp";
 import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
 import { AppLinks } from "./app/links";
@@ -63,7 +70,7 @@ import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
 import { Handoffs } from "./handoff/sender";
 import { pathReady } from "./platform/shell-path";
-import { setLinkedAgents } from "./platform/executables";
+import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
 import { applyLinkedTools } from "./source-control";
 import { Store } from "./app/store";
 import { projectTasks } from "./terminal/tasks";
@@ -217,14 +224,29 @@ configureCursor({
   store: join(app.getPath("userData"), "cursor-agents"),
   fetch: (url, init) => net.fetch(url, init),
 });
+// Antigravity's ACP server isn't shipped either: Relay downloads Google's build.
+configureAntigravity({
+  root: join(app.getPath("userData"), "antigravity"),
+  fetch: (url, init) => net.fetch(url, init),
+});
+const acpAgents = new AcpRegistry(
+  join(app.getPath("userData"), "acp-agents"),
+  (url, init) => net.fetch(url, init),
+);
+configureAcpRegistry(acpAgents);
 const agentUpdates = new AgentUpdates(
   (state) => window.send("relay:agent-updates", state),
   {
     ...machineIo,
     fetch: (url, init) => net.fetch(url, init),
-    cursor: cursorSdkIo,
+    sdks: { cursor: cursorSdkIo, antigravity: antigravityIo },
+    registry: registryUpdatesIo(acpAgents),
   },
 );
+acpAgents.onChange((state) => {
+  window.send("relay:acp-registry", state);
+  void agentUpdates.sync();
+});
 // The worker runs under the system Node.js, which cannot read inside app.asar.
 const projectChecks = new ProjectChecks(
   join(__dirname, "checks-worker.mjs"),
@@ -271,6 +293,7 @@ app
     );
     setGitPath(loaded.get().gitPath ?? null);
     setLinkedAgents(loaded.get().agentPaths ?? {});
+    setOwnAgentsDir(join(app.getPath("userData"), "agent-clis"));
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
     setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
     // Before anything starts an agent: runs ask it which account they use.
@@ -515,6 +538,7 @@ app
     threadTerminals.connect((event) => window.send("relay:terminal", event));
     serveApi(window, dispatch);
     // Agent sessions that kept running through a restart come back before the window does.
+    await loadRegistryAgents();
     await chats.reattach();
     if (relayTools)
       void answerRelayTools(

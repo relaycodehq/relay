@@ -2,9 +2,9 @@ import { persistedStore } from "../../lib/persisted-store";
 import { z } from "zod";
 import {
   agentName,
-  agents,
   agentProviderSchema,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 import { fastFor, modelName } from "../../../shared/model-fit";
 import {
@@ -122,7 +122,7 @@ export function presetIndex(
     (p) =>
       sameModel(p, run) &&
       p.reasoningEffort === run.reasoningEffort &&
-      (!agents[p.provider].fast || p.fast === run.fast),
+      (!agentInfo(p.provider).fast || p.fast === run.fast),
   );
   if (exact >= 0) return exact;
   if (presets[last] && sameModel(presets[last], run)) return last;

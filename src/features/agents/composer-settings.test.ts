@@ -168,9 +168,12 @@ it("starts every new thread on the models the desktop and phone share", () => {
   expect(loadComposerSettings("thread").models.codex).toBeUndefined();
   // Shared and read back, every agent keeps its model; Codex's Default
   // follows the line-question setting again.
+  const blanks = Object.fromEntries(
+    ["opencode", "amp", "antigravity"].map((p) => [p, plain("")]),
+  );
   expect(
     withNewThreadModels(loaded.models, newThreadModelsOf(loaded.models)),
-  ).toEqual({ ...loaded.models, opencode: plain("") });
+  ).toEqual({ ...loaded.models, ...blanks });
 });
 
 it("remembers the model a message went to an agent with, not one to people", () => {
@@ -287,8 +290,8 @@ it("keeps another agent's model in its own entry, apart from Codex's and Claude'
   store.set(
     "composer-settings:odd-picks",
     JSON.stringify({
-      provider: "gemini",
-      picks: { gemini: { model: "x" }, opencode: { model: "bad id!" } },
+      provider: "aider",
+      picks: { aider: { model: "x" }, opencode: { model: "bad id!" } },
     }),
   );
   expect(loadComposerSettings("odd-picks")).toMatchObject({

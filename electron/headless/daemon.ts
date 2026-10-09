@@ -7,7 +7,7 @@ import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
 import { join } from "node:path";
 import { AgentHosts } from "../agent-host/client";
-import { hostAgents, setOpenCodeEnvRoot } from "../agents";
+import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "../agents";
 import {
   AgentAccounts,
   accountHomes,
@@ -20,6 +20,13 @@ import {
   signOutCursor,
 } from "../agents/cursor/account";
 import { configureCursor } from "../agents/cursor/sdk";
+import {
+  AcpRegistry,
+  antigravityIo,
+  configureAcpRegistry,
+  configureAntigravity,
+  registryUpdatesIo,
+} from "../agents/acp";
 import { keepUsageHistory } from "../agents/usage-history";
 import { createDispatch, type Dispatch } from "../api";
 import { apiContext } from "../api/context";
@@ -43,7 +50,7 @@ import { Computers } from "../handoff/computers";
 import { HandoffReceiver } from "../handoff/receiver";
 import { Handoffs } from "../handoff/sender";
 import { setComputerName, computerName } from "../platform/computer-name";
-import { setLinkedAgents } from "../platform/executables";
+import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
 import { pathReady } from "../platform/shell-path";
 import { ClockifyPlugin } from "../plugins/clockify/service";
 import { DevOps } from "../plugins/devops/service";
@@ -134,6 +141,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const relayTools = await prepareRelayTools(join(home, "agent-host"));
   setGitPath(store.get().gitPath ?? null);
   setLinkedAgents(store.get().agentPaths ?? {});
+  setOwnAgentsDir(join(home, "agent-clis"));
   setProfilesRoot(join(home, "agent-accounts"));
   setOpenCodeEnvRoot(join(home, "opencode"));
   configureCursor({
@@ -142,6 +150,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     store: join(home, "cursor-agents"),
     fetch: fetcher,
   });
+  configureAntigravity({ root: join(home, "antigravity"), fetch: fetcher });
+  const acpAgents = new AcpRegistry(join(home, "acp-agents"), fetcher);
+  configureAcpRegistry(acpAgents);
   const agentAccounts = new AgentAccounts(store, () => {});
   applyLinkedTools(store);
   void gitExecutable().catch(() => {});
@@ -255,8 +266,10 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const agentUpdates = new AgentUpdates(() => {}, {
     ...machineIo,
     fetch: fetcher,
-    cursor: cursorSdkIo,
+    sdks: { cursor: cursorSdkIo, antigravity: antigravityIo },
+    registry: registryUpdatesIo(acpAgents),
   });
+  acpAgents.onChange(() => void agentUpdates.sync());
   const triage = new TriageService(store, home);
   const api = apiContext({
     store,
@@ -378,6 +391,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   await remote.start(true);
   void computers.start();
   // Agent sessions that kept running through a restart come back first.
+  await loadRegistryAgents();
   await chats.reattach();
   if (relayTools)
     void answerRelayTools(

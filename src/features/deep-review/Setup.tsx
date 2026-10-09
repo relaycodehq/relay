@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import type { DeepReviewStart } from "../../../shared/deep-review";
 import type { Project } from "../../../shared/projects";
-import { agentProviders } from "../../../shared/agents";
 import { sendsMessage, useSendKey } from "../../lib/send-key";
 import { useAgentName } from "./useAgentName";
 import { useDeepReviewSetup } from "./useDeepReviewSetup";
 import { ModelField } from "../agents/ModelField";
+import { useRunnableAgents } from "../agents/registry-agents";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
 import { ReviewersField } from "./ReviewersField";
@@ -37,6 +37,7 @@ export function DeepReviewSetup({
   /** Resolves true once the review has started. */
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
+  const runnable = useRunnableAgents();
   const name = useAgentName();
   const sendKey = useSendKey();
   const { setup, update, focus, setFocus, pick, choice, start } =
@@ -88,7 +89,7 @@ export function DeepReviewSetup({
               <ModelField
                 label="Lead"
                 provider={setup.lead.provider}
-                providers={agentProviders}
+                providers={runnable}
                 value={setup.lead.choice}
                 onChange={(choice, provider) =>
                   update({ lead: { provider, choice } })

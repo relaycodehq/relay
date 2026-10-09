@@ -1,6 +1,9 @@
 // Sample data and the setup state both review-prompt options share.
 import { useEffect, useState } from "react";
-import { agents, type AgentProvider } from "../../shared/agents";
+import {
+  type AgentProvider,
+  agentInfo,
+} from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
 
 /**
@@ -49,6 +52,8 @@ export const catalog: Record<AgentProvider, PromptItem[]> = {
   ],
   cursor: [command("review-security", "Bugbot's security pass")],
   opencode: [command("check", "Project · lint, types and tests")],
+  amp: [],
+  antigravity: [],
 };
 function command(name: string, description: string): PromptItem {
   return { kind: "command", name, description, token: `/${name}` };
@@ -57,8 +62,10 @@ function skill(prefix: string, name: string, description: string): PromptItem {
   return { kind: "skill", name, description, token: `${prefix}${name}` };
 }
 
-export const nativeCommand = (p: AgentProvider) =>
-  agents[p].reviewCommand.startsWith("/") ? agents[p].reviewCommand : "";
+export const nativeCommand = (p: AgentProvider) => {
+  const command = agentInfo(p).reviewCommand ?? "";
+  return command.startsWith("/") ? command : "";
+};
 export const nativeLabel = (p: AgentProvider) =>
   nativeCommand(p) || "Relay's review prompt";
 

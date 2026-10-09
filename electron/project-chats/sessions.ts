@@ -8,7 +8,7 @@ import type {
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import { codexQuestionChoice } from "../../shared/settings";
-import { agentRuntimes } from "../agents";
+import { everyAgentRuntime } from "../agents";
 import {
   claudeAgentRun,
   claudeAgents,
@@ -202,7 +202,7 @@ export class ProviderSessions {
   private end(key: string) {
     this.keys.delete(key);
     this.used.delete(key);
-    for (const runtime of Object.values(agentRuntimes))
+    for (const runtime of everyAgentRuntime())
       void runtime.closeSession(key).catch(() => {});
     this.changed(parseSessionKey(key).chatId);
   }
@@ -216,7 +216,7 @@ export class ProviderSessions {
   async reload(chatId: string): Promise<SessionReload | undefined> {
     const main = this.key(chatId);
     const keys = this.of(chatId);
-    const runtimes = Object.values(agentRuntimes);
+    const runtimes = everyAgentRuntime();
     let changes: SessionReload | undefined;
     // First, so one still working refuses before anything else closed.
     if (keys.includes(main))
@@ -235,7 +235,7 @@ export class ProviderSessions {
   async closeAll() {
     await Promise.all(
       [...this.keys].flatMap((key) =>
-        Object.values(agentRuntimes).map((runtime) =>
+        everyAgentRuntime().map((runtime) =>
           runtime.closeSession(key).catch(() => {}),
         ),
       ),

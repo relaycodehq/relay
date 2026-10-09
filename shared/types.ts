@@ -18,6 +18,7 @@ import type {
   ReadAloudState,
 } from "./read-aloud";
 import type { AgentVersions } from "./agent-updates";
+import type { RegistryAgentsState, RegistryListing } from "./acp-registry";
 import type {
   SourceControlKind,
   SourceControlProvider,
@@ -546,10 +547,22 @@ export interface Api
   teaSetup(): Promise<TeaSetup>;
   /** Signs in to Gitea with the token `tea` holds for one of its logins. */
   connectWithTea(login: string): Promise<Account>;
-  /** Signs in to Cursor in the browser, downloading its SDK first if needed. */
-  signInCursor(): Promise<AgentVersions>;
-  signOutCursor(): Promise<AgentVersions>;
+  /**
+   * Signs an agent with no login command in through the browser: Cursor,
+   * downloading its SDK first if needed, or Antigravity.
+   */
+  signInAgent(provider: AgentProvider): Promise<AgentVersions>;
+  signOutAgent(provider: AgentProvider): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
+  /** Every agent the ACP registry lists, as this machine would get it; `fresh` asks again. */
+  registryListing(fresh?: boolean): Promise<RegistryListing[]>;
+  /** The agents installed from the ACP registry. */
+  registryAgents(): Promise<RegistryAgentsState>;
+  /** Installs, or updates to the registry's version of, the agent with registry id `id`. */
+  installRegistryAgent(id: string): Promise<RegistryAgentsState>;
+  /** Stops its sessions and deletes what Relay downloaded for it. */
+  removeRegistryAgent(id: string): Promise<RegistryAgentsState>;
+  onRegistryAgents(callback: (state: RegistryAgentsState) => void): () => void;
   onAgentAccounts(
     callback: (state: import("./agent-accounts").AgentAccountsState) => void,
   ): () => void;

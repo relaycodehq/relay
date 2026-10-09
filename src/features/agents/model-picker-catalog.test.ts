@@ -20,6 +20,8 @@ const noCustoms = {
   claude: [],
   opencode: [],
   cursor: [],
+  amp: [],
+  antigravity: [],
 } as Record<AgentProvider, string[]>;
 const catalogs: Partial<Record<AgentProvider, AgentCatalog>> = {
   codex: {

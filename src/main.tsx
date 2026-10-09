@@ -12,6 +12,7 @@ import { initTypography } from "./lib/typography";
 import { initChatWidth } from "./lib/chat-width";
 import { initShortcuts } from "./lib/shortcuts";
 import { followChatEvents } from "./lib/chat-events";
+import { startRegistryAgents } from "./features/agents/registry-agents";
 initAppearance();
 initTypography();
 initChatWidth();
@@ -29,7 +30,11 @@ const client = new QueryClient({
     mutations: { retry: false },
   },
 });
-if (window.relay) followChatEvents(client);
+if (window.relay) {
+  followChatEvents(client);
+  // Threads on a registry agent need its name before anything lists them.
+  startRegistryAgents();
+}
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* The preload bridge only exists in the desktop app; a browser tab on

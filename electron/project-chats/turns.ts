@@ -9,7 +9,12 @@ import type {
 import { replyRoot, sentBy, threadWorktree } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
-import { agentName, agents, helperProviders } from "../../shared/agents";
+import {
+  agentName,
+  agents,
+  helperProviders,
+  agentInfo,
+} from "../../shared/agents";
 import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
@@ -159,7 +164,7 @@ export class ChatTurns {
         ),
       ];
       let skills: CodexSkill[] = [];
-      if (skillMatches.length && asked && agents[asked.provider].skills) {
+      if (skillMatches.length && asked && agentInfo(asked.provider).skills) {
         const available = await codexSkills(root);
         for (const match of skillMatches) {
           const skill = available.find((s) => s.name === match[2]);
@@ -328,7 +333,7 @@ export class ChatTurns {
       // Some agents only run a command or skill when the message starts with
       // it, so a command goes out alone.
       const command =
-        (agents[asked.provider].commandsAlone || !!goal) &&
+        (agentInfo(asked.provider).commandsAlone || !!goal) &&
         /^\/[a-zA-Z0-9_.:-]+(?:\s|$)/.test(asked.question);
       // Another agent answered last on this branch: let it brief the new one
       // first, unless a command leaves no room for the note.
@@ -571,7 +576,7 @@ export class ChatTurns {
    */
   reattach() {
     const back = Promise.all(
-      Object.entries(agentRuntimes).map(async ([provider, runtime]) =>
+      agentRuntimes().map(async ([provider, runtime]) =>
         (
           (await runtime.reattach?.(
             (key) =>
@@ -712,7 +717,7 @@ export class ChatTurns {
       const provider = latest?.provider;
       if (!provider || !agentSession(chat, provider, parentId).thread)
         throw new Error("There is no agent session to compact yet.");
-      if (instructions && !agents[provider].compactInstructions)
+      if (instructions && !agentInfo(provider).compactInstructions)
         throw new Error(
           `${agentName(provider)} compacts without custom instructions.`,
         );

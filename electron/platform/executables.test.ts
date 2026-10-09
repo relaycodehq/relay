@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./shell-path", () => ({ pathReady: async () => {} }));
@@ -53,6 +53,20 @@ describe.skipIf(!posix)("finding an agent CLI", () => {
     await program(join(root, "bin"), "claude", "exit 1");
     const real = await program(
       join(root, ".volta/bin"),
+      "claude",
+      working("claude"),
+    );
+    expect(await findExecutable("claude")).toBe(real);
+  });
+
+  it("skips a stub that can't even start, as blocked install scripts leave", async () => {
+    const stub = join(root, "bin/claude");
+    await mkdir(join(root, "bin"), { recursive: true });
+    await writeFile(stub, 'echo "claude native binary not installed" >&2\n');
+    await chmod(stub, 0o755);
+    process.env.PATH = [join(root, "bin"), join(root, "later")].join(delimiter);
+    const real = await program(
+      join(root, "later"),
       "claude",
       working("claude"),
     );

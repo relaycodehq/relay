@@ -1,5 +1,8 @@
 import { findClaudeModel, effortLabels } from "../../../shared/settings";
-import { agents, type AgentProvider } from "../../../shared/agents";
+import {
+  type AgentProvider,
+  agentInfo,
+} from "../../../shared/agents";
 import type { LeadAgent, ReviewAgent } from "../../../shared/deep-review";
 import { useClaudeModels } from "../agents/useClaudeModels";
 import { useCodexModels } from "../agents/useCodexModels";
@@ -15,7 +18,7 @@ export function useAgentName() {
       : agent.provider === "claude"
         ? (findClaudeModel(claude, agent.choice.model)?.name ??
           (agent.choice.model || "Claude default"))
-        : agent.choice.model || agents[agent.provider].defaultModel;
+        : agent.choice.model || agentInfo(agent.provider).defaultModel;
 }
 
 export const effortName = (agent: ReviewAgent | LeadAgent) =>

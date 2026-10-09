@@ -14,7 +14,7 @@ import {
 import { api } from "../../lib/api";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { prefillCommand, prefillSignIn } from "../terminal/thread-terminals";
-import { signInCursor } from "../updates/agent-updates";
+import { signInAgent } from "../updates/agent-updates";
 import { signInOffer } from "./sign-in-offer";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import { useStableCallback } from "../../lib/useStableCallback";
@@ -54,7 +54,7 @@ export function useMessageActions({
     async (provider: AgentProvider) => {
       if (signInOffer(provider).via === "terminal")
         return chatId ? prefillSignIn(projectId, chatId, provider) : false;
-      await signInCursor();
+      await signInAgent(provider);
       return true;
     },
     [projectId, chatId],

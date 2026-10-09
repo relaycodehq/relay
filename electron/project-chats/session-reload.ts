@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { agentName, agents } from "../../shared/agents";
+import {
+  agentName,
+  agentInfo,
+} from "../../shared/agents";
 import type { ChatMessage } from "../../shared/projects";
 import { contextAgent } from "../../shared/recipient";
 import type { ChatCore } from "./core";
@@ -23,7 +26,7 @@ export function reloadSessions(core: ChatCore, id: string) {
     assertHere(chat);
     const provider = contextAgent(chat.messages.filter((m) => !m.parentId));
     if (!provider) throw new Error("There is no agent session to reload yet.");
-    if (!agents[provider].reload)
+    if (!agentInfo(provider).reload)
       throw new Error(
         `${agentName(provider)} runs every thread in one server, so one thread's session can't be reloaded.`,
       );

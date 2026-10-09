@@ -9,7 +9,7 @@ import { createInterface } from "node:readline/promises";
 import { relayCommands } from "../app/open-folder";
 import { tailnetProbe } from "../remote/tailscale";
 import type { AgentVersion } from "../../shared/agent-updates";
-import { agents as agentInfo, type AgentProvider } from "../../shared/agents";
+import { agentInfo, type AgentProvider } from "../../shared/agents";
 import { callControl, type DaemonStatus, type ThreadRow } from "./control";
 import {
   ago,
@@ -54,7 +54,7 @@ import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
 
 const agentName = (provider: string) =>
-  agentInfo[provider as AgentProvider]?.cli ?? provider;
+  agentInfo(provider as AgentProvider)?.cli ?? provider;
 
 /** This bundle; the service and background starts run it again. */
 const script = __filename;
@@ -1034,7 +1034,7 @@ async function setup(home: string, flags: Flags) {
 }
 
 function signIn(provider: AgentProvider) {
-  const info = agentInfo[provider];
+  const info = agentInfo(provider);
   return "login" in info ? `${provider} ${info.login}` : provider;
 }
 

@@ -19,7 +19,7 @@ import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
 import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
-import { agentInfo, agentProviders, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, agentName, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
@@ -47,7 +47,7 @@ import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from
 import { DictationButton, dictationShrinkMs } from "./DictationButton";
 import { useKeyboardShown } from "./KeyboardAware";
 import { ModelSheet } from "./ModelSheet";
-import { ProviderIcon, agentNames } from "./ProviderIcon";
+import { ProviderIcon } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
 import { UsageBar, UsageSheet, useUsage } from "./Usage";
 import { mono, type, useTheme } from "./theme";
@@ -498,7 +498,7 @@ export const Composer = forwardRef<
           value={live ? undefined : text}
           onChangeText={edit}
           onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
-          placeholder={placeholder ?? `Message ${agentNames[provider]}`}
+          placeholder={placeholder ?? `Message ${agentName(provider)}`}
           placeholderTextColor={t.faint}
           style={[styles.input, { color: t.text }]}
         >

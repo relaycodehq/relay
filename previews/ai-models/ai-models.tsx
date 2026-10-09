@@ -33,7 +33,11 @@ import "../../src/features/agents/composer-model-picker.css";
 import "../_shared/chrome.css";
 import "./ai-models.css";
 import { initAppearance } from "../../src/lib/appearance";
-import { agentName, agentProviders, agents } from "../../shared/agents";
+import {
+  agentName,
+  agentProviders,
+  agentInfo,
+} from "../../shared/agents";
 import type { AgentProvider } from "../../shared/agents";
 import { defaultAISettings, type AISettings } from "../../shared/settings";
 import type { WatchScope } from "../../shared/watch";
@@ -471,7 +475,7 @@ function AgentsPage() {
                 label={
                   <span className="aim-row-name">
                     <ProviderIcon provider={agent.provider} />
-                    {agents[agent.provider].cli}
+                    {agentInfo(agent.provider).cli}
                   </span>
                 }
                 hint={

@@ -1,15 +1,36 @@
 import { z } from "zod";
 import type { ReasoningEffort } from "./settings";
 
-/** Every agent a thread can talk to, in the order Relay offers them. */
+/** The agents built into Relay, in the order it offers them. */
 export const agentProviders = [
   "codex",
   "claude",
   "opencode",
   "cursor",
+  "amp",
+  "antigravity",
 ] as const;
-export const agentProviderSchema = z.enum(agentProviders);
-export type AgentProvider = z.infer<typeof agentProviderSchema>;
+export type BuiltinProvider = (typeof agentProviders)[number];
+/** An agent Relay installed from the ACP registry, by its registry id: `acp:goose`. */
+export type RegistryProvider = `acp:${string}`;
+/** Every agent a thread can talk to: Relay's own, and those added from the ACP registry. */
+export type AgentProvider = BuiltinProvider | RegistryProvider;
+
+/** The ACP registry's agent ids. */
+export const registryIdPattern = /^[a-z0-9][a-z0-9-]*$/;
+export const registryProviderSchema = z.templateLiteral([
+  "acp:",
+  z.string().regex(registryIdPattern),
+]);
+export const agentProviderSchema = z.union([
+  z.enum(agentProviders),
+  registryProviderSchema,
+]);
+export const isRegistryProvider = (
+  provider: AgentProvider,
+): provider is RegistryProvider => provider.startsWith("acp:");
+export const registryProvider = (id: string): RegistryProvider => `acp:${id}`;
+export const registryIdOf = (provider: RegistryProvider) => provider.slice(4);
 
 export interface AgentInfo {
   name: string;
@@ -46,7 +67,7 @@ export interface AgentInfo {
   usage: boolean;
   /** Lists models from many upstream providers, so the picker groups them. */
   modelGroups: boolean;
-  /** Runs from an SDK Relay downloads, not a CLI it finds on the machine. */
+  /** Runs from something Relay downloads (an SDK, a server), not a CLI it finds on the machine. */
   sdk?: true;
   /**
    * The CLI's own sign-in, as arguments to run in a terminal. Agents without
@@ -116,23 +137,111 @@ export const agents = {
     modelGroups: true,
     sdk: true,
   },
-} as const satisfies Record<AgentProvider, AgentInfo>;
+  amp: {
+    login: "login",
+    name: "Amp",
+    cli: "Amp CLI",
+    defaultModel: "Amp default",
+    helper: false,
+    fast: false,
+    skills: false,
+    commandsAlone: true,
+    compactInstructions: false,
+    reload: true,
+    usage: false,
+    modelGroups: false,
+  },
+  antigravity: {
+    // Google's ACP server, downloaded by Relay; it signs in through Relay over ACP.
+    name: "Antigravity",
+    cli: "Antigravity",
+    defaultModel: "Antigravity default",
+    helper: false,
+    fast: false,
+    skills: false,
+    commandsAlone: true,
+    compactInstructions: false,
+    reload: true,
+    usage: false,
+    modelGroups: false,
+    sdk: true,
+  },
+} as const satisfies Record<BuiltinProvider, AgentInfo>;
+
+/** The registry agents this Relay installed, and their names as the registry gives them. */
+const registryNames = new Map<RegistryProvider, string>();
+let runnable: readonly AgentProvider[] = agentProviders;
+const listeners = new Set<() => void>();
+/** Tells this process which registry agents are installed and what they're called. */
+export function knowRegistryAgents(
+  installed: { provider: RegistryProvider; name: string }[],
+) {
+  registryNames.clear();
+  for (const { provider, name } of installed) registryNames.set(provider, name);
+  runnable = [...agentProviders, ...registryNames.keys()];
+  for (const listener of listeners) listener();
+}
+export function onRegistryAgents(listener: () => void) {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+/**
+ * Every agent a thread can run on here: Relay's own, then the registry
+ * agents installed. The same array until that changes.
+ */
+export const runnableAgents = () => runnable;
+
+/** `factory-droid` as "Factory Droid", for an agent whose name hasn't arrived. */
+const nameFromId = (id: string) =>
+  id.replace(
+    /(^|-)([a-z])/g,
+    (_, dash: string, c: string) => `${dash && " "}${c.toUpperCase()}`,
+  );
+
+/**
+ * A registry agent is driven only through ACP: its models, modes and sign-in
+ * are whatever it reports, and it runs none of Relay's own jobs.
+ */
+function registryInfo(provider: RegistryProvider): AgentInfo {
+  const name =
+    registryNames.get(provider) ?? nameFromId(registryIdOf(provider));
+  return {
+    name,
+    cli: name,
+    defaultModel: `${name} default`,
+    helper: false,
+    fast: false,
+    skills: false,
+    commandsAlone: true,
+    compactInstructions: false,
+    reload: true,
+    usage: false,
+    modelGroups: false,
+    sdk: true,
+  };
+}
 
 /**
  * An agent's profile, or nothing for one this build doesn't know: a newer
  * desktop can run agents an older phone (or desktop build) has never heard of.
  */
-export const agentInfo = (provider: string) =>
-  isAgentProvider(provider) ? agents[provider] : undefined;
+export function agentInfo(provider: AgentProvider): AgentInfo;
+export function agentInfo(provider: string): AgentInfo | undefined;
+export function agentInfo(provider: string): AgentInfo | undefined {
+  if (!isAgentProvider(provider)) return undefined;
+  return isRegistryProvider(provider)
+    ? registryInfo(provider)
+    : agents[provider];
+}
+export const agentName = (provider: AgentProvider) =>
+  agentInfo(provider)?.name ?? provider;
 
-export const agentName = (provider: AgentProvider) => agentInfo(provider)?.name ?? provider;
-
-/** The agents with `AgentInfo` field `K` on, as a type. */
+/** The built-in agents with `AgentInfo` field `K` on, as a type. */
 type AgentsWith<K extends keyof AgentInfo> = {
-  [P in AgentProvider]: (typeof agents)[P] extends Record<K, true | string>
+  [P in BuiltinProvider]: (typeof agents)[P] extends Record<K, true | string>
     ? P
     : never;
-}[AgentProvider];
+}[BuiltinProvider];
 /** The agents with field `K` on, and a schema that accepts only them. */
 function agentsWith<K extends keyof AgentInfo>(key: K) {
   const list = agentProviders.filter(
@@ -141,11 +250,12 @@ function agentsWith<K extends keyof AgentInfo>(key: K) {
   return { list, schema: z.enum(list as [AgentsWith<K>, ...AgentsWith<K>[]]) };
 }
 
-/** Agents Relay runs from a CLI it finds; the rest run from an SDK it downloads. */
-export type CliProvider = Exclude<AgentProvider, AgentsWith<"sdk">>;
+/** Agents Relay runs from a CLI it finds; the rest run from what it downloads. */
+export type CliProvider = Exclude<BuiltinProvider, AgentsWith<"sdk">>;
+export type SdkProvider = AgentsWith<"sdk"> | RegistryProvider;
 export const isCliProvider = (
   provider: AgentProvider,
-): provider is CliProvider => !(agents[provider] as AgentInfo).sdk;
+): provider is CliProvider => !agentInfo(provider).sdk;
 
 const helpers = agentsWith("helper");
 /** Agents that run Relay's helper jobs, see `AgentInfo.helper`. */
@@ -174,7 +284,7 @@ export const reviewerProviders = agentsWith("reviewCommand").list;
 export const isAgentProvider = (value: unknown): value is AgentProvider =>
   agentProviderSchema.safeParse(value).success;
 
-/** `@codex`, `@claude`, … at the start of a message. */
+/** `@codex`, `@claude`, … at the start of a message; registry agents have no mention. */
 export const agentMentionPattern = new RegExp(
   `^@(${agentProviders.join("|")})(?=\\s|$)\\s*`,
   "i",
@@ -188,7 +298,7 @@ export function agentMention(
   const m = agentMentionPattern.exec(trimmed);
   return m
     ? {
-        provider: m[1].toLowerCase() as AgentProvider,
+        provider: m[1].toLowerCase() as BuiltinProvider,
         question: trimmed.slice(m[0].length).trim(),
       }
     : null;

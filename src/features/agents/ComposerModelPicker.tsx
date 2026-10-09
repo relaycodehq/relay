@@ -19,21 +19,29 @@ import {
 } from "lucide-react";
 import {
   agentName,
-  agentProviders,
+  isRegistryProvider,
   type AgentProvider,
+  type BuiltinProvider,
   reportsUsage,
   type UsageProvider,
 } from "../../../shared/agents";
-import { OpenAI, ClaudeAI, OpenCode } from "./ProviderLogos";
+import {
+  OpenAI,
+  ClaudeAI,
+  OpenCode,
+  Amp,
+  Antigravity,
+} from "./ProviderLogos";
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
+import { RegistryGlyph } from "./RegistryGlyph";
 import { UsageMeters } from "./UsageMeters";
 import {
   isGrouped,
   modelKey,
   pickerCatalog,
   pickerRows,
-  providerNames,
+  providerName,
   type AgentCatalog,
   type Category,
   type MessageProvider,
@@ -42,16 +50,21 @@ import {
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
 import { useCustomModels, useFavoriteModels } from "./useStoredModels";
+import { useRunnableAgents } from "./registry-agents";
 import "./composer-model-picker.css";
 
-const providerIcons: Record<MessageProvider, typeof OpenAI> = {
+const providerIcons: Record<BuiltinProvider | "message", typeof OpenAI> = {
   codex: OpenAI,
   claude: ClaudeAI,
   opencode: OpenCode,
   cursor: CursorGlyph,
+  amp: Amp,
+  antigravity: Antigravity,
   message: MessageSquare,
 };
 export function ProviderIcon({ provider }: { provider: MessageProvider }) {
+  if (provider !== "message" && isRegistryProvider(provider))
+    return <RegistryGlyph provider={provider} className="provider-glyph" />;
   const Glyph = providerIcons[provider];
   return <Glyph className="provider-glyph" aria-hidden />;
 }
@@ -107,7 +120,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
   const { usage, now } = usePickerUsage(open, account?.of);
-  const offered = (providers ?? agentProviders).filter((p) => catalogs[p]);
+  const runnable = useRunnableAgents();
+  const offered = (providers ?? runnable).filter((p) => catalogs[p]);
   const selectedKey = JSON.stringify([
     provider,
     provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
@@ -134,8 +148,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
 
   function select(m: PickerModel) {
     const p = m.provider;
-    if (m.custom && p !== "message" && !customs[p].includes(m.id))
-      setCustoms((all) => ({ ...all, [p]: [...all[p], m.id].slice(-100) }));
+    if (m.custom && p !== "message" && !customs[p]?.includes(m.id))
+      setCustoms((all) => ({ ...all, [p]: [...(all[p] ?? []), m.id].slice(-100) }));
     onSelect(m.provider, m.id);
     setOpen(false);
   }
@@ -159,7 +173,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
           ? [group ? undefined : m.group, m.description]
               .filter(Boolean)
               .join(" · ")
-          : m.description || providerNames[m.provider];
+          : m.description || providerName(m.provider);
   // Opens on the section of the model in use, so it shows among its neighbours.
   const openGroup = (next: Category) =>
     setGroup(
@@ -265,14 +279,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                         ? "Favorites"
                         : tab === "message"
                           ? "Message only"
-                          : providerNames[tab]
+                          : providerName(tab)
                     }
                     title={
                       tab === "favorites"
                         ? "Favorites"
                         : tab === "message"
                           ? "Message only · no agent"
-                          : providerNames[tab]
+                          : providerName(tab)
                     }
                     className="model-provider-tab"
                     aria-pressed={category === tab}
@@ -324,7 +338,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                     {grouped && (
                       <nav
                         className="model-picker-groups"
-                        aria-label={`${providerNames[category as AgentProvider]} providers`}
+                        aria-label={`${providerName(category as AgentProvider)} providers`}
                       >
                         {[
                           {

@@ -1,5 +1,8 @@
-import { agentProviders } from "../../../shared/agents";
-import type { UsageDay, UsageMeasure } from "../../../shared/usage";
+import {
+  providersIn,
+  type UsageDay,
+  type UsageMeasure,
+} from "../../../shared/usage";
 
 /** 1.2K, 34M, 2.1B. */
 export function compact(n: number) {
@@ -43,7 +46,7 @@ export const measured = (n: number, m: UsageMeasure) =>
   m === "usd" ? usd(n) : compact(n);
 
 export const dayTotal = (d: UsageDay, m: UsageMeasure) =>
-  agentProviders.reduce((n, p) => n + d[m][p], 0);
+  providersIn(d[m]).reduce((n, p) => n + (d[m][p] ?? 0), 0);
 
 /** "19:00"; 24 reads as midnight again. */
 export const clock = (hour: number) =>
@@ -66,9 +69,9 @@ export function columnsOf(days: UsageDay[], most = 92): UsageColumn[] {
     };
     for (const d of week.slice(1)) {
       column.answers += d.answers;
-      for (const p of agentProviders) {
-        column.fresh[p] += d.fresh[p];
-        column.usd[p] += d.usd[p];
+      for (const p of providersIn(d.fresh)) {
+        column.fresh[p] = (column.fresh[p] ?? 0) + (d.fresh[p] ?? 0);
+        column.usd[p] = (column.usd[p] ?? 0) + (d.usd[p] ?? 0);
       }
     }
     columns.push(column);

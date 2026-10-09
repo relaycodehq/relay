@@ -7,14 +7,15 @@ export type AgentInstaller =
   | "bun"
   | "pnpm"
   | "homebrew"
-  /** Relay itself downloaded it, as it does Cursor's SDK. */
+  /** Relay itself downloaded it, as it does Cursor's SDK, or installed a missing CLI. */
   | "relay";
 
 type AgentUpdateRun =
   /** Waiting for another agent's update to finish. */
   | { status: "queued" }
   | { status: "running" }
-  | { status: "updated"; version: string; at: number }
+  /** `installed` when there was nothing to update: Relay put it there. */
+  | { status: "updated"; version: string; at: number; installed?: boolean }
   | { status: "failed"; message: string; output?: string; at: number };
 
 /** One agent CLI as Relay last found it. */
@@ -28,6 +29,8 @@ export interface AgentVersion {
   current?: string;
   /** The newest release its installer offers; absent when that couldn't be looked up. */
   latest?: string;
+  /** A newer release npm's `min-release-age` won't install yet, and from when it will. */
+  held?: { version: string; until: number };
   /** Absent when Relay can't tell how it was installed. */
   installer?: AgentInstaller;
   /** What updating runs; absent when Relay can't update it itself. */
@@ -36,6 +39,8 @@ export interface AgentVersion {
   error?: string;
   /** What the CLI printed when it wouldn't say its version. */
   output?: string;
+  /** What it runs through that isn't on this computer, e.g. Amp's `amp-acp`. */
+  missing?: string[];
   /** Who it's signed in as, for an agent that has its own sign-in. */
   account?: { signedIn: boolean; email?: string };
   update?: AgentUpdateRun;

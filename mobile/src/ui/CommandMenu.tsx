@@ -2,7 +2,7 @@
 // Relay's own actions, then the agent's commands or skills.
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { agentInfo, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, agentName, type AgentProvider } from "../../../shared/agents";
 import {
   commandTrigger,
   relayCommands,
@@ -10,7 +10,6 @@ import {
   type RelayCommand,
 } from "../../../shared/commands";
 import { useRemote } from "../remote/RemoteProvider";
-import { agentNames } from "./ProviderIcon";
 import { mono, type, useTheme } from "./theme";
 
 export type CommandItem =
@@ -98,7 +97,7 @@ export function commandItems(
               name: c.name,
               label: "/" + c.name + (c.argumentHint ? " " + c.argumentHint : ""),
               description: c.description,
-              source: agentNames[provider],
+              source: agentName(provider),
             }
           : {
               kind: "skill",

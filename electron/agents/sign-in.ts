@@ -1,7 +1,6 @@
 import {
-  agents,
-  type AgentInfo,
   type AgentProvider,
+  agentInfo,
 } from "../../shared/agents";
 import { findExecutable } from "../platform/executables";
 
@@ -12,7 +11,7 @@ import { findExecutable } from "../platform/executables";
  * through Relay instead.
  */
 export async function signInCommand(provider: AgentProvider) {
-  const login = (agents[provider] as AgentInfo).login;
+  const login = agentInfo(provider).login;
   if (!login) return;
   const executable = await findExecutable(provider);
   if (process.platform === "win32") {

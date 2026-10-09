@@ -60,6 +60,7 @@ describe("installOf", () => {
       expect.arrayContaining([
         "--prefix",
         "/Users/me/.nvm/versions/node/v22.1.0",
+        "--ignore-scripts=false",
         "@openai/codex@latest",
       ]),
     );
@@ -161,8 +162,14 @@ function machine(options: {
   next?: string;
   updateCode?: number;
   channel?: string;
+  /** npm's min-release-age, and the packument its check reads. */
+  releaseAge?: number;
+  packument?: unknown;
+  /** The update leaves a stub until the package's postinstall runs, as Bun does. */
+  blocksScripts?: boolean;
 }) {
   let version = options.version;
+  let stub = false;
   const runs: string[][] = [];
   const done = (stdout: string, code = 0): Exec => ({
     code,
@@ -180,16 +187,27 @@ function machine(options: {
     realpath: async (path) => (path === options.path ? options.real : path),
     exists: async () => false,
     exec: async (file, args) => {
-      if (args[0] === "--version") return done(`cli ${version}`);
+      if (args[0] === "--version") {
+        if (stub) throw new Error("spawn ENOEXEC");
+        return done(`cli ${version}`);
+      }
       runs.push([file, ...args]);
+      if (args.at(-1) === "postinstall") {
+        stub = false;
+        return done("");
+      }
       if (options.next) version = options.next;
+      stub = !!options.blocksScripts;
       return done("updated", options.updateCode ?? 0);
     },
-    fetch: async (url) => {
-      expect(url).toContain("/dist-tags");
-      return new Response(JSON.stringify(options.tags));
-    },
+    fetch: async (url) =>
+      new Response(
+        JSON.stringify(
+          url.endsWith("/dist-tags") ? options.tags : options.packument,
+        ),
+      ),
     claudeChannel: async () => options.channel ?? "latest",
+    npmReleaseAge: async () => options.releaseAge ?? 0,
   };
   const emitted: AgentVersions[] = [];
   const updates = new AgentUpdates((state) => emitted.push(state), io);
@@ -242,6 +260,35 @@ describe("AgentUpdates", () => {
     });
   });
 
+  it("runs the postinstall Bun blocked, which left Claude a stub", async () => {
+    const pkg =
+      "/Users/me/.bun/install/global/node_modules/@anthropic-ai/claude-code";
+    const { updates, runs, agent } = machine({
+      provider: "claude",
+      path: "/Users/me/.bun/bin/claude",
+      real: `${pkg}/bin/claude.exe`,
+      version: "2.1.290",
+      tags: { latest: "2.1.295" },
+      next: "2.1.295",
+      blocksScripts: true,
+    });
+    await updates.check();
+    await updates.update("claude");
+    expect(runs).toEqual([
+      [
+        "/Users/me/.bun/bin/bun",
+        "add",
+        "-g",
+        "@anthropic-ai/claude-code@latest",
+      ],
+      ["/Users/me/.bun/bin/bun", "run", "--cwd", pkg, "postinstall"],
+    ]);
+    expect(agent("claude")).toMatchObject({
+      current: "2.1.295",
+      update: { status: "updated" },
+    });
+  });
+
   it("calls an update that changed nothing a failure", async () => {
     const { updates, agent } = machine(bunCodex);
     await updates.check();
@@ -277,5 +324,189 @@ describe("AgentUpdates", () => {
       latest: "2.1.277",
       command: "claude update",
     });
+  });
+
+  it("offers only what npm's min-release-age lets it install", async () => {
+    const ago = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString();
+    const release = { "0.62.0": {}, "0.63.0": {} };
+    const npmCodex = {
+      provider: "codex" as const,
+      path: "/Users/me/.nvm/versions/node/v22/bin/codex",
+      real: "/Users/me/.nvm/versions/node/v22/lib/node_modules/@openai/codex/bin/codex.js",
+      version: "0.62.0",
+      tags: { latest: "0.63.0" },
+      releaseAge: 3,
+    };
+
+    const young = machine({
+      ...npmCodex,
+      packument: {
+        versions: release,
+        time: { "0.62.0": ago(10), "0.63.0": ago(2.5) },
+      },
+    });
+    await young.updates.check();
+    expect(young.agent("codex")).toMatchObject({
+      latest: "0.62.0",
+      held: { version: "0.63.0", until: expect.any(Number) },
+    });
+    expect(young.agent("codex").held!.until - Date.now()).toBeCloseTo(
+      0.5 * 86_400_000,
+      -5,
+    );
+
+    const old = machine({
+      ...npmCodex,
+      packument: {
+        versions: release,
+        time: { "0.62.0": ago(10), "0.63.0": ago(4) },
+      },
+    });
+    await old.updates.check();
+    expect(old.agent("codex").latest).toBe("0.63.0");
+    expect(old.agent("codex").held).toBeUndefined();
+  });
+});
+
+/** A machine where `installed` CLIs are on PATH and Relay's own installs land under /relay/clis. */
+function bareMachine(options: {
+  installed: Record<string, string>;
+  tags: Record<string, string>;
+  releaseAge?: number;
+  packument?: unknown;
+}) {
+  const on = { ...options.installed };
+  const runs: string[][] = [];
+  const done = (stdout: string): Exec => ({
+    code: 0,
+    stdout,
+    output: stdout,
+    timedOut: false,
+  });
+  const io: AgentUpdatesIo = {
+    platform: "darwin",
+    find: async (name) => {
+      if (name === "npm") return "/usr/local/bin/npm";
+      if (on[name]) return on[name];
+      throw new Error(`${name} was not found.`);
+    },
+    realpath: async (path) => path,
+    exists: async () => false,
+    exec: async (file, args) => {
+      if (args[0] === "--version") return done("cli 1.0.0");
+      runs.push([file, ...args]);
+      // npm -g --prefix puts each package's commands in <prefix>/bin.
+      const prefix = args[args.indexOf("--prefix") + 1];
+      for (const spec of args.slice(args.indexOf("--no-fund") + 1)) {
+        if (spec.startsWith("--")) continue;
+        const name = spec.includes("amp-acp")
+          ? "amp-acp"
+          : spec
+              .split("/")[0]
+              .replace("@ampcode", "amp")
+              .replace("@openai", "codex");
+        // Relay's folder comes last in the search: what the user has wins.
+        on[name] ??= `${prefix}/bin/${name}`;
+      }
+      return done("added 2 packages");
+    },
+    fetch: async (url) =>
+      new Response(
+        JSON.stringify(
+          url.endsWith("/dist-tags") ? options.tags : options.packument,
+        ),
+      ),
+    claudeChannel: async () => "latest",
+    npmReleaseAge: async () => options.releaseAge ?? 0,
+    ownAgents: () => "/relay/clis",
+  };
+  const updates = new AgentUpdates(() => {}, io);
+  const agent = (provider: string) =>
+    updates.current.agents.find((a) => a.provider === provider)!;
+  return { updates, runs, agent, on };
+}
+
+describe("AgentUpdates installing what's missing", () => {
+  it("installs a missing CLI into Relay's folder and then updates it there", async () => {
+    const { updates, runs, agent } = bareMachine({
+      installed: {},
+      tags: { latest: "1.0.0" },
+    });
+    await updates.check();
+    expect(agent("codex")).toMatchObject({
+      installer: "relay",
+      error: expect.stringMatching(/Install it here/),
+    });
+
+    await updates.update("codex");
+    expect(runs).toEqual([
+      [
+        "/usr/local/bin/npm",
+        "install",
+        "-g",
+        "--prefix",
+        "/relay/clis/codex",
+        "--no-audit",
+        "--no-fund",
+        "--ignore-scripts=false",
+        "--allow-scripts=@openai/codex",
+        "@openai/codex@latest",
+      ],
+    ]);
+    expect(agent("codex")).toMatchObject({
+      path: "/relay/clis/codex/bin/codex",
+      current: "1.0.0",
+      installer: "relay",
+      update: { status: "updated", installed: true },
+    });
+  });
+
+  it("pins Amp's prerelease under npm's min-release-age, and brings amp-acp along", async () => {
+    const ago = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString();
+    const { updates, runs } = bareMachine({
+      installed: {},
+      tags: { latest: "0.0.300-gc" },
+      releaseAge: 3,
+      packument: {
+        versions: { "0.0.200-gb": {}, "0.0.300-gc": {} },
+        time: { "0.0.200-gb": ago(4), "0.0.300-gc": ago(1) },
+      },
+    });
+    await updates.update("amp");
+    expect(runs[0].slice(-3)).toEqual([
+      "--allow-scripts=@ampcode/cli",
+      "@ampcode/cli@0.0.200-gb",
+      "amp-acp@latest",
+    ]);
+  });
+
+  it("installs amp-acp beside an Amp the user has, which keeps running", async () => {
+    const { updates, runs, agent } = bareMachine({
+      installed: { amp: "/Users/me/.amp/bin/amp" },
+      tags: { latest: "1.0.0" },
+    });
+    await updates.check();
+    expect(agent("amp")).toMatchObject({ missing: ["amp-acp"] });
+
+    await updates.update("amp");
+    expect(runs[0].slice(1)).toEqual([
+      "install",
+      "-g",
+      "--prefix",
+      "/relay/clis/amp",
+      "--no-audit",
+      "--no-fund",
+      "--ignore-scripts=false",
+      "--allow-scripts=@ampcode/cli",
+      "@ampcode/cli@latest",
+      "amp-acp@latest",
+    ]);
+    expect(agent("amp")).toMatchObject({
+      path: "/Users/me/.amp/bin/amp",
+      update: { status: "updated", installed: true },
+    });
+    expect(agent("amp").missing).toBeUndefined();
   });
 });

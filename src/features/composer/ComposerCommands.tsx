@@ -29,7 +29,11 @@ import {
 } from "../../../shared/commands";
 import type { SkillPick } from "./ComposerPromptInput";
 import { api } from "../../lib/api";
-import { agentName, agents, type AgentProvider } from "../../../shared/agents";
+import {
+  agentName,
+  type AgentProvider,
+  agentInfo,
+} from "../../../shared/agents";
 export function useComposerCommands({
   draft,
   onDraft,
@@ -93,7 +97,7 @@ export function useComposerCommands({
   // An agent whose commands run when the message starts with one lists
   // commands; the others list skills to mention.
   const commandsAlone =
-    provider !== "message" && agents[provider].commandsAlone;
+    provider !== "message" && agentInfo(provider).commandsAlone;
   const prefix = trigger?.prefix ?? "/";
   type Item = {
     kind: "relay" | "argument" | "command" | "skill";
@@ -307,7 +311,7 @@ export function useComposerCommands({
     if (agentCommand(draft)) return false;
     if (
       provider !== "message" &&
-      agents[provider].skills &&
+      agentInfo(provider).skills &&
       /^\/skill:[^\s]+(?:\s|$)/.test(draft.trim())
     )
       return false;

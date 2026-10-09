@@ -29,7 +29,11 @@ import {
   setMode,
   useAppearance,
 } from "../../src/lib/appearance";
-import { agents, type AgentProvider } from "../../shared/agents";
+import {
+  agents,
+  type AgentProvider,
+  agentInfo,
+} from "../../shared/agents";
 import { compact, usd } from "../../src/features/usage/format";
 import { HarnessMark } from "../../src/features/usage/usage-charts";
 import { sample } from "./usage-redesign-data";
@@ -518,7 +522,7 @@ const harnessRows = (m: Metric): Row[] =>
   sample.harnesses.map((h) => ({
     key: h.provider,
     mark: h.provider as AgentProvider,
-    label: agents[h.provider as AgentProvider].name,
+    label: agentInfo(h.provider as AgentProvider).name,
     value: h[m],
   }));
 const threadRows = (m: Metric): Row[] =>

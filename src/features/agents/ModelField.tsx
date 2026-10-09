@@ -6,9 +6,9 @@ import {
   type ModelChoice,
 } from "../../../shared/settings";
 import {
-  agents,
   helperProviders,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 import { onModel } from "../../../shared/model-fit";
 import { useCatalogs } from "./useCatalogs";
@@ -94,7 +94,7 @@ export function ModelField<P extends AgentProvider = AgentProvider>({
           />
         </>
       )}
-      {agents[agent].fast && (
+      {agentInfo(agent).fast && (
         <button
           type="button"
           className="composer-control composer-fast"

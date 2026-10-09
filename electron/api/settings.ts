@@ -2,12 +2,16 @@ import { dialog } from "electron";
 import { homedir } from "node:os";
 import { z } from "zod";
 import {
+  agentName,
   agentProviderSchema,
   isAgentProvider,
   agents,
   isCliProvider,
   usageProviderSchema,
   type AgentProvider,
+  agentInfo,
+  registryIdPattern,
+  registryProvider,
 } from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
@@ -17,7 +21,8 @@ import { watchScopes } from "../../shared/watch";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
 import { parseVersion } from "../../shared/agent-updates";
-import { signInCursor, signOutCursor } from "../agents/cursor/account";
+import { agentRuntime, forgetRegistryRuntime } from "../agents";
+import { acpRegistry } from "../agents/acp";
 import { runExecutable, setLinkedAgents } from "../platform/executables";
 import { gitInfo, gitVersion, setGitPath } from "../git/git";
 import { readProviderUsage } from "../agents/provider-usage";
@@ -40,6 +45,7 @@ import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
 const typedPathSchema = z.string().trim().min(1).max(4096).optional();
+const registryIdSchema = z.string().max(100).regex(registryIdPattern);
 
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
@@ -71,7 +77,7 @@ export function settingsHandlers(ctx: ApiContext) {
   function cliProvider(provider: AgentProvider) {
     if (!isCliProvider(provider))
       throw new Error(
-        `${agents[provider].name} runs from an SDK Relay downloads; there is nothing to link.`,
+        `${agentInfo(provider).name} runs from an SDK Relay downloads; there is nothing to link.`,
       );
     return provider;
   }
@@ -262,14 +268,29 @@ export function settingsHandlers(ctx: ApiContext) {
       await unlinkCli(store, kind);
       return sourceControl();
     }),
-    signInCursor: async () => {
-      await signInCursor();
+    signInAgent: takes([agentProviderSchema], async (provider) => {
+      const { signIn } = agentRuntime(provider);
+      if (!signIn) throw new Error(`${agentName(provider)} signs in in a terminal.`);
+      await signIn();
       return agentUpdates.check(true);
-    },
-    signOutCursor: async () => {
-      await signOutCursor();
+    }),
+    signOutAgent: takes([agentProviderSchema], async (provider) => {
+      const { signOut } = agentRuntime(provider);
+      if (!signOut) throw new Error(`${agentName(provider)} signs out in a terminal.`);
+      await signOut();
       return agentUpdates.check(true);
-    },
+    }),
+    registryListing: takes([z.boolean().optional()], (fresh) =>
+      acpRegistry().listing(fresh),
+    ),
+    registryAgents: () => acpRegistry().state,
+    installRegistryAgent: takes([registryIdSchema], (id) =>
+      acpRegistry().install(id),
+    ),
+    removeRegistryAgent: takes([registryIdSchema], async (id) => {
+      await forgetRegistryRuntime(registryProvider(id));
+      return acpRegistry().remove(id);
+    }),
     dictationState: () => dictation.current,
     downloadDictationModel: () => dictation.downloadModel(),
     cancelDictationDownload: () => dictation.cancelDownload(),

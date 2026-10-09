@@ -147,6 +147,13 @@ export interface AgentRuntime {
    * session and the next turn resumes it.
    */
   reloadSession?(key: string): Promise<SessionReload | undefined>;
+  /**
+   * Signs the agent in from Relay, for one with no login command; resolves
+   * once the user is through.
+   */
+  signIn?(): Promise<void>;
+  /** Signs it out from Relay, for one Relay downloads. */
+  signOut?(): Promise<void>;
   /** The models the signed-in agent offers. */
   models(): Promise<AgentModel[]>;
   /** What threads in `root` run where the model or effort is left on Default. */

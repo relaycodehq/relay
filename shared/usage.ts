@@ -59,7 +59,10 @@ export type UsageEntry = {
 export const usageRanges = ["7d", "30d", "all"] as const;
 export type UsageRange = (typeof usageRanges)[number];
 
-export type PerProvider = Record<AgentProvider, number>;
+/** Each agent's share; a registry agent appears once it has one. */
+export type PerProvider = Partial<Record<AgentProvider, number>>;
+export const providersIn = (per: PerProvider) =>
+  Object.keys(per) as AgentProvider[];
 
 /**
  * What the page counts by: dollars at API list prices, or fresh tokens, the
@@ -306,8 +309,8 @@ export function summarizeUsage(
     if (e.answer) totals.answers++;
     const day = dayOf(e.at);
     if (day) {
-      day.fresh[e.provider] += fresh;
-      day.usd[e.provider] += usd;
+      day.fresh[e.provider] = (day.fresh[e.provider] ?? 0) + fresh;
+      day.usd[e.provider] = (day.usd[e.provider] ?? 0) + usd;
       if (e.answer) day.answers++;
     }
     for (const slot of [
@@ -327,7 +330,7 @@ export function summarizeUsage(
       const t = threads.get(e.chat) ?? { fresh: 0, usd: 0, by: perProvider() };
       t.fresh += fresh;
       t.usd += usd;
-      t.by[e.provider] += fresh;
+      t.by[e.provider] = (t.by[e.provider] ?? 0) + fresh;
       threads.set(e.chat, t);
     }
   }
@@ -357,8 +360,8 @@ export function summarizeUsage(
         title: chats.get(id)?.title ?? "Deleted thread",
         projectId: chats.get(id)?.projectId ?? "",
         project: chats.get(id)?.project ?? "",
-        provider: agentProviders.reduce((best, p) =>
-          t.by[p] > t.by[best] ? p : best,
+        provider: providersIn(t.by).reduce((best, p) =>
+          (t.by[p] ?? 0) > (t.by[best] ?? 0) ? p : best,
         ),
         fresh: t.fresh,
         usd: t.usd,

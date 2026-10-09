@@ -1,6 +1,6 @@
 import { useEffect, useState, type SetStateAction } from "react";
 import { modelSchema } from "../../../shared/settings";
-import { agentProviders, type AgentProvider } from "../../../shared/agents";
+import { runnableAgents, type AgentProvider } from "../../../shared/agents";
 import { persistedStore } from "../../lib/persisted-store";
 
 const favoritesKey = "relay-model-favorites";
@@ -31,13 +31,9 @@ function setFavoriteModels(next: SetStateAction<string[]>) {
     typeof next === "function" ? next(favoriteModels.get()) : next,
   );
 }
-const readCustoms = () =>
-  Object.fromEntries(
-    agentProviders.map((p) => [
-      p,
-      readList(customsKey(p)).filter((id) => modelSchema.safeParse(id).success),
-    ]),
-  ) as Record<AgentProvider, string[]>;
+const readCustoms = (p: AgentProvider) =>
+  readList(customsKey(p)).filter((id) => modelSchema.safeParse(id).success);
+export type CustomModels = Partial<Record<AgentProvider, string[]>>;
 
 /** The starred models, as `modelKey`s, kept in this browser. */
 export function useFavoriteModels() {
@@ -46,10 +42,13 @@ export function useFavoriteModels() {
 
 /** Model ids typed into the picker, per agent, kept in this browser. */
 export function useCustomModels() {
-  const [customs, setCustoms] = useState(readCustoms);
+  const [customs, setCustoms] = useState(
+    (): CustomModels =>
+      Object.fromEntries(runnableAgents().map((p) => [p, readCustoms(p)])),
+  );
   useEffect(() => {
-    for (const p of agentProviders)
-      localStorage.setItem(customsKey(p), JSON.stringify(customs[p]));
+    for (const [p, ids] of Object.entries(customs))
+      localStorage.setItem(customsKey(p as AgentProvider), JSON.stringify(ids));
   }, [customs]);
   return [customs, setCustoms] as const;
 }

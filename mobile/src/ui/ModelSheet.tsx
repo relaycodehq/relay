@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
-import { agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
+import { agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
 import { listedModel, onWindow } from "../../../shared/model-fit";
 import { withComposerChange } from "../../../shared/remote-compose";
 import type { RemoteSettings } from "../../../shared/remote";
@@ -9,7 +9,7 @@ import type { ReasoningEffort } from "../../../shared/settings";
 import type { ModelCatalogs } from "../../../shared/composer-commands";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel } from "../remote/modes";
-import { ProviderIcon, agentNames } from "./ProviderIcon";
+import { ProviderIcon } from "./ProviderIcon";
 import { Segmented, ToggleRow } from "./Rows";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
@@ -89,7 +89,7 @@ export function ModelSheet({
       <View style={styles.tabs}>
         <Segmented
           value={provider}
-          options={agentProviders.map((p) => ({ value: p, label: agentNames[p] }))}
+          options={agentProviders.map((p) => ({ value: p, label: agentName(p) }))}
           onChange={(p) => onChange(settings, p)}
         />
       </View>
@@ -124,7 +124,7 @@ export function ModelSheet({
       )}
       {error && (
         <Text style={[styles.note, { color: t.muted }]}>
-          {`Couldn't list ${agentNames[provider]}'s models: ${error}`}
+          {`Couldn't list ${agentName(provider)}'s models: ${error}`}
         </Text>
       )}
       {!list ? (

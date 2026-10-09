@@ -1,18 +1,20 @@
 import { useState, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import {
+  Download,
   FolderOpen,
   LogIn,
   LogOut,
   MoreHorizontal,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import {
   askAgentVersions,
   checkAgentVersions,
   linkAgent,
-  signInCursor,
-  signOutCursor,
+  signInAgent,
+  signOutAgent,
   unlinkAgent,
   updateAgent,
   useAgentVersions,
@@ -25,13 +27,17 @@ import {
   type AgentVersion,
 } from "../../../shared/agent-updates";
 import {
-  agents,
+  agentName,
   isCliProvider,
+  isRegistryProvider,
+  registryIdOf,
   type AgentProvider,
+  agentInfo,
 } from "../../../shared/agents";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { SettingsCard } from "../../ui/SettingsCard";
-import { ErrorBox, Spinner } from "../../ui/ui";
+import { ErrorBox, IconButton, Spinner } from "../../ui/ui";
+import { api } from "../../lib/api";
 import "./agent-updates.css";
 
 const installers: Record<AgentInstaller, string> = {
@@ -40,8 +46,15 @@ const installers: Record<AgentInstaller, string> = {
   bun: "via Bun",
   pnpm: "via pnpm",
   homebrew: "via Homebrew",
-  relay: "downloaded by Relay",
+  relay: "installed by Relay",
 };
+
+/** "in 11 h" or "in 2 days" until npm lets a held-back release in. */
+function untilText(until: number) {
+  const hours = Math.ceil((until - Date.now()) / 3_600_000);
+  if (hours <= 1) return "within the hour";
+  return hours < 48 ? `in ${hours} h` : `in ${Math.round(hours / 24)} days`;
+}
 
 /**
  * Settings → AI models → Agents: a card per agent with its version, its
@@ -95,7 +108,7 @@ function AgentCard({
   agent: AgentVersion;
   children: ReactNode;
 }) {
-  const { cli } = agents[agent.provider];
+  const { cli } = agentInfo(agent.provider);
   const [busy, setBusy] = useState(false);
   const [linkError, setLinkError] = useState<unknown>();
   async function relink(run: () => Promise<void>) {
@@ -113,6 +126,17 @@ function AgentCard({
   const behind = isBehind(agent);
   /** Runs from an SDK Relay downloads: nothing to find or link, but an account to sign in to. */
   const sdk = !isCliProvider(agent.provider);
+  /** A CLI that isn't here, or what it runs through, which Relay can install itself. */
+  const installable = !sdk && !agent.path && agent.installer === "relay";
+  const missing = agent.missing?.join(", ");
+  const installing = installable || !!missing;
+  const registryId = isRegistryProvider(agent.provider)
+    ? registryIdOf(agent.provider)
+    : undefined;
+  // Relay can't tell whether a registry agent is signed in, so it doesn't push.
+  const wantsSignIn = registryId
+    ? agent.account?.signedIn === false
+    : !agent.account?.signedIn;
   const status = !agent.current
     ? agent.error
     : [
@@ -123,6 +147,8 @@ function AgentCard({
           : agent.latest
             ? "Up to date"
             : "Couldn't look for a newer one",
+        agent.held &&
+          `${agent.held.version} ${untilText(agent.held.until)} (npm min-release-age)`,
         agent.account &&
           (agent.account.signedIn
             ? `Signed in${agent.account.email ? ` as ${agent.account.email}` : ""}`
@@ -131,17 +157,23 @@ function AgentCard({
         .filter(Boolean)
         .join(" · ");
   const note =
-    run?.status === "updated"
-      ? agent.provider === "opencode"
-        ? "Updated. Relay's OpenCode server picks it up when Relay restarts."
-        : "Updated. New threads use it; threads already open keep the old version."
-      : run?.status === "failed"
-        ? run.message
-        : sdk && !agent.current
-          ? "Relay downloads it from npm the first time you set it up, and runs it on this computer."
-          : behind && !agent.command
-            ? "Relay can't tell how it was installed, so update it the way you installed it."
-            : undefined;
+    run?.status === "updated" && run.installed
+      ? "Installed. New threads use it."
+      : run?.status === "updated"
+        ? agent.provider === "opencode"
+          ? "Updated. Relay's OpenCode server picks it up when Relay restarts."
+          : "Updated. New threads use it; threads already open keep the old version."
+        : run?.status === "failed"
+          ? run.message
+          : sdk && !agent.current
+            ? "Relay downloads it the first time you set it up, and runs it on this computer."
+            : missing
+              ? `${cli} runs in Relay through ${missing}, which isn't installed.`
+              : installable
+                ? "Relay installs it with npm into its own folder; one you install yourself takes over."
+                : behind && !agent.command
+                  ? "Relay can't tell how it was installed, so update it the way you installed it."
+                  : undefined;
   const output =
     run?.status === "failed" && run.output
       ? { label: "Output", text: run.output }
@@ -159,16 +191,18 @@ function AgentCard({
         <span className="agent-card-tools">
           {sdk && (
             <button
-              className={!agent.account?.signedIn ? "primary" : ""}
+              className={wantsSignIn ? "primary" : ""}
               disabled={busy || isUpdating(agent)}
               title={
                 agent.account?.signedIn
                   ? undefined
-                  : "Opens Cursor's sign-in in your browser"
+                  : `Opens ${agentName(agent.provider)}'s sign-in in your browser`
               }
               onClick={() =>
                 void relink(
-                  agent.account?.signedIn ? signOutCursor : signInCursor,
+                  agent.account?.signedIn
+                    ? () => signOutAgent(agent.provider)
+                    : () => signInAgent(agent.provider),
                 )
               }
             >
@@ -186,10 +220,21 @@ function AgentCard({
                   : "Set up…"}
             </button>
           )}
-          {!sdk && !agent.path && (
+          {!sdk && agent.account?.signedIn === false && (
             <button
               className="primary"
               disabled={busy}
+              title={`Opens ${agentName(agent.provider)}'s sign-in in your browser`}
+              onClick={() => void relink(() => signInAgent(agent.provider))}
+            >
+              {busy ? <Spinner size={12} /> : <LogIn size={14} />}
+              Sign in
+            </button>
+          )}
+          {!sdk && !agent.path && (
+            <button
+              className={installable ? "" : "primary"}
+              disabled={busy || isUpdating(agent)}
               onClick={() => void relink(() => linkAgent(agent.provider))}
             >
               <FolderOpen size={14} />
@@ -199,11 +244,24 @@ function AgentCard({
           {run?.status === "running" ? (
             <button disabled>
               <Spinner size={12} />
-              Updating…
+              {installing ? "Installing…" : "Updating…"}
             </button>
           ) : run?.status === "queued" ? (
             <button disabled title="Starts when the update before it finishes">
               Waiting…
+            </button>
+          ) : installing ? (
+            <button
+              className="primary"
+              title={agent.command && `Runs ${agent.command}`}
+              onClick={() => updateAgent(agent.provider)}
+            >
+              <Download size={14} />
+              {run?.status === "failed"
+                ? "Try again"
+                : missing
+                  ? `Install ${missing}`
+                  : "Install"}
             </button>
           ) : (
             behind &&
@@ -212,7 +270,7 @@ function AgentCard({
                 className="primary"
                 title={
                   agent.installer === "relay"
-                    ? "Downloads it from npm"
+                    ? agent.command
                     : `Runs ${agent.command}`
                 }
                 onClick={() => updateAgent(agent.provider)}
@@ -222,6 +280,19 @@ function AgentCard({
                   : `Update to ${agent.latest}`}
               </button>
             )
+          )}
+          {registryId && (
+            <IconButton
+              label={`Remove ${cli}`}
+              disabled={busy || isUpdating(agent)}
+              onClick={() =>
+                void relink(async () => {
+                  await api.removeRegistryAgent(registryId);
+                })
+              }
+            >
+              <Trash2 size={14} />
+            </IconButton>
           )}
           {!sdk && agent.path && (
             <ProgramMenu
@@ -264,7 +335,7 @@ function ProgramMenu({
   onLink: () => void;
   onUnlink: () => void;
 }) {
-  const { cli } = agents[agent.provider];
+  const { cli } = agentInfo(agent.provider);
   return (
     <Menu.Root>
       <Menu.Trigger

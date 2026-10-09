@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { agents, type AgentProvider } from "../../../shared/agents";
+import {
+  type AgentProvider,
+  agentInfo,
+  agentProviders,
+  knowRegistryAgents,
+} from "../../../shared/agents";
 import type { ModelChoice } from "../../../shared/settings";
 import {
   claudeOf,
   claudeOn,
+  isPickAgent,
   livePick,
   messageChoice,
   messageContext,
   newThreadModelsOf,
+  pickAgents,
   readComposerModels,
   withModel,
   withNewThreadModels,
@@ -53,7 +60,7 @@ describe("reading models saved in the old shapes", () => {
         },
         choice: { model: "gpt-5.5", fast: false, reasoningEffort: "turbo" },
         picks: {
-          gemini: { model: "x" },
+          aider: { model: "x" },
           opencode: { model: "bad id!", reasoningEffort: "high" },
           cursor: "auto",
         },
@@ -150,18 +157,28 @@ describe("models shared with new threads and the phone", () => {
       cursor: { choice: choice("auto") },
     };
     const shared = newThreadModelsOf(models);
-    expect(Object.keys(shared).sort()).toEqual([
-      "claude",
-      "codex",
-      "cursor",
-      "opencode",
-    ]);
+    expect(Object.keys(shared).sort()).toEqual([...agentProviders].sort());
     expect(shared.codex).toEqual({ choice: choice("") });
     // Codex's Default follows the line-question setting again.
-    expect(withNewThreadModels(models, shared)).toEqual({
-      ...models,
-      opencode: { choice: choice("") },
+    const { codex: _, ...defaults } = shared;
+    expect(withNewThreadModels(models, shared)).toEqual({ ...defaults, ...models });
+  });
+
+  it("carries registry agents' models, and offers them once installed", () => {
+    const goose = { choice: choice("gpt-5.5") };
+    expect(readComposerModels({ models: { "acp:goose": goose, "acp:../x": goose } })).toEqual({
+      "acp:goose": goose,
     });
+    expect(newThreadModelsOf({})["acp:goose"]).toBeUndefined();
+    knowRegistryAgents([{ provider: "acp:goose", name: "goose" }]);
+    try {
+      expect(isPickAgent("acp:goose")).toBe(true);
+      expect(pickAgents()).toContain("acp:goose");
+      expect(newThreadModelsOf({ "acp:goose": goose })["acp:goose"]).toEqual(goose);
+    } finally {
+      knowRegistryAgents([]);
+    }
+    expect(pickAgents()).not.toContain("acp:goose");
   });
 
   it("keeps the agents it hasn't a model for", () => {
@@ -202,7 +219,7 @@ describe("what a message runs on", () => {
   it("gives every agent its own model, Fast only to one that has it", () => {
     for (const provider of ["codex", "claude", "opencode"] as AgentProvider[]) {
       const sent = messageChoice(provider, models, codex, pick);
-      expect(sent?.fast).toBe(agents[provider].fast ? true : false);
+      expect(sent?.fast).toBe(agentInfo(provider).fast ? true : false);
     }
     expect(messageChoice("claude", models, codex, pick)).toEqual(
       choice("opus", "max"),

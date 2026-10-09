@@ -7,7 +7,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { agentProviders, agents } from "../../../shared/agents";
+import { agentInfo } from "../../../shared/agents";
+import { useRunnableAgents } from "../agents/registry-agents";
 import { onModel } from "../../../shared/model-fit";
 import { effortLabels, type ReasoningEffort } from "../../../shared/settings";
 import { useCatalogs } from "../agents/useCatalogs";
@@ -49,6 +50,7 @@ export function QuickSwitchSettings() {
   const quickKeys = useQuickKeysLabel();
   const quick = useQuickSwitch();
   const catalogs = useCatalogs();
+  const runnable = useRunnableAgents();
   const save = (next: Partial<QuickSwitch>) =>
     setQuickSwitch({ ...quick, ...next });
   const presets = quick.presets;
@@ -143,10 +145,10 @@ export function QuickSwitchSettings() {
               <div className="composer-tools model-field quick-preset-fields">
                 <ComposerModelPicker
                   label={`Preset ${i + 1}`}
-                  providers={[...agentProviders]}
+                  providers={runnable}
                   provider={p.provider}
                   catalogs={Object.fromEntries(
-                    agentProviders.map((a) => [
+                    runnable.map((a) => [
                       a,
                       {
                         models: catalogs.modelsOf(a),
@@ -187,7 +189,7 @@ export function QuickSwitchSettings() {
                     />
                   </>
                 )}
-                {agents[p.provider].fast && (
+                {agentInfo(p.provider).fast && (
                   <button
                     type="button"
                     className="composer-control composer-fast"

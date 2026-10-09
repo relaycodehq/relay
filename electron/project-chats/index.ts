@@ -27,7 +27,7 @@ import type { HtmlRender } from "../../shared/html-render";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
-import { agentRuntimes } from "../agents";
+import { everyAgentRuntime } from "../agents";
 import { accountHomes } from "../agents/accounts";
 import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
@@ -785,13 +785,13 @@ export class ProjectChats {
     if (!this.disposing) await this.prepareToQuit({ detach, save });
     this.sessions.stopListening();
     if (detach) {
-      for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
+      for (const runtime of everyAgentRuntime()) runtime.detach?.();
       return;
     }
     this.schedule.commitPending();
     await this.sessions.closeAll();
     await Promise.all(
-      Object.values(agentRuntimes).map((runtime) =>
+      everyAgentRuntime().map((runtime) =>
         runtime.dispose?.().catch(() => {}),
       ),
     );

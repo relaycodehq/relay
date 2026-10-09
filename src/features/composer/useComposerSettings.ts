@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { agentProviders, type AgentProvider } from "../../../shared/agents";
+import { runnableAgents, type AgentProvider } from "../../../shared/agents";
 import {
   sameModel,
   type NewThreadModels,
@@ -137,7 +137,7 @@ function useFollowLastModels(
     if (!always && tookLastModels.current) return;
     tookLastModels.current = true;
     const changed = Object.fromEntries(
-      agentProviders.flatMap((p) =>
+      runnableAgents().flatMap((p) =>
         lastModels[p] && !sameModel(lastModels[p], shared[p])
           ? [[p, lastModels[p]]]
           : [],
@@ -151,7 +151,7 @@ function useFollowLastModels(
     const before = shownModels.current;
     shownModels.current = shared;
     if (!always || !before) return;
-    for (const p of agentProviders)
+    for (const p of runnableAgents())
       if (
         !sameModel(shared[p], before[p]) &&
         !sameModel(shared[p], lastModels?.[p])
