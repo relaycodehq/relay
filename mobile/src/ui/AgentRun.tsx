@@ -87,6 +87,7 @@ export function AgentRun({
   message,
   root,
   onOpenImage,
+  onExpanded,
   open,
 }: {
   chatId: string;
@@ -94,6 +95,8 @@ export function AgentRun({
   root?: string;
   /** Opens an image the turn looked at, by its path, among the others it looked at. */
   onOpenImage?: (path: string) => void;
+  /** Told as the trace opens and folds; open, it shows the images its calls looked at. */
+  onExpanded?: (expanded: boolean) => void;
   /** Starts unfolded even once it's ended, e.g. as a subagent's whole run. */
   open?: boolean;
 }) {
@@ -111,6 +114,8 @@ export function AgentRun({
   }
   if (held && !readingBack) setHeld(false);
   const expanded = toggled ?? (open || live || held);
+  const traced = expanded && entries.length > 0;
+  useEffect(() => onExpanded?.(traced), [traced, onExpanded]);
   if (!live && !entries.length) return null;
   const prefix = root && root.replace(/\/+$/, "") + "/";
   const display = (text: string) => (prefix ? text.split(prefix).join("") : text);

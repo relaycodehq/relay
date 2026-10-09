@@ -89,6 +89,7 @@ export const MessageView = memo(function MessageView({
     [root, where, changes, m.id, onOpenFile],
   );
   const images = useMemo(() => messageImages(chatId, m, root), [chatId, m, root]);
+  const [traceOpen, setTraceOpen] = useState(false);
   const [viewing, setViewing] = useState<{ images: LightboxImage[]; index: number }>();
   const view = useCallback((among: LightboxImage[], source: Source) => {
     // The list is fixed while it's open; ones that failed to load are left out.
@@ -178,7 +179,15 @@ export const MessageView = memo(function MessageView({
           <Text style={[styles.meta, { color: t.muted }]}>started on its own</Text>
         )}
       </View>
-      {!user && <AgentRun chatId={chatId} message={m} root={root} onOpenImage={openLooked} />}
+      {!user && (
+        <AgentRun
+          chatId={chatId}
+          message={m}
+          root={root}
+          onOpenImage={openLooked}
+          onExpanded={setTraceOpen}
+        />
+      )}
       {!!m.renders?.length && <RenderNotes renders={m.renders} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
@@ -205,7 +214,7 @@ export const MessageView = memo(function MessageView({
           image={m.status === "streaming" ? hideImage : showImage}
         />
       ) : null}
-      <MessageImages images={images.strip} onOpen={openImage} />
+      <MessageImages images={traceOpen ? images.pasted : images.strip} onOpen={openImage} />
       {viewing && (
         <Lightbox
           images={viewing.images}
