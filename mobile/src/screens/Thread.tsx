@@ -173,6 +173,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     !running && last?.status === "complete" && last.proposedPlan
       ? last.provider
       : undefined;
+  // The plan answer the go-ahead went out for: one tap sends it once, however slow the link.
+  const [wentAhead, setWentAhead] = useState<string>();
+  const goingAhead = useRef<string>(undefined);
   const where =
     thread &&
     (thread.worktree?.path && !thread.worktree.removedAt
@@ -769,19 +772,31 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       {planProvider && settings && (
         <View style={styles.plan}>
           <Button
-            label="Implement plan"
+            label={wentAhead === last?.id ? "Sending…" : "Implement plan"}
             primary
+            disabled={wentAhead === last?.id}
             onPress={() => {
+              // A ref too: a double tap lands twice before the state renders.
+              const plan = last!.id;
+              if (goingAhead.current === plan) return;
+              goingAhead.current = plan;
+              setWentAhead(plan);
               // On the planner's own model, as the composer would switch to it.
               const on = composer.current?.settingsOn(planProvider) ?? settings;
               const { send: message, nextSettings } = remotePlanGoAhead(on, planProvider, randomUUID());
               remote
                 .desktop("sendProjectChat", id, { ...message, ...(rootId ? { parentId: rootId } : {}) })
-                .then(() => {
-                  setSettings(nextSettings);
-                  return reload();
-                })
-                .catch((e) => Alert.alert("Couldn't send it", String(e?.message ?? e)));
+                .then(
+                  () => {
+                    setSettings(nextSettings);
+                    return reload();
+                  },
+                  (e) => {
+                    goingAhead.current = undefined;
+                    setWentAhead(undefined);
+                    Alert.alert("Couldn't send it", String(e?.message ?? e));
+                  },
+                );
             }}
           />
         </View>
