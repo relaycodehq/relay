@@ -336,7 +336,7 @@ export class TurnRunner {
       const first = message.id;
       // A side turn changes nothing, and edits made meanwhile are the main answer's.
       // Ignored files stay out of the snapshot; a resumed turn may have written them already.
-      const [before, ignoredStart] = await Promise.all([
+      let [before, ignoredStart] = await Promise.all([
         rules.records
           ? (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
           : null,
@@ -355,6 +355,17 @@ export class TurnRunner {
           checkout === root ? [root] : [root, checkout],
         );
       }
+      // Where the turn's edits are counted: its folder, or the worktree the
+      // thread moved to mid-answer, from the moment it moved.
+      let counted = root;
+      if (active?.abort === abort && !rules.side)
+        active.moved = async (path) => {
+          counted = path;
+          if (!before) return;
+          before = await startTurn(path, first);
+          ignoredStart = await keepIgnored(path).catch(() => null);
+          if (commits) commits = await commitWatch([path, root]);
+        };
       try {
         const body = await agentRuntime(provider).run({
           ...options,
@@ -365,20 +376,29 @@ export class TurnRunner {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
           const files = await finishTurn(
-            root,
+            counted,
             first,
             before,
             answer.message.id,
             { edited: [...edited], commands: [...commands.values()] },
           );
           if (files.length) answer.message.changes = files;
-          await recordIgnored(root, ignoredStart, [...edited], provider).catch(
-            (e) => console.warn("Could not list the ignored files edited:", e),
+          await recordIgnored(
+            counted,
+            ignoredStart,
+            [...edited],
+            provider,
+          ).catch((e) =>
+            console.warn("Could not list the ignored files edited:", e),
           );
           committed = !!(await commits?.ended());
           // The agent may have left the checkout on another branch, as landing one in main does.
-          chat.branch = await currentBranchOr(root, chat.branch);
+          chat.branch = await currentBranchOr(counted, chat.branch);
         }
+        // The agent's session started in the folder it left; the next turn
+        // starts it again in the worktree.
+        if (counted !== root && !this.core.active.hasSide(chat.id))
+          this.core.sessions.close(chat.id);
       }
       const done = answer.message;
       if (turn.kind === "compact") {

@@ -71,6 +71,11 @@ export class WorktreeSetup {
     }
   }
 
+  /** The command the project runs in each new worktree, if it has one. */
+  command(chat: ProjectChat) {
+    return this.settings(chat)?.worktreeSetup;
+  }
+
   /** The worktree's port offset, given one the first time it's asked for. */
   private portOffset(chat: ProjectChat, worktree: ChatWorktree) {
     if (worktree.portOffset === undefined) {

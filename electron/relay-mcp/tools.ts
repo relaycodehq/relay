@@ -158,6 +158,25 @@ export const relayToolSchemas = {
   stop_thread: z.object({ id: threadId }).strict(),
   settle_thread: z.object({ id: threadId }).strict(),
   usage_limits: z.object({}).strict(),
+  move_to_worktree: z
+    .object({
+      branch: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe(
+          "The new branch's name. Left out: Relay names it after the thread, relay/….",
+        ),
+      uncommitted: z
+        .boolean()
+        .optional()
+        .describe(
+          "Start the worktree with a copy of the project folder's uncommitted edits, which stay in the folder too. Left out: from the last commit only.",
+        ),
+    })
+    .strict(),
   list_projects: z.object({}).strict(),
   add_project: z
     .object({
@@ -264,6 +283,8 @@ const descriptions: Record<RelayToolName, string> = {
     "Settle a thread you started once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user.",
   usage_limits:
     "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
+  move_to_worktree:
+    "Move this thread out of the project folder into a Git worktree of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
   list_projects:
     "The projects the user has in Relay: id, name, folder, and whether it's a Git repository; `current` marks the one you work in. Check here before add_project.",
   open_preview:
@@ -283,6 +304,7 @@ const descriptions: Record<RelayToolName, string> = {
 export const STARTED_PATH = "/mcp/started";
 export const startedTools = new Set<string>([
   "usage_limits",
+  "move_to_worktree",
   "find_threads",
   "read_thread",
   "list_projects",

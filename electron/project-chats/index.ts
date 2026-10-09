@@ -53,7 +53,7 @@ import { ThreadList } from "./thread-list";
 import { ThreadTriage } from "./thread-triage";
 import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
-import { ThreadWorktrees } from "./worktrees";
+import { ThreadWorktrees, type WorktreeRequest } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
@@ -612,6 +612,10 @@ export class ProjectChats {
   }
   moveToWorktree(id: string) {
     return this.worktrees.move(id);
+  }
+  /** Moves the thread into a worktree its agent asked for in the middle of its answer. */
+  enterWorktree(id: string, request: WorktreeRequest) {
+    return this.worktrees.enter(id, request);
   }
   terminalFolder(projectId: string, id: string) {
     return this.worktrees.terminalFolder(projectId, id);

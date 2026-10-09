@@ -17,6 +17,8 @@ export interface ActiveChat {
   steer?: AgentControl["steer"];
   /** Adds a page the agent showed to the answer it is writing. */
   render?: (render: HtmlRender) => void;
+  /** Counts the rest of the answer's edits in the worktree the thread just moved to. */
+  moved?: (root: string) => Promise<void>;
   /** Pauses or clears the goal the turn pursues; Codex only. */
   goal?: AgentControl["goal"];
   /** Settles once the turn gives the thread back; see `release`. */
