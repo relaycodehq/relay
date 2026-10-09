@@ -119,10 +119,16 @@ export function Browser({
     chat,
     action,
   ) =>
-    void remote
+    remote
       .desktop("triageProjectChat", chat.id, action)
-      .then(() => remote.refresh())
-      .catch((e) => Alert.alert("Couldn't change it", String(e?.message ?? e)));
+      .then((after) => {
+        void remote.refresh().catch(() => {});
+        return after;
+      })
+      .catch((e) => {
+        Alert.alert("Couldn't change it", String(e?.message ?? e));
+        return undefined;
+      });
 
   const projectsView = overview && (
     <ScrollView refreshControl={refresh} contentContainerStyle={styles.list}>

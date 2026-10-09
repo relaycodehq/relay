@@ -105,6 +105,8 @@ export interface RemoteChatSummary {
   /** The agent asked something and is waiting for an answer. */
   waiting?: boolean;
   settledAt?: number;
+  /** Marked unread by hand, until someone opens it; older desktops leave it out. */
+  markedUnread?: true;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** Read up to this `updated`, on the desktop or any phone. */

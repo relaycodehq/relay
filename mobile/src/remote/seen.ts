@@ -37,7 +37,9 @@ export function markSeen(id: string, updated: number) {
   void AsyncStorage.setItem(seenKey, JSON.stringify(seen));
 }
 
-const unread = (c: Pick<RemoteChatSummary, "id" | "updated" | "seenAt">) => movedSinceSeen(c, since, seen);
+const unread = (
+  c: Pick<RemoteChatSummary, "id" | "updated" | "seenAt" | "markedUnread">,
+) => !!c.markedUnread || movedSinceSeen(c, since, seen);
 
 /** Whether a thread has news for this phone; re-renders when that changes. */
 export function useUnread() {
