@@ -71,6 +71,26 @@ await writeFile(
     (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
   { mode: 0o700 },
 );
+// Pin every CLI before startup. Merely putting codex on PATH lets discovery
+// probe real installs (and helper fallbacks try the user's Claude account).
+for (const cli of ["claude", "opencode"])
+  await writeFile(
+    join(bin, cli),
+    `#!${process.execPath}\nconsole.error("${cli} is unavailable in the phone fixture"); process.exit(1);\n`,
+    { mode: 0o700 },
+  );
+await mkdir(join(root, "data"), { recursive: true });
+await writeFile(
+  join(root, "data", "state.json"),
+  JSON.stringify({
+    version: 1,
+    folders: {},
+    progress: {},
+    agentPaths: Object.fromEntries(
+      ["codex", "claude", "opencode"].map((cli) => [cli, join(bin, cli)]),
+    ),
+  }),
+);
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
 if (modelDir) {
