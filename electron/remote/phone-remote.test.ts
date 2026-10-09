@@ -6,7 +6,11 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../app/store";
 import { PhoneRemote } from "./phone-remote";
 import type { RemoteHost } from "./bridge";
-import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
+import {
+  RemoteClient,
+  Unanswered,
+  type RemoteStatus,
+} from "../../shared/remote-client";
 import {
   clientHandshake,
   fromBase64Url,
@@ -390,7 +394,7 @@ it("lets a phone see the desktop's version and update it, but not take threads",
   expect(asked).toEqual(["computerInfo", "updateNow"]);
 });
 
-it("waits longer for calls that push or write, and not for the rest", async () => {
+it("waits longer for calls that push, write or send, and not for the rest", async () => {
   // Everything the desktop is asked takes a moment longer than a normal call may.
   const { remote } = await desktop(async (method) => {
     await new Promise((r) => setTimeout(r, 800));
@@ -405,9 +409,17 @@ it("waits longer for calls that push or write, and not for the rest", async () =
   await expect(
     p.client.desktop("projectCommitMessage", projectId, ["a.ts"]),
   ).resolves.toBe("Fix the flaky test");
-  await expect(p.client.desktop("projectFiles", projectId)).rejects.toThrow(
-    "didn't answer in time",
-  );
+  // A first send makes the worktree and may carry screenshots: no "Not sent" while it does.
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  await expect(
+    p.client.desktop("sendProjectChat", chatId, send),
+  ).resolves.toBeDefined();
+  // Gone unanswered, it may have run all the same, and says so.
+  const late = p.client.desktop("projectFiles", projectId);
+  await expect(late).rejects.toThrow("didn't answer in time");
+  await expect(late).rejects.toBeInstanceOf(Unanswered);
 });
 
 it("says who answers in `to` only to desktops that take it", async () => {

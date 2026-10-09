@@ -510,7 +510,14 @@ export class ProjectChats {
     fromRelay = false,
   ) {
     if (this.disposing) throw new Error("Relay is closing.");
-    assertHere(await this.storage.load(id));
+    const held = await this.storage.load(id);
+    assertHere(held);
+    // Sent again after its answer got lost: the first copy already waits its turn.
+    if (
+      held.queue?.some((q) => q.input.id === input.id) ||
+      held.scheduled?.some((s) => s.input.id === input.id)
+    )
+      return;
     if (input.side || input.parentId) {
       const chat = await this.storage.load(id);
       if (input.side || replyRoot(chat.messages, input.parentId!).side)

@@ -1162,7 +1162,8 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
       ),
     ).toBe(true),
   );
-  await chats.send(chat.id, input("@codex Another"));
+  const another = input("@codex Another");
+  await chats.send(chat.id, another);
   expect((await chats.get(chat.id)).queue).toHaveLength(1);
   chats.cancel(chat.id);
   await vi.waitFor(async () =>
@@ -1175,8 +1176,12 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
   expect((await chats.get(chat.id)).queuePaused).toBe(true);
-  // Asking again by hand lets the paused queue follow that answer.
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  // A phone that never heard back sends it again: it still waits in the queue, once.
+  await chats.send(chat.id, another);
+  expect(chats.hasActiveProject(projectId)).toBe(false);
+  expect((await chats.get(chat.id)).queue).toHaveLength(1);
+  // Asking again by hand lets the paused queue follow that answer.
   await chats.send(chat.id, input("@codex Asked by hand"));
   await vi.waitFor(
     async () => {
@@ -1190,6 +1195,9 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
     },
     { timeout: 15000 },
   );
+  expect(
+    (await chats.get(chat.id)).messages.filter((m) => m.id === another.id),
+  ).toHaveLength(1);
 });
 it("lets a message's `to` decide who answers over its body's mention", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

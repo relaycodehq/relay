@@ -549,10 +549,13 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
 
 /**
  * Calls that wait on the network, git or a model: pushes, pulls and merges,
- * written commit messages, CI and plan usage. The phone gives them the
- * desktop's two minutes instead of its usual quarter.
+ * written commit messages, CI and plan usage, and sends, which may carry
+ * screenshots over a slow link and make a worktree first. The phone gives
+ * them the desktop's two minutes instead of its usual quarter.
  */
 export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
+  "sendProjectChat",
+  "createProjectChat",
   "projectGitAction",
   "projectCommitMessage",
   "projectMergePlan",

@@ -135,7 +135,7 @@ export class RemoteClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.calls.delete(id);
-        reject(new Error(`${this.name} didn't answer in time.`));
+        reject(new Unanswered(`${this.name} didn't answer in time.`));
       }, timeoutMs);
       this.calls.set(id, { resolve, reject, timer });
       this.sendFrame({ t: "call", id, method, args });
@@ -384,10 +384,13 @@ export class RemoteClient {
     }
     for (const call of this.calls.values()) {
       clearTimeout(call.timer);
-      call.reject(new Error(reason));
+      call.reject(new Unanswered(reason));
     }
     this.calls.clear();
   }
 }
 
 class Denied extends Error {}
+
+/** The call went out but no answer came back: the desktop may have done it all the same. */
+export class Unanswered extends Error {}
