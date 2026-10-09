@@ -27,13 +27,27 @@ export function SubagentRun({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { run, error, supported, stop } = useSubagentRun(chatId, agentId);
+  const { run, error, supported, stop, refresh } = useSubagentRun(
+    chatId,
+    agentId,
+  );
   const scroll = useRef<ScrollView>(null);
   // Stays at the end while the run grows, unless you scrolled up.
   const follow = useRef(true);
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: run ? agentKind(run) : "Agent" }} />
+      {supported && error && (
+        <View style={styles.error}>
+          <Text style={[styles.note, { color: t.muted }]}>{error}</Text>
+          <Action
+            label="Retry"
+            onPress={async () => {
+              await refresh();
+            }}
+          />
+        </View>
+      )}
       {!run ? (
         <View style={styles.center}>
           {!supported ? (
@@ -44,9 +58,7 @@ export function SubagentRun({
             <Text style={[styles.note, { color: t.muted }]}>
               This agent&apos;s run is gone: the session that ran it ended.
             </Text>
-          ) : error ? (
-            <Text style={[styles.note, { color: t.muted }]}>{error}</Text>
-          ) : (
+          ) : error ? null : (
             <ActivityIndicator color={t.muted} />
           )}
         </View>
@@ -172,6 +184,7 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  error: { padding: 16, gap: 10, alignItems: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   note: { fontSize: type.small, textAlign: "center" },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },

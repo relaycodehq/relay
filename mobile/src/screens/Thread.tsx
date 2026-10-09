@@ -728,11 +728,13 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           }}
         />
       )}
-      {!rootId && agentBatch.length > 0 && (
+      {!rootId && (
         <SubagentStrip
           batch={agentBatch}
           display={display}
           onPress={() => setSheet("agents")}
+          error={agents.error}
+          onRetry={agents.refresh}
         />
       )}
       {!rootId && !!waiting?.length && !running && (
@@ -858,6 +860,8 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           })
         }
         onStop={agents.stop}
+        error={agents.error}
+        onRetry={agents.refresh}
       />
       <RenameSheet
         open={sheet === "rename"}

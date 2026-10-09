@@ -61,7 +61,12 @@ export function confirmStop(run: SubagentRun) {
 /** Stops it, saying so when it couldn't. */
 export const stopping = (stop: () => Promise<void>) => () =>
   stop().catch((e) =>
-    Alert.alert("Couldn't stop it", e instanceof Error ? e.message : String(e)),
+    Alert.alert(
+      e instanceof Error && /already finished/i.test(e.message)
+        ? "Agent already finished"
+        : "Couldn't stop it",
+      e instanceof Error ? e.message : String(e),
+    ),
   );
 
 /**
@@ -74,7 +79,11 @@ export function SubagentStrip({
   batch,
   display,
   onPress,
+  error,
+  onRetry,
 }: {
+  error?: string;
+  onRetry: () => Promise<unknown>;
   batch: SubagentRun[];
   display: (text: string) => string;
   onPress: () => void;
@@ -85,38 +94,67 @@ export function SubagentStrip({
     (a, r) => (!a || r.started >= a.started ? r : a),
     undefined,
   );
-  if (!latest) return null;
+  // Reserve this on every main thread, including before the first agent starts.
+  if (!latest)
+    return (
+      <View style={styles.slot}>
+        {error && (
+          <Pressable
+            onPress={() => void onRetry()}
+            style={styles.retry}
+            accessibilityRole="button"
+          >
+            <Text
+              numberOfLines={1}
+              style={[styles.stripText, { color: t.muted }]}
+            >
+              Couldn&apos;t load agents · Retry
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
   const back = batch.length - working.length;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${plural(batch.length, "subagent")}: ${back} back, ${working.length} working`}
-      accessibilityHint="Lists them, to read one's run or stop it"
-      onPress={onPress}
-      hitSlop={4}
-      style={({ pressed }) => [
-        styles.strip,
-        { borderColor: t.border, backgroundColor: pressed ? t.hover : t.raised },
-      ]}
-    >
-      <Bot size={15} color={t.muted} />
-      <Text numberOfLines={1} style={[styles.stripText, { color: t.text }]}>
-        {working.length === 1 ? "1 agent working" : `${working.length} agents working`}
-        <Text style={{ color: t.muted }}>
-          {" · "}
-          {/* What it's doing says more than its name on a phone's width; the sheet has both. */}
-          {latest.summary || latest.recent.some((c) => c.status === "running")
-            ? subagentNow(latest, display)
-            : latest.description}
+    <View style={styles.slot}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${plural(batch.length, "subagent")}: ${back} back, ${working.length} working`}
+        accessibilityHint="Lists them, to read one's run or stop it"
+        onPress={onPress}
+        hitSlop={4}
+        style={({ pressed }) => [
+          styles.strip,
+          {
+            borderColor: t.border,
+            backgroundColor: pressed ? t.hover : t.raised,
+          },
+        ]}
+      >
+        <Bot size={15} color={t.muted} />
+        <Text numberOfLines={1} style={[styles.stripText, { color: t.text }]}>
+          {working.length === 1
+            ? "1 agent working"
+            : `${working.length} agents working`}
+          <Text style={{ color: t.muted }}>
+            {" · "}
+            {/* What it's doing says more than its name on a phone's width; the sheet has both. */}
+            {error
+              ? "Updates paused · open for details"
+              : latest.summary ||
+                  latest.recent.some((c) => c.status === "running")
+                ? subagentNow(latest, display)
+                : latest.description}
+          </Text>
         </Text>
-      </Text>
-      {batch.length > 1 && (
-        <Text style={[styles.count, { color: t.muted }]}>
-          {back}/{batch.length}
-        </Text>
-      )}
-      <ChevronUp size={16} color={t.muted} />
-    </Pressable>
+        {batch.length > 1 && (
+          <Text style={[styles.count, { color: t.muted }]}>
+            {back}/{batch.length}
+          </Text>
+        )}
+        <ChevronUp size={16} color={t.muted} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -132,7 +170,11 @@ export function SubagentsSheet({
   onClose,
   onOpen,
   onStop,
+  error,
+  onRetry,
 }: {
+  error?: string;
+  onRetry: () => Promise<unknown>;
   open: boolean;
   /** The fan-out the strip showed; the sheet holds on to it once it's all back. */
   batch: SubagentRun[];
@@ -169,6 +211,17 @@ export function SubagentsSheet({
       onClose={onClose}
       onDismiss={openRun}
     >
+      {error && (
+        <View style={styles.retry}>
+          <Text style={[styles.now, { color: t.muted }]}>{error}</Text>
+          <Action
+            label="Retry"
+            onPress={async () => {
+              await onRetry();
+            }}
+          />
+        </View>
+      )}
       {shown.map((run) => (
         <Row
           key={run.id}
@@ -242,6 +295,13 @@ function Row({
 }
 
 const styles = StyleSheet.create({
+  slot: { height: 48 },
+  retry: {
+    marginHorizontal: 20,
+    minHeight: 40,
+    justifyContent: "center",
+    gap: 8,
+  },
   strip: {
     flexDirection: "row",
     alignItems: "center",

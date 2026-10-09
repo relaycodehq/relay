@@ -162,7 +162,7 @@ function work(agent) {
       description: agent.description,
       usage: { total_tokens: 100, tool_uses: 2, duration_ms: 600 },
       last_tool_name: second[0],
-      summary: `Working on ${agent.description.toLowerCase()}`,
+      summary: agent.description,
     });
   });
   later(agent, agent.ms - 300, () =>
