@@ -4,6 +4,7 @@ import { z } from "zod";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import {
   knownMessagesSchema,
+  projectChatSendSchema,
   type AgentActivity,
   type ChatMessage,
   type ChatSummary,
@@ -132,6 +133,8 @@ export class RemoteBridge {
     { timer: NodeJS.Timeout; event: Extract<RemoteEvent, { kind: "message" }> }
   >();
   private lastChats = "";
+  // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
+  private sends = new Set<{ chatId: string; id: string }>();
   private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
@@ -175,7 +178,10 @@ export class RemoteBridge {
         chats: this.summaries(),
       };
     },
-    chat: async (id, known, history = remoteHistory) => {
+    chat: async (id, known, history = remoteHistory, sendId) => {
+      const sending = () =>
+        [...this.sends].some((s) => s.chatId === id && s.id === sendId);
+      const inFlight = sendId !== undefined && sending();
       const patch = await this.host.chat(id, known);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
@@ -184,6 +190,18 @@ export class RemoteBridge {
         projectId: patch.projectId,
         title: patch.title,
         scope: patch.scope,
+        ...(sendId !== undefined
+          ? {
+              hasSend:
+                inFlight ||
+                sending() ||
+                patch.messages.some(
+                  (m) => (typeof m === "string" ? m : m.id) === sendId,
+                ) ||
+                patch.queue?.some((q) => q.input.id === sendId) === true ||
+                patch.scheduled?.some((s) => s.input.id === sendId) === true,
+            }
+          : {}),
         messages: patch.messages
           .slice(-history)
           .map((m) => (typeof m === "string" ? m : forPhone(m))),
@@ -254,10 +272,22 @@ export class RemoteBridge {
       );
     },
     desktop: async (method, args) => {
-      const value = await this.host.dispatch(method, args);
-      // Sends, stops and triage move thread states; phones hear before the call returns.
-      this.refresh();
-      return value;
+      const send =
+        method === "sendProjectChat"
+          ? {
+              chatId: idSchema.parse(args[0]),
+              id: projectChatSendSchema.parse(args[1]).id,
+            }
+          : undefined;
+      if (send) this.sends.add(send);
+      try {
+        const value = await this.host.dispatch(method, args);
+        // Sends, stops and triage move thread states; phones hear before the call returns.
+        this.refresh();
+        return value;
+      } finally {
+        if (send) this.sends.delete(send);
+      }
     },
     phoneAppFile: async (path, offset) => {
       if (!this.host.phoneApp)
@@ -296,6 +326,7 @@ export class RemoteBridge {
           args[2] == null
             ? undefined
             : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
+          args[3] == null ? undefined : idSchema.parse(args[3]),
         );
       case "activityDetail":
         return a.activityDetail(

@@ -84,7 +84,7 @@ function fakeHost(respond?: (method: string) => Promise<unknown>) {
       return respond?.(method);
     },
   };
-  return { host, dispatched, summary };
+  return { host, dispatched, summary, chat };
 }
 
 async function desktop(
@@ -420,6 +420,94 @@ it("waits longer for calls that push, write or send, and not for the rest", asyn
   const late = p.client.desktop("projectFiles", projectId);
   await expect(late).rejects.toThrow("didn't answer in time");
   await expect(late).rejects.toBeInstanceOf(Unanswered);
+});
+
+it("checks unanswered sends while dispatch runs, after reconnect, and outside the history page", async () => {
+  let finish!: () => void;
+  let finishRetry!: () => void;
+  const gate = new Promise<void>((resolve) => (finish = resolve));
+  const retryGate = new Promise<void>((resolve) => (finishRetry = resolve));
+  let calls = 0;
+  const { remote, dispatched, chat } = await desktop(async () =>
+    ++calls === 1 ? gate : retryGate,
+  );
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  const sending = p.client.desktop("sendProjectChat", chatId, send);
+  const unanswered = sending.catch((e: unknown) => e);
+  await vi.waitFor(() => expect(dispatched).toHaveLength(1));
+  const receipt = (client: RemoteClient, id = send.id) =>
+    client.call("chat", chatId, undefined, 1, id);
+  expect((await receipt(p.client)).hasSend).toBe(true);
+  p.client.close();
+  expect(await unanswered).toBeInstanceOf(Unanswered);
+  const again = phone(p.credentials()!);
+  await again.until("online");
+  expect((await receipt(again.client)).hasSend).toBe(true);
+  // Two requests with this id may overlap; finishing one mustn't forget the other.
+  const retry = again.client.desktop("sendProjectChat", chatId, send);
+  await vi.waitFor(() => expect(dispatched).toHaveLength(2));
+  finish();
+  expect((await receipt(again.client)).hasSend).toBe(true);
+  chat.messages = Array.from({ length: 102 }, (_, i): ChatMessage => ({
+    id: i === 0 ? send.id : randomUUID(),
+    role: "user",
+    body: "hi",
+    provider: "codex",
+    status: "complete",
+    created: i,
+    version: 1,
+  }));
+  finishRetry();
+  await retry;
+  const checked = await receipt(again.client);
+  expect(checked.messages).toHaveLength(1);
+  expect(checked.messages[0]).not.toMatchObject({ id: send.id });
+  expect(checked.hasSend).toBe(true);
+  expect((await receipt(again.client, randomUUID())).hasSend).toBe(false);
+  chat.queue = [{ input: { ...send, id: randomUUID() }, created: 1 }];
+  chat.scheduled = [
+    {
+      input: { ...send, id: randomUUID() },
+      created: 1,
+      at: Date.now() + 60000,
+    },
+  ];
+  expect((await receipt(again.client, chat.queue[0].input.id)).hasSend).toBe(
+    true,
+  );
+  expect(
+    (await receipt(again.client, chat.scheduled[0].input.id)).hasSend,
+  ).toBe(true);
+});
+
+it("keeps a desktop rejection distinct from an unanswered call and releases its receipt", async () => {
+  const { remote } = await desktop(async () => {
+    throw new Error("The queue is full.");
+  });
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  const error = await p.client
+    .desktop("sendProjectChat", chatId, send)
+    .catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect(error).not.toBeInstanceOf(Unanswered);
+  expect((error as Error).message).toBe("The queue is full.");
+  expect(
+    (await p.client.call("chat", chatId, undefined, 1, send.id)).hasSend,
+  ).toBe(false);
 });
 
 it("says who answers in `to` only to desktops that take it", async () => {

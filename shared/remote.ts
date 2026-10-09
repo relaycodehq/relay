@@ -292,6 +292,8 @@ export interface RemoteChat extends Pick<
   settings?: RemoteSettings;
   /** The conversation the last message went to: the main one, or a reply's root. */
   lastParentId?: string | null;
+  /** Receipt for the requested send, including one still being processed; older desktops omit it. */
+  hasSend?: boolean;
 }
 
 export const remoteHistory = 100;
@@ -431,6 +433,7 @@ export interface RemoteApi {
     id: string,
     known?: KnownMessages,
     history?: number,
+    sendId?: string,
   ): Promise<RemoteChat>;
   diff(source: RemoteDiffSource): Promise<RemoteDiff>;
   desktop(method: PhoneDesktopMethod, args: unknown[]): Promise<unknown>;

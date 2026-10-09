@@ -9,7 +9,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { projectChatSendSchema, type ProjectChatSend } from "../../../shared/projects";
 import { remoteHistory } from "../../../shared/remote";
 import { Unanswered, type RemoteClient } from "../../../shared/remote-client";
-import { heldIds, settled, stamp, type Outgoing } from "./outbox-state";
+import { settled, stamp, type Outgoing } from "./outbox-state";
 
 export { heldIds, outgoingMessage, type Outgoing } from "./outbox-state";
 
@@ -144,7 +144,10 @@ export async function reached(
   o: Outgoing,
   known?: Record<string, number>,
 ) {
-  return heldIds(await call("chat", o.chatId, known, remoteHistory)).has(o.send.id);
+  const thread = await call("chat", o.chatId, known, remoteHistory, o.send.id);
+  if (thread.hasSend === undefined)
+    throw new Error("Update Relay on the computer before taking back an unanswered send.");
+  return thread.hasSend;
 }
 
 const subscribe = (listener: () => void) => {
