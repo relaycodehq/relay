@@ -78,6 +78,7 @@ require("node:readline")
     const reply = (result) => send({ id: m.id, result });
     if (m.method === "initialize") return reply({});
     if (m.method === "config/read") return reply({ config: {} });
+    if (m.method === "experimentalFeature/enablement/set") return reply({});
     if (m.method === "thread/start" || m.method === "thread/resume")
       return reply({
         thread: { id: threadId },
