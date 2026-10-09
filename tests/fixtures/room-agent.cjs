@@ -1,6 +1,12 @@
 // Real subprocess transport; deterministic local provider for desktop integration tests.
 const fs = require("node:fs");
 const args = process.argv.slice(2);
+// Executable discovery skips candidates that do not report a version. A
+// fixture must win that probe rather than falling through to a real CLI.
+if (args.includes("--version")) {
+  process.stdout.write("codex 0.160.0\n");
+  process.exit(0);
+}
 // A deep review lead's answer: a summary, then its findings for Relay to list.
 const leadReport = (findings) =>
   [
