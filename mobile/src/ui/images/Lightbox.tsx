@@ -439,6 +439,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     justifyContent: "center",
+    alignItems: "center",
     gap: 7,
   },
   // The outline keeps them visible over a white screenshot.
@@ -450,5 +451,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.3)",
     backgroundColor: "rgba(255,255,255,0.4)",
   },
-  current: { backgroundColor: "#fff" },
+  // Bigger, solid and darker-ringed, so it stands out from the rest on white as on black.
+  current: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "#fff",
+  },
 });
