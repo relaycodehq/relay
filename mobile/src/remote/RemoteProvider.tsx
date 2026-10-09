@@ -24,7 +24,7 @@ import {
   savePaired,
   saveCredentials,
 } from "./credentials";
-import { cameBack } from "./computer-update";
+import { cameBack, followUpdates } from "./computer-update";
 import {
   dropLooseCopy,
   forgetOffline,
@@ -185,7 +185,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       setActiveId(id);
       setOfflineComputer(id);
       setOverview(cached);
-      connect(start);
+      const next = connect(start);
+      followUpdates(id, next.call.bind(next));
     },
     [connect],
   );
@@ -344,6 +345,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             live.relayClient?.close();
             live.relayClient = undefined;
             setClient(undefined);
+            followUpdates(undefined);
           }
           throw e;
         });
@@ -362,6 +364,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             setClient(undefined);
             setOverview(undefined);
             setStatus("offline");
+            followUpdates(undefined);
           }
         }
         forgetOffline(id);

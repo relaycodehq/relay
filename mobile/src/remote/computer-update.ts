@@ -22,6 +22,8 @@ const selfUpdating = new Map<string, boolean>();
 /** The version a computer ran when its banner was waved off, for this launch. */
 const dismissed = new Map<string, string>();
 const timers = new Map<string, ReturnType<typeof setInterval>>();
+/** When each running update was asked for, so a watch picked up again still gives up in time. */
+const started = new Map<string, number>();
 const listeners = new Set<() => void>();
 let version = 0;
 
@@ -36,6 +38,7 @@ function set(computer: string, update: ComputerUpdate | undefined) {
   if (update?.kind !== "updating" && update?.kind !== "asking") {
     clearInterval(timers.get(computer));
     timers.delete(computer);
+    started.delete(computer);
   }
   changed();
 }
@@ -69,11 +72,19 @@ export async function updateComputer(
     return set(computer, { kind: "error", message: message(e) });
   }
   if (updates.get(computer)?.kind !== "updating") return;
-  const started = Date.now();
+  started.set(computer, Date.now());
+  watch(computer, call);
+}
+
+/** Asks how the update goes every few seconds, over this connection. */
+function watch(computer: string, call: RemoteClient["call"]) {
+  clearInterval(timers.get(computer));
   timers.set(
     computer,
     setInterval(() => {
-      if (Date.now() - started > giveUpMs)
+      const update = updates.get(computer);
+      if (update?.kind !== "updating") return;
+      if (Date.now() - (started.get(computer) ?? 0) > giveUpMs)
         return set(computer, {
           kind: "error",
           message: "It hasn't come back on a new version. Check on it there.",
@@ -81,13 +92,30 @@ export async function updateComputer(
       // Gone quiet while it restarts; the next connection says how it went.
       void call("computerInfo")
         .then((info) =>
-          info.version !== from
+          info.version !== update.from
             ? set(computer, undefined)
-            : settle(computer, from, info.update),
+            : settle(computer, update.from, info.update),
         )
         .catch(() => {});
     }, watchMs),
   );
+}
+
+/**
+ * The phone talks to this computer now, or to none: another computer's update
+ * stops being watched over a connection that's closed, and this one's goes on
+ * over the new one.
+ */
+export function followUpdates(
+  computer: string | undefined,
+  call?: RemoteClient["call"],
+) {
+  for (const [id, timer] of timers)
+    if (id !== computer) {
+      clearInterval(timer);
+      timers.delete(id);
+    }
+  if (computer && call && started.has(computer)) watch(computer, call);
 }
 
 /** The computer answered on this version: an update that got it there is over. */
