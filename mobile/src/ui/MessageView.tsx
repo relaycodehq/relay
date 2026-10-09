@@ -3,6 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
+import { agentError } from "../../../shared/agent-error";
 import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
@@ -28,6 +29,7 @@ import { Lightbox, type LightboxImage } from "./Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
+import { AgentErrorNote, RenderNotes, SignInNote } from "./TurnNotices";
 import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
 
@@ -137,7 +139,9 @@ export const MessageView = memo(function MessageView({
             ? "Context compacted"
             : m.status === "cancelled"
               ? "Compaction stopped"
-              : (m.error ?? "Compaction failed")}
+              : m.error
+                ? agentError(m.error).message
+                : "Compaction failed"}
       </StatusRow>
     );
   const user = m.role === "user";
@@ -173,6 +177,7 @@ export const MessageView = memo(function MessageView({
         )}
       </View>
       {!user && <AgentRun chatId={chatId} message={m} root={root} />}
+      {!!m.renders?.length && <RenderNotes renders={m.renders} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (
@@ -230,8 +235,11 @@ export const MessageView = memo(function MessageView({
           Stopped · partial output kept
         </Text>
       )}
-      {!!m.error && m.status !== "cancelled" && (
-        <Text style={[styles.note, { color: t.danger }]}>{m.error}</Text>
+      {/* A lost login's error only says to sign in again, which the note says better from here. */}
+      {m.signIn ? (
+        <SignInNote provider={m.signIn} />
+      ) : (
+        !!m.error && m.status !== "cancelled" && <AgentErrorNote error={m.error} />
       )}
       {!user && m.status !== "streaming" && (
         <MessageActions
