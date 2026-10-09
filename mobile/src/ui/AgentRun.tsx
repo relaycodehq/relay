@@ -75,6 +75,13 @@ const Subagents = createContext<{
   messageId: "",
 });
 
+/**
+ * True while the reader is scrolled back in the thread. A turn that ends then
+ * stays open until they're at the bottom again: folding it would pull the
+ * answer below it out from under them.
+ */
+export const ReadingBack = createContext(false);
+
 export function AgentRun({
   chatId,
   message,
@@ -95,7 +102,15 @@ export function AgentRun({
   const { live, entries, shown, calls, thinking } = turn;
   // Open while the turn runs; folds back once it ends unless the reader toggled it.
   const [toggled, setToggled] = useState<boolean>();
-  const expanded = toggled ?? (open || live);
+  const readingBack = useContext(ReadingBack);
+  const [wasLive, setWasLive] = useState(live);
+  const [held, setHeld] = useState(false);
+  if (wasLive !== live) {
+    setWasLive(live);
+    if (!live && readingBack) setHeld(true);
+  }
+  if (held && !readingBack) setHeld(false);
+  const expanded = toggled ?? (open || live || held);
   if (!live && !entries.length) return null;
   const prefix = root && root.replace(/\/+$/, "") + "/";
   const display = (text: string) => (prefix ? text.split(prefix).join("") : text);
