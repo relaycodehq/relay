@@ -80,6 +80,8 @@ export interface ComposerHandle {
   restore(back: Pick<TakenBack, "body" | "images">): () => void;
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
+  /** Adds a Markdown blockquote after the draft and puts the cursor under it. */
+  quote(markdown: string): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -158,6 +160,10 @@ export const Composer = forwardRef<
       };
     },
     settingsOn: (to) => switched(settings, to),
+    quote: (markdown) => {
+      setText((draft) => (draft.trim() ? `${draft.trimEnd()}\n\n${markdown}` : markdown));
+      input.current?.focus();
+    },
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});

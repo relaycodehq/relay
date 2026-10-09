@@ -15,7 +15,7 @@ import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
-import { remoteHistory, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
+import { remoteHistory, titleBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
 import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
@@ -54,6 +54,7 @@ import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
 import { KeyboardAware } from "../ui/KeyboardAware";
+import { messageExtras, threadExtras } from "../ui/menu-extras";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
@@ -408,6 +409,23 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                 ),
             }
           : { label: "Snooze…", onPress: () => setSheet("snooze") },
+        ...threadExtras({
+          branch: thread?.worktree?.branch ?? summary?.branch,
+          worktree: thread?.worktree?.removedAt ? undefined : thread?.worktree?.path,
+          onUnread: () =>
+            void remote
+              .desktop("triageProjectChat", id, { kind: "unread" })
+              .then(() => router.back())
+              .catch((e) => Alert.alert("Couldn't mark it", String(e?.message ?? e))),
+          onRegenerate:
+            (remote.overview?.bridge ?? 1) >= titleBridge
+              ? () =>
+                  act("Couldn't name it", async () => {
+                    await remote.desktop("regenerateProjectChatTitle", id);
+                    await remote.refresh();
+                  })
+              : undefined,
+        }),
         ...(sides.length
           ? [
               {
@@ -515,6 +533,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           },
         ]
       : []),
+    ...messageExtras(m, settings && thread ? composer : undefined),
   ];
 
   const title = rootId ? "Replies" : (thread?.title ?? summary?.title ?? "");
@@ -835,6 +854,8 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       />
       <MenuSheet
         open={!!acting}
+        // Quote reads the composer's ref only once it's picked, never while drawing.
+        // eslint-disable-next-line react-hooks/refs
         items={acting ? messageItems(acting) : []}
         onClose={() => setActing(undefined)}
       />

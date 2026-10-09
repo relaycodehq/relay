@@ -36,3 +36,16 @@ export function quoteLabel(text: string, max: number) {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? flat.slice(0, max - 1).trimEnd() + "…" : flat;
 }
+
+/**
+ * The start of a message to quote from a phone, where there is no selecting a
+ * passage: its first `lines` lines and at most `chars` characters, ending in
+ * " …" where it was cut.
+ */
+export function quoteExcerpt(text: string, lines = 8, chars = 600) {
+  const whole = selectionQuote(text);
+  let cut = whole.split("\n").slice(0, lines).join("\n");
+  if (cut.length > chars) cut = cut.slice(0, chars).replace(/\s+\S*$/, "");
+  cut = cut.replace(/\s+$/, "");
+  return cut.length < whole.length ? cut + " …" : cut;
+}

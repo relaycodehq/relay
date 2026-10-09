@@ -145,7 +145,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 14;
+export const remoteBridgeVersion = 15;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -161,6 +161,9 @@ export const activityDetailBridge = 13;
 export const phoneDetailPreview = 600;
 /** From here a desktop sends a thread's images shrunk to the size a phone shows them (`image`). */
 export const imageBridge = 14;
+
+/** From here a desktop takes `regenerateProjectChatTitle` from phones. */
+export const titleBridge = 15;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -344,6 +347,7 @@ export const phoneDesktopMethods = [
   "stopProjectChatPending",
   "triageProjectChat",
   "renameProjectChat",
+  "regenerateProjectChatTitle",
   "markProjectChatSeen",
   "forkProjectChat",
   "rewindProjectTurn",
@@ -559,6 +563,7 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "projectMergeBranch",
   "projectCiStatus",
   "providerUsage",
+  "regenerateProjectChatTitle",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */
