@@ -3,6 +3,11 @@ import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
 /** A project's id, or a Scratchpad chat in whichever folder the desktop hands out. */
 export type Where = string | "scratch";
 
+type Overview = {
+  projects: readonly RemoteProject[];
+  chats: readonly Pick<RemoteChatSummary, "projectId">[];
+};
+
 /** The projects a new thread can start in, the one used last first. */
 export function projectsByUse(
   projects: readonly RemoteProject[],
@@ -25,12 +30,7 @@ export function projectsByUse(
  * latest thread is. Undefined until the computer has listed its projects.
  */
 export function startingWhere(
-  overview:
-    | {
-        projects: readonly RemoteProject[];
-        chats: readonly Pick<RemoteChatSummary, "projectId">[];
-      }
-    | undefined,
+  overview: Overview | undefined,
   asked: { project?: string; scratch?: string },
 ): Where | undefined {
   if (asked.scratch) return "scratch";
@@ -40,4 +40,15 @@ export function startingWhere(
   const wanted = of(asked.project) ?? of(overview.chats[0]?.projectId);
   if (wanted) return wanted.scratch ? "scratch" : wanted.id;
   return overview.projects.find((p) => !p.scratch)?.id ?? "scratch";
+}
+
+/** Hold a valid choice as threads move, but recover when the live list removes its project. */
+export function availableWhere(
+  picked: Where | undefined,
+  overview: Overview | undefined,
+  asked: { project?: string; scratch?: string },
+): Where | undefined {
+  if (picked === "scratch" || (picked && (!overview || overview.projects.some((p) => p.id === picked))))
+    return picked;
+  return startingWhere(overview, asked);
 }

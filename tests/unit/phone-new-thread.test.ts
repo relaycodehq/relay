@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  availableWhere,
   projectsByUse,
   startingWhere,
 } from "../../mobile/src/remote/new-thread";
@@ -57,5 +58,27 @@ describe("projectsByUse", () => {
         (p) => p.id,
       ),
     ).toEqual(["notes", "site", "relay", "x"]);
+  });
+});
+
+describe("availableWhere", () => {
+  it("holds a valid choice when another project becomes the latest", () => {
+    expect(availableWhere("relay", { projects, chats: [{ projectId: "site" }] }, {})).toBe("relay");
+  });
+
+  it("replaces a project removed from the live list, including a stale route parameter", () => {
+    const overview = { projects: [site, notes], chats: [{ projectId: "relay" }] };
+    expect(availableWhere("relay", overview, { project: "relay" })).toBe("site");
+    expect(startingWhere(overview, {})).toBe("site");
+  });
+
+  it("uses Scratchpad when the last real project is removed", () => {
+    expect(availableWhere("relay", { projects: [pad], chats: [] }, {})).toBe("scratch");
+  });
+
+  it("keeps a choice until a project list can confirm it was removed", () => {
+    expect(availableWhere("relay", undefined, {})).toBe("relay");
+    expect(availableWhere(undefined, undefined, {})).toBeUndefined();
+    expect(availableWhere("scratch", { projects: [], chats: [] }, {})).toBe("scratch");
   });
 });

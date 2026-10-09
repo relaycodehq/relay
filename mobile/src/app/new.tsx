@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
@@ -12,7 +12,7 @@ import {
 } from "../../../shared/remote-compose";
 import { loadNewThread, saveNewThread } from "../remote/offline";
 import { deliver } from "../remote/outbox";
-import { projectsByUse, startingWhere, type Where } from "../remote/new-thread";
+import { availableWhere, projectsByUse, startingWhere, type Where } from "../remote/new-thread";
 import {
   sameModel,
   type NewThreadModels,
@@ -32,15 +32,21 @@ import {
  * the project and workspace are picked in sheets from the line over it.
  */
 export default function NewThread() {
+  const { active } = useRemote();
+  return <NewThreadComposer key={active} />;
+}
+
+function NewThreadComposer() {
   const asked = useLocalSearchParams<{ project?: string; scratch?: string }>();
   const remote = useRemote();
-  const { desktop, status, overview } = remote;
+  const { desktop, status, overview, active } = remote;
   const composer = useRef<ComposerHandle>(null);
   // Settled once, so a thread moving on the computer doesn't swap the project under a thumb.
   const [picked, setPicked] = useState<Where | undefined>(() =>
     startingWhere(overview, asked),
   );
-  if (!picked && overview) setPicked(startingWhere(overview, asked));
+  const available = availableWhere(picked, overview, asked);
+  if (picked !== available) setPicked(available);
   const projects = projectsByUse(
     overview?.projects ?? [],
     overview?.chats ?? [],
@@ -89,22 +95,37 @@ export default function NewThread() {
   const [models, setModels] = useState<NewThreadModels>({});
   const chose = useRef(false);
   useEffect(() => {
-    void loadNewThread().then((saved) => {
+    let live = true;
+    void loadNewThread(active).then((saved) => {
+      if (!live) return;
       setSettings((s) => s ?? saved?.settings ?? newThreadSettings(undefined));
       if (saved) setModels((m) => (Object.keys(m).length ? m : saved.models));
     });
-  }, []);
+    return () => { live = false; };
+  }, [active]);
   const askedDesktop = useRef(false);
   useEffect(() => {
     // Offline, each of its calls would fall back to a default.
     if (status !== "online" || askedDesktop.current) return;
     askedDesktop.current = true;
+    let live = true;
     void desktopNewThread(desktop).then((s) => {
+      if (!live) return;
       if (!chose.current) setSettings(s.settings);
       setModels(s.models);
-      saveNewThread(s);
+      saveNewThread(s, active);
     });
-  }, [desktop, status]);
+    return () => {
+      live = false;
+      askedDesktop.current = false;
+    };
+  }, [desktop, status, active]);
+
+  const focused = useRef(false);
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    return () => { focused.current = false; };
+  }, []));
 
   // A sheet takes the keyboard's room; it comes back after if it was up.
   const keyboard = useKeyboardShown();
@@ -157,8 +178,8 @@ export default function NewThread() {
     if (sendAt) await desktop("sendProjectChat", chatId, message);
     else deliver(desktop, remote.active ?? "", chatId, message);
     made.current = undefined;
-    void remote.refresh();
-    router.replace(`/chat/${chatId}`);
+    void remote.refresh().catch(() => {});
+    if (focused.current) router.replace(`/chat/${chatId}`);
   };
 
   return (
