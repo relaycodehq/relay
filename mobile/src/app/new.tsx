@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { randomUUID } from "expo-crypto";
 import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
@@ -123,7 +122,7 @@ export default function NewThread() {
 
   // A thread made for a scheduled message that then failed to go, used again on the next try.
   const made = useRef<{ key: string; id: string }>(undefined);
-  const start = async ({ body, settings: using, images, sendAt }: Outgoing) => {
+  const start = async ({ id: messageId, body, settings: using, images, sendAt }: Outgoing) => {
     if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
     if (!picked)
       throw new Error("Wait for your computer to list its projects.");
@@ -143,7 +142,7 @@ export default function NewThread() {
           ).id;
     made.current = { key, id: chatId };
     const message = composeSend(using, body, {
-      id: randomUUID(),
+      id: messageId,
       ...(sendAt ? { sendAt } : {}),
       images: images.map(({ name, mimeType, dataUrl }) => ({
         name,
@@ -185,6 +184,7 @@ export default function NewThread() {
             />
           }
           projectId={projectId ?? ""}
+          sendTarget={`${picked ?? ""}:${workspace}`}
           settings={settings}
           onSettings={(s) => {
             // The next new thread, here or on the desktop, starts on it too.

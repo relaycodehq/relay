@@ -344,6 +344,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     }
   };
   const send = async ({
+    id: messageId,
     body,
     settings: using,
     images,
@@ -357,7 +358,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       using,
       side ? body.replace(/^\/btw\s+/i, "") : body,
       {
-        id: randomUUID(),
+        id: messageId,
         ...(rootId ? { parentId: rootId } : {}),
         ...(side ? { side: true } : {}),
         ...(delivery ? { delivery } : {}),
