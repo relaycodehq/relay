@@ -30,9 +30,17 @@ export function useThreadScroll(messages: readonly ChatMessage[]) {
     },
     [messages],
   );
+  const toBottom = useCallback(() => {
+    offset.current = 0;
+    setPinned(true);
+    // Inverted, offset 0 is the bottom, where the new message lands.
+    list.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
   return {
     /** Brings a message's end, where its answer field is, into view above the keyboard. */
     revealMessage,
+    /** Back to the latest text, e.g. after sending from further up. */
+    toBottom,
     // Only messages already drawn get revealed; one that isn't stays where it is.
     onScrollToIndexFailed: () => {},
     /** At the bottom, following the latest text. */

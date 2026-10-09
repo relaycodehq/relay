@@ -178,7 +178,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   }, [loaded, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
-  const { pinned, revealMessage, ...scroll } = useThreadScroll(shown);
+  const { pinned, revealMessage, toBottom, ...scroll } = useThreadScroll(shown);
   const counts = useMemo(() => replyCounts(all), [all]);
   const setupId = useMemo(
     () => (rootId ? undefined : latestSetup(listed)?.id),
@@ -432,6 +432,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         })),
       },
     );
+    toBottom();
     return deliver(remote.desktop, computer, id, message);
   };
 
