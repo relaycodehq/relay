@@ -326,6 +326,7 @@ export const Composer = forwardRef<
   };
 
   const empty = !text.trim() && !images.length;
+  const steering = running && !empty;
   /** `written` is the draft when it hasn't reached `text` yet. */
   const send = async (delivery?: "queue" | "steer", sendAt?: number, written = text) => {
     // Sending mid-dictation waits for the last words to land in the draft.
@@ -467,11 +468,13 @@ export const Composer = forwardRef<
           {/* Room for the waveform on a narrow phone. */}
           {!dictating && !shrinking && (
             <>
-              <Tool label="Permissions" shrink onPress={() => setSheet("mode")}>
-                <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
-                  {modeLabel(settings.runtimeMode)}
-                </Text>
-              </Tool>
+              {!steering && (
+                <Tool label="Permissions" shrink onPress={() => setSheet("mode")}>
+                  <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
+                    {modeLabel(settings.runtimeMode)}
+                  </Text>
+                </Tool>
+              )}
               <Tool
                 label={plan ? "Plan mode on" : "Plan mode off"}
                 onPress={() => onSettings({ ...settings, interactionMode: plan ? "default" : "plan" })}
@@ -497,7 +500,7 @@ export const Composer = forwardRef<
               <Text style={[styles.slash, { color: t.muted }]}>/</Text>
             </Tool>
           )}
-          {running && !empty && (
+          {steering && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Steer now"
