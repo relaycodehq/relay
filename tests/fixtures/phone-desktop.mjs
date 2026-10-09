@@ -24,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import {
   mkdtemp,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -46,7 +47,9 @@ const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
 const subagents = process.argv.includes("--subagents");
 if (claude && subagents) {
-  console.error("--claude and --subagents each bring their own `claude`; pick one.");
+  console.error(
+    "--claude and --subagents each bring their own `claude`; pick one.",
+  );
   process.exit(2);
 }
 const theme = arg("--theme");
@@ -84,7 +87,10 @@ const codexPath = await fakeCli(
 
 // Pin every agent: an absent or broken stand-in must never discover a real CLI.
 const agentPaths = Object.fromEntries(
-  agentProviders.map((provider) => [provider, join(bin, `disabled-${provider}`)]),
+  agentProviders.map((provider) => [
+    provider,
+    join(bin, `disabled-${provider}`),
+  ]),
 );
 agentPaths.codex = codexPath;
 if (claude || subagents) {
@@ -172,13 +178,27 @@ const app = await electron.launch({
     ...(subagents ? { RELAY_FIXTURE_AGENTS_SLOWER: "8" } : {}),
   },
 });
-const stop = async () => {
-  await app.close().catch(() => {});
+// The agent host outlives the app on purpose, and app.close() can hang, so
+// both are put down here or they keep their stand-ins running for good.
+const stop = async (code = 0) => {
+  await Promise.race([
+    app.close().catch(() => {}),
+    new Promise((r) => setTimeout(r, 10_000)),
+  ]);
+  app.process().kill("SIGKILL");
+  for (const name of await readdir(join(root, "data", "agent-host")).catch(
+    () => [],
+  )) {
+    const pid = /^host-(\d+)\.json$/.exec(name)?.[1];
+    try {
+      if (pid) process.kill(Number(pid), "SIGTERM");
+    } catch {}
+  }
   await rm(root, { recursive: true, force: true });
-  process.exit(0);
+  process.exit(code);
 };
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
 
 if (name || version)
   await app.evaluate(
@@ -214,63 +234,68 @@ if (images) {
     await page.screenshot({ clip: { x: 0, y: 0, width: 280, height: 700 } }),
   );
 }
-const pairing = await page.evaluate(
-  async ({ seed, images, repo, claude, subagents }) => {
-    const project = await window.relay.addProject();
-    if (claude) {
-      // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
-      const chat = await window.relay.createProjectChat(project.id, {
-        kind: "project",
-      });
-      await window.relay.sendProjectChat(chat.id, {
-        id: crypto.randomUUID(),
-        body: "@claude Count to twenty",
-        provider: "claude",
-        choice: { model: "opus[1m]", reasoningEffort: "", fast: false },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-      });
-    }
-    if (seed || images || subagents) {
-      const settings = await window.relay.aiSettings();
-      const start = async (body, provider = "codex") => {
+const pairing = await page
+  .evaluate(
+    async ({ seed, images, repo, claude, subagents }) => {
+      const project = await window.relay.addProject();
+      if (claude) {
+        // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
         const chat = await window.relay.createProjectChat(project.id, {
           kind: "project",
         });
         await window.relay.sendProjectChat(chat.id, {
           id: crypto.randomUUID(),
-          body: `@${provider} ${body}`,
-          provider,
-          choice: settings.questions,
+          body: "@claude Count to twenty",
+          provider: "claude",
+          choice: { model: "opus[1m]", reasoningEffort: "", fast: false },
           runtimeMode: "full-access",
           interactionMode: "default",
         });
-        return chat.id;
-      };
-      if (images)
-        await start(
-          "fixture echo: Before ![](docs/missing.png) after:\n\n" +
-            "![the welcome screen](docs/shot.png)\n\n" +
-            "![the sidebar](docs/sidebar.png)\n\n" +
-            "And a web one, ![logo](https://example.com/logo.png), stays a link.",
-        );
-      if (images)
-        await start(
-          `fixture view images ${repo}/docs/shot.png ${repo}/docs/sidebar.png\n\n` +
-            "fixture echo: I looked at the welcome screen and the sidebar.",
-        );
-      if (subagents) await start("Fan out", "claude");
-      if (seed) {
-        await start("fixture edit files in the cache");
-        await new Promise((r) => setTimeout(r, 2500));
-        await start("fixture stream long answer about the cache guard");
       }
-    }
-    await window.relay.setPhoneRemote(true);
-    return window.relay.phonePairing();
-  },
-  { seed, images, repo, claude, subagents },
-);
+      if (seed || images || subagents) {
+        const settings = await window.relay.aiSettings();
+        const start = async (body, provider = "codex") => {
+          const chat = await window.relay.createProjectChat(project.id, {
+            kind: "project",
+          });
+          await window.relay.sendProjectChat(chat.id, {
+            id: crypto.randomUUID(),
+            body: `@${provider} ${body}`,
+            provider,
+            choice: settings.questions,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+          });
+          return chat.id;
+        };
+        if (images)
+          await start(
+            "fixture echo: Before ![](docs/missing.png) after:\n\n" +
+              "![the welcome screen](docs/shot.png)\n\n" +
+              "![the sidebar](docs/sidebar.png)\n\n" +
+              "And a web one, ![logo](https://example.com/logo.png), stays a link.",
+          );
+        if (images)
+          await start(
+            `fixture view images ${repo}/docs/shot.png ${repo}/docs/sidebar.png\n\n` +
+              "fixture echo: I looked at the welcome screen and the sidebar.",
+          );
+        if (subagents) await start("Fan out", "claude");
+        if (seed) {
+          await start("fixture edit files in the cache");
+          await new Promise((r) => setTimeout(r, 2500));
+          await start("fixture stream long answer about the cache guard");
+        }
+      }
+      await window.relay.setPhoneRemote(true);
+      return window.relay.phonePairing();
+    },
+    { seed, images, repo, claude, subagents },
+  )
+  .catch(async (e) => {
+    console.error(e);
+    await stop(1);
+  });
 let url = pairing.url;
 if (host) {
   const u = new URL(url);
