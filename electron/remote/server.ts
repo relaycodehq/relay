@@ -16,7 +16,7 @@ import {
   type RemoteMethod,
   type ServerFrame,
 } from "../../shared/remote";
-import type { RemoteDevices } from "./devices";
+import { SignInUnavailable, type RemoteDevices } from "./devices";
 import { LinkSender } from "./link-sender";
 import { tailnetPeer } from "./tailscale";
 
@@ -39,6 +39,7 @@ interface Connection {
   channel?: Channel;
   deviceId?: string;
   alive: boolean;
+  authenticating?: boolean;
   /** Binary frames and patches, once both ends speak `compactBridge`. */
   link?: LinkSender;
 }
@@ -46,12 +47,6 @@ interface Connection {
 /** Unauthenticated sockets get this long to finish the handshake. */
 const handshakeMs = 10_000;
 const maxConnections = 24;
-
-class Unavailable extends Error {
-  constructor(cause: unknown) {
-    super("Couldn't check the phone's sign-in.", { cause });
-  }
-}
 
 export const nodeCodec: Codec = {
   deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
@@ -199,6 +194,9 @@ export class RemoteServer {
   private async receive(c: Connection, frame: ClientFrame) {
     const { devices } = this.options;
     if (!c.deviceId) {
+      // One sign-in per socket, including while persistence is pending.
+      if (c.authenticating) return c.socket.terminate();
+      c.authenticating = true;
       try {
         if (frame.t === "pair") {
           const { device, token } = await devices.pair(
@@ -215,11 +213,10 @@ export class RemoteServer {
             bridge: remoteBridgeVersion,
           });
         } else if (frame.t === "auth") {
-          const device = await devices
-            .verify(String(frame.deviceId), String(frame.token))
-            .catch((e: unknown) => {
-              throw new Unavailable(e);
-            });
+          const device = await devices.verify(
+            String(frame.deviceId),
+            String(frame.token),
+          );
           if (!device)
             throw new Error("This phone isn't paired with Relay anymore.");
           c.deviceId = device.id;
@@ -234,15 +231,17 @@ export class RemoteServer {
           c.link = new LinkSender((f) => this.send(c, f));
         this.options.onPresence?.();
       } catch (e) {
-        // Only a phone Relay doesn't know is told no, which stops it for
-        // good; one Relay couldn't check right now tries again.
-        if (e instanceof Unavailable) {
+        // Only persistence after a valid token is retryable. Invalid tokens
+        // never reach it, and cryptographic failures terminate in accept().
+        if (e instanceof SignInUnavailable) {
           console.warn("Phone remote: couldn't check a phone's sign-in:", e.cause);
           return c.socket.close();
         }
         this.send(c, {
           t: "denied",
-          reason: e instanceof Error ? e.message : "Not allowed.",
+          reason: frame.t === "auth"
+            ? "This phone isn't paired with Relay anymore."
+            : e instanceof Error ? e.message : "Not allowed.",
         });
         c.socket.close();
       }
