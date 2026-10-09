@@ -12,7 +12,7 @@ import {
 import { ciSummary, type CiState, type CiStatus } from "../../../shared/ci";
 import { shortAge } from "../../../shared/chat-activity";
 import { useRemote } from "../remote/RemoteProvider";
-import { useNow } from "./motion";
+import { useForeground, useNow } from "./motion";
 import { Sheet } from "./Sheet";
 import { type, useTheme, type Palette } from "./theme";
 
@@ -59,19 +59,21 @@ export function CiStatusButton({
   const [ci, setCi] = useState<CiStatus | null>(null);
   const [open, setOpen] = useState(false);
   const now = useNow(60_000);
+  const foreground = useForeground();
   const load = useCallback(() => {
     if (status !== "online") return;
     desktop("projectCiStatus", projectId, chatId)
       .then(setCi)
       .catch(() => setCi(null));
   }, [desktop, status, projectId, chatId]);
-  // Now and every minute while this thread is on screen.
+  // Now and every minute while this thread is on screen and the app in front.
   useFocusEffect(
     useCallback(() => {
+      if (!foreground) return;
       load();
       const timer = setInterval(load, 60_000);
       return () => clearInterval(timer);
-    }, [load]),
+    }, [load, foreground]),
   );
   const wasRunning = useRef(running);
   useEffect(() => {
