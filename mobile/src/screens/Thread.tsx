@@ -59,7 +59,7 @@ import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
-import { KeyboardAware } from "../ui/KeyboardAware";
+import { KeyboardAware, RevealMessage } from "../ui/KeyboardAware";
 import { ReadingBack } from "../ui/AgentRun";
 import { messageExtras, threadExtras } from "../ui/menu-extras";
 import { MessageView } from "../ui/MessageView";
@@ -165,7 +165,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
-  const { pinned, ...scroll } = useThreadScroll(shown);
+  const { pinned, revealMessage, ...scroll } = useThreadScroll(shown);
   const counts = useMemo(() => replyCounts(all), [all]);
   const setupId = useMemo(
     () => (rootId ? undefined : latestSetup(listed)?.id),
@@ -647,6 +647,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
         </View>
       ) : (
         <ReadingBack.Provider value={!pinned}>
+        <RevealMessage.Provider value={revealMessage}>
           <FlatList
             inverted
             // Basis 0, not its content's height: otherwise a long thread and the
@@ -762,6 +763,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
             keyboardShouldPersistTaps="handled"
             onTouchStart={Keyboard.dismiss}
           />
+        </RevealMessage.Provider>
         </ReadingBack.Provider>
       )}
       {!rootId && summary?.goal && (

@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import type { FlatList, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Keyboard, type FlatList, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import type { ChatMessage } from "../../../shared/projects";
 import { offsetAfterResize, pinSlack, scrollAnchor } from "./scroll-anchor";
 
@@ -9,7 +9,32 @@ export function useThreadScroll(messages: readonly ChatMessage[]) {
   const offset = useRef(0);
   const height = useRef<number>(undefined);
   const [pinned, setPinned] = useState(true);
+  // Once the keyboard has settled, so the list has its final size.
+  const revealMessage = useCallback(
+    (id: string) => {
+      const index = messages.findIndex((m) => m.id === id);
+      if (index < 0) return;
+      const go = () =>
+        setTimeout(
+          () =>
+            // Inverted, a view position of 0 lines the message's end up with the list's bottom.
+            list.current?.scrollToIndex({ index, viewPosition: 0, animated: true }),
+          50,
+        );
+      if (Keyboard.isVisible()) return void go();
+      const shown = Keyboard.addListener("keyboardDidShow", () => {
+        shown.remove();
+        go();
+      });
+      setTimeout(() => shown.remove(), 1500);
+    },
+    [messages],
+  );
   return {
+    /** Brings a message's end, where its answer field is, into view above the keyboard. */
+    revealMessage,
+    // Only messages already drawn get revealed; one that isn't stays where it is.
+    onScrollToIndexFailed: () => {},
     /** At the bottom, following the latest text. */
     pinned,
     ref: list,

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useEffect, useState, type ReactNode } from "react";
 import { Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { useHeaderHeight } from "expo-router/react-navigation";
 
@@ -64,5 +64,15 @@ export function focusAfterModal(input: { focus(): void; blur(): void }) {
   };
   attempt();
 }
+
+/** Called as a field is focused, to bring it into view above the keyboard. */
+export const RevealField = createContext<() => void>(() => {});
+
+/**
+ * Scrolls a thread to a message's end once the keyboard is up. Android scrolls
+ * a focused field in the inverted thread list the wrong way, to the top of its
+ * card, leaving the field under the composer.
+ */
+export const RevealMessage = createContext<(messageId: string) => void>(() => {});
 
 const styles = StyleSheet.create({ fill: { flex: 1 } });
