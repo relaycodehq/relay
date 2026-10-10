@@ -104,6 +104,9 @@ if (!process.env.RELAY_TEST_DATA)
 // One place on every platform, beside the rest of Relay's data.
 app.setAppLogsPath(join(app.getPath("userData"), "logs"));
 startLog(app.getPath("logs"), app.getVersion());
+// Specs run in the background on a real machine: silent unless one listens for sound.
+if (process.env.RELAY_TEST_DATA && process.env.RELAY_TEST_SOUND !== "1")
+  app.commandLine.appendSwitch("mute-audio");
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
