@@ -1,7 +1,6 @@
 // Linked folders in project settings: what every thread in the project
 // may reach beyond it, with a note the agent is told, and how far it may go.
 import { useEffect, useState } from "react";
-import { Popover } from "@base-ui/react/popover";
 import { useQuery } from "@tanstack/react-query";
 import { FolderGit2, FolderOpen, FolderSymlink, Plus, X } from "lucide-react";
 import {
@@ -13,6 +12,7 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { ComposerSelect } from "../../ui/ComposerSelect";
+import { SearchSelect } from "../../ui/SearchSelect";
 import { ErrorBox, IconButton } from "../../ui/ui";
 import { useProjectSetting } from "../projects/ProjectSettings";
 import "./linked-folders.css";
@@ -55,56 +55,48 @@ export function LinkMenu({
     staleTime: 30_000,
   });
   const taken = new Set(linked.map((l) => l.path));
-  const free = (suggestions.data ?? []).filter((s) => !taken.has(s.path));
-  const beside = free.filter((s) => s.beside);
-  const projects = free.filter((s) => !s.beside);
-  const item = (s: (typeof free)[number]) => (
-    <Popover.Close
-      key={s.path}
-      className="composer-select-item"
-      onClick={() => onLink(s.path)}
-    >
-      {s.repository ? <FolderGit2 size={14} /> : <FolderSymlink size={14} />}
-      <span>{s.project ?? linkName(s.path)}</span>
-      <small>{tildePath(s.path)}</small>
-    </Popover.Close>
-  );
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger className="linked-add">
-        <Plus size={13} />
-        {label}
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          className="composer-popup-positioner"
-          align="start"
-          sideOffset={6}
-        >
-          <Popover.Popup className="composer-select-popup linked-menu">
-            {!!beside.length && (
-              <div className="composer-menu-label">Beside {project.name}</div>
-            )}
-            {beside.map(item)}
-            {!!projects.length && (
-              <div className="composer-menu-label">Your projects</div>
-            )}
-            {projects.map(item)}
-            <Popover.Close
-              className="composer-select-item linked-menu-finder"
-              onClick={() =>
-                void api.chooseFolder("Link a folder").then((path) => {
-                  if (path) onLink(path);
-                })
-              }
-            >
-              <FolderOpen size={14} />
-              <span>Choose a folder…</span>
-            </Popover.Close>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+    <SearchSelect
+      label={label}
+      trigger={
+        <>
+          <Plus size={13} />
+          {label}
+        </>
+      }
+      triggerClassName="linked-add"
+      className="linked-menu"
+      placeholder="Search folders and projects…"
+      options={(suggestions.data ?? [])
+        .filter((s) => !taken.has(s.path))
+        .sort((a, b) => Number(b.beside) - Number(a.beside))
+        .map((s) => ({
+          value: s.path,
+          label: s.project ?? linkName(s.path),
+          detail: tildePath(s.path),
+          icon: s.repository ? (
+            <FolderGit2 size={14} />
+          ) : (
+            <FolderSymlink size={14} />
+          ),
+          group: s.beside ? `Beside ${project.name}` : "Your projects",
+        }))}
+      onChange={onLink}
+      onOpenChange={setOpen}
+      empty={
+        suggestions.isPending
+          ? "Looking for folders…"
+          : "No folders to suggest."
+      }
+      action={{
+        label: "Choose a folder…",
+        icon: <FolderOpen size={14} />,
+        onSelect: () =>
+          void api.chooseFolder("Link a folder").then((path) => {
+            if (path) onLink(path);
+          }),
+      }}
+    />
   );
 }
 

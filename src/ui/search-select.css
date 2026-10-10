@@ -3,6 +3,7 @@
   display: flex;
   flex-direction: column;
   width: 340px;
+  min-width: var(--anchor-width);
   max-width: calc(100vw - 24px);
   max-height: min(410px, var(--available-height));
   padding: 0;
@@ -50,4 +51,62 @@
   padding: 10px;
   color: var(--muted);
   font-size: 11px;
+}
+.search-select-detail {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.search-select-popup .composer-select-item {
+  justify-content: flex-start;
+  gap: 10px;
+}
+.search-select-popup .composer-select-item > svg {
+  flex: none;
+}
+.search-select-check {
+  margin-left: auto;
+}
+/* The row under the list, e.g. Finder: it stays put while the list scrolls. */
+.search-select-popup .search-select-action {
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding-inline: 13px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+/* A trigger dressed as a form field, for forms that had a native select. */
+.search-select-field {
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  text-align: left;
+}
+.search-select-field > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-select-field > svg {
+  flex: none;
+  color: var(--muted);
+}
+.search-select-field:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

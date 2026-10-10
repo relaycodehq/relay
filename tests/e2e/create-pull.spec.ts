@@ -162,7 +162,7 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await expect(dialog.getByLabel("PR title")).toHaveValue(
       "Improve the feature",
     );
-    await expect(dialog.getByLabel("PR target branch")).toHaveValue("main");
+    await expect(dialog.getByLabel("PR target branch")).toHaveText("main");
     await expect(dialog).toContainText("1 uncommitted file is excluded");
     expect(
       fixture.requests.filter(

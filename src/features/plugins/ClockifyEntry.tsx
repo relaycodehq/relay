@@ -5,7 +5,8 @@ import {
   type ClockifyProject,
 } from "../../../shared/clockify";
 import { IconButton } from "../../ui/ui";
-import { clock } from "./clockify-format";
+import { clock, clockifyProjectOptions } from "./clockify-format";
+import { SearchSelect } from "../../ui/SearchSelect";
 
 /** Why a stretch has no project, in the words the review uses. */
 const emptyReason = (b: ClockifyBlock) =>
@@ -79,22 +80,18 @@ export function ClockifyEntry({
           style={{ ["--c" as string]: color }}
         >
           <i aria-hidden />
-          <select
-            value={block.clockifyProjectId}
+          <SearchSelect
+            label="Clockify project"
+            value={block.clockifyProjectId ?? ""}
             disabled={sent || !projects}
-            onChange={(e) => {
-              onEdit({ clockifyProjectId: e.target.value });
+            onChange={(id) => {
+              onEdit({ clockifyProjectId: id });
               onCommit();
             }}
-          >
-            <option value="">Leave out</option>
-            {projects?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.clientName ? `${p.name} · ${p.clientName}` : p.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={14} aria-hidden />
+            options={clockifyProjectOptions(projects, "Leave out")}
+            placeholder="Search projects and clients…"
+            triggerClassName="search-select-field"
+          />
         </span>
       </label>
 

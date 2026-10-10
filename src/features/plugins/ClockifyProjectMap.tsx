@@ -3,6 +3,8 @@ import { ChevronRight } from "lucide-react";
 import type { ClockifyProject } from "../../../shared/clockify";
 import type { Project } from "../../../shared/projects";
 import { SettingsCard } from "../../ui/SettingsCard";
+import { SearchSelect } from "../../ui/SearchSelect";
+import { clockifyProjectOptions } from "./clockify-format";
 
 /** Which Clockify project each Relay project's time goes to; untracked ones fold away. */
 export function ClockifyProjectMap({
@@ -29,25 +31,20 @@ export function ClockifyProjectMap({
             className="plugin-dot"
             style={{ background: color ?? "transparent" }}
           />
-          <select
-            className="plugin-select"
-            aria-label={`Clockify project for ${p.name}`}
+          <SearchSelect
+            label={`Clockify project for ${p.name}`}
             value={value[p.id] ?? ""}
             disabled={!clockifyProjects}
-            onChange={(e) => {
+            onChange={(id) => {
               const next = { ...value };
-              if (e.target.value) next[p.id] = e.target.value;
+              if (id) next[p.id] = id;
               else delete next[p.id];
               onChange(next);
             }}
-          >
-            <option value="">Not tracked</option>
-            {clockifyProjects?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.clientName ? `${c.name} · ${c.clientName}` : c.name}
-              </option>
-            ))}
-          </select>
+            options={clockifyProjectOptions(clockifyProjects, "Not tracked")}
+            placeholder="Search projects and clients…"
+            triggerClassName="search-select-field"
+          />
         </span>
       </div>
     );

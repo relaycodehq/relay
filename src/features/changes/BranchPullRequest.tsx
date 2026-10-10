@@ -7,6 +7,7 @@ import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
 import "./create-pull.css";
+import { SearchSelect } from "../../ui/SearchSelect";
 /** A PR of the current branch of `where`: the checkout's, or a thread's worktree's. */
 export function CreatePullSheet({
   where,
@@ -110,21 +111,16 @@ export function CreatePullSheet({
                 <ArrowRight size={16} />
                 <label>
                   Target branch
-                  <select
-                    aria-label="PR target branch"
+                  <SearchSelect
+                    label="PR target branch"
                     value={base}
-                    onChange={(e) => setBase(e.target.value)}
+                    unset="Choose target branch"
+                    onChange={setBase}
+                    options={p.bases.map((b) => ({ value: b, label: b }))}
+                    placeholder="Search branches…"
+                    triggerClassName="search-select-field"
                     disabled={busy}
-                  >
-                    <option value="" disabled>
-                      Choose target branch
-                    </option>
-                    {p.bases.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </label>
               </div>
               <label>

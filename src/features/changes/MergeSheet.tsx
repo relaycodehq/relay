@@ -7,6 +7,7 @@ import { parseWorkspaceId } from "../../../shared/workspaces";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
 import "./create-pull.css";
+import { SearchSelect } from "../../ui/SearchSelect";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
 export function MergeSheet({
@@ -176,21 +177,18 @@ export function MergeSheet({
                 <ArrowRight size={16} />
                 <label>
                   Into
-                  <select
-                    aria-label="Merge target branch"
+                  <SearchSelect
+                    label="Merge target branch"
                     value={p.base}
-                    onChange={(e) => {
+                    onChange={(next) => {
                       setResult(undefined);
-                      setBase(e.target.value);
+                      setBase(next);
                     }}
+                    options={p.bases.map((b) => ({ value: b, label: b }))}
+                    placeholder="Search branches…"
+                    triggerClassName="search-select-field"
                     disabled={busy}
-                  >
-                    {p.bases.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </label>
               </div>
               {commits ? (

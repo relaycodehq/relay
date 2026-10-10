@@ -146,8 +146,9 @@
   align-items: center;
   gap: 10px;
 }
-.plugin-map .plugin-select {
+.plugin-map .search-select-field {
   width: 240px;
+  padding-block: 6px;
 }
 .plugin-dot {
   flex: none;
