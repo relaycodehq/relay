@@ -68,3 +68,48 @@ it("makes a fresh async question unread activity without doing so again on repla
     vi.useRealTimers();
   }
 });
+
+it("keeps a resumed answer whole when the taken-back session replays the steer it read", () => {
+  vi.useFakeTimers();
+  try {
+    const above = streamingAnswer("codex");
+    const steer = {
+      id: "steer",
+      role: "user",
+      body: "use subagents",
+      status: "complete",
+      created: above.created + 10,
+      version: 1,
+    } as ProjectChat["messages"][number];
+    const chat = { id: "c", messages: [above, steer] } as ProjectChat;
+    const before = new AnswerRecorder(
+      chat,
+      above,
+      () => {},
+      () => {},
+    );
+    before.activity(call("first"));
+    before.continueBelow("steer");
+    before.activity(call("second"));
+    const below = before.message;
+    expect(chat.messages).toEqual([above, steer, below]);
+
+    // Relay restarted: the turn carries on in the answer it was writing.
+    const resumed = new AnswerRecorder(
+      chat,
+      below,
+      () => {},
+      () => {},
+    );
+    resumed.continueBelow("steer");
+    resumed.activity(call("second"));
+    resumed.activity(call("third"));
+    expect(resumed.message).toBe(below);
+    expect(chat.messages).toEqual([above, steer, below]);
+    expect(below.status).toBe("streaming");
+    expect(below.trace!.map((e) => e.id)).toEqual(["second", "third"]);
+    resumed.end();
+  } finally {
+    vi.useRealTimers();
+  }
+});

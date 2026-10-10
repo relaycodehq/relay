@@ -163,6 +163,9 @@ export class AnswerRecorder {
       steer.version++;
       this.emit(structuredClone(steer));
     }
+    // A session taken back after a restart replays the steer it already read.
+    if (chat.messages.indexOf(this.message) > chat.messages.indexOf(steer))
+      return;
     if (this.flush) clearTimeout(this.flush);
     const above = this.message;
     if (above.body.trim() || above.trace?.length || above.activity?.length) {
