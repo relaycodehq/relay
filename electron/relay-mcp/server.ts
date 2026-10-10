@@ -135,10 +135,12 @@ function readBody(req: IncomingMessage) {
       size += chunk.length;
       if (size > BODY_LIMIT) {
         chunks.length = 0;
-        reject(new BodyTooLarge());
       } else chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => {
+      if (size > BODY_LIMIT) reject(new BodyTooLarge());
+      else resolve(Buffer.concat(chunks).toString("utf8"));
+    });
     req.on("error", reject);
   });
 }
