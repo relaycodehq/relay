@@ -145,7 +145,7 @@ const window = new AppWindow({
   },
   pageGone: (win) => {
     previews?.hideAll(win);
-    devices?.hideAll();
+    devices?.hideAll(win);
   },
   rendererGone: (details) => {
     projectChecks.stop();

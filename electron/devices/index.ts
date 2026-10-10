@@ -1,3 +1,4 @@
+import type { BrowserWindow } from "electron";
 import type { DeviceHubState } from "../../shared/devices";
 import type { PreviewBounds } from "../../shared/preview";
 import type { AppWindow } from "../app/window";
@@ -18,7 +19,7 @@ export class Devices {
   ) {
     const changed = () => void this.emit();
     this.hub = new DeviceHub(dir, changed, fetch);
-    this.view = new DeviceView(window, changed);
+    this.view = new DeviceView(changed);
   }
 
   async state(): Promise<DeviceHubState> {
@@ -39,19 +40,21 @@ export class Devices {
 
   /** Only a running hub has a page; placing one starts nothing. */
   async place(bounds: PreviewBounds | null) {
+    const win = this.window.caller();
     const running =
       bounds && (await this.hub.state()).status === "running"
         ? await this.hub.start()
         : undefined;
-    this.view.place(bounds, running);
+    this.view.place(win, bounds, running);
   }
 
   close() {
     this.view.destroy();
   }
 
-  hideAll() {
-    this.view.hide();
+  /** `win`'s page went: the hub's page goes with it if it lay over it. */
+  hideAll(win: BrowserWindow) {
+    this.view.hideIn(win);
   }
 
   dispose() {

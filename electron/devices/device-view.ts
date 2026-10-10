@@ -1,6 +1,5 @@
-import { session, shell, WebContentsView } from "electron";
+import { session, shell, WebContentsView, type BrowserWindow } from "electron";
 import type { PreviewBounds } from "../../shared/preview";
-import type { AppWindow } from "../app/window";
 import type { RunningHub } from "./hub";
 
 /** Hidden this long, the page closes, so it stops pulling frames. */
@@ -11,7 +10,8 @@ const PARTITION = "device-hub";
 /**
  * The hub's page, laid over the Device tab. Native views draw above the
  * page, so the panel takes it off while anything covers it and shows its
- * last frame instead.
+ * last frame instead. There is one page, so with the tab open in several
+ * windows it lies over the one that showed it last.
  */
 export class DeviceView {
   private view?: WebContentsView;
@@ -20,14 +20,12 @@ export class DeviceView {
   private shown = false;
   private attached = false;
   private loaded = false;
+  private host?: BrowserWindow;
   private placed = 0;
   private unload?: NodeJS.Timeout;
   snapshot?: string;
 
-  constructor(
-    private window: AppWindow,
-    private changed: () => void,
-  ) {
+  constructor(private changed: () => void) {
     const ses = session.fromPartition(PARTITION);
     const allowed = new Set(["clipboard-sanitized-write"]);
     ses.setPermissionRequestHandler((_wc, permission, callback) =>
@@ -78,12 +76,15 @@ export class DeviceView {
   }
 
   /** Lays the page over the tab, or takes it off when `bounds` is null. */
-  place(bounds: PreviewBounds | null, hub?: RunningHub) {
-    const win = this.window.win;
+  place(win: BrowserWindow | null, bounds: PreviewBounds | null, hub?: RunningHub) {
     if (!win || win.isDestroyed()) return;
+    // Another window's tab going away leaves this one's page alone.
+    if ((!bounds || !hub) && this.host && this.host !== win) return;
     const call = ++this.placed;
     if (!bounds || !hub) return void this.hideWithSnapshot(call);
+    if (this.host && this.host !== win) this.hide();
     clearTimeout(this.unload);
+    this.host = win;
     const view = this.open(hub);
     const zoom = win.webContents.getZoomFactor();
     view.setBounds({
@@ -97,7 +98,7 @@ export class DeviceView {
   }
 
   private attach() {
-    const win = this.window.win;
+    const win = this.host;
     if (!this.shown || this.attached || !this.loaded || !this.view) return;
     if (!win || win.isDestroyed()) return;
     win.contentView.addChildView(this.view);
@@ -121,14 +122,19 @@ export class DeviceView {
     this.changed();
   }
 
-  /** The window reloaded or closed: whatever the panel showed is gone. */
-  hide() {
+  /** `win` reloaded or closed: whatever its panel showed is gone. */
+  hideIn(win: BrowserWindow) {
+    if (this.host === win) this.hide();
+  }
+
+  private hide() {
     if (!this.shown) return;
     this.shown = false;
-    const win = this.window.win;
+    const win = this.host;
     if (this.attached && win && !win.isDestroyed() && this.view)
       win.contentView.removeChildView(this.view);
     this.attached = false;
+    this.host = undefined;
     clearTimeout(this.unload);
     this.unload = setTimeout(() => {
       if (!this.shown) this.destroy();
