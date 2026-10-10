@@ -136,10 +136,15 @@ export class ProjectChats {
     );
     // Hosts look methods up at call time, not with .bind(this): tests
     // vi.spyOn(chats, "send"), and this.turns is only built last.
-    this.councils = new Councils(core, {
-      send: (id, input) => this.send(id, input),
-      lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
-    });
+    const worktrees = join(dirname(dir), "worktrees");
+    this.councils = new Councils(
+      core,
+      {
+        send: (id, input) => this.send(id, input),
+        lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
+      },
+      worktrees,
+    );
     this.schedule = new ChatSchedule(core, {
       send: (id, input, fromRelay) => this.send(id, input, fromRelay),
     });
@@ -147,11 +152,7 @@ export class ProjectChats {
       resume: (id) => this.turns.resumeHeld(id),
     });
     this.titles = new ThreadTitles(core);
-    this.worktrees = new ThreadWorktrees(
-      core,
-      join(dirname(dir), "worktrees"),
-      this.councils,
-    );
+    this.worktrees = new ThreadWorktrees(core, worktrees, this.councils);
     this.cleanup = new WorktreeCleanup(
       core,
       this.worktrees,
@@ -233,9 +234,29 @@ export class ProjectChats {
    * at work and nothing would be lost; their branches stay.
    */
   cleanUpWorktrees() {
-    return this.cleanup
-      .sweep()
-      .catch((e) => console.warn("Could not clean up worktrees:", e));
+    return Promise.all([
+      this.cleanup.sweep(),
+      this.councils.sweepCheckouts((id) => this.reviewDone(id)),
+    ]).catch((e) => console.warn("Could not clean up worktrees:", e));
+  }
+  /** A review thread that no longer needs its worktree: deleted, archived or settled, with nothing at work. */
+  private reviewDone(id: string) {
+    const chats = this.store.get().chats ?? [];
+    const chat = chats.find((c) => c.id === id);
+    if (!chat) return true;
+    if (
+      [chat, ...chats.filter((c) => c.reviewer?.parent === id)].some(
+        (c) => this.active.has(c.id) || this.active.hasSide(c.id),
+      )
+    )
+      return false;
+    if (chat.archivedAt) return true;
+    try {
+      return !!this.threads.list(chat.projectId).find((c) => c.id === id)
+        ?.settledAt;
+    } catch {
+      return false;
+    }
   }
   /** The subagents Claude started in a thread, its side conversations' too. */
   agents(id: string) {
@@ -818,9 +839,7 @@ export class ProjectChats {
     this.schedule.commitPending();
     await this.sessions.closeAll();
     await Promise.all(
-      everyAgentRuntime().map((runtime) =>
-        runtime.dispose?.().catch(() => {}),
-      ),
+      everyAgentRuntime().map((runtime) => runtime.dispose?.().catch(() => {})),
     );
   }
 }

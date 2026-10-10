@@ -53,7 +53,7 @@ export class ThreadWorktrees {
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */
     readonly folder: string,
-    private councils: Pick<Councils, "busy">,
+    private councils: Pick<Councils, "busy" | "root">,
   ) {
     this.setup = new WorktreeSetup(core);
   }
@@ -100,8 +100,10 @@ export class ThreadWorktrees {
     await pending;
   }
 
-  /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
+  /** Where a thread's agent works: its worktree, made with its first message, the reviewed code's for a review, or the checkout. */
   async root(chat: ProjectChat, prompt?: string): Promise<string> {
+    const review = await this.councils.root(chat);
+    if (review) return review;
     const root = await this.core.projects.root(chat.projectId);
     const worktree = chat.worktree;
     if (!worktree) {
@@ -525,6 +527,9 @@ export class ThreadWorktrees {
     const chat = await this.core.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
+    // A review's fixes, and the files its answers changed, are in its folder.
+    const review = await this.councils.root(chat);
+    if (review) return review;
     const worktree = chat.worktree;
     if (!worktree) {
       await this.refreshAgentWorktrees(chat);

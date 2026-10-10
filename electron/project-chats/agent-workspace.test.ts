@@ -91,6 +91,7 @@ beforeEach(async () => {
   } as unknown as ChatCore;
   worktrees = new ThreadWorktrees(core, join(temp, "relay-worktrees"), {
     busy: () => false,
+    root: async () => undefined,
   });
 });
 afterEach(async () => rm(temp, { recursive: true, force: true }));

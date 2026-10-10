@@ -220,6 +220,7 @@ export class ChatTurns {
           );
         evidence = await this.evidence(chat, input.selection);
       }
+      await this.councils.fixing(chat, input);
       const user: ChatMessage = {
         id: input.id,
         role: "user",
@@ -676,7 +677,7 @@ export class ChatTurns {
     const active = this.core.active.claim(chat.id, input);
     const message = streamingAnswer(input.provider);
     try {
-      const root = await this.core.projects.root(chat.projectId);
+      const root = await this.worktrees.root(chat);
       // Resume and later sends pick the lead's agent and settings up from here.
       chat.lastInput = input;
       chat.messages.push(message);

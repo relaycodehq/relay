@@ -112,6 +112,16 @@ export interface ReviewScope {
   base?: string;
   head?: string;
   stats?: { files: number; additions: number; deletions: number };
+  /** Where the reviewed code is checked out when the thread's checkout doesn't have it; reviewers and the lead work there. */
+  checkout?: ReviewCheckout;
+}
+/** A worktree the review reads from and fixes in. */
+export interface ReviewCheckout {
+  path: string;
+  /** Relay made it for this review, detached, and removes it after; otherwise it already had the branch. */
+  made: boolean;
+  /** The local branch fixes go on, checked out there before the first fix; none for a pull request. */
+  branch?: string;
 }
 
 /** The review's topic, kept within the editable thread name's limit. */

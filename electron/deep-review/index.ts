@@ -28,6 +28,16 @@ import { settleFixes, startFixing } from "./fixes";
 import { addReport } from "./reports";
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
+import {
+  checkOutForFixes,
+  discardReviewCheckout,
+  openReviewCheckout,
+} from "./checkout";
+export {
+  ensureReviewCheckout,
+  reviewCheckoutsIn,
+  sweepReviewCheckouts,
+} from "./checkout";
 
 export type { PullInfo };
 
@@ -35,6 +45,8 @@ export interface DeepReviewHost {
   load(id: string): Promise<ProjectChat>;
   project(id: string): Project;
   root(projectId: string): Promise<string>;
+  /** The folder Relay makes worktrees in; reviews make theirs in a folder of their own there. */
+  worktrees: string;
   /** A hidden thread for one reviewer. */
   createReviewer(parent: ProjectChat, task: ReviewerTask): Promise<ProjectChat>;
   send(chatId: string, input: ProjectChatSend): Promise<void>;
@@ -72,6 +84,20 @@ export class DeepReviews {
       throw new Error("This pull request belongs to a different project.");
     const root = await this.host.root(chat.projectId);
     const scope = await resolveScope(root, config.target, project, pull);
+    // Reviewers read the code around the changes, so they work where it's
+    // checked out. Without that they still read it from Git.
+    const checkout = await openReviewCheckout(
+      root,
+      scope,
+      this.host.worktrees,
+      chat.id,
+    ).catch((e: unknown) => {
+      console.warn("Could not check out the reviewed code for review:", e);
+      return undefined;
+    });
+    if (checkout) scope.checkout = checkout;
+    const discardCheckout = () =>
+      checkout ? discardReviewCheckout(checkout) : undefined;
     const request: ChatMessage = {
       id: randomUUID(),
       role: "user",
@@ -105,7 +131,10 @@ export class DeepReviews {
         state.reviewers.push({ ...reviewer, chatId: child.id });
       }
     } catch (error) {
-      await Promise.allSettled(created.map((c) => this.host.discard(c)));
+      await Promise.allSettled([
+        ...created.map((c) => this.host.discard(c)),
+        discardCheckout(),
+      ]);
       throw error;
     }
     const before = {
@@ -125,7 +154,10 @@ export class DeepReviews {
       chat.messages.splice(chat.messages.indexOf(request), 1);
       Object.assign(chat, before);
       delete chat.deepReview;
-      await Promise.allSettled(created.map((c) => this.host.discard(c)));
+      await Promise.allSettled([
+        ...created.map((c) => this.host.discard(c)),
+        discardCheckout(),
+      ]);
       throw error;
     }
     await this.sendReviewers(chat, [...state.reviewers.keys()]);
@@ -162,6 +194,15 @@ export class DeepReviews {
   /** Messages wait for the lead while the reviewers work. */
   reviewing(chat: ProjectChat) {
     return chat.deepReview?.status === "reviewing";
+  }
+
+  /**
+   * Before a fix request in a review whose worktree Relay made, checks the
+   * reviewed branch out there; throws when it can't, so nothing is sent.
+   */
+  async fixing(chat: ProjectChat, input: ProjectChatSend) {
+    const checkout = chat.deepReview?.scope.checkout;
+    if (input.fixes?.length && checkout) await checkOutForFixes(checkout);
   }
 
   /** A fix request marks its findings as being fixed; called before it's saved. */

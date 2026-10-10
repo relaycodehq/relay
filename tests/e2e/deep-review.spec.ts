@@ -480,12 +480,17 @@ test("reviews another branch into main from a checkout on main", async () => {
     await expect(page.locator(".deep-review-request")).toContainText(
       "device-panel → main",
     );
-    // Not checked out, so Claude reads it from Git instead of running /code-review here.
-    const panes = page.locator(".deep-review-pane");
-    await expect(panes.first()).toContainText(
-      "device-panel isn't checked out here",
+    // Reviewed in a worktree of its own, so Claude runs its own review there.
+    await expect(page.locator(".deep-review-request")).toContainText(
+      "Reviewed and fixed in",
     );
+    const panes = page.locator(".deep-review-pane");
+    await expect(panes.first()).toContainText("/code-review high");
+    await screenshot(page, {
+      path: "test-results/deep-review-other-branch-started.png",
+    });
     expect(git("branch", "--show-current").trim()).toBe("main");
+    expect(git("worktree", "list")).toContain("deep-reviews");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

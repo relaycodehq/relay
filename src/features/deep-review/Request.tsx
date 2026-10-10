@@ -69,6 +69,13 @@ export function DeepReviewRequest({
             <AgentChip agent={state.lead} name={name(state.lead)} />
           </div>
           {state.focus && <p>{state.focus}</p>}
+          {scope.checkout && (
+            // The thread's Changes pane shows its own checkout, not this folder.
+            <p className="muted">
+              Reviewed and fixed in {scope.checkout.path}, not this thread's
+              checkout.
+            </p>
+          )}
         </div>
       </div>
     </article>

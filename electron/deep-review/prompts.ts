@@ -21,13 +21,26 @@ const reviewedBranch = (scope: ReviewScope) =>
   scope.target.kind === "branch"
     ? (scope.target.head ?? scope.branch)
     : undefined;
-/** A branch review of a branch other than the checkout's, read from Git rather than disk. */
+/** A branch review of a branch other than the thread checkout's. */
 const branchElsewhere = (scope: ReviewScope) =>
   scope.target.kind === "branch" && reviewedBranch(scope) !== scope.branch;
+/**
+ * The reviewed code isn't on disk where the agents work, so they read it
+ * from Git: a commit, or a pull request or another branch whose worktree
+ * couldn't be made.
+ */
+const fromGit = (scope: ReviewScope) =>
+  !scope.checkout &&
+  (scope.target.kind === "pr" ||
+    scope.target.kind === "commit" ||
+    branchElsewhere(scope));
 
 /** Says what a review covers, then how to see those changes. */
 function describe(scope: ReviewScope) {
   const t = scope.target;
+  const range = `\`git diff ${scope.base} ${scope.head}\``;
+  const checkedOut = (what: string) =>
+    `${what} is checked out at ${scope.checkout!.path}, which is where you're working, so the files there are its own. See the changes with ${range}.`;
   switch (t.kind) {
     case "uncommitted":
       return {
@@ -38,9 +51,11 @@ function describe(scope: ReviewScope) {
       const reviewed = reviewedBranch(scope);
       return {
         what: `the commits on ${reviewed} that aren't on ${t.base}`,
-        how: branchElsewhere(scope)
-          ? `${reviewed} isn't checked out here, so the files on disk are ${scope.branch ? `${scope.branch}'s` : "another commit's"}, not its. Its head is ${scope.head} and it branches off at ${scope.base}: see the changes with \`git diff ${scope.base} ${scope.head}\` and read its files with \`git show ${scope.head}:<path>\`.`
-          : `See them with \`git diff ${scope.base} ${scope.head}\`.`,
+        how: scope.checkout
+          ? checkedOut(reviewed!)
+          : branchElsewhere(scope)
+            ? `${reviewed} isn't checked out here, so the files on disk are ${scope.branch ? `${scope.branch}'s` : "another commit's"}, not its. Its head is ${scope.head} and it branches off at ${scope.base}: see the changes with ${range} and read its files with \`git show ${scope.head}:<path>\`.`
+            : `See them with ${range}.`,
       };
     }
     case "commit":
@@ -51,7 +66,9 @@ function describe(scope: ReviewScope) {
     case "pr":
       return {
         what: `pull request #${t.ref.number}${scope.title ? ` (${JSON.stringify(scope.title)})` : ""}`,
-        how: `The pull request is fetched but not checked out. Its head is ${scope.head} and it branches off at ${scope.base}: see the changes with \`git diff ${scope.base} ${scope.head}\` and read its files with \`git show ${scope.head}:<path>\`.`,
+        how: scope.checkout
+          ? checkedOut(`Its head, ${scope.head},`)
+          : `The pull request is fetched but not checked out. Its head is ${scope.head} and it branches off at ${scope.base}: see the changes with ${range} and read its files with \`git show ${scope.head}:<path>\`.`,
       };
   }
 }
@@ -81,17 +98,27 @@ export function reviewerTask(
   if (reviewer.provider === "cursor" && diff !== undefined)
     return { body: `@cursor ${bugbotPrompt(scope, diff, note)}` };
   if (reviewer.provider === "codex") {
-    // Codex's review takes a note only as instructions of its own.
-    // Its base-branch review diffs the checkout itself, so a branch that
-    // isn't checked out gets Relay's prompt, which reads it from Git.
+    // Codex's review takes a note only as instructions of its own. Its
+    // base-branch review diffs its working directory against the base, so
+    // code that isn't checked out there gets Relay's prompt, which reads it
+    // from Git. A pull request's base is the branch Relay fetched for it.
     const codex: CodexReviewTarget =
-      t.kind === "pr" || branchElsewhere(scope) || asked.note
+      (fromGit(scope) && t.kind !== "commit") || asked.note
         ? { type: "custom", instructions: reviewPrompt(scope, note) }
         : t.kind === "uncommitted"
           ? { type: "uncommittedChanges" }
           : t.kind === "branch"
             ? { type: "baseBranch", branch: t.base }
-            : { type: "commit", sha: scope.head!, title: scope.title ?? null };
+            : t.kind === "pr"
+              ? {
+                  type: "baseBranch",
+                  branch: `refs/relay/pulls/${t.ref.number}/base`,
+                }
+              : {
+                  type: "commit",
+                  sha: scope.head!,
+                  title: scope.title ?? null,
+                };
     return { body: "@codex /review", codex };
   }
   // Agents without a review command of their own are given Relay's prompt.
@@ -102,15 +129,14 @@ export function reviewerTask(
   const after = asked.note ? ` ${asked.note}` : "";
   if (t.kind === "uncommitted")
     return { body: `@claude /code-review ${level}${after}` };
-  // Given a branch name, `/code-review` picks its own base; a range keeps the
-  // one chosen. It reads the code around the range from disk, so a branch
-  // that isn't checked out gets Relay's prompt instead.
-  if (t.kind === "branch" && !branchElsewhere(scope))
+  // Given a branch name, `/code-review` picks its own base, and given a pull
+  // request it fetches it from GitHub; a range keeps the base chosen. It
+  // reads the code around the range from disk, so code that isn't checked
+  // out where it works, a commit's included, gets Relay's prompt instead.
+  if ((t.kind === "branch" || t.kind === "pr") && !fromGit(scope))
     return {
       body: `@claude /code-review ${level} ${scope.base}...${scope.head}${after}`,
     };
-  // `/code-review` fetches pull requests from GitHub; review the fetched range
-  // instead. Commits and other branches are read from Git the same way.
   return { body: `@claude ${reviewPrompt(scope, note)}` };
 }
 
@@ -155,15 +181,26 @@ function fenced(diff: string) {
   );
   return `${fence}diff\n${diff.trimEnd()}\n${fence}`;
 }
-/** Pull requests, commits and other branches are read from Git, not the checkout. */
-const elsewhere = (scope: ReviewScope) =>
-  scope.target.kind === "pr" ||
-  scope.target.kind === "commit" ||
-  branchElsewhere(scope);
 const notCheckedOut = (scope: ReviewScope) =>
-  elsewhere(scope)
+  fromGit(scope)
     ? " These changes aren't checked out, so files on disk may not match them."
     : "";
+
+/** Where the lead's fixes go, when that isn't simply the checkout it works in. */
+function fixesNote(scope: ReviewScope) {
+  const c = scope.checkout;
+  if (c && !c.made)
+    return ` They go in ${c.path}, where ${c.branch} is checked out; it's your working directory, not this thread's checkout.`;
+  if (c?.branch)
+    return ` Your working directory, ${c.path}, is a worktree Relay made for this review, detached at the reviewed head. Before a fix request reaches you, Relay checks ${c.branch} out there, so your fixes land on it.`;
+  if (c)
+    return ` Your working directory, ${c.path}, is a worktree Relay made for this review, detached at the reviewed head, with no local branch. Before editing, check with the user where the fixes should go.`;
+  if (branchElsewhere(scope))
+    return ` ${reviewedBranch(scope)} isn't checked out here; before editing, check with the user that it is.`;
+  if (fromGit(scope))
+    return " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out.";
+  return "";
+}
 
 function bugbotPrompt(scope: ReviewScope, diff: string, focus?: string) {
   return [
@@ -225,11 +262,7 @@ export function leadPrompt(
     '```relay-findings\n{"findings":[{"id":"F1","priority":"P1","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[1,2],"check":"How you confirmed it"}],"dropped":[{"title":"Short title","reason":"Why it didn\'t hold up, or that it repeats F1","reviewers":[3]}]}\n```',
     "Number findings F1, F2 and so on in priority order. `reviewers` are the numbers of the reviewers that reported it. Paths are relative to the repository root. With nothing left, return an empty findings list.",
     "Afterwards the user will ask you to fix some or all of the findings in this conversation." +
-      (branchElsewhere(state.scope)
-        ? ` ${reviewedBranch(state.scope)} isn't checked out here; before editing, check with the user that it is.`
-        : elsewhere(state.scope)
-          ? " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out."
-          : ""),
+      fixesNote(state.scope),
     ...focusNote(state.focus),
     `Reviewer reports:\n${JSON.stringify(
       reports.map((r) => ({

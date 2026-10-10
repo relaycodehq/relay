@@ -25,6 +25,7 @@ import {
   reportedFindings,
   answeredFindings,
   type DeepReviewStart,
+  type ReviewScope,
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "./prompts";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
@@ -236,6 +237,66 @@ describe("reviewer tasks", () => {
         { ...other, target: { ...other.target, head: "main", base: "x" } },
       ).codex,
     ).toEqual({ type: "baseBranch", branch: "x" });
+  });
+  it("keeps each agent's own review where the reviewed code is checked out for it", () => {
+    const claude = { provider: "claude" as const, choice };
+    const codex = { provider: "codex" as const, choice };
+    const lead = (s: ReviewScope) =>
+      leadPrompt(
+        {
+          request: randomUUID(),
+          scope: s,
+          reviewers: [],
+          lead: { provider: "claude", choice },
+          runChecks: true,
+          runtimeMode: "full-access",
+          status: "leading",
+        },
+        [],
+      );
+    const branch: ReviewScope = {
+      ...scope,
+      branch: "main",
+      target: { kind: "branch", head: "device-panel", base: "main" },
+      checkout: { path: "/wt/r1", made: true, branch: "device-panel" },
+    };
+    expect(reviewerTask(claude, branch).body).toBe(
+      `@claude /code-review high ${scope.base}...${scope.head}`,
+    );
+    expect(reviewerTask(codex, branch).codex).toEqual({
+      type: "baseBranch",
+      branch: "main",
+    });
+    const opencode = reviewerTask({ provider: "opencode", choice }, branch);
+    expect(opencode.body).toContain(
+      "device-panel is checked out at /wt/r1, which is where you're working",
+    );
+    expect(opencode.body).not.toContain("git show");
+    expect(lead(branch)).toContain(
+      "Relay checks device-panel out there, so your fixes land on it.",
+    );
+    expect(
+      lead({
+        ...branch,
+        checkout: { path: "/src/panel", made: false, branch: "device-panel" },
+      }),
+    ).toContain("They go in /src/panel, where device-panel is checked out");
+
+    const pr: ReviewScope = {
+      ...scope,
+      target: { kind: "pr", ref: { owner: "team", name: "app", number: 4 } },
+      checkout: { path: "/wt/r2", made: true },
+    };
+    expect(reviewerTask(claude, pr).body).toBe(
+      `@claude /code-review high ${scope.base}...${scope.head}`,
+    );
+    expect(reviewerTask(codex, pr).codex).toEqual({
+      type: "baseBranch",
+      branch: "refs/relay/pulls/4/base",
+    });
+    expect(lead(pr)).toContain(
+      "with no local branch. Before editing, check with the user where the fixes should go.",
+    );
   });
   it("gives an agent with no review command Relay's own prompt", () => {
     const opencode = { provider: "opencode" as const, choice };
@@ -534,6 +595,78 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   await expect(
     chats.setDeepReviewFinding(chat.id, "F7", "dismissed"),
   ).rejects.toThrow("no longer in this review");
+});
+
+it("reviews a branch that isn't checked out in a worktree of its own, fixes it on the branch, and removes the worktree once settled", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  git(repo, "switch", "-q", "-c", "panel");
+  await writeFile(join(repo, "src", "panel.ts"), "export const panel = 1;\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "Add the panel");
+  const head = git(repo, "rev-parse", "HEAD");
+  git(repo, "switch", "-q", main);
+
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "panel", base: main } }),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+  );
+  const state = (await chats.get(chat.id)).deepReview!;
+  const checkout = state.scope.checkout!;
+  expect(checkout).toMatchObject({ made: true, branch: "panel" });
+  expect(checkout.path).toBe(join(root, "worktrees", "deep-reviews", chat.id));
+  expect(git(checkout.path, "rev-parse", "HEAD")).toBe(head);
+  // The thread's checkout stays on its branch.
+  expect(git(repo, "branch", "--show-current")).toBe(main);
+
+  // Reviewers and the lead work in it, with their own reviews.
+  const records = await capture();
+  const prompts = records.filter((r) => r.prompt || r.review);
+  expect(prompts.length).toBeGreaterThan(2);
+  for (const r of prompts) expect(r.cwd).toBe(checkout.path);
+  expect(records.find((r) => r.review).review.target).toEqual({
+    type: "baseBranch",
+    branch: main,
+  });
+  const claude = await chats.get(state.reviewers[1]!.chatId);
+  expect(claude.messages[0]?.body).toBe(
+    `@claude /code-review high ${state.scope.base}...${head}`,
+  );
+
+  // A fix checks the branch out there first.
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    body: fixRequest("claude", state.report!.findings),
+    provider: "claude",
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    fixes: ["F1"],
+  });
+  expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixed"),
+  );
+
+  // Settled, it goes, but not while it holds an edit.
+  await chats.triage(chat.id, { kind: "settle" });
+  await writeFile(join(checkout.path, "fix.ts"), "export {};\n");
+  await chats.cleanUpWorktrees();
+  expect(git(checkout.path, "status", "--porcelain")).toBe("?? fix.ts");
+  await rm(join(checkout.path, "fix.ts"));
+  await chats.cleanUpWorktrees();
+  await expect(readFile(join(checkout.path, ".git"))).rejects.toThrow();
+  expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
+  expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
 });
 
 it("leaves the thread and the disk as they were when a reviewer can't be created, so starting again works", async () => {

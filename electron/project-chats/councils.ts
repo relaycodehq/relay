@@ -5,7 +5,12 @@ import type {
   FindingStatus,
   ReviewerTask,
 } from "../../shared/deep-review";
-import { DeepReviews, type PullInfo } from "../deep-review";
+import {
+  DeepReviews,
+  ensureReviewCheckout,
+  sweepReviewCheckouts,
+  type PullInfo,
+} from "../deep-review";
 import type { ChatCore } from "./core";
 
 export interface CouncilHost {
@@ -29,11 +34,14 @@ export class Councils {
   constructor(
     private core: ChatCore,
     private host: CouncilHost,
+    /** The folder Relay makes worktrees in. */
+    private worktrees: string,
   ) {
     this.reviews = new DeepReviews({
       load: (id) => this.core.storage.load(id),
       project: (id) => this.core.projects.get(id),
       root: (projectId) => this.core.projects.root(projectId),
+      worktrees,
       createReviewer: (parent, task) => this.createReviewer(parent, task),
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
@@ -50,9 +58,41 @@ export class Councils {
     return this.reviews.reviewing(chat);
   }
 
+  /** A message is about to go out in the thread; a fix request readies the review's folder or refuses. */
+  fixing(chat: ProjectChat, input: ProjectChatSend) {
+    return this.reviews.fixing(chat, input);
+  }
+
   /** A message went out in the thread. */
   sent(chat: ProjectChat, input: ProjectChatSend) {
     this.reviews.sent(chat, input);
+  }
+
+  /**
+   * Where a review thread, or one of its reviewers, works when the reviewed
+   * code isn't in the project's checkout; undefined otherwise. A worktree
+   * Relay made and has since cleaned up is made again.
+   */
+  async root(chat: ProjectChat) {
+    const state = chat.reviewer
+      ? (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
+          ?.deepReview
+      : chat.deepReview;
+    const checkout = state?.scope.checkout;
+    if (!checkout || !state.scope.head) return;
+    return ensureReviewCheckout(
+      await this.core.projects.root(chat.projectId),
+      checkout,
+      state.scope.head,
+    );
+  }
+
+  /**
+   * Removes the worktrees Relay made for reviews whose thread is gone,
+   * archived or settled, unless they hold work Git couldn't give back.
+   */
+  sweepCheckouts(done: (chatId: string) => boolean) {
+    return sweepReviewCheckouts(this.worktrees, done);
   }
 
   /** A turn in the thread ended; a review at work takes its next step, settling once it has. */
