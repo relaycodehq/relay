@@ -133,6 +133,9 @@ export function ThreadMessages({
     () => (root ? undefined : latestSetup(listed)?.id),
     [root, listed],
   );
+  /** Queued and scheduled messages wait in the conversation they were sent in, main or side. */
+  const inView = (waiting: { input: { parentId?: string | null } }) =>
+    (waiting.input.parentId ?? null) === (root?.id ?? null);
   return (
     <div className="project-messages" ref={scroll} onScroll={onScroll}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}
@@ -253,9 +256,9 @@ export function ThreadMessages({
             </button>
           )}
         <QueuedMessages
-          queue={history.data?.queue}
+          queue={history.data?.queue?.filter(inView)}
           paused={history.data?.queuePaused}
-          scheduled={history.data?.scheduled}
+          scheduled={history.data?.scheduled?.filter(inView)}
           running={running}
           compacting={shown.some(
             (m) => m.compaction && m.status === "streaming",

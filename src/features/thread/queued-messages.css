@@ -1,88 +1,136 @@
-/* Messages sent while a turn runs, waiting under the thread for their turn. */
+/* Messages sent while a turn runs, waiting under the thread for their turn:
+   unsent bubbles shaped like the user's sent ones, dashed and dimmed. */
 .chat-queue {
   margin: 20px 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
+}
+.chat-queue-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chat-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .queued-message {
-  border: 1px dashed var(--border);
-  border-radius: 16px;
-  padding: 10px 12px 8px;
-  max-width: 80%;
-  min-width: 150px;
-  color: var(--text);
   position: relative;
+  transition: transform 180ms ease;
 }
-/* Dragging reorders the queue: insertion line above or below the target. */
-.queued-message[draggable="true"] {
+.queued-message.sortable {
   cursor: grab;
 }
-.queued-message[draggable="true"]:active {
+.chat-queue-list.sorting {
+  user-select: none;
+}
+/* The row being dragged follows the pointer; the others slide aside. */
+.queued-message.lifted {
+  transition: none;
+  z-index: 2;
   cursor: grabbing;
 }
-.queued-message.dragging {
-  opacity: 0.4;
+.queued-bubble {
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  padding: 11px 64px 11px 16px;
+  background: var(--background);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  font-size: 14px;
+  line-height: 1.75;
+  transition:
+    color 120ms,
+    box-shadow 160ms;
 }
-.queued-message.drop-before::before,
-.queued-message.drop-after::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-  pointer-events: none;
+.queued-message:hover .queued-bubble,
+.queued-message.lifted .queued-bubble {
+  color: var(--text);
 }
-.queued-message.drop-before::before {
-  top: -7px;
+.queued-message.lifted .queued-bubble {
+  border-style: solid;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
-.queued-message.drop-after::after {
-  bottom: -7px;
-}
-.queued-message > p {
+.queued-bubble > p {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.55;
+  max-height: calc(1.75em * 3);
+  overflow: hidden;
 }
-.queued-message footer {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-top: 6px;
+.queued-bubble.long,
+.queued-bubble.open {
+  cursor: pointer;
 }
-.queued-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
+.queued-bubble.long > p {
+  mask-image: linear-gradient(#000 55%, transparent);
+}
+.queued-bubble.open > p {
+  max-height: none;
+  mask-image: none;
+}
+.queued-bubble small {
+  margin-right: 10px;
   color: var(--muted);
+  font-size: 11px;
 }
-.queued-status.error {
+.queued-bubble small.queued-error {
+  display: block;
   color: var(--danger);
 }
-.queued-message small {
-  color: var(--muted);
+/* Place in line in the gutter, swapped for a grip while hovered. */
+.queued-order {
+  position: absolute;
+  left: -24px;
+  top: 12px;
+  width: 18px;
+  text-align: center;
   font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.queued-order svg {
+  display: none;
+  margin: 2px auto 0;
+}
+.queued-message.sortable:hover .queued-order span {
+  display: none;
+}
+.queued-message.sortable:hover .queued-order svg {
+  display: block;
 }
 .queued-actions {
-  margin-left: auto;
+  position: absolute;
+  top: 7px;
+  right: 7px;
   display: flex;
   gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.queued-message:hover .queued-actions,
+.queued-actions:focus-within {
+  opacity: 1;
+}
+.chat-queue-list.sorting .queued-actions {
+  opacity: 0;
 }
 .queued-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
 }
@@ -91,7 +139,8 @@
   background: var(--hover);
 }
 .chat-queue-hint {
-  margin: 0;
+  margin: 2px 0 0;
+  text-align: right;
   font-size: 11px;
   color: var(--muted);
 }

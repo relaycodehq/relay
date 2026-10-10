@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowUp, CalendarClock, Clock3, X } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowUp, CalendarClock, Clock3, GripVertical, X } from "lucide-react";
 import { agentMentionPattern } from "../../../shared/agents";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { parseCodeReferences } from "../../../shared/code-references";
@@ -17,16 +17,25 @@ import {
 } from "../../lib/send-key";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { Spinner } from "../../ui/ui";
+import { useQueueSort } from "./useQueueSort";
 import "./queued-messages.css";
 
-/** A queued message's text, with its attachments counted rather than shown. */
-function QueuedBody({ input }: { input: ProjectChatSend }) {
+/** A queued message's text, with its attachments counted rather than shown; folded, its blank lines close up. */
+function QueuedBody({
+  input,
+  folded,
+}: {
+  input: ProjectChatSend;
+  folded: boolean;
+}) {
   const code = parseCodeReferences(input.body);
   const pastes = pastedTexts(code.body);
-  const body = replacePastedTexts(code.body, () => "\n\n").trim();
+  const body = replacePastedTexts(code.body, () => "\n\n")
+    .trim()
+    .replace(agentMentionPattern, "");
   return (
     <>
-      <p>{body.replace(agentMentionPattern, "")}</p>
+      <p>{folded ? body.replace(/\n\s*\n+/g, "\n") : body}</p>
       {!!code.refs.length && (
         <small>{code.refs.length} code reference(s)</small>
       )}
@@ -37,8 +46,64 @@ function QueuedBody({ input }: { input: ProjectChatSend }) {
     </>
   );
 }
-/** Drag type for reordering queued messages, so other drops are ignored. */
-const QUEUED_DRAG = "application/x-relay-queued-message";
+/** One waiting message: its unsent bubble, its place in line, and its buttons on hover. Long ones fold to three lines and open with a click. */
+function QueuedRow({
+  order,
+  sortable,
+  text,
+  justDropped,
+  children,
+  actions,
+}: {
+  order?: number;
+  sortable?: boolean;
+  /** The message's text, to measure again whether it folds when it changes. */
+  text: string;
+  justDropped?: () => boolean;
+  children: (folded: boolean) => ReactNode;
+  actions: ReactNode;
+}) {
+  const bubble = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  useLayoutEffect(() => {
+    const p = bubble.current?.querySelector("p");
+    if (p && !open) setLong(p.scrollHeight > p.clientHeight + 1);
+  }, [text, open]);
+  return (
+    <li
+      className={`queued-message${sortable ? " sortable" : ""}`}
+      title={sortable ? "Drag to reorder" : undefined}
+    >
+      {order !== undefined && (
+        <span className="queued-order" aria-hidden>
+          <span>{order}</span>
+          {sortable && <GripVertical size={13} />}
+        </span>
+      )}
+      <div
+        ref={bubble}
+        className={["queued-bubble", long && "long", open && "open"]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={() => {
+          if (!justDropped?.() && (long || open)) setOpen(!open);
+        }}
+      >
+        {children(!open)}
+      </div>
+      <span className="queued-actions">{actions}</span>
+    </li>
+  );
+}
+/** What the queue as a whole waits for. */
+function queueHeading(count: number, paused?: boolean, compacting?: boolean) {
+  const what = count > 1 ? `${count} queued` : "Queued";
+  if (paused) return count > 1 ? `Paused · ${count} queued` : "Paused";
+  if (compacting)
+    return `${what} · ${count > 1 ? "the first sends" : "sends"} after compaction`;
+  return `${what} · ${count > 1 ? "sent one by one" : "sends"} after this answer`;
+}
 
 /** The messages waiting to go: queued behind the answer, reordered by dragging, and scheduled for later. */
 export function QueuedMessages({
@@ -68,125 +133,95 @@ export function QueuedMessages({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const editKey = useShortcutLabel("edit-queued");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [drop, setDrop] = useState<QueueDrop | null>(null);
-  const clearDrag = () => {
-    setDragging(null);
-    setDrop(null);
-  };
-  function dropped() {
-    const moving = dragging,
-      target = drop;
-    clearDrag();
-    if (moving && target) onMove(moving, target);
-  }
+  const sort = useQueueSort(
+    queue?.map((q) => q.input.id) ?? [],
+    (queue?.length ?? 0) > 1 && !busy,
+    onMove,
+  );
   return (
     <>
       {!!queue?.length && (
         <section className="chat-queue" aria-label="Queued messages">
-          {queue.map((queued, index) => {
-            const afterCompaction = compacting && !paused && index === 0;
-            return (
-              <div
-                key={queued.input.id}
-                className={[
-                  "queued-message",
-                  dragging === queued.input.id && "dragging",
-                  drop?.id === queued.input.id &&
-                    dragging !== queued.input.id &&
-                    `drop-${drop.where}`,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                draggable={queue.length > 1 && !busy}
-                title={queue.length > 1 ? "Drag to reorder" : undefined}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(QUEUED_DRAG, queued.input.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  setDragging(queued.input.id);
-                }}
-                onDragEnd={clearDrag}
-                onDragOver={(e) => {
-                  if (!dragging || !e.dataTransfer.types.includes(QUEUED_DRAG))
-                    return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  const box = e.currentTarget.getBoundingClientRect(),
-                    where =
-                      e.clientY < box.top + box.height / 2 ? "before" : "after";
-                  setDrop((current) =>
-                    current?.id === queued.input.id && current.where === where
-                      ? current
-                      : { id: queued.input.id, where },
-                  );
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  dropped();
-                }}
-              >
-                <QueuedBody input={queued.input} />
-                <footer>
-                  <span
-                    className="queued-status"
-                    title={
-                      paused
-                        ? (queued.error ?? "Waits for Send now")
-                        : index === 0
-                          ? "Sends when the current answer finishes"
-                          : "Sends after the messages above it"
-                    }
-                  >
-                    {afterCompaction ? (
-                      <>
-                        <Spinner size={13} steady /> Sends after compaction
-                      </>
-                    ) : (
-                      <>
-                        <Clock3 size={13} /> {paused ? "Paused" : "Queued"}
-                      </>
-                    )}
-                  </span>
-                  <span className="queued-actions">
-                    <button
-                      type="button"
-                      disabled={busy || afterCompaction}
-                      aria-label={
-                        compacting
-                          ? "Send right after compaction"
-                          : running
-                            ? "Steer now"
-                            : "Send now"
-                      }
-                      title={
-                        afterCompaction
-                          ? "Already sends as soon as compaction finishes"
-                          : compacting
-                            ? "A compaction can't be steered; send this right after it"
+          <header
+            className="chat-queue-head"
+            title={
+              paused
+                ? "Waits for Send now"
+                : "Sends when the current answer finishes, in this order"
+            }
+          >
+            {compacting && !paused ? (
+              <Spinner size={13} steady />
+            ) : (
+              <Clock3 size={13} />
+            )}
+            {queueHeading(queue.length, paused, compacting)}
+          </header>
+          <ol
+            className="chat-queue-list"
+            ref={sort.list}
+            onPointerDown={sort.onPointerDown}
+          >
+            {queue.map((queued, index) => {
+              const afterCompaction = compacting && !paused && index === 0;
+              return (
+                <QueuedRow
+                  key={queued.input.id}
+                  order={queue.length > 1 ? index + 1 : undefined}
+                  sortable={queue.length > 1 && !busy}
+                  text={queued.input.body}
+                  justDropped={sort.justDropped}
+                  actions={
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy || afterCompaction}
+                        aria-label={
+                          compacting
+                            ? "Send right after compaction"
                             : running
-                              ? "Steer the current answer, or send this next when it can't be steered"
+                              ? "Steer now"
                               : "Send now"
-                      }
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => onSteer(queued.input.id)}
-                    >
-                      <ArrowUp size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label="Cancel and return to the composer"
-                      title="Cancel and return to the composer"
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => onReturn(queued.input)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </span>
-                </footer>
-              </div>
-            );
-          })}
+                        }
+                        title={
+                          afterCompaction
+                            ? "Already sends as soon as compaction finishes"
+                            : compacting
+                              ? "A compaction can't be steered; send this right after it"
+                              : running
+                                ? "Steer the current answer, or send this next when it can't be steered"
+                                : "Send now"
+                        }
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => onSteer(queued.input.id)}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label="Cancel and return to the composer"
+                        title="Cancel and return to the composer"
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => onReturn(queued.input)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  }
+                >
+                  {(folded) => (
+                    <>
+                      <QueuedBody input={queued.input} folded={folded} />
+                      {paused && queued.error && (
+                        <small className="queued-error">{queued.error}</small>
+                      )}
+                    </>
+                  )}
+                </QueuedRow>
+              );
+            })}
+          </ol>
           {running && !compacting && (
             <p className="chat-queue-hint">
               <kbd>{queueKeyLabel(sendKey, runningAction)}</kbd> to queue ·{" "}
@@ -203,52 +238,64 @@ export function QueuedMessages({
       )}
       {!!scheduled?.length && (
         <section className="chat-queue" aria-label="Scheduled messages">
-          {[...scheduled]
-            .sort((a, b) => a.at - b.at)
-            .map((scheduled) => (
-              <div key={scheduled.input.id} className="queued-message">
-                <QueuedBody input={scheduled.input} />
-                <footer>
-                  <span
-                    className={`queued-status${scheduled.error ? " error" : ""}`}
-                    title={
-                      scheduled.error ?? new Date(scheduled.at).toLocaleString()
-                    }
-                  >
-                    <CalendarClock size={13} />{" "}
-                    {scheduled.error
-                      ? "Didn't send"
-                      : `Sends ${wakeLabel(scheduled.at, new Date())}`}
-                  </span>
-                  <span className="queued-actions">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label="Send now"
-                      title={
-                        running
-                          ? "Queue now, to send when the current answer finishes"
-                          : "Send now"
-                      }
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => onSteer(scheduled.input.id)}
-                    >
-                      <ArrowUp size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label="Cancel and return to the composer"
-                      title="Cancel and return to the composer"
-                      onPointerDown={(e) => e.preventDefault()}
-                      onClick={() => onReturn(scheduled.input)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </span>
-                </footer>
-              </div>
-            ))}
+          <header className="chat-queue-head">
+            <CalendarClock size={13} /> Scheduled
+          </header>
+          <ol className="chat-queue-list">
+            {[...scheduled]
+              .sort((a, b) => a.at - b.at)
+              .map((scheduled) => (
+                <QueuedRow
+                  key={scheduled.input.id}
+                  text={scheduled.input.body}
+                  actions={
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label="Send now"
+                        title={
+                          running
+                            ? "Queue now, to send when the current answer finishes"
+                            : "Send now"
+                        }
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => onSteer(scheduled.input.id)}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label="Cancel and return to the composer"
+                        title="Cancel and return to the composer"
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => onReturn(scheduled.input)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  }
+                >
+                  {(folded) => (
+                    <>
+                      <QueuedBody input={scheduled.input} folded={folded} />
+                      <small
+                        className={`queued-when${scheduled.error ? " queued-error" : ""}`}
+                        title={
+                          scheduled.error ??
+                          new Date(scheduled.at).toLocaleString()
+                        }
+                      >
+                        {scheduled.error
+                          ? "Didn't send"
+                          : `Sends ${wakeLabel(scheduled.at, new Date())}`}
+                      </small>
+                    </>
+                  )}
+                </QueuedRow>
+              ))}
+          </ol>
         </section>
       )}
     </>
