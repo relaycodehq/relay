@@ -111,21 +111,41 @@ export class ThreadTriage {
   /**
    * Called once a run ended and its queue went out: a thread settled while it
    * ran settles for real if nothing is left going, or comes back to Activity
-   * when its answer failed or was stopped.
+   * when its answer failed or was stopped, quitting Relay included.
    */
   async ended(id: string) {
     const chat = await this.core.storage.load(id);
-    if (!chat.settleWhenDone || this.going(chat)) return;
+    const since = chat.settleWhenDone;
+    if (!since || this.going(chat)) return;
     const answer = chat.messages
       .filter((m) => m.role === "assistant" && !m.parentId)
       .at(-1);
+    // A turn a restart left running, about to be taken back.
+    if (answer?.status === "streaming") return;
     delete chat.settleWhenDone;
     const now = Date.now();
-    if (chatSummary(chat).asking || answer?.status !== "complete")
+    if (
+      chatSummary(chat).asking ||
+      answer?.status !== "complete" ||
+      (chat.stopped && chat.stopped.at >= since)
+    )
       delete chat.settledAt;
     else chat.settledAt = now;
     await this.core.storage.save(chat);
     if (chat.settledAt) await this.settleStarted(id, now);
+  }
+  /**
+   * After Relay starts: a quit cut off the runs of threads settled while
+   * they ran, and no run ending will look at them again.
+   */
+  async restarted() {
+    const ids = (this.core.store.get().chats ?? [])
+      .filter((c) => c.settleWhenDone)
+      .map((c) => c.id);
+    for (const id of ids)
+      await this.ended(id).catch((e) =>
+        console.warn("Could not settle a thread settled while running:", e),
+      );
   }
   /** Something runs in the thread now, or is about to go on by itself. */
   private going(chat: ProjectChat) {

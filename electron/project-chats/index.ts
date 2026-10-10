@@ -577,8 +577,9 @@ export class ProjectChats {
    * Takes back the agent sessions that kept running while Relay restarted.
    * A turn one was in carries on in the answer it was writing.
    */
-  reattach() {
-    return this.turns.reattach();
+  async reattach() {
+    await this.turns.reattach();
+    await this.triaging.restarted();
   }
   /** Puts right any thread summary a crash left behind its thread. */
   async reconcileSummaries() {

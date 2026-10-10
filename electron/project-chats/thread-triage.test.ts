@@ -152,6 +152,66 @@ it("unsettling a thread settled while running lets its answer come back as usual
   expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
 });
 
+/** Relay quits with `id` settled while it runs, after `left` saves what the quit left; then starts again. */
+async function quitAndRestart(
+  id: string,
+  left: (chat: import("../../shared/projects").ProjectChat) => void,
+) {
+  const core = (chats as unknown as { core: ChatCore }).core;
+  const chat = await core.storage.load(id);
+  left(chat);
+  await core.storage.save(chat);
+  await chats.dispose();
+  chats = new ProjectChats(
+    store,
+    new Projects(store),
+    join(root, "chats"),
+    () => {},
+  );
+  const listed = () => chats.list(projectId).find((c) => c.id === id)!;
+  // Nothing has looked at it since the quit.
+  expect(chatActivitySection(listed(), Date.now())).toBe("settled");
+  await (chats as unknown as { triaging: ThreadTriage }).triaging.restarted();
+  return listed();
+}
+
+it("brings a thread settled while running back when quitting Relay cut its answer off", async () => {
+  const thread = await runningThread();
+  await chats.triage(thread.id, { kind: "settle-when-done" });
+  const after = await quitAndRestart(thread.id, (chat) =>
+    chat.messages.push({
+      id: randomUUID(),
+      role: "assistant",
+      provider: "claude",
+      status: "streaming",
+      body: "Committing",
+      created: Date.now(),
+      version: 1,
+    }),
+  );
+  expect(after.settleWhenDone).toBeUndefined();
+  expect(chatActivitySection(after, Date.now())).toBe("active");
+});
+
+it("brings a thread settled while running back when quitting Relay stopped its background work", async () => {
+  const thread = await runningThread();
+  await chats.triage(thread.id, { kind: "settle-when-done" });
+  const after = await quitAndRestart(thread.id, (chat) => {
+    chat.messages.push({
+      id: randomUUID(),
+      role: "assistant",
+      provider: "claude",
+      status: "complete",
+      body: "Started the build in the background",
+      created: Date.now(),
+      version: 1,
+    });
+    chat.stopped = { at: Date.now(), items: [] };
+  });
+  expect(after.settleWhenDone).toBeUndefined();
+  expect(chatActivitySection(after, Date.now())).toBe("active");
+});
+
 it("a started thread settled on its own stays settled when its lead's settle is undone", async () => {
   const lead = await chats.create(projectId, scope);
   const child = await chats.create(projectId, scope, "checkout", {
