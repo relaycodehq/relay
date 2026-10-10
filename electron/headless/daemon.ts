@@ -379,6 +379,8 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
       // Images go to phones whole, re-encoded smaller where that's possible.
       shrinkImage: (dataUrl) => compressImage(dataUrl),
+      renderPage: (chatId, renderId, page) =>
+        chats.renderPage(chatId, renderId, page),
       dictation: speech.forPhones.dictation,
       readAloud: speech.forPhones.readAloud,
       handoffs: receiver,

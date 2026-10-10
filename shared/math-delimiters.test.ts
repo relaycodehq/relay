@@ -10,6 +10,11 @@ describe("normalizeMath", () => {
       "so $x_1$ and $\\alpha$.",
       "so $$x_1$$ and $$\\alpha$$.",
     ],
+    [
+      "a formula after prices",
+      "It costs $5 and $10, and $x_1$ is free.",
+      "It costs $5 and $10, and $$x_1$$ is free.",
+    ],
     ["display on one line", "$$ E = mc^2 $$", "$$\nE = mc^2\n$$"],
     ["bracket display on one line", "\\[ E = mc^2 \\]", "$$\nE = mc^2\n$$"],
     [

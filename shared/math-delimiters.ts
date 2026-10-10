@@ -159,8 +159,14 @@ function singleDollarEnd(text: string, from: number): number {
       continue;
     }
     if (text[k] !== "$") continue;
-    if (/\s/.test(text[k - 1]!)) continue;
-    if (text[k + 1] === "$" || /\d/.test(text[k + 1] ?? "")) continue;
+    // A formula holds no other dollar, so the first one decides: the closer,
+    // or proof this wasn't math ("$5 and $10, then $x$" pairs only the last two).
+    if (
+      /\s/.test(text[k - 1]!) ||
+      text[k + 1] === "$" ||
+      /\d/.test(text[k + 1] ?? "")
+    )
+      return -1;
     // "$HOME/$USER" and "$a-$b": a formula doesn't end on a separator.
     return /[/:,;.-]/.test(text[k - 1]!) ? -1 : k;
   }

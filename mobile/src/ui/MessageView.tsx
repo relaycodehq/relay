@@ -27,7 +27,8 @@ import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { StartedInTurn } from "./StartedThreads";
-import { AgentErrorNote, RenderNotes, SignInNote } from "./TurnNotices";
+import { AgentErrorNote, SignInNote } from "./TurnNotices";
+import { RenderCards } from "./renders/Renders";
 import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
 
@@ -192,7 +193,9 @@ export const MessageView = memo(function MessageView({
         />
       )}
       {!user && startCalls(m).length > 0 && <StartedInTurn chatId={chatId} message={m} />}
-      {!!m.renders?.length && <RenderNotes renders={m.renders} />}
+      {!!m.renders?.length && (
+        <RenderCards chatId={chatId} renders={m.renders} onCompose={onSteer} />
+      )}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (

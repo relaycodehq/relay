@@ -508,6 +508,8 @@ app
         dispatch,
         phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
         shrinkImage,
+        renderPage: (chatId, renderId, page) =>
+          chats.renderPage(chatId, renderId, page),
         dictation: {
           status: () => dictation.current.status,
           open: () => dictation.open(),

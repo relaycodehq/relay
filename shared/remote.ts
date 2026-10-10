@@ -154,7 +154,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 16;
+export const remoteBridgeVersion = 17;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -182,6 +182,8 @@ export const titleBridge = 15;
 export const markedUnreadBridge = 15;
 /** From here phones may call `selectAgentWorktree`, to take a thread off a worktree that is gone. */
 export const workspaceBridge = 16;
+/** From here phones may fetch the pages an answer showed with show_html (`renderPage`). */
+export const renderBridge = 17;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -495,6 +497,8 @@ export interface RemoteApi {
   ): Promise<string | null>;
   /** The image as a data URL at most `max` pixels on its longer side; missing before `imageBridge`. */
   image(source: RemoteImageSource, max: number): Promise<string>;
+  /** One page of a thread's render, as the agent wrote it; missing before `renderBridge`. */
+  renderPage(chatId: string, renderId: string, page: number): Promise<string>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
@@ -548,6 +552,7 @@ export const remoteMethods = [
   "readAloud",
   "activityDetail",
   "image",
+  "renderPage",
   "computerProjects",
   "handoffUpload",
   "receiveHandoff",

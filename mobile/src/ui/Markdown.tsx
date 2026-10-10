@@ -1,7 +1,13 @@
 import { createContext, memo, useContext, type ReactNode } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { lexer, type Token, type Tokens } from "marked";
+import { Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Marked, type Token, type Tokens } from "marked";
+import { normalizeMath } from "../../../shared/math-delimiters";
+import { texToPlain } from "../../../shared/tex-plain";
+import { MathBlock } from "./math/MathBlock";
+import { mathExtensions, type InlineMathToken, type MathToken } from "./math/marked-math";
 import { mono, type, useTheme, type Palette } from "./theme";
+
+const marked = new Marked({ extensions: mathExtensions });
 
 /**
  * What pressing a link's destination or a piece of inline code does, when it
@@ -26,7 +32,7 @@ export const Markdown = memo(function Markdown({
   image?: ShowImage;
 }) {
   const theme = useTheme();
-  const tokens = lexer(text);
+  const tokens = marked.lexer(normalizeMath(text));
   return (
     <View style={styles.root}>
       <Small.Provider value={!!small}>
@@ -87,6 +93,21 @@ function Paragraph({ tokens, t }: { tokens: Token[]; t: Palette }) {
         <BlockImage key={i} token={image} />
       ))}
     </View>
+  );
+}
+
+/**
+ * A formula inside a sentence, as plain text: a WebView can't sit in a line of
+ * text. One this can't set in plain text (a matrix, an unknown command) stays
+ * as its source, which reads better than a half-translation.
+ */
+function InlineMath({ tex }: { tex: string }) {
+  const t = useTheme();
+  const plain = texToPlain(tex);
+  return plain === null ? (
+    <Text style={[styles.codespan, { color: t.muted }]}>{tex}</Text>
+  ) : (
+    <Text style={styles.math}>{plain}</Text>
   );
 }
 
@@ -151,6 +172,10 @@ function block(token: Token, t: Palette, key: number): ReactNode {
   switch (token.type) {
     case "space":
       return null;
+    case "math": {
+      const math = token as MathToken;
+      return <MathBlock key={key} tex={math.text} closed={math.closed} />;
+    }
     case "paragraph":
       return <Paragraph key={key} tokens={(token as Tokens.Paragraph).tokens} t={t} />;
     case "heading": {
@@ -285,6 +310,8 @@ function inline(tokens: Token[] | undefined, t: Palette): ReactNode[] {
             {inline((token as Tokens.Del).tokens, t)}
           </Text>
         );
+      case "inlineMath":
+        return <InlineMath key={i} tex={(token as InlineMathToken).text} />;
       case "codespan":
         return <CodeSpan key={i}>{decode((token as Tokens.Codespan).text)}</CodeSpan>;
       case "link": {
@@ -343,6 +370,7 @@ const styles = StyleSheet.create({
   em: { fontStyle: "italic" },
   del: { textDecorationLine: "line-through" },
   codespan: { fontFamily: mono, fontSize: 13.5 },
+  math: { fontFamily: Platform.select({ ios: "Times New Roman", default: "serif" }), fontStyle: "italic" },
   codeBlock: { borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
   codeContent: { padding: 12 },
   code: { fontFamily: mono, fontSize: 12.5, lineHeight: 18 },

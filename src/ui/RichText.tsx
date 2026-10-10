@@ -32,7 +32,7 @@ import {
   markdownBlocks,
   mathClosed,
 } from "../lib/markdown-blocks";
-import { normalizeMath } from "../lib/math-delimiters";
+import { normalizeMath } from "../../shared/math-delimiters";
 import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { CodeBlock, InlineCommand } from "./CodeBlock";

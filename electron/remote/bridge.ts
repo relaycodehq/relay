@@ -30,6 +30,7 @@ import {
   type RemoteMethod,
   type RemoteProjectIcon,
 } from "../../shared/remote";
+import { RENDER_MAX_PAGES } from "../../shared/html-render";
 import { sentAgent } from "../../shared/recipient";
 import { isStartThreads } from "../../shared/started-threads";
 import { chatOrder } from "../../shared/remote-delta";
@@ -59,6 +60,8 @@ export interface RemoteHost {
   };
   /** `dataUrl` at most `max` pixels on its longer side; without it phones get images whole. */
   shrinkImage?(dataUrl: string, max: number): string;
+  /** A page an answer showed with show_html. */
+  renderPage?(chatId: string, renderId: string, page: number): Promise<string>;
   /** The speech engine phones dictate with. */
   dictation?: SpeechService;
   /** The voice phones hear answers in. */
@@ -265,6 +268,10 @@ export class RemoteBridge {
       )) as string;
       return this.host.shrinkImage?.(dataUrl, max) ?? dataUrl;
     },
+    renderPage: async (chatId, renderId, page) => {
+      if (!this.host.renderPage) throw new Error("This desktop can't show pages.");
+      return this.host.renderPage(chatId, renderId, page);
+    },
     diff: async (source) => {
       const [method, args]: [ApiMethod, unknown[]] =
         source.kind === "turn"
@@ -376,6 +383,17 @@ export class RemoteBridge {
         return a.image(
           imageSourceSchema.parse(args[0]),
           z.number().int().min(16).max(4096).parse(args[1]),
+        );
+      case "renderPage":
+        return a.renderPage(
+          idSchema.parse(args[0]),
+          idSchema.parse(args[1]),
+          z
+            .number()
+            .int()
+            .min(0)
+            .max(RENDER_MAX_PAGES - 1)
+            .parse(args[2]),
         );
       case "subagents":
         return a.subagents(

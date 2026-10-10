@@ -492,6 +492,28 @@ it("sends a thread's image shrunk to what the phone shows, through the desktop's
   ).rejects.toThrow();
 });
 
+it("hands a phone the pages an answer showed, only for well-formed ids", async () => {
+  const { b } = bridge();
+  const asked: unknown[][] = [];
+  (b as unknown as { host: RemoteHost }).host.renderPage = async (...args) => {
+    asked.push(args);
+    return "<p>page</p>";
+  };
+  const renderId = randomUUID();
+  expect(await b.handle("renderPage", [chatId, renderId, 1])).toBe(
+    "<p>page</p>",
+  );
+  expect(asked).toEqual([[chatId, renderId, 1]]);
+  for (const args of [
+    ["../x", renderId, 0],
+    [chatId, "../../etc", 0],
+    [chatId, renderId, -1],
+    [chatId, renderId, 99],
+  ])
+    await expect(b.handle("renderPage", args)).rejects.toThrow();
+  expect(asked).toHaveLength(1);
+});
+
 it("only sends subagents when their phone-visible list or run changes", async () => {
   const run: SubagentDetail = {
     id: "toolu_a",
