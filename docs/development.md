@@ -35,6 +35,9 @@ Source layout: `electron/` owns credentials, API calls, disk and process access;
 See the [browser preview guide](previews.md) for existing-server discovery,
 isolated pane sessions and named worktree links in external browsers.
 
+See [adding an agent adapter](agent-adapters.md) for the runtime boundary,
+session lifecycle, integration checklist and previous additions.
+
 ## Releases and automatic updates
 
 A release is an annotated `v<major>.<minor>.<patch>` tag on `main`; pushing to `main` alone ships nothing. The tag's message is the changelog friends read in Settings → About and on GitHub. `scripts/tag-release.sh log` lists what landed since the last tag, and `scripts/tag-release.sh <notes.md> [version]` tags `origin/main` with those notes and pushes the tag; the version defaults to the last tag's patch plus one.

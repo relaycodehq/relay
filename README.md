@@ -97,6 +97,9 @@ Automated tests do not cover real agent accounts, OS credential prompts, signing
 
 ## For contributors
 
+Adding an agent? Start with the [agent adapter architecture](docs/agent-adapters.md):
+integration routes, runtime and session contracts, and examples from previous additions.
+
 <details>
 <summary><strong>Build and run from source</strong></summary>
 
