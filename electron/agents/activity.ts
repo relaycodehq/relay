@@ -74,6 +74,7 @@ const relayToolLabels: Record<string, string> = {
   add_project: "Added a project",
   show_html: "Showed a page",
   preview_html: "Looked at a page",
+  ask_html: "Asked with a page",
 };
 
 /** An MCP call's label and which server's tool it was. */

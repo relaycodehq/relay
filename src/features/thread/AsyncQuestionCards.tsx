@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { agentName, type AgentProvider } from "../../../shared/agents";
-import type {
-  AsyncAgentQuestions,
-  ChatMessage,
+import {
+  PAGE_QUESTION_ID,
+  type AsyncAgentQuestions,
+  type ChatMessage,
 } from "../../../shared/projects";
+import type { AgentRequest } from "../../../shared/agent-modes";
 import { api } from "../../lib/api";
 import { AgentRequestCard } from "./AgentRequestCard";
 
@@ -19,7 +21,18 @@ export function AsyncQuestionCards({
   return (
     <div className="async-question-cards">
       {message.questions.map((group) =>
-        group.answers ? (
+        group.answers && group.page ? (
+          <details className="async-question-answered" key={group.id}>
+            <summary>
+              {group.answers[PAGE_QUESTION_ID]
+                ? `Answered "${group.page.title}"`
+                : `Skipped "${group.page.title}"`}
+            </summary>
+            {group.answers[PAGE_QUESTION_ID] && (
+              <pre>{group.answers[PAGE_QUESTION_ID].join("\n")}</pre>
+            )}
+          </details>
+        ) : group.answers ? (
           <details className="async-question-answered" key={group.id}>
             <summary>
               Answered {group.questions.length === 1 ? "question" : "questions"}
@@ -46,6 +59,29 @@ export function AsyncQuestionCards({
       )}
     </div>
   );
+}
+
+/** The card a group shows as: a page the agent asked with, or its questions. */
+function requestOf(
+  group: AsyncAgentQuestions,
+  provider: AgentProvider,
+): AgentRequest {
+  if (group.page) {
+    const ask = group.questions[0]?.question;
+    return {
+      id: group.id,
+      kind: "page",
+      title: group.page.title,
+      ...(ask && ask !== group.page.title ? { detail: ask } : {}),
+      page: group.page,
+    };
+  }
+  return {
+    id: group.id,
+    kind: "question",
+    title: `${agentName(provider)} has ${group.questions.length === 1 ? "a question" : "questions"}`,
+    questions: group.questions,
+  };
 }
 
 function AsyncQuestionCard({
@@ -83,12 +119,8 @@ function AsyncQuestionCard({
       <div hidden={!!group.dismissed}>
         <AgentRequestCard
           deferred
-          request={{
-            id: group.id,
-            kind: "question",
-            title: `${agentName(provider)} has ${group.questions.length === 1 ? "a question" : "questions"}`,
-            questions: group.questions,
-          }}
+          chatId={chatId}
+          request={requestOf(group, provider)}
           onRespond={(response) =>
             api.answerProjectChatQuestion(chatId, messageId, group.id, response)
           }

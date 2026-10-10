@@ -36,6 +36,13 @@
   background: var(--toolbar);
   border-radius: 8px;
 }
+/* What an agent says about the page it asks with: words, not a command. */
+.agent-request-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .agent-request footer {
   display: flex;
   align-items: center;

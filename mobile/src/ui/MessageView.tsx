@@ -130,6 +130,12 @@ export const MessageView = memo(function MessageView({
         onRerun={onRerunSetup && setupCanRerun(m) ? () => onRerunSetup(m) : undefined}
       />
     );
+  if (m.role === "user" && m.pageAnswer)
+    return (
+      <StatusRow>
+        {`${m.pageAnswer.skipped ? "You skipped" : "You answered"} “${m.pageAnswer.title}”${m.pageAnswer.skipped ? " and left it to the agent" : ""}`}
+      </StatusRow>
+    );
   if (m.reload)
     return (
       <StatusRow>{reloadNote(m.reload, m.status === "streaming")}</StatusRow>

@@ -15,6 +15,7 @@ export const RenderFrame = memo(function RenderFrame({
   height: initial,
   placeholder,
   onCompose,
+  onAnswer,
   onSize,
 }: {
   /** The whole document, from phoneRenderDocument; a new one reloads the page. */
@@ -24,6 +25,8 @@ export const RenderFrame = memo(function RenderFrame({
   /** Shown behind the page until it has drawn, and instead if it can't. */
   placeholder?: ReactNode;
   onCompose?: (text: string) => void;
+  /** What an asked page (ask_html) hands over with relay.answer(), as JSON. */
+  onAnswer?: (json: string) => void;
   onSize?: (height: number) => void;
 }) {
   const [height, setHeight] = useState(initial);
@@ -41,8 +44,9 @@ export const RenderFrame = memo(function RenderFrame({
       } else if (message.relayRender === "link")
         void Linking.openURL(message.href).catch(() => {});
       else if (message.relayRender === "compose") onCompose?.(message.text);
+      else if (message.relayRender === "answer") onAnswer?.(message.json);
     },
-    [onCompose, onSize],
+    [onCompose, onAnswer, onSize],
   );
   const fail = useCallback(() => setFailed(true), []);
   return (

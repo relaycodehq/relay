@@ -6,10 +6,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ChevronDown, ChevronRight, MessageCircleQuestion } from "lucide-react-native";
 import { agentName } from "../../../shared/agents";
-import type { AsyncAgentQuestions, ChatMessage } from "../../../shared/projects";
+import { PAGE_QUESTION_ID, type AsyncAgentQuestions, type ChatMessage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { RevealField, RevealMessage } from "./KeyboardAware";
 import { Questions } from "./RequestCard";
+import { AskPage } from "./renders/AskPage";
 import { type, useTheme } from "./theme";
 
 export function AsyncQuestions({ chatId, message }: { chatId: string; message: ChatMessage }) {
@@ -55,7 +56,12 @@ function Open({
     }
   };
   const many = group.questions.length > 1;
-  const title = `${agentName(message.provider)} has ${many ? "questions" : "a question"}`;
+  const title =
+    group.page?.title ?? `${agentName(message.provider)} has ${many ? "questions" : "a question"}`;
+  const sent = (ok: boolean) => {
+    // A tap, not Success: that one is the turn's end.
+    if (ok) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
   const dismiss = (dismissed: boolean) =>
     run(() => desktop("setProjectChatQuestionDismissed", chatId, message.id, group.id, dismissed));
   return (
@@ -83,24 +89,38 @@ function Open({
           </Pressable>
         </View>
         <Text style={[styles.hint, { color: t.muted }]}>{"Answer whenever you're ready."}</Text>
-        <RevealField.Provider value={() => revealMessage(message.id)}>
-          <Questions
-            questions={group.questions}
+        {group.page ? (
+          <AskPage
+            chatId={chatId}
+            page={group.page}
+            head={null}
             busy={busy}
-            deferred
-            onAnswer={(answers) =>
+            onAnswer={(answer) =>
               void run(() =>
                 desktop("answerProjectChatQuestion", chatId, message.id, group.id, {
-                  kind: "question",
-                  answers,
+                  kind: "page",
+                  answer,
                 }),
-              ).then((sent) => {
-                // A tap, not Success: that one is the turn's end.
-                if (sent) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              })
+              ).then(sent)
             }
           />
-        </RevealField.Provider>
+        ) : (
+          <RevealField.Provider value={() => revealMessage(message.id)}>
+            <Questions
+              questions={group.questions}
+              busy={busy}
+              deferred
+              onAnswer={(answers) =>
+                void run(() =>
+                  desktop("answerProjectChatQuestion", chatId, message.id, group.id, {
+                    kind: "question",
+                    answers,
+                  }),
+                ).then(sent)
+              }
+            />
+          </RevealField.Provider>
+        )}
         {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
       </View>
       {group.dismissed && (
@@ -124,6 +144,18 @@ function Open({
 
 function Answered({ group }: { group: AsyncAgentQuestions }) {
   const t = useTheme();
+  if (group.page) {
+    const answer = group.answers?.[PAGE_QUESTION_ID]?.join("\n");
+    return (
+      <Fold label={`${answer ? "Answered" : "Skipped"} "${group.page.title}"`}>
+        {answer && (
+          <Text selectable style={[styles.hint, { color: t.muted }]}>
+            {answer}
+          </Text>
+        )}
+      </Fold>
+    );
+  }
   return (
     <Fold label={`Answered ${group.questions.length > 1 ? "questions" : "question"}`}>
       {group.questions.map((q) => (

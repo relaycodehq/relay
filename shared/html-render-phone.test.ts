@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASK_ANSWER_MAX_CHARS,
   LIGHT_RENDER_THEME,
   RENDER_COMPOSE_CHARS,
   RENDER_MAX_HEIGHT,
@@ -62,6 +63,19 @@ describe("parseRenderMessage", () => {
       relayRender: "compose",
       text: "Go with B",
     });
+  });
+
+  it("takes an asked page's answer whole, and none too big to hand back", () => {
+    const json = JSON.stringify({ sound: "glass" });
+    expect(parse({ relayRender: "answer", json })).toEqual({
+      relayRender: "answer",
+      json,
+    });
+    const big = JSON.stringify("x".repeat(ASK_ANSWER_MAX_CHARS));
+    expect(parse({ relayRender: "answer", json: big })).toBeNull();
+    expect(
+      parse({ relayRender: "answer", json: { sound: "glass" } }),
+    ).toBeNull();
   });
 
   it("takes a short page's own height, as a one-line formula needs", () => {

@@ -1,5 +1,8 @@
 import type { HtmlRender } from "../../shared/html-render";
-import type { ProjectChatSend } from "../../shared/projects";
+import type {
+  AsyncAgentQuestions,
+  ProjectChatSend,
+} from "../../shared/projects";
 import { AgentRequests } from "./agent-requests";
 import type { AgentOptions } from "../agents/types";
 import { withTimeout } from "../util/timeout";
@@ -17,6 +20,8 @@ export interface ActiveChat {
   steer?: AgentControl["steer"];
   /** Adds a page the agent showed to the answer it is writing. */
   render?: (render: HtmlRender) => void;
+  /** Leaves a page the agent asks with in the answer, as an open question. */
+  askPage?: (group: AsyncAgentQuestions) => void;
   /** Counts the rest of the answer's edits in the worktree the thread just moved to. */
   moved?: (root: string) => Promise<void>;
   /** Pauses or clears the goal the turn pursues; Codex only. */

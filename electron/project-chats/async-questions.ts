@@ -4,7 +4,13 @@ import {
   type AgentResponse,
 } from "../../shared/agent-modes";
 import type { AgentProvider } from "../../shared/agents";
-import type { ChatMessage, ProjectChatSend } from "../../shared/projects";
+import {
+  PAGE_QUESTION_ID,
+  type AsyncAgentQuestions,
+  type PageAnswer,
+  type ChatMessage,
+  type ProjectChatSend,
+} from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
 import type { ChatCore } from "./core";
 import { assertHere } from "./handoff";
@@ -34,6 +40,61 @@ export function supersedeQuestions(
   });
 }
 
+/**
+ * What answering a group says to the agent, and what the group keeps. A page
+ * (ask_html) takes the JSON it handed back, nothing for a skip, or the words
+ * of a phone too old to show it.
+ */
+export function answerOf(
+  group: AsyncAgentQuestions,
+  response: AgentResponse,
+): {
+  body: string;
+  answers: Record<string, string[]>;
+  pageAnswer?: PageAnswer;
+} {
+  if (group.page) {
+    const text =
+      response.kind === "page"
+        ? response.answer
+        : response.kind === "question"
+          ? (response.answers[PAGE_QUESTION_ID]?.join("\n").trim() ?? null)
+          : undefined;
+    if (text === undefined) throw new Error("Invalid response type.");
+    const title = group.page.title;
+    return text
+      ? {
+          body: `Answer to your page "${title}":\n${text}`,
+          answers: { [PAGE_QUESTION_ID]: [text] },
+          pageAnswer: { title },
+        }
+      : {
+          body: `I skipped your page "${title}". Decide on your own, and say what you picked.`,
+          answers: {},
+          pageAnswer: { title, skipped: true as const },
+        };
+  }
+  if (response.kind !== "question") throw new Error("Invalid response type.");
+  if (
+    Object.keys(response.answers).some(
+      (key) => !group.questions.some((q) => q.id === key),
+    )
+  )
+    throw new Error("Unknown question.");
+  if (
+    group.questions.some((q) => !response.answers[q.id]?.some((a) => a.trim()))
+  )
+    throw new Error("Answer each question before sending.");
+  return {
+    body:
+      "Answer to your questions:\n" +
+      group.questions
+        .map((q) => `${q.question}\n${response.answers[q.id].join("\n")}`)
+        .join("\n\n"),
+    answers: response.answers,
+  };
+}
+
 /** Answers message-based questions through the active turn, or a normal follow-up. */
 export class AsyncQuestions {
   constructor(
@@ -49,26 +110,10 @@ export class AsyncQuestions {
         messageId,
         itemId,
       );
-      const response = agentResponseSchema.parse(value);
-      if (response.kind !== "question")
-        throw new Error("Invalid response type.");
-      if (
-        Object.keys(response.answers).some(
-          (key) => !group.questions.some((q) => q.id === key),
-        )
-      )
-        throw new Error("Unknown question.");
-      if (
-        group.questions.some(
-          (q) => !response.answers[q.id]?.some((a) => a.trim()),
-        )
-      )
-        throw new Error("Answer each question before sending.");
-      const body =
-        "Answer to your questions:\n" +
-        group.questions
-          .map((q) => `${q.question}\n${response.answers[q.id].join("\n")}`)
-          .join("\n\n");
+      const { body, answers, pageAnswer } = answerOf(
+        group,
+        agentResponseSchema.parse(value),
+      );
       if (body.length > 32000)
         throw new Error(
           "These answers are too long. Shorten them before sending.",
@@ -94,6 +139,7 @@ export class AsyncQuestions {
           asyncQuestionAnswer: true,
           unread: true,
           ...(message.parentId ? { parentId: message.parentId } : {}),
+          ...(pageAnswer ? { pageAnswer } : {}),
         };
         // In the transcript before Codex echoes the steer it read.
         chat.messages.push(sent);
@@ -115,9 +161,10 @@ export class AsyncQuestions {
             message.parentId ?? undefined,
           ),
           body,
+          ...(pageAnswer ? { pageAnswer } : {}),
         });
       }
-      group.answers = response.answers;
+      group.answers = answers;
       delete group.dismissed;
       message.version++;
       this.core.emit({ chatId: id, message: structuredClone(message) });

@@ -53,6 +53,14 @@ export const projectChatSendSchema = z
       .object({ id: idSchema, name: z.string().trim().min(1).max(300) })
       .strict()
       .optional(),
+    /** Answers a page the agent asked with; see PageAnswer. */
+    pageAnswer: z
+      .object({
+        title: z.string().trim().min(1).max(120),
+        skipped: z.literal(true).optional(),
+      })
+      .strict()
+      .optional(),
     /** Deep review findings this message asks the lead to fix. */
     fixes: z
       .array(z.string().regex(/^F\d{1,3}$/))
@@ -73,8 +81,12 @@ export const resumeSettingsSchema = projectChatSendSchema
   .strict();
 export type ResumeSettings = z.infer<typeof resumeSettingsSchema>;
 
-/** Who a message says it's from, when another thread's agent sent it. */
-export const sentBy = (input: Pick<ProjectChatSend, "fromThread">) =>
-  input.fromThread
+/** Who a message says it's from, when another thread's agent sent it, and what page it answers. */
+export const sentBy = (
+  input: Pick<ProjectChatSend, "fromThread" | "pageAnswer">,
+) => ({
+  ...(input.fromThread
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
-    : {};
+    : {}),
+  ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
+});

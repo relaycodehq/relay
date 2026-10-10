@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentProvider } from "../../shared/agents";
 import type {
   AgentActivity,
+  AsyncAgentQuestions,
   ChatMessage,
   ContextUsage,
   ProjectChat,
@@ -120,6 +121,13 @@ export class AnswerRecorder {
   render(render: HtmlRender) {
     if (this.stopped) return;
     (this.message.renders ??= []).push(render);
+    this.changed();
+  }
+  /** A page the agent asks with (ask_html): an open question until answered or skipped. */
+  askPage(group: AsyncAgentQuestions) {
+    if (this.stopped) return;
+    (this.message.questions ??= []).push(group);
+    this.chat.updated = Date.now();
     this.changed();
   }
   commentary(id: string, text: string | null) {

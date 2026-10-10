@@ -5,9 +5,23 @@ import type { WatchNote } from "../watch";
 import type { AgentQuestion } from "../agent-modes";
 import type { HtmlRender } from "../html-render";
 
+export interface PageAnswer {
+  title: string;
+  skipped?: true;
+}
+
+/** The one question an asked page (ask_html) carries, under which its answer is kept. */
+export const PAGE_QUESTION_ID = "page";
+
 /** A question the agent leaves open while it keeps working. */
 export interface AsyncAgentQuestions {
   id: string;
+  /**
+   * Asked with a page (ask_html): the answer is what the page handed back, as
+   * JSON, under PAGE_QUESTION_ID; none there means skipped. `questions` then
+   * holds one plain question, for phones too old to show the page.
+   */
+  page?: HtmlRender;
   questions: AgentQuestion[];
   answers?: Record<string, string[]>;
   /** Hidden by the user; can be reopened without answering or stopping the agent. */
@@ -83,6 +97,8 @@ export interface ChatMessage {
   steered?: boolean;
   /** Local: a reply to an async question sent into the running turn. */
   asyncQuestionAnswer?: boolean;
+  /** Answers a page the agent asked with (ask_html): shown as a quiet line, its body is what the agent reads. */
+  pageAnswer?: PageAnswer;
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**

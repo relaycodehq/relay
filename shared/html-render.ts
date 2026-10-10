@@ -38,11 +38,14 @@ export interface RenderShot {
 export const RENDER_WIDTHS = [320, 480, 640, 800, 960, 1120];
 export const RENDER_MIN_HEIGHT = 80;
 export const RENDER_MAX_HEIGHT = 2000;
-export const RENDER_MAX_PAGES = 4;
+/** A backstop against a runaway call, not a target: the agent picks how many. */
+export const RENDER_MAX_PAGES = 12;
 /** One page's HTML; the tools server sizes its body limit from this and the page cap. */
 export const RENDER_MAX_CHARS = 200_000;
 /** What a page may put in the composer through relay.compose(). */
 export const RENDER_COMPOSE_CHARS = 4000;
+/** The most an ask_html page may hand back through relay.answer(), as JSON. */
+export const ASK_ANSWER_MAX_CHARS = 32_000;
 
 export const RENDER_SCHEME = "relay-render";
 /** Where a page is served from; the main process answers it. */
@@ -132,6 +135,8 @@ export type RenderFromFrame =
   | { relayRender: "size"; height: number }
   | { relayRender: "link"; href: string }
   | { relayRender: "compose"; text: string }
+  /** relay.answer(): what the user would send back to an agent that asked with the page. */
+  | { relayRender: "answer"; json: string }
   /** Esc or a zoom key pressed in the page that the page left alone. */
   | { relayRender: "key"; key: string };
 
@@ -201,7 +206,10 @@ const BOOTSTRAP = `(() => {
     e.preventDefault();
     if (/^(https?|mailto):/i.test(a.href)) post({ relayRender: "link", href: a.href });
   }, true);
-  window.relay = { compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }) };
+  window.relay = {
+    compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }),
+    answer: (value) => { let json; try { json = JSON.stringify(value === undefined ? null : value); } catch { return; } post({ relayRender: "answer", json }); },
+  };
   // Focus in the page keeps keys from the thread, so Esc and the zoom keys go
   // up unless typed into a field or taken by the page, which it shows by
   // preventing their default once every listener has run.

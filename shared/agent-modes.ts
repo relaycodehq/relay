@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentProvider } from "./agents";
+import { ASK_ANSWER_MAX_CHARS, type HtmlRender } from "./html-render";
 export const runtimeModeSchema = z.enum([
   "approval-required",
   "auto-accept-edits",
@@ -85,6 +86,13 @@ export const agentResponseSchema = z.discriminatedUnion("kind", [
       ),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("page"),
+      /** What the page handed relay.answer(), as JSON; null when the user skipped it. */
+      answer: z.string().max(ASK_ANSWER_MAX_CHARS).nullable(),
+    })
+    .strict(),
 ]);
 export type AgentResponse = z.infer<typeof agentResponseSchema>;
 export interface AgentQuestion {
@@ -97,11 +105,13 @@ export interface AgentQuestion {
 }
 export interface AgentRequest {
   id: string;
-  kind: "approval" | "question";
+  kind: "approval" | "question" | "page";
   title: string;
   detail?: string;
   decisions?: AgentDecision[];
   questions?: AgentQuestion[];
+  /** The page an agent asks with (ask_html), saved like show_html's; see shared/html-render. */
+  page?: HtmlRender;
 }
 export type AskAgentRequest = (
   request: Omit<AgentRequest, "id">,

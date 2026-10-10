@@ -21,7 +21,7 @@ const pages = new ImageCache();
 // The height each page last settled at, so a row mounted again opens at it.
 const settled = new Map<string, number>();
 
-function usePage(chatId: string, renderId: string, page: number) {
+export function usePage(chatId: string, renderId: string, page: number) {
   const { call, status, active } = useRemote();
   const key = `${active}:${chatId}:${renderId}:${page}`;
   const [result, setResult] = useState<{ key: string; html?: string }>();

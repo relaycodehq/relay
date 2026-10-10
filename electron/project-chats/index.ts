@@ -21,7 +21,7 @@ import type {
   ProjectChatSend,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import { PAGE_QUESTION_ID, replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
@@ -705,6 +705,23 @@ export class ProjectChats {
       throw new Error("This thread has no running answer to show it in.");
     await this.storage.renders.save(id, render.id, pages);
     active.render(render);
+  }
+  /**
+   * Leaves a page the thread's agent asks with (ask_html) in the answer it is
+   * writing, as an open question: kept like a shown page, answered later
+   * through answerQuestion. `ask` is the plain question for phones too old to
+   * show the page.
+   */
+  async askWithPage(id: string, page: HtmlRender, html: string, ask: string) {
+    const active = this.active.get(id);
+    if (!active?.askPage || active.finishing || active.stopping)
+      throw new Error("This thread has no running answer to ask in.");
+    await this.storage.renders.save(id, page.id, [html]);
+    active.askPage({
+      id: page.id,
+      page,
+      questions: [{ id: PAGE_QUESTION_ID, header: "Page", question: ask }],
+    });
   }
   /** A page an answer showed, as its agent wrote it. */
   renderPage(id: string, renderId: string, page: number) {

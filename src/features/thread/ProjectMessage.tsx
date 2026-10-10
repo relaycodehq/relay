@@ -30,6 +30,7 @@ import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { CompactionRow } from "./CompactionRow";
 import { SessionReloadRow } from "./SessionReloadRow";
+import { PageAnswerRow } from "./PageAnswerRow";
 import { WorktreeCommandRow } from "./WorktreeCommandRow";
 import {
   AnswerImage,
@@ -299,6 +300,8 @@ export const Message = memo(function Message({
       />
     );
   if (m.reload) return <SessionReloadRow message={m} reload={m.reload} />;
+  if (m.role === "user" && m.pageAnswer)
+    return <PageAnswerRow message={m} answer={m.pageAnswer} />;
   if (m.worktreeCommand)
     return (
       <WorktreeCommandRow

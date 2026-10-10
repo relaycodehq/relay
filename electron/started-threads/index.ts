@@ -26,6 +26,7 @@ import {
 import { sentAgent } from "../../shared/recipient";
 import { noteForAgent } from "../../shared/thread-notes";
 import type { ModelChoice } from "../../shared/settings";
+import type { HtmlRender } from "../../shared/html-render";
 import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
@@ -79,6 +80,7 @@ type Chats = Pick<
   | "worktreeFrom"
   | "triage"
   | "showRender"
+  | "askWithPage"
   | "enterWorktree"
   | "notes"
 >;
@@ -264,6 +266,8 @@ export class StartedThreads {
           input,
           signal,
         );
+      case "ask_html":
+        return this.askPage(lead, input, signal);
       case "show_html":
       case "preview_html":
         return answerRenderTool(
@@ -278,6 +282,30 @@ export class StartedThreads {
           signal,
         );
     }
+  }
+
+  /**
+   * Leaves the agent's page in its answer for the user to answer whenever
+   * they like; the answer comes as their next message, so nothing waits on a
+   * tool call that a client would time out.
+   */
+  private async askPage(
+    lead: ProjectChat,
+    { title, html, detail }: RelayToolArgs<"ask_html">,
+    signal: AbortSignal,
+  ) {
+    const look =
+      this.look && (await this.look(html, {}, signal).catch(() => undefined));
+    const page: HtmlRender = {
+      id: randomUUID(),
+      title,
+      created: Date.now(),
+      pages: [look ? { heights: look.heights } : {}],
+    };
+    await this.chats.askWithPage(lead.id, page, html, detail ?? title);
+    return toolText(
+      `Shown to the user as "${title}". Their answer comes as their next message, as the JSON the page handed back, or word that they skipped it. If you can't go on without it, end your turn now and wait.`,
+    );
   }
 
   /**

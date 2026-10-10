@@ -1,0 +1,14 @@
+/* A page an agent asks with: it sits over the message box, so past half the
+   window it scrolls inside its card instead of pushing the thread away. */
+.ask-page {
+  max-height: 50vh;
+  margin-top: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ask-page iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}

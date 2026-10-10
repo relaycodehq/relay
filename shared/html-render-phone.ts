@@ -3,6 +3,7 @@
 // that comes out wider than the screen is laid out at the width it needs and
 // scaled down to fit, rather than scrolled sideways.
 import {
+  ASK_ANSWER_MAX_CHARS,
   RENDER_MAX_HEIGHT,
   RENDER_COMPOSE_CHARS,
   RENDER_CSP,
@@ -65,7 +66,10 @@ const bootstrap = (theme: RenderTheme) => `(() => {
     e.preventDefault();
     if (/^(https?|mailto):/i.test(a.href)) post({ relayRender: "link", href: a.href });
   }, true);
-  window.relay = { compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }) };
+  window.relay = {
+    compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }),
+    answer: (value) => { let json; try { json = JSON.stringify(value === undefined ? null : value); } catch { return; } post({ relayRender: "answer", json }); },
+  };
 })();`;
 
 /**
@@ -94,7 +98,7 @@ export function parseRenderMessage(data: string): RenderFromFrame | null {
     return null;
   }
   if (!message || typeof message !== "object") return null;
-  const { relayRender, height, href, text } = message as Record<
+  const { relayRender, height, href, text, json } = message as Record<
     string,
     unknown
   >;
@@ -116,5 +120,12 @@ export function parseRenderMessage(data: string): RenderFromFrame | null {
     return { relayRender, href: href.slice(0, 2000) };
   if (relayRender === "compose" && typeof text === "string" && text.trim())
     return { relayRender, text: text.slice(0, RENDER_COMPOSE_CHARS) };
+  // Too big to hand back is no answer at all, rather than a cut one.
+  if (
+    relayRender === "answer" &&
+    typeof json === "string" &&
+    json.length <= ASK_ANSWER_MAX_CHARS
+  )
+    return { relayRender, json };
   return null;
 }

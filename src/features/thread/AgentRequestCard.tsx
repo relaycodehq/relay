@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { AgentQuestionForm } from "./AgentQuestionForm";
-import { LockKeyhole, MessageCircleQuestion, Ellipsis } from "lucide-react";
+import { AskPage } from "../html-render/AskPage";
+import {
+  Ellipsis,
+  LockKeyhole,
+  MessageCircleQuestion,
+  PanelTop,
+} from "lucide-react";
 import { Menu } from "@base-ui/react/menu";
 import type {
   AgentRequest,
@@ -15,12 +21,15 @@ const labels: Record<AgentDecision, string> = {
   cancel: "Cancel",
 };
 export function AgentRequestCard({
+  chatId,
   request,
   onRespond,
   pendingCount = 1,
   deferred = false,
   onDismiss,
 }: {
+  /** Where an asked page (ask_html) is kept; without it the page can't load. */
+  chatId?: string;
   request: AgentRequest;
   pendingCount?: number;
   /** The agent keeps working; answering requires an explicit Send. */
@@ -59,6 +68,8 @@ export function AgentRequestCard({
       <header>
         {request.kind === "approval" ? (
           <LockKeyhole size={15} />
+        ) : request.kind === "page" ? (
+          <PanelTop size={15} />
         ) : (
           <MessageCircleQuestion size={15} />
         )}
@@ -79,7 +90,20 @@ export function AgentRequestCard({
       {deferred && (
         <p className="agent-question-timing">Answer whenever you're ready.</p>
       )}
-      {request.detail && <pre>{request.detail}</pre>}
+      {request.detail &&
+        (request.kind === "page" ? (
+          <p className="agent-request-note">{request.detail}</p>
+        ) : (
+          <pre>{request.detail}</pre>
+        ))}
+      {request.kind === "page" && request.page && chatId && (
+        <AskPage
+          chatId={chatId}
+          page={request.page}
+          busy={busy}
+          onAnswer={(answer) => void respond({ kind: "page", answer })}
+        />
+      )}
       {request.kind === "question" && (
         <AgentQuestionForm
           questions={request.questions ?? []}

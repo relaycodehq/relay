@@ -1,11 +1,17 @@
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { defaultAISettings } from "../../shared/settings";
-import type {
-  ChatMessage,
-  ProjectChat,
-  ProjectChatSend,
+import {
+  PAGE_QUESTION_ID,
+  type AsyncAgentQuestions,
+  type ChatMessage,
+  type ProjectChat,
+  type ProjectChatSend,
 } from "../../shared/projects";
-import { AsyncQuestions, supersedeQuestions } from "./async-questions";
+import {
+  AsyncQuestions,
+  answerOf,
+  supersedeQuestions,
+} from "./async-questions";
 import { ActiveTurns } from "./active";
 import { threadControl } from "./control";
 import type { ChatCore } from "./core";
@@ -254,4 +260,42 @@ it("folds away the agent's open questions in the conversation a new turn is type
   expect(answered.questions![0].dismissed).toBeUndefined();
   expect(otherAgent.questions![0].dismissed).toBeUndefined();
   expect(aside.questions![0].dismissed).toBeUndefined();
+});
+
+describe("answerOf, for a page the agent asked with", () => {
+  const group: AsyncAgentQuestions = {
+    id: "g",
+    page: { id: "g", title: "Pick a sound", pages: [{}], created: 1 },
+    questions: [{ id: PAGE_QUESTION_ID, question: "Pick a sound" }],
+  };
+
+  it("hands the agent the page's JSON, or word of a skip", () => {
+    expect(
+      answerOf(group, { kind: "page", answer: '{"sound":"glass"}' }),
+    ).toEqual({
+      body: 'Answer to your page "Pick a sound":\n{"sound":"glass"}',
+      answers: { [PAGE_QUESTION_ID]: ['{"sound":"glass"}'] },
+      pageAnswer: { title: "Pick a sound" },
+    });
+    expect(answerOf(group, { kind: "page", answer: null })).toEqual({
+      body: 'I skipped your page "Pick a sound". Decide on your own, and say what you picked.',
+      answers: {},
+      pageAnswer: { title: "Pick a sound", skipped: true },
+    });
+  });
+
+  it("takes the words of a phone too old to show the page", () => {
+    expect(
+      answerOf(group, {
+        kind: "question",
+        answers: { [PAGE_QUESTION_ID]: ["  the glass one "] },
+      }).body,
+    ).toBe('Answer to your page "Pick a sound":\nthe glass one');
+  });
+
+  it("refuses an approval for it", () => {
+    expect(() =>
+      answerOf(group, { kind: "approval", decision: "accept" }),
+    ).toThrow("Invalid response type");
+  });
 });

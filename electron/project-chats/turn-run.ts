@@ -127,8 +127,10 @@ export class TurnRunner {
     const stop = () => answer.stop();
     abort.signal.addEventListener("abort", stop, { once: true });
     const active = this.core.active.get(chat.id);
-    if (!rules.side && active?.abort === abort)
+    if (!rules.side && active?.abort === abort) {
       active.render = (render) => answer.render(render);
+      active.askPage = (group) => answer.askPage(group);
+    }
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
