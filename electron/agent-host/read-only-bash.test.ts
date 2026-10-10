@@ -23,6 +23,7 @@ it("turns down anything that writes, runs or hides another command", () => {
     "git checkout -- src",
     "git commit -am wip",
     "git branch -D old",
+    "git stash",
     "git -c core.pager=sh log",
     "git diff --output=patch.diff",
     "git status && rm -rf src",

@@ -139,7 +139,13 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
 
   // A helper job is one bare question in a process of its own, never the thread's.
   const key = job.kind === "helper" ? undefined : options.session?.key;
-  const agent = await acquireAcpAgent(profile, key, options.cwd, options.env);
+  // A thread is read-only from its start, so its process can be started that way.
+  const readOnly = options.readOnly ? await profile.readOnlyEnv?.(options.cwd) : undefined;
+  if (readOnly?.warning) options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
+  const agent = await acquireAcpAgent(profile, key, options.cwd, {
+    ...options.env,
+    ...readOnly?.env,
+  });
   const { connection } = agent;
   const adopted = job.kind === "adopt" ? agent.inflight : undefined;
   if (job.kind === "adopt" && (!adopted || !agent.session)) {

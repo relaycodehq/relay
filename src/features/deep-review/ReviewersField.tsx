@@ -4,7 +4,7 @@ import {
   ownReviewCommand,
   type ReviewAgent,
 } from "../../../shared/deep-review";
-import { reviewerProviders } from "../../../shared/agents";
+import { agentInfo, reviewerProviders } from "../../../shared/agents";
 import { nextReviewer, swapReviewer } from "./deep-review-setup";
 import { ModelField } from "../agents/ModelField";
 import { ReviewPromptLine } from "./ReviewPromptLine";
@@ -20,6 +20,9 @@ export function ReviewersField({
   onChange: (reviewers: ReviewAgent[]) => void;
 }) {
   const count = reviewers.length;
+  const warnings = [
+    ...new Set(reviewers.map((r) => agentInfo(r.provider).reviewWarning)),
+  ].filter(Boolean);
   return (
     <div className="deep-review-field">
       <span className="deep-review-label">Reviewers</span>
@@ -61,6 +64,11 @@ export function ReviewersField({
             </li>
           ))}
         </ol>
+        {warnings.map((warning) => (
+          <span key={warning} className="deep-review-note deep-review-warning">
+            {warning}
+          </span>
+        ))}
         {count < MAX_REVIEWERS && (
           <button
             type="button"

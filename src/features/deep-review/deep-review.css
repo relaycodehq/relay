@@ -170,6 +170,9 @@
   color: var(--muted);
   font-size: 11px;
 }
+.deep-review-warning {
+  color: #ab8c4e;
+}
 .deep-review-check {
   display: inline-flex;
   flex-direction: row;

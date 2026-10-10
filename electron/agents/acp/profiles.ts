@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { InteractionMode, RuntimeMode } from "../../../shared/agent-modes";
 import type { RegistryProvider } from "../../../shared/agents";
 import { findExecutable, runExecutable } from "../../platform/executables";
+import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
 
 /** The agents Relay runs over ACP: its own, and those installed from the ACP registry. */
@@ -30,6 +31,11 @@ export interface AcpProfile {
     args: string[];
     env?: Record<string, string>;
   }>;
+  /**
+   * More environment for a read-only thread's process, for an agent that runs
+   * its tools without asking Relay first and so can't be turned down over ACP.
+   */
+  readOnlyEnv?(cwd: string): Promise<{ env: Record<string, string>; warning?: string }>;
   /** Settings for Relay's approval mode, tried in order; those the agent doesn't offer are skipped. */
   wishes(mode: {
     runtime?: RuntimeMode;
@@ -80,8 +86,13 @@ const amp: AcpProfile = {
     return { command: bridge, args: [], env: { AMP_CLI_PATH: cli } };
   },
   // Amp runs its tools without asking unless its own permission rules say to.
-  wishes: ({ runtime }) => [
-    { option: "permission", value: runtime === "full-access" ? "bypass" : "default" },
+  readOnlyEnv,
+  // Bypass would override the read-only rules too.
+  wishes: ({ runtime, readOnly }) => [
+    {
+      option: "permission",
+      value: runtime === "full-access" && !readOnly ? "bypass" : "default",
+    },
   ],
   install: "Install Amp in Settings → AI models → Agents, or from ampcode.com.",
   // The bridge reports a failed turn as the answer's text.

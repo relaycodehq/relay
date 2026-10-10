@@ -3,7 +3,7 @@
 // user's settings approves a call before canUseTool can turn it down, so the
 // line has to be drawn in a PreToolUse hook, which runs first.
 
-const plain = new Set([
+export const plain = new Set([
   "cd",
   "pwd",
   "ls",
@@ -29,7 +29,7 @@ const plain = new Set([
   "egrep",
   "fgrep",
 ]);
-const gitReads = new Set([
+export const gitReads = new Set([
   "status",
   "diff",
   "log",
@@ -51,7 +51,7 @@ const gitReads = new Set([
   "range-diff",
 ]);
 /** Subcommands that only read with these flags and nothing else. */
-const gitListings: Record<string, Set<string>> = {
+export const gitListings: Record<string, Set<string>> = {
   branch: new Set([
     "-a",
     "-r",
@@ -66,6 +66,8 @@ const gitListings: Record<string, Set<string>> = {
   remote: new Set(["-v"]),
   stash: new Set(["list"]),
 };
+/** Listings that change something when given no arguments: a bare `git stash` stashes. */
+export const gitBareWrites = new Set(["stash"]);
 
 /** Whether every command in `command` is on Relay's list of ones that only read. */
 export function readsOnly(command: string): boolean {
@@ -114,7 +116,8 @@ function gitReadsOnly(args: string[]) {
     return false;
   if (gitReads.has(sub)) return true;
   const listing = gitListings[sub];
-  return !!listing && rest.every((a) => listing.has(a));
+  if (!listing || (gitBareWrites.has(sub) && !rest.length)) return false;
+  return rest.every((a) => listing.has(a));
 }
 
 /** `sed -n '12,40p' file`: printing lines, never editing in place. */

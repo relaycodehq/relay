@@ -50,6 +50,8 @@ export interface AgentInfo {
    * read a diff without changing anything can review.
    */
   reviewCommand?: string;
+  /** What could still let this agent change files while it reviews, shown in the setup. */
+  reviewWarning?: string;
   /** Codex's Fast service tier. */
   fast: boolean;
   /** Codex skills, picked with `$name` or `/skill:name`. */
@@ -149,6 +151,10 @@ export const agents = {
     cli: "Amp CLI",
     defaultModel: "Amp default",
     helper: false,
+    // Held to reading by its own permission rules; see acp/amp-review.
+    reviewCommand: "Relay's review prompt",
+    reviewWarning:
+      "Amp is kept to reading by its own permission rules. A project's .amp/settings.json can override them, and then it may still change files.",
     fast: false,
     skills: false,
     commandsAlone: true,
@@ -164,6 +170,7 @@ export const agents = {
     cli: "Antigravity",
     defaultModel: "Antigravity default",
     helper: false,
+    reviewCommand: "Relay's review prompt",
     fast: false,
     skills: false,
     commandsAlone: true,
