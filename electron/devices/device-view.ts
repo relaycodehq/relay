@@ -20,7 +20,7 @@ export class DeviceView {
   private shown = false;
   private attached = false;
   private loaded = false;
-  private host?: BrowserWindow;
+  private shownIn?: BrowserWindow;
   private placed = 0;
   private unload?: NodeJS.Timeout;
   snapshot?: string;
@@ -78,16 +78,21 @@ export class DeviceView {
     return view;
   }
 
+  /** The window the page lies over. */
+  get host() {
+    return this.shownIn;
+  }
+
   /** Lays the page over the tab, or takes it off when `bounds` is null. */
   place(win: BrowserWindow | null, bounds: PreviewBounds | null, hub?: RunningHub) {
     if (!win || win.isDestroyed()) return;
     // Another window's tab going away leaves this one's page alone.
-    if ((!bounds || !hub) && this.host && this.host !== win) return;
+    if ((!bounds || !hub) && this.shownIn && this.shownIn !== win) return;
     const call = ++this.placed;
     if (!bounds || !hub) return void this.hideWithSnapshot(call);
-    if (this.host && this.host !== win) this.hide();
+    if (this.shownIn && this.shownIn !== win) this.hide();
     clearTimeout(this.unload);
-    this.host = win;
+    this.shownIn = win;
     const view = this.open(hub);
     const zoom = win.webContents.getZoomFactor();
     view.setBounds({
@@ -101,7 +106,7 @@ export class DeviceView {
   }
 
   private attach() {
-    const win = this.host;
+    const win = this.shownIn;
     if (!this.shown || this.attached || !this.loaded || !this.view) return;
     if (!win || win.isDestroyed()) return;
     win.contentView.addChildView(this.view);
@@ -127,17 +132,17 @@ export class DeviceView {
 
   /** `win` reloaded or closed: whatever its panel showed is gone. */
   hideIn(win: BrowserWindow) {
-    if (this.host === win) this.hide();
+    if (this.shownIn === win) this.hide();
   }
 
   private hide() {
     if (!this.shown) return;
     this.shown = false;
-    const win = this.host;
+    const win = this.shownIn;
     if (this.attached && win && !win.isDestroyed() && this.view)
       win.contentView.removeChildView(this.view);
     this.attached = false;
-    this.host = undefined;
+    this.shownIn = undefined;
     clearTimeout(this.unload);
     this.unload = setTimeout(() => {
       if (this.shown) return;
