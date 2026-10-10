@@ -448,6 +448,44 @@
   padding: 0;
   font-size: 11px;
 }
+/* The unread divider folded into an agent switch's row. Read, the time
+   collapses and the row's label glides back to the middle as the lines grow
+   into its room; the row's height never changes. The negative margin and the
+   dot's padding cancel the row's gap, so a collapsed mark leaves no hole. */
+.agent-handoff .context-compaction::before,
+.agent-handoff .context-compaction::after {
+  transition: background-color 0.6s ease;
+}
+.agent-handoff .context-compaction:has(> .unread-mark:not([data-read]))::before,
+.agent-handoff .context-compaction:has(> .unread-mark:not([data-read]))::after {
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.unread-mark {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin-right: -12px;
+  color: var(--accent);
+  font-weight: 500;
+  transition:
+    grid-template-columns 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s ease;
+}
+.unread-mark > span {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.unread-mark > span > :last-child {
+  padding-right: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.unread-mark[data-read] {
+  grid-template-columns: 0fr;
+  opacity: 0;
+}
 .agent-handoff-note {
   margin: 4px 24px 8px;
   padding: 8px 12px;

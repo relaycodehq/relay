@@ -25,7 +25,7 @@ import {
 import { Message } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
-import { UnreadDivider } from "./UnreadDivider";
+import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
@@ -131,6 +131,13 @@ export function ThreadMessages({
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
     [arrival, root, listed],
   );
+  const unreadProps = unread && {
+    chatId: arrival!.chatId,
+    since: unread.since,
+    read: arrival!.read,
+    scroll,
+    bottomInset: dockHeight,
+  };
   const setupId = useMemo(
     () => (root ? undefined : latestSetup(listed)?.id),
     [root, listed],
@@ -153,15 +160,8 @@ export function ThreadMessages({
           </button>
         )}
         {listed.slice(-visible).flatMap((m) => [
-          m.id === unread?.id && (
-            <UnreadDivider
-              key="unread-divider"
-              chatId={arrival!.chatId}
-              since={unread.since}
-              read={arrival!.read}
-              scroll={scroll}
-              bottomInset={dockHeight}
-            />
+          m.id === unread?.id && !m.handoff && (
+            <UnreadDivider key="unread-divider" {...unreadProps!} />
           ),
           m.side ? (
             <SideQuestion
@@ -203,6 +203,11 @@ export function ThreadMessages({
                 m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
               }
               onSteer={root?.side ? undefined : onSteer}
+              unread={
+                m.id === unread?.id && m.handoff ? (
+                  <UnreadMark {...unreadProps!} />
+                ) : undefined
+              }
               onRerunSetup={
                 // Setup changes files the running answer may be using.
                 chat && !busy && !running && m.id === setupId

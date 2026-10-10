@@ -78,10 +78,12 @@ function HandoffRow({
   message: m,
   projectRoot,
   onOpenFile,
+  unread,
 }: {
   message: ChatMessage;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
+  unread?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const { from, to, computer, byRelay } = m.handoff!;
@@ -97,6 +99,7 @@ function HandoffRow({
       role="status"
     >
       <div className="context-compaction">
+        {unread}
         <span>
           {m.status === "streaming"
             ? `${agentName(from)} is writing a handoff note for ${computer ?? agentName(to)}…`
@@ -143,6 +146,7 @@ export const Message = memo(function Message({
   onSignIn,
   onSteer,
   onRerunSetup,
+  unread,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -170,6 +174,8 @@ export const Message = memo(function Message({
   onSteer?: (text: string) => void;
   /** Offered on the thread's latest worktree setup, when it didn't get through. */
   onRerunSetup?: (m: ChatMessage) => Promise<void>;
+  /** Where the unseen part starts at a row that draws its own line, which carries the mark instead of a divider above it. */
+  unread?: ReactNode;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -289,6 +295,7 @@ export const Message = memo(function Message({
         message={m}
         projectRoot={projectRoot}
         onOpenFile={onOpenFile}
+        unread={unread}
       />
     );
   if (m.reload) return <SessionReloadRow message={m} reload={m.reload} />;
