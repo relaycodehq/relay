@@ -26,6 +26,7 @@ import type {
 } from "./source-control";
 import type { LineQuestion } from "./questions";
 import type { WatchScope } from "./watch";
+import type { RenderMode } from "./html-render";
 import type {
   ProjectCheckInfo,
   ProjectCheckState,
@@ -314,6 +315,9 @@ export interface Api
   /** Flag what I'd miss in Claude threads: off (the default), the main thread, or with its subagents. */
   watchThreads(): Promise<WatchScope>;
   saveWatchThreads(scope: WatchScope): Promise<WatchScope>;
+  /** When agents show pages in answers: on their own (the default), only when asked, or never. */
+  renderMode(): Promise<RenderMode>;
+  saveRenderMode(mode: RenderMode): Promise<RenderMode>;
   /** Days without activity before a thread settles by itself; null never. */
   autoSettleDays(): Promise<number | null>;
   saveAutoSettleDays(days: number | null): Promise<number | null>;

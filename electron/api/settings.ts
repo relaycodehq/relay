@@ -18,6 +18,7 @@ import { aiSettingsSchema } from "../../shared/settings";
 import { accountIdSchema } from "../../shared/agent-accounts";
 import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
 import { watchScopes } from "../../shared/watch";
+import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
 import { parseVersion } from "../../shared/agent-updates";
@@ -111,6 +112,13 @@ export function settingsHandlers(ctx: ApiContext) {
         s.watchThreads = scope;
       });
       return scope;
+    }),
+    renderMode: () => store.get().renderMode ?? "auto",
+    saveRenderMode: takes([z.enum(renderModes)], async (mode) => {
+      await store.update((s) => {
+        s.renderMode = mode;
+      });
+      return mode;
     }),
     autoSettleDays: () => {
       const days = store.get().autoSettleDays;

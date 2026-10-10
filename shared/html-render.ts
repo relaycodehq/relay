@@ -202,6 +202,21 @@ export function injectRenderBootstrap(html: string) {
 export const RENDER_PROMPT =
   "When a chart, table, diagram, comparison or mockup would say more than prose, or the user wants to see a few ways to do something, show it in your answer with Relay's show_html tool (variants for alternatives) rather than describing it, and check a page with scripts with preview_html first. A whole app, or a page that needs a dev server, belongs in the thread's preview instead.";
 
+/**
+ * When agents show pages: on their own judgement, only when the user asks
+ * for something to see, or never, without the tools. Pages cost tokens.
+ */
+export const renderModes = ["auto", "asked", "off"] as const;
+export type RenderMode = (typeof renderModes)[number];
+
+/** The line that replaces RENDER_PROMPT when pages are only for asking. */
+export const RENDER_ASKED_PROMPT =
+  "Use Relay's show_html tool only when the user asks to see something, like a chart, a table or a few versions to pick from; otherwise answer in text.";
+
+/** The line about pages a thread's agent gets in its instructions, if any. */
+export const renderPrompt = (mode: RenderMode = "auto") =>
+  mode === "auto" ? RENDER_PROMPT : mode === "asked" ? RENDER_ASKED_PROMPT : "";
+
 /** How a page should be built, for the agent; the tools' descriptions carry it. */
 export const RENDER_GUIDE = `The page sits in the chat column between your tool calls and your reply, about 600 to 1100 px wide, its height fitted to its content (${RENDER_MAX_HEIGHT} px at most, then it scrolls). Build it to sit flush in the conversation:
 - No outer background, card, border or big padding: the page's background shows the thread behind it. Let width be fluid, never fixed wider than 320 px.

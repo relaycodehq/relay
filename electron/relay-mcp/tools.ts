@@ -323,6 +323,15 @@ export const startedTools = new Set<string>([
   "preview_html",
 ]);
 
+/** In a URL's query, `pages=off` leaves out the tools that show the user pages. */
+export const PAGES_PARAM = "pages";
+const pageTools = new Set<string>([
+  "show_html",
+  "preview_html",
+] satisfies RelayToolName[]);
+export const withoutPages = <T extends { name: string }>(list: T[]) =>
+  list.filter((t) => !pageTools.has(t.name));
+
 /** What tools/list returns. */
 export const relayToolList = Object.entries(relayToolSchemas).map(
   ([name, schema]) => {

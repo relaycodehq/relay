@@ -1136,7 +1136,8 @@
 }
 
 /* Flag what I'd miss: a switch at its own width, the cost in a line under it. */
-.watch-scope {
+.watch-scope,
+.render-mode {
   display: flex;
 }
 .watch-how {

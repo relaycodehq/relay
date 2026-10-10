@@ -23,6 +23,7 @@ import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
 import { SettingsCard, SettingsSelect } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import { WatchThreadsSetting } from "../WatchThreadsSetting";
+import { RenderModeSetting } from "../RenderModeSetting";
 
 type AISave = ReturnType<typeof useSaveAISettings>;
 
@@ -120,6 +121,17 @@ export function useModelEntries(
         "watch watcher heads up you should know flag miss notice subagent cheat tests side check btw fork observer cost price tokens",
       block: true,
       render: () => <WatchThreadsSetting />,
+    },
+    {
+      id: "render-mode",
+      category: "relay-models",
+      title: "Visualizations",
+      description:
+        "Charts, tables and mockups agents draw in their answers, at a thousand or more tokens each. When asked: only when you ask to see something. Off: never.",
+      keywords:
+        "visualization visualisation chart diagram table mockup html page show_html preview_html render tokens cost save cheap off",
+      block: true,
+      render: () => <RenderModeSetting />,
     },
     {
       id: "quick-switch",

@@ -18,6 +18,7 @@ import type { ProviderCommand } from "../../shared/commands";
 import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
 import type { UsageJob, UsageTokens } from "../../shared/usage";
+import type { RenderMode } from "../../shared/html-render";
 
 /** What one request of a run used, as the agent reported it. */
 export type UsageReport = {
@@ -119,7 +120,12 @@ export interface AgentOptions {
   /** A deep review's reviewer: it may read and run anything but changes no files. */
   readOnly?: boolean;
   /** Relay's tools for starting and driving other threads, reached as this thread; see electron/relay-mcp. */
-  relayTools?: { url: string; token: string };
+  relayTools?: {
+    url: string;
+    token: string;
+    /** How readily the agent is told to show pages; "off" serves it no page tools. */
+    renders?: RenderMode;
+  };
   onRequest?: AskAgentRequest;
   watch?: AgentWatch;
   session?: {

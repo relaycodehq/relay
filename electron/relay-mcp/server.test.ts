@@ -164,6 +164,40 @@ test("a started thread's path lists and answers only the tools that drive no oth
   expect(calls).toEqual([]);
 });
 
+test("pages=off leaves out the page tools and refuses their calls", async () => {
+  const calls: string[] = [];
+  const url = await serve(async (_chat, name) => {
+    calls.push(name);
+    return toolText("ok");
+  });
+  for (const path of [url, url.replace(/\/mcp$/, STARTED_PATH)]) {
+    const list = await (
+      await post(`${path}?pages=off`, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+      })
+    ).json();
+    const names = list.result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain("read_thread");
+    expect(names).not.toContain("show_html");
+    expect(names).not.toContain("preview_html");
+  }
+  const refused = await (
+    await post(`${url}?pages=off`, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "show_html",
+        arguments: { title: "x", html: "<p>x</p>" },
+      },
+    })
+  ).json();
+  expect(refused.error.code).toBe(-32602);
+  expect(calls).toEqual([]);
+});
+
 test("a failing call comes back as a tool error, not a dead request", async () => {
   const url = await serve(async () => {
     throw new Error("That isn't a thread you started.");

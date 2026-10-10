@@ -212,7 +212,11 @@ export class TurnRunner {
           }
         : undefined;
     try {
-      const relayTools = relayToolsFor(chat.id, !!chat.startedBy);
+      const relayTools = relayToolsFor(
+        chat.id,
+        !!chat.startedBy,
+        this.core.store.get().renderMode,
+      );
       const env = await this.host.env(chat);
       const links = await this.links(chat, root);
       const options = {

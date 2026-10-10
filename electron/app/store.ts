@@ -30,6 +30,8 @@ interface State {
   keepAwake?: boolean;
   /** Flag what I'd miss in Claude threads; unset is off. */
   watchThreads?: import("../../shared/watch").WatchScope;
+  /** When agents show pages in answers; unset is auto. */
+  renderMode?: import("../../shared/html-render").RenderMode;
   /** Topics the watcher was told are already known, newest last. */
   watchKnown?: string[];
   /** Legacy saves: automatic names were already title-cased by the old migration. */

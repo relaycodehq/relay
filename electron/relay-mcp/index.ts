@@ -7,7 +7,8 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { z } from "zod";
-import { STARTED_PATH } from "./tools";
+import type { RenderMode } from "../../shared/html-render";
+import { PAGES_PARAM, STARTED_PATH } from "./tools";
 
 export { serveRelayTools, type McpHandlers } from "./server";
 export {
@@ -96,11 +97,16 @@ export function useRelayMcp(config: RelayMcpConfig | undefined) {
 }
 
 /** What an agent session needs to reach the tools as `chatId`. */
-export function relayToolsFor(chatId: string, started = false) {
+export function relayToolsFor(
+  chatId: string,
+  started = false,
+  renders: RenderMode = "auto",
+) {
   return current
     ? {
-        url: `http://127.0.0.1:${current.port}${started ? STARTED_PATH : "/mcp"}`,
+        url: `http://127.0.0.1:${current.port}${started ? STARTED_PATH : "/mcp"}${renders === "off" ? `?${PAGES_PARAM}=off` : ""}`,
         token: relayToken(current.secret, chatId),
+        renders,
       }
     : undefined;
 }

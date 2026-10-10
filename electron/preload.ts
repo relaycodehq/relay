@@ -203,6 +203,8 @@ const methods = [
   "saveKeepAwake",
   "watchThreads",
   "saveWatchThreads",
+  "renderMode",
+  "saveRenderMode",
   "autoSettleDays",
   "saveAutoSettleDays",
   "worktreeCleanupDays",
