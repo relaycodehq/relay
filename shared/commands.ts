@@ -1,4 +1,10 @@
-import { agentName, agentProviders } from "./agents";
+import {
+  agentInfo,
+  agentName,
+  agentProviders,
+  sideProviders,
+  type AgentProvider,
+} from "./agents";
 
 export const relayCommands = [
   { name: "openpr", description: "Open this branch’s PR, or create one" },
@@ -55,6 +61,16 @@ export type RelayCommand = (typeof relayCommands)[number]["name"];
 /** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */
 export const asideNeedsAnswer =
   "Ask the agent something first, then ask on the side.";
+/** The agents a `/btw` can go to, as a sentence. */
+export const sideAgentsText = sideProviders
+  .map(agentName)
+  .join(", ")
+  .replace(/, ([^,]*)$/, " or $1");
+/** Why `provider` can't take a `/btw`, or nothing when it can. */
+export function sideRefusal(provider: AgentProvider): string | undefined {
+  if (agentInfo(provider)?.side) return undefined;
+  return `${agentName(provider)} can't answer beside the thread. Pick ${sideAgentsText} to ask a side question.`;
+}
 /**
  * Commands the composer applies to its own settings. They also work in the
  * middle of a message, and take only their own text out of it.

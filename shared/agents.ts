@@ -58,6 +58,8 @@ export interface AgentInfo {
   commandsAlone: boolean;
   /** Compaction takes instructions for what the summary should keep. */
   compactInstructions: boolean;
+  /** Answers a `/btw` with the thread's context: from its session, or in a fork of it. */
+  side: boolean;
   /**
    * A thread's session runs in a process of its own, so restarting it on the
    * same conversation loads skills, plugins and instructions changed since.
@@ -88,6 +90,7 @@ export const agents = {
     skills: true,
     commandsAlone: false,
     compactInstructions: false,
+    side: true,
     reload: true,
     usage: true,
     modelGroups: false,
@@ -103,6 +106,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: true,
+    side: true,
     reload: true,
     usage: true,
     modelGroups: false,
@@ -118,6 +122,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    side: true,
     reload: false,
     usage: false,
     modelGroups: true,
@@ -132,6 +137,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    side: false,
     reload: true,
     usage: false,
     modelGroups: true,
@@ -147,6 +153,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    side: false,
     reload: true,
     usage: false,
     modelGroups: false,
@@ -161,6 +168,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    side: false,
     reload: true,
     usage: false,
     modelGroups: false,
@@ -214,6 +222,7 @@ function registryInfo(provider: RegistryProvider): AgentInfo {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    side: false,
     reload: true,
     usage: false,
     modelGroups: false,
@@ -277,6 +286,8 @@ export const usageProviders = agentsWith("usage").list;
 export const usageProviderSchema = agentsWith("usage").schema;
 export const reportsUsage = (p: string): p is UsageProvider =>
   usageProviders.some((u) => u === p);
+/** Agents that answer a `/btw`, see `AgentInfo.side`. */
+export const sideProviders = agentsWith("side").list;
 /** Agents a deep review can ask, see `AgentInfo.reviewCommand`. */
 export const reviewerProviderSchema = agentsWith("reviewCommand").schema;
 export const reviewerProviders = agentsWith("reviewCommand").list;

@@ -2732,6 +2732,17 @@ it("fails a /btw question outright when its folder is gone, instead of leaving a
   ).rejects.toThrow("Folder is gone.");
   expect((await chats.get(chat.id)).messages).toHaveLength(before);
 });
+it("refuses a /btw for an agent that can't fork the thread before saving anything", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await expect(
+    chats.send(chat.id, {
+      ...input("@amp where is the cache guard?"),
+      provider: "amp" as const,
+      side: true as const,
+    }),
+  ).rejects.toThrow("Amp can't answer beside the thread.");
+  expect((await chats.get(chat.id)).messages).toEqual([]);
+});
 it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from the main session", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));

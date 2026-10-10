@@ -80,6 +80,7 @@ export function commandItems(
     ...(trigger.prefix === "/"
       ? relayCommands
           .filter((c) => !unavailable.includes(c.name))
+          .filter((c) => c.name !== "btw" || !!agentInfo(provider)?.side)
           .map((c): CommandItem => ({
             kind: "relay",
             name: c.name,

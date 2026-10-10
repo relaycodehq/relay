@@ -7,6 +7,7 @@ import type {
 import { replyRoot } from "../../shared/projects";
 import { agentMention, agentName } from "../../shared/agents";
 import { agentAsked } from "../../shared/recipient";
+import { sideRefusal } from "../../shared/commands";
 import { agentRuntime } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatCore } from "./core";
@@ -40,6 +41,8 @@ export class SideQuestions {
     if (!asked?.question) throw new Error("Ask a question after /btw.");
     // A side thread stays with the agent it started with.
     const provider = root?.provider ?? asked.provider;
+    const refusal = sideRefusal(provider);
+    if (refusal) throw new Error(refusal);
     const main = agentSession(chat, provider).thread;
     if (!main && !agentSession(chat, provider, rootId).thread)
       throw new Error(

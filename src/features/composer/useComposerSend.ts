@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentProvider } from "../../../shared/agents";
+import { agentInfo, type AgentProvider } from "../../../shared/agents";
 import { relayCommand } from "../../../shared/commands";
 import {
   buildSend,
@@ -89,9 +89,15 @@ export function useComposerSend({
       });
       return;
     }
-    // `/btw` goes to the agent picked here, beside whatever the thread runs.
+    // `/btw` goes to the agent picked here, beside whatever the thread runs;
+    // one that can't take it is told so by the command menu.
     const btw = relayCommand(draft.text);
-    if (btw?.name === "btw" && btw.args && to !== "message") {
+    if (
+      btw?.name === "btw" &&
+      btw.args &&
+      to !== "message" &&
+      agentInfo(to).side
+    ) {
       if (busy || sending.current || !runs.codex) return;
       sending.current = true;
       const outgoing = draft.take(false);

@@ -24,6 +24,7 @@ import {
   composerCommands,
   commandTrigger,
   argumentTrigger,
+  sideRefusal,
   type CommandOption,
   type RelayCommand,
 } from "../../../shared/commands";
@@ -125,6 +126,12 @@ export function useComposerCommands({
           ...(prefix === "/"
             ? relayCommands
                 .filter((c) => !inline || composerCommands.includes(c.name))
+                .filter(
+                  (c) =>
+                    c.name !== "btw" ||
+                    provider === "message" ||
+                    agentInfo(provider).side,
+                )
                 .map((c) => ({
                   kind: "relay" as const,
                   name: c.name,
@@ -302,6 +309,14 @@ export function useComposerCommands({
     if (action?.name === "goal") {
       if (provider === "codex" || provider === "claude") return false;
       setError("Pick Codex or Claude Code to set a goal.");
+      return true;
+    }
+    const refusal =
+      action?.name === "btw" && provider !== "message"
+        ? sideRefusal(provider)
+        : undefined;
+    if (refusal) {
+      setError(refusal);
       return true;
     }
     if (action) {

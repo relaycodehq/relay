@@ -21,7 +21,7 @@ import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
 import { agentInfo, agentName, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
-import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
+import { isComposerCommand, relayCommand, sideRefusal, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
 import { modelName } from "../../../shared/model-fit";
 import type { ContextUsage } from "../../../shared/projects";
@@ -393,6 +393,8 @@ export const Composer = forwardRef<
         return setError("Pick Codex or Claude Code to set a goal.");
       if (command && command.name !== "btw" && command.name !== "goal") return void run(command.name, command.args);
       if (command?.name === "btw" && !command.args) return setError("Add a question after /btw.");
+      const refusal = command?.name === "btw" ? sideRefusal(provider) : undefined;
+      if (refusal) return setError(refusal);
       const name = /^\/([^\s]+)/.exec(draft)?.[1];
       const agentCommand = agentInfo(provider)?.commandsAlone && commands.some((c) => c.name === name);
       const skill = agentInfo(provider)?.skills && /^\/skill:[^\s]+(?:\s|$)/.test(draft);

@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { agentName, agentInfo } from "../../../shared/agents";
 import {
-  agentName,
-  agentProviders,
-  agentInfo,
-} from "../../../shared/agents";
-import type { RelayCommand } from "../../../shared/commands";
+  sideAgentsText,
+  type RelayCommand,
+} from "../../../shared/commands";
 import { latestContext } from "../../../shared/context-usage";
 import type { ChatMessage } from "../../../shared/projects";
 import { api } from "../../lib/api";
@@ -73,7 +72,7 @@ export function useSessionCommands({
     // With a question and an agent picked, the composer sends it itself.
     if (command === "btw")
       return args
-        ? `Pick ${agentProviders.map(agentName).join(" or ")} to ask a side question.`
+        ? `Pick ${sideAgentsText} to ask a side question.`
         : "Type your question after /btw.";
     if (command === "context") {
       if (!chat || !context)
