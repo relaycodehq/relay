@@ -544,6 +544,9 @@ export class ChatTurns {
     const active = idle
       ? this.core.active.claim(chat.id, input)
       : this.core.active.create(chat.id, input);
+    // Otherwise Stop only reaches the turn holding the thread, and this one
+    // runs on after it with a Stop button that does nothing.
+    const unride = idle ? undefined : this.core.active.ride(chat.id, active);
     const { abort } = active;
     const message: ChatMessage =
       resumed ??
@@ -563,6 +566,11 @@ export class ChatTurns {
       });
     } finally {
       if (idle) this.endRun(chat, active);
+      else {
+        unride!();
+        active.requests.close();
+        active.end();
+      }
     }
   }
   /**

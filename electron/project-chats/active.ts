@@ -45,6 +45,8 @@ export class ActiveTurns {
   private turns = new Map<string, ActiveChat>();
   /** By `chatId:rootId`. */
   private sides = new Map<string, Side>();
+  /** Turns an agent started by itself while another held the thread. */
+  private riders = new Map<string, Set<ActiveChat>>();
   constructor(private changed: (id: string) => void) {}
 
   get(id: string) {
@@ -91,12 +93,30 @@ export class ActiveTurns {
     return active;
   }
 
+  /**
+   * A turn the agent started by itself beside the thread's running one. It
+   * doesn't hold the thread, but stopping the thread stops it too.
+   */
+  ride(id: string, active: ActiveChat) {
+    const riders = this.riders.get(id) ?? new Set();
+    riders.add(active);
+    this.riders.set(id, riders);
+    return () => {
+      riders.delete(active);
+      if (!riders.size && this.riders.get(id) === riders)
+        this.riders.delete(id);
+    };
+  }
+
   /** Stops the thread's answer; the thread reads as idle while the agent winds down. */
   stop(id: string) {
-    const active = this.turns.get(id);
-    if (!active) return;
-    active.stopping = true;
-    active.abort.abort();
+    const running = [this.turns.get(id), ...(this.riders.get(id) ?? [])];
+    if (!running.some(Boolean)) return;
+    for (const active of running) {
+      if (!active) continue;
+      active.stopping = true;
+      active.abort.abort();
+    }
     this.changed(id);
   }
 
@@ -135,20 +155,26 @@ export class ActiveTurns {
     // An agent can start a turn of its own meanwhile; that one stops too.
     for (;;) {
       const active = this.turns.get(id);
+      const riders = [...(this.riders.get(id) ?? [])];
       const sides = [...this.sides]
         .filter(([key]) => key.startsWith(`${id}:`))
         .map(([, side]) => side);
-      if (!active && !sides.length) return;
+      if (!active && !riders.length && !sides.length) return;
       active?.abort.abort();
+      for (const rider of riders) rider.abort.abort();
       for (const side of sides) side.abort.abort();
       try {
         await withTimeout(
-          Promise.allSettled([active?.ended, ...sides.map((s) => s.job)]),
+          Promise.allSettled([
+            active?.ended,
+            ...riders.map((r) => r.ended),
+            ...sides.map((s) => s.job),
+          ]),
           Math.max(0, deadline - Date.now()),
           "The agent didn't stop in time. Try again.",
         );
       } catch (e) {
-        if (this.turns.has(id)) throw e;
+        if (this.turns.has(id) || this.riders.has(id)) throw e;
         return;
       }
     }
