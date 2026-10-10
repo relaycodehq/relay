@@ -1,4 +1,4 @@
-import type { ProjectDiagnostic } from "../../../../shared/checks";
+import { checksCover, type ProjectDiagnostic } from "../../../../shared/checks";
 import { checkStatus } from "../../checks/editor-checks";
 import type { FileEditor } from "../useEditableDiff";
 import type { ChecksController } from "../../checks/useProjectChecks";
@@ -18,7 +18,12 @@ export function CheckPanel({
   problems: ProjectDiagnostic[];
   editor: () => FileEditor | undefined;
 }) {
-  if (!checks.enabled || !checks.info?.targets.length) return null;
+  if (
+    !checks.enabled ||
+    !checks.info?.targets.length ||
+    !checksCover(checks.target, path)
+  )
+    return null;
   return (
     <div className="editor-checks">
       <span>{checkStatus(checks.state, path, hash)}</span>

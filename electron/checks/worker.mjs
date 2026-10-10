@@ -321,14 +321,14 @@ function symbol(m) {
   }
 }
 function loadTypeScript(fallbackReason) {
-  const project = req("typescript");
-  if (project.server?.ProjectService && !fallbackReason) {
+  const project = fallbackReason ? undefined : req("typescript");
+  if (project?.server?.ProjectService) {
     engine = `Checked by the project’s TypeScript ${project.version}.`;
     return project;
   }
   const reason =
     fallbackReason ??
-    `TypeScript ${project.version ?? "unknown"} has no language service API`;
+    `TypeScript ${project?.version ?? "unknown"} has no language service API`;
   if (!fallbackTypeScript || target.provider === "angular")
     throw new Error(
       `${reason}. Use a project with a compatible TypeScript language service (tested with 5.9).`,
@@ -498,10 +498,27 @@ async function startProjectService(fallbackReason) {
   if (paused) pending = true;
   else check();
 }
+// A plain TypeScript project without its own compiler installed is checked
+// by Relay's; Angular's plugin has to match the project's TypeScript.
+function projectTypeScript() {
+  try {
+    return req.resolve("typescript/package.json");
+  } catch (e) {
+    if (
+      e?.code !== "MODULE_NOT_FOUND" ||
+      !fallbackTypeScript ||
+      target.provider === "angular"
+    )
+      throw e;
+  }
+}
 try {
-  const packageJson = req.resolve("typescript/package.json"),
-    version = JSON.parse(readFileSync(packageJson, "utf8")).version;
-  if (target.provider === "typescript" && parseInt(version) >= 7) {
+  const packageJson = projectTypeScript(),
+    version =
+      packageJson && JSON.parse(readFileSync(packageJson, "utf8")).version;
+  if (!packageJson)
+    await startProjectService("the project has no TypeScript installed");
+  else if (target.provider === "typescript" && parseInt(version) >= 7) {
     try {
       await startLanguageServer({ root, configFile, packageJson, paused });
     } catch (e) {

@@ -7,6 +7,10 @@ export interface CheckTarget {
   config: string;
   provider: CheckProvider;
 }
+/** Whether a target's checks can read `path`: scripts, and templates for Angular. */
+export const checksCover = (target: CheckTarget | undefined, path: string) =>
+  /\.[cm]?[jt]sx?$/.test(path) ||
+  (target?.provider === "angular" && path.endsWith(".html"));
 export interface ProjectCheckInfo {
   framework:
     "Angular" | "Next.js" | "TypeScript" | "JavaScript" | "Unsupported";

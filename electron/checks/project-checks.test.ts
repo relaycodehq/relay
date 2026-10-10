@@ -495,6 +495,30 @@ describe("project language support", () => {
     expect(await readFile(join(root, reviewPath), "utf8")).toBe(reviewCode);
     expect(git("status", "--porcelain")).toBe("M src/greeting.ts");
   });
+  it("checks a project without its own TypeScript with Relay's", async () => {
+    const { root, head } = await languageProject(server);
+    roots.push(root);
+    await rm(join(root, "node_modules"), { recursive: true });
+    const service = new ProjectChecks(
+      resolve("electron/checks/worker.mjs"),
+      fallbackTypeScript,
+    );
+    services.push(service);
+    await service.start(
+      "pr",
+      root,
+      server,
+      ref,
+      head,
+      "typescript:tsconfig.json",
+    );
+    const s = await ready(service, head);
+    expect(s.engine).toContain("the project has no TypeScript installed");
+    expect(s.diagnostics[0]).toMatchObject({
+      path: reviewPath,
+      code: "TS2322",
+    });
+  });
   it("falls back to Relay's TypeScript when a TypeScript 7 language server cannot start", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);

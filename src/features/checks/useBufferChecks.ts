@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { checksCover } from "../../../shared/checks";
 import { checkedFile, problemMarkers } from "./editor-checks";
 import type { ChecksController } from "./useProjectChecks";
 
@@ -21,18 +22,20 @@ export function useBufferChecks(
     [checked, state, path],
   );
   const markers = useMemo(() => problemMarkers(problems), [problems]);
+  // A buffer the checks can't read would only make them recheck the project.
+  const covered = checksCover(checks.target, path);
   useEffect(() => {
-    if (text === undefined || !checks.enabled || !state?.id) return;
+    if (text === undefined || !covered || !checks.enabled || !state?.id) return;
     const timer = setTimeout(() => {
       void checks.buffer(path, text).catch(onError);
     }, 250);
     return () => clearTimeout(timer);
-  }, [text, path, checks.enabled, state?.id]);
+  }, [text, path, covered, checks.enabled, state?.id]);
   useEffect(
     () => () => {
-      void checks.buffer(path, null).catch(() => {});
+      if (covered) void checks.buffer(path, null).catch(() => {});
     },
-    [path, checks.buffer],
+    [path, covered, checks.buffer],
   );
   return { problems, markers };
 }
