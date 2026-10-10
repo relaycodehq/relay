@@ -1,5 +1,12 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, CalendarClock, Clock3, GripVertical, X } from "lucide-react";
+import {
+  ArrowUp,
+  CalendarClock,
+  Clock3,
+  GripVertical,
+  Minimize2,
+  X,
+} from "lucide-react";
 import { agentMentionPattern } from "../../../shared/agents";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { parseCodeReferences } from "../../../shared/code-references";
@@ -9,6 +16,7 @@ import type {
   ProjectChatSend,
 } from "../../../shared/projects";
 import type { QueueDrop } from "./chat-queue";
+import { compactInstructions } from "../../../shared/commands";
 import {
   queueKeyLabel,
   steerKeyLabel,
@@ -43,6 +51,18 @@ function QueuedBody({
         <small>{input.images.length} screenshot(s)</small>
       )}
       {!!pastes.length && <small>{pastes.length} pasted text(s)</small>}
+    </>
+  );
+}
+/** A queued compaction: what it does, and the instructions it carries. */
+function QueuedCompact({ body }: { body: string }) {
+  const instructions = compactInstructions(body);
+  return (
+    <>
+      <p className="queued-compact">
+        <Minimize2 size={13} aria-hidden /> Compact context
+      </p>
+      {instructions && <small>{instructions}</small>}
     </>
   );
 }
@@ -116,6 +136,7 @@ export function QueuedMessages({
   onSteer,
   onMove,
   onReturn,
+  onRemove,
 }: {
   queue?: ProjectChatData["queue"];
   paused?: boolean;
@@ -129,6 +150,8 @@ export function QueuedMessages({
   onMove: (messageId: string, target: QueueDrop) => void;
   /** Takes it out of the queue, back into the composer. */
   onReturn: (input: ProjectChatSend) => void;
+  /** Drops a queued compaction, which has nothing to take back. */
+  onRemove: (messageId: string) => void;
 }) {
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
@@ -173,37 +196,64 @@ export function QueuedMessages({
                   justDropped={sort.justDropped}
                   actions={
                     <>
-                      <button
-                        type="button"
-                        disabled={busy || afterCompaction}
-                        aria-label={
-                          compacting
-                            ? "Send right after compaction"
-                            : running
-                              ? "Steer now"
-                              : "Send now"
-                        }
-                        title={
-                          afterCompaction
-                            ? "Already sends as soon as compaction finishes"
-                            : compacting
-                              ? "A compaction can't be steered; send this right after it"
+                      {queued.compact ? (
+                        !running && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label="Compact now"
+                            title="Compact now"
+                            onPointerDown={(e) => e.preventDefault()}
+                            onClick={() => onSteer(queued.input.id)}
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy || afterCompaction}
+                          aria-label={
+                            compacting
+                              ? "Send right after compaction"
                               : running
-                                ? "Steer the current answer, or send this next when it can't be steered"
+                                ? "Steer now"
                                 : "Send now"
-                        }
-                        onPointerDown={(e) => e.preventDefault()}
-                        onClick={() => onSteer(queued.input.id)}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
+                          }
+                          title={
+                            afterCompaction
+                              ? "Already sends as soon as compaction finishes"
+                              : compacting
+                                ? "A compaction can't be steered; send this right after it"
+                                : running
+                                  ? "Steer the current answer, or send this next when it can't be steered"
+                                  : "Send now"
+                          }
+                          onPointerDown={(e) => e.preventDefault()}
+                          onClick={() => onSteer(queued.input.id)}
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={busy}
-                        aria-label="Cancel and return to the composer"
-                        title="Cancel and return to the composer"
+                        aria-label={
+                          queued.compact
+                            ? "Don't compact"
+                            : "Cancel and return to the composer"
+                        }
+                        title={
+                          queued.compact
+                            ? "Don't compact"
+                            : "Cancel and return to the composer"
+                        }
                         onPointerDown={(e) => e.preventDefault()}
-                        onClick={() => onReturn(queued.input)}
+                        onClick={() =>
+                          queued.compact
+                            ? onRemove(queued.input.id)
+                            : onReturn(queued.input)
+                        }
                       >
                         <X size={14} />
                       </button>
@@ -212,7 +262,11 @@ export function QueuedMessages({
                 >
                   {(folded) => (
                     <>
-                      <QueuedBody input={queued.input} folded={folded} />
+                      {queued.compact ? (
+                        <QueuedCompact body={queued.input.body} />
+                      ) : (
+                        <QueuedBody input={queued.input} folded={folded} />
+                      )}
                       {paused && queued.error && (
                         <small className="queued-error">{queued.error}</small>
                       )}

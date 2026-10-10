@@ -168,7 +168,15 @@ export function ThreadComposer({
   thread: { root, messages, shown, running },
   councils: { reviewing },
   background: { agentBatch, pending, stopped, leftBehind },
-  session: { runCommand, context, compacting, showContext, compact },
+  session: {
+    runCommand,
+    context,
+    compacting,
+    showContext,
+    compact,
+    queuedCompact,
+    cancelCompact,
+  },
   attachments,
   worktree,
   checkout,
@@ -343,11 +351,15 @@ export function ThreadComposer({
             usage={context.usage}
             provider={context.provider}
             compacting={compacting}
-            compactDisabled={running || busy}
+            compactDisabled={busy}
+            compactLater={running}
+            compactQueued={running && queuedCompact}
             openSignal={showContext}
             counter={counter}
             savedReport={savedReport}
-            onCompact={() => compact()}
+            onCompact={() =>
+              running && queuedCompact ? cancelCompact() : compact()
+            }
           />
         )
       }

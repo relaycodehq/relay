@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { agentName, agentInfo } from "../../../shared/agents";
-import {
-  sideAgentsText,
-  type RelayCommand,
-} from "../../../shared/commands";
+import { sideAgentsText, type RelayCommand } from "../../../shared/commands";
 import { latestContext } from "../../../shared/context-usage";
-import type { ChatMessage } from "../../../shared/projects";
+import type {
+  ChatMessage,
+  ProjectChat as ProjectChatData,
+} from "../../../shared/projects";
 import { api } from "../../lib/api";
 import type { ThreadHandle } from "./useThreadHandle";
 
@@ -22,6 +22,7 @@ export function useSessionCommands({
   shown,
   root,
   running,
+  queue,
   onCommand,
 }: {
   handle: ThreadHandle;
@@ -30,6 +31,7 @@ export function useSessionCommands({
   /** The side conversation's first message, while one is open; it compacts its own session. */
   root?: ChatMessage;
   running: boolean;
+  queue: ProjectChatData["queue"];
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
   const qc = useQueryClient();
@@ -39,6 +41,11 @@ export function useSessionCommands({
   );
   /** Bumped by `/context` to open the meter. */
   const [showContext, setShowContext] = useState(0);
+  /** Compacting queued behind the running answer, for this conversation. */
+  const queuedCompact = queue?.find(
+    (q) => q.compact && (q.input.parentId ?? null) === (root?.id ?? null),
+  );
+  /** Compacts now, or right after the running answer. */
   function compact(instructions?: string) {
     if (!chat) return;
     // Through the write gate, so a double click or a send racing it waits its turn.
@@ -47,12 +54,22 @@ export function useSessionCommands({
       await refetch();
     });
   }
+  function cancelCompact() {
+    if (!chat || !queuedCompact) return;
+    void run(async () => {
+      await api.projectChatQueueAction(
+        chat.id,
+        "remove",
+        queuedCompact.input.id,
+      );
+      await refetch();
+    });
+  }
   // Session commands need this thread; the rest belong to the workspace.
   function runCommand(command: RelayCommand, args: string): boolean | string {
     if (command === "compact") {
       if (!chat || !context) return "There is no agent session to compact yet.";
-      if (running || busy || compacting)
-        return "Wait for the current answer before compacting.";
+      if (compacting) return "The session is already compacting.";
       if (args && !agentInfo(context.provider).compactInstructions)
         return `${agentName(context.provider)} compacts without custom instructions.`;
       compact(args || undefined);
@@ -82,5 +99,13 @@ export function useSessionCommands({
     }
     return onCommand(command, args);
   }
-  return { context, compacting, showContext, compact, runCommand };
+  return {
+    context,
+    compacting,
+    showContext,
+    compact,
+    queuedCompact: !!queuedCompact,
+    cancelCompact,
+    runCommand,
+  };
 }

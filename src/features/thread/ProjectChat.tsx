@@ -188,6 +188,7 @@ export function ProjectChat({
     shown,
     root,
     running,
+    queue: history.data?.queue,
     onCommand: (command, args) =>
       links.command(command, args) ?? onCommand(command, args),
   });

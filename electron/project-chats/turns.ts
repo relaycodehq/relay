@@ -688,56 +688,96 @@ export class ChatTurns {
       throw e;
     }
   }
-  /** Compacts the provider session behind the newest answer on this branch. */
+  /**
+   * Compacts the provider session behind the newest answer on this branch,
+   * or queues compacting it right after the running answer.
+   */
   compact(id: string, parentId?: string, instructions?: string) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
       await this.core.active.finished(id);
-      if (this.core.active.has(id))
-        throw new Error("Wait for the current answer before compacting.");
       const chat = await this.core.storage.load(id);
       assertHere(chat);
       if (parentId && chat.messages.find((m) => m.id === parentId)?.side)
         throw new Error(
           "A side question has no session of its own to compact.",
         );
-      const root = await this.worktrees.root(chat);
-      const latest = [...chat.messages]
-        .reverse()
-        .find(
-          (m) =>
-            m.role === "assistant" && (m.parentId ?? undefined) === parentId,
+      const running = this.core.active.get(id);
+      if (!running && !this.councils.busy(chat)) {
+        // Compacting now does what one queued for this conversation would.
+        const queued = chat.queue?.find(
+          (q) => q.compact && (q.input.parentId ?? undefined) === parentId,
         );
-      const provider = latest?.provider;
-      if (!provider || !agentSession(chat, provider, parentId).thread)
+        if (queued) {
+          chat.queue = chat.queue!.filter((q) => q !== queued);
+          await this.core.storage.save(chat);
+        }
+        return this.compactNow(id, parentId, instructions);
+      }
+      if (chat.messages.some((m) => m.compaction && m.status === "streaming"))
+        throw new Error("The session is already compacting.");
+      // The running answer's agent, when it answers on this branch, is the
+      // one whose session will be newest by the time this goes.
+      const provider =
+        (running?.input && (running.input.parentId ?? undefined) === parentId
+          ? agentAsked(running.input)?.provider
+          : undefined) ?? latestAnswer(chat, parentId)?.provider;
+      if (!provider)
         throw new Error("There is no agent session to compact yet.");
       if (instructions && !agentInfo(provider).compactInstructions)
         throw new Error(
           `${agentName(provider)} compacts without custom instructions.`,
         );
-      const input = sessionInput(chat, provider, this.core.store, parentId);
-      const active = this.core.active.claim(id, input);
-      const { abort } = active;
-      const message = streamingAnswer(provider, {
-        compaction: true,
-        ...(parentId ? { parentId } : {}),
+      await this.queue.addCompact(chat, {
+        ...sessionInput(chat, provider, this.core.store, parentId),
+        body: instructions ? `/compact ${instructions}` : "/compact",
       });
-      chat.messages.push(message);
-      try {
-        await this.core.storage.save(chat);
-      } catch (e) {
-        this.core.active.release(id, active);
-        throw e;
-      }
-      this.core.emit({ chatId: id, message });
-      active.job = this.runner
-        .run(chat, message, root, instructions ?? "", input, abort, {
-          kind: "compact",
-        })
-        .finally(() => this.endRun(chat, active));
-      void active.job.catch((e) =>
-        console.warn("Could not save the compaction:", e),
-      );
     });
   }
+  /** Compacts now, for a caller already holding the thread's control. */
+  async compactNow(id: string, parentId?: string, instructions?: string) {
+    if (this.core.active.has(id))
+      throw new Error("Wait for the current answer before compacting.");
+    const chat = await this.core.storage.load(id);
+    assertHere(chat);
+    const root = await this.worktrees.root(chat);
+    const provider = latestAnswer(chat, parentId)?.provider;
+    if (!provider || !agentSession(chat, provider, parentId).thread)
+      throw new Error("There is no agent session to compact yet.");
+    if (instructions && !agentInfo(provider).compactInstructions)
+      throw new Error(
+        `${agentName(provider)} compacts without custom instructions.`,
+      );
+    const input = sessionInput(chat, provider, this.core.store, parentId);
+    const active = this.core.active.claim(id, input);
+    const { abort } = active;
+    const message = streamingAnswer(provider, {
+      compaction: true,
+      ...(parentId ? { parentId } : {}),
+    });
+    chat.messages.push(message);
+    try {
+      await this.core.storage.save(chat);
+    } catch (e) {
+      this.core.active.release(id, active);
+      throw e;
+    }
+    this.core.emit({ chatId: id, message });
+    active.job = this.runner
+      .run(chat, message, root, instructions ?? "", input, abort, {
+        kind: "compact",
+      })
+      .finally(() => this.endRun(chat, active));
+    void active.job.catch((e) =>
+      console.warn("Could not save the compaction:", e),
+    );
+  }
 }
+
+/** The newest answer in a conversation: the main one, or a side one by its root. */
+const latestAnswer = (chat: ProjectChat, parentId?: string) =>
+  [...chat.messages]
+    .reverse()
+    .find(
+      (m) => m.role === "assistant" && (m.parentId ?? undefined) === parentId,
+    );

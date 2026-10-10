@@ -705,6 +705,63 @@ it("keeps what Claude compacted to beside the compaction, not as its answer", as
   expect(compaction.body).toBe("");
   expect(compaction.compactSummary).toBe("Summary:\n1. Keep the old API.");
 });
+it("compacts when the running answer is done, ahead of what was already queued", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await chats.send(chat.id, input("@codex Now fix it"));
+  await chats.compact(chat.id);
+  await chats.compact(chat.id);
+  const queued = (await chats.get(chat.id)).queue!;
+  expect(queued.map((q) => !!q.compact)).toEqual([true, false]);
+  await vi.waitFor(
+    async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(5);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 10_000 },
+  );
+  const saved = await chats.get(chat.id);
+  expect(saved.queue ?? []).toHaveLength(0);
+  expect(
+    saved.messages.map((m) =>
+      m.compaction ? "compaction" : `${m.role}:${m.body.slice(0, 13)}`,
+    ),
+  ).toEqual([
+    "user:@codex Explai",
+    expect.stringMatching(/^assistant:/),
+    "compaction",
+    "user:@codex Now fi",
+    expect.stringMatching(/^assistant:/),
+  ]);
+});
+it("takes a repeated compact's instructions in place of the queued one's", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(chat.id, claude("@claude Explain the cache guard"));
+  await chats.send(chat.id, claude("@claude Now fix it"));
+  await chats.compact(chat.id, undefined, "Keep the API decisions");
+  const first = (await chats.get(chat.id)).queue![0]!;
+  await chats.queueAction(chat.id, "move", first.input.id, 1);
+  await chats.compact(chat.id, undefined, "Keep the test plan");
+  let queue = (await chats.get(chat.id)).queue!;
+  expect(queue.map((q) => !!q.compact)).toEqual([false, true]);
+  expect(queue[1]!.input).toMatchObject({
+    id: first.input.id,
+    body: "/compact Keep the test plan",
+  });
+  await chats.compact(chat.id);
+  queue = (await chats.get(chat.id)).queue!;
+  expect(queue.filter((q) => q.compact).map((q) => q.input.body)).toEqual([
+    "/compact",
+  ]);
+});
 it("brings the sidebar summary up to date when a compaction finishes", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const finished = () =>

@@ -75,6 +75,12 @@
   max-height: none;
   mask-image: none;
 }
+.queued-bubble > p.queued-compact {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
 .queued-bubble small {
   margin-right: 10px;
   color: var(--muted);

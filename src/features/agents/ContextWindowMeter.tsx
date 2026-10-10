@@ -1,6 +1,6 @@
 import { useEffect, useId, useReducer, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { Eye, EyeOff, Minimize2 } from "lucide-react";
+import { Check, Eye, EyeOff, Minimize2 } from "lucide-react";
 import type {
   ChatMessage,
   ContextUsage,
@@ -302,6 +302,8 @@ export function ContextWindowMeter({
   provider,
   compacting,
   compactDisabled,
+  compactLater = false,
+  compactQueued = false,
   onCompact,
   openSignal,
   counter,
@@ -313,6 +315,10 @@ export function ContextWindowMeter({
   provider: ChatMessage["provider"];
   compacting: boolean;
   compactDisabled: boolean;
+  /** An answer is running: compacting waits for it, and clicking queues it. */
+  compactLater?: boolean;
+  /** Compacting is queued behind the running answer; clicking takes it back. */
+  compactQueued?: boolean;
   onCompact: () => void;
   /** Opens the details whenever this changes, e.g. from a /context command. */
   openSignal?: number;
@@ -474,20 +480,37 @@ export function ContextWindowMeter({
               <CacheMeter cache={cache} heat={heat} now={now} />
             )}
             <p className="context-meter-note">
-              {compactDisabled && !compacting
-                ? "You can compact once the current answer finishes."
+              {compactLater && !compacting
+                ? compactQueued
+                  ? "Compacts once the current answer finishes, before anything queued."
+                  : "Compact when done summarizes earlier turns once the current answer finishes, before anything queued."
                 : `${agent} compacts automatically when the window fills. Compact now to summarize earlier turns and free space.`}
             </p>
             <button
               type="button"
               className="composer-select-item context-compact"
               disabled={compactDisabled || compacting}
+              aria-pressed={
+                compactLater && !compacting ? compactQueued : undefined
+              }
+              title={compactQueued ? "Don't compact after all" : undefined}
               onClick={onCompact}
             >
               <span className="composer-option-label">
                 <Minimize2 size={13} aria-hidden />
-                {compacting ? "Compacting…" : "Compact context"}
+                {compacting
+                  ? "Compacting…"
+                  : compactLater
+                    ? "Compact when done"
+                    : "Compact context"}
               </span>
+              {compactQueued && !compacting && (
+                <Check
+                  size={13}
+                  className="context-compact-check"
+                  aria-hidden
+                />
+              )}
             </button>
             {cache && heat && (
               <button

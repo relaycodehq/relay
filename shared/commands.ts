@@ -6,6 +6,10 @@ import {
   type AgentProvider,
 } from "./agents";
 
+/** The instructions after a `/compact`, as a queued compaction carries them. */
+export const compactInstructions = (body: string) =>
+  body.replace(/^\s*\/compact\b/, "").trim() || undefined;
+
 export const relayCommands = [
   { name: "openpr", description: "Open this branch’s PR, or create one" },
   { name: "changes", description: "Review local uncommitted changes" },

@@ -193,6 +193,8 @@ export class ProjectChats {
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(core, this.schedule, this.councils, {
       sendNow: (id, input) => this.turns.sendNow(id, input),
+      compactNow: (id, parentId, instructions) =>
+        this.turns.compactNow(id, parentId, instructions),
     });
     this.turns = new ChatTurns(
       core,

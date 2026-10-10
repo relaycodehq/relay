@@ -38,7 +38,7 @@ export function useQueuedMessages({
   /** Counts messages taken back, so the composer remounts on the draft they left. */
   const [restored, setRestored] = useState(0);
   async function queueAction(
-    action: "steer" | "move",
+    action: "steer" | "move" | "remove",
     messageId: string,
     index?: number,
   ) {
@@ -117,6 +117,7 @@ export function useQueuedMessages({
     restored,
     editLast,
     steer: (messageId: string) => queueAction("steer", messageId),
+    remove: (messageId: string) => queueAction("remove", messageId),
     move,
     returnToComposer,
   };

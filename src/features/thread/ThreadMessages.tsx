@@ -81,7 +81,7 @@ export function ThreadMessages({
     openTurnDiff,
     rewindTurn,
   },
-  queue: { steer, move, returnToComposer },
+  queue: { steer, move, returnToComposer, remove },
   worktree,
   onResume,
   onSteer,
@@ -267,6 +267,7 @@ export function ThreadMessages({
           onSteer={steer}
           onMove={move}
           onReturn={returnToComposer}
+          onRemove={remove}
         />
         {root && shown.length === 1 && (
           <p className="thread-reply-empty">

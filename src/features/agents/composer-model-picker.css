@@ -813,6 +813,9 @@
   cursor: default;
   color: var(--muted);
 }
+.context-compact-check {
+  margin-left: auto;
+}
 .context-compact:has(+ .context-heat-toggle) {
   margin-bottom: 0;
 }

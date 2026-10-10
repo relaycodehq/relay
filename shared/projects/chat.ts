@@ -11,6 +11,11 @@ interface QueuedChatMessage {
   input: ProjectChatSend;
   created: number;
   error?: string;
+  /**
+   * Compacts the session of `input.parentId`'s conversation instead of
+   * sending; the body reads `/compact` and any instructions after it.
+   */
+  compact?: true;
 }
 /** Sent with Send later; goes out at `at`, or queues if an answer is running. */
 export interface ScheduledChatMessage extends QueuedChatMessage {

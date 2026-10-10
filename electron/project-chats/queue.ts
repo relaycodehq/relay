@@ -6,6 +6,7 @@ import type {
 } from "../../shared/projects";
 import { replyRoot, sentBy } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
+import { compactInstructions } from "../../shared/commands";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
@@ -13,6 +14,12 @@ import type { ChatSchedule } from "./schedule";
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
   sendNow(id: string, input: ProjectChatSend): Promise<void>;
+  /** Compacts a conversation's session now; the thread must be idle. */
+  compactNow(
+    id: string,
+    parentId?: string,
+    instructions?: string,
+  ): Promise<void>;
 }
 
 /**
@@ -80,6 +87,29 @@ export class ChatQueue {
   }
 
   /**
+   * Compacts the conversation's session right after the running answer,
+   * ahead of the messages already queued, so they start on the freed window.
+   * One per conversation: asking again keeps its place in the queue but
+   * takes the newer instructions, or none.
+   */
+  async addCompact(chat: ProjectChat, input: ProjectChatSend) {
+    const parentId = input.parentId ?? undefined;
+    const queued = chat.queue?.find(
+      (q) => q.compact && (q.input.parentId ?? undefined) === parentId,
+    );
+    if (queued) {
+      queued.input = { ...queued.input, body: input.body };
+      delete queued.error;
+    } else
+      (chat.queue ??= []).unshift({
+        input,
+        created: Date.now(),
+        compact: true,
+      });
+    await this.core.storage.save(chat);
+  }
+
+  /**
    * A message went out without queueing. Asking an agent again picks a
    * stopped queue back up after this answer; Relay's own messages leave it
    * stopped. Drain waits behind the sender's control, so it sees the change.
@@ -100,7 +130,13 @@ export class ChatQueue {
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {
-      await this.host.sendNow(id, next.input);
+      if (next.compact)
+        await this.host.compactNow(
+          id,
+          next.input.parentId ?? undefined,
+          compactInstructions(next.input.body),
+        );
+      else await this.host.sendNow(id, next.input);
       chat.queue = chat.queue!.filter((q) => q.input.id !== next.input.id);
       await this.core.storage.save(chat);
       if (!this.core.active.has(id)) await this.drain(id);
