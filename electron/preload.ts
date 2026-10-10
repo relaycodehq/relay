@@ -55,6 +55,7 @@ const methods = [
   "threadNotes",
   "keepThreadNote",
   "tickThreadNote",
+  "arrangeThreadNote",
   "removeThreadNote",
   "terminalSessions",
   "continueTerminalSession",

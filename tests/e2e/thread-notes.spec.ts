@@ -94,9 +94,8 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     await chip.hover();
     const card = page.getByRole("dialog", { name: "Notes" });
     await expect(card).toBeVisible();
-    await expect(card.locator(".notes-lead")).toHaveText(
-      "Ideas, cheapest wins first:",
-    );
+    // Just the list: the line leading into it stays in the answer.
+    await expect(card.locator(".notes-lead")).toHaveCount(0);
     await expect(card.locator(".notes-items > li")).toHaveCount(3);
     await card.getByRole("checkbox").nth(1).click();
     await expect(card.getByRole("checkbox").nth(1)).toHaveAttribute(
@@ -119,7 +118,7 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     const composer = page.getByLabel("Message project");
     await expect(composer.locator(".composer-quote-chip")).toHaveAttribute(
       "data-quote",
-      "Ideas, cheapest wins first:\n\n1. Open threads from the cache\n\n3. Optimistic sends with an outbox",
+      "1. Open threads from the cache\n\n3. Optimistic sends with an outbox",
     );
     await expect(card).toBeHidden();
     await composer.fill("");
@@ -157,6 +156,29 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     await expect(
       page.getByLabel("Message project").locator(".composer-quote-chip"),
     ).toContainText("3. Optimistic sends");
+
+    // Items drop out and move by their grip, numbered again, ticks and all.
+    await chip.click();
+    await expect(card).toBeVisible();
+    const rows = card.locator(".notes-items > li");
+    await rows.nth(0).hover();
+    await rows.nth(0).getByRole("button", { name: "Remove this item" }).click();
+    await expect(rows).toHaveCount(2);
+    const grip = (await rows.nth(1).locator(".notes-grip").boundingBox())!;
+    const top = (await rows.nth(0).boundingBox())!;
+    await page.mouse.move(grip.x + 6, grip.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + 6, top.y + 4, { steps: 10 });
+    await page.mouse.up();
+    await expect(card.locator(".notes-text")).toHaveText([
+      "Optimistic sends with an outbox",
+      "Skip the re-render on every heartbeat",
+    ]);
+    await expect(card.locator(".notes-n")).toHaveText(["1.", "2."]);
+    await expect(card.getByRole("checkbox").nth(1)).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
 
     // Selecting the lead line offers Keep beside Add to chat.
     await answer

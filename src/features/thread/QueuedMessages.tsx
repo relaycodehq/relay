@@ -25,7 +25,7 @@ import {
 } from "../../lib/send-key";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { Spinner } from "../../ui/ui";
-import { useQueueSort } from "./useQueueSort";
+import { useDragSort } from "../../lib/useDragSort";
 import "./queued-messages.css";
 
 /** A queued message's text, with its attachments counted rather than shown; folded, its blank lines close up. */
@@ -156,7 +156,7 @@ export function QueuedMessages({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const editKey = useShortcutLabel("edit-queued");
-  const sort = useQueueSort(
+  const sort = useDragSort(
     queue?.map((q) => q.input.id) ?? [],
     (queue?.length ?? 0) > 1 && !busy,
     onMove,

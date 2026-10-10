@@ -246,14 +246,3 @@ export function selectionContext(range: Range): SelectionContext {
   }
   return {};
 }
-
-/**
- * The line leading into a kept list, like "Ideas, cheapest first:", when the
- * paragraph right above the list's frame ends with a colon.
- */
-export function listLead(frame: Element | null | undefined) {
-  const above = frame?.previousElementSibling;
-  if (above?.tagName !== "P" || !above.textContent?.trim().endsWith(":"))
-    return undefined;
-  return selectionMarkdown(above as unknown as MdNode) || undefined;
-}

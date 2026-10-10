@@ -213,6 +213,12 @@ export interface ProjectChatApi {
     item: number,
     done: boolean,
   ): Promise<ThreadNote[]>;
+  /** A list note's items in a new order, numbered from 1; items left out are dropped. */
+  arrangeThreadNote(
+    id: string,
+    note: string,
+    order: number[],
+  ): Promise<ThreadNote[]>;
   removeThreadNote(id: string, note: string): Promise<ThreadNote[]>;
   /** Claude Code and Codex sessions run in a terminal in the project's folder, newest first. */
   terminalSessions(projectId: string): Promise<TerminalSession[]>;

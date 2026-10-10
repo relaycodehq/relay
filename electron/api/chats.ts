@@ -149,6 +149,10 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, noteIdSchema, z.number().int().min(1), z.boolean()],
       (id, note, item, done) => projectChats.notes.tick(id, note, item, done),
     ),
+    arrangeThreadNote: takes(
+      [idSchema, noteIdSchema, z.array(z.number().int().min(1)).max(500)],
+      (id, note, order) => projectChats.notes.arrange(id, note, order),
+    ),
     removeThreadNote: takes([idSchema, noteIdSchema], (id, note) =>
       projectChats.notes.remove(id, note),
     ),

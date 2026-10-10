@@ -106,18 +106,21 @@ export function noteQuote(note: ThreadNote, index?: number): string {
   // Preserve the original formatting when nothing has been crossed out.
   if (index === undefined && remaining.length === list.items.length)
     return note.text;
-  const items = remaining.map((item) => {
-    const marker = `${item.number || "-"} `;
-    return item.text
-      .split("\n")
-      .map((line, i) =>
-        i === 0 ? marker + line : line ? " ".repeat(marker.length) + line : "",
-      )
-      .join("\n");
-  });
+  const items = remaining.map((item) => itemMarkdown(item, item.number));
   return [index === undefined ? list.lead : "", ...items]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** `item` back as markdown behind `number`, or a bullet without one. */
+function itemMarkdown(item: NoteItem, number: string) {
+  const marker = `${number || "-"} `;
+  return item.text
+    .split("\n")
+    .map((line, i) =>
+      i === 0 ? marker + line : line ? " ".repeat(marker.length) + line : "",
+    )
+    .join("\n");
 }
 
 /** Changes whenever the thread's notes do, so a window or phone knows to fetch them. */
@@ -185,6 +188,52 @@ export function tickNote(
       ? {
           ...n,
           ...(sorted.length ? { done: sorted } : { done: undefined }),
+          updated: now,
+        }
+      : n,
+  );
+}
+
+/**
+ * A list note with its items in a new `order`, numbered from 1 as the user
+ * sees them; items left out are dropped. Numbers count up again from where
+ * the list started and ticks go with their items. Dropping every item drops
+ * the note, and one left over makes it a plain note.
+ */
+export function arrangeNote(
+  notes: ThreadNote[] | undefined,
+  id: string,
+  order: number[],
+  now = Date.now(),
+): ThreadNote[] {
+  const note = find(notes, id);
+  const list = noteList(note.text);
+  if (!list) throw new Error(`Note ${id} isn't a list.`);
+  const count = list.items.length;
+  if (order.some((item) => !Number.isInteger(item) || item < 1 || item > count))
+    throw new Error(`Note ${id} has items 1 to ${count}.`);
+  if (new Set(order).size !== order.length)
+    throw new Error("Each item goes in the order once.");
+  if (!order.length) return removeNote(notes, id);
+  let next = Number.parseInt(list.items[0]!.number, 10) || 1;
+  const items = order.map((item) => {
+    const kept = list.items[item - 1]!;
+    return itemMarkdown(kept, kept.number && `${next++}.`);
+  });
+  // Items of several paragraphs need the blank lines between them.
+  const loose = list.items.some((item) => item.text.includes("\n\n"));
+  const body = items.join(loose ? "\n\n" : "\n");
+  const text = list.lead ? `${list.lead}\n\n${body}` : body;
+  const was = new Set(note.done);
+  const done = noteList(text)
+    ? order.flatMap((item, index) => (was.has(item - 1) ? [index] : []))
+    : [];
+  return notes!.map((n) =>
+    n === note
+      ? {
+          ...n,
+          text,
+          ...(done.length ? { done } : { done: undefined }),
           updated: now,
         }
       : n,

@@ -1,5 +1,6 @@
 import {
   addNote,
+  arrangeNote,
   removeNote,
   tickNote,
   type NewNote,
@@ -28,6 +29,11 @@ export class ThreadNotes {
   async tick(id: string, note: string, item: number, done: boolean) {
     const chat = await this.core.storage.load(id);
     return this.write(chat, tickNote(chat.notes, note, item, done));
+  }
+
+  async arrange(id: string, note: string, order: number[]) {
+    const chat = await this.core.storage.load(id);
+    return this.write(chat, arrangeNote(chat.notes, note, order));
   }
 
   async remove(id: string, note: string) {

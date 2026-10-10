@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   addNote,
+  arrangeNote,
   noteForAgent,
   noteList,
   noteQuote,
@@ -119,4 +120,40 @@ it("keeps, ticks and removes notes, with ids an agent can name", () => {
   expect(addNote(notes, { text: "new" }).note.id).toBe("n3");
   expect(() => removeNote(notes, "n9")).toThrow("no note n9");
   expect(notesMark([])).toBeUndefined();
+});
+
+it("reorders and drops list items, numbering them again and keeping their ticks", () => {
+  const text =
+    "Next:\n\n1. First\n2. **Second**\n   - child\n3. Third\n4. Fourth";
+  const [moved] = arrangeNote([note(text, [0, 2])], "n1", [3, 2, 1], 5);
+  expect(moved!.text).toBe(
+    "Next:\n\n1. Third\n2. **Second**\n   - child\n3. First",
+  );
+  expect(moved!.done).toEqual([0, 2]);
+  expect(moved!.updated).toBe(5);
+  expect(noteList(moved!.text)!.items.map((item) => item.text)).toEqual([
+    "Third",
+    "**Second**\n- child",
+    "First",
+  ]);
+  // A list that started at 9 still does, and a wider number re-indents its lines.
+  const [late] = arrangeNote(
+    [note("9. a\n10. b\n    more")],
+    "n1",
+    [2, 1],
+  );
+  expect(late!.text).toBe("9. b\n   more\n10. a");
+  expect(arrangeNote([note("- a\n- b\n- c")], "n1", [3, 1])[0]!.text).toBe(
+    "- c\n- a",
+  );
+});
+
+it("turns a list arranged down to one item into a plain note, and none into no note", () => {
+  const [one] = arrangeNote([note("1. a\n2. b", [1])], "n1", [2]);
+  expect(one!.text).toBe("1. b");
+  expect(one!.done).toBeUndefined();
+  expect(arrangeNote([note("1. a\n2. b")], "n1", [])).toEqual([]);
+  expect(() => arrangeNote([note("1. a\n2. b")], "n1", [1, 1])).toThrow();
+  expect(() => arrangeNote([note("1. a\n2. b")], "n1", [3])).toThrow();
+  expect(() => arrangeNote([note("just text")], "n1", [1])).toThrow();
 });

@@ -68,7 +68,6 @@ import { WorktreeDialogs } from "./WorktreeControls";
 import { useThreadLinks } from "../linked-folders/useThreadLinks";
 import { NotesChip } from "../notes/NotesChip";
 import { useThreadNotes } from "../notes/useThreadNotes";
-import { listLead } from "../notes/selection-markdown";
 import { KeepBlock, type Keeper } from "../../ui/KeepBlock";
 import "./thread.css";
 
@@ -257,13 +256,11 @@ export function ProjectChat({
     () =>
       chatId
         ? {
-            keep: (markdown, at) => {
-              const lead = listLead(at.closest(".markdown-list"));
+            keep: (markdown, at) =>
               void notes.keep(
-                lead ? `${lead}\n\n${markdown}` : markdown,
+                markdown,
                 at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
-              );
-            },
+              ),
             kept: notes.kept,
           }
         : null,

@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef, type PointerEvent } from "react";
-import type { QueueDrop } from "./chat-queue";
 
-/** How far the pointer moves before a press becomes a drag, so clicks still expand a message. */
+/** Where a dragged row lands: before or after the row with this id. */
+export type DragDrop = { id: string; where: "before" | "after" };
+
+/** How far the pointer moves before a press becomes a drag, so a click stays a click. */
 const DRAG_THRESHOLD = 4;
 /** How long the dropped row takes to glide into its slot. */
 const SETTLE_MS = 160;
@@ -24,14 +26,16 @@ function settle(list: HTMLElement | null) {
 
 /**
  * Reorders a list by dragging with the pointer: the picked row follows it,
- * the rows it passes slide aside, and the drop becomes a `QueueDrop`. The
+ * the rows it passes slide aside, and the drop becomes a `DragDrop`. The
  * rows stay where they slid until the reordered list renders, so nothing
  * snaps back for a frame in between.
  */
-export function useQueueSort(
+export function useDragSort(
   ids: string[],
   enabled: boolean,
-  onMove: (id: string, target: QueueDrop) => void,
+  onMove: (id: string, target: DragDrop) => void,
+  /** Rows lift only by this part of them, so the rest stays selectable. */
+  handle?: string,
 ) {
   const list = useRef<HTMLOListElement>(null);
   const dropped = useRef(false);
@@ -43,6 +47,7 @@ export function useQueueSort(
       target = e.target as Element;
     if (!enabled || !root || e.button !== 0 || target.closest("button, a"))
       return;
+    if (handle && !target.closest(handle)) return;
     const rows = [...root.children] as HTMLElement[];
     const from = rows.findIndex((row) => row.contains(target));
     if (from < 0 || rows.length < 2) return;
@@ -128,7 +133,7 @@ export function useQueueSort(
   return {
     list,
     onPointerDown,
-    /** True for the click that ends a drag, so it doesn't also expand the message. */
+    /** True for the click that ends a drag, so it doesn't also count as a click. */
     justDropped: () => dropped.current,
   };
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatSummary } from "../../../shared/projects";
 import {
+  arrangeNote,
   removeNote,
   tickNote,
   type ThreadNote,
@@ -21,6 +22,8 @@ export interface ThreadNotesHandle {
   /** Keeps markdown from message `from`; resolves once it's saved. */
   keep: (text: string, from?: string) => Promise<void>;
   tick: (note: string, item: number, done: boolean) => void;
+  /** Puts a list note's items (from 1) in `order`, dropping those left out. */
+  arrange: (note: string, order: number[]) => void;
   remove: (note: string) => void;
   kept: (text: string) => boolean;
 }
@@ -101,6 +104,12 @@ export function useThreadNotes(
         change(
           (list) => tickNote(list, note, item, done),
           () => api.tickThreadNote(id, note, item, done),
+        ),
+      arrange: (note, order) =>
+        id &&
+        change(
+          (list) => arrangeNote(list, note, order),
+          () => api.arrangeThreadNote(id, note, order),
         ),
       remove: (note) =>
         id &&

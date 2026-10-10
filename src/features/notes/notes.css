@@ -89,8 +89,23 @@
   transition: opacity 120ms ease;
 }
 .notes-note:hover > .notes-note-tools,
+.notes-note:hover > .notes-foot > .notes-note-tools,
 .notes-note-tools:focus-within {
   opacity: 1;
+}
+.notes-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-top: 2px;
+}
+.notes-foot > .notes-note-tools {
+  position: static;
+  padding: 0;
+}
+.notes-foot > .notes-progress {
+  margin-top: 0;
 }
 .notes-note-tools button,
 .notes-ask {
@@ -137,11 +152,43 @@
   list-style: none;
 }
 .notes-items > li {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
   padding: 3px 4px 3px 2px;
   border-radius: 7px;
+  transition: transform 180ms ease;
+}
+.notes-items.sorting {
+  user-select: none;
+}
+/* The row being dragged follows the pointer; the others slide aside. */
+.notes-items > li.lifted {
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 0 6px 18px -6px #0008;
+  transition: none;
+}
+/* Hangs in the note's padding, left of the tick. */
+.notes-grip {
+  position: absolute;
+  top: 4px;
+  left: -14px;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 18px;
+  color: var(--muted);
+  cursor: grab;
+  opacity: 0;
+}
+.notes-items > li.lifted > .notes-grip {
+  cursor: grabbing;
+}
+.notes-items:not(.sorting) > li:hover > .notes-grip,
+.notes-items > li.lifted > .notes-grip {
+  opacity: 1;
 }
 .notes-items > li:hover {
   background: var(--hover);
@@ -181,12 +228,31 @@
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
 }
-.notes-ask {
+.notes-ask,
+.notes-drop {
   flex: none;
   opacity: 0;
 }
-.notes-items > li:hover > .notes-ask,
-.notes-ask:focus-visible {
+.notes-drop {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+.notes-drop:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.notes-items:not(.sorting) > li:hover > .notes-ask,
+.notes-items:not(.sorting) > li:hover > .notes-drop,
+.notes-ask:focus-visible,
+.notes-drop:focus-visible {
   opacity: 1;
 }
 .notes-progress,
