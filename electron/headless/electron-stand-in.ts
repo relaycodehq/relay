@@ -244,10 +244,21 @@ export class BrowserWindow {
   static fromWebContents() {
     return null;
   }
+  static getFocusedWindow() {
+    return null;
+  }
   constructor() {
     throw unavailable("A window");
   }
 }
+
+/** Windows place themselves on screens; with no windows there are none. */
+export const screen = {
+  getAllDisplays: () => [],
+  getPrimaryDisplay: () => {
+    throw unavailable("A display");
+  },
+};
 
 export class WebContentsView {
   constructor() {

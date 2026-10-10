@@ -59,6 +59,8 @@ interface Preview {
   stopPick?: () => void;
   /** When it last left the panel. */
   hiddenAt: number;
+  /** The Relay window it's laid over while shown: the main one, or its thread's own. */
+  host?: BrowserWindow;
   popOut?: BrowserWindow;
   error?: string;
   server: DevServerState;
@@ -445,10 +447,12 @@ export class ThreadPreviews {
   /** Lays the preview over the panel, or takes it off when `bounds` is null. */
   place(key: string, bounds: PreviewBounds | null) {
     const preview = this.previews.get(key);
-    const win = this.window.win;
+    const win = this.window.hostFor(key);
     if (!preview || preview.popOut || !win) return;
     const call = ++preview.placed;
     if (!bounds) return void this.hideWithSnapshot(preview, call);
+    // Its thread moved to another window since it was laid out.
+    if (preview.host && preview.host !== win) this.hide(preview);
     this.revive(preview);
     const view = preview.view!;
     const zoom = win.webContents.getZoomFactor();
@@ -459,10 +463,11 @@ export class ThreadPreviews {
       height: Math.max(0, Math.round(bounds.height * zoom)),
     });
     if (preview.shown) return;
-    // One at a time over the panel.
+    // One at a time over each window's panel.
     for (const other of this.previews.values())
-      if (other !== preview) this.hide(other);
+      if (other !== preview && other.host === win) this.hide(other);
     win.contentView.addChildView(view);
+    preview.host = win;
     preview.shown = preview.drawn = true;
     if (preview.snapshot) {
       preview.snapshot = undefined;
@@ -499,14 +504,16 @@ export class ThreadPreviews {
     preview.hiddenAt = this.now();
     preview.stopPick?.();
     this.servers.watch(preview.target.folder, false);
-    const win = this.window.win;
+    const win = preview.host;
+    preview.host = undefined;
     if (win && !win.isDestroyed() && preview.view)
       win.contentView.removeChildView(preview.view);
   }
 
-  /** The window reloaded or closed: whatever the panel showed is gone. */
-  hideAll() {
-    for (const preview of this.previews.values()) this.hide(preview);
+  /** `win` reloaded or closed: whatever its panel showed is gone. */
+  hideAll(win?: BrowserWindow) {
+    for (const preview of this.previews.values())
+      if (!win || preview.host === win) this.hide(preview);
   }
 
   async navigate(projectId: string, chatId: string | null, url: string) {
@@ -712,7 +719,7 @@ export class ThreadPreviews {
 
   /** Gives a view never shown a surface: a moment in the window, outside what it shows. */
   private async prime(preview: Preview) {
-    const win = this.window.win;
+    const win = this.window.hostFor(preview.target.key);
     const view = preview.view;
     if (!win || win.isDestroyed() || !view)
       throw new Error(

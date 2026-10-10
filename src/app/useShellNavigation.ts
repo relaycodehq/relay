@@ -19,6 +19,7 @@ import type { NavigationLock } from "../lib/navigation-lock";
 import { openThread } from "../lib/thread-storage";
 import type { ThreadView } from "../features/thread/useThreadView";
 import { useWorkspacePanes } from "../lib/workspace-panes";
+import type { ThreadWindow } from "../../shared/thread-windows";
 
 /** What the main pane shows: a project, the Pull requests page or Usage. */
 export type Surface = "project" | "inbox" | "usage";
@@ -29,16 +30,30 @@ export type ShellNavigation = ReturnType<typeof useShellNavigation>;
  * Where the shell is: a project and its open thread, or the project's unsent
  * one while none is, or the Pull requests page. A thread brings back the
  * panes it had open, and each project the thread it showed last.
+ *
+ * A thread's own window is `pinned` to it: it never leaves that thread nor
+ * saves where it is, and anywhere else it's asked to go opens in the main
+ * window.
  */
 export function useShellNavigation(
   projects: Project[] | undefined,
   lock: NavigationLock,
   view: ThreadView,
+  pinned?: ThreadWindow,
 ) {
-  const [selected, setSelected] = useState(() =>
-      localStorage.getItem("relay-project-id"),
+  const [selected, setSelected] = useState(
+      () => pinned?.projectId ?? localStorage.getItem("relay-project-id"),
     ),
-    [chatId, setChatId] = useState<string | null>(null);
+    [chatId, setOpenChat] = useState<string | null>(pinned?.chatId ?? null);
+  /** Somewhere a pinned window doesn't go: the main window shows it instead. */
+  const elsewhere = (projectId: string, id?: string | null) => {
+    if (id === pinned?.chatId) return;
+    void api.openInMainWindow(projectId, id ?? undefined).catch(() => {});
+  };
+  const setChatId = (id: string | null) => {
+    if (pinned) elsewhere(pinned.projectId, id);
+    else setOpenChat(id);
+  };
   const [draftScope, setDraftScope] = useState<ChatScope>({
     kind: "project",
   });
@@ -47,15 +62,17 @@ export function useShellNavigation(
     useState<ChatWorkspace>("checkout");
   /** A page shown instead of a project: Pull requests or Usage. */
   const [surface, setSurface] = useState<Surface>(() => {
+    if (pinned) return "project";
     const saved = localStorage.getItem("relay-surface");
     return saved === "inbox" || saved === "usage" ? saved : "project";
   });
   const inbox = surface === "inbox";
   const setInbox = (on: boolean) => setSurface(on ? "inbox" : "project");
-  const project =
-    projects?.find((p) => p.id === selected) ??
-    projects?.find((p) => !p.scratch) ??
-    projects?.[0];
+  const project = pinned
+    ? projects?.find((p) => p.id === pinned.projectId)
+    : (projects?.find((p) => p.id === selected) ??
+      projects?.find((p) => !p.scratch) ??
+      projects?.[0]);
   // Which of the project's unsent threads shows while no thread is open.
   const draftId = project ? currentNewThread(project.id) : "";
   const panes = useWorkspacePanes(chatId ?? draftId);
@@ -70,7 +87,8 @@ export function useShellNavigation(
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
   useEffect(() => {
-    if (project) {
+    if (pinned) panes.switchTo(pinned.chatId);
+    else if (project) {
       localStorage.setItem("relay-project-id", project.id);
       const saved = openThread.load(project.id);
       setChatId(saved || null);
@@ -85,7 +103,7 @@ export function useShellNavigation(
       saveDraftScope(draftId, draftScope);
   }, [draftScope, draftId, restoredProject]);
   useEffect(() => {
-    localStorage.setItem("relay-surface", surface);
+    if (!pinned) localStorage.setItem("relay-surface", surface);
   }, [surface]);
   useEffect(() => {
     if (project && project.id === restoredProject)
@@ -102,6 +120,10 @@ export function useShellNavigation(
     fresh: boolean | string = false,
   ) {
     if (lock.blocked()) return false;
+    if (pinned) {
+      elsewhere(p.id, fresh ? null : next?.id);
+      return false;
+    }
     if (fresh || next) openThread.save(p.id, next?.id ?? null);
     if (fresh) {
       const id = fresh === true ? freshNewThread(p.id) : fresh;
@@ -120,6 +142,7 @@ export function useShellNavigation(
   }
   /** Opens a thread with the panes it had open when it was last on screen. */
   function openChat(id: string) {
+    if (pinned) return elsewhere(pinned.projectId, id);
     // The turn and file the last thread showed don't carry over to another.
     if (id !== chatId) view.clear();
     setChatId(id);
@@ -127,7 +150,7 @@ export function useShellNavigation(
   }
   /** A thread keeps the scope it started with; another one takes a new thread. */
   function newThreadIn(next: ChatScope) {
-    if (lock.blocked()) return;
+    if (lock.blocked() || pinned) return;
     // From a thread it starts afresh, not in a draft written for something else.
     if (chat && project)
       setCurrentNewThread(project.id, freshNewThread(project.id));

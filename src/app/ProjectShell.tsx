@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
-import { threadWorktree } from "../../shared/projects";
 import { api } from "../lib/api";
 import { fitHeader } from "./header-fit";
 import {
@@ -15,58 +14,47 @@ import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
 import { useShortcut } from "../lib/shortcuts";
 import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
-import { usePanelTabs } from "../features/panel/panel-tabs";
 import { useIncomingLinks } from "./useIncomingLinks";
 import { useOpenedFolders } from "./useOpenedFolders";
 import { useNewThreads } from "./useNewThreads";
-import { usePaneOpens } from "./usePaneOpens";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
-import { useHostAccount } from "../features/pulls/useHostAccount";
 import { usePullsAccount } from "../features/pulls/usePullsAccount";
 import { NoPullHost } from "../features/pulls/NoPullHost";
 import { ConnectHost } from "../features/pulls/ConnectHost";
-import { usePullThreads } from "./usePullThreads";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
 import { useShellNavigation } from "./useShellNavigation";
 import { useSidebarVisibility } from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
-import { useThreadFolder } from "./useThreadFolder";
-import { useThreadTerminal } from "./useThreadTerminal";
-import { NO_VIEWING, useThreadView } from "../features/thread/useThreadView";
-import { paneFrame, type PaneId } from "../lib/workspace-panes";
+import { useThreadView } from "../features/thread/useThreadView";
 import { PullsSurface } from "./PullsSurface";
-import {
-  GitActions,
-  type GitActionsHandle,
-} from "../features/changes/GitActions";
-import { HandoffButton } from "../features/handoff/HandoffButton";
+import type { GitActionsHandle } from "../features/changes/GitActions";
 import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
-import { ProjectChat } from "../features/thread/ProjectChat";
-import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
-import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
 import { PullsTitle } from "../features/pulls/PullRequestsPage";
 import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
-import { RunningTasks } from "../features/terminal/RunningTasks";
 import { Settings } from "../features/settings/Settings";
+import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import {
-  ProjectTitle,
-  TerminalToggle,
-  ThreadPaneToggles,
-  TitlebarBrand,
-} from "./ShellTitlebar";
+  ThreadHeaderActions,
+  ThreadWorkspace,
+  useThreadTools,
+} from "./ThreadWorkspace";
+import { PopOutButton } from "../features/thread-windows/ThreadWindowButtons";
+import { ThreadElsewhere } from "../features/thread-windows/ThreadElsewhere";
+import {
+  hasOwnWindow,
+  useHasOwnWindow,
+} from "../features/thread-windows/thread-windows";
+import type { ThreadWindow } from "../../shared/thread-windows";
 import { SignInDialog } from "../features/settings/SignInDialog";
-import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
-import { ThreadChanges, ThreadPanel } from "./ThreadPanes";
 import { ErrorBox, IconButton, Loading } from "../ui/ui";
-import { Pane } from "../ui/WorkspacePanes";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
 const NO_PROJECTS: Project[] = [];
@@ -91,7 +79,7 @@ export default function ProjectShell() {
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);
-  const { project, chats, chat, draftId, pull, panes, inbox, navigate } = nav;
+  const { project, chat, draftId, panes, inbox, navigate } = nav;
   const usage = nav.surface === "usage";
   // Pull requests or Usage instead of a project.
   const elsewhere = nav.surface !== "project";
@@ -111,12 +99,9 @@ export default function ProjectShell() {
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
   const everyThread = useEveryThread(realProjects);
-  const terminal = useThreadTerminal(nav);
-  const folder = useThreadFolder(nav);
-  const panel = usePanelTabs(panes.layout.thread, panes.layout.open.panel);
-  const opens = usePaneOpens(nav, panel, view, folder, lock, setError);
+  const tools = useThreadTools(nav, view, lock, boot.data?.account, setError);
+  const { opens, prs, host } = tools;
   const links = useIncomingLinks(boot.data, nav, signIn, lock, setError);
-  const prs = usePullThreads(nav, lock, setError);
   const pullsPage = usePullsPage(
     lock,
     projects.refetch,
@@ -164,8 +149,22 @@ export default function ProjectShell() {
       }
     });
   }
+  /**
+   * Opens `c`, or brings its own window up when it has one. Pass `here`
+   * to show it in this window regardless, as one coming back does.
+   */
+  function open(p: Project, c?: ChatSummary, fresh?: true | string) {
+    if (c && !fresh && hasOwnWindow(c.id))
+      void api.openThreadWindow(p.id, c.id).catch(setError);
+    else navigate(p, c, fresh);
+  }
   /** A thread known only by its ids, as Settings and Usage name one. */
-  function openChatById(projectId: string, chatId: string, then?: () => void) {
+  function openChatById(
+    projectId: string,
+    chatId: string,
+    then?: () => void,
+    here = false,
+  ) {
     const p = projects.data?.find((p) => p.id === projectId);
     if (!p) return;
     void qc
@@ -176,26 +175,29 @@ export default function ProjectShell() {
       .then((list) => {
         const next = list.find((c) => c.id === chatId);
         if (!next) return;
-        navigate(p, next);
+        if (here) navigate(p, next);
+        else open(p, next);
         then?.();
       })
       .catch(setError);
   }
-  const frame = (id: PaneId) => ({
-    ...paneFrame(panes.layout, id),
-    onResize: panes.resize,
-    onMove: panes.move,
-  });
-  const host = useHostAccount(project?.repository, boot.data?.account);
+  const loaded = !!projects.data;
+  // A thread back from its own window shows here, even before its window
+  // has finished closing; the one that opened this window waits for it to load.
+  useEffect(() => {
+    if (!loaded) return;
+    const show = (t: ThreadWindow | null) =>
+      t && openChatById(t.projectId, t.chatId, undefined, true);
+    void api.takeOpenThread().then(show).catch(setError);
+    return api.onOpenThread(show);
+  }, [loaded]);
+  const poppedOut = useHasOwnWindow(chat?.id);
   const pullsHost = usePullsAccount(boot.data?.account);
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
   // Off in Settings → Integrations, nothing offers to connect it.
   const gitea = boot.data.gitea;
-  const codeOpen =
-    panes.layout.open.changes ||
-    (panes.layout.open.panel && panel.has("files"));
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
@@ -221,54 +223,15 @@ export default function ProjectShell() {
             <ProjectTitle project={project} chat={chat} onError={setError} />
           )}
           <span className="spacer" />
-          {!settings.open && !elsewhere && project && (
-            <div className="thread-header-actions">
-              <ProjectChecksButton
-                quiet
-                compact
-                checks={folder.checks}
-                onOpenFile={(path, line) =>
-                  opens.openInEditor({ path, line, directory: false })
-                }
-              />
-              {!project.plain && (
-                <GitActions
-                  key={folder.where}
-                  project={project}
-                  where={folder.where}
-                  connected={!!host.account}
-                  disabled={lock.locked}
-                  ref={gitActions}
-                  onConnect={() => setChoosePR(true)}
-                  onReview={(ref) => void prs.review(ref)}
-                  onChanges={() => opens.openCode("changes")}
-                  onError={setError}
-                />
-              )}
-              <div className="header-strip">
-                {chat && !project.plain && !project.scratch && (
-                  <>
-                    <HandoffButton
-                      chat={chat}
-                      onError={setError}
-                      onSettings={() => settings.show("computers")}
-                    />
-                    <span className="header-strip-sep" aria-hidden="true" />
-                  </>
-                )}
-                <ThreadPaneToggles
-                  panes={panes}
-                  plain={project.plain}
-                  pull={pull}
-                  lines={folder.tree?.lines}
-                  filesOpen={panel.has("files")}
-                  unseen={!panes.layout.open.panel && !!panel.unseen}
-                  onToggle={opens.togglePane}
-                />
-                <span className="header-strip-sep" aria-hidden="true" />
-                <TerminalToggle terminal={terminal} />
-              </div>
-            </div>
+          {!settings.open && !elsewhere && project && !poppedOut && (
+            <ThreadHeaderActions
+              tools={tools}
+              project={project}
+              gitActions={gitActions}
+              move={chat && <PopOutButton chat={chat} onError={setError} />}
+              onConnectHost={() => setChoosePR(true)}
+              onSettings={settings.show}
+            />
           )}
           {sidebar.hidden && !settings.open && (
             <IconButton label="Open settings" onClick={() => settings.show()}>
@@ -301,7 +264,7 @@ export default function ProjectShell() {
                     draftId: chat ? undefined : draftId,
                   }
             }
-            onOpen={navigate}
+            onOpen={open}
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
             onSendDraft={() => composer.current?.submit()}
@@ -365,146 +328,55 @@ export default function ProjectShell() {
             onAdd={() => starts.addProject()}
             onScratch={() => void starts.scratch()}
           />
+        ) : chat && poppedOut ? (
+          <ThreadElsewhere
+            key={chat.id}
+            chat={chat}
+            projectName={project.name}
+            hidden={settings.open}
+            onError={setError}
+          />
         ) : (
-          <div className="workspace-column" hidden={settings.open}>
-            <div className="workspace-panes">
-              <Pane
-                id="chat"
-                label="Chat"
-                {...frame("chat")}
-                className="project-chat-pane"
-              >
-                <StartedThreadsContext.Provider
-                  value={{
-                    lead: chat?.id,
-                    // A lead and the threads it started may be in different projects.
-                    threads: everyThread,
-                    open: (c) =>
-                      navigate(
-                        projects.data?.find((p) => p.id === c.projectId) ??
-                          project,
-                        c,
-                      ),
-                  }}
-                >
-                  <ProjectChat
-                    key={chat?.id ?? draftId}
-                    ref={composer}
-                    project={project}
-                    projects={realProjects}
-                    chat={chat}
-                    draftId={draftId}
-                    draftScope={nav.draftScope}
-                    viewing={codeOpen ? view.viewing : NO_VIEWING}
-                    contextText={view.context}
-                    onContextUsed={() => view.setContext(undefined)}
-                    scopes={{
-                      canChoosePR: !!host.account || host.pending,
-                      onClearScope: () => nav.newThreadIn({ kind: "project" }),
-                      onChoosePR:
-                        project.repository || account
-                          ? () => {
-                              if (!lock.blocked()) setChoosePR(true);
-                            }
-                          : undefined,
-                      onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
-                      onDeepReview: () => nav.newThreadIn({ kind: "review" }),
-                    }}
-                    opens={{
-                      onOpenCode: opens.openCode,
-                      onOpenFile: opens.openChatFile,
-                      onOpenTurnDiff: opens.openTurnDiff,
-                    }}
-                    onCommand={runCommand}
-                    onDraftWorkspace={nav.setDraftWorkspace}
-                    onStartThread={starts.start}
-                    onCreated={async (c) => {
-                      const from: ShellSpot = {
-                        projectId: project.id,
-                        chatId: null,
-                        draftId,
-                        surface: "project",
-                      };
-                      if (!c.worktree && sameSpot(spotNow(), from))
-                        adoptDraftTerminal(project.id, c.id);
-                      await openCreated(c, from);
-                    }}
-                    onForked={(c) =>
-                      openCreated(c, {
-                        projectId: project.id,
-                        chatId: chat?.id ?? null,
-                        draftId,
-                        surface: "project",
-                      })
-                    }
-                    onOpenThread={(c) =>
-                      openCreated(c, {
-                        projectId: project.id,
-                        chatId: chat?.id ?? null,
-                        draftId,
-                        surface: "project",
-                      })
-                    }
-                    onSwitchProject={(next) => navigate(next, undefined, true)}
-                    onAddProject={() => starts.addProject()}
-                    onProjectSettings={() =>
-                      settings.show("project", project.id)
-                    }
-                  />
-                </StartedThreadsContext.Provider>
-                <RunningTasks
-                  key={project.id}
-                  project={project}
-                  chats={chats.data ?? []}
-                  onOpenChat={(c) => navigate(project, c)}
-                />
-              </Pane>
-              <Pane id="changes" label="Changes" {...frame("changes")}>
-                {panes.layout.open.changes && (
-                  <ThreadChanges
-                    project={project}
-                    pull={pull}
-                    folder={folder}
-                    view={view}
-                    opens={opens}
-                    review={{
-                      account: host.account,
-                      github: host.github,
-                      onRecheck: host.recheck,
-                      onDiscuss: (target, pr) =>
-                        void prs
-                          .open(pr)
-                          .then(() => opens.askAbout(target, pr))
-                          .catch(setError),
-                      onConnect: gitea ? () => void linkProject() : undefined,
-                    }}
-                  />
-                )}
-              </Pane>
-              <Pane id="panel" label="Panel" {...frame("panel")}>
-                {panes.layout.open.panel && (
-                  <ThreadPanel
-                    project={project}
-                    chatId={chat?.id ?? null}
-                    folder={folder}
-                    view={view}
-                    opens={opens}
-                    panel={panel}
-                    zoomed={panes.layout.zoomed === "panel"}
-                    onZoom={(on) => panes.zoom(on ? "panel" : undefined)}
-                  />
-                )}
-              </Pane>
-            </div>
-            {terminal.shown && (
-              <TerminalDrawer
-                projectId={project.id}
-                chatId={chat?.id ?? null}
-                worktree={!!threadWorktree(chat)}
-                onClose={() => terminal.close()}
-              />
-            )}
-          </div>
+          <ThreadWorkspace
+            tools={tools}
+            project={project}
+            projects={realProjects}
+            allProjects={projects.data ?? NO_PROJECTS}
+            everyThread={everyThread}
+            composer={composer}
+            hidden={settings.open}
+            onChoosePR={
+              project.repository || account
+                ? () => {
+                    if (!lock.blocked()) setChoosePR(true);
+                  }
+                : undefined
+            }
+            onCommand={runCommand}
+            onStartThread={starts.start}
+            onCreated={async (c) => {
+              const from: ShellSpot = {
+                projectId: project.id,
+                chatId: null,
+                draftId,
+                surface: "project",
+              };
+              if (!c.worktree && sameSpot(spotNow(), from))
+                adoptDraftTerminal(project.id, c.id);
+              await openCreated(c, from);
+            }}
+            onOpened={(c) =>
+              openCreated(c, {
+                projectId: project.id,
+                chatId: chat?.id ?? null,
+                draftId,
+                surface: "project",
+              })
+            }
+            onAddProject={() => starts.addProject()}
+            onSettings={settings.show}
+            onLinkProject={gitea ? () => void linkProject() : undefined}
+          />
         )}
         {settings.open && (
           <Settings

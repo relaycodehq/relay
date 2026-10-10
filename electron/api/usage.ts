@@ -32,7 +32,7 @@ export function usageHandlers(ctx: ApiContext) {
         z.string().regex(/^[\w.-]{1,80}\.png$/),
       ],
       async (dataUrl, name) => {
-        const result = await dialog.showSaveDialog(ctx.window.win!, {
+        const result = await dialog.showSaveDialog(ctx.window.caller()!, {
           defaultPath: join(app.getPath("downloads"), name),
           filters: [{ name: "PNG image", extensions: ["png"] }],
         });

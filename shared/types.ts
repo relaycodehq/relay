@@ -630,6 +630,23 @@ export interface Api
   onOpenUrl(callback: (url: string) => void): () => void;
   /** A project to show: `relay <folder>` or a folder dropped on Relay. */
   onOpenProject(callback: (id: string) => void): () => void;
+  /** Which threads have windows of their own. */
+  threadWindows(): Promise<import("./thread-windows").ThreadWindowsState>;
+  onThreadWindows(
+    callback: (state: import("./thread-windows").ThreadWindowsState) => void,
+  ): () => void;
+  /** Pops a thread out into its own window, or brings its window up. */
+  openThreadWindow(projectId: string, chatId: string): Promise<void>;
+  /** Closes a thread's window and shows the thread in the main window. */
+  returnThreadWindow(chatId: string): Promise<void>;
+  /** Shows the main window, on this thread unless it has a window of its own. */
+  openInMainWindow(projectId: string, chatId?: string): Promise<void>;
+  /** The thread the main window was opened to show, once. */
+  takeOpenThread(): Promise<import("./thread-windows").ThreadWindow | null>;
+  /** A thread to show in the main window, sent as its own window closes. */
+  onOpenThread(
+    callback: (thread: import("./thread-windows").ThreadWindow) => void,
+  ): () => void;
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */

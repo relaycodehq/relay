@@ -1,0 +1,116 @@
+/* Where a popped-out thread was in the main window: a small picture of its
+   window with what its agent is doing; clicking it brings the window up. */
+.thread-elsewhere {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 35px;
+}
+.thread-elsewhere-window {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  width: min(400px, 100%);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.thread-elsewhere-window:hover {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  transform: translateY(-1px);
+}
+.thread-elsewhere-window:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.thread-elsewhere-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+  font-size: 11px;
+  color: var(--muted);
+}
+.thread-elsewhere-lights {
+  display: flex;
+  gap: 5px;
+}
+.thread-elsewhere-lights i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.thread-elsewhere-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-elsewhere-title span {
+  opacity: 0.6;
+}
+.thread-elsewhere-title b {
+  color: var(--text);
+  font-weight: 550;
+}
+.thread-elsewhere-raise {
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.thread-elsewhere-window:hover .thread-elsewhere-raise,
+.thread-elsewhere-window:focus-visible .thread-elsewhere-raise {
+  opacity: 1;
+}
+.thread-elsewhere-window .remote-peek {
+  min-width: 0;
+  font-size: 12px;
+  white-space: normal;
+}
+.thread-elsewhere-window .subagents-now {
+  color: var(--text);
+}
+.thread-elsewhere-quote {
+  -webkit-line-clamp: 2;
+}
+.thread-elsewhere-calls.remote-peek-calls {
+  height: calc(4 * 17px);
+}
+.thread-elsewhere-calls.remote-peek-calls:empty {
+  display: none;
+}
+.thread-elsewhere-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.thread-elsewhere-foot .text-button {
+  color: var(--muted);
+}
+.thread-elsewhere-foot .text-button:hover {
+  color: var(--text);
+}

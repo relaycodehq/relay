@@ -1,0 +1,207 @@
+/* Preview chrome: the desktop the two windows sit on. The windows themselves
+   are the app's own markup and CSS. */
+.tw-note {
+  margin: 0;
+  padding: 8px 16px 0;
+  max-width: 900px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.tw-stage {
+  flex: 1;
+  min-height: 0;
+  padding: 34px 24px 24px;
+  overflow: auto;
+}
+.tw-desk {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+.tw-desk.stacked {
+  flex-direction: column;
+  gap: 48px;
+}
+.tw-window {
+  position: relative;
+  flex-shrink: 0;
+  height: 720px;
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: visible;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.28);
+}
+.tw-window[hidden] {
+  display: none;
+}
+.tw-window > .app {
+  flex: 1;
+  min-width: 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tw-caption {
+  position: absolute;
+  top: -24px;
+  left: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tw-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 20px;
+}
+.tw-lights > *,
+.tw-lights i {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #febc2e;
+}
+.tw-lights > button {
+  background: #ff5f57;
+  cursor: default;
+}
+.tw-lights i:last-child {
+  background: #28c840;
+}
+/* The popped window has no sidebar column, so its title starts after the lights. */
+.tw-popped .project-titlebar-brand {
+  width: auto;
+  min-width: 0;
+  padding-right: 6px;
+}
+.tw-popped .project-titlebar-brand .tw-lights {
+  width: 76px;
+}
+/* Raising the window when its sidebar card or "Show window" is clicked. */
+.tw-raised {
+  animation: tw-raise 0.6s ease-out;
+}
+@keyframes tw-raise {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  30% {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+/* Where the popped thread was: a small picture of its window. */
+.tw-away {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 35px;
+}
+.tw-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  width: 400px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.tw-mini:hover {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  transform: translateY(-1px);
+}
+.tw-mini:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tw-mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+  font-size: 11px;
+  color: var(--muted);
+}
+.tw-mini-lights {
+  display: flex;
+  gap: 5px;
+}
+.tw-mini-lights i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.tw-mini-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tw-mini-title span {
+  opacity: 0.6;
+}
+.tw-mini-title b {
+  color: var(--text);
+  font-weight: 550;
+}
+.tw-mini-raise {
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tw-mini:hover .tw-mini-raise,
+.tw-mini:focus-visible .tw-mini-raise {
+  opacity: 1;
+}
+.tw-mini .remote-peek {
+  min-width: 0;
+  font-size: 12px;
+}
+.tw-mini .subagents-now {
+  color: var(--text);
+}
+/* Holds four rows, so the card doesn't grow as calls come in. */
+.tw-mini-calls {
+  flex: none;
+  height: calc(4 * 17px);
+}
+.tw-away-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tw-away-foot .text-button {
+  color: var(--muted);
+}
+.tw-away-foot .text-button:hover {
+  color: var(--text);
+}

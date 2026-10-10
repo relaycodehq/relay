@@ -57,7 +57,7 @@ export function settingsHandlers(ctx: ApiContext) {
     program: string,
     extensions = ["exe", "cmd", "bat"],
   ) {
-    const result = await dialog.showOpenDialog(ctx.window.win!, {
+    const result = await dialog.showOpenDialog(ctx.window.caller()!, {
       title: `Choose the ${program} program`,
       // Version managers keep their installs in hidden folders.
       properties: ["openFile", "showHiddenFiles"],
@@ -305,7 +305,7 @@ export function settingsHandlers(ctx: ApiContext) {
     removeDictationModel: () => dictation.removeModel(),
     dictationMicrophone: () => dictation.microphone(),
     connectDictation: () => {
-      const win = ctx.window.win;
+      const win = ctx.window.caller();
       return !!win && !win.isDestroyed() && dictation.connect(win.webContents);
     },
     warmDictation: () => dictation.warm(),

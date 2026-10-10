@@ -5,14 +5,23 @@ import {
   nativeImage,
   nativeTheme,
   type IpcMainInvokeEvent,
+  type Rectangle,
+  type WebContents,
 } from "electron";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { threadTerminals } from "../terminal/thread-terminals";
 import type { RelayEvents } from "../../shared/events";
+import type { ThreadWindow } from "../../shared/thread-windows";
+import { isRelayPage, loadPage } from "./page";
+import { ThreadWindows } from "./thread-windows";
 
-const root = join(__dirname, "../dist/index.html");
-const dev = process.env.RELAY_DEV_URL;
+/** The window whose page made the API call running now. */
+const callers = new AsyncLocalStorage<BrowserWindow | null>();
+
+/** Runs `call` as one made from `win`'s page; see `AppWindow.caller`. */
+export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
+  callers.run(win, call);
 
 /** Windows has no badge count; a dot on the taskbar button stands in. */
 function badgeDot() {
@@ -32,32 +41,76 @@ function badgeDot() {
   return nativeImage.createFromBitmap(pixels, { width: size, height: size });
 }
 
-/** Relay's one window: closed, it comes back from the menubar, the dock or a link. */
+/**
+ * Relay's main window, and the threads popped out of it into their own.
+ * Closed, the main one comes back from the menubar, the dock or a link.
+ */
 export class AppWindow {
   win: BrowserWindow | null = null;
   /** Startup has finished; until then only startup opens the window. */
   ready = false;
   /** The typography setting's share of the window zoom; ⌘+ and ⌘− add to it. */
   interfaceScale = 1;
+  readonly threads: ThreadWindows;
   private closingToQuit = false;
+  /** A thread to open once the main window's page asks, as it loads. */
+  private pendingThread?: ThreadWindow;
 
   constructor(
     private hooks: {
       closed(): void;
       quitCancelled(): void;
-      /** The page is going; whatever it laid over itself goes too. */
-      reloaded(): void;
+      /** `win`'s page is going, reloaded or closed; whatever it laid over itself goes too. */
+      pageGone(win: BrowserWindow): void;
       rendererGone(details: Electron.RenderProcessGoneDetails): void;
     },
-  ) {}
+  ) {
+    this.threads = new ThreadWindows({
+      make: (bounds, unloadKept) =>
+        this.build(
+          {
+            ...(bounds ?? { width: 1100, height: 900 }),
+            minWidth: 560,
+            minHeight: 500,
+          },
+          unloadKept,
+        ),
+      changed: (state) => this.send("relay:thread-windows", state),
+      pageGone: (win) => hooks.pageGone(win),
+      quitCancelled: () => hooks.quitCancelled(),
+      returned: (thread) => this.openThread(thread),
+    });
+  }
 
-  /** Pushes to the renderer; channels in `RelayEvents` must carry their payload. */
+  /** Pushes to every Relay window; channels in `RelayEvents` must carry their payload. */
   send<C extends string>(
     channel: C,
     payload: C extends keyof RelayEvents ? RelayEvents[C] : unknown,
   ) {
-    if (this.win && !this.win.isDestroyed())
-      this.win.webContents.send(channel, payload);
+    for (const win of this.all())
+      if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+
+  /** The main window and every thread's own. */
+  all(): BrowserWindow[] {
+    return [...(this.win ? [this.win] : []), ...this.threads.windows()];
+  }
+
+  /** The window whose page made the API call running now, else the main one. */
+  caller(): BrowserWindow | null {
+    const from = callers.getStore();
+    return from && !from.isDestroyed() ? from : this.win;
+  }
+
+  /** The window a thread's things lay over: its own if it has one, else the main one. */
+  hostFor(key: string) {
+    return this.threads.window(key) ?? this.win;
+  }
+
+  /** The Relay window in front, else the main one. */
+  front() {
+    const focused = BrowserWindow.getFocusedWindow();
+    return focused && this.all().includes(focused) ? focused : this.win;
   }
 
   show() {
@@ -76,11 +129,30 @@ export class AppWindow {
     this.show();
   }
 
+  /** Shows `thread` in the main window, opening the window if it's closed. */
+  openThread(thread: ThreadWindow) {
+    if (this.win && !this.win.webContents.isLoading()) {
+      this.show();
+      this.win.webContents.send("relay:open-thread", thread);
+      return;
+    }
+    this.pendingThread = thread;
+    this.open();
+  }
+
+  /** The thread the main window's page should open as it loads, once. */
+  takeThread() {
+    const thread = this.pendingThread;
+    this.pendingThread = undefined;
+    return thread ?? null;
+  }
+
   /**
-   * Closes the window on the way to quitting; its unsaved-edits prompt can
-   * still cancel. False when there is no window to close.
+   * Closes the windows on the way to quitting, threads' first; each one's
+   * unsaved-edits prompt can still cancel. False when none is left to close.
    */
   closeToQuit() {
+    if (this.threads.closeToQuit()) return true;
     if (!this.win) return false;
     this.closingToQuit = true;
     this.win.close();
@@ -98,25 +170,71 @@ export class AppWindow {
     else app.setBadgeCount(count);
   }
 
-  /** Only Relay's own page, in its main frame, may call the API. */
+  /** Only Relay's own page, in a Relay window's main frame, may call the API. */
   trusts(event: IpcMainInvokeEvent) {
-    const source = event.senderFrame?.url;
+    const win = this.all().find((w) => w.webContents === event.sender);
     return (
-      event.sender === this.win?.webContents &&
-      event.senderFrame === this.win?.webContents.mainFrame &&
-      (source === pathToFileURL(root).href ||
-        (!app.isPackaged && source === `${dev}/`))
+      !!win &&
+      event.senderFrame === win.webContents.mainFrame &&
+      isRelayPage(event.senderFrame?.url)
     );
+  }
+
+  private isRelay(wc: WebContents | null | undefined) {
+    return !!wc && this.all().some((w) => w.webContents === wc);
   }
 
   create() {
     // Hidden while Relay sat in the menubar alone.
     if (process.platform === "darwin") void app.dock?.show();
+    const win = this.build(
+      { width: 1500, height: 960, minWidth: 1050, minHeight: 650 },
+      () => {
+        this.closingToQuit = false;
+        this.hooks.quitCancelled();
+      },
+    );
+    this.win = win;
+    // A reloaded window starts without terminals; shells keep their output until it asks.
+    win.webContents.on("did-start-navigation", (details) => {
+      if (details.isMainFrame && !details.isSameDocument)
+        threadTerminals.detach();
+    });
+    win.webContents.on("render-process-gone", (_event, details) =>
+      this.hooks.rendererGone(details),
+    );
+    win.on("closed", () => {
+      this.hooks.closed();
+      this.hooks.pageGone(win);
+      // Only the window knows what's unread; a closed one can't clear it later.
+      // (Windows quits with its last window, taking the overlay with it.)
+      app.setBadgeCount(0);
+      this.win = null;
+      if (this.closingToQuit) {
+        this.closingToQuit = false;
+        app.quit();
+      }
+    });
+    win.once("ready-to-show", () => this.show());
+    void loadPage(win);
+  }
+
+  /**
+   * A window for Relay's page, not loaded yet: its chrome, what its page may
+   * do and reach, and the unsaved-edits prompt as it closes. `unloadKept`
+   * runs when that prompt keeps it open.
+   */
+  private build(
+    size: Partial<Rectangle> & {
+      width: number;
+      height: number;
+      minWidth: number;
+      minHeight: number;
+    },
+    unloadKept: () => void,
+  ) {
     const win = new BrowserWindow({
-      width: 1500,
-      height: 960,
-      minWidth: 1050,
-      minHeight: 650,
+      ...size,
       show: false,
       title: "Relay",
       backgroundColor: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
@@ -150,18 +268,15 @@ export class AppWindow {
         spellcheck: false,
       },
     });
-    this.win = win;
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     // The renderer's caption buttons swap maximize for restore.
     const sendMaximized = () =>
-      this.win?.webContents.send("relay:maximized", this.win.isMaximized());
+      win.webContents.send("relay:maximized", win.isMaximized());
     win.on("maximize", sendMaximized);
     win.on("unmaximize", sendMaximized);
-    // A reloaded window starts without terminals; shells keep their output until it asks.
     win.webContents.on("did-start-navigation", (details) => {
       if (!details.isMainFrame || details.isSameDocument) return;
-      threadTerminals.detach();
-      this.hooks.reloaded();
+      this.hooks.pageGone(win);
       // Settings may have been recording a shortcut when the page went.
       win.webContents.setIgnoreMenuShortcuts(false);
     });
@@ -169,11 +284,7 @@ export class AppWindow {
     // after re-bundling dependencies and the error screen's button need it.
     // Every other destination stays blocked.
     win.webContents.on("will-navigate", (e) => {
-      const target = URL.parse(e.url);
-      if (target) target.hash = "";
-      const page =
-        dev && !app.isPackaged ? `${dev}/` : pathToFileURL(root).href;
-      if (target?.href !== page) e.preventDefault();
+      if (!isRelayPage(e.url)) e.preventDefault();
     });
     // The font list, for the typography settings' font pickers, and the
     // microphone alone for dictation.
@@ -182,7 +293,7 @@ export class AppWindow {
         callback(
           permission === "local-fonts" ||
             (permission === "media" &&
-              wc === this.win?.webContents &&
+              this.isRelay(wc) &&
               "mediaTypes" in details &&
               !!details.mediaTypes?.length &&
               details.mediaTypes.every((type) => type === "audio")),
@@ -192,12 +303,11 @@ export class AppWindow {
       (wc, permission, _origin, details) =>
         permission === "local-fonts" ||
         (permission === "media" &&
-          wc === this.win?.webContents &&
+          this.isRelay(wc) &&
           details.mediaType === "audio"),
     );
-    win.once("ready-to-show", () => this.show());
     win.webContents.on("will-prevent-unload", (event) => {
-      const choice = dialog.showMessageBoxSync(this.win!, {
+      const choice = dialog.showMessageBoxSync(win, {
         type: "warning",
         title: "Unsaved code edits",
         message: "Close without saving your code edits?",
@@ -207,36 +317,8 @@ export class AppWindow {
         cancelId: 0,
       });
       if (choice === 1) event.preventDefault();
-      else {
-        this.closingToQuit = false;
-        this.hooks.quitCancelled();
-      }
+      else unloadKept();
     });
-    win.webContents.on("render-process-gone", (_event, details) =>
-      this.hooks.rendererGone(details),
-    );
-    win.on("closed", () => {
-      this.hooks.closed();
-      // Only the window knows what's unread; a closed one can't clear it later.
-      // (Windows quits with its last window, taking the overlay with it.)
-      app.setBadgeCount(0);
-      this.win = null;
-      if (this.closingToQuit) {
-        this.closingToQuit = false;
-        app.quit();
-      }
-    });
-    void loadPage(win);
+    return win;
   }
-}
-
-/** Loads Relay's page into `win`; `search` asks it to be something other than the app. */
-export function loadPage(win: BrowserWindow, search?: string) {
-  if (dev && !app.isPackaged) {
-    // scripts/dev.mjs's URL: Vite's port, moved up in a worktree.
-    const port = 5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
-    if (dev !== `http://127.0.0.1:${port}`) throw new Error("Invalid dev URL");
-    return win.loadURL(search ? `${dev}/?${search}` : dev);
-  }
-  return win.loadFile(root, search ? { search } : undefined);
 }

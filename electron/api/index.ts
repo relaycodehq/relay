@@ -1,7 +1,7 @@
-import { ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import { z } from "zod";
 import type { ApiMethod } from "../../shared/types";
-import type { AppWindow } from "../app/window";
+import { callFrom, type AppWindow } from "../app/window";
 import { accountHandlers } from "./account";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
@@ -20,6 +20,7 @@ import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { soundHandlers } from "./sounds";
 import { terminalHandlers } from "./terminals";
+import { threadWindowHandlers } from "./thread-windows";
 import { previewHandlers } from "./previews";
 import { usageHandlers } from "./usage";
 
@@ -37,6 +38,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     gitHandlers(ctx),
     chatHandlers(ctx),
     terminalHandlers(ctx),
+    threadWindowHandlers(ctx),
     previewHandlers(ctx),
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
@@ -63,10 +65,13 @@ export function serveApi(window: AppWindow, dispatch: Dispatch) {
     try {
       return {
         ok: true,
-        // Unknown names fall through to dispatch's own error.
-        value: await dispatch(
-          z.string().parse(method) as ApiMethod,
-          z.array(z.unknown()).max(10).parse(args),
+        // Unknown names fall through to dispatch's own error. Handlers that
+        // act on a window act on the one this call came from.
+        value: await callFrom(BrowserWindow.fromWebContents(event.sender), () =>
+          dispatch(
+            z.string().parse(method) as ApiMethod,
+            z.array(z.unknown()).max(10).parse(args),
+          ),
         ),
       };
     } catch (e) {

@@ -3,13 +3,20 @@ import { api } from "../../lib/api";
 import type { Project } from "../../../shared/projects";
 import { pickSound, SoundCues } from "../../../shared/sound-cues";
 import { openThreadId } from "../thread/arrival";
+import { focusedThreadWindow } from "../thread-windows/thread-windows";
 import { playSound } from "./player";
 import { soundSettingsQuery } from "./state";
 
-/** Thread sounds while the window is open; nothing sounds for the thread you're looking at. */
+/**
+ * Thread sounds while the main window is open, for its threads and those in
+ * windows of their own, which play none themselves. Nothing sounds for the
+ * thread you're looking at, here or in its own window.
+ */
 export function followSounds(qc: QueryClient) {
   const cues = new SoundCues({
-    hears: (chatId) => !(document.hasFocus() && openThreadId() === chatId),
+    hears: (chatId) =>
+      !(document.hasFocus() && openThreadId() === chatId) &&
+      focusedThreadWindow() !== chatId,
     async play(heard) {
       // A main process from before sounds has nothing to answer with.
       const app = await qc

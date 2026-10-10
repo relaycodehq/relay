@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./ui/ui";
 import ProjectShell from "./app/ProjectShell";
+import ThreadWindowShell from "./app/ThreadWindowShell";
 import { drawsWindowControls, WindowControls } from "./app/WindowControls";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
@@ -15,12 +16,16 @@ import { followChatEvents } from "./lib/chat-events";
 import { followSounds } from "./features/sounds/follow-sounds";
 import { playPushedSounds } from "./features/sounds/pushed-sounds";
 import { startRegistryAgents } from "./features/agents/registry-agents";
+import { followThreadWindows } from "./features/thread-windows/thread-windows";
+import { threadWindowOf } from "../shared/thread-windows";
 // The menubar's hidden sound player loads this page too, for its sounds alone.
 if (window.relay && new URLSearchParams(location.search).has("sounds"))
   playPushedSounds();
 else startApp();
 
 function startApp() {
+  // A thread popped out of the main window, in a window of its own.
+  const thread = threadWindowOf(location.search);
   initAppearance();
   initTypography();
   initChatWidth();
@@ -40,7 +45,9 @@ function startApp() {
   });
   if (window.relay) {
     followChatEvents(client);
-    followSounds(client);
+    followThreadWindows();
+    // The main window plays every thread's sounds, its own windows' too.
+    if (!thread) followSounds(client);
     // Threads on a registry agent need its name before anything lists them.
     startRegistryAgents();
   }
@@ -52,7 +59,11 @@ function startApp() {
         <>
           <ErrorBoundary>
             <QueryClientProvider client={client}>
-              <ProjectShell />
+              {thread ? (
+                <ThreadWindowShell thread={thread} />
+              ) : (
+                <ProjectShell />
+              )}
             </QueryClientProvider>
           </ErrorBoundary>
           {drawsWindowControls && <WindowControls />}

@@ -27,6 +27,7 @@ import { startLog } from "./app/log";
 import { Quit } from "./app/quit";
 import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
+import { savedThreadWindows } from "../shared/thread-windows";
 import {
   offerCrashReport,
   offerWindowReport,
@@ -136,11 +137,10 @@ const github = new GithubLogin((url, options) => net.fetch(url, options));
 const window = new AppWindow({
   quitCancelled: () => quit.cancel(),
   closed: () => {
-    previews?.hideAll();
     blame.dispose();
     projectChecks.stop();
   },
-  reloaded: () => previews?.hideAll(),
+  pageGone: (win) => previews?.hideAll(win),
   rendererGone: (details) => {
     projectChecks.stop();
     if (window.win) void offerWindowReport(window.win, details);
@@ -280,7 +280,12 @@ app
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
-    menubarSounds = new MenubarSounds(loaded, () => !!window.win);
+    // The main window plays its own sounds; a thread in a window of its own
+    // stays quiet while that window is in front.
+    menubarSounds = new MenubarSounds(
+      loaded,
+      (chatId) => !window.win && window.threads.state().focused !== chatId,
+    );
     // The host runs from a plain file: Node can't start a module inside app.asar.
     const hostScript = join(__dirname, "agent-host.mjs").replace(
       /app\.asar([\\/])/,
@@ -587,6 +592,17 @@ app
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
       menubar.start();
     window.create();
+    window.threads.restore({
+      load: () => savedThreadWindows(loaded.get().threadWindows),
+      save: (windows) =>
+        void loaded
+          .update((s) => {
+            s.threadWindows = windows;
+          })
+          .catch((e) => console.warn("Could not save thread windows:", e)),
+      exists: ({ chatId }) =>
+        !!loaded.get().chats?.some((c) => c.id === chatId),
+    });
     void login.restoreSaved(loaded);
     app.on("activate", () => {
       if (!window.win) window.create();

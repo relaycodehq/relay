@@ -124,23 +124,62 @@ function setup(
   ) => target(chat, url ? Number(new URL(url).port) : 3000),
 ) {
   let now = Date.now();
+  const main = fakeWindow();
+  /** Threads popped out into windows of their own. */
+  const own = new Map<string, ReturnType<typeof fakeWindow>>();
   const window = {
     send: vi.fn(),
-    win: {
-      isDestroyed: () => false,
-      contentView: { addChildView() {}, removeChildView() {} },
-    },
+    win: main,
+    hostFor: (key: string) => own.get(key) ?? main,
   } as unknown as AppWindow;
   const previews = new ThreadPreviews(window, resolve, () => now);
   cleanup.push(previews);
   return {
     previews,
     window,
+    main,
+    own,
     advance: () => {
       now += 6 * 60_000;
     },
   };
 }
+
+function fakeWindow() {
+  const shown = new Set<unknown>();
+  return {
+    shown,
+    isDestroyed: () => false,
+    webContents: { getZoomFactor: () => 1 },
+    contentView: {
+      addChildView: (view: unknown) => void shown.add(view),
+      removeChildView: (view: unknown) => void shown.delete(view),
+    },
+  };
+}
+const bounds = { x: 0, y: 0, width: 600, height: 400 };
+
+it("lays a popped-out thread's preview over its own window, one per window", async () => {
+  const { previews, main, own } = setup();
+  await previews.open("project", "a");
+  await previews.open("project", "b");
+  const [a, b] = mock.views;
+  const popped = fakeWindow();
+  own.set("b", popped);
+  previews.place("a", bounds);
+  previews.place("b", bounds);
+  expect([...main.shown]).toEqual([a]);
+  expect([...popped.shown]).toEqual([b]);
+  // The main window closing takes only what lay over it.
+  previews.hideAll(main as never);
+  expect(main.shown.size).toBe(0);
+  expect([...popped.shown]).toEqual([b]);
+  // Back in the main window, it leaves the window it was in.
+  own.delete("b");
+  previews.place("b", bounds);
+  expect(popped.shown.size).toBe(0);
+  expect([...main.shown]).toEqual([b]);
+});
 
 it("serializes concurrent opens and closes every created renderer", async () => {
   const { previews } = setup();

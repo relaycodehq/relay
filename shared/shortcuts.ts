@@ -115,6 +115,14 @@ const shortcutCommands = {
         ? [combo(mac, "meta+KeyJ"), combo(mac, "ctrl+Backquote")]
         : [combo(mac, "ctrl+Backquote")],
   },
+  "thread-window": {
+    title: "Open the thread in its own window, or put it back",
+    group: "Threads",
+    description:
+      "From its own window, the thread goes back to the main window. Closing that window does the same.",
+    keywords: "pop out window detach monitor",
+    defaults: one("mod+shift+KeyO"),
+  },
   "jump-thread": {
     title: "Open one of the first nine activity threads",
     group: "Threads",

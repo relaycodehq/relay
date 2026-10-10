@@ -4,7 +4,7 @@ import type { ProjectChatEvent, ProjectChatsEvent } from "../../shared/events";
 import { pickSound, SoundCues } from "../../shared/sound-cues";
 import { customFileId } from "../../shared/sounds";
 import type { Store } from "../app/store";
-import { loadPage } from "../app/window";
+import { loadPage } from "../app/page";
 import { CustomSounds } from ".";
 
 /** How long the hidden player lingers after a sound, for the next one to come quickly. */
@@ -13,8 +13,9 @@ const lingerMs = 30_000;
 /**
  * Thread sounds while Relay sits in the menubar with its window closed: the
  * window's own player is gone with it, so a hidden one opens for the sound
- * and closes again once things are quiet. Headless Relay has no menubar and
- * plays nothing.
+ * and closes again once things are quiet. Threads' own windows play nothing,
+ * so they count as closed here. Headless Relay has no menubar and plays
+ * nothing.
  */
 export class MenubarSounds {
   private cues: SoundCues;
@@ -22,13 +23,14 @@ export class MenubarSounds {
   private player: { win: BrowserWindow; loaded: Promise<void> } | undefined;
   private linger: ReturnType<typeof setTimeout> | undefined;
 
+  /** `hears` says whether a thread's sounds are this player's to play. */
   constructor(
     private store: Store,
-    windowOpen: () => boolean,
+    hears: (chatId: string) => boolean,
   ) {
     this.custom = new CustomSounds(store);
     this.cues = new SoundCues({
-      hears: () => !windowOpen(),
+      hears,
       play: (cues) => this.play(cues),
     });
   }

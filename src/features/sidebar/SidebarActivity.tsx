@@ -370,7 +370,7 @@ function ThreadCard({
                 kind="branch"
               />
             )}
-            <AwayWhere view={away} />
+            <AwayWhere chatId={c.id} view={away} />
             {compact && state}
             {compact && draft && (
               <div className="sb-card-actions">

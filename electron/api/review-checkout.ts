@@ -68,7 +68,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       return dir ? inspectFolder(dir, requireServer(r), r) : null;
     }),
     linkFolder: takes([repoSchema], async (r) => {
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
+      const result = await dialog.showOpenDialog(ctx.window.caller()!, {
         title: "Link local Git repository",
         properties: ["openDirectory"],
       });

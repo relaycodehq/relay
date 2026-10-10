@@ -15,6 +15,8 @@ import {
   ShieldOff,
   Sparkles,
   Split,
+  SquareArrowDownLeft,
+  SquareArrowOutUpRight,
   SquarePen,
   Sunrise,
   Unlink,
@@ -33,6 +35,8 @@ import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import type { ThreadMenuAction } from "./useThreadActions";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
+import { useHasOwnWindow } from "../thread-windows/thread-windows";
+import { useShortcutLabel } from "../../lib/shortcuts";
 
 /** "After 3 quiet days, a merged PR or a commit". */
 function autoSettleLabel(days: number | null | undefined, onCommit?: boolean) {
@@ -88,6 +92,8 @@ export function ThreadMenu({
   const branch = chat.worktree?.branch ?? chat.branch;
   const triage = (triage: ChatTriage) => onAction({ kind: "triage", triage });
   const holder = threadContextAgent(chat);
+  const ownWindow = useHasOwnWindow(chat.id);
+  const windowKeys = useShortcutLabel("thread-window");
   return (
     <MenuPopup side="bottom" align="start">
       <MenuAction
@@ -96,6 +102,25 @@ export function ThreadMenu({
       >
         New thread{projectName ? ` in ${projectName}` : ""}
       </MenuAction>
+      {ownWindow ? (
+        <MenuAction
+          icon={<SquareArrowDownLeft size={13} />}
+          hint={windowKeys}
+          onClick={() => onAction({ kind: "own-window", open: false })}
+        >
+          Back to the main window
+        </MenuAction>
+      ) : (
+        !chat.sentTo && (
+          <MenuAction
+            icon={<SquareArrowOutUpRight size={13} />}
+            hint={windowKeys}
+            onClick={() => onAction({ kind: "own-window", open: true })}
+          >
+            Open in new window
+          </MenuAction>
+        )
+      )}
       <MenuAction
         icon={<Split size={13} />}
         hint={chat.provider && agentName(chat.provider)}

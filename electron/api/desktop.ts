@@ -31,16 +31,17 @@ export function desktopHandlers(ctx: ApiContext) {
           .strict(),
       ],
       (appearance) => {
-        const win = window.win;
         // Native chrome (vibrancy, menus, scrollbars) follows the theme's mode.
         // Pinning a resolved kind in system mode would also pin the renderer's
         // prefers-color-scheme, so it could never see the OS go dark again.
         nativeTheme.themeSource = appearance.mode;
-        win?.setBackgroundColor(appearance.background);
         const icon = nativeImage.createFromDataURL(appearance.icon);
-        if (!icon.isEmpty()) {
-          if (process.platform === "darwin") app.dock?.setIcon(icon);
-          else win?.setIcon(icon);
+        if (!icon.isEmpty() && process.platform === "darwin")
+          app.dock?.setIcon(icon);
+        for (const win of window.all()) {
+          win.setBackgroundColor(appearance.background);
+          if (!icon.isEmpty() && process.platform !== "darwin")
+            win.setIcon(icon);
         }
       },
     ),
@@ -56,11 +57,11 @@ export function desktopHandlers(ctx: ApiContext) {
       (colors) => {
         // Only Linux uses the native overlay for its window controls.
         if (process.platform === "linux")
-          window.win?.setTitleBarOverlay(colors);
+          window.caller()?.setTitleBarOverlay(colors);
       },
     ),
     setInterfaceScale: takes([z.number().min(0.5).max(2)], (scale) => {
-      const contents = window.win?.webContents;
+      const contents = window.caller()?.webContents;
       if (!contents) return;
       // Keep whatever ⌘+ and ⌘− added on top of the old size.
       const own = contents.getZoomFactor() / window.interfaceScale;
@@ -71,7 +72,7 @@ export function desktopHandlers(ctx: ApiContext) {
       setApplicationMenu(window, menu);
     }),
     ignoreMenuShortcuts: takes([z.boolean()], (ignore) => {
-      window.win?.webContents.setIgnoreMenuShortcuts(ignore);
+      window.caller()?.webContents.setIgnoreMenuShortcuts(ignore);
     }),
     searchThemes: takes(
       [z.string().max(200), z.number().int().min(0).max(100_000).optional()],
@@ -94,14 +95,14 @@ export function desktopHandlers(ctx: ApiContext) {
     windowControl: takes(
       [z.enum(["minimize", "toggleMaximize", "close"])],
       (action) => {
-        const win = window.win;
+        const win = window.caller();
         if (action === "minimize") win?.minimize();
         else if (action === "close") win?.close();
         else if (win?.isMaximized()) win.unmaximize();
         else win?.maximize();
       },
     ),
-    isMaximized: () => window.win?.isMaximized() ?? false,
+    isMaximized: () => window.caller()?.isMaximized() ?? false,
     writeClipboard: takes([textSchema], async (text) => {
       await clipboard.writeText(text);
     }),

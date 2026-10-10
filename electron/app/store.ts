@@ -43,6 +43,8 @@ interface State {
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */
   projectGroupsOrdered?: true;
   sidebarView?: import("../../shared/types").SidebarView;
+  /** Threads open in windows of their own, and where; they reopen after a restart. */
+  threadWindows?: import("../../shared/thread-windows").SavedThreadWindow[];
   /** Days without activity before a thread settles; null never, unset the default. */
   autoSettleDays?: number | null;
   /** Days after settling before a thread's worktree is removed; null never, unset the default. */

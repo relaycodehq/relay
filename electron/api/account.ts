@@ -59,6 +59,8 @@ export function accountHandlers(ctx: ApiContext) {
   return {
     bootstrap: () => {
       const client = login.client;
+      // Links wait for the main window; a thread's own window leaves them.
+      const main = ctx.window.caller() === ctx.window.win;
       return {
         account: client?.account ?? null,
         gitea: giteaOn(store.get()),
@@ -66,8 +68,8 @@ export function accountHandlers(ctx: ApiContext) {
         loginRestore: login.restore,
         savedServer: store.get().account?.server,
         sidebarView: store.get().sidebarView,
-        pendingUrl: links.take(),
-        pendingProject: links.takeProject(),
+        pendingUrl: main ? links.take() : undefined,
+        pendingProject: main ? links.takeProject() : undefined,
         workspace: workspaceSchema.parse(
           store.get().workspaces?.[pageAccount()] ?? emptyWorkspace(),
         ),

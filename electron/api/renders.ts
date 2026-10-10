@@ -41,7 +41,7 @@ const shotSchema = z
 /** Copying and saving the pages answers showed with show_html. */
 export function renderHandlers(ctx: ApiContext) {
   const window = () => {
-    const win = ctx.window.win;
+    const win = ctx.window.caller();
     if (!win) throw new Error("Pages can only be saved from Relay's window.");
     return win;
   };

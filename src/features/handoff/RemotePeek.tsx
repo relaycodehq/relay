@@ -85,23 +85,38 @@ export function RemotePeek({ view }: { view: HandoffView }) {
       ) : (
         remote.latest && <p className="remote-peek-quote">{remote.latest}</p>
       )}
-      <div className="subagents-calls remote-peek-calls">
-        {(remote.recent ?? []).map((call) => {
-          const Icon = activityIcons[call.kind];
-          const running = live && call.status === "running";
-          return (
-            <span
-              key={call.id}
-              className={`subagents-call${running ? " live" : ""}`}
-            >
-              <Icon size={12} />
-              <span className={call.kind === "command" ? "mono" : undefined}>
-                {running ? liveLabel(call) : doneLabel(call)}
-              </span>
+      <PeekCalls calls={remote.recent ?? []} live={!!live} />
+    </div>
+  );
+}
+
+/** A turn's last calls, oldest first; while `live`, the running one stands out. */
+export function PeekCalls({
+  calls,
+  live,
+  className = "",
+}: {
+  calls: AgentActivity[];
+  live: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`subagents-calls remote-peek-calls ${className}`}>
+      {calls.map((call) => {
+        const Icon = activityIcons[call.kind];
+        const running = live && call.status === "running";
+        return (
+          <span
+            key={call.id}
+            className={`subagents-call${running ? " live" : ""}`}
+          >
+            <Icon size={12} />
+            <span className={call.kind === "command" ? "mono" : undefined}>
+              {running ? liveLabel(call) : doneLabel(call)}
             </span>
-          );
-        })}
-      </div>
+          </span>
+        );
+      })}
     </div>
   );
 }

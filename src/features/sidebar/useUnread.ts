@@ -5,6 +5,15 @@ import { readJson, writeJson } from "../../lib/persisted-store";
 import { useWindowFocused } from "../../lib/window-focus";
 import { clearArrival, noteArrival } from "../thread/arrival";
 
+const SEEN = "relay-thread-seen";
+
+function savedSeen(): Record<string, number> {
+  const saved = readJson(SEEN);
+  return saved && typeof saved === "object"
+    ? (saved as Record<string, number>)
+    : {};
+}
+
 /**
  * Last time each thread was open here; drives the unread dot. The open thread
  * only counts as seen while Relay is in front: an answer that lands while
@@ -19,12 +28,15 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
     localStorage.setItem("relay-thread-seen-since", String(now));
     return now;
   });
-  const [seen, setSeen] = useState<Record<string, number>>(() => {
-    const saved = readJson("relay-thread-seen");
-    return saved && typeof saved === "object"
-      ? (saved as Record<string, number>)
-      : {};
-  });
+  const [seen, setSeen] = useState(savedSeen);
+  // A thread read in its own window counts as read here too.
+  useEffect(() => {
+    const changed = (e: StorageEvent) => {
+      if (e.key === SEEN) setSeen(savedSeen());
+    };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, []);
   const current = chats.find((c) => c.id === chatId);
   /** The thread last read here; marking it unread while it's open holds until it's opened again. */
   const opened = useRef<string | undefined>(undefined);
@@ -56,8 +68,11 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
     )
       return;
     setSeen((s) => {
+      // Another window may have read threads since this one last looked.
       const next = { ...s, [current.id]: current.updated };
-      writeJson("relay-thread-seen", next);
+      for (const [id, at] of Object.entries(savedSeen()))
+        next[id] = Math.max(next[id] ?? 0, at);
+      writeJson(SEEN, next);
       return next;
     });
     // Phones read it from the desktop, so their marks clear too.

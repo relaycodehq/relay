@@ -24,6 +24,7 @@ export type ThreadMenuAction =
   | { kind: "stop-driving" }
   | { kind: "move-worktree" }
   | { kind: "project-settings" }
+  | { kind: "own-window"; open: boolean }
   | { kind: "triage"; triage: ChatTriage };
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
@@ -273,6 +274,12 @@ export function useThreadActions({
           return setMoving(c.id);
         case "project-settings":
           return onProjectSettings(c.projectId);
+        case "own-window":
+          return void (
+            action.open
+              ? api.openThreadWindow(c.projectId, c.id)
+              : api.returnThreadWindow(c.id)
+          ).catch(failed);
         case "triage":
           return void triage(c, action.triage);
       }

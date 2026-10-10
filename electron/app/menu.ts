@@ -16,7 +16,8 @@ export function setApplicationMenu(
   custom: MenuAccelerators = {},
 ) {
   const mac = process.platform === "darwin";
-  const contents = () => window.win?.webContents;
+  // The Relay window in front: a thread's own, or the main one.
+  const contents = () => window.front()?.webContents;
   // Roles would bring back their default keys when a shortcut is cleared, so
   // these do the work themselves.
   const view = (
@@ -87,7 +88,10 @@ export function setApplicationMenu(
           { type: "separator" },
           ...view("fullscreen", {
             label: "Toggle Full Screen",
-            click: () => window.win?.setFullScreen(!window.win.isFullScreen()),
+            click: () => {
+              const win = window.front();
+              win?.setFullScreen(!win.isFullScreen());
+            },
           }),
         ],
       },

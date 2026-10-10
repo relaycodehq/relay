@@ -153,7 +153,7 @@ export function projectHandlers(ctx: ApiContext) {
     revealProject: takes([idSchema], (id) => openPath(projects.root(id))),
     projects: () => projects.list(ctx.login.client),
     addProject: async () => {
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
+      const result = await dialog.showOpenDialog(ctx.window.caller()!, {
         title: "Add a project folder",
         properties: ["openDirectory"],
       });
@@ -166,7 +166,7 @@ export function projectHandlers(ctx: ApiContext) {
       listFolders(dir).catch(() => []),
     ),
     chooseFolder: takes([z.string().max(200)], async (title) => {
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
+      const result = await dialog.showOpenDialog(ctx.window.caller()!, {
         title,
         properties: ["openDirectory", "createDirectory"],
       });
