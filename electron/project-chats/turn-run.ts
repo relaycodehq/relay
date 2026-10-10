@@ -91,9 +91,9 @@ export class TurnRunner {
     private host: TurnRunnerHost,
   ) {}
 
-  /** What the thread reaches beyond its folder; a reviewer or thinker reaches what its thread does. */
+  /** What the thread reaches beyond its folder; a reviewer reaches what its thread does. */
   private async links(chat: ProjectChat, root: string) {
-    const parent = (chat.reviewer ?? chat.thinker)?.parent;
+    const parent = chat.reviewer?.parent;
     const own = parent
       ? await this.core.storage.load(parent).then(
           (c) => c.links,
@@ -197,7 +197,6 @@ export class TurnRunner {
       (provider === "claude" || provider === "codex") &&
       (turn.kind === "reply" || turn.kind === "adopt") &&
       !rules.side &&
-      !chat.thinker &&
       !chat.reviewer
         ? {
             scope,
@@ -246,9 +245,9 @@ export class TurnRunner {
         onSteered: (id: string) => answer.continueBelow(id),
         skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
         job: agentJob(turn, chat),
-        // A reviewer's or thinker's work counts toward the thread it serves.
+        // A reviewer's work counts toward the thread it serves.
         usage: {
-          chat: (chat.reviewer ?? chat.thinker)?.parent ?? chat.id,
+          chat: chat.reviewer?.parent ?? chat.id,
           project: chat.projectId,
         },
         onContext: (usage: ContextUsage) => answer.context(usage),
@@ -267,7 +266,7 @@ export class TurnRunner {
               : undefined,
           );
           const browserLinks =
-            !rules.side && !chat.thinker && !chat.reviewer
+            !rules.side && !chat.reviewer
               ? await this.core.previewLinks?.note(chat).catch((e) => {
                   console.warn("Could not discover browser links:", e);
                 })
@@ -311,13 +310,9 @@ export class TurnRunner {
         },
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        ...(chat.thinker || chat.reviewer || rules.side
-          ? { readOnly: true }
-          : {}),
+        ...(chat.reviewer || rules.side ? { readOnly: true } : {}),
         // A started thread only gets the reading ones: no threads of threads.
-        ...(relayTools && !chat.thinker && !chat.reviewer && !rules.side
-          ? { relayTools }
-          : {}),
+        ...(relayTools && !chat.reviewer && !rules.side ? { relayTools } : {}),
         // The thread's running answer owns its requests; a side turn asks none.
         onRequest: rules.side
           ? undefined
@@ -417,7 +412,6 @@ export class TurnRunner {
         !abort.signal.aborted &&
         turn.kind === "reply" &&
         !rules.side &&
-        !chat.thinker &&
         !chat.reviewer &&
         this.core.previewLinks
       ) {

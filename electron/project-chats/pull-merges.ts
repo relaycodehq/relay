@@ -31,7 +31,6 @@ function watching(chat: ChatSummary) {
     !worktree.landed &&
     !chat.archivedAt &&
     !chat.reviewer &&
-    !chat.thinker &&
     !(chat.settledAt != null && chat.settledAt >= chat.updated)
   );
 }

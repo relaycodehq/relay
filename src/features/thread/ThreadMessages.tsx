@@ -27,7 +27,6 @@ import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
-import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
 import { TerminalOrigin } from "../continue-session/TerminalOrigin";
 
@@ -63,7 +62,6 @@ export function ThreadMessages({
   projectPath,
   thread: {
     history,
-    messages,
     root,
     shown,
     listed,
@@ -73,14 +71,7 @@ export function ThreadMessages({
     leadAnswered,
   },
   view: { scroll, column, onScroll, visible, earlier, showEarlier, dockHeight },
-  councils: {
-    review,
-    plans,
-    fixFindings,
-    setFindingStatus,
-    resumeReview,
-    resumeUltraplan,
-  },
+  councils: { review, fixFindings, setFindingStatus, resumeReview },
   actions: {
     signIn,
     openReply,
@@ -232,22 +223,6 @@ export function ThreadMessages({
                         onFix={(findings) => void fixFindings(findings)}
                         onStatus={setFindingStatus}
                         onOpenFile={openFile}
-                      />
-                    ),
-                  }
-                : {})}
-              {...(plans?.[m.id]
-                ? {
-                    after: (
-                      <UltraplanCouncil
-                        state={plans[m.id]!}
-                        brief={messages.find(
-                          (b) => b.id === plans[m.id]!.brief,
-                        )}
-                        busy={busy}
-                        projectRoot={worktree.folder}
-                        onOpenFile={openFile}
-                        onResume={() => resumeUltraplan(m.id)}
                       />
                     ),
                   }

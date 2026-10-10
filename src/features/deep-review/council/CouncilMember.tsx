@@ -1,6 +1,4 @@
-// One agent of a council in its hidden thread: a deep review's reviewer, or
-// an Ultraplan thinker.
-import type { ReactNode } from "react";
+// One agent of a council in its hidden thread: a deep review's reviewer.
 import { CircleCheck } from "lucide-react";
 import { clock } from "../../../../shared/waiting";
 import { hasCouncilReport } from "../../../../shared/council";
@@ -23,10 +21,6 @@ export function CouncilMember({
   live,
   projectRoot,
   onOpenFile,
-  role = "Reviewer",
-  title,
-  via = "Deep review",
-  prompt,
 }: {
   number: number;
   agent: ReviewAgent;
@@ -34,12 +28,6 @@ export function CouncilMember({
   live: boolean;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
-  role?: string;
-  /** Leads the header, like a thinker's job. */
-  title?: ReactNode;
-  via?: string;
-  /** Shown in place of a request too long to read in a pane. */
-  prompt?: string;
 }) {
   const name = useAgentName();
   const messages = useMemberThread(chatId, live);
@@ -51,10 +39,9 @@ export function CouncilMember({
   return (
     <section
       className="deep-review-pane"
-      aria-label={`${role} ${number}: ${name(agent)}`}
+      aria-label={`Reviewer ${number}: ${name(agent)}`}
     >
       <header>
-        {title}
         <ProviderIcon provider={agent.provider} />
         <strong>{name(agent)}</strong>
         <span className="muted">{effortName(agent)}</span>
@@ -88,10 +75,10 @@ export function CouncilMember({
               <article className="project-message user" key={m.id}>
                 <header>
                   <strong>You</strong>
-                  <span className="muted">via {via}</span>
+                  <span className="muted">via Deep review</span>
                 </header>
                 <div className="markdown deep-review-pane-prompt">
-                  <p>{prompt ?? m.body.replace(agentMentionPattern, "")}</p>
+                  <p>{m.body.replace(agentMentionPattern, "")}</p>
                 </div>
               </article>
             ) : (

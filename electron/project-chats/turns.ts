@@ -75,8 +75,8 @@ export class ChatTurns {
    * Ends a run. The thread goes idle first: the finished answer moved
    * `updated`, and the sidebar summary only catches up once the thread no
    * longer counts as active. Queued messages go out last, after a deep review
-   * or Ultraplan has taken its next step, since that step decides whether the
-   * council still holds them back.
+   * has taken its next step, since that step decides whether the review
+   * still holds them back.
    */
   private endRun(
     chat: ProjectChat,
@@ -142,8 +142,6 @@ export class ChatTurns {
         images: undefined,
         selection: undefined,
         delivery: undefined,
-        // Carrying on doesn't call another council.
-        ultraplan: undefined,
       },
       true,
     );
@@ -154,7 +152,7 @@ export class ChatTurns {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
       await this.worktrees.refreshAgentWorktrees(chat);
-      if (!chat.worktree && !threadWorktree(chat) && !chat.thinker)
+      if (!chat.worktree && !threadWorktree(chat))
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.worktrees.root(chat, input.body);
       if (chat.messages.some((m) => m.id === input.id)) {
@@ -211,18 +209,6 @@ export class ChatTurns {
           );
         if (parent)
           throw new Error("Set a goal in the thread's main conversation.");
-      }
-      if (input.ultraplan) {
-        if (!asked) throw new Error("Ultraplan needs an agent to lead it.");
-        if (parent || chat.scope.kind === "review")
-          throw new Error(
-            "Ultraplan runs in the main conversation of a thread.",
-          );
-        if (/^\//.test(asked.question))
-          throw new Error("Ultraplan can't run a command. Ask a question.");
-        // The lead plans; nobody edits until you ask it to build.
-        input = { ...input, interactionMode: "plan" };
-        active.input = input;
       }
       let evidence: unknown;
       if (input.selection && asked) {
@@ -390,14 +376,10 @@ export class ChatTurns {
           ),
         );
       const answer = streamingAnswer(asked.provider, {
-        // With a council, the lead's first answer is its brief.
-        ...(input.ultraplan ? { brief: true } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
       });
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
-      if (input.ultraplan)
-        this.councils.begin(chat, input, asked.provider, answer.id);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: answer });
       const { prompt, caughtUp, briefed } = turnPrompt({
@@ -648,8 +630,8 @@ export class ChatTurns {
             m.provider === provider &&
             (m.parentId ?? undefined) === branch,
         );
-      // Reviewers and thinkers answer a step Relay drove; that step is gone.
-      if (chat.reviewer || chat.thinker)
+      // Reviewers answer a step Relay drove; that step is gone.
+      if (chat.reviewer)
         throw new Error("This thread's turns can't be picked back up.");
       await this.unprompted(
         chat,

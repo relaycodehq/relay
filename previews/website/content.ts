@@ -61,11 +61,6 @@ export const features: { title: string; text: string; detail: string }[] = [
     detail: "reviewers → lead",
   },
   {
-    title: "Ultraplan",
-    text: "Agents on different models examine the problem. A lead agent checks their notes against the code and writes the plan.",
-    detail: "council → plan",
-  },
-  {
     title: "Side questions",
     text: "Type /btw to ask a side question. The main session does not get it. Scratchpad holds threads without a project.",
     detail: "/btw · ⌘⇧N",

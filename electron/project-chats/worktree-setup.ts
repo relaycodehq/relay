@@ -112,8 +112,6 @@ export class WorktreeSetup {
    * RELAY_PORT_OFFSET and friends. Nothing in the checkout.
    */
   async env(chat: ProjectChat): Promise<Record<string, string>> {
-    if (chat.thinker)
-      return this.env(await this.core.storage.load(chat.thinker.parent));
     const worktree = chat.worktree;
     if (!worktree?.path || worktree.removedAt) return {};
     const fresh = worktree.portOffset === undefined;

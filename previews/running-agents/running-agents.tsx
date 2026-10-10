@@ -56,16 +56,6 @@ const sample: ChatSummary[] = [
     runningAgents: ["claude", "codex", "cursor", "opencode"],
   }),
   chat({
-    id: "ultraplan",
-    projectId: "openusage",
-    title: "Plan the usage history export",
-    branch: "export",
-    provider: "claude",
-    running: true,
-    runningSince: now - 90_000,
-    runningAgents: ["codex", "claude", "opencode"],
-  }),
-  chat({
     id: "switched",
     title: "Why does the dock icon badge lag behind?",
     provider: "claude",
@@ -139,7 +129,6 @@ function Preview() {
             Deep review: Claude leads, Codex, Cursor and OpenCode review; past
             three agents the last slot counts the rest.
           </li>
-          <li>Ultraplan: Codex leads a council with Claude and OpenCode.</li>
           <li>
             Switched to Codex, waiting on you: before, the card still said
             Claude.

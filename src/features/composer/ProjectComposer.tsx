@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -24,7 +23,8 @@ import {
 import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
-import { sendTarget, useComposerSend } from "./useComposerSend";
+import { draftRecipient } from "../../../shared/recipient";
+import { useComposerSend } from "./useComposerSend";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
 import { usePromptHistory } from "./usePromptHistory";
@@ -48,10 +48,6 @@ import { DictationButton } from "../dictation/DictationButton";
 import { SketchEditor } from "../images/ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "../quick-switch/QuickSwitchHud";
-import {
-  UltraplanCouncilRow,
-  UltraplanRing,
-} from "../deep-review/council/Ultraplan";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
@@ -89,8 +85,6 @@ export interface ComposerConversation {
   agent?: AgentProvider;
   /** The agent whose last answer proposed a plan, offered to build it. */
   planner?: AgentProvider;
-  /** It can plan with a council first; see shared/ultraplan. */
-  ultraplan?: boolean;
   /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
   chatId?: string;
   accounts?: Partial<Record<AccountProvider, string>>;
@@ -157,13 +151,7 @@ export function ProjectComposer({
   /** Opens a new thread in the project, once a message sent to go on there is in. */
   onNextThread?: () => void;
 }) {
-  const {
-    running,
-    busy,
-    agent,
-    planner,
-    ultraplan: ultraplanOffered = false,
-  } = conversation;
+  const { running, busy, agent, planner } = conversation;
   const stop = useStopKeys(running && !!onStop, () => onStop?.());
   const form = useRef<HTMLFormElement>(null);
   const composer = useComposerSettings({
@@ -187,8 +175,6 @@ export function ProjectComposer({
     conversation.chatId,
     conversation.accounts,
   );
-  /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
-  const [spark, setSpark] = useState(0);
   const input = useRef<HTMLElement>(null);
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
@@ -213,12 +199,7 @@ export function ProjectComposer({
   addFiles.current = draft.addFiles;
   const filePick = useRef<HTMLInputElement>(null);
   const [viewingPaste, setViewingPaste] = useState<number>();
-  const target = sendTarget(draft.text, composer, ultraplanOffered);
-  const { to, councilOn } = target;
-  const pickUltraplan = useCallback((on: boolean) => {
-    composer.setUltraplan(on);
-    if (on) setSpark((n) => n + 1);
-  }, []);
+  const to = draftRecipient(draft.text, composer.provider);
   // OpenRouter bills per token, so its spend shows instead of a usage ring.
   const runsOnOpenRouter =
     to === "opencode" &&
@@ -264,7 +245,7 @@ export function ProjectComposer({
     draft,
     state: composer,
     runs,
-    target,
+    to,
     conversation,
     complete: !!attachment?.complete,
     intercept: commands.interceptSend,
@@ -327,7 +308,6 @@ export function ProjectComposer({
           sending.send(runningAction === "steer");
         }}
       >
-        {councilOn && <UltraplanRing key={spark} />}
         {attachment?.view}
         <ComposerAttachmentStrip
           draft={draft}
@@ -372,9 +352,7 @@ export function ProjectComposer({
             to === "message"
               ? "Leave a note or message your colleague…"
               : (placeholder ??
-                (councilOn
-                  ? "Something hard? A council thinks it over, then the lead plans…"
-                  : "Ask about the code, plan a change, or build something…"))
+                "Ask about the code, plan a change, or build something…")
           }
           onKeyDownCapture={(e) => {
             // A recalled message takes ↑/↓ even from a menu it opened.
@@ -425,15 +403,6 @@ export function ProjectComposer({
               event.preventDefault();
           }}
         />
-        {councilOn && (
-          <UltraplanCouncilRow
-            kind={composer.council}
-            onKind={(kind) => {
-              composer.setCouncil(kind);
-              setSpark((n) => n + 1);
-            }}
-          />
-        )}
         <div className="composer-tools">
           <input
             ref={filePick}
@@ -485,9 +454,7 @@ export function ProjectComposer({
               mode: to !== "message" && (
                 <InteractionModeMenu
                   interactionMode={composer.interactionMode}
-                  ultraplan={councilOn}
                   onInteractionMode={composer.setInteractionMode}
-                  onUltraplan={ultraplanOffered ? pickUltraplan : undefined}
                 />
               ),
               attach: (

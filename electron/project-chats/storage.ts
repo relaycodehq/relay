@@ -63,7 +63,6 @@ export function chatSummary({
   movedIn,
   setupNote,
   deepReview,
-  ultraplans,
   handover,
   carriedIds,
   notes,
@@ -262,6 +261,7 @@ export class ChatStorage {
    * the agent history are backfilled once from their conversations too.
    */
   async reconcile(storeSavedAt: number) {
+    await this.dropThinkers();
     const listed = this.store.get().chats ?? [];
     const recent = await Promise.all(
       listed.map(async ({ id, providers }) => {
@@ -282,6 +282,22 @@ export class ChatStorage {
         // An unreadable thread surfaces when it is opened.
       }
     }
+  }
+
+  /** Ultraplan is gone; the hidden threads its thinkers worked in would only show up as strays. */
+  private async dropThinkers() {
+    const isThinker = (c: object) => !!(c as { thinker?: unknown }).thinker;
+    const strays = (this.store.get().chats ?? []).filter(isThinker);
+    if (!strays.length) return;
+    for (const { id } of strays) {
+      this.cache.delete(id);
+      await rm(join(this.dir, id + ".json"), { force: true }).catch((e) =>
+        console.warn("Could not remove a retired thinker thread:", e),
+      );
+    }
+    await this.store.update((s) => {
+      s.chats = (s.chats ?? []).filter((c) => !isThinker(c));
+    });
   }
 
   async addSummary(chat: ProjectChat) {

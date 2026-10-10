@@ -232,6 +232,25 @@ it("puts right a summary a crash left behind its thread", async () => {
   expect(changed).toEqual(["p"]);
 });
 
+it("removes the hidden threads Ultraplan's thinkers left behind, and keeps the thread they served", async () => {
+  const parent = thread();
+  const thinker = {
+    ...thread(),
+    thinker: { parent: parent.id, request: "r", slot: 0 },
+  } as ProjectChat;
+  await storage.add(parent);
+  await storage.add(thinker);
+  await storage.reconcile(store.savedAtLoad);
+
+  expect(store.get().chats!.map((c) => c.id)).toEqual([parent.id]);
+  await expect(
+    readFile(join(root, "chats", thinker.id + ".json"), "utf8"),
+  ).rejects.toThrow();
+  await expect(storage.load(parent.id)).resolves.toMatchObject({
+    id: parent.id,
+  });
+});
+
 it("derives open questions from messages, clearing the flag after answers or dismissals", () => {
   const chat = thread();
   const group = { id: "ask", questions: [{ id: "q", question: "Which?" }] };

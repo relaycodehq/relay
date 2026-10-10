@@ -10,20 +10,16 @@ const claude: SendSettings = {
   interactionMode: "default",
 };
 
-it("sends a council's question in Plan, queued behind a running answer rather than steering it", () => {
-  expect(
-    buildSend(claude, "plan retries", {
-      council: "angles",
-      running: { steer: true },
-    }),
-  ).toMatchObject({
+it("steers a running answer or queues behind it, as asked", () => {
+  const sent = (steer: boolean) =>
+    buildSend(claude, "plan retries", { running: { steer } });
+  expect(sent(true)).toMatchObject({
     body: "@claude plan retries",
-    interactionMode: "plan",
-    ultraplan: "angles",
-    delivery: "queue",
+    delivery: "steer",
     choice: { fast: false },
     contextWindow: "200k",
   });
+  expect(sent(false)).toMatchObject({ delivery: "queue" });
 });
 
 it("asks for no context window on a model with 1M built in", () => {

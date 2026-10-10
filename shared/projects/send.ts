@@ -4,7 +4,6 @@ import { agentProviderSchema } from "../agents";
 import { accountIdSchema } from "../agent-accounts";
 import { lineQuestionSchema } from "../questions";
 import { aiSettingsSchema } from "../settings";
-import { ultraplanKindSchema } from "../ultraplan";
 import { filePathSchema, idSchema } from "../validation";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
@@ -49,8 +48,6 @@ export const projectChatSendSchema = z
     viewing: filePathSchema.optional(),
     selection: lineQuestionSchema.optional(),
     images: z.array(pastedImageSchema).max(3).optional(),
-    /** Plan this with a council of thinkers first; see shared/ultraplan. */
-    ultraplan: ultraplanKindSchema.optional(),
     /** Sent by the agent in another thread, through Relay's tools; see electron/started-threads. */
     fromThread: z
       .object({ id: idSchema, name: z.string().trim().min(1).max(300) })

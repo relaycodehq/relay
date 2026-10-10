@@ -9,10 +9,6 @@ import {
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
 import { isAgentProvider, type AgentProvider } from "../../../shared/agents";
-import {
-  ultraplanKindSchema,
-  type UltraplanKind,
-} from "../../../shared/ultraplan";
 import { readJson } from "../../lib/persisted-store";
 import { composerSettingsKey } from "../../lib/thread-storage";
 import {
@@ -30,10 +26,6 @@ export interface ComposerSettings {
   models: ComposerModels;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
-  /** Plan with a council first; see shared/ultraplan. */
-  ultraplan: boolean;
-  /** The council's kind, kept while Ultraplan is off. */
-  council: UltraplanKind;
 }
 const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
@@ -122,8 +114,6 @@ export function loadComposerSettings(
         : readComposerModels(saved),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
-    ultraplan: saved?.ultraplan === true,
-    council: ultraplanKindSchema.catch("angles").parse(saved?.council),
   };
 }
 export function saveComposerSettings(
@@ -138,7 +128,7 @@ export function saveComposerSettings(
 /**
  * Hands a new thread's composer settings to the thread it started, on the
  * agent the first message went to. The new-thread composer keeps its models
- * and runtime mode, but Plan and Ultraplan were for that thread: the next one
+ * and runtime mode, but Plan was for that thread: the next one
  * starts in Build.
  */
 export function startThreadSettings(
@@ -151,7 +141,6 @@ export function startThreadSettings(
   saveComposerSettings(from, {
     ...settings,
     interactionMode: "default",
-    ultraplan: false,
   });
 }
 /**
@@ -168,7 +157,6 @@ export function forkThreadSettings(
     ...settings,
     ...(provider ? { provider } : {}),
     interactionMode: "default",
-    ultraplan: false,
   });
 }
 /**

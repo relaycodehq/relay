@@ -150,7 +150,7 @@ export class ComputerHandoff {
         throw new Error(
           `This thread came from ${chat.cameFrom.computer}. Bring it back there instead.`,
         );
-      if (chat.scope.kind === "review" || chat.reviewer || chat.thinker)
+      if (chat.scope.kind === "review" || chat.reviewer)
         throw new Error("A deep review can't move to another computer.");
       if (!chat.messages.length)
         throw new Error("Send a first message before handing the thread off.");

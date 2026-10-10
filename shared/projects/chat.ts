@@ -3,7 +3,6 @@ import type { AgentProvider } from "../agents";
 import type { DeepReviewState } from "../deep-review";
 import type { ThreadNote } from "../thread-notes";
 import type { ChatHandover } from "../handoff";
-import type { UltraplanState } from "../ultraplan";
 import type { ChatMessage } from "./messages";
 import type { ProjectChatSend } from "./send";
 import type { ChatSummary } from "./threads";
@@ -49,8 +48,6 @@ export interface ProjectChat extends ChatSummary {
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
   deepReview?: DeepReviewState;
-  /** Ultraplan councils, by the user message each one works on. */
-  ultraplans?: Record<string, UltraplanState>;
   /** Each agent's session on a side conversation, by its root message. */
   replySessions?: Record<string, AgentSessions>;
   /** Local: what the next turn hears about a handoff between computers. */

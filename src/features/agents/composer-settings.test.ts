@@ -31,8 +31,6 @@ const sol = {
 const modes = {
   runtimeMode: "full-access",
   interactionMode: "default",
-  ultraplan: false,
-  council: "angles",
 } as const;
 const plain = (
   model: string,
@@ -59,8 +57,6 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     },
     runtimeMode: "auto",
     interactionMode: "plan",
-    ultraplan: false,
-    council: "angles",
   });
   // A Codex or message-only one carries Codex's choice.
   saveSentSettings("chat", "message", {
@@ -111,8 +107,6 @@ it("falls back to defaults for anything unreadable", () => {
   );
   const defaults = {
     interactionMode: "default",
-    ultraplan: false,
-    council: "angles",
     provider: undefined,
   };
   expect(loadComposerSettings("a")).toEqual({
@@ -195,30 +189,6 @@ it("remembers the model a message went to an agent with, not one to people", () 
   ).toBeUndefined();
 });
 
-it("keeps Ultraplan and its council, and reads anything else as off", () => {
-  store.set(
-    "composer-settings:odd",
-    JSON.stringify({ ultraplan: "yes", council: "debate" }),
-  );
-  expect(loadComposerSettings("odd")).toMatchObject({
-    ultraplan: false,
-    council: "angles",
-  });
-  store.set(
-    "composer-settings:on",
-    JSON.stringify({
-      interactionMode: "plan",
-      ultraplan: true,
-      council: "same",
-    }),
-  );
-  expect(loadComposerSettings("on")).toMatchObject({
-    interactionMode: "plan",
-    ultraplan: true,
-    council: "same",
-  });
-});
-
 it("follows the default agent until one is picked", () => {
   expect(composerProvider(undefined, "claude")).toBe("claude");
   expect(composerProvider("codex", "claude")).toBe("codex");
@@ -242,7 +212,6 @@ it("starts a thread on the agent its first message went to", () => {
     models: { codex: { choice: sol }, claude: plain("opus", "max") },
     runtimeMode: "auto",
     interactionMode: "plan",
-    ultraplan: true,
   });
   startThreadSettings("new:project", "thread", "claude");
   expect(loadComposerSettings("thread")).toMatchObject({
@@ -257,7 +226,6 @@ it("starts a thread on the agent its first message went to", () => {
     models: { codex: { choice: sol }, claude: { choice: { model: "opus" } } },
     runtimeMode: "auto",
     interactionMode: "default",
-    ultraplan: false,
   });
 });
 
@@ -346,8 +314,6 @@ it("moves settings saved in the old shapes to `models`, and loses none", () => {
     },
     runtimeMode: "auto",
     interactionMode: "plan",
-    ultraplan: true,
-    council: "same",
   };
   expect(loaded).toEqual(expected);
   // Written back in the new shape only: the old keys go with the old blob.
@@ -355,11 +321,9 @@ it("moves settings saved in the old shapes to `models`, and loses none", () => {
   const written = JSON.parse(store.get("composer-settings:chat")!);
   expect(Object.keys(written).sort()).toEqual([
     "agent",
-    "council",
     "interactionMode",
     "models",
     "runtimeMode",
-    "ultraplan",
   ]);
   expect(loadComposerSettings("chat")).toEqual(expected);
 });

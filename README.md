@@ -78,7 +78,6 @@ Where Relay stands out: a thread moves to another of your computers mid-conversa
 | **Watch every step** | Commands, reads, edits and subagents appear live, then fold away when the answer lands. |
 | **Review every edit** | The working tree side by side with the conversation. Stage, commit and push from the thread; browse history in a commit graph. |
 | **Deep review** | Several models read your changes, then a lead checks every finding and fixes what holds up. |
-| **Plan with a council** | Ultraplan: thinkers on different models study the problem, a lead checks their notes against the code and writes the plan. |
 | **Work in isolation** | Give a thread its own Git worktree, even mid-conversation, and land it through a normal branch merge. |
 | **Use a terminal** | Every thread has its own shell under the conversation. |
 | **Review pull requests** | GitHub through your `gh` login, or Gitea, with CI status in the title bar. |

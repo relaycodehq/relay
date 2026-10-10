@@ -9,7 +9,6 @@ import type {
   ChatSentTo,
 } from "../handoff";
 import type { FromTerminal } from "../terminal-sessions";
-import type { ThinkerTask } from "../ultraplan";
 import { refSchema } from "../validation";
 import type { LinkedFolder } from "./links";
 import type {
@@ -109,8 +108,6 @@ export interface ChatSummary {
   goal?: ThreadGoal;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
   reviewer?: ReviewerTask;
-  /** An Ultraplan's thinker; its thread shows inside the council, never on its own. */
-  thinker?: ThinkerTask;
   /** Started by another thread's agent through Relay's tools; listed under that thread. */
   startedBy?: StartedBy;
   /** The user let this thread's agent start, message, stop and settle any thread, in any project, without asking. */
@@ -122,7 +119,7 @@ export interface ChatSummary {
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
-  /** The thread's own agent first, then its reviewers or thinkers, one per provider. */
+  /** The thread's own agent first, then its reviewers, one per provider. */
   runningAgents?: AgentProvider[];
   /** Needs the user, even if an async question lets the agent continue. */
   waiting?: boolean;

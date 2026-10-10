@@ -293,13 +293,11 @@ export interface ProjectChatApi {
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
 }
 
-/** Deep reviews and Ultraplan councils, run inside a thread. */
+/** Deep reviews, run inside a thread. */
 export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
   /** A short name for a deep review setup, written by a helper agent; null when none could. */
   nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
-  /** Runs the council's thinkers that didn't finish, then the lead. */
-  resumeUltraplan(id: string, request: string): Promise<void>;
   /** Runs the reviewers that didn't finish, then the lead. */
   resumeDeepReview(id: string): Promise<void>;
   setDeepReviewFinding(

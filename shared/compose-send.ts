@@ -3,7 +3,6 @@ import { fastFor, windowFor } from "./model-fit";
 import type { ProjectChatSend } from "./projects";
 import { draftRecipient, type Recipient } from "./recipient";
 import type { ModelChoice } from "./settings";
-import type { UltraplanKind } from "./ultraplan";
 
 /** A message as a composer hands it on, before it gets its id. */
 export type ComposedSend = Omit<ProjectChatSend, "id">;
@@ -19,8 +18,6 @@ export interface SendSettings {
 }
 
 export interface SendOptions {
-  /** A council plans this one question, in Plan mode. */
-  council?: UltraplanKind;
   /** An answer is running: the message waits for it, or steers it. */
   running?: { steer: boolean };
   sendAt?: number;
@@ -46,7 +43,6 @@ export function buildSend(
     ? settings.choice
     : { model: "", reasoningEffort: "", fast: false };
   const contextWindow = picked ? settings.contextWindow : undefined;
-  const { council } = options;
   // A note to people keeps the choice as picked; nobody runs it.
   const fast = to === "message" ? choice.fast : fastFor(to, choice.fast);
   return {
@@ -62,8 +58,7 @@ export function buildSend(
     choice: { ...choice, fast },
     ...windowFor(to, choice.model, contextWindow),
     runtimeMode,
-    interactionMode: council ? "plan" : interactionMode,
-    ...(council ? { ultraplan: council } : {}),
+    interactionMode,
     ...(options.side ? { side: true } : {}),
     ...(options.parentId ? { parentId: options.parentId } : {}),
     ...(options.images?.length ? { images: options.images } : {}),
@@ -72,16 +67,15 @@ export function buildSend(
 
 /**
  * When the message goes: at `sendAt`, or beside the running answer, steering
- * it unless a council is starting, which waits in the queue.
+ * it.
  */
 function whenSent({
   sendAt,
   running,
-  council,
 }: SendOptions): Pick<ComposedSend, "sendAt" | "delivery"> {
   if (sendAt) return { sendAt };
   if (!running) return {};
-  return { delivery: running.steer && !council ? "steer" : "queue" };
+  return { delivery: running.steer ? "steer" : "queue" };
 }
 
 /** What a composer sends to carry out a proposed plan. */

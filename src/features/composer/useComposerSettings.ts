@@ -66,19 +66,15 @@ export function useComposerSettings({
   );
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
-  const [ultraplan, setUltraplan] = useState(saved.ultraplan);
-  const [council, setCouncil] = useState(saved.council);
   const settings: ComposerSettings = {
     provider: picked,
     models,
     runtimeMode,
     interactionMode,
-    ultraplan,
-    council,
   };
   useEffect(() => {
     saveComposerSettings(key, settings);
-  }, [key, picked, models, runtimeMode, interactionMode, ultraplan, council]);
+  }, [key, picked, models, runtimeMode, interactionMode]);
   return {
     ...settings,
     /** The agent it runs: the one picked here, else the thread's or the default. */
@@ -90,8 +86,6 @@ export function useComposerSettings({
     setModels,
     setRuntimeMode,
     setInteractionMode,
-    setUltraplan,
-    setCouncil,
     /** Remembers what a new thread starts `to` on, here and on the phone. */
     saveLastModel,
     /** Saved at once rather than by the effect, for a thread the next send starts. */

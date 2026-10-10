@@ -98,7 +98,6 @@ function firstAgentWorktree(chat: ProjectChat, next: AgentWorktree[]) {
     chat.worktree ||
     chat.scope.kind !== "project" ||
     chat.reviewer ||
-    chat.thinker ||
     chat.activeAgentWorktree ||
     chat.agentWorktrees?.length
   )

@@ -325,9 +325,6 @@ export function chatHandlers(ctx: ApiContext) {
     resumeDeepReview: takes([idSchema], (id) =>
       projectChats.resumeDeepReview(id),
     ),
-    resumeUltraplan: takes([idSchema, idSchema], (id, request) =>
-      projectChats.resumeUltraplan(id, request),
-    ),
     setDeepReviewFinding: takes(
       [idSchema, z.string().regex(/^F\d{1,3}$/), z.enum(["open", "dismissed"])],
       (id, findingId, status) =>

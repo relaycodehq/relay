@@ -65,8 +65,8 @@ export class LimitResumes {
   async stopped(chatId: string, messageId: string, limit: AgentError) {
     const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
-    // A reviewer's or thinker's thread is its council's to carry on.
-    if (!message || chat.reviewer || chat.thinker) return;
+    // A reviewer's thread is its review's to carry on.
+    if (!message || chat.reviewer) return;
     const { provider } = limit;
     const account = hasAccounts(provider)
       ? accountFor(provider, chat.accounts?.[provider])

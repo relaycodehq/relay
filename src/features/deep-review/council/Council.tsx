@@ -1,4 +1,4 @@
-// What a deep review's and an Ultraplan's councils share in the thread: the
+// What a deep review's council shares in the thread: the
 // toggle that folds their panes, and the bar to resume one that halted.
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";

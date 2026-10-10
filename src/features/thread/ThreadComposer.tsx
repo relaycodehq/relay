@@ -166,7 +166,7 @@ export function ThreadComposer({
   project,
   scope,
   thread: { root, messages, shown, running },
-  councils: { reviewing, planning },
+  councils: { reviewing },
   background: { agentBatch, pending, stopped, leftBehind },
   session: { runCommand, context, compacting, showContext, compact },
   attachments,
@@ -223,7 +223,7 @@ export function ThreadComposer({
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
   // A side thread doesn't wait for the main answer, nor queue behind it.
-  const waiting = root?.side ? false : running || reviewing || planning;
+  const waiting = root?.side ? false : running || reviewing;
   const held =
     busy ||
     worktree.unavailable ||
@@ -239,15 +239,13 @@ export function ThreadComposer({
       ? `Ask ${agentName(root.provider)} a follow-up on the side…`
       : reviewing
         ? "Reviewers are at work. Messages wait for the lead…"
-        : planning
-          ? "The council is thinking. Messages wait for the lead's plan…"
-          : pending?.some((p) => p.kind === "task")
-            ? "Message Claude, its background work keeps going…"
-            : pending
-              ? "Message Claude now, or wait for it to check back…"
-              : project.scratch
-                ? "Ask anything…"
-                : undefined);
+        : pending?.some((p) => p.kind === "task")
+          ? "Message Claude, its background work keeps going…"
+          : pending
+            ? "Message Claude now, or wait for it to check back…"
+            : project.scratch
+              ? "Ask anything…"
+              : undefined);
   return (
     <ProjectComposer
       ref={ref}
@@ -272,7 +270,6 @@ export function ThreadComposer({
         busy: held,
         agent: chat && threadContextAgent(chat),
         planner: running ? undefined : openPlan(messages, shown),
-        ultraplan: !root && scope.kind !== "review",
         chatId: chat?.id,
         accounts: chat?.accounts,
       }}

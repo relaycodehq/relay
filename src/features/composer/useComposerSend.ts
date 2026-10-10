@@ -6,7 +6,7 @@ import {
   planGoAhead,
   type ComposedSend,
 } from "../../../shared/compose-send";
-import { draftRecipient, type Recipient } from "../../../shared/recipient";
+import type { Recipient } from "../../../shared/recipient";
 import { dictationSnapshot, stopDictation } from "../dictation/audio/session";
 import type { DraftImage } from "../images/draft-images";
 import { numberImages } from "../../../shared/image-refs";
@@ -17,24 +17,8 @@ import type { ComposerState } from "./useComposerSettings";
 import { noteUsed } from "../../lib/used";
 import { parseGoalCommand } from "../../../shared/goal";
 
-/** Who the draft goes to, and whether a council thinks it over first; see shared/ultraplan. */
-export interface SendTarget {
-  to: Recipient;
-  councilOn: boolean;
-}
-
-/** `offered`: the conversation can plan with a council. */
-export function sendTarget(
-  text: string,
-  { provider, ultraplan }: Pick<ComposerState, "provider" | "ultraplan">,
-  offered: boolean,
-): SendTarget {
-  const to = draftRecipient(text, provider);
-  return { to, councilOn: offered && ultraplan && to !== "message" };
-}
-
 /**
- * Sending the draft to `target.to`: as a message, queued or steering while an
+ * Sending the draft to `to`: as a message, queued or steering while an
  * answer runs, as a `/btw` on the side, or as the go-ahead for a proposed
  * plan. One goes out at a time.
  */
@@ -42,7 +26,7 @@ export function useComposerSend({
   draft,
   state,
   runs,
-  target: { to, councilOn },
+  to,
   conversation: { busy, running },
   complete,
   intercept,
@@ -51,7 +35,8 @@ export function useComposerSend({
   draft: ComposerDraft;
   state: ComposerState;
   runs: AgentRuns;
-  target: SendTarget;
+  /** Who the draft goes to. */
+  to: Recipient;
   conversation: { busy: boolean; running: boolean };
   /** What's attached beside the draft is a complete message on its own. */
   complete: boolean;
@@ -128,16 +113,9 @@ export function useComposerSend({
         draft.setError("Could not apply the drawing to the screenshot.");
         return;
       }
-      // A council is one question's worth: follow-ups go to the lead, in
-      // Plan. Saved before sending, so a thread it starts opens that way too.
-      if (councilOn) {
-        state.setUltraplan(false);
-        state.save({ ultraplan: false });
-      }
       const outgoing = draft.take(true);
       const sent = await onSend(
         buildSend(runs.sendSettings(to)!, body, {
-          ...(councilOn ? { council: state.council } : {}),
           ...(running ? { running: { steer } } : {}),
           sendAt,
           images: flattened.map(({ name, mimeType, dataUrl }) => ({
@@ -150,7 +128,6 @@ export function useComposerSend({
       );
       if (!sent) {
         outgoing.restore();
-        if (councilOn) state.setUltraplan(true);
       } else if (to !== "message")
         state.saveLastModel(to, {
           choice: runs.choiceFor(to)!,
@@ -184,7 +161,6 @@ export function useComposerSend({
         if (accepted) {
           state.setProvider(nextSettings.to);
           state.setInteractionMode(nextSettings.interactionMode);
-          state.setUltraplan(false);
         }
       } finally {
         sending.current = false;

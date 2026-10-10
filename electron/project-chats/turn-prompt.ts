@@ -6,9 +6,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { agentName } from "../../shared/agents";
-import { council } from "../../shared/ultraplan";
 import { reviewReports } from "../../shared/deep-review";
-import { briefPrompt } from "./ultraplan";
 
 export interface TurnPromptInput {
   chat: ProjectChat;
@@ -51,13 +49,11 @@ export function turnPrompt({
   const scope =
     chat.scope.kind === "pr"
       ? `This discussion concerns PR #${chat.scope.ref.number} in ${chat.scope.ref.owner}/${chat.scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`
-      : chat.thinker
-        ? "You are one of several thinkers in an Ultraplan, working read-only on the linked project. Don't change any files."
-        : chat.scope.kind === "review"
-          ? chat.reviewer
-            ? "You are one of several reviewers in a deep review. Don't change any files."
-            : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
-          : "This is a general discussion of the linked project and its local working changes.";
+      : chat.scope.kind === "review"
+        ? chat.reviewer
+          ? "You are one of several reviewers in a deep review. Don't change any files."
+          : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
+        : "This is a general discussion of the linked project and its local working changes.";
   // A forked session already holds everything up to its message.
   const known =
     session.thread && session.through
@@ -167,7 +163,7 @@ export function turnPrompt({
       : "";
   const prompt = command
     ? question
-    : `${question ? `My request: ${question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}${findingsNote}`.trimStart();
+    : `${question ? `My request: ${question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
   return {
     prompt,
     // What a command couldn't carry, the session hears next turn.

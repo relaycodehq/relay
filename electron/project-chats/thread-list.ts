@@ -62,17 +62,17 @@ export class ThreadList {
     const chats = (this.core.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
-    // A review runs while any of its reviewers does, a thread while its thinkers do.
+    // A review runs while any of its reviewers does.
     const helpers = new Map<string, ActiveChat[]>();
     for (const c of chats) {
-      const parent = (c.reviewer ?? c.thinker)?.parent;
+      const parent = c.reviewer?.parent;
       const active = parent && this.core.active.get(c.id);
       if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
     }
     // Once for the list: it is read on every change to any of its threads.
     const live = this.core.sessions.pending();
     return chats
-      .filter((c) => !c.reviewer && !c.thinker)
+      .filter((c) => !c.reviewer)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
         const crew = [

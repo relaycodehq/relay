@@ -8,7 +8,6 @@ import type {
   LinkedFolder,
   ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
-import { councilWorking } from "../../../shared/ultraplan";
 import { api } from "../../lib/api";
 import { saveSentSettings } from "../agents/composer-settings";
 import { useNewThread } from "./useNewThread";
@@ -17,7 +16,7 @@ import { noteUsed } from "../../lib/used";
 
 export type Councils = ReturnType<typeof useCouncils>;
 
-/** A thread's deep review and ultraplans: their state, and what the thread can do with them. */
+/** A thread's deep review: its state, and what the thread can do with them. */
 export function useCouncils({
   handle: { chat, projectId, run, setError, refetch, listChanged },
   data,
@@ -35,9 +34,6 @@ export function useCouncils({
   const review = data?.deepReview;
   // Reviewers work in threads of their own; this one waits for the lead.
   const reviewing = review?.status === "reviewing";
-  const plans = data?.ultraplans;
-  // Thinkers work in threads of their own; messages wait for the lead's plan.
-  const planning = councilWorking(Object.values(plans ?? {}));
   // A start that failed leaves its thread for the next try. Kept apart from
   // the composer's, so a message sent from this draft instead gets a thread of its own.
   const reviewThread = useNewThread(
@@ -103,13 +99,9 @@ export function useCouncils({
   return {
     review,
     reviewing,
-    plans,
-    planning,
     startReview,
     fixFindings,
     setFindingStatus,
     resumeReview: () => resume((chatId) => api.resumeDeepReview(chatId)),
-    resumeUltraplan: (request: string) =>
-      resume((chatId) => api.resumeUltraplan(chatId, request)),
   };
 }

@@ -42,15 +42,13 @@ export function useChatThread(
     () => conversation(messages, roots, root?.id),
     [messages, roots, root?.id],
   );
-  // A council's brief shows inside it, not as an answer of its own.
-  const listed = useMemo(() => shown.filter((m) => !m.brief), [shown]);
   return {
     history,
     messages,
     /** The side conversation's first message, while one is open. */
     root,
     shown,
-    listed,
+    listed: shown,
     running: messages.some((m) => m.status === "streaming"),
     replyCounts: counts,
     sideThreads: sides,

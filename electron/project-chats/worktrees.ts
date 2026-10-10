@@ -102,9 +102,6 @@ export class ThreadWorktrees {
 
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
   async root(chat: ProjectChat, prompt?: string): Promise<string> {
-    // A thinker reads whatever its thread works in, worktree included.
-    if (chat.thinker)
-      return this.root(await this.core.storage.load(chat.thinker.parent));
     const root = await this.core.projects.root(chat.projectId);
     const worktree = chat.worktree;
     if (!worktree) {
@@ -362,7 +359,7 @@ export class ThreadWorktrees {
   /** Why a checkout thread can't move into a worktree now, if it can't. */
   private async moveBlocked(chat: ProjectChat) {
     if (chat.worktree) return "This thread already has its own worktree.";
-    if (chat.scope.kind !== "project" || chat.reviewer || chat.thinker)
+    if (chat.scope.kind !== "project" || chat.reviewer)
       return "Only repository threads can work in a worktree.";
     if ((await this.core.projects.inspect(chat.projectId)).plain)
       return "Worktrees need a Git repository.";
@@ -462,7 +459,7 @@ export class ThreadWorktrees {
             ? `This thread already works in its own worktree, ${chat.worktree.path}${chat.worktree.branch ? ` on ${chat.worktree.branch}` : ""}.`
             : "This thread already has its own worktree.",
         );
-      if (chat.scope.kind !== "project" || chat.reviewer || chat.thinker)
+      if (chat.scope.kind !== "project" || chat.reviewer)
         throw new Error("Only repository threads can work in a worktree.");
       if ((await this.core.projects.inspect(chat.projectId)).plain)
         throw new Error("Worktrees need a Git repository.");
@@ -568,12 +565,7 @@ export class ThreadWorktrees {
     return this.core.control(id, async () => {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
-      if (
-        chat.worktree ||
-        chat.scope.kind !== "project" ||
-        chat.reviewer ||
-        chat.thinker
-      )
+      if (chat.worktree || chat.scope.kind !== "project" || chat.reviewer)
         throw new Error(
           "Only project-folder threads can select an agent worktree.",
         );

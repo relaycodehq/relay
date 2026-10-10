@@ -395,9 +395,6 @@ export class ProjectChats {
   ) {
     return this.councils.setFinding(id, findingId, status);
   }
-  resumeUltraplan(id: string, request: string) {
-    return this.councils.resumeUltraplan(id, request);
-  }
   /** The same chat object a running turn writes into, so its next publish keeps the note closed. */
   closeWatchNote(
     id: string,
@@ -589,13 +586,13 @@ export class ProjectChats {
   async reconcileSummaries() {
     await this.storage.reconcile(this.store.savedAtLoad);
   }
-  /** Threads with an answer running now; council members count under their parent. */
+  /** Threads with an answer running now; reviewers count under their parent. */
   working() {
     const chats = new Map((this.store.get().chats ?? []).map((c) => [c.id, c]));
     return new Set(
       this.active.ids().map((id) => {
         const chat = chats.get(id);
-        return (chat?.reviewer ?? chat?.thinker)?.parent ?? id;
+        return chat?.reviewer?.parent ?? id;
       }),
     ).size;
   }

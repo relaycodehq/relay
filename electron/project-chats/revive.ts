@@ -65,18 +65,11 @@ export function reviveChat(
     review.status = review.status === "reviewing" ? "stopped" : "failed";
     interrupted = true;
   }
-  // A council cut off before the lead's plan waits for Resume; a plan
-  // cut off resumes like any answer.
-  for (const plan of Object.values(chat.ultraplans ?? {}))
-    if (
-      plan.status === "briefing" ||
-      plan.status === "thinking" ||
-      plan.status === "leading"
-    ) {
-      plan.status =
-        plan.status === "leading" && plan.answer ? "done" : "stopped";
-      interrupted = true;
-    }
+  // Ultraplan councils were retired; their state is dead weight now.
+  if ("ultraplans" in chat) {
+    delete (chat as { ultraplans?: unknown }).ultraplans;
+    interrupted = true;
+  }
   if (review?.fixing) {
     for (const id of Object.values(review.fixing).flat())
       if (review.statuses?.[id] === "fixing") {

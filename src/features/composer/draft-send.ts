@@ -12,7 +12,6 @@ import { api } from "../../lib/api";
 import {
   composerProvider,
   loadComposerSettings,
-  saveComposerSettings,
   startThreadSettings,
 } from "../agents/composer-settings";
 import {
@@ -90,8 +89,6 @@ export async function sendDraft(
     : { model: "", reasoningEffort: "" as const };
   const choice = messageChoice(recipient, settings.models, selected, pick);
   if (!choice) return null;
-  const council =
-    settings.ultraplan && recipient !== "message" && scope.kind !== "review";
   const draftImages = await loadDraftImages(key);
   const outgoing = numberImages(text, draftImages);
   const images = await Promise.all(outgoing.images.map(flattenSketch));
@@ -105,7 +102,6 @@ export async function sendDraft(
     },
     outgoing.text,
     {
-      ...(council ? { council: settings.council } : {}),
       ...(chat?.running ? { running: { steer: false } } : {}),
       images: images.map(({ name, mimeType, dataUrl }) => ({
         name,
@@ -131,8 +127,6 @@ export async function sendDraft(
     id: crypto.randomUUID(),
   });
   started.delete(id);
-  // A council is one question's worth; its thread goes on with the lead.
-  if (council) saveComposerSettings(id, { ...settings, ultraplan: false });
   if (!chat) {
     startThreadSettings(id, target.id, recipient);
     forgetNewThread(id);

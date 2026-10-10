@@ -116,7 +116,7 @@ it("pauses a queue that was waiting when Relay closed and moves old modes over",
   expect("mode" in input).toBe(false);
 });
 
-it("stops councils and reviews an earlier session left running, reopening findings being fixed", () => {
+it("stops reviews an earlier session left running, reopening findings being fixed", () => {
   const chat = thread({
     deepReview: {
       scope: prScope,
@@ -124,10 +124,6 @@ it("stops councils and reviews an earlier session left running, reopening findin
       statuses: { a: "fixing", b: "fixed" },
       fixing: { m: ["a", "b"] },
     } as unknown as ProjectChat["deepReview"],
-    ultraplans: {
-      planned: { status: "leading", answer: "plan" },
-      cut: { status: "thinking" },
-    } as unknown as ProjectChat["ultraplans"],
   });
   expect(reviveChat(chat, () => false)).toBe(true);
   expect(chat.deepReview).toMatchObject({
@@ -135,8 +131,6 @@ it("stops councils and reviews an earlier session left running, reopening findin
     statuses: { a: "open", b: "fixed" },
   });
   expect(chat.deepReview?.fixing).toBeUndefined();
-  expect(chat.ultraplans?.planned.status).toBe("done");
-  expect(chat.ultraplans?.cut.status).toBe("stopped");
 });
 
 it("drops worktrees no command of the thread made, and duplicate or unclaimed records", () => {

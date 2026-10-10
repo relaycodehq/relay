@@ -970,20 +970,6 @@ if (args.includes("--permission-prompt-tool")) {
             "See `src/lib/cache.ts`, `src/components/file-60.tsx` and `src/nowhere.ts`.",
         }).find(([prompt]) => said.includes(prompt))?.[1] ??
         "The cache guard prevents duplicate requests.";
-      // An Ultraplan lead in Plan mode answers the council with a plan.
-      if (planning && said.includes("The council is back")) {
-        send({
-          method: "item/completed",
-          params: {
-            threadId: "fixture-thread",
-            item: {
-              id: "fixture-plan",
-              type: "plan",
-              text: "## Proposed plan\n\n1. Retry with backoff.\n2. Cap the attempts.",
-            },
-          },
-        });
-      }
       // Edits the checkout mid-turn, so Relay's turn snapshots see changes.
       if (said.includes("fixture edit files")) {
         const fs = require("node:fs"),

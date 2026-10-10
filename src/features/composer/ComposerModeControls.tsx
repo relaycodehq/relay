@@ -7,7 +7,6 @@ import {
   PencilRuler,
   LockKeyhole,
   LockKeyholeOpen,
-  Orbit,
   PencilLine,
   Sparkles,
 } from "lucide-react";
@@ -24,8 +23,12 @@ const icons = {
   auto: Sparkles,
   "full-access": LockKeyholeOpen,
 };
-type Mode = InteractionMode | "ultraplan";
-const modes: { value: Mode; label: string; hint: string; icon: ReactNode }[] = [
+const modes: {
+  value: InteractionMode;
+  label: string;
+  hint: string;
+  icon: ReactNode;
+}[] = [
   {
     value: "default",
     label: "Build",
@@ -38,32 +41,21 @@ const modes: { value: Mode; label: string; hint: string; icon: ReactNode }[] = [
     hint: "no edits",
     icon: <PencilRuler size={14} />,
   },
-  {
-    value: "ultraplan",
-    label: "Ultraplan",
-    hint: "a council thinks first",
-    icon: <Orbit size={14} />,
-  },
 ];
 // Permissions and planning are independent controls.
 export const ComposerModeControls = memo(function ComposerModeControls({
   provider,
   runtimeMode,
   interactionMode,
-  ultraplan = false,
   onRuntimeMode,
   onInteractionMode,
-  onUltraplan,
 }: {
   /** The agent that will answer; how it honors each runtime mode differs. */
   provider?: AgentProvider;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
-  ultraplan?: boolean;
   onRuntimeMode: (mode: RuntimeMode) => void;
   onInteractionMode: (mode: InteractionMode) => void;
-  /** Unset where a council can't run, so the menu doesn't offer it. */
-  onUltraplan?: (on: boolean) => void;
 }) {
   return (
     <>
@@ -76,9 +68,7 @@ export const ComposerModeControls = memo(function ComposerModeControls({
       <span className="composer-divider" aria-hidden />
       <InteractionModeMenu
         interactionMode={interactionMode}
-        ultraplan={ultraplan}
         onInteractionMode={onInteractionMode}
-        onUltraplan={onUltraplan}
       />
     </>
   );
@@ -110,19 +100,15 @@ export const RuntimeModeSelect = memo(function RuntimeModeSelect({
   );
 });
 
-/** Build, Plan, or Ultraplan. */
+/** Build or Plan. */
 export const InteractionModeMenu = memo(function InteractionModeMenu({
   interactionMode,
-  ultraplan = false,
   onInteractionMode,
-  onUltraplan,
 }: {
   interactionMode: InteractionMode;
-  ultraplan?: boolean;
   onInteractionMode: (mode: InteractionMode) => void;
-  onUltraplan?: (on: boolean) => void;
 }) {
-  const mode: Mode = ultraplan ? "ultraplan" : interactionMode;
+  const mode = interactionMode;
   const current = modes.find((m) => m.value === mode)!;
   return (
     <Menu.Root>
@@ -130,12 +116,10 @@ export const InteractionModeMenu = memo(function InteractionModeMenu({
         className={`composer-control composer-interaction ${mode !== "default" ? "selected" : ""}`}
         data-mode={mode}
         aria-label={`Mode: ${current.label}`}
-        title="Build, plan, or plan with a council first"
+        title="Build or plan"
       >
         {current.icon}
-        <span className={mode === "ultraplan" ? "ultraplan-text" : undefined}>
-          {current.label}
-        </span>
+        <span>{current.label}</span>
         <ChevronDown size={12} />
       </Menu.Trigger>
       <Menu.Portal>
@@ -148,39 +132,25 @@ export const InteractionModeMenu = memo(function InteractionModeMenu({
             className="composer-select-popup composer-mode-menu"
             aria-label="Mode"
           >
-            <Menu.RadioGroup
-              value={mode}
-              onValueChange={(value: Mode) => {
-                onInteractionMode(value === "default" ? "default" : "plan");
-                onUltraplan?.(value === "ultraplan");
-              }}
-            >
-              {modes
-                .filter((m) => m.value !== "ultraplan" || onUltraplan)
-                .map((m) => (
-                  <Menu.RadioItem
-                    key={m.value}
-                    className="composer-select-item"
-                    value={m.value}
-                    data-mode={m.value}
-                    closeOnClick
-                  >
-                    <span className="composer-mode-option">
-                      {m.icon}
-                      <span
-                        className={
-                          m.value === "ultraplan" ? "ultraplan-text" : undefined
-                        }
-                      >
-                        {m.label}
-                      </span>
-                      <small>{m.hint}</small>
-                    </span>
-                    <Menu.RadioItemIndicator>
-                      <Check size={13} />
-                    </Menu.RadioItemIndicator>
-                  </Menu.RadioItem>
-                ))}
+            <Menu.RadioGroup value={mode} onValueChange={onInteractionMode}>
+              {modes.map((m) => (
+                <Menu.RadioItem
+                  key={m.value}
+                  className="composer-select-item"
+                  value={m.value}
+                  data-mode={m.value}
+                  closeOnClick
+                >
+                  <span className="composer-mode-option">
+                    {m.icon}
+                    <span>{m.label}</span>
+                    <small>{m.hint}</small>
+                  </span>
+                  <Menu.RadioItemIndicator>
+                    <Check size={13} />
+                  </Menu.RadioItemIndicator>
+                </Menu.RadioItem>
+              ))}
             </Menu.RadioGroup>
           </Menu.Popup>
         </Menu.Positioner>

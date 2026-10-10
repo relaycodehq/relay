@@ -158,10 +158,9 @@ export function useSettingCommands({
         runs.setEffort(to, change.reasoningEffort);
       else if (change.command === "permissions")
         state.setRuntimeMode(change.runtimeMode);
-      else if (change.command === "plan") {
+      else if (change.command === "plan")
         state.setInteractionMode(change.plan ? "plan" : "default");
-        if (!change.plan) state.setUltraplan(false);
-      } else if (to !== "message") runs.setFast(to, change.fast);
+      else if (to !== "message") runs.setFast(to, change.fast);
       return true;
     },
   };

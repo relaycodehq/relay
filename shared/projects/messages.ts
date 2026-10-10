@@ -70,8 +70,6 @@ export interface ChatMessage {
   handoff?: AgentHandoff;
   reload?: SessionReload;
   worktreeCommand?: WorktreeCommandRun;
-  /** Local marker: the lead's brief for an Ultraplan council, shown inside it. */
-  brief?: boolean;
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
   unprompted?: boolean;
   context?: ContextUsage;
