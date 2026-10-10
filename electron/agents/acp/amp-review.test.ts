@@ -20,6 +20,35 @@ const reads = [
   "find src -name '*.test.ts'",
   "ls -la; wc -l src/styles.css",
   "cat a.js\ngit show HEAD:a.js",
+  "rg -n 'useEffect$' src",
+  "rg --glob='*.ts' -e foo",
+  "sed -n '40,$p' a.ts",
+  "git log --format='%h %s' -5",
+  "git log --oneline --no-ext-diff",
+  "git show HEAD@{1}",
+  "sort -k2 -n a",
+];
+/** Flags the shell hands the command in a form a look at the words misses. */
+const disguised = [
+  "git diff '--output=x'",
+  'git diff "--output"=x',
+  "git diff --out\"put\"=x",
+  "git grep --open-fi=sh foo",
+  "git grep -lOsh foo",
+  "find . '-delete'",
+  "find . -de''lete",
+  "find . -\\delete",
+  "find . -{delete,true}",
+  "find . {-delete,-true}",
+  "find . ${X:--delete}",
+  "find . $'\\x2ddelete'",
+  "find . $IFS-delete",
+  "find . -del*",
+  "sort '-o' f a",
+  "sort -ro f a",
+  "sort --out=f a",
+  "tree -ao f",
+  "rg '--pre=sh' x",
 ];
 const writes = [
   "touch marker.txt",
@@ -49,6 +78,7 @@ const writes = [
   "lsof",
   "catalog",
   "sort -o out a",
+  "file -C -m magic",
   "ls;",
   "",
 ];
@@ -63,6 +93,13 @@ it("lets through what readsOnly does", () => {
 it("turns down whatever readsOnly does", () => {
   for (const command of writes)
     expect(readOnlyShellPattern.test(command), command).toBe(false);
+});
+
+it("turns down flags spelled to slip past the look", () => {
+  for (const command of disguised) {
+    expect(readsOnly(command), command).toBe(false);
+    expect(readOnlyShellPattern.test(command), command).toBe(false);
+  }
 });
 
 it("puts Relay's rules in place of the user's, keeping their other settings", () => {
@@ -89,4 +126,11 @@ it("warns when the project's own Amp rules come first", async () => {
   expect(warning).toContain(join(root, ".amp", "settings.json"));
   const written = JSON.parse(await readFile(env.AMP_SETTINGS_FILE, "utf8"));
   expect(written["amp.permissions"].at(-1)).toMatchObject({ action: "reject" });
+});
+
+it("writes the settings for reviewers starting together", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "amp-review-"));
+  await expect(
+    Promise.all([readOnlyEnv(cwd), readOnlyEnv(cwd), readOnlyEnv(cwd)]),
+  ).resolves.toHaveLength(3);
 });

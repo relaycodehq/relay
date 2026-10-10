@@ -243,9 +243,9 @@ export class StartedThreads {
       case "list_notes":
         return this.listNotes(lead, input);
       case "add_note":
-        return this.addNote(lead, input);
+        return this.addNote(lead, input, signal);
       case "tick_note":
-        return this.tickNote(lead, input);
+        return this.tickNote(lead, input, signal);
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
       case "list_projects":
@@ -839,11 +839,50 @@ export class StartedThreads {
     });
   }
 
+  /**
+   * The thread whose notes a change goes into. Another thread's take the same
+   * leave as driving it: what is kept there is the first thing read_thread
+   * hands any agent reading it.
+   */
+  private async notesToChange(
+    lead: ProjectChat,
+    thread: string | undefined,
+    what: string,
+    detail: string,
+    signal: AbortSignal,
+  ) {
+    if (!thread || thread === lead.id) return lead;
+    if (lead.startedBy)
+      throw new Error(
+        "A thread started by another thread keeps notes only in its own.",
+      );
+    const { chat, mine, where } = await this.target(lead, thread);
+    if (
+      !mine &&
+      !(await this.drive(
+        lead,
+        `${what} “${chat.title}”${where}?`,
+        detail,
+        signal,
+      ))
+    )
+      return undefined;
+    return chat;
+  }
+
   private async addNote(
     lead: ProjectChat,
     { text, thread }: RelayToolArgs<"add_note">,
+    signal: AbortSignal,
   ) {
-    const chat = await this.notesOf(lead, thread);
+    const chat = await this.notesToChange(
+      lead,
+      thread,
+      "Keep a note in",
+      head(text),
+      signal,
+    );
+    if (!chat) return this.refused("keep this there");
     const note = await this.chats.notes.add(chat.id, {
       text,
       by: this.leadSide(lead).agent,
@@ -856,8 +895,16 @@ export class StartedThreads {
   private async tickNote(
     lead: ProjectChat,
     { note, item, done = true, thread }: RelayToolArgs<"tick_note">,
+    signal: AbortSignal,
   ) {
-    const chat = await this.notesOf(lead, thread);
+    const chat = await this.notesToChange(
+      lead,
+      thread,
+      `${done ? "Tick" : "Untick"} item ${item} of ${note} in`,
+      "",
+      signal,
+    );
+    if (!chat) return this.refused(`${done ? "tick" : "untick"} it`);
     await this.chats.notes.tick(chat.id, note, item, done);
     return toolText(`${done ? "Ticked" : "Unticked"} ${note} item ${item}.`);
   }

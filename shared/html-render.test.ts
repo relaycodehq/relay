@@ -4,6 +4,7 @@ import {
   RENDER_MIN_HEIGHT,
   RENDER_WIDTHS,
   injectRenderBootstrap,
+  prependToHead,
   renderHeightAt,
 } from "./html-render";
 
@@ -44,5 +45,34 @@ describe("injectRenderBootstrap", () => {
     const html = injectRenderBootstrap("<!DOCTYPE html><table></table>");
     expect(html.startsWith("<!DOCTYPE html><head>")).toBe(true);
     expect(scriptAt(html)).toBeLessThan(html.indexOf("<table>"));
+  });
+});
+
+describe("prependToHead", () => {
+  const tag = "<meta id=first>";
+
+  it("skips a <head> in a comment or an attribute, where the tag would do nothing", () => {
+    expect(prependToHead("<!-- <head> --><p>x</p>", tag)).toBe(
+      `<!-- <head> --><head><meta charset="utf-8">${tag}</head><p>x</p>`,
+    );
+    expect(
+      prependToHead('<!doctype html><html data-x="<head>"><body>x</body></html>', tag),
+    ).toBe(
+      `<!doctype html><html data-x="<head>"><head><meta charset="utf-8">${tag}</head><body>x</body></html>`,
+    );
+    expect(prependToHead('<head data-x="a>b"><title>t</title>', tag)).toBe(
+      `<head data-x="a>b">${tag}<title>t</title>`,
+    );
+  });
+
+  it("goes before whatever the page puts ahead of its own head", () => {
+    const html = prependToHead('<img src="https://x/a.png"><head></head>', tag);
+    expect(html.indexOf(tag)).toBeLessThan(html.indexOf("<img"));
+  });
+
+  it("takes an unclosed comment for the rest of the page", () => {
+    expect(prependToHead("<!-- <head>", tag)).toBe(
+      `<head><meta charset="utf-8">${tag}</head><!-- <head>`,
+    );
   });
 });

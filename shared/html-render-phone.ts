@@ -6,6 +6,7 @@ import {
   RENDER_MAX_HEIGHT,
   RENDER_COMPOSE_CHARS,
   RENDER_CSP,
+  prependToHead,
   withSeries,
   type RenderFromFrame,
   type RenderTheme,
@@ -66,18 +67,6 @@ const bootstrap = (theme: RenderTheme) => `(() => {
   }, true);
   window.relay = { compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }) };
 })();`;
-
-/** `html` with `tag` as the first thing in its head, adding a head when it has none. */
-function prependToHead(html: string, tag: string) {
-  const head = /<head(\s[^>]*)?>/i.exec(html);
-  if (head) {
-    const at = head.index + head[0].length;
-    return html.slice(0, at) + tag + html.slice(at);
-  }
-  const doctype = /^\s*<!doctype[^>]*>/i.exec(html);
-  const at = doctype ? doctype[0].length : 0;
-  return `${html.slice(0, at)}<head><meta charset="utf-8">${tag}</head>${html.slice(at)}`;
-}
 
 /**
  * `html` with the rules and the bootstrap as the first things in its head.

@@ -217,15 +217,27 @@ const BOOTSTRAP = `(() => {
 export const injectRenderBootstrap = (html: string) =>
   prependToHead(html, `<script>${BOOTSTRAP}</script>`);
 
-/** `html` with `tag` as the first thing in its head, adding a head when it has none. */
+const ATTRIBUTES = `(?:\\s+[^\\s"'>/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s"'>]+))?)*\\s*/?`;
+/** What may come before the head and load nothing: the doctype, comments and the `<html>` tag. */
+const BEFORE_HEAD = new RegExp(
+  `^(?:\\s+|<!--(?:-?>|[\\s\\S]*?--!?>)|<!doctype[^>]*>|<html${ATTRIBUTES}>)*`,
+  "i",
+);
+const HEAD = new RegExp(`^<head${ATTRIBUTES}>`, "i");
+
+/**
+ * `html` with `tag` as the first thing in its head, adding a head when it has
+ * none. Only a head the page opens before anything else counts: a `<head>` in
+ * a comment or an attribute would leave the tag (a CSP, say) inert. A head
+ * opened later is ignored by the parser, and what it holds still goes in ours.
+ */
 export function prependToHead(html: string, tag: string) {
-  const head = /<head(\s[^>]*)?>/i.exec(html);
+  const at = BEFORE_HEAD.exec(html)![0].length;
+  const head = HEAD.exec(html.slice(at));
   if (head) {
-    const at = head.index + head[0].length;
-    return html.slice(0, at) + tag + html.slice(at);
+    const end = at + head[0].length;
+    return html.slice(0, end) + tag + html.slice(end);
   }
-  const doctype = /^\s*<!doctype[^>]*>/i.exec(html);
-  const at = doctype ? doctype[0].length : 0;
   return `${html.slice(0, at)}<head><meta charset="utf-8">${tag}</head>${html.slice(at)}`;
 }
 

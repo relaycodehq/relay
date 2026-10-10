@@ -180,7 +180,9 @@ export const relayToolSchemas = {
       ),
       thread: threadId
         .optional()
-        .describe("Whose notes. Left out: this thread's."),
+        .describe(
+          "Whose notes. Left out: this thread's. Another thread's asks the user first, unless you started it.",
+        ),
     })
     .strict(),
   tick_note: z
@@ -197,7 +199,9 @@ export const relayToolSchemas = {
         .describe("False unticks it. Left out: ticks it."),
       thread: threadId
         .optional()
-        .describe("Whose notes. Left out: this thread's."),
+        .describe(
+          "Whose notes. Left out: this thread's. Another thread's asks the user first, unless you started it.",
+        ),
     })
     .strict(),
   move_to_worktree: z

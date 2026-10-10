@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  disguisedFlag,
   gitBareWrites,
   gitListings,
   gitReads,
@@ -19,19 +21,20 @@ const oneOf = (words: Iterable<string>) =>
 /** The rest of one command, up to the next `;`, `&&`, `|` or newline; `2>&1` stays in it. */
 const rest = "(?:>&|[^;&|\\n])*";
 const ends = "(?=[\\s;&|]|$)";
-/** No later argument of this command starts with one of `flags`. */
-const without = (flags: string) => `(?![^;&|\\n]*\\s(?:${flags}))`;
+/** No later argument of this command starts with one of `flags`, or hides a flag from that look. */
+const without = (flags: string) =>
+  `(?![^;&|\\n]*(?:\\s(?:${flags})|${disguisedFlag}))`;
 const gitPrefix = "git(?:\\s+(?:--no-pager|-C\\s+[^\\s;&|]+))*\\s+";
 const sedLines = "(?:\\d+|\\$)(?:,(?:\\d+|\\$))?p";
 
 const command = [
   `${oneOf(plain)}${ends}${rest}`,
   `rg${ends}${without("--pre(?:=|\\s|$)")}${rest}`,
-  `sort${ends}${without("-o|--output")}${rest}`,
-  `tree${ends}${without("-o")}${rest}`,
+  `sort${ends}${without("--o|-[^-\\s]*o")}${rest}`,
+  `tree${ends}${without("--o|-[^-\\s]*o")}${rest}`,
   `find${ends}${without("-(?:exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)(?:\\s|$)")}${rest}`,
   `sed(?:\\s+-n)+\\s+(?:'${sedLines}'|"${sedLines}"|${sedLines})(?:\\s+[^\\s;&|<>-][^\\s;&|<>]*)*\\s*`,
-  `${gitPrefix}${oneOf(gitReads)}${ends}${without("--output|-O|--open-files-in-pager|--ext-diff")}${rest}`,
+  `${gitPrefix}${oneOf(gitReads)}${ends}${without("--(?:ou|op|ext)|-[^-\\s]*O")}${rest}`,
   ...Object.entries(gitListings).map(
     ([sub, flags]) =>
       `${gitPrefix}${escape(sub)}(?:\\s+${oneOf(flags)}${ends})${gitBareWrites.has(sub) ? "+" : "*"}\\s*`,
@@ -151,7 +154,8 @@ export async function readOnlyEnv(cwd: string) {
   const dir = join(tmpdir(), "relay-amp-read-only");
   await mkdir(dir, { recursive: true });
   const path = join(dir, "settings.json");
-  const temp = `${path}.${process.pid}.${Date.now()}`;
+  // Reviewers start together, so a name from the clock could be taken twice.
+  const temp = `${path}.${randomUUID()}`;
   await writeFile(temp, JSON.stringify(readOnlySettings(await userSettings()), null, 2));
   await rename(temp, path);
   const overriding = await overridingWorkspace(cwd);

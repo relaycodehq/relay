@@ -3,6 +3,7 @@
 // user's settings approves a call before canUseTool can turn it down, so the
 // line has to be drawn in a PreToolUse hook, which runs first.
 
+// Not `file`: `file -C` compiles a magic file and writes it beside it.
 export const plain = new Set([
   "cd",
   "pwd",
@@ -11,7 +12,6 @@ export const plain = new Set([
   "head",
   "tail",
   "wc",
-  "file",
   "stat",
   "du",
   "echo",
@@ -69,6 +69,22 @@ export const gitListings: Record<string, Set<string>> = {
 /** Listings that change something when given no arguments: a bare `git stash` stashes. */
 export const gitBareWrites = new Set(["stash"]);
 
+/**
+ * Spellings the shell turns into a flag that a look at the words misses: a
+ * quote or backslash before or inside its name (`'--output=x'`, `-de''lete`),
+ * a glob or brace right after it, brace expansion (`{-delete,-true}`) and `$`
+ * expansions (`${X:--delete}`, `$'\x2ddelete'`). A `$` ending a word, as in
+ * `rg 'foo$'`, and sed's `'1,$p'` stay allowed.
+ */
+export const disguisedFlag = [
+  `(?:^|\\s)['"\\\\]+-`,
+  `(?:^|\\s)-[\\w-]*['"\\\\]+[\\w-]`,
+  `(?:^|\\s)-[\\w-]*[*?[{]`,
+  `\\{[^\\s}]*(?:,|\\.\\.)`,
+  `\\$(?!['"]?(?:[\\s;&|]|$)|p['"])`,
+].join("|");
+const disguised = new RegExp(disguisedFlag);
+
 /** Whether every command in `command` is on Relay's list of ones that only read. */
 export function readsOnly(command: string): boolean {
   const bare = command.replace(
@@ -85,15 +101,22 @@ export function readsOnly(command: string): boolean {
 function segmentReads(segment: string) {
   const [name, ...args] = segment.split(/\s+/);
   const has = (pattern: RegExp) => args.some((a) => pattern.test(a));
+  // Their flags decide whether they write, so a flag has to be spelled plainly.
+  if (
+    ["git", "rg", "sort", "tree", "find"].includes(name) &&
+    disguised.test(segment)
+  )
+    return false;
   switch (name) {
     case "git":
       return gitReadsOnly(args);
     case "rg":
       return !has(/^--pre(=|$)/);
     case "sort":
-      return !has(/^(-o|--output)/);
+      // Short flags cluster (`-ro`) and long ones may be cut short (`--out`).
+      return !has(/^(--o|-[^-]*o)/);
     case "tree":
-      return !has(/^-o/);
+      return !has(/^(--o|-[^-]*o)/);
     case "find":
       return !has(
         /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/,
@@ -111,7 +134,8 @@ function gitReadsOnly(args: string[]) {
     i += args[i] === "-C" ? 2 : 1;
   const [sub, ...rest] = args.slice(i);
   if (
-    rest.some((a) => /^(--output|-O|--open-files-in-pager|--ext-diff)/.test(a))
+    // git takes a long flag cut short (`--open-fi`) and clustered short ones (`-lO`).
+    rest.some((a) => /^(--(ou|op|ext)|-[^-]*O)/.test(a))
   )
     return false;
   if (gitReads.has(sub)) return true;

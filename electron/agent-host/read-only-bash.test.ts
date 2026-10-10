@@ -35,6 +35,7 @@ it("turns down anything that writes, runs or hides another command", () => {
     "echo $(rm -rf src)",
     "echo `id`",
     "npm test",
+    "file -C -m magic",
     "ls | xargs rm",
     "sleep 100 &",
     "FOO=1 git status",
