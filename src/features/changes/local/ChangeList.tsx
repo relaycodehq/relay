@@ -11,6 +11,7 @@ import {
 import {
   byFolder,
   changeLabels,
+  folderKey,
   type ChangeSection,
   type ListArea,
   type SelectedChange,
@@ -27,6 +28,9 @@ interface Props {
   grouped: boolean;
   collapsed: ChangeArea[];
   onCollapse: (area: ChangeArea, collapse: boolean) => void;
+  /** Folder groups shown without their files, by `folderKey`. */
+  shutFolders: string[];
+  onShutFolders: (keys: string[], shut: boolean) => void;
   busy: boolean;
   projectId?: string;
   listRef: RefObject<HTMLDivElement | null>;
@@ -58,6 +62,7 @@ function Section(props: SectionProps) {
   const open = !collapsed.includes(s.area),
     staged = s.area === "staged";
   const toggle = (paths: string[]) => onAct({ kind: s.kind, revision, paths });
+  const folders = grouped ? [...byFolder(s.files)] : [];
   return (
     <section>
       <header>
@@ -82,29 +87,47 @@ function Section(props: SectionProps) {
       </header>
       {open &&
         (grouped
-          ? [...byFolder(s.files)].map(([folder, files]) => (
-              <div
-                key={folder}
-                role="group"
-                aria-label={folder || "Repository root"}
-              >
-                <div className="working-folder">
-                  <input
-                    type="checkbox"
-                    aria-label={`${staged ? "Unstage" : "Stage"} ${folder || "repository root"}`}
-                    checked={staged}
-                    disabled={busy}
-                    onChange={() => toggle(files.map((c) => c.path))}
-                  />
-                  <span title={folder || "Repository root"}>
-                    {folder || "/"}
-                  </span>
+          ? folders.map(([folder, files]) => {
+              const name = folder || "Repository root",
+                key = folderKey(s.area, folder),
+                shut = props.shutFolders.includes(key),
+                // ⌥-click opens or closes every folder in the list.
+                fold = (all: boolean) =>
+                  props.onShutFolders(
+                    all ? folders.map(([f]) => folderKey(s.area, f)) : [key],
+                    !shut,
+                  );
+              return (
+                <div key={folder} role="group" aria-label={name}>
+                  <div className="working-folder">
+                    <button
+                      className="change-section-toggle"
+                      aria-label={name}
+                      aria-expanded={!shut}
+                      title="⌥-click for every folder"
+                      onClick={(e) => fold(e.altKey)}
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                    <input
+                      type="checkbox"
+                      aria-label={`${staged ? "Unstage" : "Stage"} ${folder || "repository root"}`}
+                      checked={staged}
+                      disabled={busy}
+                      onChange={() => toggle(files.map((c) => c.path))}
+                    />
+                    <span title={name} onClick={(e) => fold(e.altKey)}>
+                      {folder || "/"}
+                    </span>
+                    {shut && <small>{files.length}</small>}
+                  </div>
+                  {!shut &&
+                    files.map((c) => (
+                      <ChangeRow key={c.path} change={c} nested {...props} />
+                    ))}
                 </div>
-                {files.map((c) => (
-                  <ChangeRow key={c.path} change={c} nested {...props} />
-                ))}
-              </div>
-            ))
+              );
+            })
           : s.files.map((c) => (
               <ChangeRow key={c.path} change={c} nested={false} {...props} />
             )))}

@@ -30,8 +30,8 @@ export function useChangeReveals({
   tree?: WorkingTree;
   selected: SelectedChange | null;
   setSelected: (next: SelectedChange | null) => void;
-  /** Opens the list the revealed file is in. */
-  onReveal: (area: ChangeArea) => void;
+  /** Opens the list, and the folder in it, the revealed file is in. */
+  onReveal: (area: ChangeArea, path: string) => void;
   list: RefObject<HTMLElement | null>;
 }) {
   const [wanted, setWanted] = useState<ProjectFileLink | null>(null),
@@ -56,7 +56,7 @@ export function useChangeReveals({
     }
     const area = revealArea(change);
     setSelected({ path: change.path, area });
-    onReveal(area);
+    onReveal(area, change.path);
     setLine(wanted.directory ? undefined : wanted.line);
     setWanted(null);
     setRevealed((n) => n + 1);

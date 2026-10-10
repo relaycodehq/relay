@@ -5,7 +5,12 @@ import type { CodeReference } from "../../../shared/code-references";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import type { RequestChannel } from "../../lib/request-channel";
-import { changeSections, commitBlocked } from "./working-changes";
+import {
+  changeSections,
+  commitBlocked,
+  folderKey,
+} from "./working-changes";
+import { parentOf } from "../../lib/file-tree";
 import { useSavedChanges } from "./useSavedChanges";
 import { useWorkingDiff, useWorkingTree } from "./useWorkingTree";
 import { useChangeReveals } from "./useChangeReveals";
@@ -52,14 +57,19 @@ export function LocalChanges({
   const diff = useWorkingDiff(working, pull, projectId, selected);
   const [push, setPush] = useState(false),
     [splitting, setSplitting] = useState(false),
-    [collapsed, setCollapsed] = useState<ChangeArea[]>([]);
+    [collapsed, setCollapsed] = useState<ChangeArea[]>([]),
+    [shutFolders, setShutFolders] = useState<string[]>([]);
   const fileList = useRef<HTMLDivElement>(null);
   const { missing, line, setLine, pick } = useChangeReveals({
     reveals,
     tree,
     selected,
     setSelected,
-    onReveal: (area) => setCollapsed((c) => c.filter((a) => a !== area)),
+    onReveal: (area, path) => {
+      setCollapsed((c) => c.filter((a) => a !== area));
+      const key = folderKey(area, parentOf(path));
+      setShutFolders((f) => f.filter((k) => k !== key));
+    },
     list: fileList,
   });
   const sections = tree ? changeSections(tree.changes) : [];
@@ -127,6 +137,13 @@ export function LocalChanges({
                   setCollapsed((c) =>
                     collapse ? [...c, area] : c.filter((a) => a !== area),
                   )
+                }
+                shutFolders={shutFolders}
+                onShutFolders={(keys, shut) =>
+                  setShutFolders((f) => [
+                    ...f.filter((k) => !keys.includes(k)),
+                    ...(shut ? keys : []),
+                  ])
                 }
                 busy={busy}
                 projectId={projectId}

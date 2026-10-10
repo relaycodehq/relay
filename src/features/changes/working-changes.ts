@@ -31,6 +31,10 @@ export function byFolder(files: WorkingChange[]) {
   return folders;
 }
 
+/** A folder group in the staged or working list, as the collapsed ones are kept. */
+export const folderKey = (area: ChangeArea, folder: string) =>
+  `${area}:${folder}`;
+
 export interface ChangeSection {
   area: ChangeArea;
   title: string;

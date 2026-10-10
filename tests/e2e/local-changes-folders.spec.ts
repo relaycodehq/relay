@@ -49,6 +49,10 @@ test("the Changes pane groups files by folder, per project", async () => {
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
     await page
+      .getByRole("dialog", { name: "Add a project", exact: true })
+      .getByRole("option", { name: "Choose in Finder…", exact: true })
+      .click();
+    await page
       .getByRole("group", { name: "Workspace panes" })
       .getByRole("button", { name: /^Changes\b/ })
       .click();
@@ -79,6 +83,23 @@ test("the Changes pane groups files by folder, per project", async () => {
       "src/a.ts",
       "src/b.ts",
     ]);
+
+    // A folder folds away its files and says how many it hides; ⌥ folds them all.
+    const working = changes.locator(".working-file-list > section").nth(1);
+    await working.getByRole("button", { name: "Repository root", exact: true }).click();
+    await expect(working.locator(".working-file")).toHaveCount(1);
+    await expect(working.locator(".working-folder small")).toHaveText(["1"]);
+    await screenshot(changes.locator(".working-sidebar"), {
+      path: "test-results/local-changes-folder-collapsed.png",
+    });
+    await working
+      .getByRole("button", { name: "src/lib", exact: true })
+      .click({ modifiers: ["Alt"] });
+    await expect(working.locator(".working-file")).toHaveCount(0);
+    await working
+      .getByRole("button", { name: "src/lib", exact: true })
+      .click({ modifiers: ["Alt"] });
+    await expect(working.locator(".working-file")).toHaveCount(2);
 
     // The choice survives a reload.
     await page.reload();
