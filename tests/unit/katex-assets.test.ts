@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   katexCss,
+  katexFonts,
   katexJs,
   katexVersion,
 } from "../../mobile/src/ui/math/katex-assets";
@@ -16,8 +17,12 @@ describe("katex assets", () => {
   });
 
   it("carry fonts inside and nothing that would be fetched", () => {
-    expect(katexCss).toContain("data:font/woff2;base64,");
-    expect(katexCss).not.toMatch(/url\((?!data:)/);
+    // Faces sit apart from the CSS, so a page carries only the ones it uses.
+    const faces = Object.values(katexFonts);
+    expect(faces.length).toBeGreaterThan(0);
+    for (const face of faces) expect(face).toContain("data:font/woff2;base64,");
+    for (const css of [katexCss, ...faces])
+      expect(css).not.toMatch(/url\((?!data:)/);
     // Inlined into a <script>, this would end the page's own.
     expect(katexJs).not.toMatch(/<\/script/i);
   });
