@@ -106,6 +106,7 @@ describe("chat activity", () => {
     const morning = new Date(2026, 8, 22, 10, 0);
     const presets = snoozePresets(morning);
     expect(presets.map((p) => p.id)).toEqual([
+      "quarter",
       "hour",
       "three-hours",
       "evening",

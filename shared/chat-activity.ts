@@ -193,7 +193,7 @@ export function chatIsEmpty(chat: ChatSummary): boolean {
 }
 
 export interface SnoozePreset {
-  id: "hour" | "three-hours" | "evening" | "tomorrow" | "next-week";
+  id: "quarter" | "hour" | "three-hours" | "evening" | "tomorrow" | "next-week";
   label: string;
   until: number;
 }
@@ -218,6 +218,7 @@ const daysToMonday = (date: Date) => 7 - ((date.getDay() + 6) % 7);
 
 export function snoozePresets(now: Date): SnoozePreset[] {
   const choices: (SnoozePreset | false)[] = [
+    { id: "quarter", label: "15 minutes", until: now.getTime() + HOUR_MS / 4 },
     { id: "hour", label: "1 hour", until: now.getTime() + HOUR_MS },
     { id: "three-hours", label: "3 hours", until: now.getTime() + 3 * HOUR_MS },
     // Past five the evening is too close to be worth a choice of its own.
