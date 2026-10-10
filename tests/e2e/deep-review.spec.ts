@@ -403,7 +403,9 @@ test("a message sent after a deep review failed to start gets a thread of its ow
       page.getByText("main has no commits that aren't on other."),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Repository", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Clear Deep review", exact: true })
+      .click();
     await page.getByLabel("Message project").fill("Explain this project");
     await page
       .getByRole("button", { name: "Send message", exact: true })

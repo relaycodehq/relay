@@ -1,9 +1,4 @@
-import {
-  ChevronDown,
-  FolderGit2,
-  GitPullRequest,
-  ScanSearch,
-} from "lucide-react";
+import { ChevronDown, GitPullRequest, ScanSearch, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ChatScope, Project } from "../../../shared/projects";
 import type { PullRef } from "../../../shared/types";
@@ -14,7 +9,8 @@ import { ScratchpadWord } from "./ScratchpadWord";
 /** Picking what an empty thread is about: the repository, a PR or a deep review. */
 export interface ScopeChoice {
   canChoosePR: boolean;
-  onRepository: () => void;
+  /** Back to a plain repository thread, the scope nothing picked means. */
+  onClearScope: () => void;
   /**
    * Asks for the Git host first, when PRs can't be chosen yet. Absent when
    * there's no host to ask for: no GitHub remote and no Gitea account.
@@ -30,7 +26,7 @@ export function ScopeButtons({
   scope,
   choosing,
   canChoosePR,
-  onRepository,
+  onClearScope,
   onChoosePR,
   onSelectPR,
   onDeepReview,
@@ -50,37 +46,52 @@ export function ScopeButtons({
     <>
       {choosing && !project.plain && (
         <>
-          <button
-            className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
-            onClick={onRepository}
+          <Chosen
+            when={scope.kind === "pr"}
+            label={scope.kind === "pr" ? `PR #${scope.ref.number}` : ""}
+            onClear={onClearScope}
+            reserve={
+              <>
+                <GitPullRequest size={14} />
+                Review a PR
+                <ChevronDown size={12} />
+              </>
+            }
           >
-            <FolderGit2 size={14} />
-            Repository
-          </button>
-          {canChoosePR ? (
-            <ProjectPullPicker
-              project={project}
-              selected={scope.kind === "pr" ? scope.ref : null}
-              onSelect={onSelectPR}
-              compact
-            />
-          ) : onChoosePR ? (
+            {canChoosePR ? (
+              <ProjectPullPicker
+                project={project}
+                selected={scope.kind === "pr" ? scope.ref : null}
+                onSelect={onSelectPR}
+                compact
+              />
+            ) : onChoosePR ? (
+              <button
+                className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
+                onClick={onChoosePR}
+              >
+                <GitPullRequest size={14} />
+                {scope.kind === "pr"
+                  ? `PR #${scope.ref.number}`
+                  : "Review a PR"}
+                <ChevronDown size={12} />
+              </button>
+            ) : null}
+          </Chosen>
+          <Chosen
+            when={scope.kind === "review"}
+            label="Deep review"
+            onClear={onClearScope}
+          >
             <button
-              className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
-              onClick={onChoosePR}
+              className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
+              aria-pressed={scope.kind === "review"}
+              onClick={scope.kind === "review" ? onClearScope : onDeepReview}
             >
-              <GitPullRequest size={14} />
-              {scope.kind === "pr" ? `PR #${scope.ref.number}` : "Review a PR"}
-              <ChevronDown size={12} />
+              <ScanSearch size={14} />
+              Deep review
             </button>
-          ) : null}
-          <button
-            className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
-            onClick={onDeepReview}
-          >
-            <ScanSearch size={14} />
-            Deep review
-          </button>
+          </Chosen>
         </>
       )}
       {choosing && !project.scratch && continueSession}
@@ -90,6 +101,56 @@ export function ScopeButtons({
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * A picked scope wears an × that takes the thread back to the repository.
+ * With `reserve`, the chip never gets narrower than that unpicked look, so
+ * picking and clearing don't slide the controls after it.
+ */
+function Chosen({
+  when,
+  label,
+  onClear,
+  reserve,
+  children,
+}: {
+  when: boolean;
+  label: string;
+  onClear: () => void;
+  reserve?: ReactNode;
+  children: ReactNode;
+}) {
+  const chip = when ? (
+    <span className="thread-scope-chosen selected">
+      {children}
+      <button
+        type="button"
+        className="thread-scope-clear"
+        aria-label={`Clear ${label}`}
+        title="Back to a repository thread"
+        onClick={onClear}
+      >
+        <X size={12} aria-hidden />
+      </button>
+    </span>
+  ) : (
+    children
+  );
+  if (!reserve) return chip;
+  return (
+    <span className="thread-scope-slot">
+      <button
+        type="button"
+        className="thread-scope-ghost"
+        tabIndex={-1}
+        aria-hidden
+      >
+        {reserve}
+      </button>
+      {chip}
+    </span>
   );
 }
 

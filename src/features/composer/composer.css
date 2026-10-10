@@ -31,7 +31,6 @@
   align-items: center;
   gap: 6px;
   padding: 0 6px 10px;
-  flex-wrap: wrap;
 }
 .thread-context-controls button {
   font-size: 11px;
@@ -45,6 +44,43 @@
   background: var(--accent-soft);
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* The outline is a shadow so a picked chip stays the height of an unpicked one. */
+.thread-scope-chosen {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.thread-context-controls .thread-scope-chosen > .selected {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  padding-right: 3px;
+}
+/* One line: a long PR title gives way rather than wrapping the row, which would jolt the thread. */
+.thread-scope-slot {
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content);
+  min-width: 0;
+}
+.thread-scope-slot > * {
+  grid-area: 1 / 1;
+}
+.thread-context-controls .thread-scope-ghost {
+  visibility: hidden;
+}
+.thread-context-controls .thread-scope-clear {
+  padding: 3px;
+  margin-right: 4px;
+  color: inherit;
+  opacity: 0.6;
+}
+.thread-context-controls .thread-scope-clear:hover {
+  opacity: 1;
 }
 .thread-context-controls .thread-review-action {
   color: var(--accent);

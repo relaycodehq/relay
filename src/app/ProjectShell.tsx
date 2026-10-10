@@ -396,7 +396,7 @@ export default function ProjectShell() {
                     onContextUsed={() => view.setContext(undefined)}
                     scopes={{
                       canChoosePR: !!host.account || host.pending,
-                      onRepository: () => nav.newThreadIn({ kind: "project" }),
+                      onClearScope: () => nav.newThreadIn({ kind: "project" }),
                       onChoosePR:
                         project.repository || account
                           ? () => {

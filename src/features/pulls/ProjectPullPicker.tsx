@@ -1,10 +1,15 @@
 import { useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronDown, GitPullRequest, RefreshCw, Search } from "lucide-react";
 import type { Project } from "../../../shared/projects";
-import type { PullRef } from "../../../shared/types";
+import type { Page, ProjectPull, PullRef } from "../../../shared/types";
 import { api } from "../../lib/api";
 import "./pull-picker.css";
 
@@ -37,6 +42,7 @@ export function ProjectPullPicker({
     getNextPageParam: (page) => page.nextPage ?? undefined,
     enabled: open,
   });
+  const title = usePickedTitle(project, selected);
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const query = search.trim().toLocaleLowerCase();
   const matches = items.filter((pull) =>
@@ -66,16 +72,19 @@ export function ProjectPullPicker({
         type="button"
         className={
           compact
-            ? `thread-context-button ${selected ? "selected" : ""}`
+            ? `thread-context-button project-pull-compact ${selected ? "selected" : ""}`
             : "project-pull-trigger"
         }
         aria-label={selected ? `PR #${selected.number}` : "Review a PR"}
+        title={selected && title ? `#${selected.number} ${title}` : undefined}
         disabled={disabled}
       >
         <GitPullRequest size={compact ? 14 : 16} aria-hidden />
         <span>
           {selected
-            ? `PR #${selected.number}`
+            ? title
+              ? `#${selected.number} ${title}`
+              : `PR #${selected.number}`
             : compact
               ? "Review a PR"
               : "Choose a pull request"}
@@ -242,4 +251,26 @@ export function ProjectPullPicker({
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/**
+ * The picked PR's title: from the list it was picked in, so the label doesn't
+ * change twice, then from the PR itself once a reload has emptied that list.
+ */
+function usePickedTitle(project: Project, selected: PullRef | null) {
+  const qc = useQueryClient();
+  const listed = selected
+    ? qc
+        .getQueriesData<InfiniteData<Page<ProjectPull>>>({
+          queryKey: ["project-pulls", project.id],
+        })
+        .flatMap(([, data]) => data?.pages.flatMap((page) => page.items) ?? [])
+        .find((pull) => pull.number === selected.number)?.title
+    : undefined;
+  const pull = useQuery({
+    queryKey: ["pull", selected],
+    queryFn: () => api.pull(selected!),
+    enabled: !!selected && !listed,
+  });
+  return listed ?? pull.data?.title;
 }

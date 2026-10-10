@@ -54,7 +54,7 @@ test("new threads start on the repository, and not behind an open dialog", async
     await context("Deep review").click();
     await expect(context("Deep review")).toHaveClass(/selected/);
     await newThread("Beta");
-    await expect(context("Repository")).toHaveClass(/selected/);
+    await expect(context("Deep review")).not.toHaveClass(/selected/);
     // Its draft card goes back to it as it was left...
     await page.getByRole("button", { name: "View activity" }).click();
     await page
@@ -68,7 +68,6 @@ test("new threads start on the repository, and not behind an open dialog", async
     await newThread("Alpha");
     await expect(page.locator(".project-window-title")).toContainText("Alpha");
     await expect(context("Deep review")).not.toHaveClass(/selected/);
-    await expect(context("Repository")).toHaveClass(/selected/);
 
     // The new-thread shortcut leaves the workspace alone behind a dialog.
     const changes = page

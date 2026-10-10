@@ -16,6 +16,13 @@
   background: var(--hover);
   color: var(--text);
 }
+.project-pull-compact span {
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .project-pull-trigger span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -96,10 +103,13 @@
   align-items: center;
   justify-content: center;
 }
+/* A fixed height: the popup opens upward, so loading, empty and full lists would move its top. */
 .project-pull-scroll {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  flex: 1;
-  max-height: 300px;
+  flex: 0 1 300px;
+  height: 300px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 7px 7px;
@@ -135,6 +145,9 @@
   padding: 12px 10px;
   color: var(--muted);
   font-size: 11px;
+}
+.project-pull-scroll > .project-pull-status:only-child {
+  margin: auto;
 }
 .project-pull-status button,
 .project-pull-more {
