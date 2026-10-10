@@ -238,6 +238,8 @@ const methods = [
   "providerUsage",
   "usageSummary",
   "saveUsageImage",
+  "exportRenderImage",
+  "saveRenderHtml",
   "agentAccounts",
   "addAgentAccount",
   "signInAgentAccount",

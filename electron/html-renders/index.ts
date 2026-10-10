@@ -8,3 +8,4 @@ export {
   type RenderToolName,
   type RenderTools,
 } from "./agent-tools";
+export { copyImage, saveAs, shootRender, standaloneHtml } from "./export";

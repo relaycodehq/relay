@@ -17,6 +17,23 @@ export interface HtmlRenderPage {
   heights?: number[];
 }
 
+/** One page of a render to copy or save; the title names the file. */
+export interface RenderTarget {
+  chatId: string;
+  renderId: string;
+  page: number;
+  title: string;
+}
+/** How a page's picture is taken: where its frame sits in the window when it fits there whole, else loaded afresh at `width`. */
+export interface RenderShot {
+  to: "clipboard" | "file";
+  /** In the window's CSS pixels. */
+  rect?: { x: number; y: number; width: number; height: number };
+  width: number;
+  /** Device pixels per CSS pixel, so a fresh load comes out as sharp as the window. */
+  scale: number;
+}
+
 /** The frame widths a page is measured at; others are interpolated. */
 export const RENDER_WIDTHS = [320, 480, 640, 800, 960, 1120];
 export const RENDER_MIN_HEIGHT = 80;
@@ -114,7 +131,9 @@ export type RenderToFrame =
 export type RenderFromFrame =
   | { relayRender: "size"; height: number }
   | { relayRender: "link"; href: string }
-  | { relayRender: "compose"; text: string };
+  | { relayRender: "compose"; text: string }
+  /** Esc or a zoom key pressed in the page that the page left alone. */
+  | { relayRender: "key"; key: string };
 
 /** What the page's response allows: its own inline code and public https assets, no Relay origin. */
 export const RENDER_CSP = [
@@ -183,11 +202,23 @@ const BOOTSTRAP = `(() => {
     if (/^(https?|mailto):/i.test(a.href)) post({ relayRender: "link", href: a.href });
   }, true);
   window.relay = { compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }) };
+  // Focus in the page keeps keys from the thread, so Esc and the zoom keys go
+  // up unless typed into a field or taken by the page, which it shows by
+  // preventing their default once every listener has run.
+  addEventListener("keydown", (e) => {
+    if (!["Escape", "+", "=", "-", "0"].includes(e.key) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const field = e.target instanceof Element && e.target.closest("input,textarea,select,[contenteditable]:not([contenteditable=false])");
+    if (field && e.key !== "Escape") return;
+    setTimeout(() => { if (!e.defaultPrevented) post({ relayRender: "key", key: e.key }); });
+  });
 })();`;
 
 /** `html` with the bootstrap as the first thing in its head. */
-export function injectRenderBootstrap(html: string) {
-  const tag = `<script>${BOOTSTRAP}</script>`;
+export const injectRenderBootstrap = (html: string) =>
+  prependToHead(html, `<script>${BOOTSTRAP}</script>`);
+
+/** `html` with `tag` as the first thing in its head, adding a head when it has none. */
+export function prependToHead(html: string, tag: string) {
   const head = /<head(\s[^>]*)?>/i.exec(html);
   if (head) {
     const at = head.index + head[0].length;

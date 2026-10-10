@@ -13,6 +13,7 @@ import { desktopHandlers } from "./desktop";
 import { gitHandlers } from "./git";
 import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
+import { renderHandlers } from "./renders";
 import { reviewCheckoutHandlers } from "./review-checkout";
 import { reviewHandlers } from "./reviews";
 import { pluginHandlers } from "./plugins";
@@ -38,6 +39,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     previewHandlers(ctx),
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
+    renderHandlers(ctx),
     pluginHandlers(ctx),
     desktopHandlers(ctx),
     computerHandlers(ctx),

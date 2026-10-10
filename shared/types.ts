@@ -346,6 +346,15 @@ export interface Api
   ): Promise<import("./usage").UsageSummary>;
   /** Saves the usage share card through a save dialog; null when cancelled. */
   saveUsageImage(pngDataUrl: string, name: string): Promise<string | null>;
+  /** A page an answer showed, as a picture on the clipboard or in a file; the file's path, null when cancelled or copied. */
+  exportRenderImage(
+    target: import("./html-render").RenderTarget,
+    shot: import("./html-render").RenderShot,
+  ): Promise<string | null>;
+  /** A page an answer showed, saved as HTML in the theme it shows in; null when cancelled. */
+  saveRenderHtml(
+    target: import("./html-render").RenderTarget,
+  ): Promise<string | null>;
   /** Claude Code and Codex accounts; see shared/agent-accounts. */
   agentAccounts(): Promise<import("./agent-accounts").AgentAccountsState>;
   /** Opens the CLI's browser sign-in for a new account; it's listed once that finishes. */

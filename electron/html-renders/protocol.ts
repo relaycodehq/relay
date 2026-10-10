@@ -17,10 +17,13 @@ export function registerRenderScheme() {
 /** Drafts preview_html and show_html load before anything is saved, by one-off id. */
 export const renderDrafts = new Map<string, string>();
 
+/** In memory, for windows that look at a page zoomed. */
+export const shotSession = () => session.fromPartition("relay-render-shots");
+
 type ReadPage = (chatId: string, renderId: string, page: number) => Promise<string>;
 
 export function serveRenders(read: ReadPage) {
-  session.defaultSession.protocol.handle(RENDER_SCHEME, async (request) => {
+  const serve = async (request: Request) => {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean);
     let html: string | undefined;
@@ -39,5 +42,7 @@ export function serveRenders(read: ReadPage) {
         "cache-control": "no-store",
       },
     });
-  });
+  };
+  session.defaultSession.protocol.handle(RENDER_SCHEME, serve);
+  shotSession().protocol.handle(RENDER_SCHEME, serve);
 }

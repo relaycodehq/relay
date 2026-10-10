@@ -9,7 +9,7 @@ import {
   withSeries,
   type RenderTheme,
 } from "../../shared/html-render";
-import { renderDrafts } from "./protocol";
+import { renderDrafts, shotSession } from "./protocol";
 
 const LOAD_MS = 15_000;
 /** Time for scripts that draw after load, like a chart's first frame. */
@@ -56,17 +56,29 @@ const KEEP_CANVASES = `new Promise((done) => {
 
 export async function lookAtPage(
   html: string,
-  options: { shotWidth?: number; theme?: RenderTheme },
+  options: {
+    shotWidth?: number;
+    theme?: RenderTheme;
+    /** Device pixels per CSS pixel in the shot; offscreen windows paint at 1. */
+    scale?: number;
+    /** The widths to measure the height at. */
+    widths?: readonly number[];
+  },
   signal?: AbortSignal,
 ): Promise<PageLook> {
   const token = randomUUID();
   renderDrafts.set(token, html);
+  const scale = options.scale ?? 1;
   const win = new BrowserWindow({
     show: false,
     width: RENDER_WIDTHS[0],
     height: 100,
+    // macOS keeps even an offscreen window within the screen, cutting a tall shot short.
+    enableLargerThanScreen: true,
     webPreferences: {
       offscreen: true,
+      // Zoom is kept per origin, so a zoomed shot gets a session of its own.
+      session: scale === 1 ? undefined : shotSession(),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -107,24 +119,25 @@ export async function lookAtPage(
     if (win.isDestroyed()) throw new Error("Cancelled.");
     // The thread shows through a page; here nothing would but white.
     await wc.insertCSS("html { background: var(--background) }");
+    // Zoomed in a window as much larger, the page lays out at the same width.
+    wc.setZoomFactor(scale);
+    const size = (width: number, height: number) =>
+      win.setContentSize(Math.round(width * scale), Math.round(height * scale));
     await pause(SETTLE_MS);
     const heights: number[] = [];
     const measure = () =>
       wc.executeJavaScript(
         "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(Math.ceil(document.documentElement.getBoundingClientRect().height)))))",
       ) as Promise<number>;
-    for (const width of RENDER_WIDTHS) {
-      win.setContentSize(width, 100);
+    for (const width of options.widths ?? RENDER_WIDTHS) {
+      size(width, 100);
       heights.push(await measure());
     }
     let image: NativeImage | undefined, shotHeight: number | undefined;
     if (options.shotWidth) {
-      win.setContentSize(options.shotWidth, 100);
+      size(options.shotWidth, 100);
       shotHeight = await measure();
-      win.setContentSize(
-        options.shotWidth,
-        Math.min(Math.max(shotHeight, 40), 4000),
-      );
+      size(options.shotWidth, Math.min(Math.max(shotHeight, 40), 4000));
       await measure();
       listening = false;
       await wc.executeJavaScript(KEEP_CANVASES);
