@@ -91,6 +91,10 @@ export class ThreadTitles {
           const title = await generateThreadTitle({
             user: firstUser.body,
             answer: answer?.body,
+            images: firstUser.images?.map((image) => ({
+              path: this.core.storage.imagePath(chat.id, image),
+              mimeType: image.mimeType,
+            })),
             provider: by,
             choice,
             signal: titleAbort.signal,

@@ -1082,6 +1082,34 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
 });
+it("shows the title helper the screenshots sent with a vague message", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@claude huh"),
+    provider: "claude",
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png",
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
+  });
+  const titling = async () =>
+    (await agentCalls({ helpers: true }))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((r) => r.provider === "claude" && r.prompt.startsWith("{"))
+      .map((r) => JSON.parse(r.prompt).message.content)
+      .find((content) => content[0].text.startsWith("Generate a short title"));
+  await vi.waitFor(async () => expect(await titling()).toBeDefined());
+  expect((await titling())[1]).toMatchObject({
+    type: "image",
+    source: { type: "base64", media_type: "image/png", data: tinyPng },
+  });
+});
 it("sends a screenshot on its own without inventing a request", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
