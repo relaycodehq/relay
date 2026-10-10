@@ -82,24 +82,28 @@ export async function resolveScope(
       };
     }
     case "branch": {
-      if (!branch)
-        throw new Error("Check out the branch you want to review first.");
-      if (target.base === branch)
+      const reviewed = target.head ?? branch;
+      if (!reviewed) throw new Error("Choose the branch to review.");
+      if (target.base === reviewed)
         throw new Error("Choose a base other than the branch itself.");
       const base = await commit(
         root,
         target.base,
         `Relay can't find the branch ${target.base}.`,
       );
-      const head = await commit(root, "HEAD", "This branch has no commits.");
+      const head = await commit(
+        root,
+        reviewed === branch ? "HEAD" : reviewed,
+        `Relay can't find the branch ${reviewed}.`,
+      );
       const fork = (await git(root, ["merge-base", base, head])).trim();
       if (fork === head)
         throw new Error(
-          `${branch} has no commits that aren't on ${target.base}.`,
+          `${reviewed} has no commits that aren't on ${target.base}.`,
         );
       return {
-        target,
-        label: `${branch} vs ${target.base}`,
+        target: { ...target, head: reviewed },
+        label: `${reviewed} → ${target.base}`,
         branch,
         base: fork,
         head,

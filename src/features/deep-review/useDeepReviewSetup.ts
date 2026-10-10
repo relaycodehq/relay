@@ -7,7 +7,7 @@ import { loadComposerSettings } from "../agents/composer-settings";
 import {
   firstSetup,
   focusKey,
-  reviewBase,
+  reviewBranches,
   reviewTarget,
   savedSetup,
   setupKey,
@@ -53,7 +53,7 @@ function useSetupDraft(projectId: string) {
 
 export type TargetPick = ReturnType<typeof useTargetPick>;
 
-/** What the setup's kind of target points at: the branch's base, the pull request or the commit. */
+/** What the setup's kind of target points at: the branch and its base, the pull request or the commit. */
 function useTargetPick(
   projectId: string,
   setup: Setup,
@@ -73,8 +73,10 @@ function useTargetPick(
       (await api.projectHistory(projectId, "head", 40)).commits,
     enabled: setup.kind === "commit",
   });
-  const { bases, base } = reviewBase(
-    setup.base,
+  // Unlike the base, the reviewed branch isn't kept: the next review starts on the checkout's.
+  const [chosenHead, setHead] = useState("");
+  const { heads, head, bases, base } = reviewBranches(
+    { head: chosenHead, base: setup.base },
     branches.data?.branches ?? [],
     branches.data?.bases ?? [],
     branch,
@@ -82,13 +84,16 @@ function useTargetPick(
   const chosenCommit = commit || commits.data?.[0]?.sha;
   const target = reviewTarget(setup.kind, {
     changes,
-    branch,
+    head,
     base,
     pull,
     commit: chosenCommit,
   });
   return {
     target,
+    heads,
+    head,
+    setHead,
     bases,
     base,
     branchesPending: branches.isPending,

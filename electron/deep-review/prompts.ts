@@ -16,6 +16,15 @@ import { hasCouncilReport } from "../../shared/council";
 
 const MAX_REPORT = 20000;
 
+/** The branch a branch review covers; reviews saved before it was a choice took the checked-out one. */
+const reviewedBranch = (scope: ReviewScope) =>
+  scope.target.kind === "branch"
+    ? (scope.target.head ?? scope.branch)
+    : undefined;
+/** A branch review of a branch other than the checkout's, read from Git rather than disk. */
+const branchElsewhere = (scope: ReviewScope) =>
+  scope.target.kind === "branch" && reviewedBranch(scope) !== scope.branch;
+
 /** Says what a review covers, then how to see those changes. */
 function describe(scope: ReviewScope) {
   const t = scope.target;
@@ -25,11 +34,15 @@ function describe(scope: ReviewScope) {
         what: `the uncommitted changes in this checkout${scope.branch ? ` on ${scope.branch}` : ""}, staged and unstaged, including new files`,
         how: "See them with `git status` and `git diff HEAD`.",
       };
-    case "branch":
+    case "branch": {
+      const reviewed = reviewedBranch(scope);
       return {
-        what: `the commits on ${scope.branch} that aren't on ${t.base}`,
-        how: `See them with \`git diff ${scope.base} ${scope.head}\`.`,
+        what: `the commits on ${reviewed} that aren't on ${t.base}`,
+        how: branchElsewhere(scope)
+          ? `${reviewed} isn't checked out here, so the files on disk are ${scope.branch ? `${scope.branch}'s` : "another commit's"}, not its. Its head is ${scope.head} and it branches off at ${scope.base}: see the changes with \`git diff ${scope.base} ${scope.head}\` and read its files with \`git show ${scope.head}:<path>\`.`
+          : `See them with \`git diff ${scope.base} ${scope.head}\`.`,
       };
+    }
     case "commit":
       return {
         what: `commit ${scope.head}${scope.title ? ` (${JSON.stringify(scope.title)})` : ""}`,
@@ -69,8 +82,10 @@ export function reviewerTask(
     return { body: `@cursor ${bugbotPrompt(scope, diff, note)}` };
   if (reviewer.provider === "codex") {
     // Codex's review takes a note only as instructions of its own.
+    // Its base-branch review diffs the checkout itself, so a branch that
+    // isn't checked out gets Relay's prompt, which reads it from Git.
     const codex: CodexReviewTarget =
-      t.kind === "pr" || asked.note
+      t.kind === "pr" || branchElsewhere(scope) || asked.note
         ? { type: "custom", instructions: reviewPrompt(scope, note) }
         : t.kind === "uncommitted"
           ? { type: "uncommittedChanges" }
@@ -87,12 +102,15 @@ export function reviewerTask(
   const after = asked.note ? ` ${asked.note}` : "";
   if (t.kind === "uncommitted")
     return { body: `@claude /code-review ${level}${after}` };
-  // Given a branch name, `/code-review` picks its own base; a range keeps the one chosen.
-  if (t.kind === "branch")
+  // Given a branch name, `/code-review` picks its own base; a range keeps the
+  // one chosen. It reads the code around the range from disk, so a branch
+  // that isn't checked out gets Relay's prompt instead.
+  if (t.kind === "branch" && !branchElsewhere(scope))
     return {
       body: `@claude /code-review ${level} ${scope.base}...${scope.head}${after}`,
     };
-  // `/code-review` fetches pull requests from GitHub; review the fetched range instead.
+  // `/code-review` fetches pull requests from GitHub; review the fetched range
+  // instead. Commits and other branches are read from Git the same way.
   return { body: `@claude ${reviewPrompt(scope, note)}` };
 }
 
@@ -137,9 +155,11 @@ function fenced(diff: string) {
   );
   return `${fence}diff\n${diff.trimEnd()}\n${fence}`;
 }
-/** Pull requests and commits are read from Git, not the checkout. */
+/** Pull requests, commits and other branches are read from Git, not the checkout. */
 const elsewhere = (scope: ReviewScope) =>
-  scope.target.kind === "pr" || scope.target.kind === "commit";
+  scope.target.kind === "pr" ||
+  scope.target.kind === "commit" ||
+  branchElsewhere(scope);
 const notCheckedOut = (scope: ReviewScope) =>
   elsewhere(scope)
     ? " These changes aren't checked out, so files on disk may not match them."
@@ -205,9 +225,11 @@ export function leadPrompt(
     '```relay-findings\n{"findings":[{"id":"F1","priority":"P1","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[1,2],"check":"How you confirmed it"}],"dropped":[{"title":"Short title","reason":"Why it didn\'t hold up, or that it repeats F1","reviewers":[3]}]}\n```',
     "Number findings F1, F2 and so on in priority order. `reviewers` are the numbers of the reviewers that reported it. Paths are relative to the repository root. With nothing left, return an empty findings list.",
     "Afterwards the user will ask you to fix some or all of the findings in this conversation." +
-      (elsewhere(state.scope)
-        ? " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out."
-        : ""),
+      (branchElsewhere(state.scope)
+        ? ` ${reviewedBranch(state.scope)} isn't checked out here; before editing, check with the user that it is.`
+        : elsewhere(state.scope)
+          ? " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out."
+          : ""),
     ...focusNote(state.focus),
     `Reviewer reports:\n${JSON.stringify(
       reports.map((r) => ({

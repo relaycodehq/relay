@@ -81,16 +81,17 @@ export function TargetField({
             </span>
           )}
           {kind === "branch" &&
-            (!branch ? (
-              <span className="deep-review-target-detail">
-                Check out the branch to review first
-              </span>
-            ) : (
+            (pick.heads.length ? (
               <>
-                <span className="deep-review-target-detail">
-                  <GitBranch size={13} /> {branch}
-                  <span className="muted">against</span>
-                </span>
+                <SearchSelect
+                  label="Branch to review"
+                  value={pick.head ?? ""}
+                  unset="Choose a branch"
+                  onChange={pick.setHead}
+                  options={pick.heads.map((b) => ({ value: b, label: b }))}
+                  placeholder="Search branches…"
+                />
+                <span className="deep-review-target-detail muted">into</span>
                 {pick.base ? (
                   <SearchSelect
                     label="Base branch"
@@ -100,13 +101,13 @@ export function TargetField({
                     placeholder="Search branches…"
                   />
                 ) : (
-                  <span className="muted">
-                    {pick.branchesPending
-                      ? "Loading branches…"
-                      : "no other branch"}
-                  </span>
+                  <span className="muted">no other branch</span>
                 )}
               </>
+            ) : (
+              <span className="deep-review-target-detail">
+                {pick.branchesPending ? "Loading branches…" : "No branches yet"}
+              </span>
             ))}
           {kind === "pr" &&
             (canChoosePR ? (

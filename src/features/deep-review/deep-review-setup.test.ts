@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import {
   firstSetup,
-  reviewBase,
+  reviewBranches,
   reviewTarget,
   swapReviewer,
   withOpus,
@@ -114,20 +114,55 @@ describe("target", () => {
     { name: "origin/develop", current: false },
     { name: "zeta", current: false },
   ];
+  const pick = (
+    head: string,
+    base: string,
+    checkedOut?: string,
+    usual: string[] = [],
+  ) => reviewBranches({ head, base }, branches, usual, checkedOut);
   it("reviews against the chosen base, else the repository's, else another branch", () => {
-    expect(reviewBase("zeta", branches, ["main"], "feature").base).toBe("zeta");
+    expect(pick("", "zeta", "feature", ["main"]).base).toBe("zeta");
+    expect(pick("", "gone", "feature", ["develop", "main"]).base).toBe(
+      "origin/develop",
+    );
+    expect(pick("", "", "feature").base).toBe("main");
     expect(
-      reviewBase("gone", branches, ["develop", "main"], "feature").base,
-    ).toBe("origin/develop");
-    expect(reviewBase("", branches, [], "feature").base).toBe("main");
-    expect(reviewBase("main", branches, [], "main").bases).toEqual([
+      reviewBranches({ head: "", base: "" }, [], ["main"]).base,
+    ).toBeUndefined();
+    expect(pick("", "", "feature", ["main", "develop"]).bases).toEqual([
+      "main",
       "origin/develop",
       "zeta",
     ]);
-    expect(reviewBase("", [], ["main"]).base).toBeUndefined();
+  });
+
+  it("reviews the checked-out branch unless another is chosen, never into itself", () => {
+    expect(pick("", "main", "feature")).toMatchObject({
+      head: "feature",
+      base: "main",
+    });
+    // On main, another branch reviewed into main, which is checked out.
+    expect(pick("zeta", "main", "main")).toMatchObject({
+      head: "zeta",
+      base: "main",
+    });
+    expect(pick("zeta", "main", "main").bases).not.toContain("zeta");
+    // Choosing the base as the branch to review moves the base on.
+    expect(pick("main", "main", "feature")).toMatchObject({
+      head: "main",
+      base: "feature",
+    });
+    // A chosen branch that's gone falls back to the checkout.
+    expect(pick("gone", "main", "feature").head).toBe("feature");
+  });
+
+  it("has no branch to review in a detached checkout until one is chosen", () => {
+    const detached = pick("", "", undefined, ["main"]);
+    expect(detached).toMatchObject({ head: undefined, base: "main" });
     expect(
-      reviewBase("", branches, ["main", "develop"], "feature").bases,
-    ).toEqual(["main", "origin/develop", "zeta"]);
+      reviewTarget("branch", { changes: 0, pull: null, ...detached }),
+    ).toBeUndefined();
+    expect(pick("zeta", "", undefined, ["main"]).head).toBe("zeta");
   });
 
   it("has a target only once it knows everything it needs", () => {
@@ -138,8 +173,11 @@ describe("target", () => {
     });
     expect(reviewTarget("branch", { ...none, base: "main" })).toBeUndefined();
     expect(
-      reviewTarget("branch", { ...none, base: "main", branch: "f" }),
-    ).toEqual({ kind: "branch", base: "main" });
+      reviewTarget("branch", { ...none, base: "main", head: "f" }),
+    ).toEqual({ kind: "branch", head: "f", base: "main" });
+    expect(
+      reviewTarget("branch", { ...none, base: "main", head: "main" }),
+    ).toBeUndefined();
     expect(reviewTarget("pr", none)).toBeUndefined();
     expect(reviewTarget("commit", { ...none, commit: "abc1234" })).toEqual({
       kind: "commit",

@@ -428,6 +428,70 @@ test("a message sent after a deep review failed to start gets a thread of its ow
   }
 });
 
+test("reviews another branch into main from a checkout on main", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(repo);
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "README.md"), "# Queue\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  git("switch", "-qc", "device-panel");
+  await writeFile(join(repo, "panel.ts"), "export const panel = 1;\n");
+  git("add", ".");
+  git("commit", "-qm", "Add the panel");
+  git("switch", "-q", "main");
+  const app = await launch(root);
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page.getByRole("radio", { name: "Branch" }).click();
+    // The checked-out branch first, into the only other one.
+    const head = page.getByRole("button", { name: "Branch to review" });
+    const base = page.getByRole("button", { name: "Base branch" });
+    await expect(head).toHaveText("main");
+    await expect(base).toHaveText("device-panel");
+    await head.click();
+    await page.getByRole("option", { name: "device-panel" }).click();
+    await expect(head).toHaveText("device-panel");
+    await expect(base).toHaveText("main");
+    await screenshot(page, {
+      path: "test-results/deep-review-other-branch.png",
+    });
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+
+    await expect(page.locator(".deep-review-request")).toContainText(
+      "device-panel → main",
+    );
+    // Not checked out, so Claude reads it from Git instead of running /code-review here.
+    const panes = page.locator(".deep-review-pane");
+    await expect(panes.first()).toContainText(
+      "device-panel isn't checked out here",
+    );
+    expect(git("branch", "--show-current").trim()).toBe("main");
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("the next findings wait until the lead has finished a fix", async () => {
   const { page, close } = await openProject();
   try {

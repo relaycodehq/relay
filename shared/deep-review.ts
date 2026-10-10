@@ -17,7 +17,14 @@ const branchNameSchema = z
   );
 const reviewTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("uncommitted") }).strict(),
-  z.object({ kind: z.literal("branch"), base: branchNameSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("branch"),
+      base: branchNameSchema,
+      /** The branch under review; without it, the one checked out (as before it was a choice). */
+      head: branchNameSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("commit"),
@@ -95,7 +102,7 @@ export type ReviewSetup = z.infer<typeof reviewSetupSchema>;
 /** What the review covers, as resolved in the checkout when it started. */
 export interface ReviewScope {
   target: ReviewTarget;
-  /** "Uncommitted changes", "feature/x vs main", "Commit 1a2b3c4", "PR #42". */
+  /** "Uncommitted changes", "feature/x → main", "Commit 1a2b3c4", "PR #42". */
   label: string;
   /** A commit's subject or a PR's title. */
   title?: string;

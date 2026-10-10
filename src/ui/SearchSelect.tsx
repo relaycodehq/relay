@@ -11,12 +11,15 @@ export function SearchSelect({
   options,
   onChange,
   placeholder = "Search…",
+  unset,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   placeholder?: string;
+  /** The trigger's text while nothing is picked. */
+  unset?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -36,7 +39,9 @@ export function SearchSelect({
         aria-label={label}
         className="composer-control"
       >
-        <span>{options.find((o) => o.value === value)?.label ?? value}</span>
+        <span>
+          {options.find((o) => o.value === value)?.label ?? (value || unset)}
+        </span>
         <ChevronDown size={12} />
       </Popover.Trigger>
       <Popover.Portal>

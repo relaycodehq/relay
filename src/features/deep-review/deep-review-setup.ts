@@ -104,25 +104,28 @@ export const swapReviewer = (
   );
 
 /**
- * The base a branch is reviewed against: the one chosen while it's still a
- * branch, else the repository's base, local or on origin, else any other.
- * The repository's bases lead the list; the rest keep their recency order.
+ * The branch a branch review covers and the base it goes into. The branch is
+ * the one chosen, else the one checked out; a detached checkout has none
+ * until one is chosen. The base is the one chosen while it's still a branch
+ * other than that, else the repository's base, local or on origin, else any
+ * other. The repository's bases lead the list; the rest keep their order.
  */
-export function reviewBase(
-  chosen: string,
-  branches: { name: string; current: boolean; unrelated?: boolean }[],
+export function reviewBranches(
+  chosen: { head: string; base: string },
+  branches: { name: string; unrelated?: boolean }[],
   repositoryBases: string[],
-  branch?: string,
+  checkedOut?: string,
 ) {
-  const others = branches
-    .filter((b) => !b.current && !b.unrelated && b.name !== branch)
-    .map((b) => b.name);
+  const heads = branches.filter((b) => !b.unrelated).map((b) => b.name);
+  const head = [chosen.head, checkedOut].find((b) => b && heads.includes(b));
+  const others = heads.filter((b) => b !== head);
   const usual = repositoryBases
     .flatMap((b) => [b, `origin/${b}`])
     .filter((b) => others.includes(b));
   const bases = [...usual, ...others.filter((b) => !usual.includes(b))];
-  const base = chosen && bases.includes(chosen) ? chosen : bases[0];
-  return { bases, base };
+  const base =
+    chosen.base && bases.includes(chosen.base) ? chosen.base : bases[0];
+  return { heads, head, bases, base };
 }
 
 /** What the setup would review, or nothing until it has all it needs. */
@@ -130,13 +133,13 @@ export function reviewTarget(
   kind: ReviewTarget["kind"],
   {
     changes,
-    branch,
+    head,
     base,
     pull,
     commit,
   }: {
     changes: number;
-    branch?: string;
+    head?: string;
     base?: string;
     pull: PullRef | null;
     commit?: string;
@@ -146,7 +149,7 @@ export function reviewTarget(
     case "uncommitted":
       return changes ? { kind } : undefined;
     case "branch":
-      return base && branch ? { kind, base } : undefined;
+      return base && head && base !== head ? { kind, head, base } : undefined;
     case "pr":
       return pull ? { kind, ref: pull } : undefined;
     case "commit":

@@ -196,6 +196,47 @@ describe("reviewer tasks", () => {
       ).body,
     ).toBe("@claude /code-review high");
   });
+  it("reads a branch that isn't checked out from Git, for every agent", () => {
+    const other = {
+      ...scope,
+      branch: "main",
+      target: { kind: "branch" as const, head: "device-panel", base: "main" },
+    };
+    const claude = reviewerTask({ provider: "claude", choice }, other).body;
+    expect(claude).toContain("the commits on device-panel that aren't on main");
+    expect(claude).toContain(
+      "device-panel isn't checked out here, so the files on disk are main's",
+    );
+    expect(claude).toContain(`git show ${scope.head}:<path>`);
+    expect(claude).not.toContain("/code-review");
+    // Codex's base-branch review would diff the checkout, which is main.
+    const codex = reviewerTask({ provider: "codex", choice }, other).codex;
+    expect(codex?.type === "custom" && codex.instructions).toContain(
+      `git diff ${scope.base} ${scope.head}`,
+    );
+    const lead = leadPrompt(
+      {
+        request: randomUUID(),
+        scope: other,
+        reviewers: [],
+        lead: { provider: "claude", choice },
+        runChecks: true,
+        runtimeMode: "full-access",
+        status: "leading",
+      },
+      [],
+    );
+    expect(lead).toContain(
+      "device-panel isn't checked out here; before editing, check with the user that it is.",
+    );
+    // Naming the checked-out branch is the review it always was.
+    expect(
+      reviewerTask(
+        { provider: "codex", choice },
+        { ...other, target: { ...other.target, head: "main", base: "x" } },
+      ).codex,
+    ).toEqual({ type: "baseBranch", branch: "x" });
+  });
   it("gives an agent with no review command Relay's own prompt", () => {
     const opencode = { provider: "opencode" as const, choice };
     const task = reviewerTask(
@@ -788,8 +829,10 @@ describe("what a review covers", () => {
       { kind: "branch", base: "main" },
       project,
     );
+    // Saved without the branch, as before it was a choice: the checkout's.
     expect(scope).toMatchObject({
-      label: "feature vs main",
+      target: { kind: "branch", head: "feature", base: "main" },
+      label: "feature → main",
       branch: "feature",
       head,
       stats: { files: 1, additions: 1, deletions: 0 },
@@ -797,6 +840,48 @@ describe("what a review covers", () => {
     await expect(
       resolveScope(work, { kind: "branch", base: "nowhere" }, project),
     ).rejects.toThrow("can't find the branch nowhere");
+  });
+
+  it("covers a branch that isn't checked out, leaving the checkout alone", async () => {
+    const { resolveScope } = await import("./scope");
+    const fork = git(work, "rev-parse", "HEAD");
+    git(work, "checkout", "--quiet", "-b", "device-panel");
+    const head = await commit("b.ts", "panel\n", "Add the panel");
+    git(work, "checkout", "--quiet", "main");
+    // The error names the branch under review, not the checkout.
+    await expect(
+      resolveScope(
+        work,
+        { kind: "branch", head: "main", base: "device-panel" },
+        project,
+      ),
+    ).rejects.toThrow("main has no commits that aren't on device-panel.");
+    // main's own commit must not count as what's under review.
+    await commit("a.ts", "one\nmain\n", "Move main on");
+    const target = { kind: "branch" as const, head: "device-panel" };
+    const scope = await resolveScope(
+      work,
+      { ...target, base: "main" },
+      project,
+    );
+    expect(scope).toMatchObject({
+      label: "device-panel → main",
+      branch: "main",
+      base: fork,
+      head,
+      stats: { files: 1, additions: 1, deletions: 0 },
+    });
+    expect(git(work, "branch", "--show-current")).toBe("main");
+    await expect(
+      resolveScope(work, { ...target, base: "device-panel" }, project),
+    ).rejects.toThrow("Choose a base other than the branch itself.");
+    await expect(
+      resolveScope(
+        work,
+        { kind: "branch", head: "gone", base: "main" },
+        project,
+      ),
+    ).rejects.toThrow("can't find the branch gone");
   });
 
   it("diffs uncommitted changes with new files, leaving the index alone", async () => {
