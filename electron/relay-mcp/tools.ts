@@ -1,5 +1,5 @@
 // The tools Relay offers an agent for starting and driving threads, its own
-// and, once the user lets it, any other,
+// and, once the user lets it, any other, for the notes the user keeps in them,
 // for adding the projects they work in, for reading its plans' usage limits,
 // for looking at its thread's preview (electron/preview/agent-tools), and for
 // showing pages in its answer (electron/html-renders).
@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import { reasoningEffortSchema } from "../../shared/settings";
+import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import {
   RENDER_GUIDE,
   RENDER_MAX_CHARS,
@@ -165,6 +166,40 @@ export const relayToolSchemas = {
   stop_thread: z.object({ id: threadId }).strict(),
   settle_thread: z.object({ id: threadId }).strict(),
   usage_limits: z.object({}).strict(),
+  list_notes: z
+    .object({
+      thread: threadId
+        .optional()
+        .describe("Whose notes. Left out: this thread's."),
+    })
+    .strict(),
+  add_note: z
+    .object({
+      text: noteTextSchema.describe(
+        "Markdown. A list, with optional lines leading into it and nothing after, becomes items the user ticks off.",
+      ),
+      thread: threadId
+        .optional()
+        .describe("Whose notes. Left out: this thread's."),
+    })
+    .strict(),
+  tick_note: z
+    .object({
+      note: noteIdSchema.describe("The note's id from list_notes, like n2."),
+      item: z
+        .number()
+        .int()
+        .min(1)
+        .describe("The item's number in list_notes, from 1."),
+      done: z
+        .boolean()
+        .optional()
+        .describe("False unticks it. Left out: ticks it."),
+      thread: threadId
+        .optional()
+        .describe("Whose notes. Left out: this thread's."),
+    })
+    .strict(),
   move_to_worktree: z
     .object({
       branch: z
@@ -283,7 +318,7 @@ const descriptions: Record<RelayToolName, string> = {
   find_threads:
     "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, and which thread started it. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread:
-    "Any thread, from list_threads or find_threads: its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
+    "Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
   send_to_thread: `Send a message to a thread, as its user would. It answers in its own turn.\n\n${DRIVE_NOTE}`,
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
@@ -293,6 +328,12 @@ const descriptions: Record<RelayToolName, string> = {
     "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
   move_to_worktree:
     "Move this thread out of the project folder into a Git worktree of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
+  list_notes:
+    "The notes the user keeps in a thread, beside its composer: lists from answers, snippets, decisions they want at hand. A list note's items are numbered, ticked ones marked done. Read them when the user refers to their notes, or to work they listed there.",
+  add_note:
+    "Keep something in a thread's notes, which the user sees beside the composer. Only when the user explicitly asks you to keep, note or pin something; never on your own because it seems useful or worth remembering. Keep what they asked for in markdown, as it was. The same text twice is kept once.",
+  tick_note:
+    "Tick off an item of a list note, or untick it: when you finished the work it names, or the user asks.",
   list_projects:
     "The projects the user has in Relay: id, name, folder, and whether it's a Git repository; `current` marks the one you work in. Check here before add_project.",
   open_preview:
@@ -312,6 +353,9 @@ const descriptions: Record<RelayToolName, string> = {
 export const STARTED_PATH = "/mcp/started";
 export const startedTools = new Set<string>([
   "usage_limits",
+  "list_notes",
+  "add_note",
+  "tick_note",
   "move_to_worktree",
   "find_threads",
   "read_thread",

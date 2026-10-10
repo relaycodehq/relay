@@ -17,6 +17,7 @@ import {
   resumeSettingsSchema,
 } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
+import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -31,6 +32,7 @@ const optional = <T extends z.ZodType>(schema: T) =>
 const agentIdSchema = z.string().min(1).max(200);
 const imagePathSchema = z.string().min(1).max(500);
 const branchSchema = z.string().trim().min(1).max(250);
+const messageIdSchema = z.string().min(1).max(200);
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
@@ -137,6 +139,18 @@ export function chatHandlers(ctx: ApiContext) {
     detachProjectChat: takes([idSchema], (id) => projectChats.detach(id)),
     stopProjectChatDriving: takes([idSchema], (id) =>
       projectChats.allowDriving(id, false),
+    ),
+    threadNotes: takes([idSchema], (id) => projectChats.notes.list(id)),
+    keepThreadNote: takes(
+      [idSchema, noteTextSchema, optional(messageIdSchema)],
+      (id, text, from) => projectChats.notes.add(id, { text, from }),
+    ),
+    tickThreadNote: takes(
+      [idSchema, noteIdSchema, z.number().int().min(1), z.boolean()],
+      (id, note, item, done) => projectChats.notes.tick(id, note, item, done),
+    ),
+    removeThreadNote: takes([idSchema, noteIdSchema], (id, note) =>
+      projectChats.notes.remove(id, note),
     ),
     markProjectChatSeen: takes(
       [idSchema, z.number().int().min(0)],

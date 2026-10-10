@@ -101,6 +101,8 @@ export interface ChatSummary {
   nextSend?: number;
   /** Changes whenever its queue or Send later list does, so phones know to fetch them. */
   queueMark?: string;
+  /** Changes whenever its notes do, so windows and phones know to fetch them. */
+  notesMark?: string;
   /** The answer a usage limit stopped, resumed once the limit lifts; see limit-resume. */
   limitResume?: LimitResume;
   /** The main conversation's native `/goal`, as its agent last reported it; see shared/goal. */

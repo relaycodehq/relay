@@ -18,6 +18,7 @@ import type {
   FindingStatus,
   ReviewSetup,
 } from "../deep-review";
+import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
 import type { DirListing, FileInfo } from "../project-files";
@@ -201,6 +202,18 @@ export interface ProjectChatApi {
   markProjectChatSeen(id: string, seenAt: number): Promise<void>;
   /** A new thread holding the conversation up to this answer, or up to the latest finished one. */
   forkProjectChat(id: string, messageId?: string): Promise<ChatSummary>;
+  /** What the user keeps at hand in the thread, oldest first. */
+  threadNotes(id: string): Promise<ThreadNote[]>;
+  /** Keeps markdown from the thread, kept from message `from`; the note already holding it, if one does. */
+  keepThreadNote(id: string, text: string, from?: string): Promise<ThreadNote>;
+  /** Ticks item `item` (from 1) of a list note, or unticks it. */
+  tickThreadNote(
+    id: string,
+    note: string,
+    item: number,
+    done: boolean,
+  ): Promise<ThreadNote[]>;
+  removeThreadNote(id: string, note: string): Promise<ThreadNote[]>;
   /** Claude Code and Codex sessions run in a terminal in the project's folder, newest first. */
   terminalSessions(projectId: string): Promise<TerminalSession[]>;
   /** A thread carrying on a terminal session; the one that already does, if any. */

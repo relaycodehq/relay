@@ -1,6 +1,7 @@
 import type { AgentRequest } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { DeepReviewState } from "../deep-review";
+import type { ThreadNote } from "../thread-notes";
 import type { ChatHandover } from "../handoff";
 import type { UltraplanState } from "../ultraplan";
 import type { ChatMessage } from "./messages";
@@ -56,6 +57,8 @@ export interface ProjectChat extends ChatSummary {
   handover?: ChatHandover;
   /** Local: on a thread that came from another computer, each carried message's id there by its id here. */
   carriedIds?: Record<string, string>;
+  /** What the user keeps at hand in the thread; see shared/thread-notes. */
+  notes?: ThreadNote[];
 }
 /** An agent's session on a conversation, and the last message it heard there. */
 export interface AgentSession {

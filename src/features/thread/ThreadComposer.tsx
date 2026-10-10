@@ -173,6 +173,7 @@ export function ThreadComposer({
   worktree,
   checkout,
   scopeButtons,
+  notesChip,
   links,
   onProjectSettings,
   onSend,
@@ -193,6 +194,8 @@ export function ThreadComposer({
   worktree: ThreadWorktree;
   checkout: ProjectCheckout;
   scopeButtons: ReactNode;
+  /** The notes kept in the thread, first of the controls on the right. */
+  notesChip: ReactNode;
   links: ThreadLinks;
   onProjectSettings: () => void;
   onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
@@ -276,6 +279,7 @@ export function ThreadComposer({
       context={
         <>
           {scopeButtons}
+          {notesChip}
           <StartedChip ids={undefined} live />
           {agentBatch.length > 0 && (
             <SubagentsIndicator

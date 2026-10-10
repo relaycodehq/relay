@@ -16,6 +16,7 @@ import type {
   ProjectChatSend,
   StartedBy,
 } from "../../shared/projects";
+import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
 import { resultText, type ToolResult } from "../relay-mcp";
 
@@ -123,6 +124,19 @@ function fakeChats() {
       askInTurn: async (id: string, request: unknown) => {
         asked.push({ id, request });
         return { kind: "approval", decision: answer.decision };
+      },
+      notes: {
+        list: async (id: string) => chats.get(id)!.notes ?? [],
+        add: async (id: string, input: NewNote) => {
+          const chat = chats.get(id)!;
+          const { notes, note } = addNote(chat.notes, input);
+          chat.notes = notes;
+          return note;
+        },
+        tick: async (id: string, note: string, item: number, done: boolean) => {
+          const chat = chats.get(id)!;
+          chat.notes = tickNote(chat.notes, note, item, done);
+        },
       },
     } as any,
     asked,
@@ -1034,4 +1048,53 @@ test("an async question does not finish wait_for_threads while its agent continu
       await call(threads, lead.id, "wait_for_threads", { timeoutSeconds: 1 }),
     ).threads[0].status,
   ).toBe("needs-input");
+});
+
+test("notes: an agent keeps, reads and ticks them, here and in another thread", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const other = await api.create("q", { kind: "project" });
+  other.title = "Phone speed";
+
+  const kept = await call(threads, lead.id, "add_note", {
+    text: "Ideas:\n\n1. Cache threads\n2. Outbox",
+  });
+  expect(resultText(kept)).toBe("Kept as n1.");
+  expect(lead.notes?.[0]).toMatchObject({ id: "n1", by: "claude" });
+  await call(threads, lead.id, "tick_note", { note: "n1", item: 2 });
+  expect(parse(await call(threads, lead.id, "list_notes", {}))).toEqual({
+    notes: [
+      {
+        id: "n1",
+        keptBy: "claude",
+        lead: "Ideas:",
+        items: [
+          { item: 1, text: "Cache threads" },
+          { item: 2, text: "Outbox", done: true },
+        ],
+      },
+    ],
+  });
+
+  expect(
+    resultText(
+      await call(threads, lead.id, "add_note", {
+        text: "`npm run e2e`",
+        thread: other.id,
+      }),
+    ),
+  ).toBe("Kept as n1 in “Phone speed”.");
+  expect(chats.get(other.id)!.notes).toHaveLength(1);
+  // read_thread leads with them.
+  expect(
+    parse(await call(threads, lead.id, "read_thread", { id: other.id })).notes,
+  ).toEqual([{ id: "n1", keptBy: "claude", text: "`npm run e2e`" }]);
+
+  const wrong = await call(threads, lead.id, "tick_note", {
+    note: "n1",
+    item: 1,
+    thread: other.id,
+  });
+  expect(wrong.isError).toBe(true);
+  expect(resultText(wrong)).toBe("Note n1 isn't a list.");
 });

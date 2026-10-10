@@ -8,6 +8,7 @@ import type {
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
 import type { ChatCore } from "./core";
+import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
 
 /** New threads: empty ones, and forks of an existing one up to an answer. */
@@ -106,6 +107,11 @@ export class ThreadCreate {
         version: 1,
       })),
     };
+    const notes = ThreadNotes.forFork(
+      source.notes,
+      new Map(kept.map((m, i) => [m.id, chat.messages[i]!.id])),
+    );
+    if (notes) chat.notes = notes;
     chat.forkedAt = chat.messages.at(-1)!.id;
     await this.core.storage.copyImages(source.id, chat.id, kept);
     await this.core.storage.renders.copy(

@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -65,6 +66,10 @@ import { RunCommand } from "../../ui/CodeBlock";
 import { WorkItemCards } from "../plugins/WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
 import { useThreadLinks } from "../linked-folders/useThreadLinks";
+import { NotesChip } from "../notes/NotesChip";
+import { useThreadNotes } from "../notes/useThreadNotes";
+import { listLead } from "../notes/selection-markdown";
+import { KeepBlock, type Keeper } from "../../ui/KeepBlock";
 import "./thread.css";
 
 /** What the thread's messages ask the shell's panes to show. */
@@ -245,6 +250,24 @@ export function ProjectChat({
     isEmpty,
   });
   const { scroll, composerDock, scrolledUp, dockHeight, followAnswer } = view;
+  const notes = useThreadNotes(chat, handle.setError);
+  const chatId = chat?.id;
+  const keeper = useMemo<Keeper | null>(
+    () =>
+      chatId
+        ? {
+            keep: (markdown, at) => {
+              const lead = listLead(at.closest(".markdown-list"));
+              void notes.keep(
+                lead ? `${lead}\n\n${markdown}` : markdown,
+                at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
+              );
+            },
+            kept: notes.kept,
+          }
+        : null,
+    [chatId, notes],
+  );
   const councils = useCouncils({
     handle,
     data: history.data,
@@ -323,20 +346,22 @@ export function ProjectChat({
       <ThreadHeader onBack={root ? () => setRootId(null) : undefined} />
       {!isEmpty && (
         <RunCommand.Provider value={runCommand}>
-          <ThreadMessages
-            handle={handle}
-            projectPath={project.path}
-            thread={thread}
-            view={view}
-            councils={councils}
-            actions={actions}
-            queue={queue}
-            worktree={worktree}
-            onResume={() =>
-              void resume(() => composer.current?.agentSettings())
-            }
-            onSteer={steerFromNote}
-          />
+          <KeepBlock.Provider value={keeper}>
+            <ThreadMessages
+              handle={handle}
+              projectPath={project.path}
+              thread={thread}
+              view={view}
+              councils={councils}
+              actions={actions}
+              queue={queue}
+              worktree={worktree}
+              onResume={() =>
+                void resume(() => composer.current?.agentSettings())
+              }
+              onSteer={steerFromNote}
+            />
+          </KeepBlock.Provider>
         </RunCommand.Provider>
       )}
       {!isEmpty && (
@@ -350,6 +375,11 @@ export function ProjectChat({
       <SelectionQuote
         container={scroll}
         onQuote={(text) => composer.current?.insertQuote(text)}
+        onKeep={
+          chatId
+            ? (markdown, messageId) => void notes.keep(markdown, messageId)
+            : undefined
+        }
       />
       <div
         ref={composerDock}
@@ -420,6 +450,13 @@ export function ProjectChat({
               locked: checkoutDisabled,
             }}
             scopeButtons={scopeButtons}
+            notesChip={
+              <NotesChip
+                notes={notes}
+                onQuote={(text) => composer.current?.insertQuote(text)}
+                onJump={view.jumpTo}
+              />
+            }
             links={links}
             onProjectSettings={onProjectSettings}
             onSend={send}

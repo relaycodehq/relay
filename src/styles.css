@@ -1014,7 +1014,9 @@ small {
 .markdown-code-copy,
 .math-block-copy,
 .inline-command-run,
-.markdown-table-copy {
+.markdown-table-copy,
+.markdown-table-keep,
+.markdown-list-keep {
   display: grid;
   place-items: center;
   width: 24px;
@@ -1043,6 +1045,31 @@ small {
   right: 4px;
   z-index: 2;
 }
+.markdown-table-keep {
+  position: absolute;
+  top: 4px;
+  right: 32px;
+  z-index: 2;
+}
+/* A list a thread can keep in its notes; the frame holds the list's margins,
+   so first- and last-child rules still reach them. */
+.markdown-list {
+  position: relative;
+  /* The pin sits by the list's widest line, not across the column. */
+  width: fit-content;
+  max-width: 100%;
+  padding-right: 32px;
+  margin: 1em 0;
+}
+.markdown-list > ol,
+.markdown-list > ul {
+  margin: 0;
+}
+.markdown-list-keep {
+  position: absolute;
+  top: -2px;
+  right: 0;
+}
 .markdown-quote:hover > .markdown-quote-copy,
 .markdown-quote-copy:focus-visible,
 .markdown-code:hover .markdown-code-copy,
@@ -1051,6 +1078,10 @@ small {
 .inline-command-run:focus-visible,
 .markdown-table-frame:hover > .markdown-table-copy,
 .markdown-table-copy:focus-visible,
+.markdown-table-frame:hover > .markdown-table-keep,
+.markdown-table-keep:focus-visible,
+.markdown-list:hover > .markdown-list-keep,
+.markdown-list-keep:focus-visible,
 .math-block:hover > .math-block-copy,
 .math-block-copy:focus-visible {
   opacity: 1;
@@ -1059,8 +1090,18 @@ small {
 .markdown-code-copy:hover,
 .math-block-copy:hover,
 .inline-command-run:hover,
-.markdown-table-copy:hover {
+.markdown-table-copy:hover,
+.markdown-table-keep:hover,
+.markdown-list-keep:hover {
   color: var(--text);
+}
+/* What's kept says so, hovered or not. */
+.markdown-code-copy[aria-pressed="true"],
+.markdown-table-keep[aria-pressed="true"],
+.markdown-list-keep[aria-pressed="true"] {
+  opacity: 1;
+  color: var(--accent);
+  cursor: default;
 }
 /* KaTeX sets its own font and colour; the size follows the text around it. */
 .markdown .katex {

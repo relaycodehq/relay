@@ -24,6 +24,7 @@ import {
   type ProjectChatSend,
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
+import { noteForAgent } from "../../shared/thread-notes";
 import type { ModelChoice } from "../../shared/settings";
 import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
@@ -79,6 +80,7 @@ type Chats = Pick<
   | "triage"
   | "showRender"
   | "enterWorktree"
+  | "notes"
 >;
 
 const defaultChoice: ModelChoice = {
@@ -238,6 +240,12 @@ export class StartedThreads {
         return this.settle(lead, input.id, signal);
       case "usage_limits":
         return json(await this.usage(lead));
+      case "list_notes":
+        return this.listNotes(lead, input);
+      case "add_note":
+        return this.addNote(lead, input);
+      case "tick_note":
+        return this.tickNote(lead, input);
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
       case "list_projects":
@@ -802,7 +810,56 @@ export class StartedThreads {
       ...(m.error ? { error: m.error } : {}),
       ...(m.changes?.length ? { changed: m.changes.map((c) => c.path) } : {}),
     }));
-    return json({ messages, next: main.at(-1)?.id ?? after ?? null });
+    // The notes come first: what the user keeps at hand there.
+    const notes = after ? [] : (chat.notes ?? []).map(noteForAgent);
+    return json({
+      ...(notes.length ? { notes } : {}),
+      messages,
+      next: main.at(-1)?.id ?? after ?? null,
+    });
+  }
+
+  /** The thread whose notes a call means: the one named, or the caller's own. */
+  private async notesOf(lead: ProjectChat, thread?: string) {
+    if (!thread || thread === lead.id) return lead;
+    return this.chats.get(thread).catch(() => {
+      throw new Error("There's no such thread; see find_threads.");
+    });
+  }
+
+  private async listNotes(
+    lead: ProjectChat,
+    { thread }: RelayToolArgs<"list_notes">,
+  ) {
+    const chat = await this.notesOf(lead, thread);
+    const notes = await this.chats.notes.list(chat.id);
+    return json({
+      ...(chat.id === lead.id ? {} : { thread: chat.title }),
+      notes: notes.map(noteForAgent),
+    });
+  }
+
+  private async addNote(
+    lead: ProjectChat,
+    { text, thread }: RelayToolArgs<"add_note">,
+  ) {
+    const chat = await this.notesOf(lead, thread);
+    const note = await this.chats.notes.add(chat.id, {
+      text,
+      by: this.leadSide(lead).agent,
+    });
+    return toolText(
+      `Kept as ${note.id}${chat.id === lead.id ? "" : ` in “${chat.title}”`}.`,
+    );
+  }
+
+  private async tickNote(
+    lead: ProjectChat,
+    { note, item, done = true, thread }: RelayToolArgs<"tick_note">,
+  ) {
+    const chat = await this.notesOf(lead, thread);
+    await this.chats.notes.tick(chat.id, note, item, done);
+    return toolText(`${done ? "Ticked" : "Unticked"} ${note} item ${item}.`);
   }
 
   private async sendTo(

@@ -146,11 +146,14 @@ export const CodeBlock = memo(function CodeBlock({
   code,
   lang,
   closed = true,
+  tools,
 }: {
   code: string;
   lang?: string;
   /** False while the fence is still streaming in: nothing is offered for half a block. */
   closed?: boolean;
+  /** More buttons beside Copy, like the pin that keeps the block in notes. */
+  tools?: ReactNode;
 }) {
   const theme = useSyncExternalStore(
     subscribeSyntaxTheme,
@@ -243,6 +246,7 @@ export const CodeBlock = memo(function CodeBlock({
             {showSource ? <Workflow size={13} /> : <CodeIcon size={13} />}
           </button>
         )}
+        {tools}
         <button
           type="button"
           className="markdown-code-copy"

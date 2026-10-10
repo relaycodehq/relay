@@ -19,6 +19,7 @@ import type {
   ScheduledChatMessage,
 } from "../../shared/projects";
 import { contextAgent } from "../../shared/recipient";
+import { notesMark } from "../../shared/thread-notes";
 import { keyedQueue } from "../util/keyed-queue";
 import type { Store } from "../app/store";
 import { RenderFiles } from "../html-renders";
@@ -65,8 +66,10 @@ export function chatSummary({
   ultraplans,
   handover,
   carriedIds,
+  notes,
   // Worked out below; a stale copy on the thread itself doesn't count.
   queueMark: _staleMark,
+  notesMark: _staleNotesMark,
   asking,
   ...summary
 }: ProjectChat): ChatSummary {
@@ -85,6 +88,7 @@ export function chatSummary({
   ];
   const next = nextSend(scheduled);
   const mark = queueMark({ queue, queuePaused, scheduled });
+  const notesAt = notesMark(notes);
   const open = messages.some((m) =>
     m.questions?.some((group) => !group.answers && !group.dismissed),
   );
@@ -95,6 +99,7 @@ export function chatSummary({
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
     ...(mark ? { queueMark: mark } : {}),
+    ...(notesAt ? { notesMark: notesAt } : {}),
     ...(open ? { asking: true as const } : {}),
     empty: !messages.length && !scheduled?.length,
   };

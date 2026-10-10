@@ -79,7 +79,14 @@ function copySelectedCells(
 
 // Columns size themselves until the first drag; after that the table switches to
 // fixed layout with the measured widths so each column can be dragged freely.
-export function MarkdownTable({ children }: { children?: ReactNode }) {
+export function MarkdownTable({
+  children,
+  tools,
+}: {
+  children?: ReactNode;
+  /** More buttons beside Copy, like the pin that keeps the table in notes. */
+  tools?: ReactNode;
+}) {
   const tableRef = useRef<HTMLTableElement>(null);
   const [widths, setWidths] = useState<number[] | null>(null);
   const [copied, copy] = useCopy();
@@ -159,6 +166,7 @@ export function MarkdownTable({ children }: { children?: ReactNode }) {
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
+      {tools}
     </div>
   );
 }

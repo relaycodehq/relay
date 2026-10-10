@@ -50,6 +50,7 @@ import { TurnFiles } from "./turn-files";
 import { TerminalContinue } from "./terminal-continue";
 import { ThreadCreate } from "./thread-create";
 import { ThreadList } from "./thread-list";
+import { ThreadNotes } from "./notes";
 import { ThreadTriage } from "./thread-triage";
 import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
@@ -88,6 +89,8 @@ export class ProjectChats {
   private core: ChatCore;
   private threads: ThreadList;
   private triaging: ThreadTriage;
+  /** What the user keeps at hand in each thread. */
+  readonly notes: ThreadNotes;
   private creating: ThreadCreate;
   private terminal: TerminalContinue;
   constructor(
@@ -159,6 +162,7 @@ export class ProjectChats {
     this.threads = new ThreadList(core);
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
     this.creating = new ThreadCreate(core);
+    this.notes = new ThreadNotes(core);
     this.terminal = new TerminalContinue(
       core,
       this.worktrees,

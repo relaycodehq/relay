@@ -5,6 +5,7 @@ import {
   useContext,
   useMemo,
   useRef,
+  type HTMLAttributes,
   type ReactNode,
 } from "react";
 import { Copy, Check } from "lucide-react";
@@ -39,6 +40,7 @@ import { CodeBlock, InlineCommand } from "./CodeBlock";
 import { ColorCode } from "./ColorCode";
 import { FileEntryIcon } from "./FileEntryIcon";
 import { MarkdownTable } from "./MarkdownTable";
+import { KeepBlock, KeepBlockButton } from "./KeepBlock";
 import { BlockMath, InlineMath } from "./MathView";
 
 function markdownNodeText(node: unknown): string {
@@ -61,6 +63,50 @@ function markdownCodeLanguage(node: unknown): string | undefined {
 }
 /** What the block being rendered was parsed from, for its fences to check. */
 const MarkdownSource = createContext("");
+/** The markdown `node` was parsed from, cut out of the block's source. */
+function nodeSource(source: string, node?: { position?: Position }) {
+  const start = node?.position?.start.offset,
+    end = node?.position?.end.offset;
+  return start === undefined || end === undefined
+    ? ""
+    : source.slice(start, end);
+}
+/** The pin that keeps `node`'s markdown in the thread's notes. */
+function KeepNode({
+  node,
+  className,
+}: {
+  node?: { position?: Position };
+  className: string;
+}) {
+  const source = useContext(MarkdownSource);
+  return (
+    <KeepBlockButton source={nodeSource(source, node)} className={className} />
+  );
+}
+type ListProps = HTMLAttributes<HTMLElement> & {
+  start?: number;
+  node?: { position?: Position };
+};
+/**
+ * A list, with a pin to keep it when it stands at the top level of a thread
+ * that keeps notes; its frame takes over the list's margins.
+ */
+function MarkdownList({
+  node,
+  ordered,
+  ...props
+}: ListProps & { ordered: boolean }) {
+  const keeper = useContext(KeepBlock);
+  const List = ordered ? "ol" : "ul";
+  if (!keeper || node?.position?.start.column !== 1) return <List {...props} />;
+  return (
+    <div className="markdown-list">
+      <List {...props} />
+      <KeepNode node={node} className="markdown-list-keep" />
+    </div>
+  );
+}
 function MarkdownFence({ node }: { node?: { position?: Position } }) {
   const source = useContext(MarkdownSource);
   const lang = markdownCodeLanguage(node);
@@ -71,11 +117,13 @@ function MarkdownFence({ node }: { node?: { position?: Position } }) {
         closed={mathClosed(source, node?.position)}
       />
     );
+  const closed = fenceClosed(source, node?.position);
   return (
     <CodeBlock
       code={markdownNodeText(node).replace(/\n$/, "")}
       lang={lang}
-      closed={fenceClosed(source, node?.position)}
+      closed={closed}
+      tools={closed && <KeepNode node={node} className="markdown-code-copy" />}
     />
   );
 }
@@ -216,7 +264,15 @@ export const RichText = memo(function RichText({
   const linksFiles = !!onOpenFile;
   const components = useMemo<Components>(
     () => ({
-      table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
+      table: ({ children, node }) => (
+        <MarkdownTable
+          tools={<KeepNode node={node} className="markdown-table-keep" />}
+        >
+          {children}
+        </MarkdownTable>
+      ),
+      ol: (props) => <MarkdownList {...props} ordered />,
+      ul: (props) => <MarkdownList {...props} ordered={false} />,
       blockquote: ({ children }) => <MarkdownQuote>{children}</MarkdownQuote>,
       th: ({ children, style }) => (
         <th style={style}>
