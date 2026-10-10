@@ -1222,10 +1222,15 @@ small {
 }
 .markdown .contains-task-list {
   list-style: none;
-  padding-left: 4px;
 }
+/* The checkbox hangs in the list's padding like a bullet, so a wrapped
+   line lines up under the text, not under the box; the space markdown
+   leaves after the box makes up the rest of the gap. */
 .markdown .task-list-item input {
-  margin: 0 6px 0 0;
+  width: 13px;
+  height: 13px;
+  margin: 0 2.5px 0 -19px;
+  padding: 0;
   vertical-align: -1px;
 }
 .markdown-table-frame {
