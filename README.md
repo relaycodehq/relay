@@ -101,7 +101,7 @@ Where Relay stands out: a thread moves to another of your computers mid-conversa
 
 ## For contributors
 
-Adding an agent? Start with the [agent adapter architecture](docs/agent-adapters.md): integration routes, runtime and session contracts, and examples from previous additions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, code conventions and pull request guidance. To report a vulnerability privately, follow [SECURITY.md](SECURITY.md). Adding an agent? Start with the [agent adapter architecture](docs/agent-adapters.md).
 
 ```console
 npm ci
@@ -135,7 +135,7 @@ Copy the teaser to `docs/media/relay-teaser.mp4` when the UI changes.
 
 ## Contact
 
-Questions, ideas or anything else: [hello@relaycode.io](mailto:hello@relaycode.io). For a bug, please [open an issue](https://github.com/relaycodehq/relay/issues) with the steps, your platform and your Relay version. Pull requests are welcome; small, focused ones are easiest to review.
+Questions or setup help: [hello@relaycode.io](mailto:hello@relaycode.io). For bugs and feature requests, use the [issue forms](https://github.com/relaycodehq/relay/issues/new/choose). Report suspected vulnerabilities privately using [SECURITY.md](SECURITY.md); keep exploit details out of public issues. Pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

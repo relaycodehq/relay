@@ -1,0 +1,82 @@
+name: Bug report
+description: Report something in Relay that does not work as expected.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form creates a **public issue**. For suspected vulnerabilities, follow
+        [SECURITY.md](https://github.com/relaycodehq/relay/blob/main/SECURITY.md)
+        and email hello@relaycode.io instead.
+
+        Search existing issues first. Remove credentials, pairing codes/links,
+        device tokens, private source and personal details from anything you attach.
+  - type: input
+    id: version
+    attributes:
+      label: Relay version
+      description: Copy the version from Settings → About; for a source build, include the commit.
+      placeholder: Release version or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Where does it happen?
+      options:
+        - Desktop app
+        - Android phone app
+        - Headless Relay
+        - Build or installation
+        - Other / unsure
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and version
+      description: Include architecture if relevant. For phone or remote issues, include both devices' OS and Relay versions.
+      placeholder: e.g. macOS 15 / arm64, Windows 11 / x64, or Ubuntu 24.04 / x64
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and permission mode
+      description: If an agent is involved, include its name/version, model and permission mode (Supervised, Auto-accept edits, Auto or Full access).
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give the shortest reproducible steps using a sample project. Include how often it happens.
+      placeholder: |
+        1. Open a sample project…
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happens instead? Include the exact error if there is one, with private details removed.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs, screenshots or additional context
+      description: Optional. Review attachments for sensitive content. Do not upload a full Relay data folder or private conversation.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is a public bug report; I have removed sensitive data and will report suspected vulnerabilities privately using SECURITY.md.
+          required: true

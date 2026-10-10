@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement to Relay.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before submitting. Describe the problem you want
+        solved and how you would use the improvement.
+
+        This issue will be **public**. Use sample data and remove private details
+        from screenshots and examples. For a suspected vulnerability, follow
+        [SECURITY.md](https://github.com/relaycodehq/relay/blob/main/SECURITY.md)
+        and email hello@relaycode.io instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe your workflow and what is difficult or missing today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: What should Relay do, and what would using it look like?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Optional. What have you tried, or what other approaches could solve the problem?
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant platforms, agents or examples
+      description: Optional. Include sample screenshots or examples if they help explain the request.

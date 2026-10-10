@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/relaycodehq/relay/blob/main/SECURITY.md
+    about: Email hello@relaycode.io with [SECURITY] Relay in the subject. Keep exploit details out of public issues.
+  - name: Ask a question
+    url: https://github.com/relaycodehq/relay/blob/main/CONTRIBUTING.md#bugs-and-ideas
+    about: For setup help or general questions, email the maintainers.
