@@ -219,12 +219,12 @@ export function ThreadPaneToggles({
       onMove={move}
       panes={panesOf(layout.order, plain).map((id) => ({
         id,
-        open: layout.open[id],
+        open: visible.includes(id),
         // The panel stays open over an unsaved edit in Files, and so does
         // the last open pane.
         disabled:
           (id === "panel" && locked && layout.open.panel && filesOpen) ||
-          (layout.open[id] && visible.length === 1),
+          (visible.includes(id) && visible.length === 1),
         ...(id === "chat"
           ? { label: "Chat", icon: <MessageSquare size={14} /> }
           : id === "panel"

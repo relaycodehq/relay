@@ -12,9 +12,13 @@ export type SidebarVisibility = ReturnType<typeof useSidebarVisibility>;
  * Whether the projects sidebar shows, and its peek while hidden. It
  * remembers two states: beside the chat alone, and beside a side pane (a
  * PR's Review, say). Until toggled there, the latter follows the "make room"
- * setting.
+ * setting. While a pane is zoomed it is hidden whatever was chosen, and
+ * toggling it ends the zoom instead of changing the choice.
  */
-export function useSidebarVisibility(besidePane: boolean) {
+export function useSidebarVisibility(
+  besidePane: boolean,
+  zoom: { on: boolean; exit: () => void },
+) {
   const autoHide = useSidebarAutoHide();
   const [hiddenAlone, setHiddenAlone] = useState(
     () => localStorage.getItem("relay-projects-hidden") === "true",
@@ -23,9 +27,11 @@ export function useSidebarVisibility(besidePane: boolean) {
     const saved = localStorage.getItem(BESIDE_PANE_KEY);
     return saved ? saved === "true" : null;
   });
-  const hidden = besidePane
-    ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
-    : hiddenAlone;
+  const hidden =
+    zoom.on ||
+    (besidePane
+      ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
+      : hiddenAlone);
   // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<number | undefined>(undefined);
@@ -40,6 +46,7 @@ export function useSidebarVisibility(besidePane: boolean) {
   const toggle = () => {
     window.clearTimeout(peekTimer.current);
     setPeek(false);
+    if (zoom.on) return zoom.exit();
     (besidePane ? setHiddenBesidePane : setHiddenAlone)(!hidden);
   };
   useShortcut("sidebar", true, toggle);

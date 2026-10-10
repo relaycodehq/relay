@@ -98,6 +98,10 @@ export default function ProjectShell() {
   // A page stands in for the chat alone.
   const sidebar = useSidebarVisibility(
     !elsewhere && panes.visible.some((id) => id !== "chat"),
+    {
+      on: !elsewhere && !!panes.layout.zoomed,
+      exit: () => panes.zoom(undefined),
+    },
   );
   const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
   const showSettings = useStableCallback(settings.show);
@@ -486,6 +490,8 @@ export default function ProjectShell() {
                     view={view}
                     opens={opens}
                     panel={panel}
+                    zoomed={panes.layout.zoomed === "panel"}
+                    onZoom={(on) => panes.zoom(on ? "panel" : undefined)}
                   />
                 )}
               </Pane>

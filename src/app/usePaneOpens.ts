@@ -54,7 +54,8 @@ export function usePaneOpens(
     else panes.show("changes");
   }
   function togglePane(id: PaneId) {
-    const open = panes.layout.open[id];
+    // A pane hidden behind a zoom reads as closed, so a click brings it back.
+    const open = panes.visible.includes(id);
     // Closing the panel would unmount Files and its unsaved edit.
     if (open && id === "panel" && panel.has("files") && lock.blocked()) return;
     panes.setOpen(id, !open);

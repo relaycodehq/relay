@@ -163,6 +163,18 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       .click();
     await expect(panel.getByRole("tab")).toHaveText(["Files", "Terminal"]);
 
+    // Zooming the panel hides the other panes and the sidebar without closing
+    // them; asking for another pane brings everything back.
+    await panel
+      .getByRole("button", { name: "Expand panel", exact: true })
+      .click();
+    expect(await order()).toEqual(["panel"]);
+    await expect(collapsed).toHaveCount(1);
+    await expect(panel.getByRole("tab")).toHaveText(["Files", "Terminal"]);
+    await toggle("Chat").click();
+    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
+    await expect(collapsed).toHaveCount(0);
+
     // The last visible pane cannot be hidden.
     await toggle("Panel").click();
     await toggle("Changes").click();

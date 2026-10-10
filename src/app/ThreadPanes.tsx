@@ -1,5 +1,11 @@
 import { useCallback, useState } from "react";
-import { GitCompareArrows, GitPullRequest, X } from "lucide-react";
+import {
+  ChevronsLeftRight,
+  ChevronsRightLeft,
+  GitCompareArrows,
+  GitPullRequest,
+  X,
+} from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
 import type { Account, Pull, PullRef } from "../../shared/types";
@@ -169,6 +175,8 @@ export function ThreadPanel({
   view,
   opens,
   panel,
+  zoomed,
+  onZoom,
 }: {
   project: Project;
   chatId: string | null;
@@ -176,6 +184,9 @@ export function ThreadPanel({
   view: ThreadView;
   opens: PaneOpens;
   panel: PanelTabs;
+  /** The panel fills the workspace, the other panes and the sidebar stepped aside. */
+  zoomed: boolean;
+  onZoom: (zoomed: boolean) => void;
 }) {
   const { locked } = useNavigationLock();
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
@@ -254,6 +265,17 @@ export function ThreadPanel({
           ref={historyActions}
           hidden={front?.surface !== "history"}
         />
+        <IconButton
+          label={zoomed ? "Restore the other panes" : "Expand panel"}
+          active={zoomed}
+          onClick={() => onZoom(!zoomed)}
+        >
+          {zoomed ? (
+            <ChevronsRightLeft size={15} />
+          ) : (
+            <ChevronsLeftRight size={15} />
+          )}
+        </IconButton>
         <IconButton
           label="Close panel"
           disabled={locked && panel.has("files")}

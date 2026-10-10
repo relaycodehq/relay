@@ -31,6 +31,8 @@ interface PaneLayout {
   thread: string;
   open: OpenPanes;
   weights: Record<PaneId, number>;
+  /** The pane filling the row while the others are hidden, not closed. */
+  zoomed?: PaneId;
 }
 
 const CHAT_ONLY: OpenPanes = {
@@ -129,9 +131,13 @@ export const restoredLayout = (thread: string): PaneLayout => ({
   open: recall(thread) ?? CHAT_ONLY,
 });
 
-/** The open panes, in order. */
-const visiblePanes = ({ order, open }: Pick<PaneLayout, "order" | "open">) =>
-  order.filter((id) => open[id]);
+/** The panes on screen, in order: the zoomed one alone, else every open one. */
+const visiblePanes = ({
+  order,
+  open,
+  zoomed,
+}: Pick<PaneLayout, "order" | "open" | "zoomed">) =>
+  order.filter((id) => (zoomed ? id === zoomed : open[id]));
 
 /** A folder without Git has no changes to show. */
 export const panesOf = (order: PaneId[], plain?: boolean) =>
@@ -143,16 +149,16 @@ export const panesOf = (order: PaneId[], plain?: boolean) =>
  * `previous` is the open pane before it, which its splitter resizes against.
  */
 export function paneFrame(
-  layout: Pick<PaneLayout, "order" | "open" | "weights">,
+  layout: Pick<PaneLayout, "order" | "open" | "weights" | "zoomed">,
   id: PaneId,
 ) {
-  const { order, open, weights } = layout;
+  const { order, weights } = layout;
   const visible = visiblePanes(layout);
   const index = visible.indexOf(id);
   const previous = index > 0 ? visible[index - 1] : undefined;
   const total = visible.reduce((sum, pane) => sum + weights[pane], 0);
   return {
-    open: open[id],
+    open: visible.includes(id),
     order: order.indexOf(id),
     weight: weights[id],
     grow: weights[id] / (total || 1),
@@ -187,7 +193,7 @@ export function useWorkspacePanes(thread: string) {
       setLayout((l) =>
         l.thread === thread
           ? l
-          : { ...l, thread, open: recall(thread) ?? l.open },
+          : { ...l, thread, open: recall(thread) ?? l.open, zoomed: undefined },
       ),
     [thread],
   );
@@ -199,10 +205,15 @@ export function useWorkspacePanes(thread: string) {
     (next: string, fresh = false) =>
       setLayout((l) =>
         fresh
-          ? { ...l, thread: next, open: CHAT_ONLY }
+          ? { ...l, thread: next, open: CHAT_ONLY, zoomed: undefined }
           : l.thread === next
             ? l
-            : { ...l, thread: next, open: recall(next) ?? CHAT_ONLY },
+            : {
+                ...l,
+                thread: next,
+                open: recall(next) ?? CHAT_ONLY,
+                zoomed: undefined,
+              },
       ),
     [],
   );
@@ -212,8 +223,20 @@ export function useWorkspacePanes(thread: string) {
         const next = { ...l.open, [id]: open };
         // Never leave the workspace empty: the chat is the fallback pane.
         if (!PANE_IDS.some((p) => next[p])) next.chat = true;
-        return { ...l, open: next };
+        // Asking for another pane, or closing the zoomed one, ends the zoom.
+        const zoomOver = l.zoomed && (id === l.zoomed) !== open;
+        return { ...l, open: next, zoomed: zoomOver ? undefined : l.zoomed };
       }),
+    [],
+  );
+  /** Fills the row with `id`, or gives the others their room back. */
+  const zoom = useCallback(
+    (id: PaneId | undefined) =>
+      setLayout((l) =>
+        id
+          ? { ...l, zoomed: id, open: { ...l.open, [id]: true } }
+          : { ...l, zoomed: undefined },
+      ),
     [],
   );
   const show = useCallback((id: PaneId) => setOpen(id, true), [setOpen]);
@@ -233,5 +256,5 @@ export function useWorkspacePanes(thread: string) {
     [],
   );
   const visible = visiblePanes(layout);
-  return { layout, visible, setOpen, show, switchTo, move, resize };
+  return { layout, visible, setOpen, show, zoom, switchTo, move, resize };
 }

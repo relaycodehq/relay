@@ -30,6 +30,20 @@ describe("paneFrame", () => {
       previous: undefined,
     });
   });
+  it("gives a zoomed pane the whole row and hides the rest without closing them", () => {
+    const l = {
+      ...layout("chat", "changes", "panel"),
+      zoomed: "panel" as const,
+    };
+    expect(paneFrame(l, "panel")).toMatchObject({
+      open: true,
+      grow: 1,
+      previous: undefined,
+    });
+    expect(paneFrame(l, "chat").open).toBe(false);
+    expect(paneFrame(l, "changes").open).toBe(false);
+    expect(l.open.chat && l.open.changes).toBe(true);
+  });
 });
 
 describe("panesOf", () => {
