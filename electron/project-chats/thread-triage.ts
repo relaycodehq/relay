@@ -8,6 +8,7 @@ import {
   linkedFoldersSchema,
   type ChatTriage,
   type LinkedFolder,
+  type ProjectChat,
 } from "../../shared/projects";
 import { accountFor } from "../agents/accounts";
 import type { ChatCore } from "./core";
@@ -70,6 +71,8 @@ export class ThreadTriage {
         .catch((e) => console.warn("Could not drop an archived worktree:", e));
       return chatSummary(chat);
     }
+    if (triage.kind === "settle-when-done" && chat.waiting)
+      throw new Error("Answer the waiting request before settling.");
     // A phone's card can be a couple of seconds behind the live turn.
     if (
       triage.kind === "settle" &&
@@ -85,8 +88,13 @@ export class ThreadTriage {
       throw new Error("Answer the waiting request before snoozing.");
     delete chat.snoozedAt;
     delete chat.snoozedUntil;
-    if (triage.kind === "settle") chat.settledAt = now;
-    else if (triage.kind === "unsettle" || triage.kind === "snooze")
+    delete chat.settleWhenDone;
+    if (triage.kind === "settle" || triage.kind === "settle-when-done") {
+      chat.settledAt = now;
+      // Done already, it is a plain settle.
+      if (triage.kind === "settle-when-done" && this.going(chat))
+        chat.settleWhenDone = now;
+    } else if (triage.kind === "unsettle" || triage.kind === "snooze")
       delete chat.settledAt;
     // Settled by hand or automatically, moving it back keeps it out until something new happens.
     if (triage.kind === "unsettle") chat.unsettledAt = now;
@@ -96,8 +104,46 @@ export class ThreadTriage {
       chat.snoozedUntil = triage.until;
     }
     await this.core.storage.save(chat);
-    if (triage.kind === "settle") await this.settleStarted(id, now);
+    if (triage.kind === "settle" || !chat.settleWhenDone)
+      await this.settleStarted(id, now);
     return chatSummary(chat);
+  }
+  /**
+   * Called once a run ended and its queue went out: a thread settled while it
+   * ran settles for real if nothing is left going, or comes back to Activity
+   * when its answer failed or was stopped.
+   */
+  async ended(id: string) {
+    const chat = await this.core.storage.load(id);
+    if (!chat.settleWhenDone || this.going(chat)) return;
+    const answer = chat.messages
+      .filter((m) => m.role === "assistant" && !m.parentId)
+      .at(-1);
+    delete chat.settleWhenDone;
+    const now = Date.now();
+    if (chatSummary(chat).asking || answer?.status !== "complete")
+      delete chat.settledAt;
+    else chat.settledAt = now;
+    await this.core.storage.save(chat);
+    if (chat.settledAt) await this.settleStarted(id, now);
+  }
+  /** Something runs in the thread now, or is about to go on by itself. */
+  private going(chat: ProjectChat) {
+    return (
+      this.core.active.has(chat.id) ||
+      this.councils.busy(chat) ||
+      this.core.sessions.pending(chat.id).length > 0 ||
+      (!!chat.queue?.length && !chat.queuePaused) ||
+      !!nextSend(chat.scheduled)
+    );
+  }
+  /** Your own message to a thread settled while it ran brings it back. */
+  async sent(id: string) {
+    const chat = await this.core.storage.load(id);
+    if (!chat.settleWhenDone) return;
+    delete chat.settleWhenDone;
+    delete chat.settledAt;
+    await this.core.storage.save(chat);
   }
   /** Removes the worktree of a thread still archived since `at`, if all of it landed. */
   private async dropLanded(id: string, at: number) {
@@ -120,13 +166,7 @@ export class ThreadTriage {
    */
   private async settleStarted(id: string, now: number) {
     for (const child of await this.started(id)) {
-      const going =
-        this.core.active.has(child.id) ||
-        this.councils.busy(child) ||
-        !!child.waiting ||
-        this.core.sessions.pending(child.id).length > 0 ||
-        (!!child.queue?.length && !child.queuePaused) ||
-        !!nextSend(child.scheduled);
+      const going = this.going(child) || !!child.waiting;
       if (going || chatSummary(child).asking || child.settledAt) continue;
       // The settle overlay wins while present; keep the snooze underneath for Undo.
       child.settledAt = now;

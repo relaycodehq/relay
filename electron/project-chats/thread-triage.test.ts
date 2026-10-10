@@ -88,6 +88,70 @@ it("settling a thread settles the threads it started that are done, and undo bri
   expect((await chats.get(done.id)).settledAt).toBeUndefined();
 });
 
+/** A thread with a turn running, and the way to end it as `status`. */
+async function runningThread() {
+  const thread = await chats.create(projectId, scope);
+  const core = (chats as unknown as { core: ChatCore }).core;
+  const triaging = (chats as unknown as { triaging: ThreadTriage }).triaging;
+  const active = core.active.claim(thread.id, {
+    id: randomUUID(),
+    body: "Commit",
+    provider: "claude",
+    to: "claude",
+    choice: { model: "", fast: false, reasoningEffort: "" },
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+  });
+  const end = async (status: "complete" | "failed" | "cancelled") => {
+    const chat = await core.storage.load(thread.id);
+    chat.messages.push({
+      id: randomUUID(),
+      role: "assistant",
+      provider: "claude",
+      status,
+      body: "Done",
+      created: Date.now(),
+      version: 1,
+    });
+    await new Promise((r) => setTimeout(r, 5));
+    chat.updated = Date.now();
+    await core.storage.save(chat);
+    core.active.release(thread.id, active);
+    await triaging.ended(thread.id);
+  };
+  const listed = () => chats.list(projectId).find((c) => c.id === thread.id)!;
+  return { id: thread.id, end, listed };
+}
+
+it("settles a running thread when its answer finishes, and it stays settled", async () => {
+  const thread = await runningThread();
+  await chats.triage(thread.id, { kind: "settle-when-done" });
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("settled");
+
+  await thread.end("complete");
+  const after = thread.listed();
+  expect(after.settleWhenDone).toBeUndefined();
+  expect(after.settledAt).toBeGreaterThanOrEqual(after.updated);
+  expect(chatActivitySection(after, Date.now())).toBe("settled");
+});
+
+it("brings a thread settled while running back when its answer fails", async () => {
+  const thread = await runningThread();
+  await chats.triage(thread.id, { kind: "settle-when-done" });
+  await thread.end("failed");
+  const after = thread.listed();
+  expect(after.settleWhenDone).toBeUndefined();
+  expect(chatActivitySection(after, Date.now())).toBe("active");
+});
+
+it("unsettling a thread settled while running lets its answer come back as usual", async () => {
+  const thread = await runningThread();
+  await chats.triage(thread.id, { kind: "settle-when-done" });
+  await chats.triage(thread.id, { kind: "unsettle" });
+  await thread.end("complete");
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+});
+
 it("a started thread settled on its own stays settled when its lead's settle is undone", async () => {
   const lead = await chats.create(projectId, scope);
   const child = await chats.create(projectId, scope, "checkout", {

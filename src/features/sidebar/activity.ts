@@ -25,14 +25,19 @@ export function triaged(
       setTriageState(next, action.to);
       return next;
     }
-    default:
+    default: {
+      const settles =
+        action.kind === "settle" || action.kind === "settle-when-done";
       return {
         ...chat,
-        settledAt: action.kind === "settle" ? now : undefined,
+        settledAt: settles ? now : undefined,
+        settleWhenDone:
+          action.kind === "settle-when-done" && chat.running ? now : undefined,
         autoSettled: undefined,
         snoozedAt: action.kind === "snooze" ? now : undefined,
         snoozedUntil: action.kind === "snooze" ? action.until : undefined,
       };
+    }
   }
 }
 

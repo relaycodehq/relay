@@ -32,7 +32,7 @@ export function useActivityKeys({
   const jumpTo = useRef<(index: number) => boolean>(() => false);
   useShortcut("settle", true, () => {
     const c = active.find((a) => a.id === chatId);
-    if (c && !c.running && !c.waiting) settle(c);
+    if (c && !c.waiting) settle(c);
   });
   useEffect(() => {
     let reveal: number | undefined;

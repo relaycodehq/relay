@@ -64,6 +64,8 @@ export class ChatTurns {
     private evidence:
       | ((chat: ProjectChat, selection: LineQuestion) => Promise<unknown>)
       | undefined,
+    /** A run ended and its queue went out; see ThreadTriage.ended. */
+    private ended: (id: string) => Promise<void>,
   ) {}
 
   starting() {
@@ -94,6 +96,7 @@ export class ChatTurns {
       .control(chat.id, async () => {
         await stepped;
         await this.queue.drain(chat.id);
+        await this.ended(chat.id);
       })
       .catch((e) => console.warn("Could not send the queued messages:", e));
   }

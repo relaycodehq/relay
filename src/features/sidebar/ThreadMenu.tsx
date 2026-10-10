@@ -135,10 +135,10 @@ export function ThreadMenu({
         <MenuAction
           icon={<Check size={13} />}
           hint={settleKeys}
-          disabled={busy}
+          disabled={!!chat.waiting}
           onClick={() => onAction({ kind: "settle" })}
         >
-          Settle thread
+          {chat.running ? "Settle when done" : "Settle thread"}
         </MenuAction>
       )}
       {section === "snoozed" ? (

@@ -8,16 +8,20 @@ export type ChatActivitySection = "active" | "snoozed" | "settled";
 /** What triage reads; the phone's thread summaries carry just these. */
 type Triaged = Pick<
   ChatSummary,
-  "running" | "waiting" | "settledAt" | "snoozedAt" | "snoozedUntil" | "updated"
+  | "running"
+  | "waiting"
+  | "settledAt"
+  | "settleWhenDone"
+  | "snoozedAt"
+  | "snoozedUntil"
+  | "updated"
 >;
 
 export function chatSettled(chat: Triaged): boolean {
-  return (
-    !chat.running &&
-    !chat.waiting &&
-    chat.settledAt != null &&
-    chat.settledAt >= chat.updated
-  );
+  if (chat.waiting || chat.settledAt == null) return false;
+  // Settled mid-answer: the answer it waits for moves `updated` past it.
+  if (chat.settleWhenDone != null) return true;
+  return !chat.running && chat.settledAt >= chat.updated;
 }
 
 function chatSnoozed(chat: Triaged, now: number): boolean {
@@ -134,6 +138,7 @@ function autoSettle(
 
 const triageKeys = [
   "settledAt",
+  "settleWhenDone",
   "unsettledAt",
   "snoozedAt",
   "snoozedUntil",

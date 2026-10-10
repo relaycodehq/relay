@@ -233,13 +233,20 @@ export function LimitStrip({
 }
 
 /** A settled thread, opened: the next message moves it back to Activity. */
-export function SettledStrip({ onUnsettle }: { onUnsettle: () => void }) {
+export function SettledStrip({
+  whenDone,
+  onUnsettle,
+}: {
+  /** Settled while its answer runs; it stays settled once that ends. */
+  whenDone?: boolean;
+  onUnsettle: () => void;
+}) {
   return (
     <div className="waiting-strip settled" role="status">
       <div className="waiting-strip-head">
         <CheckCheck size={15} />
         <span className="waiting-strip-text">
-          <b>Settled</b>
+          <b>{whenDone ? "Settles when done" : "Settled"}</b>
           <span> · replying moves it back to Activity</span>
         </span>
         <button

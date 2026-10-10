@@ -44,6 +44,22 @@ describe("chat activity", () => {
     ).toBe("active");
   });
 
+  it("keeps a thread settled while it runs once told to settle when done, unless it asks", () => {
+    const settling = { settledAt: 6_000, settleWhenDone: 6_000 };
+    expect(
+      chatActivitySection(
+        chat({ ...settling, running: true, updated: 8_000 }),
+        10_000,
+      ),
+    ).toBe("settled");
+    expect(
+      chatActivitySection(
+        chat({ ...settling, running: true, waiting: true }),
+        10_000,
+      ),
+    ).toBe("active");
+  });
+
   it("wakes a snoozed thread on its timer, new activity or a request", () => {
     const snoozed = { snoozedAt: 6_000, snoozedUntil: 20_000 };
     expect(chatActivitySection(chat(snoozed), 10_000)).toBe("snoozed");

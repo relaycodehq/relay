@@ -546,6 +546,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.asking ? { asking: true } : {}),
     ...(c.blocked ? { blocked: true } : {}),
     ...(c.settledAt ? { settledAt: c.settledAt } : {}),
+    ...(c.settleWhenDone ? { settleWhenDone: c.settleWhenDone } : {}),
     ...(c.autoSettled ? { autoSettled: true } : {}),
     ...(c.markedUnread ? { markedUnread: true } : {}),
     ...(c.seenAt ? { seenAt: c.seenAt } : {}),

@@ -145,7 +145,7 @@ export function chatHandlers(ctx: ApiContext) {
     sendProjectChat: takes(
       [idSchema, projectChatSendSchema],
       async (id, send) => {
-        const sent = await projectChats.send(id, send);
+        const sent = await projectChats.sendYours(id, send);
         await rememberSentModel(store, send);
         return sent;
       },

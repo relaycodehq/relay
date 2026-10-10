@@ -108,6 +108,8 @@ export interface RemoteChatSummary {
   asking?: true;
   blocked?: true;
   settledAt?: number;
+  /** Settled while it runs; older desktops leave it out, so it shows active until done. */
+  settleWhenDone?: number;
   /** A computed shelf position rather than a saved settle mark. */
   autoSettled?: true;
   /** Marked unread by hand, until someone opens it; older desktops leave it out. */

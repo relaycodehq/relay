@@ -198,6 +198,7 @@ export class ProjectChats {
       this.councils,
       this.queue,
       evidence,
+      (id) => this.triaging.ended(id),
     );
   }
   /**
@@ -502,6 +503,11 @@ export class ProjectChats {
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
     return this.control(id, () => this.sendHeld(id, input, fromRelay));
+  }
+  /** Your own message, from the composer or a phone: it unsettles a thread settled while it ran. */
+  async sendYours(id: string, input: ProjectChatSend) {
+    await this.triaging.sent(id);
+    return this.send(id, input);
   }
   /** A send whose caller already holds the thread's control. */
   private async sendHeld(

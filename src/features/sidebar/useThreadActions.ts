@@ -29,7 +29,12 @@ export type ThreadMenuAction =
 export type ThreadActions = ReturnType<typeof useThreadActions>;
 
 /** Settling, archiving and snoozing are what ⌘Z can take back. */
-const UNDOABLE = new Set<ChatTriage["kind"]>(["settle", "archive", "snooze"]);
+const UNDOABLE = new Set<ChatTriage["kind"]>([
+  "settle",
+  "settle-when-done",
+  "archive",
+  "snooze",
+]);
 
 /**
  * What the sidebar does to a thread: opening, triage, naming, forking it and
@@ -130,7 +135,8 @@ export function useThreadActions({
   const triage = (c: ChatSummary, action: ChatTriage) => apply(c, action);
   /**
    * Settling the open thread moves on to its neighbour in activity, or a new
-   * thread; undoing it comes back unless you went elsewhere meanwhile.
+   * thread; undoing it comes back unless you went elsewhere meanwhile. A
+   * running thread settles when done: it stays settled once its answer ends.
    */
   const settle = (c: ChatSummary) => {
     let back: (() => void) | undefined;
@@ -144,7 +150,7 @@ export function useThreadActions({
           if (latest.current.chatId === next?.id) latest.current.open(c);
         };
     }
-    void apply(c, { kind: "settle" }, back);
+    void apply(c, { kind: c.running ? "settle-when-done" : "settle" }, back);
   };
   const rename = async (c: ChatSummary, title: string) => {
     patch(c, (entry) => ({ ...entry, title, renamed: true }));

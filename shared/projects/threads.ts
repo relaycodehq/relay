@@ -55,6 +55,12 @@ export interface ChatSummary {
   empty?: boolean;
   /** Settled until a newer update; see shared/chat-activity. */
   settledAt?: number;
+  /**
+   * Settled by hand while its answer ran: it stays settled through that
+   * answer and whatever was queued behind it, and becomes a plain settle once
+   * they finish cleanly. A question, a failure or your own message drops it.
+   */
+  settleWhenDone?: number;
   /** Moved back to activity by hand; auto-settle leaves it alone until newer activity. */
   unsettledAt?: number;
   /** Never settled automatically; only the thread's menu turns it back on. */
@@ -169,6 +175,7 @@ const triageTime = z.number().int().positive().optional();
 export const chatTriageStateSchema = z
   .object({
     settledAt: triageTime,
+    settleWhenDone: triageTime,
     unsettledAt: triageTime,
     snoozedAt: triageTime,
     snoozedUntil: triageTime,
@@ -178,6 +185,7 @@ export const chatTriageStateSchema = z
 export type ChatTriageState = z.infer<typeof chatTriageStateSchema>;
 export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("settle") }).strict(),
+  z.object({ kind: z.literal("settle-when-done") }).strict(),
   z.object({ kind: z.literal("unsettle") }).strict(),
   z
     .object({

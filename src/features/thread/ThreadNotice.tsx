@@ -79,7 +79,11 @@ function PressingStrip({
   const unsettle = async () => {
     undos.claim([chat.id]);
     qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
-      list?.map((c) => (c.id === chat.id ? { ...c, settledAt: undefined } : c)),
+      list?.map((c) =>
+        c.id === chat.id
+          ? { ...c, settledAt: undefined, settleWhenDone: undefined }
+          : c,
+      ),
     );
     try {
       await api.triageProjectChat(chat.id, { kind: "unsettle" });
@@ -117,7 +121,10 @@ function PressingStrip({
         }
       />
     );
-  if (chatSettled(chat)) return <SettledStrip onUnsettle={unsettle} />;
+  if (chatSettled(chat))
+    return (
+      <SettledStrip whenDone={!!chat.settleWhenDone} onUnsettle={unsettle} />
+    );
   return (
     chat.cameFrom?.abandonedAt && (
       <AbandonedStrip computer={chat.cameFrom.computer} />
