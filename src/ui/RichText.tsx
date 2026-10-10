@@ -1,6 +1,9 @@
 import {
+  Children,
+  cloneElement,
   createContext,
   Fragment,
+  isValidElement,
   memo,
   useContext,
   useMemo,
@@ -95,16 +98,75 @@ type ListProps = HTMLAttributes<HTMLElement> & {
 function MarkdownList({
   node,
   ordered,
+  children,
   ...props
 }: ListProps & { ordered: boolean }) {
   const keeper = useContext(KeepBlock);
+  const depth = useContext(ListDepth);
   const List = ordered ? "ol" : "ul";
-  if (!keeper || node?.position?.start.column !== 1) return <List {...props} />;
+  let n = props.start ?? 1;
+  const items = Children.map(children, (child) =>
+    isValidElement<ItemProps>(child) && child.type === MarkdownItem
+      ? cloneElement(child, {
+          marker: ordered ? `${n++}.` : BULLETS[Math.min(depth, 2)],
+        })
+      : child,
+  );
+  const list = (
+    <ListDepth.Provider value={depth + 1}>
+      <List {...props}>{items}</List>
+    </ListDepth.Provider>
+  );
+  if (!keeper || node?.position?.start.column !== 1) return list;
   return (
     <div className="markdown-list">
-      <List {...props} />
+      {list}
       <KeepNode node={node} className="markdown-list-keep" />
     </div>
+  );
+}
+/** How deep the list being rendered is nested, for its bullet. */
+const ListDepth = createContext(0);
+const BULLETS = ["•", "◦", "▪"];
+type ItemProps = HTMLAttributes<HTMLLIElement> & {
+  node?: unknown;
+  marker?: string;
+};
+/**
+ * A list item whose bullet or number is text, not a `::marker`, so a
+ * selection takes it along. aria-hidden keeps it out of what Keep writes,
+ * which numbers lists itself. A task item's checkbox is its marker.
+ */
+function MarkdownItem({ node: _node, marker, children, ...props }: ItemProps) {
+  if (!marker || props.className?.includes("task-list-item"))
+    return <li {...props}>{children}</li>;
+  const text = (
+    <span className="markdown-item-marker" aria-hidden="true">
+      <span>
+        {BULLETS.includes(marker) ? (
+          <span className="markdown-item-bullet" data-bullet={marker}>
+            {marker}
+          </span>
+        ) : (
+          marker
+        )}
+        {/* A plain space would end the right-to-left line and jump to its left. */}
+        {"\u00a0"}
+      </span>
+    </span>
+  );
+  // A loose list wraps each item in paragraphs; outside the first one the
+  // marker would copy onto a line of its own.
+  const parts = Children.toArray(children);
+  const first = parts.findIndex((part) => part !== "\n");
+  const lead = parts[first];
+  if (isValidElement<{ children?: ReactNode }>(lead) && lead.type === "p")
+    parts[first] = cloneElement(lead, {}, text, lead.props.children);
+  else parts.unshift(text);
+  return (
+    <li {...props} className="markdown-item">
+      {parts}
+    </li>
   );
 }
 function MarkdownFence({ node }: { node?: { position?: Position } }) {
@@ -273,6 +335,7 @@ export const RichText = memo(function RichText({
       ),
       ol: (props) => <MarkdownList {...props} ordered />,
       ul: (props) => <MarkdownList {...props} ordered={false} />,
+      li: MarkdownItem,
       blockquote: ({ children }) => <MarkdownQuote>{children}</MarkdownQuote>,
       th: ({ children, style }) => (
         <th style={style}>

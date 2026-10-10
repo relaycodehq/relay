@@ -1182,6 +1182,44 @@ small {
 .markdown ol {
   padding-left: 20px;
 }
+/* Bullets and numbers are text so a selection takes them along. They sit
+   in the line, hanging into the list's padding, so a drag from the edge
+   starts before them; numbers too wide for it spill left like a ::marker. */
+.markdown-item {
+  list-style: none;
+}
+.markdown-item-marker {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 20px;
+  margin-left: -20px;
+  /* Right-to-left, so it overflows to the left; the text inside stays LTR. */
+  direction: rtl;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+.markdown-item-marker > span {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+/* The font's bullets are smaller than the discs they stand in for. The
+   selected glyph stays text-sized and unseen, so its highlight matches the
+   line, and a bigger copy is painted over it. */
+.markdown-item-bullet {
+  position: relative;
+  -webkit-text-fill-color: transparent;
+}
+.markdown-item-bullet::before {
+  content: attr(data-bullet);
+  position: absolute;
+  left: 0;
+  -webkit-text-fill-color: currentColor;
+  transform: scale(1.6);
+  transform-origin: 50% 58%;
+}
+.markdown-item-bullet[data-bullet="▪"]::before {
+  transform: none;
+}
 .markdown .contains-task-list {
   list-style: none;
   padding-left: 4px;
