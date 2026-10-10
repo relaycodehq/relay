@@ -9,7 +9,7 @@ import { X } from "lucide-react";
 import type { PaneId } from "../lib/workspace-panes";
 import { IconButton } from "./ui";
 import "./workspace-panes.css";
-import { dragFrom } from "../lib/dragFrom";
+import { Splitter } from "./Splitter";
 
 export interface PaneSlots {
   title: HTMLElement | null;
@@ -232,24 +232,16 @@ function PaneSplitter({
     return { l, total: l + pane.getBoundingClientRect().width };
   };
   return (
-    <div
+    <Splitter
       className="pane-splitter"
-      role="separator"
-      aria-label="Resize panes"
-      aria-orientation="vertical"
-      tabIndex={0}
+      label="Resize panes"
+      step={20}
       style={{ order }}
-      onDoubleClick={() => onResize({ [left.id]: 1, [right.id]: 1 })}
-      onKeyDown={(e) => {
-        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-        e.preventDefault();
-        const { l, total } = widths(e.currentTarget);
-        resizeBy(l + (e.key === "ArrowLeft" ? -20 : 20), total);
+      begin={(handle) => {
+        const { l, total } = widths(handle);
+        return (delta) => resizeBy(l + delta, total);
       }}
-      onPointerDown={(e) => {
-        const { l, total } = widths(e.currentTarget);
-        dragFrom(e, (dx) => resizeBy(l + dx, total));
-      }}
+      onReset={() => onResize({ [left.id]: 1, [right.id]: 1 })}
     />
   );
 }

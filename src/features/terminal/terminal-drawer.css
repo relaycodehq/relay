@@ -22,11 +22,6 @@
   left: 0;
   z-index: 2;
   height: 6px;
-  cursor: row-resize;
-}
-.terminal-drawer-resizer:focus-visible {
-  background: color-mix(in srgb, var(--accent) 35%, transparent);
-  outline: none;
 }
 .terminal-drawer-header {
   display: flex;

@@ -1864,13 +1864,6 @@ html {
   bottom: 0;
   width: 6px;
   z-index: 30;
-  cursor: col-resize;
-  touch-action: none;
-}
-/* Hover shows only the cursor; keyboard focus keeps its highlight. */
-.pane-resizer:focus-visible {
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
-  outline: none;
 }
 :root {
   --accent-foreground: #fff;

@@ -2,7 +2,7 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import { RotateCw, SquareTerminal, X } from "lucide-react";
 import { IconButton } from "../../ui/ui";
 import { PaneTabs } from "../../ui/PaneTabs";
-import { dragFrom } from "../../lib/dragFrom";
+import { Splitter } from "../../ui/Splitter";
 import {
   newTerminalSlot,
   setDockTabs,
@@ -82,25 +82,18 @@ export function TerminalDrawer({
       style={{ height }}
       aria-label="Terminal"
     >
-      <div
+      <Splitter
         className="terminal-drawer-resizer"
-        role="separator"
-        aria-label="Resize terminal"
-        aria-orientation="horizontal"
-        aria-valuemin={minHeight}
-        aria-valuenow={height}
-        tabIndex={0}
-        onDoubleClick={() => resize(defaultHeight)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-            e.preventDefault();
-            resize(height + (e.key === "ArrowUp" ? 20 : -20));
-          }
-        }}
-        onPointerDown={(e) => {
+        label="Resize terminal"
+        orientation="horizontal"
+        step={20}
+        value={height}
+        min={minHeight}
+        begin={() => {
           const origin = height;
-          dragFrom(e, (_dx, dy) => resize(origin - dy));
+          return (delta) => resize(origin - delta);
         }}
+        onReset={() => resize(defaultHeight)}
       />
       <header className="terminal-drawer-header">
         <PaneTabs

@@ -1,0 +1,12 @@
+.splitter {
+  cursor: col-resize;
+  touch-action: none;
+}
+.splitter.horizontal {
+  cursor: row-resize;
+}
+/* Hover shows only the cursor; keyboard focus keeps its highlight. */
+.splitter:focus-visible {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  outline: none;
+}

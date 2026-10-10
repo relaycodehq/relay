@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { dragFrom } from "../lib/dragFrom";
+import { Splitter } from "./Splitter";
+
 export function PaneResizer({
   pane,
   label,
@@ -28,26 +29,17 @@ export function PaneResizer({
     localStorage.setItem(key, String(next));
   };
   return (
-    <div
+    <Splitter
       className="pane-resizer"
-      role="separator"
-      aria-label={label ?? `Resize ${pane}`}
-      aria-orientation="vertical"
-      aria-valuemin={min}
-      aria-valuemax={max}
-      aria-valuenow={width}
-      tabIndex={0}
-      onDoubleClick={() => update(initial)}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-          e.preventDefault();
-          update(width + (e.key === "ArrowLeft" ? -10 : 10));
-        }
-      }}
-      onPointerDown={(e) => {
+      label={label ?? `Resize ${pane}`}
+      value={width}
+      min={min}
+      max={max}
+      begin={() => {
         const origin = width;
-        dragFrom(e, (dx) => update(origin + dx));
+        return (delta) => update(origin + delta);
       }}
+      onReset={() => update(initial)}
     />
   );
 }

@@ -18,7 +18,9 @@ import {
   isMarkdown,
   MarkdownModes,
   MarkdownPreview,
+  MarkdownSplitter,
   useMarkdownMode,
+  useMarkdownSplit,
 } from "./editor/MarkdownPreview";
 import { FolderPrompt, UnsavedPrompt } from "./editor/prompts";
 import { useEditorBlame } from "./editor/useEditorBlame";
@@ -87,6 +89,7 @@ export default function LocalFileEditor({
   useSaveShortcut(file.save);
   const markdown = inline && !!project && isMarkdown(path);
   const [mode, setMode] = useMarkdownMode();
+  const [share, setShare] = useMarkdownSplit();
   const shown = markdown ? mode : "code";
   const code = (
     <>
@@ -171,9 +174,20 @@ export default function LocalFileEditor({
           {markdown ? (
             <div className={`markdown-split ${shown}`}>
               {/* Kept mounted in Preview, so the editor keeps its undo and scroll. */}
-              <div className="markdown-split-code" hidden={shown === "preview"}>
+              <div
+                className="markdown-split-code"
+                hidden={shown === "preview"}
+                style={
+                  shown === "split"
+                    ? { flex: `0 0 ${share * 100}%` }
+                    : undefined
+                }
+              >
                 {code}
               </div>
+              {shown === "split" && (
+                <MarkdownSplitter share={share} onShare={setShare} />
+              )}
               {shown !== "code" && (
                 <MarkdownPreview
                   where={project.id}

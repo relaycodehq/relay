@@ -52,12 +52,6 @@
   width: 6px;
   margin: 0 -3px;
   z-index: 30;
-  cursor: col-resize;
-  touch-action: none;
-}
-.pane-splitter:focus-visible {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
-  outline: none;
 }
 
 .pane-header {

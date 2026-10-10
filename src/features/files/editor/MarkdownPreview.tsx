@@ -5,6 +5,7 @@ import { imageMime } from "../../../../shared/project-files";
 import { api } from "../../../lib/api";
 import { persistedStore } from "../../../lib/persisted-store";
 import { RichText } from "../../../ui/RichText";
+import { Splitter } from "../../../ui/Splitter";
 import { IconButton } from "../../../ui/ui";
 
 export type MarkdownMode = "code" | "split" | "preview";
@@ -20,6 +21,44 @@ const modes = persistedStore<MarkdownMode>(
 /** How Markdown files open, the same for every one of them. */
 export function useMarkdownMode() {
   return [modes.use(), modes.set] as const;
+}
+
+// The code's share of the width in Split.
+const shares = persistedStore<number>(
+  "relay-markdown-split",
+  (saved) => {
+    const share = Number(saved);
+    return share >= 0.2 && share <= 0.8 ? share : 0.5;
+  },
+  String,
+);
+
+export function useMarkdownSplit() {
+  return [shares.use(), shares.set] as const;
+}
+
+export function MarkdownSplitter({
+  share,
+  onShare,
+}: {
+  share: number;
+  onShare: (share: number) => void;
+}) {
+  return (
+    <Splitter
+      className="markdown-splitter"
+      label="Resize code and preview"
+      value={Math.round(share * 100)}
+      min={20}
+      max={80}
+      begin={(handle) => {
+        const width = handle.parentElement!.clientWidth;
+        return (delta) =>
+          onShare(Math.max(0.2, Math.min(0.8, share + delta / width)));
+      }}
+      onReset={() => onShare(0.5)}
+    />
+  );
 }
 
 export function MarkdownModes({
