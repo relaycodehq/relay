@@ -57,6 +57,7 @@ import { UsageRing } from "./UsageRing";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
 import { AccountControl, accountUsageFooter } from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
+import { noteUsed } from "../../lib/used";
 import "./composer.css";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
@@ -381,11 +382,13 @@ export function ProjectComposer({
               const at = promptInput.current?.caret();
               if (at?.start === 0 && at.end === 0 && onEditQueued()) {
                 e.preventDefault();
+                noteUsed("shortcut:edit-queued");
                 return;
               }
             }
             if (!e.repeat && matches("send-new-thread", e)) {
               e.preventDefault();
+              noteUsed("shortcut:send-new-thread");
               void sending.send(runningAction === "steer", undefined, () => {
                 // Not if the thread was left while it sent.
                 if (mounted.current) onNextThread?.();
@@ -395,12 +398,14 @@ export function ProjectComposer({
             const step = effortStep(e);
             if (step) {
               e.preventDefault();
+              noteUsed(`shortcut:effort-${step < 0 ? "down" : "up"}`);
               runs.stepEffort(to, step);
               return;
             }
             const quickDir = quick.presets.length ? quickStep(e) : 0;
             if (quickDir) {
               e.preventDefault();
+              noteUsed(`shortcut:quick-${quickDir < 0 ? "prev" : "next"}`);
               quick.step(quickDir);
               return;
             }

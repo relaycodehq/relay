@@ -17,6 +17,7 @@ import {
   mentionTrigger,
   type MentionItem,
 } from "./mention-items";
+import { noteUsed } from "../../lib/used";
 
 export interface MentionRange {
   start: number;
@@ -93,6 +94,7 @@ export function useFileMentions({
   }
   function choose(item = selected) {
     if (!item || !trigger) return;
+    noteUsed("mention");
     onPick(item.path, { start: trigger.start, end: at });
   }
   function onKeyDown(e: KeyboardEvent<HTMLElement>) {

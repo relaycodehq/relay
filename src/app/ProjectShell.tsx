@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
@@ -11,7 +11,8 @@ import {
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
 import { projectFor } from "../features/pulls/pull-board";
-import { SIDEBAR_WIDTH } from "../lib/settings-page";
+import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
+import { useStableCallback } from "../lib/useStableCallback";
 import { useShortcut } from "../lib/shortcuts";
 import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
 import { usePanelTabs } from "../features/panel/panel-tabs";
@@ -99,6 +100,8 @@ export default function ProjectShell() {
     !elsewhere && panes.visible.some((id) => id !== "chat"),
   );
   const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
+  const showSettings = useStableCallback(settings.show);
+  useEffect(() => onOpenSettings(showSettings), [showSettings]);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   // Scratchpad chats have their own sidebar section and never show as projects.

@@ -23,3 +23,18 @@ export type SettingsCategory =
   | "read-aloud"
   | "shortcuts"
   | "about";
+
+const OPEN_SETTINGS = "relay:open-settings";
+
+/** Opens Settings at `category` from a feature the shell hands no way there. */
+export function openSettings(category: SettingsCategory) {
+  window.dispatchEvent(new CustomEvent(OPEN_SETTINGS, { detail: category }));
+}
+
+/** The shell's side of `openSettings`; returns the unsubscribe. */
+export function onOpenSettings(show: (category: SettingsCategory) => void) {
+  const listener = (event: Event) =>
+    show((event as CustomEvent<SettingsCategory>).detail);
+  window.addEventListener(OPEN_SETTINGS, listener);
+  return () => window.removeEventListener(OPEN_SETTINGS, listener);
+}

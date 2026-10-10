@@ -13,6 +13,7 @@ import { api } from "../../lib/api";
 import { saveSentSettings } from "../agents/composer-settings";
 import { useNewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
+import { noteUsed } from "../../lib/used";
 
 export type Councils = ReturnType<typeof useCouncils>;
 
@@ -61,6 +62,7 @@ export function useCouncils({
           interactionMode: "default",
         });
         await api.startDeepReview(thread.id, config);
+        noteUsed("deep-review");
         onSent();
       });
       await listChanged();

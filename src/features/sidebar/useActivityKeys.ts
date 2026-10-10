@@ -4,6 +4,7 @@ import { modifierCode } from "../../../shared/shortcuts";
 import { mac } from "../../lib/mod-key";
 import { digitOf, holdsModifiersOf, useShortcut } from "../../lib/shortcuts";
 import type { ThreadActions } from "./useThreadActions";
+import { noteUsed } from "../../lib/used";
 
 const CMD_HINT_DELAY_MS = 500;
 
@@ -56,7 +57,10 @@ export function useActivityKeys({
       else if (reveal === undefined)
         reveal = window.setTimeout(() => setHeld(true), CMD_HINT_DELAY_MS);
       const digit = digitOf("jump-thread", e);
-      if (digit && jumpTo.current(digit - 1)) e.preventDefault();
+      if (digit && jumpTo.current(digit - 1)) {
+        e.preventDefault();
+        noteUsed("shortcut:jump-thread");
+      }
     };
     const up = (e: KeyboardEvent) => {
       if (!holdsModifiersOf("jump-thread", e)) release();

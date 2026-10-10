@@ -10,7 +10,7 @@ export interface KeyCombo {
   ctrl: boolean;
   meta: boolean;
   shift: boolean;
-  /** Pressed twice in a row, like Esc Esc to stop an answer. */
+  /** Pressed twice in a row, like 2× Esc to stop an answer. */
   twice?: boolean;
 }
 
@@ -143,7 +143,7 @@ const shortcutCommands = {
     title: "Stop the answer and pause queued messages",
     group: "Threads",
     description:
-      "Esc Esc needs a second press, so a stray Esc can't stop anything. Keys of your own stop right away.",
+      "2× Esc needs a second press, so a stray Esc can't stop anything. Keys of your own stop right away.",
     keywords: "cancel interrupt escape",
     defaults: one("Escape", true),
   },

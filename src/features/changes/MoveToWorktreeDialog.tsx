@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { noteUsed } from "../../lib/used";
 import "./changed-files.css";
 import "./worktrees.css";
 
@@ -33,6 +34,7 @@ export function MoveToWorktreeDialog({
     setError(undefined);
     try {
       await api.moveProjectChatToWorktree(chatId);
+      noteUsed("move-worktree");
       onClose();
     } catch (e) {
       setError(e);

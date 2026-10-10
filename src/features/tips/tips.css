@@ -1,0 +1,223 @@
+/* Takes only the room the thinking word leaves, so the word never shrinks
+   into an ellipsis. The empty part lets the pointer through. */
+.tip-peek {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 24px;
+  padding-left: 16px;
+  pointer-events: none;
+  cursor: default;
+}
+.tip-peek > * {
+  pointer-events: auto;
+}
+/* Faint until the pointer comes to it, so it never competes with the turn. */
+.tip-say {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0.45;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+  animation: tip-say-arrive 0.4s 0.4s ease backwards;
+}
+@keyframes tip-say-arrive {
+  from {
+    opacity: 0;
+  }
+}
+.tip-clip {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+.tip-peek:hover :is(.tip-say, .tip-clip),
+.tip-peek:focus-within :is(.tip-say, .tip-clip) {
+  opacity: 1;
+}
+.tip-ask {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tip-cta,
+.tip-dismiss {
+  flex: none;
+}
+.tip-keys {
+  font: inherit;
+  color: var(--text);
+}
+.tip-cta {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Outranks the global button:hover, which loads after this file. */
+.tip-peek button:hover {
+  background: none;
+}
+.tip-cta:hover {
+  text-decoration: underline;
+}
+.tip-dismiss {
+  display: flex;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  padding: 2px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tip-dismiss:hover {
+  color: var(--text);
+}
+.tip-clip {
+  position: relative;
+  flex: none;
+  width: 29px;
+  height: 24px;
+  /* Clip stands behind the row's bottom edge; above it he may climb out. */
+  clip-path: inset(-26px -4px 0 -4px);
+}
+
+/* Washed out in the accent colour, like a placeholder image. */
+.clip {
+  --clip-wire: color-mix(in oklab, var(--accent) 45%, var(--muted));
+  --clip-lid: color-mix(in oklab, var(--accent) 35%, var(--muted));
+  --clip-eye: color-mix(in oklab, var(--accent) 12%, white);
+  --clip-ink: color-mix(in oklab, var(--accent) 45%, black);
+}
+.clip svg {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1);
+  animation: clip-arrive 0.5s 0.1s cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+}
+.clip.near svg {
+  transform: translateY(-4px);
+}
+.clip.up svg {
+  transform: translateY(-12px);
+}
+.tip-peek.gone .clip svg {
+  transform: translateY(27px);
+  transition-timing-function: ease-in;
+}
+.tip-peek.gone :is(.tip-say, .tip-clip) {
+  opacity: 0;
+}
+@keyframes clip-arrive {
+  from {
+    transform: translateY(27px);
+  }
+}
+.clip-wire {
+  stroke: var(--clip-wire);
+}
+.clip-eye {
+  fill: var(--clip-eye);
+}
+.clip-rim {
+  fill: none;
+  stroke: var(--clip-ink);
+  stroke-width: 0.5;
+}
+.clip-pupil {
+  fill: var(--clip-ink);
+}
+.clip-lid path:first-child {
+  fill: var(--clip-lid);
+}
+.clip-line {
+  stroke: var(--clip-ink);
+  stroke-width: 0.55;
+}
+.clip-brow {
+  stroke: var(--clip-ink);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+.clip-smirk {
+  fill: none;
+  stroke: var(--clip-ink);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.clip-pupil,
+.clip-lid,
+.clip-brow {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.22s ease;
+}
+
+/* Scheming even at rest; squinting as the pointer comes; one brow up on it. */
+.clip-lid {
+  transform: translateY(0.5px);
+}
+.clip.near .clip-lid {
+  transform: translateY(1.3px);
+}
+.clip.near .clip-brow.l {
+  transform: translateY(0.7px) rotate(9deg);
+}
+.clip.near .clip-brow.r {
+  transform: translateY(0.7px) rotate(-9deg);
+}
+.clip.sly .clip-lid.l {
+  transform: translateY(1.6px);
+}
+.clip.sly .clip-lid.r {
+  transform: translateY(0.2px);
+}
+.clip.sly .clip-brow.l {
+  transform: translateY(0.9px) rotate(12deg);
+}
+.clip.sly .clip-brow.r {
+  transform: translateY(-1.7px) rotate(-16deg);
+}
+.clip.sly .clip-smirk {
+  opacity: 1;
+}
+.clip-brows.waggle .clip-brow.l {
+  animation: clip-waggle-l 0.7s ease;
+}
+.clip-brows.waggle .clip-brow.r {
+  animation: clip-waggle-r 0.7s ease;
+}
+@keyframes clip-waggle-l {
+  25%,
+  75% {
+    transform: translateY(-1.4px) rotate(4deg);
+  }
+  0%,
+  50%,
+  100% {
+    transform: translateY(0.9px) rotate(12deg);
+  }
+}
+@keyframes clip-waggle-r {
+  25%,
+  75% {
+    transform: translateY(-3px) rotate(-8deg);
+  }
+  0%,
+  50%,
+  100% {
+    transform: translateY(-1.7px) rotate(-16deg);
+  }
+}

@@ -29,6 +29,7 @@ import {
 import { matchedCombo, useShortcutLabel } from "../../lib/shortcuts";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import { DictationWave } from "./DictationWave";
+import { noteUsed } from "../../lib/used";
 import "./dictation.css";
 
 /** Held longer than this, the key is push-to-talk and letting go finishes. */
@@ -73,6 +74,7 @@ function onKeyDown(e: KeyboardEvent) {
   if (phase === "idle") {
     const composer = pick();
     if (!composer) return;
+    noteUsed("shortcut:dictate");
     press = { at: performance.now(), combo };
     composer.start();
   } else if (phase === "starting" || phase === "listening") {

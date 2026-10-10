@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAppearance } from "../../../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../../agents/cache-heat";
 import { setImagePills, useImagePills } from "../../images/image-pills";
+import { setTipsShown, useTipsShown } from "../../tips/tip-memory";
 import {
   setSidebarAutoHide,
   useSidebarAutoHide,
@@ -35,6 +36,7 @@ export function useAppearanceEntries(): SettingEntry[] {
   const appearance = useAppearance();
   const cacheHeat = useCacheHeat();
   const imagePills = useImagePills();
+  const tipsShown = useTipsShown();
   const sidebarAutoHide = useSidebarAutoHide();
   const smartNames = useSavedSetting(
     {
@@ -172,6 +174,18 @@ export function useAppearanceEntries(): SettingEntry[] {
           checked={cacheHeat}
           onChange={setCacheHeat}
         />
+      ),
+    },
+    {
+      id: "tips",
+      category: "appearance",
+      title: "Tips from Clip",
+      description:
+        "When an agent has been working a while, Clip peeks up at the right of its thinking line with one thing Relay can do that you haven't set up. Right-click him to turn tips off.",
+      keywords:
+        "tips clip paperclip clippy hints suggestions peek eyes working onboarding",
+      render: () => (
+        <Switch label="Show tips" checked={tipsShown} onChange={setTipsShown} />
       ),
     },
     {

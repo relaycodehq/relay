@@ -105,7 +105,7 @@ describe("saved shortcuts", () => {
   it("labels a digit family and a double press", async () => {
     const s = await load();
     expect(s.shortcutLabel("jump-thread")).toBe("⌘1–9");
-    expect(s.shortcutLabel("stop")).toBe("Esc Esc");
+    expect(s.shortcutLabel("stop")).toBe("2× Esc");
     expect(s.shortcutLabel("zoom-in")).toBe("⌘+");
     expect(s.digitOf("jump-thread", key("Digit4", { meta: true }))).toBe(4);
     expect(s.digitOf("jump-thread", key("Digit4", { ctrl: true }))).toBe(

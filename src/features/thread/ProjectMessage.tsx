@@ -45,6 +45,7 @@ import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { pilledImages, UserText, type SentImage } from "./UserText";
 import { signInOffer } from "./sign-in-offer";
+import { TipPeek } from "../tips/TipPeek";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -366,6 +367,7 @@ export const Message = memo(function Message({
                 }
               : undefined
           }
+          aside={chatId && <TipPeek chatId={chatId} message={m} />}
         />
       )}
       {chatId && !!m.renders?.length && (

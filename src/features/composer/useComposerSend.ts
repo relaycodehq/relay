@@ -14,6 +14,8 @@ import { flattenSketch } from "../images/sketch";
 import type { AgentRuns } from "./useAgentRuns";
 import type { ComposerDraft } from "./useComposerDraft";
 import type { ComposerState } from "./useComposerSettings";
+import { noteUsed } from "../../lib/used";
+import { parseGoalCommand } from "../../../shared/goal";
 
 /** Who the draft goes to, and whether a council thinks it over first; see shared/ultraplan. */
 export interface SendTarget {
@@ -149,6 +151,7 @@ export function useComposerSend({
           ...runs.contextFor(to),
         });
       if (sent) {
+        if (parseGoalCommand(body)?.type === "set") noteUsed("goal");
         await draft.forgetSent();
         after?.();
       }

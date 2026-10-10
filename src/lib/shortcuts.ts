@@ -17,6 +17,7 @@ import {
 } from "../../shared/shortcuts";
 import { mac } from "./mod-key";
 import { persistedStore } from "./persisted-store";
+import { noteUsed } from "./used";
 
 /**
  * Every app shortcut's keys: the defaults, and whatever the user changed in
@@ -295,6 +296,7 @@ export function useShortcut(
       if (popupOpen()) return;
       e.preventDefault();
       if (capture && field) e.stopPropagation();
+      noteUsed(`shortcut:${id}`);
       fire.current();
     };
     window.addEventListener("keydown", down, capture);
@@ -302,7 +304,7 @@ export function useShortcut(
   }, [id, enabled, repeat, capture]);
 }
 
-/** Esc Esc and the like, which only a dedicated handler can tell apart. */
+/** 2× Esc and the like, which only a dedicated handler can tell apart. */
 export const pressedTwice = (id: ShortcutId) =>
   bindings(id).some((c) => c.twice);
 
@@ -384,7 +386,7 @@ export function comboLabel(c: KeyCombo, digits?: boolean) {
   }
   if (digits) key = "1–9";
   const label = modifiersLabel(mods) + key;
-  return c.twice ? `${label} ${label}` : label;
+  return c.twice ? `2× ${label}` : label;
 }
 
 export const shortcutLabel = (id: ShortcutId) => {

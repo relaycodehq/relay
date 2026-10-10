@@ -307,6 +307,7 @@ export function AgentTurn({
   onChanges,
   images,
   open,
+  aside,
 }: {
   message: ChatMessage;
   projectRoot: string;
@@ -315,6 +316,8 @@ export function AgentTurn({
   images?: ReadImages;
   /** Stays open once it ends, where the run is what the reader came for. */
   open?: boolean;
+  /** Sits at the right end of the live thinking line. */
+  aside?: ReactNode;
 }) {
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
@@ -453,6 +456,7 @@ export function AgentTurn({
                         <ThinkingWord seed={message.id} />
                       </>
                     )}
+                    {aside}
                   </div>
                 </div>
               )}
