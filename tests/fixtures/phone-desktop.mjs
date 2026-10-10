@@ -20,6 +20,8 @@
 // the tool's limit). With --subagents its lead then sends Claude's agents off too.
 // --asks starts threads that end on what the phone has to tell: an open
 // question, a provider error envelope, a lost login and a page shown with show_html.
+// --rendering starts one thread that shows a page in two variants (a fluid card and a
+// table 760 px wide, to be scaled down) and one whose answer holds inline and display math.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -54,6 +56,7 @@ const claude = process.argv.includes("--claude");
 const images = process.argv.includes("--images");
 const subagents = process.argv.includes("--subagents");
 const asks = process.argv.includes("--asks");
+const rendering = process.argv.includes("--rendering");
 const family = Math.min(6, Number(arg("--family") ?? 0));
 if (claude && subagents) {
   console.error(
@@ -246,7 +249,7 @@ if (images) {
 }
 const pairing = await page
   .evaluate(
-    async ({ seed, images, repo, claude, subagents, asks, family }) => {
+    async ({ seed, images, repo, claude, subagents, asks, rendering, family }) => {
       const project = await window.relay.addProject();
       if (claude) {
         // Last sent on Claude's 1M window, as the desktop keeps it: "opus[1m]".
@@ -262,7 +265,7 @@ const pairing = await page
           interactionMode: "default",
         });
       }
-      if (seed || images || subagents || asks || family) {
+      if (seed || images || subagents || asks || rendering || family) {
         const settings = await window.relay.aiSettings();
         const start = async (body, provider = "codex") => {
           const chat = await window.relay.createProjectChat(project.id, {
@@ -314,6 +317,45 @@ const pairing = await page
             await new Promise((r) => setTimeout(r, 500));
           }
         }
+        if (rendering) {
+          const cell = (i) =>
+            `<td style="border:1px solid var(--border);padding:8px;height:56px">v${i}</td>`;
+          const head = (i) =>
+            `<th style="border:1px solid var(--border);padding:8px">col ${i}</th>`;
+          const cols = [...Array(8).keys()];
+          const shown = await start(
+            "fixture relay show_html " +
+              JSON.stringify({
+                title: "Phone render test",
+                variants: [
+                  {
+                    label: "Fluid",
+                    html:
+                      '<div style="padding:12px;border:1px solid var(--border);border-radius:8px">' +
+                      "<h3 style=\"margin:0 0 8px\">Fluid card</h3>" +
+                      '<p style="margin:0;color:var(--muted)">A page that already fits a phone.</p>' +
+                      '<p><a href="https://example.com">a link</a> ' +
+                      "<button onclick=\"relay.compose('Go with Fluid')\">Go with Fluid</button></p></div>",
+                  },
+                  {
+                    label: "Wide",
+                    html:
+                      '<table style="width:700px;border-collapse:collapse">' +
+                      `<tr>${cols.map(head).join("")}</tr><tr>${cols.map(cell).join("")}</tr></table>`,
+                  },
+                ],
+              }),
+          );
+          await window.relay.renameProjectChat(shown, "Shows pages");
+          await new Promise((r) => setTimeout(r, 500));
+          const math = await start(
+            "fixture echo: Rendering test. Inline: the loss is \\(L(\\theta) = \\frac{1}{n}\\sum_{i=1}^n \\ell_i\\) and with $\\alpha = 0.1$ the update is $\\theta_{t+1} = \\theta_t - \\alpha \\nabla L$. Prices stay prose: it costs $5 and $10, then $x_1$ is free.\n\n" +
+              "\\[\n\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}\n\\]\n\n" +
+              "$$\n\\begin{aligned}\na &= b + c \\\\\nd &= \\frac{e}{f}\n\\end{aligned}\n$$\n\n" +
+              "```\n$not math$ \\[ nor this \\]\n```",
+          );
+          await window.relay.renameProjectChat(math, "Shows math");
+        }
         if (family) {
           const threads = Array.from({ length: family }, (_, i) => ({
             prompt:
@@ -347,7 +389,7 @@ const pairing = await page
       await window.relay.setPhoneRemote(true);
       return window.relay.phonePairing();
     },
-    { seed, images, repo, claude, subagents, asks, family },
+    { seed, images, repo, claude, subagents, asks, rendering, family },
   )
   .catch(async (e) => {
     console.error(e);

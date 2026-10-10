@@ -3,7 +3,7 @@
 // that comes out wider than the screen is laid out at the width it needs and
 // scaled down to fit, rather than scrolled sideways.
 import {
-  clampRenderHeight,
+  RENDER_MAX_HEIGHT,
   RENDER_COMPOSE_CHARS,
   RENDER_CSP,
   withSeries,
@@ -87,7 +87,9 @@ function prependToHead(html: string, tag: string) {
 export const phoneRenderDocument = (html: string, theme: RenderTheme) =>
   prependToHead(
     /^\s*<!doctype/i.test(html) ? html : `<!doctype html>${html}`,
-    `<meta http-equiv="Content-Security-Policy" content="${PHONE_RENDER_CSP}"><script>${bootstrap(theme)}</script>`,
+    // Without a viewport an Android WebView lays a page out at about 980 px
+    // and shrinks it to fit, so nothing would be as large as it should.
+    `<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="${PHONE_RENDER_CSP}"><script>${bootstrap(theme)}</script>`,
   );
 
 /**
@@ -112,7 +114,11 @@ export function parseRenderMessage(data: string): RenderFromFrame | null {
     typeof height === "number" &&
     Number.isFinite(height)
   )
-    return { relayRender, height: clampRenderHeight(height) };
+    // A formula is one line tall: the desktop's minimum frame would triple it.
+    return {
+      relayRender,
+      height: Math.min(RENDER_MAX_HEIGHT, Math.max(1, Math.ceil(height))),
+    };
   if (
     relayRender === "link" &&
     typeof href === "string" &&

@@ -17,7 +17,7 @@ describe("phoneRenderDocument", () => {
       LIGHT_RENDER_THEME,
     );
     expect(html).toMatch(
-      /^<!doctype html><html><head><meta http-equiv="Content-Security-Policy"[^>]*><script>[\s\S]*<\/script><title>x<\/title>/,
+      /^<!doctype html><html><head><meta name="viewport"[^>]*><meta http-equiv="Content-Security-Policy"[^>]*><script>[\s\S]*<\/script><title>x<\/title>/,
     );
     expect(html).toContain("ReactNativeWebView.postMessage");
   });
@@ -61,6 +61,13 @@ describe("parseRenderMessage", () => {
     expect(parse({ relayRender: "compose", text: "Go with B" })).toEqual({
       relayRender: "compose",
       text: "Go with B",
+    });
+  });
+
+  it("takes a short page's own height, as a one-line formula needs", () => {
+    expect(parse({ relayRender: "size", height: 41 })).toEqual({
+      relayRender: "size",
+      height: 41,
     });
   });
 

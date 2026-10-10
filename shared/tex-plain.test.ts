@@ -12,6 +12,7 @@ describe("texToPlain", () => {
     ["\\sqrt{x}", "√x"],
     ["\\sqrt{x+1}", "√(x+1)"],
     ["\\mathbb{R}^n", "ℝⁿ"],
+    ["\\ell_i + \\hbar", "ℓᵢ + ℏ"],
     ["\\sum_{i=1}^n x_i", "∑ᵢ₌₁ⁿ xᵢ"],
     ["a \\leq b \\to c", "a ≤ b → c"],
     ["\\text{if } x \\in S", "if x ∈ S"],

@@ -40,7 +40,7 @@ export const RenderFrame = memo(function RenderFrame({
         onSize?.(message.height);
       } else if (message.relayRender === "link")
         void Linking.openURL(message.href).catch(() => {});
-      else onCompose?.(message.text);
+      else if (message.relayRender === "compose") onCompose?.(message.text);
     },
     [onCompose, onSize],
   );
@@ -75,8 +75,12 @@ export const RenderFrame = memo(function RenderFrame({
           thirdPartyCookiesEnabled={false}
           sharedCookiesEnabled={false}
           allowsLinkPreview={false}
-          // The system's font size would rescale a page laid out in CSS pixels.
+          // The system's font size would rescale a page laid out in CSS pixels,
+          // and pinching one would pull the thread's scroll out of the user's hand.
           textZoom={100}
+          scalesPageToFit={false}
+          setBuiltInZoomControls={false}
+          setDisplayZoomControls={false}
           // The page is as tall as it says; only one past the cap scrolls itself.
           scrollEnabled={height >= RENDER_MAX_HEIGHT}
           nestedScrollEnabled
