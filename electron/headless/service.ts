@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { inSshSession, startOutsideSession } from "./outside-session";
 import { headlessPaths } from "./paths";
 
 const run = promisify(execFile);
@@ -201,7 +202,20 @@ const readUtf16 = (bytes: Buffer) =>
     : bytes.toString("utf8");
 
 /** Runs the Startup script now, as signing in would. */
-function launchWindows(file: string) {
+async function launchWindows(file: string) {
+  if (inSshSession()) {
+    const wscript = join(
+      process.env.SystemRoot ?? "C:\\Windows",
+      "System32",
+      "wscript.exe",
+    );
+    await startOutsideSession(
+      `"${wscript}" "${file}"`,
+      dirname(file),
+      process.env,
+    );
+    return;
+  }
   spawn("wscript.exe", [file], {
     detached: true,
     stdio: "ignore",
@@ -261,7 +275,7 @@ export async function installService(spec: ServiceSpec) {
   await mkdir(headlessPaths(spec.home).logs, { recursive: true, mode: 0o700 });
   if (kind === "windows") {
     await writeFile(file, utf16(windowsLauncher(spec)));
-    launchWindows(file);
+    await launchWindows(file);
     return {
       kind,
       file,
@@ -320,7 +334,7 @@ export async function startService() {
   const kind = installedService();
   if (!kind) return false;
   if (kind === "windows") {
-    launchWindows(serviceFile(kind));
+    await launchWindows(serviceFile(kind));
     return true;
   }
   if (kind === "systemd") {

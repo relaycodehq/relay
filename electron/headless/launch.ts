@@ -15,6 +15,7 @@ import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
 import { headlessPaths, privateDirectory } from "./paths";
 import { lockPath } from "./lock";
+import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
 
 /** What a Relay run as a service exits with to be started again. */
@@ -160,28 +161,45 @@ export async function startDetached(
     await startService();
     return { status: await answering(home), via: "service" };
   }
-  const child = spawnRelay(home, script);
-  let code: number | null = null;
-  child.once("exit", (c) => (code = c ?? 1));
-  return { status: await answering(home, () => code), via: "process" };
+  const exited = await spawnRelay(home, script);
+  return { status: await answering(home, exited), via: "process" };
 }
 
-/** Relay in the background, apart from this process; what it prints goes to relay.out.log. */
-export function spawnRelay(home: string, script: string) {
+/**
+ * Relay in the background, apart from this process; what it prints goes to
+ * relay.out.log. Resolves to how it exited, null while it runs.
+ */
+export async function spawnRelay(
+  home: string,
+  script: string,
+): Promise<() => number | null> {
   const { logs } = headlessPaths(home);
   mkdirSync(logs, { recursive: true, mode: 0o700 });
-  const out = openSync(join(logs, "relay.out.log"), "a", 0o600);
+  const log = join(logs, "relay.out.log");
+  const env = { ...process.env, RELAY_HOME: home };
+  if (inSshSession()) {
+    const shell = process.env.ComSpec ?? "cmd.exe";
+    const pid = await startOutsideSession(
+      `"${shell}" /d /s /c ""${process.execPath}" "${script}" run --background >> "${log}" 2>&1"`,
+      home,
+      env,
+    );
+    return () => (alive(pid) ? null : 1);
+  }
+  const out = openSync(log, "a", 0o600);
   const child = spawn(process.execPath, [script, "run", "--background"], {
     // Not wherever `relay` was typed: Windows can't rename a folder a process is in.
     cwd: home,
     detached: true,
     stdio: ["ignore", out, out],
-    env: { ...process.env, RELAY_HOME: home },
+    env,
     windowsHide: true,
   });
   closeSync(out);
   child.unref();
-  return child;
+  let code: number | null = null;
+  child.once("exit", (c) => (code = c ?? 1));
+  return () => code;
 }
 
 /** The lock owns the home; the PID file is only status, never a lock itself. */

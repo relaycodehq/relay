@@ -454,7 +454,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         await rm(paths.control, { force: true });
       await releaseHome();
       if (restart && process.env.RELAY_SERVICE) process.exit(restartCode);
-      if (restart) spawnRelay(home, join(__dirname, "relay.cjs"));
+      if (restart) await spawnRelay(home, join(__dirname, "relay.cjs"));
       process.exit(0);
     })());
   onAppQuit(() => void shutDown(false));
