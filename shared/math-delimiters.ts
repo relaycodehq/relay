@@ -108,14 +108,23 @@ function inlineMath(line: string): string {
   return out + convertInline(line.slice(at));
 }
 
-/** `\[x\]` is also how prose escapes brackets, so it needs a formula's look. */
-const FORMULA_LOOK = /[\\^_={}]/;
+/**
+ * `\[x\]` is also how prose escapes brackets, so it needs a formula's look.
+ * A regular expression in prose, `\[\d+\]` or `\[\w{2,4}\]`, has its escapes
+ * and counts set aside first; `\sigma` and `\frac` stay, being longer.
+ */
+const formulaLook = (tex: string) =>
+  /[\\^_={}]/.test(
+    tex
+      .replace(/\\[dDwWsSbBntr](?![A-Za-z])|\\[.*+?()|/[\]-]/g, "")
+      .replace(/\{\d+(?:,\d*)?\}/g, ""),
+  );
 
 function convertInline(text: string): string {
   const parens = text
     .replace(/\\\(\s*(.+?)\s*\\\)/g, (_, tex: string) => `$$${tex}$$`)
     .replace(/\\\[\s*(.+?)\s*\\\]/g, (all, tex: string) =>
-      FORMULA_LOOK.test(tex) ? `$$${tex}$$` : all,
+      formulaLook(tex) ? `$$${tex}$$` : all,
     );
   return pandocDollars(parens);
 }

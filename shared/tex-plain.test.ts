@@ -24,11 +24,20 @@ describe("texToPlain", () => {
     expect(texToPlain(tex)).toBe(expected);
   });
 
+  it("writes cube and fourth roots with their own signs", () => {
+    expect(texToPlain("\\sqrt[3]{x}")).toBe("∛x");
+    expect(texToPlain("\\sqrt [4] {x+1}")).toBe("∜(x+1)");
+  });
+
   it.each([
     "\\begin{pmatrix} a & b \\end{pmatrix}",
     "a \\\\ b",
     "\\unknownmacro{x}",
     "\\mathbb{X}",
+    "\\sqrt[n]{x}",
+    "\\toString x",
+    "\\hasOwnProperty{x}",
+    "\\mathbb{constructor}",
     "x^",
     "{a",
     "a}",

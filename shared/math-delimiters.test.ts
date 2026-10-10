@@ -5,6 +5,7 @@ describe("normalizeMath", () => {
   it.each([
     ["inline parens", "so \\(x^2\\) holds", "so $$x^2$$ holds"],
     ["inline brackets", "so \\[a_1 + b\\] holds", "so $$a_1 + b$$ holds"],
+    ["inline brackets with a command", "so \\[\\sigma\\] holds", "so $$\\sigma$$ holds"],
     [
       "pandoc dollars",
       "so $x_1$ and $\\alpha$.",
@@ -38,6 +39,7 @@ describe("normalizeMath", () => {
     "Set $HOME/$USER and $PATH:$HOME.",
     "A \\$5 fee and \\$x\\$.",
     "Tag \\[WIP\\] and \\[draft\\].",
+    "Match \\[\\d+\\] or \\[\\w{2,4}\\.\\s\\] in the log.",
     "Already $$x$$ inline stays.",
     "`$x$` and ``\\(x\\)`` are code",
     "```\n$x$\n\\[\n$$\n```",

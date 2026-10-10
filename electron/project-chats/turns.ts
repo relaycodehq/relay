@@ -97,6 +97,8 @@ export class ChatTurns {
         await stepped;
         await this.queue.drain(chat.id);
         await this.ended(chat.id);
+        // A review that stopped or failed has no lead turn whose end would look at it.
+        if (chat.reviewer) await this.ended(chat.reviewer.parent);
       })
       .catch((e) => console.warn("Could not send the queued messages:", e));
   }

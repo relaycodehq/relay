@@ -280,6 +280,10 @@ const TRANSPARENT = new Set([
 
 class Unsupported extends Error {}
 
+/** `table[key]`, but not what every object inherits, like `constructor`. */
+const own = (table: Record<string, string>, key: string) =>
+  Object.hasOwn(table, key) ? table[key] : undefined;
+
 /** The formula in plain text, or null when it uses anything this doesn't cover. */
 export function texToPlain(tex: string): string | null {
   try {
@@ -351,22 +355,39 @@ class Reader {
       return `${wrap(top)}/${wrap(bottom)}`;
     }
     if (name === "sqrt") {
+      const sign = this.rootSign();
       const root = this.argument();
-      return /^[\p{L}\p{N}]+$/u.test(root) ? `√${root}` : `√(${root})`;
+      return /^[\p{L}\p{N}]+$/u.test(root)
+        ? `${sign}${root}`
+        : `${sign}(${root})`;
     }
     if (name === "mathbb") {
       const letter = this.argument();
-      const mapped = BLACKBOARD[letter];
+      const mapped = own(BLACKBOARD, letter);
       if (!mapped) throw new Unsupported();
       return mapped;
     }
-    if (name in ACCENTS) {
+    const accent = own(ACCENTS, name);
+    if (accent) {
       const base = this.argument();
-      return base.length === 1 ? base + ACCENTS[name] : `${name}(${base})`;
+      return base.length === 1 ? base + accent : `${name}(${base})`;
     }
     if (TRANSPARENT.has(name)) return this.argument();
-    const symbol = SYMBOLS[name];
+    const symbol = own(SYMBOLS, name);
     if (symbol === undefined) throw new Unsupported();
     return symbol;
+  }
+
+  /** `\sqrt`'s sign, `∛` or `∜` for a cube or fourth root, which have one. */
+  private rootSign() {
+    const index = /^\s*\[\s*(\d+)\s*\]/.exec(this.src.slice(this.at));
+    if (!index) {
+      if (/^\s*\[/.test(this.src.slice(this.at))) throw new Unsupported();
+      return "√";
+    }
+    this.at += index[0].length;
+    const sign = own({ "2": "√", "3": "∛", "4": "∜" }, index[1]!);
+    if (!sign) throw new Unsupported();
+    return sign;
   }
 }

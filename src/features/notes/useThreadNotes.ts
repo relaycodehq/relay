@@ -9,6 +9,8 @@ import {
 import { api } from "../../lib/api";
 
 const NONE: ThreadNote[] = [];
+/** The mark each thread's cached notes were last brought up to. */
+const cachedAt = new Map<string, string | undefined>();
 export const notesKey = (chatId: string | undefined) => [
   "thread-notes",
   chatId,
@@ -44,13 +46,19 @@ export function useThreadNotes(
     enabled: !!id && !!mark,
     staleTime: Infinity,
   });
-  // The first fetch is the query's own; later marks fetch again.
-  const seen = useRef(mark);
+  // Remembered past the thread being open, since its cached notes outlive that.
   useEffect(() => {
-    if (seen.current === mark) return;
-    seen.current = mark;
+    if (!id) return;
+    const known = cachedAt.has(id);
+    const was = cachedAt.get(id);
+    cachedAt.set(id, mark);
+    if (known && was === mark) return;
+    // Nothing cached yet: the first fetch is the query's own.
+    if (qc.getQueryData(key) === undefined) return;
     if (mark) void qc.invalidateQueries({ queryKey: key, exact: true });
-  }, [qc, key, mark]);
+    // No mark is no notes, and a disabled query would keep showing the old ones.
+    else qc.setQueryData(key, NONE);
+  }, [qc, id, key, mark]);
   // A note kept here shows before the list's mark catches up.
   const notes = query.data ?? NONE;
 

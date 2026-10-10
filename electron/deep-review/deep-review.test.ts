@@ -691,6 +691,23 @@ it("stops its reviewers with the review, and picks up where it stopped", async (
   );
 });
 
+it("brings a review settled while it ran back when it stops without a lead", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ reviewers: [{ provider: "codex", choice }] }),
+  );
+  await chats.triage(chat.id, { kind: "settle-when-done" });
+  expect((await chats.get(chat.id)).settleWhenDone).toBeDefined();
+  await chats.cancel(chat.id);
+  await vi.waitFor(async () => {
+    const after = await chats.get(chat.id);
+    expect(after.settleWhenDone).toBeUndefined();
+    expect(after.settledAt).toBeUndefined();
+  });
+});
+
 it("stays resumable when the agent answers a question after a stop", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "review" });

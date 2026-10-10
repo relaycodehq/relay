@@ -28,7 +28,8 @@ export function serveRenders(read: ReadPage) {
     const parts = url.pathname.split("/").filter(Boolean);
     let html: string | undefined;
     try {
-      if (url.host === "draft" && parts.length === 1)
+      // A zoomed shot's draft comes from a host of its own; see lookAtPage.
+      if ((url.host === "draft" || url.host.startsWith("shot-")) && parts.length === 1)
         html = renderDrafts.get(parts[0]);
       else if (url.host === "render" && parts.length === 3)
         html = await read(parts[0], parts[1], Number(parts[2]));

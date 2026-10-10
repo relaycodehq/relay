@@ -104,7 +104,11 @@ export class ThreadTriage {
       chat.snoozedUntil = triage.until;
     }
     await this.core.storage.save(chat);
-    if (triage.kind === "settle" || !chat.settleWhenDone)
+    // Settle-when-done that waits for the run settles them once it ends.
+    if (
+      triage.kind === "settle" ||
+      (triage.kind === "settle-when-done" && !chat.settleWhenDone)
+    )
       await this.settleStarted(id, now);
     return chatSummary(chat);
   }

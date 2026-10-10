@@ -88,6 +88,16 @@ it("settling a thread settles the threads it started that are done, and undo bri
   expect((await chats.get(done.id)).settledAt).toBeUndefined();
 });
 
+it("snoozing or unsettling a thread leaves the threads it started as they were", async () => {
+  const lead = await chats.create(projectId, scope);
+  const startedBy = { chatId: lead.id, agent: "claude" as const };
+  const done = await chats.create(projectId, scope, "checkout", startedBy);
+  await chats.triage(lead.id, { kind: "snooze", until: Date.now() + 3_600_000 });
+  expect((await chats.get(done.id)).settledAt).toBeUndefined();
+  await chats.triage(lead.id, { kind: "unsettle" });
+  expect((await chats.get(done.id)).settledAt).toBeUndefined();
+});
+
 /** A thread with a turn running, and the way to end it as `status`. */
 async function runningThread() {
   const thread = await chats.create(projectId, scope);

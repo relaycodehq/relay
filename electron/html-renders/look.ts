@@ -77,7 +77,8 @@ export async function lookAtPage(
     enableLargerThanScreen: true,
     webPreferences: {
       offscreen: true,
-      // Zoom is kept per origin, so a zoomed shot gets a session of its own.
+      // Zoom is kept per origin, so a zoomed shot gets a session of its own,
+      // and an origin of its own in it so two shots' zooms can't meet.
       session: scale === 1 ? undefined : shotSession(),
       sandbox: true,
       contextIsolation: true,
@@ -109,7 +110,7 @@ export async function lookAtPage(
   let loadError: string | undefined;
   try {
     await Promise.race([
-      win.loadURL(`${RENDER_SCHEME}://draft/${token}#theme=${encodeURIComponent(JSON.stringify(theme))}`),
+      win.loadURL(`${RENDER_SCHEME}://${scale === 1 ? "draft" : `shot-${token}`}/${token}#theme=${encodeURIComponent(JSON.stringify(theme))}`),
       pause(LOAD_MS).then(() => {
         throw new Error(`The page didn't finish loading in ${LOAD_MS / 1000}s.`);
       }),
