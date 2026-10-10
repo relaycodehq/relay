@@ -1,6 +1,7 @@
 import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
+import type { PlaySoundEvent } from "./sounds";
 
 /** A thread's message as it streams or changes; `title` once the thread is named. */
 export interface ProjectChatEvent {
@@ -24,4 +25,5 @@ export interface RelayEvents {
   "relay:project-adding": AddingJob | null;
   "relay:preview": PreviewState;
   "relay:preview-reveal": PreviewReveal;
+  "relay:play-sound": PlaySoundEvent;
 }

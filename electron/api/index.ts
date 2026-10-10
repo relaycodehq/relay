@@ -18,6 +18,7 @@ import { reviewCheckoutHandlers } from "./review-checkout";
 import { reviewHandlers } from "./reviews";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
+import { soundHandlers } from "./sounds";
 import { terminalHandlers } from "./terminals";
 import { previewHandlers } from "./previews";
 import { usageHandlers } from "./usage";
@@ -40,6 +41,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
     renderHandlers(ctx),
+    soundHandlers(ctx),
     pluginHandlers(ctx),
     desktopHandlers(ctx),
     computerHandlers(ctx),

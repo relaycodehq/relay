@@ -1,4 +1,5 @@
 import {
+  Bell,
   Bot,
   FolderGit2,
   Info,
@@ -103,6 +104,13 @@ export const categories: {
     description:
       "Have answers read to you by a voice that runs on this computer.",
     icon: Volume2,
+  },
+  {
+    id: "sounds",
+    label: "Sounds",
+    description:
+      "A sound when a thread finishes, needs you or fails while you're looking elsewhere. Each project can pick its own.",
+    icon: Bell,
   },
   {
     id: "shortcuts",

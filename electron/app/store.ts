@@ -28,6 +28,10 @@ interface State {
   smartProjectNames?: boolean;
   /** Keep the computer from idling to sleep while Relay runs; unset is on. */
   keepAwake?: boolean;
+  /** Sounds for threads that finish, need you or fail; unset plays nothing. */
+  sounds?: import("../../shared/sounds").SoundSettings;
+  /** Sound files added in Settings → Sounds, kept in `sounds/` under app data. */
+  customSounds?: import("../sounds").StoredCustomSound[];
   /** Flag what I'd miss in Claude threads; unset is off. */
   watchThreads?: import("../../shared/watch").WatchScope;
   /** When agents show pages in answers; unset is auto. */
@@ -94,7 +98,8 @@ export class Store {
     await this.queue;
     if (this.writeError) throw this.writeError;
   }
-  constructor(private dir: string) {}
+  /** App data; other services keep their files beside state.json. */
+  constructor(readonly dir: string) {}
   async load() {
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
     try {

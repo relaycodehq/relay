@@ -1,0 +1,57 @@
+.sound-setting,
+.sound-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sound-volume input[type="range"] {
+  width: 180px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.sound-volume .settings-row-value {
+  min-width: 40px;
+  text-align: right;
+}
+.sound-try,
+.sound-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+.sound-try:disabled {
+  opacity: 0.4;
+}
+.custom-sounds {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.custom-sound {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 260px;
+}
+.custom-sound > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sound-remove {
+  color: var(--muted);
+}
+.sound-remove:hover {
+  color: var(--danger);
+}
+.sound-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+}

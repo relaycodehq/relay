@@ -11,6 +11,12 @@ import {
   ProjectDevPortField,
   ProjectWorktreeCommandField,
 } from "../../projects/ProjectSettings";
+import { ProjectSoundSelect } from "../../sounds/SoundSettings";
+import {
+  soundEventHints,
+  soundEventLabels,
+  soundEvents,
+} from "../../../../shared/sounds";
 
 /** What the project opened from its own menu does its own way. */
 export function projectEntries(project: Project | undefined): SettingEntry[] {
@@ -107,6 +113,16 @@ export function projectEntries(project: Project | undefined): SettingEntry[] {
       keywords: "settle settled auto commit git done finished trigger agent",
       render: () => <ProjectCommitSettleSwitch project={project} />,
     },
+    ...soundEvents.map((event): SettingEntry => ({
+      id: `project-sound-${event}`,
+      category: "project",
+      section: "Sounds",
+      title: soundEventLabels[event],
+      description: soundEventHints[event],
+      keywords:
+        "sound sounds audio chime notification ping done needs you waiting failed",
+      render: () => <ProjectSoundSelect project={project} event={event} />,
+    })),
     ...(project.plain
       ? []
       : [

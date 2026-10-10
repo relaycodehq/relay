@@ -88,6 +88,7 @@ import {
 } from "./agents/accounts";
 import { ProjectAdding } from "./project-add";
 import { TerminalSessions } from "./terminal-sessions";
+import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
 import {
@@ -103,10 +104,10 @@ if (!process.env.RELAY_TEST_DATA)
   app.setPath("userData", join(app.getPath("appData"), "Relay Experimental"));
 // One place on every platform, beside the rest of Relay's data.
 app.setAppLogsPath(join(app.getPath("userData"), "logs"));
-startLog(app.getPath("logs"), app.getVersion());
 // Specs run in the background on a real machine: silent unless one listens for sound.
 if (process.env.RELAY_TEST_DATA && process.env.RELAY_TEST_SOUND !== "1")
   app.commandLine.appendSwitch("mute-audio");
+startLog(app.getPath("logs"), app.getVersion());
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
@@ -123,6 +124,8 @@ let projectChats: ProjectChats | undefined;
 let previews: ThreadPreviews | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
+/** Thread sounds while the window is closed; headless Relay wires none. */
+let menubarSounds: MenubarSounds | undefined;
 /** Handing threads to other computers running Relay. */
 let handoffs: { computers: Computers; sender: Handoffs } | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
@@ -176,6 +179,7 @@ const quit = new Quit({
   },
   release: () => {
     menubar.destroy();
+    menubarSounds?.dispose();
     keepAwake.dispose();
     threadTerminals.closeAll();
     previews?.dispose();
@@ -276,6 +280,7 @@ app
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
+    menubarSounds = new MenubarSounds(loaded, () => !!window.win);
     // The host runs from a plain file: Node can't start a module inside app.asar.
     const hostScript = join(__dirname, "agent-host.mjs").replace(
       /app\.asar([\\/])/,
@@ -348,6 +353,7 @@ app
       (event) => {
         window.send("relay:project-chat", event);
         phoneRemote?.chatEvent(event);
+        menubarSounds?.chatEvent(event);
       },
       async (chat, selection) => {
         if (chat.scope.kind !== "pr")
@@ -463,6 +469,7 @@ app
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
       window.send("relay:project-chats", event);
       phoneRemote?.chatsEvent(event);
+      menubarSounds?.chatsEvent(event);
     });
     chats.onSummaries((projectId) => {
       summaries.changed(projectId);

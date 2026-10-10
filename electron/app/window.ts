@@ -226,12 +226,17 @@ export class AppWindow {
         app.quit();
       }
     });
-    if (dev && !app.isPackaged) {
-      // scripts/dev.mjs's URL: Vite's port, moved up in a worktree.
-      const port = 5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
-      if (dev !== `http://127.0.0.1:${port}`)
-        throw new Error("Invalid dev URL");
-      void win.loadURL(dev);
-    } else void win.loadFile(root);
+    void loadPage(win);
   }
+}
+
+/** Loads Relay's page into `win`; `search` asks it to be something other than the app. */
+export function loadPage(win: BrowserWindow, search?: string) {
+  if (dev && !app.isPackaged) {
+    // scripts/dev.mjs's URL: Vite's port, moved up in a worktree.
+    const port = 5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
+    if (dev !== `http://127.0.0.1:${port}`) throw new Error("Invalid dev URL");
+    return win.loadURL(search ? `${dev}/?${search}` : dev);
+  }
+  return win.loadFile(root, search ? { search } : undefined);
 }

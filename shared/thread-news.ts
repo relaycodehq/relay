@@ -20,6 +20,20 @@ export type LastAnswer = Pick<
   "status" | "body" | "error" | "provider"
 >;
 
+/** What news needs to know of a thread; the desktop's and the phone's lists both have it. */
+export type NewsChat = Pick<
+  RemoteChatSummary,
+  | "id"
+  | "title"
+  | "provider"
+  | "running"
+  | "waiting"
+  | "limitResume"
+  | "snoozedUntil"
+  | "seenAt"
+  | "updated"
+>;
+
 const previewLength = 240;
 
 /**
@@ -27,8 +41,8 @@ const previewLength = 240;
  * isn't news, nor one read where it happened: someone is watching it there.
  */
 export function threadNews(
-  before: ReadonlyMap<string, RemoteChatSummary>,
-  now: readonly RemoteChatSummary[],
+  before: ReadonlyMap<string, NewsChat>,
+  now: readonly NewsChat[],
   answers: ReadonlyMap<string, LastAnswer>,
   at = Date.now(),
 ): ThreadNews[] {

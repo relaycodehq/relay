@@ -75,3 +75,6 @@ export function useArrival(chatId: string | undefined) {
   const arrival = useSyncExternalStore(subscribe, () => current);
   return arrival && arrival.chatId === chatId ? arrival : undefined;
 }
+
+/** The thread on screen, as the sidebar last marked it read; undefined with none open. */
+export const openThreadId = () => current?.chatId;

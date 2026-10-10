@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Repo } from "../types";
+import { projectSoundsSchema } from "../sounds";
 import { linkedFoldersSchema } from "./links";
 import { chatWorkspaceSchema } from "./threads";
 
@@ -57,6 +58,8 @@ export const projectSettingsSchema = z
     devCommand: worktreeCommand.optional(),
     /** Where its dev server listens in the checkout; a worktree adds its RELAY_PORT_OFFSET. */
     devPort: z.number().int().min(1).max(65535).optional(),
+    /** Sounds for its threads; see shared/sounds. */
+    sounds: projectSoundsSchema.optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
