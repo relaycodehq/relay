@@ -16,7 +16,10 @@ const PARTITION = "device-hub";
 export class DeviceView {
   private view?: WebContentsView;
   private hub?: RunningHub;
+  /** The tab wants the page; it's only in the window once it has loaded. */
   private shown = false;
+  private attached = false;
+  private loaded = false;
   private placed = 0;
   private unload?: NodeJS.Timeout;
   snapshot?: string;
@@ -55,10 +58,22 @@ export class DeviceView {
       event.preventDefault();
       if (/^https?:/i.test(url)) void shell.openExternal(url);
     });
+    // Until the page paints, the tab keeps showing the last frame.
+    const ready = () => {
+      if (this.view !== view) return;
+      this.loaded = true;
+      this.attach();
+    };
+    wc.once("did-finish-load", ready);
+    // -3 is a load another navigation replaced, not one that failed.
+    wc.on("did-fail-load", (_e, code, _text, _url, mainFrame) => {
+      if (mainFrame && code !== -3) ready();
+    });
     // The link trades the token for a cookie and drops it from the address.
     void wc.loadURL(`${hub.origin}/?token=${hub.token}`).catch(() => {});
     this.view = view;
     this.hub = hub;
+    this.loaded = false;
     return view;
   }
 
@@ -77,9 +92,16 @@ export class DeviceView {
       width: Math.max(0, Math.round(bounds.width * zoom)),
       height: Math.max(0, Math.round(bounds.height * zoom)),
     });
-    if (this.shown) return;
-    win.contentView.addChildView(view);
     this.shown = true;
+    this.attach();
+  }
+
+  private attach() {
+    const win = this.window.win;
+    if (!this.shown || this.attached || !this.loaded || !this.view) return;
+    if (!win || win.isDestroyed()) return;
+    win.contentView.addChildView(this.view);
+    this.attached = true;
     if (this.snapshot) {
       this.snapshot = undefined;
       this.changed();
@@ -89,7 +111,7 @@ export class DeviceView {
   private async hideWithSnapshot(call: number) {
     if (!this.shown) return;
     const wc = this.view?.webContents;
-    if (wc && !wc.isDestroyed()) {
+    if (this.attached && wc && !wc.isDestroyed()) {
       const frame = await wc.capturePage().catch(() => null);
       if (call !== this.placed) return;
       if (frame && !frame.isEmpty())
@@ -104,8 +126,9 @@ export class DeviceView {
     if (!this.shown) return;
     this.shown = false;
     const win = this.window.win;
-    if (win && !win.isDestroyed() && this.view)
+    if (this.attached && win && !win.isDestroyed() && this.view)
       win.contentView.removeChildView(this.view);
+    this.attached = false;
     clearTimeout(this.unload);
     this.unload = setTimeout(() => {
       if (!this.shown) this.destroy();

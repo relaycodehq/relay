@@ -17,6 +17,8 @@ describe("tokenIn", () => {
 
   it("waits for the whole line", () => {
     expect(tokenIn("Local:   http://localhost:3461/?token=hWPb")).toBeUndefined();
+    // Long enough to pass for a token, but the chunk ended mid-way.
+    expect(tokenIn("Local:   http://localhost:3461/?token=hWPbzF85TqTx9hKFsfJy")).toBeUndefined();
   });
 });
 

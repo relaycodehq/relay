@@ -60,9 +60,9 @@ export function hubEnv(
   };
 }
 
-/** The session token the hub prints in its startup link. */
+/** The session token the hub prints in its startup link, once all of it is in. */
 export function tokenIn(output: string): string | undefined {
-  return /[?&]token=([\w-]{16,})/.exec(output)?.[1];
+  return /[?&]token=([\w-]{16,})(?=[^\w-])/.exec(output)?.[1];
 }
 
 const freePort = () =>
@@ -102,6 +102,7 @@ export class DeviceHub {
   private running?: RunningHub;
   private starting?: Promise<RunningHub>;
   private disposed = false;
+  private quitting = new AbortController();
 
   constructor(
     private dir: string,
@@ -163,7 +164,6 @@ export class DeviceHub {
       });
       this.set("starting");
       const hub = await this.launch(node, hubEnv(process.env, sdk));
-      if (this.disposed) throw new Error("Relay is quitting.");
       this.running = hub;
       this.set("running");
       return hub;
@@ -171,6 +171,10 @@ export class DeviceHub {
       this.set("failed", e instanceof Error ? e.message : String(e));
       throw e;
     }
+  }
+
+  private checkDisposed() {
+    if (this.disposed) throw new Error("Relay is quitting.");
   }
 
   private async install() {
@@ -194,6 +198,7 @@ export class DeviceHub {
         `${PACKAGE}@${HUB_VERSION}`,
       ],
       INSTALL_TIMEOUT,
+      this.quitting.signal,
     );
     if (run.code === 0 && (await this.installed())) return;
     await rm(this.home, { recursive: true, force: true });
@@ -207,6 +212,7 @@ export class DeviceHub {
   private async launch(node: string, env: NodeJS.ProcessEnv): Promise<RunningHub> {
     const port = await freePort();
     const origin = `http://127.0.0.1:${port}`;
+    this.checkDisposed();
     const child = spawn(
       node,
       [
@@ -234,22 +240,29 @@ export class DeviceHub {
     };
     child.stdout!.on("data", read);
     child.stderr!.on("data", read);
-    const exited = new Promise<never>((_, reject) =>
+    const gone = () => {
+      if (this.child !== child) return;
+      this.child = this.running = undefined;
+      if (!this.disposed && this.status === "running")
+        this.set("failed", "The device hub stopped. Start it again to keep watching.");
+    };
+    const exited = new Promise<never>((_, reject) => {
       child.once("exit", (code) => {
+        gone();
         reject(
           new Error(
             `The device hub stopped (exit ${code ?? "signal"}):\n${output.trim().slice(-1500)}`,
           ),
         );
-      }),
-    );
-    exited.catch(() => {});
-    child.once("exit", () => {
-      if (this.child !== child) return;
-      this.child = this.running = undefined;
-      if (!this.disposed && this.status === "running")
-        this.set("failed", "The device hub stopped. Start it again to keep watching.");
+      });
+      // A process that never started emits only this, never exit.
+      child.on("error", (error) => {
+        if (child.pid) return console.warn("Device hub process error:", error);
+        gone();
+        reject(new Error(`The device hub couldn't start: ${error.message}`));
+      });
     });
+    exited.catch(() => {});
     const deadline = Date.now() + READY_TIMEOUT;
     while (Date.now() < deadline) {
       const ready = await this.fetch(`${origin}/readyz`).then(
@@ -265,6 +278,7 @@ export class DeviceHub {
 
   async dispose() {
     this.disposed = true;
+    this.quitting.abort();
     const child = this.child;
     this.child = this.running = undefined;
     if (child) await stopProcessTree(child).catch(() => {});

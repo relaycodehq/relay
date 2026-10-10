@@ -180,7 +180,10 @@ const quit = new Quit({
     for (const result of closed)
       if (result.status === "rejected")
         console.warn("Could not close a remote service:", result.reason);
-    await projectChats?.dispose({ detach: quit.detaching, save: false });
+    await Promise.all([
+      projectChats?.dispose({ detach: quit.detaching, save: false }),
+      devices?.dispose(),
+    ]);
     if (quit.detaching) agentHosts?.detach();
   },
   release: () => {
@@ -189,6 +192,7 @@ const quit = new Quit({
     keepAwake.dispose();
     threadTerminals.closeAll();
     previews?.dispose();
+    // Quitting before Relay finished starting skips shutDown.
     void devices?.dispose();
     blame.dispose();
     login.client?.dispose();
