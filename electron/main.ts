@@ -98,6 +98,7 @@ import {
   ServerLinks,
   worktreeDevPort,
 } from "./preview";
+import { Devices } from "./devices";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -123,6 +124,8 @@ let store: Store | undefined;
 let projectChats: ProjectChats | undefined;
 /** The threads' browsers; unset until Relay has started. */
 let previews: ThreadPreviews | undefined;
+/** Simulators and emulators in the panel; unset until Relay has started. */
+let devices: Devices | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
 /** Thread sounds while the window is closed; headless Relay wires none. */
@@ -140,7 +143,10 @@ const window = new AppWindow({
     blame.dispose();
     projectChecks.stop();
   },
-  pageGone: (win) => previews?.hideAll(win),
+  pageGone: (win) => {
+    previews?.hideAll(win);
+    devices?.hideAll();
+  },
   rendererGone: (details) => {
     projectChecks.stop();
     if (window.win) void offerWindowReport(window.win, details);
@@ -183,6 +189,7 @@ const quit = new Quit({
     keepAwake.dispose();
     threadTerminals.closeAll();
     previews?.dispose();
+    void devices?.dispose();
     blame.dispose();
     login.client?.dispose();
   },
@@ -420,6 +427,11 @@ app
       chats,
       () => loaded.get().chats ?? [],
     );
+    devices = new Devices(
+      window,
+      join(app.getPath("userData"), "device-hub"),
+      (url, init) => net.fetch(url, init),
+    );
     previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
       previewProjects.target(projectId, chatId, url, serverLinks, folder),
     );
@@ -469,6 +481,7 @@ app
         send: (job) => window.send("relay:project-adding", job),
       }),
       previews,
+      devices,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

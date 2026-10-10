@@ -4,6 +4,7 @@ import {
   GitGraph,
   GitPullRequest,
   Globe,
+  Smartphone,
   SquareTerminal,
 } from "lucide-react";
 import type { Surface } from "./panel-tabs";
@@ -14,12 +15,14 @@ export const SURFACE_LABELS: Record<Surface, string> = {
   history: "History",
   terminal: "Terminal",
   browser: "Browser",
+  device: "Device",
 };
 export const SURFACE_ICONS: Record<Surface, ReactNode> = {
   files: <Files size={13} />,
   history: <GitGraph size={13} />,
   terminal: <SquareTerminal size={13} />,
   browser: <Globe size={13} />,
+  device: <Smartphone size={13} />,
 };
 
 interface Item {
@@ -60,6 +63,12 @@ export function SurfacePicker({
       label: "Browser",
       icon: <Globe size={14} />,
       letter: "B",
+    },
+    {
+      id: "device",
+      label: "Device",
+      icon: <Smartphone size={14} />,
+      letter: "D",
     },
     {
       id: "pull",

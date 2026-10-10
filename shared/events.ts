@@ -1,3 +1,4 @@
+import type { DeviceHubState } from "./devices";
 import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
@@ -30,4 +31,5 @@ export interface RelayEvents {
   "relay:thread-windows": ThreadWindowsState;
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
+  "relay:device-hub": DeviceHubState;
 }

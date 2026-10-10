@@ -25,7 +25,7 @@ import {
   previewKey,
   usePreviewState,
 } from "./previews";
-import { useNativeView } from "./useNativeView";
+import { useNativeView } from "../../lib/useNativeView";
 import "./browser.css";
 
 /**

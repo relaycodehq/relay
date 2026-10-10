@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from "react";
-import type { PreviewBounds } from "../../../shared/preview";
+import type { PreviewBounds } from "../../shared/preview";
 
 /** Things that open over the page: menus, popovers, dialogs, the image viewer. */
 const OVERLAYS =

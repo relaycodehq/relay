@@ -10,6 +10,7 @@ import { combine } from "./combine";
 import { computerHandlers } from "./computers";
 import type { ApiContext, Handlers } from "./context";
 import { desktopHandlers } from "./desktop";
+import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
@@ -40,6 +41,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
     previewHandlers(ctx),
+    deviceHandlers(ctx),
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
     renderHandlers(ctx),

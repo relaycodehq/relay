@@ -40,6 +40,8 @@ import {
   BrowserSurface,
   BrowserTabIcon,
 } from "../features/browser/BrowserSurface";
+import { DeviceSurface } from "../features/device/DeviceSurface";
+import { closeDeviceView } from "../features/device/device-hub";
 import {
   closePreview,
   previewKey,
@@ -228,6 +230,7 @@ export function ThreadPanel({
     if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
     if (tab?.surface === "browser")
       closePreview(previewKey(project.id, chatId));
+    if (tab?.surface === "device") closeDeviceView();
     panel.close(key);
   };
   const folderShown =
@@ -317,6 +320,11 @@ export function ThreadPanel({
             front={front?.surface === "browser"}
             onPick={opens.ask}
           />
+        </div>
+      )}
+      {panel.has("device") && (
+        <div className="panel-body" hidden={front?.surface !== "device"}>
+          <DeviceSurface front={front?.surface === "device"} />
         </div>
       )}
       {front?.slot !== undefined && (

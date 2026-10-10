@@ -31,6 +31,7 @@ import type { Updater } from "../app/updater";
 import type { DevBuild } from "../app/dev-build";
 import type { AgentAccounts } from "../agents/accounts";
 import type { ProjectAdding } from "../project-add";
+import type { Devices } from "../devices";
 import type { ThreadPreviews } from "../preview";
 
 export interface Services {
@@ -62,6 +63,8 @@ export interface Services {
   projectAdding: ProjectAdding;
   /** Desktop browser views; absent when Relay runs headless. */
   previews?: ThreadPreviews;
+  /** Simulators and emulators in the panel; absent when Relay runs headless. */
+  devices?: Devices;
 }
 
 /** What a method's promise resolves to in the page. */
