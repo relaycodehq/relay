@@ -144,6 +144,20 @@ export function useThreadScroll({
     observer.observe(dock);
     return () => observer.disconnect();
   }, [isEmpty, scrolledUp]);
+  // The folded composer shows the draft's first line, not wherever the caret
+  // last scrolled it to.
+  useEffect(() => {
+    const dock = composerDock.current;
+    if (!dock || !scrolledUp) return;
+    const toTop = (event?: FocusEvent) => {
+      const next = event ? event.relatedTarget : document.activeElement;
+      if (next instanceof Node && dock.contains(next)) return;
+      dock.querySelector(".composer-prompt-input")?.scrollTo({ top: 0 });
+    };
+    toTop();
+    dock.addEventListener("focusout", toTop);
+    return () => dock.removeEventListener("focusout", toTop);
+  }, [scrolledUp]);
   // The padding lands a render after the measurement, and a thread opens with
   // none, so re-pin once it has. Pinning before it would leave the end of the
   // thread under the composer, and the next scroll event would stop following.

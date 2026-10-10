@@ -260,6 +260,29 @@
   overflow: hidden;
   padding-top: 12px;
 }
+/* Keep the first line whole: hide the next one peeking in under it, and fade
+   the line out before "+N lines" instead of chopping it. The cut follows the
+   box's bottom edge, so the text folds away with it rather than ahead of it. */
+.thread-bottom-composer.collapsed:not(:focus-within)
+  .composer-prompt[data-more]
+  .composer-prompt-input {
+  mask-image:
+    linear-gradient(
+      to bottom,
+      #000 max(9px + 1lh, 100% - 13px),
+      transparent max(12px + 1lh, 100% - 10px)
+    ),
+    linear-gradient(
+      to right,
+      #000 calc(100% - 150px),
+      transparent calc(100% - 90px)
+    );
+  mask-composite: intersect;
+}
+.thread-bottom-composer.collapsed:not(:focus-within) .composer-more-lines {
+  opacity: 1;
+  transition: opacity 160ms ease 140ms;
+}
 .thread-message-column {
   width: 100%;
   max-width: var(--thread-width);

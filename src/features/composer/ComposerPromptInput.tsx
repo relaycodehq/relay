@@ -5,6 +5,7 @@ import { useDraftPills } from "./useDraftPills";
 import type { ImageChip } from "./prompt/image-pill";
 import { QuoteTooltip, useQuoteTip } from "./prompt/QuoteTip";
 import { useImagePeek } from "./prompt/useImagePeek";
+import { useLineCount } from "./prompt/useLineCount";
 import { usePromptEditor, type PromptEvents } from "./prompt/usePromptEditor";
 import {
   usePromptHandle,
@@ -53,12 +54,18 @@ export function ComposerPromptInput({
   );
   const tip = useQuoteTip(editor);
   const [peek, setPeek] = useImagePeek(editor);
+  const more = useLineCount(editor) - 1;
   usePromptSync(editor, value, pills, images, placeholder);
   useComboboxRole(editor, expanded, controls, activeId, autocomplete);
   usePromptHandle(handleRef, editor, draftKey, pills);
   return (
-    <div {...events}>
+    <div {...events} className="composer-prompt" data-more={more || undefined}>
       <EditorContent editor={editor} />
+      {more > 0 && (
+        <span className="composer-more-lines" aria-hidden>
+          +{more} {more === 1 ? "line" : "lines"}
+        </span>
+      )}
       {tip && <QuoteTooltip tip={tip} />}
       <PreviewCard.Root
         open={!!peek}

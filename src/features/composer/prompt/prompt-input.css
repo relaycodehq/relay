@@ -15,6 +15,20 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.composer-prompt {
+  position: relative;
+}
+/* Shown by a collapsed composer, beside the one line it keeps. */
+.composer-more-lines {
+  opacity: 0;
+  position: absolute;
+  top: 12px;
+  right: 20px;
+  font-size: 12px;
+  line-height: calc(var(--prompt-font-size, 13px) * 1.65);
+  color: var(--muted);
+  pointer-events: none;
+}
 .composer-prompt-input:focus-visible {
   outline: none;
 }

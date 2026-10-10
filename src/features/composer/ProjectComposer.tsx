@@ -65,6 +65,8 @@ export interface ComposerHandle {
   /** The agent picked here and its settings; none while it only messages people. */
   agentSettings: () => ResumeSettings | undefined;
   focus: () => void;
+  /** Focuses the draft with the caret at its end. */
+  focusEnd: () => void;
   /** Adds screenshots at the end of the draft, as pills after its words. */
   attachImages: (files: File[]) => void;
   /** Sends the draft, exactly as the send button does. */
@@ -198,6 +200,7 @@ export function ProjectComposer({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
       agentSettings: () => agentSettings.current(),
       focus: () => input.current?.focus(),
+      focusEnd: () => promptInput.current?.focusEnd(),
       attachImages(files) {
         promptInput.current?.focusEnd();
         addFiles.current(files);

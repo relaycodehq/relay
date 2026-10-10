@@ -358,6 +358,14 @@ export function ProjectChat({
             ? "thread-start"
             : `thread-bottom-composer${scrolledUp ? " collapsed" : ""}`
         }
+        onMouseDownCapture={(e) => {
+          // The folded draft opens where writing left off, wherever it's clicked.
+          if (!scrolledUp || e.currentTarget.matches(":focus-within")) return;
+          if (!(e.target as Element).closest?.(".composer-prompt")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          composer.current?.focusEnd();
+        }}
       >
         {history.data?.requests?.slice(0, 1).map((request) => (
           <AgentRequestCard
