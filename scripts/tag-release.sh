@@ -6,7 +6,7 @@
 #   scripts/tag-release.sh log                  what landed on origin/main since the last release
 #   scripts/tag-release.sh <notes.md> [version]  tag origin/main with those notes and push the tag
 #
-# The version defaults to the last tag's patch plus one.
+# The version defaults to package.json's, bumped with npm run version:bump.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 git fetch --quiet --tags origin
@@ -23,7 +23,7 @@ fi
 
 notes="${1:?Usage: tag-release.sh log | <notes.md> [version]}"
 grep -q '[^[:space:]]' "$notes" || { echo "$notes is empty." >&2; exit 1; }
-version="${2:-${last%.*}.$((${last##*.} + 1))}"
+version="${2:-$(node -p 'require("./package.json").version')}"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "$version isn't X.Y.Z." >&2; exit 1; }
 [[ "$(printf '%s\n' "$last" "$version" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" == "$version" && "$version" != "$last" ]] ||
   { echo "$version isn't newer than v$last." >&2; exit 1; }

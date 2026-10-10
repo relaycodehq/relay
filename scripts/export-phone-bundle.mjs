@@ -19,15 +19,15 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveVersion, syncVersion } from "./sync-version.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mobile = join(repo, "mobile");
 const out = join(repo, "dist-phone");
 const version =
-  process.argv[2] ??
-  JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).version;
-if (!/^\d+\.\d+\.\d+$/.test(version))
-  throw new Error(`Not a release version: ${version}`);
+  process.argv[2] === undefined
+    ? syncVersion()
+    : resolveVersion({ version: process.argv[2] });
 
 const { phoneRuntime } = await import(join(mobile, "scripts", "runtime.mjs"));
 const runtime = await phoneRuntime();
@@ -58,7 +58,7 @@ execFileSync(
   {
     cwd: mobile,
     stdio: "inherit",
-    env: { ...process.env, NODE_ENV: "production" },
+    env: { ...process.env, NODE_ENV: "production", RELAY_VERSION: version },
     shell: process.platform === "win32",
   },
 );

@@ -3,6 +3,9 @@ import { build } from "esbuild";
 import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { bundles, onnxRuntimeBundle } from "./electron-bundles.mjs";
+import { syncVersion } from "./sync-version.mjs";
+
+syncVersion();
 
 for (const { options } of bundles) await build(options);
 

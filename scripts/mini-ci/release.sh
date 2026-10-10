@@ -99,7 +99,7 @@ step "Installing dependencies"
 install .
 install mobile
 
-npm version "$version" --no-git-tag-version --allow-same-version >/dev/null
+node scripts/sync-version.mjs "$version"
 
 step "Building"
 npm run build
@@ -169,7 +169,7 @@ trap quit_docker EXIT
       exec 3>&1 1>&2
       mkdir /work && cd /work && tar -xf -
       npm ci
-      npm version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null
+      node scripts/sync-version.mjs "$VERSION"
       node scripts/build-electron.mjs
       npx electron-builder --linux AppImage dir --x64 --publish never
       python3 scripts/package-omarchy.py

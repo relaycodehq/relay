@@ -8,7 +8,7 @@ export default defineConfig({
       "{src,electron,shared}/**/*.test.{ts,tsx}",
       "mobile/src/**/*.test.{ts,tsx}",
       "tests/unit/**/*.test.{ts,tsx}",
-      "scripts/dev-*.test.mjs",
+      "scripts/*.test.mjs",
     ],
     // Caps, not waits: see tests/unit/setup.ts.
     setupFiles: ["tests/unit/setup.ts"],

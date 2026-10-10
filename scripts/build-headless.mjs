@@ -5,7 +5,6 @@
 // speech engines are downloaded where they're set up.
 //
 //   node scripts/build-headless.mjs [version]
-import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   readdirSync,
@@ -16,27 +15,9 @@ import {
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { bundles, onnxRuntimeBundle } from "./electron-bundles.mjs";
+import { resolveVersion, syncVersion } from "./sync-version.mjs";
 
 export const headlessOut = "dist-headless";
-
-/** The version given, else the latest v* tag's, else package.json's. */
-function versionOf(given) {
-  if (given) return given.replace(/^v/, "");
-  try {
-    return execFileSync(
-      "git",
-      ["describe", "--tags", "--abbrev=0", "--match", "v*"],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    )
-      .trim()
-      .replace(/^v/, "");
-  } catch {
-    return JSON.parse(readFileSync("package.json", "utf8")).version;
-  }
-}
 
 /**
  * The speech engines' npm packages as the lockfile pins them, which a
@@ -79,7 +60,8 @@ function speechRuntime() {
 }
 
 export async function buildHeadless(given) {
-  const version = versionOf(given);
+  const version =
+    given === undefined ? syncVersion() : resolveVersion({ version: given });
   rmSync(headlessOut, { recursive: true, force: true });
   const shared = {
     bundle: true,

@@ -15,7 +15,7 @@ import { IconButton, Spinner } from "../../ui/ui";
 
 /**
  * The version this Relay runs, at the footer's start; opens About. A
- * development build never updates, and its package version is a placeholder.
+ * development build never updates, so its footer identifies it as dev.
  */
 export function RunningVersion({ onAbout }: { onAbout: () => void }) {
   const state = useUpdates().state;
