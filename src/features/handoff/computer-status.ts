@@ -26,14 +26,17 @@ function ago(since: number, now: number) {
   return hours < 48 ? `${hours} h` : `${Math.round(hours / 24)} d`;
 }
 
+/** Errors run long (a whole stderr); the thread itself has the rest. */
+const firstLine = (error: string) => {
+  const line = error.split("\n")[0];
+  return line.length > 120 ? line.slice(0, 119) + "…" : line;
+};
+
 export function threadLine(t: AwayThread, now: number) {
-  if (t.state === "failed") return t.error ?? stateWord.failed;
-  if (t.state === "stopped") {
-    // Agent errors run long (a whole stderr); the thread itself has the rest.
-    const why = t.error?.split("\n")[0];
-    if (!why) return stateWord.stopped;
-    return `stopped · ${why.length > 120 ? why.slice(0, 119) + "…" : why}`;
-  }
+  if (t.state === "failed")
+    return t.error ? firstLine(t.error) : stateWord.failed;
+  if (t.state === "stopped")
+    return t.error ? `stopped · ${firstLine(t.error)}` : stateWord.stopped;
   if (t.state === "finished") {
     const when = ago(t.since, now);
     return when === "just now" ? "finished just now" : `finished ${when} ago`;

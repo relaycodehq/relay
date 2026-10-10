@@ -97,6 +97,22 @@ export function ComputerCard({
                   {busy === t.chatId ? "Bringing back…" : "Bring back"}
                 </button>
               )}
+              {t.retry && (
+                <button
+                  className="cm-text-button accent"
+                  disabled={!online || !!busy}
+                  title={online ? t.error : `${c.name} is offline`}
+                  onClick={() =>
+                    run(t.chatId, () =>
+                      t.retry === "send"
+                        ? api.retryHandoff(t.chatId)
+                        : api.bringBackThread(t.chatId),
+                    )
+                  }
+                >
+                  {busy === t.chatId ? "Trying…" : "Try again"}
+                </button>
+              )}
             </li>
           ))}
         </ul>

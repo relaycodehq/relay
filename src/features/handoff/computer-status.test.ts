@@ -65,6 +65,9 @@ describe("a thread's line on the computer card", () => {
       "No room",
     );
     expect(threadLine(thread({ state: "failed" }), now)).toBe("didn't arrive");
+    expect(
+      threadLine(thread({ state: "failed", error: "Its work…\nhint: …" }), now),
+    ).toBe("Its work…");
   });
 });
 

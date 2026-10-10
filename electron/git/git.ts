@@ -131,7 +131,12 @@ export function gitError(e: unknown) {
   const rejected = String(error.stdout || "").match(/^!\t.+$/gm) ?? [];
   const message = [
     ...rejected,
-    String(error.stderr || "").trim() || error.message,
+    // Advice like "hint: git config set advice.diverging false" is for a terminal.
+    String(error.stderr || "")
+      .split("\n")
+      .filter((line) => !/^hint:/.test(line))
+      .join("\n")
+      .trim() || error.message,
   ].join("\n");
   return new Error(redactCredentials(message).slice(0, 3000));
 }

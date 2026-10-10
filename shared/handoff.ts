@@ -218,6 +218,8 @@ export interface AwayThread {
   /** When it left, or when it finished. */
   since: number;
   error?: string;
+  /** Failed on its way there or back, without clashing files: the step to try again. */
+  retry?: "send" | "return";
 }
 /** Settings → Computers: this computer, and each paired one with its threads there. */
 export interface ComputersOverview {

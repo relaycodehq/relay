@@ -23,3 +23,16 @@ it("doesn't expose unrelated command stdout in errors", () => {
   });
   expect(gitError(error).message).toBe("fatal: unable to read file");
 });
+
+it("drops Git's terminal advice from errors", () => {
+  const error = Object.assign(new Error("Command failed"), {
+    stderr:
+      "hint: Diverging branches can't be fast-forwarded, you need to either:\n" +
+      "hint:\n" +
+      "hint: \tgit merge --no-ff\n" +
+      "fatal: Not possible to fast-forward, aborting.\n",
+  });
+  expect(gitError(error).message).toBe(
+    "fatal: Not possible to fast-forward, aborting.",
+  );
+});

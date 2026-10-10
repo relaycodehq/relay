@@ -207,6 +207,9 @@ export class Handoffs {
         ...(sentTo.error || remote?.failed
           ? { error: sentTo.error ?? remote?.failed }
           : {}),
+        ...(sentTo.error && !sentTo.conflicts?.length
+          ? { retry: sentTo.state === "sending" ? "send" : "return" }
+          : {}),
       };
     };
     return {
