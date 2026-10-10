@@ -10,6 +10,8 @@ export type DeviceHubStatus =
   | "absent"
   /** Downloaded, not running. */
   | "stopped"
+  /** Stopped because nobody watched it; the tab showing again starts it. */
+  | "asleep"
   | "installing"
   | "starting"
   | "running"
@@ -31,7 +33,7 @@ export interface DevicesApi {
   startDeviceHub(): Promise<DeviceHubState>;
   /** Where the panel shows the hub, in the page's CSS pixels; null takes it off. */
   placeDeviceView(bounds: PreviewBounds | null): Promise<void>;
-  /** The Device tab closed: the page goes, the hub and its devices keep running. */
+  /** The Device tab closed: the page goes and the hub stops; its devices keep running. */
   closeDeviceView(): Promise<void>;
   onDeviceHub(callback: (state: DeviceHubState) => void): () => void;
 }

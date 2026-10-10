@@ -7,12 +7,12 @@ import { openSurface } from "../fixtures/navigation";
 
 // Downloads the real expo-device-hub with the user's npm and streams a real
 // emulator, so it runs only when asked: boot one, then RELAY_DEVICE_E2E=1.
-test("the Device surface downloads the hub, streams a booted emulator over the panel, and stops the hub on quit", async () => {
+test("the Device surface downloads the hub, streams a booted emulator over the panel, sleeps the hub while nobody watches, and stops it on quit", async () => {
   test.skip(
     !process.env.RELAY_DEVICE_E2E,
     "Boot an Android Emulator, then set RELAY_DEVICE_E2E=1",
   );
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-device-"))),
     repo = join(root, "project");
   await mkdir(repo, { recursive: true });
@@ -107,11 +107,28 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     }, hubOrigin);
     await writeFile("test-results/device-view.png", Buffer.from(frame, "base64"));
 
-    // Closing the tab takes the page away; the hub keeps running.
+    const up = (origin: string) => () =>
+      fetch(`${origin}/readyz`).then(() => "up", () => "down");
+    // Another tab in front: the page unloads after 20 s and the hub stops.
+    await openSurface(page, "Files");
+    await expect.poll(hubView).toBeNull();
+    expect(await up(hubOrigin)()).toBe("up");
+    await expect.poll(up(hubOrigin), { timeout: 40_000 }).toBe("down");
+    // Back in front, the last frame shows while a new hub starts.
+    await openSurface(page, "Device");
+    await expect(panel.locator(".device-snapshot")).toBeVisible();
+    await expect.poll(hubView, { timeout: 30_000 }).not.toBeNull();
+    const woken = new URL((await hubView())!.url).origin;
+    expect(woken).not.toBe(hubOrigin);
+    hubOrigin = woken;
+    await expect.poll(hubPage, { timeout: 60_000 }).toContain("Live");
+
+    // Closing the tab takes the page away and stops the hub.
     await panel.getByRole("tab", { name: "Device" }).hover();
     await panel.getByRole("button", { name: "Close device" }).click();
     await expect.poll(hubView).toBeNull();
-    expect((await fetch(`${hubOrigin}/readyz`)).ok).toBe(true);
+    await expect.poll(up(hubOrigin)).toBe("down");
+    hubOrigin = "";
   } finally {
     await app.close();
   }

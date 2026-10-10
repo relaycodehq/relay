@@ -22,14 +22,17 @@ export function DeviceSurface({ front }: { front: boolean }) {
     (bounds: PreviewBounds | null) => void api.placeDeviceView(bounds),
     [],
   );
-  const showPage = front && state?.status === "running";
+  // Asleep, the tab still follows where it is: showing it wakes the hub.
+  const showPage =
+    front && (state?.status === "running" || state?.status === "asleep");
   useNativeView(viewport, showPage, place);
+  const waking =
+    front && (state?.status === "asleep" || state?.status === "starting");
+  const lastFrame = (showPage || waking) && state?.snapshot;
   return (
     <div className="device-surface" ref={viewport}>
-      {showPage && state.snapshot && (
-        <img className="device-snapshot" src={state.snapshot} alt="" />
-      )}
-      {!showPage && <DeviceNotice state={state} />}
+      {lastFrame && <img className="device-snapshot" src={lastFrame} alt="" />}
+      {!showPage && !lastFrame && <DeviceNotice state={state} />}
     </div>
   );
 }
@@ -42,7 +45,11 @@ function DeviceNotice({ state }: { state?: DeviceHubState }) {
         <p>Downloading Expo Device Hub {state.version}…</p>
       </div>
     );
-  if (state.status === "starting" || state.status === "stopped")
+  if (
+    state.status === "starting" ||
+    state.status === "stopped" ||
+    state.status === "asleep"
+  )
     return (
       <div className="device-notice">
         <p>Starting the device hub…</p>

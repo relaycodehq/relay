@@ -19,7 +19,7 @@ export class Devices {
   ) {
     const changed = () => void this.emit();
     this.hub = new DeviceHub(dir, changed, fetch);
-    this.view = new DeviceView(changed);
+    this.view = new DeviceView(changed, () => void this.hub.sleep());
   }
 
   async state(): Promise<DeviceHubState> {
@@ -38,18 +38,22 @@ export class Devices {
     return this.state();
   }
 
-  /** Only a running hub has a page; placing one starts nothing. */
+  /**
+   * Only a running hub has a page. Placing wakes one that went to sleep
+   * unwatched; the tab places the page again once it runs.
+   */
   async place(bounds: PreviewBounds | null) {
     const win = this.window.caller();
+    const { status } = await this.hub.state();
+    if (bounds && status === "asleep") void this.hub.start().catch(() => {});
     const running =
-      bounds && (await this.hub.state()).status === "running"
-        ? await this.hub.start()
-        : undefined;
+      bounds && status === "running" ? await this.hub.start() : undefined;
     this.view.place(win, bounds, running);
   }
 
   close() {
     this.view.destroy();
+    return this.hub.sleep();
   }
 
   /** `win`'s page went: the hub's page goes with it if it lay over it. */

@@ -2,7 +2,7 @@ import { session, shell, WebContentsView, type BrowserWindow } from "electron";
 import type { PreviewBounds } from "../../shared/preview";
 import type { RunningHub } from "./hub";
 
-/** Hidden this long, the page closes, so it stops pulling frames. */
+/** Hidden this long, the page closes and the hub stops, so nothing pulls frames. */
 const UNLOAD_MS = 20_000;
 /** Not persisted: the token, and so its cookie, change with every start. */
 const PARTITION = "device-hub";
@@ -25,7 +25,10 @@ export class DeviceView {
   private unload?: NodeJS.Timeout;
   snapshot?: string;
 
-  constructor(private changed: () => void) {
+  constructor(
+    private changed: () => void,
+    private unloaded: () => void,
+  ) {
     const ses = session.fromPartition(PARTITION);
     const allowed = new Set(["clipboard-sanitized-write"]);
     ses.setPermissionRequestHandler((_wc, permission, callback) =>
@@ -137,7 +140,9 @@ export class DeviceView {
     this.host = undefined;
     clearTimeout(this.unload);
     this.unload = setTimeout(() => {
-      if (!this.shown) this.destroy();
+      if (this.shown) return;
+      this.destroy();
+      this.unloaded();
     }, UNLOAD_MS);
   }
 

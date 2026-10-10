@@ -276,6 +276,15 @@ export class DeviceHub {
     throw new Error("The device hub didn't start in time.");
   }
 
+  /** Nobody is watching: stops it until the tab shows it again. */
+  async sleep() {
+    const child = this.child;
+    if (!child || this.status !== "running") return;
+    this.child = this.running = undefined;
+    this.set("asleep");
+    await stopProcessTree(child).catch(() => {});
+  }
+
   async dispose() {
     this.disposed = true;
     this.quitting.abort();
