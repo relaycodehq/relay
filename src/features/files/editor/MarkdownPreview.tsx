@@ -119,7 +119,7 @@ export function MarkdownPreview({
   );
   return (
     <div className="markdown-preview">
-      <RichText text={shown} image={image} />
+      <RichText text={shown} image={image} html />
     </div>
   );
 }

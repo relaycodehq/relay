@@ -13,6 +13,8 @@ import Markdown, {
   type Components,
   type UrlTransform,
 } from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import type { Position } from "unist";
 import { streamingMarkdownTail } from "./markdown-incremental";
@@ -139,12 +141,16 @@ const urlTransform: UrlTransform = (url, key, node) =>
   /^(?:data:image\/|file:)/i.test(url)
     ? url
     : defaultUrlTransform(url);
+// GitHub's allowlist, so a README's HTML can't restyle or script the app.
+const htmlPlugins = [rehypeRaw, rehypeSanitize];
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   components,
+  html,
 }: {
   text: string;
   components: Components;
+  html: boolean;
 }) {
   // GFM parses tables, task lists, strikethrough and bare links before the incremental pass.
   const remarkPlugins = useMemo(() => [remarkGfm, streamingMarkdownTail()], []);
@@ -152,6 +158,7 @@ const MarkdownBlock = memo(function MarkdownBlock({
     <MarkdownSource.Provider value={text}>
       <Markdown
         remarkPlugins={remarkPlugins}
+        rehypePlugins={html ? htmlPlugins : undefined}
         components={components}
         urlTransform={urlTransform}
       >
@@ -166,6 +173,7 @@ export const RichText = memo(function RichText({
   onOpenFile,
   inlineCode,
   image,
+  html = false,
 }: {
   text: string;
   projectRoot?: string;
@@ -174,6 +182,8 @@ export const RichText = memo(function RichText({
   inlineCode?: (value: string) => ReactNode | undefined;
   /** Shows an `![alt](src)`; undefined leaves it to the default, which only draws data URLs. */
   image?: (src: string, alt: string) => ReactNode | undefined;
+  /** Renders HTML in the text, sanitized, instead of dropping it: for files, not answers. */
+  html?: boolean;
 }) {
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
@@ -289,7 +299,7 @@ export const RichText = memo(function RichText({
         {blocks.map((block, index) => (
           <Fragment key={index}>
             {index > 0 && "\n"}
-            <MarkdownBlock text={block} components={components} />
+            <MarkdownBlock text={block} components={components} html={html} />
           </Fragment>
         ))}
       </div>
