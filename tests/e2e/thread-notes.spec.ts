@@ -108,6 +108,45 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       animations: "disabled",
     });
 
+    // Completed work stays pinned, but isn't offered for the next message.
+    await expect(card.getByRole("status")).toHaveText("2 of 3 remaining");
+    await expect(
+      card.locator(".notes-items > li").nth(1).locator(".notes-ask"),
+    ).toBeDisabled();
+    await card
+      .getByRole("button", { name: "Quote remaining items in your message" })
+      .click();
+    const composer = page.getByLabel("Message project");
+    await expect(composer.locator(".composer-quote-chip")).toHaveAttribute(
+      "data-quote",
+      "Ideas, cheapest wins first:\n\n1. Open threads from the cache\n\n3. Optimistic sends with an outbox",
+    );
+    await expect(card).toBeHidden();
+    await composer.fill("");
+
+    // Nothing to send when all are done; unticking makes it quotable again.
+    await chip.click();
+    await expect(card).toBeVisible();
+    await card.getByRole("checkbox").nth(0).click();
+    await card.getByRole("checkbox").nth(2).click();
+    await expect(card.getByRole("status")).toHaveText("All done");
+    await expect(
+      card.getByRole("button", {
+        name: "All done — uncheck an item to quote it",
+      }),
+    ).toBeDisabled();
+    await screenshot(page, {
+      path: "test-results/screenshots/notes-card-done.png",
+      animations: "disabled",
+    });
+    await card.getByRole("checkbox").nth(0).click();
+    await card.getByRole("checkbox").nth(2).click();
+    await expect(
+      card.getByRole("button", {
+        name: "Quote remaining items in your message",
+      }),
+    ).toBeEnabled();
+
     // Ask quotes the item into the draft.
     await card.locator(".notes-items > li").nth(2).hover();
     await card
@@ -139,7 +178,7 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     );
     await expect(kept.locator(".markdown")).toHaveText("Kept as n3.");
     await expect(chip).toHaveText("3");
-    await chip.hover();
+    await chip.click();
     await expect(card.locator(".notes-by")).toHaveText("Kept by Codex");
     await screenshot(page, {
       path: "test-results/screenshots/notes-card-three.png",
@@ -161,7 +200,7 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       `fixture relay add_note ${JSON.stringify({ text: nested })}`,
     );
     await expect(chip).toHaveText("4");
-    await chip.hover();
+    await chip.click();
     const items = card
       .locator(".notes-note")
       .last()

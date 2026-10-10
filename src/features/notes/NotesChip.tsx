@@ -5,7 +5,11 @@ import { useMemo, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { ArrowUpToLine, Check, Pin, TextQuote, X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
-import { noteList, type ThreadNote } from "../../../shared/thread-notes";
+import {
+  noteList,
+  noteQuote,
+  type ThreadNote,
+} from "../../../shared/thread-notes";
 import { RichText } from "../../ui/RichText";
 import type { ThreadNotesHandle } from "./useThreadNotes";
 import "./notes.css";
@@ -89,6 +93,13 @@ function Note({
 }) {
   const list = useMemo(() => noteList(note.text), [note.text]);
   const done = new Set(note.done);
+  const quote = noteQuote(note);
+  const remaining = list?.items.filter((_, index) => !done.has(index)).length;
+  const quoteLabel = !quote
+    ? "All done — uncheck an item to quote it"
+    : list && remaining !== list.items.length
+      ? "Quote remaining items in your message"
+      : "Quote it in your message";
   return (
     <section className="notes-note">
       <div className="notes-note-tools">
@@ -104,9 +115,12 @@ function Note({
         )}
         <button
           type="button"
-          title="Quote it in your message"
-          aria-label="Quote it in your message"
-          onClick={() => onQuote(note.text)}
+          title={quoteLabel}
+          aria-label={quoteLabel}
+          disabled={!quote}
+          onClick={() => {
+            if (quote) onQuote(quote);
+          }}
         >
           <TextQuote size={13} />
         </button>
@@ -148,12 +162,16 @@ function Note({
                 <button
                   type="button"
                   className="notes-ask"
-                  title="Quote this item in your message"
-                  onClick={() =>
-                    onQuote(
-                      `${item.number ? `${item.number} ` : ""}${item.text}`,
-                    )
+                  title={
+                    done.has(index)
+                      ? "Uncheck this item to quote it"
+                      : "Quote this item in your message"
                   }
+                  disabled={done.has(index)}
+                  onClick={() => {
+                    const text = noteQuote(note, index);
+                    if (text) onQuote(text);
+                  }}
                 >
                   <TextQuote size={12} />
                   Ask
@@ -161,6 +179,11 @@ function Note({
               </li>
             ))}
           </ol>
+          <div className="notes-progress" role="status">
+            {remaining
+              ? `${remaining} of ${list.items.length} remaining`
+              : "All done"}
+          </div>
         </>
       ) : (
         <div className="notes-body">

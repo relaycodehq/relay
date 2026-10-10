@@ -104,10 +104,16 @@
   color: var(--muted);
   font-size: 12px;
 }
-.notes-note-tools button:hover,
-.notes-ask:hover {
+.notes-note-tools button:hover:not(:disabled),
+.notes-ask:hover:not(:disabled) {
   background: var(--hover);
   color: var(--text);
+}
+.notes-note-tools button:disabled,
+.notes-ask:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.4;
 }
 .notes-lead {
   padding-right: 80px;
@@ -183,6 +189,7 @@
 .notes-ask:focus-visible {
   opacity: 1;
 }
+.notes-progress,
 .notes-by {
   margin-top: 4px;
   color: var(--muted);

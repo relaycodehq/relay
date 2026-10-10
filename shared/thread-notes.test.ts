@@ -3,10 +3,59 @@ import {
   addNote,
   noteForAgent,
   noteList,
+  noteQuote,
   notesMark,
   removeNote,
   tickNote,
+  type ThreadNote,
 } from "./thread-notes";
+
+const note = (text: string, done?: number[]): ThreadNote => ({
+  id: "n1",
+  text,
+  done,
+  created: 1,
+  updated: 1,
+});
+
+it("quotes only unfinished items, keeping the lead and original item numbers", () => {
+  const text =
+    "Next:\n\n1. Already fixed\n2. Still needed\n3. Also fixed\n4. Last job";
+  expect(noteQuote(note(text, [0, 2]))).toBe(
+    "Next:\n\n2. Still needed\n\n4. Last job",
+  );
+  expect(noteQuote(note(text, [0, 1, 2, 3]))).toBe("");
+  expect(noteQuote(note(text, [0]), 0)).toBe("");
+  expect(noteQuote(note(text, [0]), 1)).toBe("2. Still needed");
+  expect(noteQuote(note(text), 9)).toBe("");
+});
+
+it("preserves nested lists, paragraphs and code in bulk and individual quotes", () => {
+  const text =
+    "Jobs:\n\n9. Finished\n10. **Remaining**\n    - child\n\n    More context.\n\n    ```ts\n    run()\n    ```";
+  const expected =
+    "10. **Remaining**\n    - child\n\n    More context.\n\n    ```ts\n    run()\n    ```";
+  expect(noteQuote(note(text, [0]))).toBe(`Jobs:\n\n${expected}`);
+  expect(noteQuote(note(text), 1)).toBe(expected);
+  expect(noteQuote(note("- done\n- remaining\n  - child", [0]))).toBe(
+    "- remaining\n  - child",
+  );
+});
+
+it("leaves plain notes and untouched lists intact, and restores unchecked work", () => {
+  for (const text of [
+    "A **decision**",
+    "```ts\nrun()\n```",
+    "Ideas:\n\n* a\n* b",
+  ]) {
+    expect(noteQuote(note(text))).toBe(text);
+    expect(noteQuote(note(text, [99]))).toBe(text);
+  }
+  const original = note("- a\n- b", [0, 1]);
+  const restored = tickNote([original], "n1", 1, false)[0]!;
+  expect(noteQuote(restored)).toBe("- a");
+  expect(original.done).toEqual([0, 1]);
+});
 
 it("reads a list with the line that leads into it", () => {
   expect(

@@ -94,6 +94,32 @@ export function noteList(text: string): NoteList | undefined {
   return { lead: lines.slice(0, start).join("\n").trim(), items };
 }
 
+/** Markdown for the draft: only unfinished work, or one unfinished item. */
+export function noteQuote(note: ThreadNote, index?: number): string {
+  const list = noteList(note.text);
+  if (!list) return index === undefined ? note.text : "";
+  const done = new Set(note.done);
+  const remaining = list.items.filter(
+    (_, i) => !done.has(i) && (index === undefined || index === i),
+  );
+  if (!remaining.length) return "";
+  // Preserve the original formatting when nothing has been crossed out.
+  if (index === undefined && remaining.length === list.items.length)
+    return note.text;
+  const items = remaining.map((item) => {
+    const marker = `${item.number || "-"} `;
+    return item.text
+      .split("\n")
+      .map((line, i) =>
+        i === 0 ? marker + line : line ? " ".repeat(marker.length) + line : "",
+      )
+      .join("\n");
+  });
+  return [index === undefined ? list.lead : "", ...items]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /** Changes whenever the thread's notes do, so a window or phone knows to fetch them. */
 export function notesMark(notes: ThreadNote[] | undefined) {
   if (!notes?.length) return undefined;
