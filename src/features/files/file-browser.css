@@ -283,6 +283,8 @@
 }
 /* The editor inside the Files pane, without the standalone editor's chrome. */
 .project-inline-editor {
+  /* The bar sheds labels by the editor's width, not the pane's, which includes the file list. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -308,4 +310,45 @@
 }
 .project-editor-empty {
   flex: 1;
+}
+.editor-bar > .file-list-toggle {
+  margin-left: -6px;
+  margin-right: 2px;
+}
+.markdown-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.markdown-split-code {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.markdown-split-code[hidden] {
+  display: none;
+}
+.markdown-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 18px 28px 40vh;
+}
+.markdown-split.split .markdown-preview {
+  border-left: 1px solid var(--border);
+}
+.markdown-split.preview .markdown-preview > .markdown {
+  max-width: 780px;
+  margin: 0 auto;
+}
+.markdown-preview > .markdown {
+  font-size: 13px;
+}
+.markdown-preview .markdown-image {
+  max-width: 100%;
+}
+.markdown-preview-missing {
+  color: var(--muted);
+  font-style: italic;
 }

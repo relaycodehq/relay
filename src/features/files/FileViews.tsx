@@ -24,17 +24,21 @@ import { revealLabel } from "./FileTree";
 import "./file-browser.css";
 
 /** The path across the top of a viewer, in the editor bar's style, with room for actions. */
-function FileBar({
+export function FileBar({
+  lead,
   path,
   detail,
   children,
 }: {
+  /** Before the path, like the file list's toggle. */
+  lead?: ReactNode;
   path: string;
   detail?: string;
   children?: ReactNode;
 }) {
   return (
     <div className="editor-bar">
+      {lead}
       <EditorPath path={path}>
         {detail && <span className="editor-bar-state">{detail}</span>}
       </EditorPath>
@@ -88,12 +92,14 @@ export function FolderView({
   where,
   dir,
   title,
+  lead,
   onOpen,
 }: {
   where: string;
   dir: string;
   /** The project's name, for the root. */
   title: string;
+  lead?: ReactNode;
   onOpen: (path: string, kind: "file" | "dir") => void;
 }) {
   const [error, setError] = useState<unknown>();
@@ -124,6 +130,7 @@ export function FolderView({
   return (
     <section className="folder-view" aria-label="Folder">
       <FileBar
+        lead={lead}
         path={dir || title}
         detail={listing.data ? `${entries.length} items` : undefined}
       >
@@ -254,7 +261,15 @@ function GridCard({
 }
 
 /** A picture in the file's own place, on a checkerboard so transparency shows. */
-export function ImageFile({ where, info }: { where: string; info: FileInfo }) {
+export function ImageFile({
+  where,
+  info,
+  lead,
+}: {
+  where: string;
+  info: FileInfo;
+  lead?: ReactNode;
+}) {
   const [error, setError] = useState<unknown>();
   const [actual, setActual] = useState(false);
   const [natural, setNatural] = useState<{ width: number; height: number }>();
@@ -267,6 +282,7 @@ export function ImageFile({ where, info }: { where: string; info: FileInfo }) {
   return (
     <section className="image-file" aria-label="Image">
       <FileBar
+        lead={lead}
         path={info.path}
         detail={[
           natural && `${natural.width} × ${natural.height}`,
@@ -316,11 +332,19 @@ export function ImageFile({ where, info }: { where: string; info: FileInfo }) {
 }
 
 /** A file that can't be edited here: what it is, and the ways to open it elsewhere. */
-export function OtherFile({ where, info }: { where: string; info: FileInfo }) {
+export function OtherFile({
+  where,
+  info,
+  lead,
+}: {
+  where: string;
+  info: FileInfo;
+  lead?: ReactNode;
+}) {
   const [error, setError] = useState<unknown>();
   return (
     <section className="other-file" aria-label="File">
-      <FileBar path={info.path} detail={formatSize(info.size)}>
+      <FileBar lead={lead} path={info.path} detail={formatSize(info.size)}>
         <RevealButtons
           where={where}
           path={info.path}

@@ -8,20 +8,26 @@ import { EditHistory, ReloadButton } from "./controls";
 
 /** The inline editor's bar: its path and state, then its controls. */
 export function EditorBar({
+  lead,
   path,
   file,
   editor,
   symbols,
+  modes,
   actions,
   base,
   compare,
   onCompare,
   saveKeys,
 }: {
+  /** Before the path, like the file list's toggle. */
+  lead?: ReactNode;
   path: string;
   file: LocalFileSession;
   editor: () => FileEditor | undefined;
   symbols: ReactNode;
+  /** How a Markdown file shows: code, preview or both. */
+  modes?: ReactNode;
   actions: ReactNode;
   base: string;
   compare: boolean;
@@ -32,6 +38,7 @@ export function EditorBar({
   const { source, dirty, saving, saved, loading } = file;
   return (
     <div className="editor-bar">
+      {lead}
       <EditorPath path={path} title={source?.path ?? path}>
         <span
           className={`editor-bar-state ${dirty ? "dirty" : ""}`}
@@ -48,6 +55,7 @@ export function EditorBar({
       </EditorPath>
       {source && symbols}
       <span className="divider" />
+      {modes}
       <EditHistory size={15} editor={editor} />
       <ReloadButton size={15} file={file} />
       {actions}

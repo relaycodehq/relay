@@ -14,6 +14,12 @@ import { CheckPanel } from "./editor/CheckPanel";
 import { EditCode } from "./editor/EditCode";
 import { EditorBar } from "./editor/EditorBar";
 import { EditorFooter } from "./editor/EditorFooter";
+import {
+  isMarkdown,
+  MarkdownModes,
+  MarkdownPreview,
+  useMarkdownMode,
+} from "./editor/MarkdownPreview";
 import { FolderPrompt, UnsavedPrompt } from "./editor/prompts";
 import { useEditorBlame } from "./editor/useEditorBlame";
 import { useSymbolNavigation } from "../diff/SymbolNavigation";
@@ -28,6 +34,7 @@ export default function LocalFileEditor({
   path,
   line,
   onClose,
+  lead,
   actions,
 }: {
   checks: ChecksController;
@@ -37,6 +44,8 @@ export default function LocalFileEditor({
   path: string;
   line?: number;
   onClose: () => void;
+  /** Before the path in the inline bar. */
+  lead?: ReactNode;
   /** Extra buttons in the inline bar, after the editing controls. */
   actions?: ReactNode;
 }) {
@@ -76,6 +85,35 @@ export default function LocalFileEditor({
   const view = useEditableDiff(path, source, file.revision, line, markers);
   const saveKeys = useShortcutLabel("save");
   useSaveShortcut(file.save);
+  const markdown = inline && !!project && isMarkdown(path);
+  const [mode, setMode] = useMarkdownMode();
+  const shown = markdown ? mode : "code";
+  const code = (
+    <>
+      <div className="editor-versions" hidden={!compare}>
+        <span>{base} · read-only</span>
+        <span>Local working tree · editable</span>
+      </div>
+      <div
+        className="local-editor-surface"
+        {...blame.handlers}
+        inert={file.loading}
+        aria-busy={file.loading}
+        onKeyDownCapture={editorKeys(view.editor, symbols.at)}
+      >
+        {!view.diff ? (
+          <Loading text="Preparing editable diff…" />
+        ) : (
+          <EditCode
+            view={view}
+            symbols={symbols.handlers}
+            compare={compare}
+            onEdit={file.edit}
+          />
+        )}
+      </div>
+    </>
+  );
   return (
     <EditorFrame
       inline={inline}
@@ -86,10 +124,12 @@ export default function LocalFileEditor({
       {symbols.overlay}
       {inline && (
         <EditorBar
+          lead={lead}
           path={path}
           file={file}
           editor={view.editor}
           symbols={symbols.controls}
+          modes={markdown && <MarkdownModes mode={mode} onMode={setMode} />}
           actions={actions}
           base={base}
           compare={compare}
@@ -128,28 +168,23 @@ export default function LocalFileEditor({
           />
           {!inline && symbols.controls}
           {blame.overlay}
-          <div className="editor-versions" hidden={!compare}>
-            <span>{base} · read-only</span>
-            <span>Local working tree · editable</span>
-          </div>
-          <div
-            className="local-editor-surface"
-            {...blame.handlers}
-            inert={file.loading}
-            aria-busy={file.loading}
-            onKeyDownCapture={editorKeys(view.editor, symbols.at)}
-          >
-            {!view.diff ? (
-              <Loading text="Preparing editable diff…" />
-            ) : (
-              <EditCode
-                view={view}
-                symbols={symbols.handlers}
-                compare={compare}
-                onEdit={file.edit}
-              />
-            )}
-          </div>
+          {markdown ? (
+            <div className={`markdown-split ${shown}`}>
+              {/* Kept mounted in Preview, so the editor keeps its undo and scroll. */}
+              <div className="markdown-split-code" hidden={shown === "preview"}>
+                {code}
+              </div>
+              {shown !== "code" && (
+                <MarkdownPreview
+                  where={project.id}
+                  path={path}
+                  text={file.buffer ?? ""}
+                />
+              )}
+            </div>
+          ) : (
+            code
+          )}
           {!inline && (
             <EditorFooter
               file={file}

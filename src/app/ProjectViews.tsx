@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search, FileCode2 } from "lucide-react";
+import { Search, FileCode2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { filePathSchema } from "../../shared/validation";
@@ -17,6 +17,7 @@ import { useExpanded } from "../features/files/useFileTree";
 import type { Viewing } from "../features/thread/useThreadView";
 import { FileTree } from "../features/files/FileTree";
 import {
+  FileBar,
   FolderView,
   ImageFile,
   OtherFile,
@@ -26,7 +27,8 @@ import { PaneResizer } from "../ui/PaneResizer";
 import { LocalChanges } from "../features/changes/LocalChanges";
 import { TurnChanges } from "../features/changes/TurnChanges";
 import type { CodeReference } from "../../shared/code-references";
-import { ErrorBox, Loading } from "../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../ui/ui";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import type { PaneSlots } from "../ui/WorkspacePanes";
 const LocalFileEditor = lazy(() => import("../features/files/LocalFileEditor"));
 
@@ -167,9 +169,19 @@ export function ProjectFiles({
   });
   const [actionError, setActionError] = useState<unknown>();
   const editorReady = !!file && (tree.data || project.plain);
+  const [listHidden, setListHidden] = useStoredFlag("relay-file-list-hidden");
+  const listToggle = (
+    <IconButton
+      label={listHidden ? "Show file list" : "Hide file list"}
+      className="file-list-toggle"
+      onClick={() => setListHidden((hidden) => !hidden)}
+    >
+      {listHidden ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+    </IconButton>
+  );
   return (
     <div className="files-workspace">
-      <aside className="project-file-list">
+      <aside className="project-file-list" hidden={listHidden}>
         <PaneResizer
           pane="files"
           label="Resize file list"
@@ -261,17 +273,20 @@ export function ProjectFiles({
       </aside>
       {file ? (
         info.error ? (
-          <div className="empty project-editor-empty">
-            <FileCode2 size={28} />
-            <h2>Can’t open this file</h2>
-            <ErrorBox error={info.error} />
+          <div className="files-main">
+            <FileBar lead={listToggle} path={file.path} />
+            <div className="empty project-editor-empty">
+              <FileCode2 size={28} />
+              <h2>Can’t open this file</h2>
+              <ErrorBox error={info.error} />
+            </div>
           </div>
         ) : !info.data ? (
           <Loading text="Opening…" />
         ) : info.data.kind === "image" ? (
-          <ImageFile where={where} info={info.data} />
+          <ImageFile where={where} info={info.data} lead={listToggle} />
         ) : info.data.kind === "other" ? (
-          <OtherFile where={where} info={info.data} />
+          <OtherFile where={where} info={info.data} lead={listToggle} />
         ) : editorReady ? (
           <div className="files-main">
             {!!actionError && <ErrorBox error={actionError} />}
@@ -287,6 +302,7 @@ export function ProjectFiles({
                 path={file.path}
                 line={file.line}
                 inline
+                lead={listToggle}
                 actions={
                   <RevealButtons
                     where={where}
@@ -308,6 +324,7 @@ export function ProjectFiles({
           where={where}
           dir={selection?.path ?? ""}
           title={project.name}
+          lead={listToggle}
           onOpen={(path, kind) => select({ kind, path })}
         />
       )}
