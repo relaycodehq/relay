@@ -411,21 +411,15 @@ it("counts five reviewers as one working thread alongside two ordinary threads",
     }),
   );
   expect(chats.working()).toBe(3);
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(review.id)).deepReview?.status).toBe("leading");
-      expect(chats.working()).toBe(3);
-    },
-    { timeout: 15000 },
-  );
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(review.id)).deepReview?.status).toBe("done");
-      expect(chats.working()).toBe(2);
-    },
-    { timeout: 15000 },
-  );
-}, 30000);
+  await vi.waitFor(async () => {
+    expect((await chats.get(review.id)).deepReview?.status).toBe("leading");
+    expect(chats.working()).toBe(3);
+  });
+  await vi.waitFor(async () => {
+    expect((await chats.get(review.id)).deepReview?.status).toBe("done");
+    expect(chats.working()).toBe(2);
+  });
+});
 
 it("runs each reviewer in a hidden thread, then the lead, and lists its findings", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
@@ -437,10 +431,8 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   expect(listed[0]?.title).toBe("Deep review · Uncommitted changes");
   expect(listed[0]?.running).toBe(true);
 
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
   const done = await chats.get(chat.id);
   const state = done.deepReview!;
@@ -493,10 +485,8 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   expect((await chats.get(chat.id)).deepReview?.statuses).toEqual({
     F1: "fixing",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixed"),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixed"),
   );
   await chats.setDeepReviewFinding(chat.id, "F1", "dismissed");
   expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("dismissed");
@@ -585,10 +575,8 @@ it("ends the review as failed and resumable when no reviewer can be started", as
   expect(failed.deepReview?.status).toBe("failed");
   expect(failed.messages).toHaveLength(1);
   await chats.resumeDeepReview(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
 });
 
@@ -618,10 +606,8 @@ it("ends the review as failed when it can't even tell that its reviewers failed 
 
   expect((await chats.get(chat.id)).deepReview?.status).toBe("failed");
   await chats.resumeDeepReview(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
 });
 
@@ -629,10 +615,8 @@ it("ends each reviewer's agent once it has reported", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "review" });
   await chats.startDeepReview(chat.id, config());
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
   const records = await capture();
   const reviewers: number[] = [
@@ -669,20 +653,17 @@ it("holds messages for the lead until the reviewers finish", async () => {
   expect(waiting.queue).toHaveLength(1);
   expect(waiting.messages).toHaveLength(1);
   // It goes out after the lead's answer.
-  await vi.waitFor(
-    async () => {
-      const current = await chats.get(chat.id);
-      expect(current.queue ?? []).toHaveLength(0);
-      expect(current.messages.map((m) => m.role)).toEqual([
-        "user",
-        "assistant",
-        "user",
-        "assistant",
-      ]);
-      expect(current.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    const current = await chats.get(chat.id);
+    expect(current.queue ?? []).toHaveLength(0);
+    expect(current.messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(current.messages.at(-1)?.status).toBe("complete");
+  });
 });
 
 it("stops its reviewers with the review, and picks up where it stopped", async () => {
@@ -695,23 +676,18 @@ it("stops its reviewers with the review, and picks up where it stopped", async (
   await chats.cancel(chat.id);
   expect((await chats.get(chat.id)).deepReview?.status).toBe("stopped");
   const reviewer = (await chats.get(chat.id)).deepReview!.reviewers[0]!;
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(reviewer.chatId)).messages.at(-1)?.status).toBe(
-        "cancelled",
-      );
-      // The answer reads cancelled a moment before its reviewer lets go.
-      expect(chats.list(projectId)[0]?.running).toBeFalsy();
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(reviewer.chatId)).messages.at(-1)?.status).toBe(
+      "cancelled",
+    );
+    // The answer reads cancelled a moment before its reviewer lets go.
+    expect(chats.list(projectId)[0]?.running).toBeFalsy();
+  });
   // Nothing hands over to the lead after a stop.
   expect((await chats.get(chat.id)).messages).toHaveLength(1);
   await chats.resumeDeepReview(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
 });
 
@@ -723,10 +699,7 @@ it("stays resumable when the agent answers a question after a stop", async () =>
     config({ reviewers: [{ provider: "codex", choice }] }),
   );
   await chats.cancel(chat.id);
-  await vi.waitFor(
-    () => expect(chats.list(projectId)[0]?.running).toBeFalsy(),
-    { timeout: 10000 },
-  );
+  await vi.waitFor(() => expect(chats.list(projectId)[0]?.running).toBeFalsy());
   await chats.send(chat.id, {
     id: randomUUID(),
     body: "@codex What did the reviewers look at so far?",
@@ -735,13 +708,11 @@ it("stays resumable when the agent answers a question after a stop", async () =>
     runtimeMode: "full-access",
     interactionMode: "default",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
-        role: "assistant",
-        status: "complete",
-      }),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+      role: "assistant",
+      status: "complete",
+    }),
   );
   // Only the lead's first answer settles the review.
   expect((await chats.get(chat.id)).deepReview?.status).toBe("stopped");
@@ -921,10 +892,8 @@ it("comes back stopped after Relay closes mid-review, ready to resume", async ()
   expect(reopened.deepReview?.status).toBe("stopped");
   expect(reopened.messages).toHaveLength(1);
   await chats.resumeDeepReview(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
 });
 
@@ -935,10 +904,8 @@ it("frees the findings a fix was on when Relay died mid-fix", async () => {
     chat.id,
     config({ reviewers: [{ provider: "codex", choice }] }),
   );
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
   await chats.send(chat.id, {
     id: randomUUID(),
@@ -973,12 +940,10 @@ it("lists the lead's findings when the user steered its first answer", async () 
     focus: "fixture wait for steer",
   });
   await chats.startDeepReview(chat.id, setup);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
-        "Checking the reports.",
-      ),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+      "Checking the reports.",
+    ),
   );
   await chats.send(chat.id, {
     id: randomUUID(),
@@ -989,10 +954,8 @@ it("lists the lead's findings when the user steered its first answer", async () 
     interactionMode: "default",
     delivery: "steer",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
   const done = await chats.get(chat.id);
   // The answer went on below the steer, and that's where the findings are.

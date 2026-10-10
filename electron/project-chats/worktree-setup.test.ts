@@ -8,8 +8,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, watch, type FSWatcher } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { Store } from "../app/store";
@@ -17,6 +17,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
+import { shellQuote } from "../../shared/validation";
 import type { ChatMessage, ProjectSettings } from "../../shared/projects";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { freePortOffset } from "./worktree-setup";
@@ -33,6 +34,22 @@ let root: string, repo: string;
 let store: Store, projects: Projects, chats: ProjectChats;
 let projectId: string;
 let events: { chatId: string; message: ChatMessage }[];
+const watchers: FSWatcher[] = [];
+function fileSignal(file: string) {
+  return new Promise<void>((resolve, reject) => {
+    const watcher = watch(dirname(file), () => {
+      if (!existsSync(file)) return;
+      watcher.close();
+      resolve();
+    });
+    watchers.push(watcher);
+    watcher.on("error", reject);
+    if (existsSync(file)) {
+      watcher.close();
+      resolve();
+    }
+  });
+}
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-setup-")));
   repo = join(root, "repo");
@@ -63,6 +80,7 @@ beforeEach(async () => {
   );
 });
 afterEach(async () => {
+  for (const watcher of watchers.splice(0)) watcher.close();
   await chats?.dispose();
   vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
@@ -79,15 +97,12 @@ const input = (body: string) => ({
 const settle = (settings: ProjectSettings) =>
   projects.saveSettings(projectId, { workspace: "worktree", ...settings });
 const answered = (id: string, count: number) =>
-  vi.waitFor(
-    async () => {
-      const { messages } = await chats.get(id);
-      expect(messages).toHaveLength(count);
-      expect(messages.at(-1)?.status).toBe("complete");
-      expect(messages.at(-1)?.worktreeCommand).toBeUndefined();
-    },
-    { timeout: 8000 },
-  );
+  vi.waitFor(async () => {
+    const { messages } = await chats.get(id);
+    expect(messages).toHaveLength(count);
+    expect(messages.at(-1)?.status).toBe("complete");
+    expect(messages.at(-1)?.worktreeCommand).toBeUndefined();
+  });
 const turns = async () =>
   (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()
@@ -153,10 +168,8 @@ it("runs a failed setup again in its row, and the agent hears it passed", async 
   expect(setup.status).toBe("failed");
 
   await chats.rerunWorktreeSetup(chat.id, setup.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages[1]!.status).toBe("complete"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages[1]!.status).toBe("complete"),
   );
   // Same row, no new one.
   expect((await chats.get(chat.id)).messages).toHaveLength(3);
@@ -186,22 +199,56 @@ it("leaves a project without setup alone, and runs teardown before removing the 
 });
 
 it("archives at once and tears the worktree down after", async () => {
-  const torn = join(root, "torn");
+  const torn = join(root, "torn"),
+    ready = join(root, "teardown-ready"),
+    release = join(root, "release-teardown"),
+    script = join(root, "teardown.cjs");
+  await writeFile(
+    script,
+    `
+    const fs = require('node:fs');
+    const finish = () => {
+      if (fs.existsSync(${JSON.stringify(release)})) {
+        fs.writeFileSync(${JSON.stringify(torn)}, 'done');
+        process.exit();
+      }
+    };
+    fs.watch(${JSON.stringify(root)}, finish);
+    fs.writeFileSync(${JSON.stringify(ready + ".tmp")}, 'ready');
+    fs.renameSync(${JSON.stringify(ready + ".tmp")}, ${JSON.stringify(ready)});
+    finish();
+  `,
+  );
   await settle({
-    worktreeTeardown: `sleep 1; touch ${JSON.stringify(torn)}`,
+    worktreeTeardown: [process.execPath, script]
+      .map((arg) =>
+        process.platform === "win32" ? JSON.stringify(arg) : shellQuote(arg),
+      )
+      .join(" "),
   });
   const chat = await chats.create(projectId, { kind: "project" }, "worktree");
   await chats.send(chat.id, input("@codex Hello"));
   await answered(chat.id, 2);
 
-  const started = Date.now();
-  await chats.triage(chat.id, { kind: "archive" });
-  expect(Date.now() - started).toBeLessThan(800);
-  expect(existsSync(torn)).toBe(false);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).worktree!.removedAt).toBeDefined(),
-    { timeout: 5000 },
+  const readySignal = fileSignal(ready);
+  let archived = false;
+  const archiving = chats.triage(chat.id, { kind: "archive" }).then(() => {
+    archived = true;
+  });
+  try {
+    await readySignal;
+    expect(await readFile(ready, "utf8")).toBe("ready");
+    // Archiving must finish while teardown is explicitly held open.
+    expect(archived).toBe(true);
+    expect((await chats.get(chat.id)).archivedAt).toBeDefined();
+    expect((await chats.get(chat.id)).worktree!.removedAt).toBeUndefined();
+    expect(existsSync(torn)).toBe(false);
+  } finally {
+    await writeFile(release, "release");
+    await archiving;
+  }
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).worktree!.removedAt).toBeDefined(),
   );
   expect(existsSync(torn)).toBe(true);
 });
@@ -225,19 +272,15 @@ it("stopping the turn during setup stops setup, and no answer starts", async () 
   await settle({ worktreeSetup: "echo installing; sleep 30" });
   const chat = await chats.create(projectId, { kind: "project" }, "worktree");
   await chats.send(chat.id, input("@codex Build it"));
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
-      ).toBe("installing\n"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
+    ).toBe("installing\n"),
   );
 
   await chats.cancel(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages[1]?.status).toBe("cancelled"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages[1]?.status).toBe("cancelled"),
   );
   const { messages } = await chats.get(chat.id);
   expect(messages).toHaveLength(2);

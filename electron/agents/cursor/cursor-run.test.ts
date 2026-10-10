@@ -206,22 +206,33 @@ describe("a Cursor turn", () => {
   });
 
   it("stops when cancelled", async () => {
-    const { controller, options } = turn("[[slow]]");
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => (started = resolve));
+    const { controller, options } = turn("[[slow]]", {
+      onText: () => started(),
+    });
     const running = runCursor(options);
-    setTimeout(() => controller.abort(), 300);
-    await expect(running).rejects.toThrow(/Cancelled by you/);
+    const cancelled = expect(running).rejects.toThrow(/Cancelled by you/);
+    await ready;
+    controller.abort();
+    await cancelled;
   });
 
   it("takes a steering message while it works and answers it", async () => {
     let steer!: NonNullable<
       Parameters<NonNullable<AgentOptions["onControl"]>>[0]
     >["steer"];
+    let working!: () => void;
+    const ready = new Promise<void>((resolve) => (working = resolve));
     const { seen, options } = turn("[[steer]]", {
       onControl: (control) => (steer = control.steer),
+      onText: (text) => {
+        seen.text.push(text);
+        if (text === "Working. ") working();
+      },
     });
     const running = runCursor(options);
-    for (let i = 0; i < 100 && !seen.text.includes("Working. "); i++)
-      await new Promise((r) => setTimeout(r, 50));
+    await ready;
     await steer("switch to b", "m1");
     expect(await running).toBe("Got: switch to b");
     expect(seen.steered).toEqual(["m1"]);

@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -26,10 +25,10 @@ const script = (path: string, body: string) => {
   chmodSync(path, 0o755);
 };
 
-/** Runs the shim in `cwd`; the app and headless Relay write down what they were given. */
-function relay(cwd: string, args: string[], { headless = true } = {}) {
+/** FD 3 stays open until the background app exits, so close covers either route. */
+async function relay(cwd: string, args: string[], { headless = true } = {}) {
   const app = join(dir, "Relay App");
-  script(app, `printf '%s\\n' "$@" > "${dir}/app.log"`);
+  script(app, `printf '%s\\n' "$@" >&3`);
   const install = join(dir, "install");
   mkdirSync(join(install, "bin"), { recursive: true });
   rmSync(join(install, "bin", "relay"), { force: true });
@@ -39,39 +38,39 @@ function relay(cwd: string, args: string[], { headless = true } = {}) {
     shim,
     shimScript("linux", "dev.relay.experimental", app).replace(/^#!.*\n/, ""),
   );
-  rmSync(join(dir, "app.log"), { force: true });
-  const run = spawnSync(shim, args, {
+  const run = spawn(shim, args, {
     cwd,
-    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe", "pipe"],
     env: { ...process.env, RELAY_INSTALL: install },
   });
-  // The app is launched in the background.
-  for (let i = 0; i < 50 && run.status === 0; i++) {
-    try {
-      return { ...run, app: readFileSync(join(dir, "app.log"), "utf8") };
-    } catch {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
-    }
-  }
-  return { ...run, app: undefined };
+  let stdout = "";
+  let stderr = "";
+  let opened: string | undefined;
+  run.stdout!.on("data", (chunk) => (stdout += chunk));
+  run.stderr!.on("data", (chunk) => (stderr += chunk));
+  run.stdio[3]!.on("data", (chunk) => (opened = (opened ?? "") + chunk));
+  const status = await new Promise<number | null>((resolve, reject) => {
+    run.once("error", reject);
+    run.once("close", resolve);
+  });
+  return { status, stdout, stderr, app: opened };
 }
 
-it("opens a folder in the app by its full path", () => {
+it("opens a folder in the app by its full path", async () => {
   const project = join(dir, "my project");
   mkdirSync(join(project, "src"), { recursive: true });
-  expect(relay(join(project, "src"), [".."]).app).toBe(`${project}\n`);
+  expect((await relay(join(project, "src"), [".."])).app).toBe(`${project}\n`);
 });
 
-it("hands commands to the headless Relay, even with a folder of that name", () => {
+it("hands commands to the headless Relay, even with a folder of that name", async () => {
   mkdirSync(join(dir, "logs"));
-  const run = relay(dir, ["logs", "-f"]);
+  const run = await relay(dir, ["logs", "-f"]);
   expect(run.stdout).toBe("logs\n-f\n");
   expect(run.app).toBeUndefined();
-  // Proving the app stayed shut waits out the whole poll.
-}, 10000);
+});
 
-it("says how to install the headless Relay when it isn't", () => {
-  const run = relay(dir, ["status"], { headless: false });
+it("says how to install the headless Relay when it isn't", async () => {
+  const run = await relay(dir, ["status"], { headless: false });
   expect(run.status).toBe(1);
   expect(run.stderr).toMatch(/install\.sh \| sh/);
 });

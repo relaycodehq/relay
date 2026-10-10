@@ -26,6 +26,7 @@ import { ChatSummaryFeed } from "./chat-summaries";
 import { AgentAccounts, accountFor } from "../agents/accounts";
 import { prepareProfile, setProfilesRoot } from "../agents/accounts/profiles";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
+import * as titleHelpers from "../agents/thread-titles";
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
   findExecutable: vi.fn(),
@@ -35,7 +36,59 @@ let root: string,
   projects: Projects,
   chats: ProjectChats,
   projectId: string;
-let events: { chatId: string; message: ChatMessage; title?: string }[];
+type ChatEvent = { chatId: string; message: ChatMessage; title?: string };
+let events: ChatEvent[];
+const eventListeners = new Set<(event: ChatEvent) => void>();
+const waitCleanups = new Set<() => void>();
+const recordEvent = (event: ChatEvent) => {
+  const captured = structuredClone(event);
+  events.push(captured);
+  for (const listener of eventListeners) listener(captured);
+};
+/** Listen to the same pushes the renderer receives; the test deadline bounds a missing event. */
+const waitForChatEvent = (
+  chatId: string,
+  predicate: (event: ChatEvent) => boolean,
+  after = 0,
+) => {
+  const received = events
+    .slice(after)
+    .find((event) => event.chatId === chatId && predicate(event));
+  if (received) return Promise.resolve(received);
+  return new Promise<ChatEvent>((resolve) => {
+    const cleanup = () => {
+      eventListeners.delete(listener);
+      waitCleanups.delete(cleanup);
+    };
+    const listener = (event: ChatEvent) => {
+      if (event.chatId !== chatId || !predicate(event)) return;
+      cleanup();
+      resolve(event);
+    };
+    eventListeners.add(listener);
+    waitCleanups.add(cleanup);
+  });
+};
+/** Summary writes have their own notification, after the streamed message push. */
+const waitForSummary = (
+  chatId: string,
+  predicate: (summary: ChatSummary) => boolean,
+) =>
+  new Promise<ChatSummary>((resolve) => {
+    const check = () => {
+      const summary = chats.list(projectId).find((chat) => chat.id === chatId);
+      if (!summary || !predicate(summary)) return;
+      cleanup();
+      resolve(summary);
+    };
+    const unsubscribe = chats.onSummaries(check);
+    const cleanup = () => {
+      unsubscribe();
+      waitCleanups.delete(cleanup);
+    };
+    waitCleanups.add(cleanup);
+    check();
+  });
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-project-chat-")));
   const repo = join(root, "repo");
@@ -52,12 +105,13 @@ beforeEach(async () => {
   projects = new Projects(store);
   projectId = (await projects.add(repo, null)).id;
   events = [];
-  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
-    events.push(structuredClone(event)),
-  );
+  chats = new ProjectChats(store, projects, join(root, "chats"), recordEvent);
 });
 afterEach(async () => {
+  for (const cleanup of waitCleanups) cleanup();
   await chats?.dispose();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   // Windows holds a folder a just-stopped agent ran in for a moment.
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
@@ -84,10 +138,11 @@ const input = (body: string) => ({
 it("answers async Codex questions inside the running turn without interrupting or queueing", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture async question live"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages[1]?.questions).toHaveLength(1),
-    { timeout: 6000 },
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) =>
+      message.questions?.length === 1 &&
+      !!message.trace?.some((entry) => entry.id === "after-question"),
   );
   const current = await chats.get(chat.id);
   const message = current.messages[1];
@@ -98,19 +153,27 @@ it("answers async Codex questions inside the running turn without interrupting o
   const waiting = () =>
     chats.list(projectId).find((c) => c.id === chat.id)?.waiting;
   // Listed from the saved summary, which a running answer writes each second.
-  await vi.waitFor(() => expect(waiting()).toBe(true), { timeout: 3000 });
+  await waitForSummary(chat.id, (summary) => summary.waiting === true);
   expect(
     chats.list(projectId).find((c) => c.id === chat.id)?.blocked,
   ).toBeUndefined();
   const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
+  const beforeAnswer = events.length;
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
     answers,
   });
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) => message.status === "complete",
+    beforeAnswer,
+  );
+  await waitForSummary(
+    chat.id,
+    (summary) => !summary.waiting && !summary.running,
   );
   const answered = await chats.get(chat.id);
+  expect(answered.messages.at(-1)?.status).toBe("complete");
   expect(
     answered.messages.find((m) => m.id === message.id)?.questions?.[0].answers,
   ).toEqual(answers);
@@ -147,18 +210,16 @@ it("answers async Codex questions inside the running turn without interrupting o
       answers,
     }),
   ).rejects.toThrow("already been answered");
-}, 15000);
+});
 
 it("keeps unanswered async questions across a restart and answers them as a follow-up", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture async question finished"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) => message.status === "complete",
   );
+  await waitForSummary(chat.id, (summary) => !summary.running);
   const message = (await chats.get(chat.id)).messages[1];
   expect(message.questions?.[0].questions).toEqual([
     {
@@ -169,9 +230,7 @@ it("keeps unanswered async questions across a restart and answers them as a foll
     { id: "1", question: "Which account should own it?" },
   ]);
   await chats.dispose();
-  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
-    events.push(structuredClone(event)),
-  );
+  chats = new ProjectChats(store, projects, join(root, "chats"), recordEvent);
   expect((await chats.get(chat.id)).messages[1].questions).toEqual(
     message.questions,
   );
@@ -190,14 +249,22 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect(waiting()).toBeFalsy();
   await dismiss(false);
   expect(waiting()).toBe(true);
+  const beforeAnswer = events.length;
   await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
     kind: "question",
     answers: { "0": ["An unlisted choice"], "1": ["fixture-owner"] },
   });
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) => message.status === "complete",
+    beforeAnswer,
+  );
+  await waitForSummary(
+    chat.id,
+    (summary) => !summary.waiting && !summary.running,
   );
   expect(waiting()).toBeFalsy();
+  expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
   const calls = (await agentCalls())
     .split("\n")
     .filter(Boolean)
@@ -206,16 +273,12 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect(turns).toHaveLength(2);
   expect(turns[1].turn.input[0].text).toContain("An unlisted choice");
   expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
-}, 15000);
+});
 it("sends only messages the renderer doesn't hold at their current version", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const full = await chats.get(chat.id);
   const [question, answer] = full.messages;
@@ -230,7 +293,7 @@ it("sends only messages the renderer doesn't hold at their current version", asy
   expect(rebuilt.messages[0]).toBe(question);
   expect(rebuilt.messages[1]).toEqual(answer);
   expect(() => applyChatPatch(patch, undefined)).toThrow("missing a message");
-}, 15000);
+});
 it("streams locally, persists final answers, and resumes the same Codex session with selected settings", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -245,12 +308,8 @@ it("streams locally, persists final answers, and resumes the same Codex session 
     ).toBe(true),
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("streaming");
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
     "The cache guard prevents duplicate requests.",
@@ -258,16 +317,10 @@ it("streams locally, persists final answers, and resumes the same Codex session 
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
   expect(events.some((e) => e.title === "Cache guard behavior")).toBe(true);
   await chats.dispose();
-  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
-    events.push(structuredClone(event)),
-  );
+  chats = new ProjectChats(store, projects, join(root, "chats"), recordEvent);
   await chats.send(chat.id, input("@codex And why is that useful?"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const requests = (await agentCalls())
     .trim()
@@ -302,16 +355,14 @@ it("streams locally, persists final answers, and resumes the same Codex session 
   expect(requests.filter((r) => r.turn)[1].turn.input[0].text).not.toContain(
     "The cache guard prevents duplicate requests.",
   );
-}, 15000);
+});
 it("names a thread from its first message while the answer is still running", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   vi.stubEnv("RELAY_AGENT_TURN_MS", "4000");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
-    { timeout: 3000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("streaming");
   const titling = (await agentCalls({ helpers: true }))
@@ -328,9 +379,10 @@ it("names a thread from its first message while the answer is still running", as
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
-}, 12000);
+});
 it("retries a missing title once, not every time the thread is read", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const generate = vi.spyOn(titleHelpers, "generateThreadTitle");
   const chat = await chats.create(projectId, { kind: "project" });
   // The generated title is the prompt excerpt already.
   await chats.send(chat.id, input("@codex Cache guard behavior"));
@@ -338,17 +390,22 @@ it("retries a missing title once, not every time the thread is read", async () =
     (await agentCalls({ helpers: true }))
       .split("\n")
       .filter((line) => line.includes("Generate a short title")).length;
-  await vi.waitFor(async () => expect(await titleRuns()).toBe(1), {
-    timeout: 8000,
-  });
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) => message.status === "complete",
+  );
+  await waitForSummary(chat.id, (summary) => !summary.running);
+  expect(generate).toHaveBeenCalledTimes(1);
+  // A helper can return the existing excerpt; wait for that actual result before rereading.
+  await generate.mock.results[0].value;
   for (let read = 0; read < 3; read++) {
-    await new Promise((r) => setTimeout(r, 500));
+    await chats.get(chat.id);
     chats.ensureTitle(chat.id);
   }
-  await new Promise((r) => setTimeout(r, 1000));
+  expect(generate).toHaveBeenCalledTimes(1);
   expect(await titleRuns()).toBe(1);
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
-}, 15000);
+});
 it("retries a title with the answering agent's own model after another agent took over", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -362,15 +419,12 @@ it("retries a title with the answering agent's own model after another agent too
       provider,
       choice: { ...input(body).choice, model: `${provider}-model` },
     });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   }
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
@@ -386,16 +440,14 @@ it("retries a title with the answering agent's own model after another agent too
   await vi.waitFor(async () => expect(await models()).toHaveLength(2));
   // Codex can't run Claude's model; it retries with its own settings.
   expect(await models()).not.toContain("claude-model");
-}, 20000);
+});
 it("waits for the first answer to name a thread of only screenshots", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex [Image #1]"));
   expect((await chats.get(chat.id)).title).toBe("[Image #1]");
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
   );
   const titling = (await agentCalls({ helpers: true }))
     .trim()
@@ -403,7 +455,7 @@ it("waits for the first answer to name a thread of only screenshots", async () =
     .map((line) => JSON.parse(line))
     .find((r) => r.turn?.input[0].text.startsWith("Generate a short title"));
   expect(titling.turn.input[0].text).toContain('"answer"');
-}, 12000);
+});
 it("keeps the furthest read mark, and lists it for the desktop and phones", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.markSeen(chat.id, 500);
@@ -419,12 +471,8 @@ it("keeps a user's thread name over the prompt excerpt and generated titles", as
     renamed: true,
   });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const requests = (await agentCalls())
     .trim()
@@ -434,29 +482,22 @@ it("keeps a user's thread name over the prompt excerpt and generated titles", as
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.list(projectId))[0].title).toBe("Cache work");
-}, 12000);
+});
 it("asks the outgoing agent for a handoff note before another agent takes over", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   await chats.send(chat.id, {
     ...input("@claude Now fix it"),
     provider: "claude",
   });
-  await vi.waitFor(
-    async () => {
-      const messages = (await chats.get(chat.id)).messages;
-      expect(messages).toHaveLength(5);
-      expect(messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    const messages = (await chats.get(chat.id)).messages;
+    expect(messages).toHaveLength(5);
+    expect(messages.at(-1)?.status).toBe("complete");
+  });
   const after = await chats.get(chat.id);
   const note = after.messages[3]!;
   expect(note).toMatchObject({
@@ -498,17 +539,15 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   // The history slice carries the earlier exchange, not the note again.
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
-}, 20000);
+});
 /** Sends `body` to Claude after Codex's turn, and returns the thread and Claude's prompt. */
 async function switchToClaude(chatId: string, body: string) {
   await chats.send(chatId, { ...input(body), provider: "claude" });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chatId)).messages.at(-1)).toMatchObject({
-        provider: "claude",
-        status: "complete",
-      }),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chatId)).messages.at(-1)).toMatchObject({
+      provider: "claude",
+      status: "complete",
+    }),
   );
   const prompt = JSON.parse(
     (await agentCalls())
@@ -523,10 +562,8 @@ async function switchToClaude(chatId: string, body: string) {
 it("briefs the new agent itself when a usage limit cut off the outgoing agent's turn", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed"),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed"),
   );
   const { chat: after, prompt } = await switchToClaude(
     chat.id,
@@ -541,17 +578,13 @@ it("briefs the new agent itself when a usage limit cut off the outgoing agent's 
   expect(prompt).toContain(
     "didn't finish (failed: You've hit your usage limit.)",
   );
-}, 20000);
+});
 it("writes the note itself when the outgoing agent runs out while writing it", async () => {
   vi.stubEnv("RELAY_AGENT_NOTE_LIMIT", "1");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const { chat: after, prompt } = await switchToClaude(
     chat.id,
@@ -567,17 +600,13 @@ it("writes the note itself when the outgoing agent runs out while writing it", a
   expect(notes[0]!.error).toBeUndefined();
   expect(prompt).toContain("Handoff note Relay wrote");
   expect(prompt).toContain("Explain the cache guard");
-}, 20000);
+});
 it("accepts a message for another agent without waiting for the handoff note", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   await chats.send(chat.id, {
     ...input("@claude Now fix it"),
@@ -590,15 +619,13 @@ it("accepts a message for another agent without waiting for the handoff note", a
     handoff: { from: "codex", to: "claude" },
     status: "streaming",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
-        provider: "claude",
-        status: "complete",
-      }),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+      provider: "claude",
+      status: "complete",
+    }),
   );
-}, 20000);
+});
 it("tells an agent coming back what was asked of the other agent meanwhile", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const [body, count] of [
@@ -610,15 +637,12 @@ it("tells an agent coming back what was asked of the other agent meanwhile", asy
       ...input(body),
       provider: body.startsWith("@claude") ? "claude" : "codex",
     });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   }
   const codex = (await agentCalls())
     .trim()
@@ -634,19 +658,16 @@ it("tells an agent coming back what was asked of the other agent meanwhile", asy
     "@claude Now fix it",
     "Claude found the same cache guard.",
   ]);
-}, 30000);
+});
 it("still tells a compacted session the notes left since its last answer", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const settled = (count: number) =>
-    vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await settled(2);
   await chats.send(chat.id, input("Keep the old API."));
@@ -662,19 +683,16 @@ it("still tells a compacted session the notes left since its last answer", async
     .map((c) => c.turn.input[0].text as string)
     .find((text) => text.startsWith("My request: Go on"))!;
   expect(prompt).toContain("Keep the old API.");
-}, 20000);
+});
 it("keeps what Claude compacted to beside the compaction, not as its answer", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const settled = (count: number) =>
-    vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   await chats.send(chat.id, {
     ...input("@claude Explain the cache guard"),
     provider: "claude",
@@ -686,19 +704,16 @@ it("keeps what Claude compacted to beside the compaction, not as its answer", as
   expect(compaction.compaction).toBe(true);
   expect(compaction.body).toBe("");
   expect(compaction.compactSummary).toBe("Summary:\n1. Keep the old API.");
-}, 20000);
+});
 it("brings the sidebar summary up to date when a compaction finishes", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const finished = () =>
-    vi.waitFor(
-      async () => {
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-          "complete",
-        );
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    vi.waitFor(async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await finished();
   await chats.triage(chat.id, { kind: "settle" });
@@ -708,21 +723,18 @@ it("brings the sidebar summary up to date when a compaction finishes", async () 
     const summary = chats.list(projectId).find((c) => c.id === chat.id)!;
     expect(summary.updated).toBe((await chats.get(chat.id)).updated);
   });
-}, 20000);
+});
 it("generates a title for Claude conversations, which have no thread-name event", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
     ...input("@claude Explain the cache guard"),
     provider: "claude",
   });
-  await vi.waitFor(
-    async () => {
-      const saved = await chats.get(chat.id);
-      expect(saved.title).toBe("Cache guard behavior");
-      expect(saved.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    const saved = await chats.get(chat.id);
+    expect(saved.title).toBe("Cache guard behavior");
+    expect(saved.messages.at(-1)?.status).toBe("complete");
+  });
   const titling = (await agentCalls({ helpers: true }))
     .trim()
     .split("\n")
@@ -733,7 +745,7 @@ it("generates a title for Claude conversations, which have no thread-name event"
     "--model claude-haiku-5-5 --effort low",
   );
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
-}, 12000);
+});
 it("names a thread on its own model when the small one isn't available", async () => {
   vi.stubEnv("RELAY_AGENT_REJECT_MODEL", "claude-haiku-5-5");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -741,10 +753,8 @@ it("names a thread on its own model when the small one isn't available", async (
     ...input("@claude Explain the cache guard"),
     provider: "claude",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
   );
   const models = (await agentCalls({ helpers: true }))
     .trim()
@@ -753,7 +763,7 @@ it("names a thread on its own model when the small one isn't available", async (
     .filter((r) => r.provider === "claude" && r.prompt.includes("short title"))
     .map((r) => r.args[r.args.indexOf("--model") + 1]);
   expect(models).toEqual(["claude-haiku-5-5", "fixture-model"]);
-}, 12000);
+});
 it("shows a turn Claude starts by itself as its own answer, so later answers stay under their questions", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -764,21 +774,15 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     chat.id,
     claude("@claude Start the fixture background task"),
   );
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.status,
-      ).toBe("complete"),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.status,
+    ).toBe("complete"),
   );
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
   await chats.send(chat.id, claude("@claude Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   expect(
     (await chats.get(chat.id)).messages.map((m) => [
@@ -793,7 +797,7 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     ["user", false, "@claude Explain the cache guard"],
     ["assistant", false, "Claude found the same cache guard."],
   ]);
-}, 15000);
+});
 it("steers a turn Claude started by itself", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -804,24 +808,19 @@ it("steers a turn Claude started by itself", async () => {
     chat.id,
     claude("@claude Start the fixture background task to steer"),
   );
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
-      ).toBe("Looking into it."),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
+    ).toBe("Looking into it."),
   );
   await chats.send(chat.id, {
     ...claude("@claude Use the blue one"),
     delivery: "steer",
   });
-  await vi.waitFor(
-    async () => {
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-      expect((await chats.get(chat.id)).messages).toHaveLength(5);
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+    expect((await chats.get(chat.id)).messages).toHaveLength(5);
+  });
   expect(
     (await chats.get(chat.id)).messages.map((m) => [
       m.role,
@@ -841,7 +840,7 @@ it("steers a turn Claude started by itself", async () => {
     ["user", "@claude Use the blue one", false, true],
     ["assistant", "Noted: Use the blue one", false, false],
   ]);
-}, 15000);
+});
 it.each([
   ["reads it mid-turn", "fixture wait for steer", "Looking into it."],
   ["reads it after finishing", "fixture late steer", "Done before your note."],
@@ -854,24 +853,19 @@ it.each([
       provider: "claude" as const,
     });
     await chats.send(chat.id, claude(`@claude ${prompt}`));
-    await vi.waitFor(
-      async () =>
-        expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
-          "Looking into it.",
-        ),
-      { timeout: 8000 },
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+        "Looking into it.",
+      ),
     );
     await chats.send(chat.id, {
       ...claude("@claude Use the blue one"),
       delivery: "steer",
     });
-    await vi.waitFor(
-      async () => {
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-        expect((await chats.get(chat.id)).messages).toHaveLength(4);
-      },
-      { timeout: 8000 },
-    );
+    await vi.waitFor(async () => {
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+      expect((await chats.get(chat.id)).messages).toHaveLength(4);
+    });
     const messages = (await chats.get(chat.id)).messages;
     expect(
       messages.map((m) => [m.role, m.body, m.status, !!m.steered]),
@@ -891,30 +885,24 @@ it.each([
       messages[3]!.id,
     );
   },
-  15000,
 );
 it("continues Codex's answer below a steering message once Codex reads it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture codex steer"));
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
-      ).toBeGreaterThan(0),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
+    ).toBeGreaterThan(0),
   );
   const steer = {
     ...input("@codex Use the blue one"),
     delivery: "steer" as const,
   };
   await chats.send(chat.id, steer);
-  await vi.waitFor(
-    async () => {
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-      expect((await chats.get(chat.id)).messages).toHaveLength(4);
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+    expect((await chats.get(chat.id)).messages).toHaveLength(4);
+  });
   const messages = (await chats.get(chat.id)).messages;
   expect(messages.map((m) => [m.role, m.body, m.status])).toEqual([
     ["user", "@codex fixture codex steer", "complete"],
@@ -927,7 +915,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
     .split("\n")
     .map((line) => JSON.parse(line));
   expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
-}, 30000);
+});
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -938,23 +926,16 @@ it("keeps a question's answer under it when Claude's own turn follows it", async
     chat.id,
     claude("@claude Start the fixture background task"),
   );
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   // Sent before the task ends, so Claude's own turn arrives after this answer.
   await chats.send(chat.id, claude("@claude Explain the cache guard"));
-  await vi.waitFor(
-    async () => {
-      const messages = (await chats.get(chat.id)).messages;
-      expect(messages.find((m) => m.unprompted)?.status).toBe("complete");
-      expect(messages.every((m) => m.status === "complete")).toBe(true);
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    const messages = (await chats.get(chat.id)).messages;
+    expect(messages.find((m) => m.unprompted)?.status).toBe("complete");
+    expect(messages.every((m) => m.status === "complete")).toBe(true);
+  });
   const messages = (await chats.get(chat.id)).messages;
   const question = messages.findIndex(
     (m) => m.body === "@claude Explain the cache guard",
@@ -965,7 +946,7 @@ it("keeps a question's answer under it when Claude's own turn follows it", async
   expect(messages.filter((m) => m.unprompted).map((m) => m.body)).toEqual([
     "The background task finished.",
   ]);
-}, 15000);
+});
 const tinyPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
 it("saves a pasted screenshot outside chat JSON and sends a local image to Codex", async () => {
@@ -981,15 +962,10 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
     ],
   });
   // The thread stays active a moment after its answer reads complete.
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      );
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 6000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   const image = (await chats.get(chat.id)).messages[0].images?.[0];
   expect(image).toMatchObject({ name: "screen.png", mimeType: "image/png" });
   expect(await chats.image(chat.id, image!.id)).toBe(
@@ -1020,7 +996,7 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
       ],
     }),
   ).rejects.toThrow("Screenshot is invalid");
-}, 10000);
+});
 it("passes a pasted screenshot as an image block to Claude", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -1034,12 +1010,8 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
       },
     ],
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const requests = (await agentCalls())
     .trim()
@@ -1052,7 +1024,7 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
     type: "image",
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
-}, 10000);
+});
 it("sends a screenshot on its own without inventing a request", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -1066,12 +1038,8 @@ it("sends a screenshot on its own without inventing a request", async () => {
       },
     ],
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const saved = await chats.get(chat.id);
   expect(saved.messages[0].body).toBe("@claude");
@@ -1089,19 +1057,15 @@ it("sends a screenshot on its own without inventing a request", async () => {
     expect(block.text).not.toBe("");
     expect(block.text).not.toContain("My request");
   }
-}, 10000);
+});
 it("sends a Claude slash command as the whole prompt so Claude runs it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
     ...input("@claude /security-review focus on auth"),
     provider: "claude",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const requests = (await agentCalls())
     .trim()
@@ -1113,7 +1077,7 @@ it("sends a Claude slash command as the whole prompt so Claude runs it", async (
   expect(message.message.content[0].text).toBe(
     "/security-review focus on auth",
   );
-}, 10000);
+});
 it("tells a Claude session begun with a command what the thread is about on its next turn", async () => {
   const chat = await chats.create(projectId, {
     kind: "pr",
@@ -1121,15 +1085,12 @@ it("tells a Claude session begun with a command what the thread is about on its 
   });
   for (const body of ["@claude /security-review", "@claude Fix the first"]) {
     await chats.send(chat.id, { ...input(body), provider: "claude" });
-    await vi.waitFor(
-      async () => {
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-          "complete",
-        );
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    await vi.waitFor(async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   }
   const prompts = (await agentCalls())
     .trim()
@@ -1141,7 +1102,7 @@ it("tells a Claude session begun with a command what the thread is about on its 
   expect(prompts[1]).toContain("This discussion concerns PR #7 in Web/portal");
   // Nothing came before the command, so its session has heard it all.
   expect(prompts[1]).not.toContain("Conversation updates");
-}, 15000);
+});
 it("tells Claude on its next turn what a command it began with couldn't carry", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const body of [
@@ -1151,15 +1112,12 @@ it("tells Claude on its next turn what a command it began with couldn't carry", 
   ]) {
     const provider = body.startsWith("@claude") ? "claude" : "codex";
     await chats.send(chat.id, { ...input(body), provider });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages.at(-1)?.role).toBe("assistant");
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages.at(-1)?.role).toBe("assistant");
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   }
   const prompt = (await agentCalls())
     .trim()
@@ -1174,7 +1132,7 @@ it("tells Claude on its next turn what a command it began with couldn't carry", 
   expect((await chats.get(chat.id)).messages.some((m) => m.handoff)).toBe(
     false,
   );
-}, 30000);
+});
 it("keeps ordinary notes local, cancels a partial answer, and does not duplicate retried messages", async () => {
   const chat = await chats.create(projectId, { kind: "project" }),
     note = input("Consider a cache here.");
@@ -1221,18 +1179,15 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
   expect((await chats.get(chat.id)).queue).toHaveLength(1);
   // Asking again by hand lets the paused queue follow that answer.
   await chats.send(chat.id, input("@codex Asked by hand"));
-  await vi.waitFor(
-    async () => {
-      const saved = await chats.get(chat.id);
-      expect(saved.queue ?? []).toHaveLength(0);
-      expect(
-        saved.messages.filter((m) => m.role === "user").map((m) => m.body),
-      ).toEqual(
-        expect.arrayContaining(["@codex Asked by hand", "@codex Another"]),
-      );
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    const saved = await chats.get(chat.id);
+    expect(saved.queue ?? []).toHaveLength(0);
+    expect(
+      saved.messages.filter((m) => m.role === "user").map((m) => m.body),
+    ).toEqual(
+      expect.arrayContaining(["@codex Asked by hand", "@codex Another"]),
+    );
+  });
   expect(
     (await chats.get(chat.id)).messages.filter((m) => m.id === another.id),
   ).toHaveLength(1);
@@ -1246,20 +1201,18 @@ it("lets a message's `to` decide who answers over its body's mention", async () 
     ...input("Explain the cache guard"),
     to: "codex",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
-        role: "assistant",
-        provider: "codex",
-        status: "complete",
-      }),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+      role: "assistant",
+      provider: "codex",
+      status: "complete",
+    }),
   );
   expect(chats.list(projectId).find((c) => c.id === chat.id)).toMatchObject({
     provider: "codex",
     contextAgent: "codex",
   });
-}, 15000);
+});
 it("previews only the images a turn read, and only when they really are images", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();
@@ -1372,12 +1325,8 @@ it("validates selected PR evidence before saving a question and passes exact old
   await expect(chats.send(chat.id, request)).rejects.toThrow("This PR changed");
   expect((await chats.get(chat.id)).messages).toEqual([]);
   await chats.send(chat.id, request);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const calls = (await agentCalls())
     .trim()
@@ -1395,16 +1344,13 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
   const ask = async (body: string, parentId?: string) => {
     const request = { ...input(body), ...(parentId ? { parentId } : {}) };
     await chats.send(chat.id, request);
-    await vi.waitFor(
-      async () => {
-        const saved = await chats.get(chat.id);
-        const index = saved.messages.findIndex((m) => m.id === request.id);
-        expect(index).toBeGreaterThanOrEqual(0);
-        expect(saved.messages[index + 1]?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    await vi.waitFor(async () => {
+      const saved = await chats.get(chat.id);
+      const index = saved.messages.findIndex((m) => m.id === request.id);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(saved.messages[index + 1]?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
     return (await chats.get(chat.id)).messages.at(-1)!;
   };
   const main = await ask("@codex MAIN question");
@@ -1469,7 +1415,7 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).replySessions).toEqual(saved.replySessions);
-}, 25000);
+});
 
 it("forks Claude's session for a side conversation, and gives another agent the conversation up to its message", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1484,15 +1430,12 @@ it("forks Claude's session for a side conversation, and gives another agent the 
       provider,
       ...(parentId ? { parentId } : {}),
     });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
     return (await chats.get(chat.id)).messages.at(-1)!;
   };
   const main = await ask("@claude MAIN question", "claude", 2);
@@ -1544,20 +1487,17 @@ it("forks Claude's session for a side conversation, and gives another agent the 
     provider: "codex",
     contextAgent: "claude",
   });
-}, 30000);
+});
 
 it("forks a thread at an answer, and its first turn continues that answer's session", async () => {
   const ask = async (chatId: string, body: string, count: number) => {
     await chats.send(chatId, { ...input(body), provider: "claude" });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chatId)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chatId)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
     return (await chats.get(chatId)).messages.at(-1)!;
   };
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1594,7 +1534,7 @@ it("forks a thread at an answer, and its first turn continues that answer's sess
   expect(text).toContain("forked from another after your answer");
   expect(text).not.toContain("FIRST question");
   expect(text).not.toContain("LATER question");
-}, 30000);
+});
 
 it("discovers an enabled skill and sends its native input to Codex without trusting a renderer path", async () => {
   const { codexSkills } = await import("../agents/provider-commands");
@@ -1611,12 +1551,8 @@ it("discovers an enabled skill and sends its native input to Codex without trust
   ).rejects.toThrow(/no longer available/);
   expect((await chats.get(chat.id)).messages).toHaveLength(0);
   await chats.send(chat.id, input("@codex Explain the cache using $explain"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const calls = (await agentCalls())
     .trim()
@@ -1654,12 +1590,8 @@ it("steers an active Codex turn natively and resumes its saved session after sto
   );
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
   await chats.resume(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const calls = (await agentCalls())
     .trim()
@@ -1678,7 +1610,7 @@ it("steers an active Codex turn natively and resumes its saved session after sto
     "thread/start",
     "thread/resume",
   ]);
-}, 15000);
+});
 
 it("steers an active Codex turn with a screenshot", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1719,47 +1651,71 @@ it("steers an active Codex turn with a screenshot", async () => {
 });
 
 it("shows a stop at once and sends the next message once the agent lets go", async () => {
-  vi.stubEnv("RELAY_FIXTURE_STOP_DELAY", "1500");
+  // The agent winds down only once the test lets it go; until then only
+  // Relay's own 3 s give-up in electron/agents/codex/codex.ts frees it.
+  const release = join(root, "stop-release");
+  vi.stubEnv("RELAY_FIXTURE_STOP_RELEASE", release);
+  const turns = (
+    chats as unknown as {
+      active: { finished(id: string): Promise<void> };
+    }
+  ).active;
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-        "cache guard",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
   );
   const answerId = (await chats.get(chat.id)).messages.at(-1)!.id;
-  const stoppedAt = Date.now();
-  await chats.cancel(chat.id);
+  const order: string[] = [];
+  const stopping = chats
+    .cancel(chat.id)
+    .then(() => order.push("stop returned"));
+  // The turn is stopping now, so this waits for the agent to let go.
+  const letGo = turns.finished(chat.id).then(() => order.push("agent let go"));
+  await Promise.race([stopping, letGo]);
+  // A stop that waited for the agent would return only after the give-up.
+  expect(order).toEqual(["stop returned"]);
   const shown = events.filter((e) => e.message.id === answerId).at(-1)?.message;
   expect(shown?.status).toBe("cancelled");
-  expect(Date.now() - stoppedAt).toBeLessThan(500);
   expect(
     chats.list(projectId).find((c) => c.id === chat.id)?.running,
   ).toBeUndefined();
-  // The agent is still winding down; the next message waits for it.
-  expect(chats.hasActiveProject(projectId)).toBe(true);
+  await vi.waitFor(async () =>
+    expect(await agentCalls()).toContain('"interrupt"'),
+  );
+
+  const finished = turns.finished.bind(turns);
+  let reached!: () => void;
+  const waiting = new Promise<void>((resolve) => (reached = resolve));
+  vi.spyOn(turns, "finished").mockImplementation((id) => {
+    if (id === chat.id) reached();
+    return finished(id);
+  });
   const next = input("@codex carry on");
-  await chats.send(chat.id, next);
-  expect(Date.now() - stoppedAt).toBeGreaterThanOrEqual(1400);
+  const sending = chats.send(chat.id, next).then(() => order.push("sent"));
+  // Either the send waits for the held agent, or it went out without waiting.
+  await Promise.race([waiting, sending]);
+  expect(order).toEqual(["stop returned"]);
+  await writeFile(release, "");
+  await sending;
+  expect(order).toEqual(["stop returned", "agent let go", "sent"]);
   const saved = await chats.get(chat.id);
   expect(saved.queue ?? []).toHaveLength(0);
   expect(saved.messages.find((m) => m.id === answerId)?.status).toBe(
     "cancelled",
   );
   expect(saved.messages.some((m) => m.id === next.id)).toBe(true);
-}, 15000);
+});
 
 it("resumes a stopped answer with the agent picked since", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-        "cache guard",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
   );
   await chats.cancel(chat.id);
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
@@ -1770,12 +1726,8 @@ it("resumes a stopped answer with the agent picked since", async () => {
     runtimeMode: "approval-required",
     interactionMode: "default",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 8000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const after = await chats.get(chat.id);
   expect(after.messages.at(-1)?.provider).toBe("claude");
@@ -1799,20 +1751,17 @@ it("resumes a stopped answer with the agent picked since", async () => {
     (await chats.get(chat.id)).messages.find((m) => m.id === resume?.id)
       ?.resumed,
   ).toBe(true);
-}, 15000);
+});
 
 it("tells an agent about steering that went to the other agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const idle = () =>
-    vi.waitFor(
-      async () => {
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).not.toBe(
-          "streaming",
-        );
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    vi.waitFor(async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).not.toBe(
+        "streaming",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   const claude = (body: string) => ({
     ...input(body),
     provider: "claude" as const,
@@ -1821,14 +1770,11 @@ it("tells an agent about steering that went to the other agent", async () => {
   await idle();
   await chats.send(chat.id, input("@codex wait for cancellation"));
   // Claude's handoff note comes first; steer Codex's own answer.
-  await vi.waitFor(
-    async () => {
-      const last = (await chats.get(chat.id)).messages.at(-1);
-      expect(last?.provider).toBe("codex");
-      expect(last?.body).toContain("cache guard");
-    },
-    { timeout: 6000 },
-  );
+  await vi.waitFor(async () => {
+    const last = (await chats.get(chat.id)).messages.at(-1);
+    expect(last?.provider).toBe("codex");
+    expect(last?.body).toContain("cache guard");
+  });
   await chats.send(chat.id, {
     ...input("@codex Focus only on the cache key"),
     delivery: "steer",
@@ -1846,7 +1792,7 @@ it("tells an agent about steering that went to the other agent", async () => {
     .map((c) => JSON.parse(c.prompt).message.content[0].text as string)
     .find((text) => text.startsWith("My request: Carry on"))!;
   expect(prompt).toContain("Focus only on the cache key");
-}, 30000);
+});
 
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
@@ -1858,14 +1804,12 @@ it("drains queued follow-ups in order and retains a paused queue across restart"
   await chats.send(chat.id, third);
   await chats.send(chat.id, second);
   expect((await chats.get(chat.id)).queue).toHaveLength(2);
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.filter(
-          (m) => m.role === "assistant" && m.status === "complete",
-        ),
-      ).toHaveLength(3),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.filter(
+        (m) => m.role === "assistant" && m.status === "complete",
+      ),
+    ).toHaveLength(3),
   );
   expect(
     (await chats.get(chat.id)).messages
@@ -1884,7 +1828,7 @@ it("drains queued follow-ups in order and retains a paused queue across restart"
   expect((await chats.get(chat.id)).queue?.[0].input.id).toBe(held.id);
   await chats.queueAction(chat.id, "remove", held.id);
   expect((await chats.get(chat.id)).queue).toHaveLength(0);
-}, 20000);
+});
 
 it("leaves a paused queue paused when Relay sends Claude's wake-up itself", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1905,14 +1849,11 @@ it("leaves a paused queue paused when Relay sends Claude's wake-up itself", asyn
       schedule: { fireWakeup(id: string, w: string): Promise<void> };
     }
   ).schedule.fireWakeup(chat.id, "w");
-  await vi.waitFor(
-    () => expect(chats.hasActiveProject(projectId)).toBe(false),
-    { timeout: 10000 },
-  );
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
   const after = await chats.get(chat.id);
   expect(after.queuePaused).toBe(true);
   expect(after.queue?.map((q) => q.input.id)).toEqual([held.id]);
-}, 20000);
+});
 
 /** Fires a thread's planned resume now instead of after the limit lifts. */
 const fireLimitResume = (id: string) =>
@@ -1925,9 +1866,8 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit"));
   await chats.send(chat.id, input("@codex Queued meanwhile"));
-  await vi.waitFor(
-    () => expect(chats.list(projectId)[0].limitResume).toBeDefined(),
-    { timeout: 8000 },
+  await vi.waitFor(() =>
+    expect(chats.list(projectId)[0].limitResume).toBeDefined(),
   );
   const plan = chats.list(projectId)[0].limitResume!;
   const stopped = await chats.get(chat.id);
@@ -1947,26 +1887,23 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
   );
   expect(chats.list(projectId)[0].limitResume).toEqual(plan);
   await fireLimitResume(chat.id);
-  await vi.waitFor(
-    async () => {
-      const after = await chats.get(chat.id);
-      expect(
-        after.messages.filter((m) => m.role === "user").map((m) => m.body),
-      ).toEqual([
-        "@codex fixture usage limit",
-        expect.stringMatching(/^@codex Continue from where/),
-        "@codex Queued meanwhile",
-      ]);
-      expect(after.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    const after = await chats.get(chat.id);
+    expect(
+      after.messages.filter((m) => m.role === "user").map((m) => m.body),
+    ).toEqual([
+      "@codex fixture usage limit",
+      expect.stringMatching(/^@codex Continue from where/),
+      "@codex Queued meanwhile",
+    ]);
+    expect(after.messages.at(-1)?.status).toBe("complete");
+  });
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
   const inputs = (await chats.get(chat.id)).messages.filter(
     (m) => m.role === "user",
   );
   expect(inputs.map((m) => m.resumed)).toEqual([undefined, true, undefined]);
-}, 30000);
+});
 
 it("keeps an answer a usage limit stopped on its account, waiting for the reset, even with another signed in", async () => {
   vi.stubEnv("CODEX_HOME", join(root, "codex-home"));
@@ -1988,9 +1925,8 @@ it("keeps an answer a usage limit stopped on its account, waiting for the reset,
   try {
     const chat = await chats.create(projectId, { kind: "project" });
     await chats.send(chat.id, input("@codex fixture usage limit"));
-    await vi.waitFor(
-      () => expect(chats.list(projectId)[0].limitResume).toBeDefined(),
-      { timeout: 8000 },
+    await vi.waitFor(() =>
+      expect(chats.list(projectId)[0].limitResume).toBeDefined(),
     );
     const after = await chats.get(chat.id);
     expect(after.messages.filter((m) => m.role === "user")).toHaveLength(1);
@@ -2001,17 +1937,14 @@ it("keeps an answer a usage limit stopped on its account, waiting for the reset,
       delete s.agentAccounts;
     });
   }
-}, 20000);
+});
 
 it("fails a turn whose agent is signed out with that agent's sign-in offered, and plans no resume", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture codex signed out"));
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
+  });
   const failed = (await chats.get(chat.id)).messages.at(-1)!;
   expect(failed).toMatchObject({
     signIn: "codex",
@@ -2023,25 +1956,21 @@ it("fails a turn whose agent is signed out with that agent's sign-in offered, an
 it("plans no resume for a usage limit that says nothing of when it lifts", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit without reset"));
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   const failed = (await chats.get(chat.id)).messages.at(-1)!;
   expect(failed).toMatchObject({ error: "You've hit your usage limit." });
   expect(failed.signIn).toBeUndefined();
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
-}, 20000);
+});
 
 it("drops the planned resume when the thread moves on, and resumes nothing it no longer fits", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit"));
-  await vi.waitFor(
-    () => expect(chats.list(projectId)[0].limitResume).toBeDefined(),
-    { timeout: 8000 },
+  await vi.waitFor(() =>
+    expect(chats.list(projectId)[0].limitResume).toBeDefined(),
   );
   const plan = chats.list(projectId)[0].limitResume!;
   await chats.setLimitResume(chat.id, false);
@@ -2050,15 +1979,10 @@ it("drops the planned resume when the thread moves on, and resumes nothing it no
   expect(chats.list(projectId)[0].limitResume?.off).toBeUndefined();
   await chats.send(chat.id, input("@codex Something else first"));
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      );
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   // A plan left over from before, as a save from another build might hold.
   await chats.dispose();
   const file = join(root, "chats", chat.id + ".json");
@@ -2074,12 +1998,13 @@ it("drops the planned resume when the thread moves on, and resumes nothing it no
   expect(after.messages).toHaveLength(before);
   expect(after.limitResume).toBeUndefined();
   expect(chats.hasActiveProject(projectId)).toBe(false);
-}, 30000);
+});
 
 it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   const chat = await chats.create(projectId, { kind: "project" });
   const soon = input("Check the deploy.");
-  const scheduled = { ...soon, sendAt: Date.now() + 400 };
+  const scheduled = { ...soon, sendAt: Date.now() + 3_600_000 };
   await chats.send(chat.id, scheduled);
   await chats.send(chat.id, scheduled);
   let saved = await chats.get(chat.id);
@@ -2090,17 +2015,23 @@ it("holds a Send later message until its time, sends it now on request, and keep
   expect(chats.list(projectId)[0].nextSend).toBe(saved.scheduled?.[0].at);
   // A thread started with Send later stays in the sidebar while it waits.
   expect(chats.list(projectId)[0].empty).toBe(false);
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([
-      soon.id,
-    ]),
-  );
+  // Fire the timer scheduling itself armed, with no launch-time rearming to rescue it.
+  await vi.advanceTimersByTimeAsync(3_600_000 - 1);
+  expect((await chats.get(chat.id)).messages).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(1);
+  await waitForChatEvent(chat.id, ({ message }) => message.id === soon.id);
+  await waitForSummary(chat.id, (summary) => !summary.nextSend);
+  expect(
+    (await chats.get(chat.id)).messages.map((message) => message.id),
+  ).toEqual([soon.id]);
   expect((await chats.get(chat.id)).scheduled).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBeUndefined();
 
   // A lost acknowledgement can be retried after the original time passed.
   await expect(chats.send(chat.id, scheduled)).resolves.toBeUndefined();
-  expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([soon.id]);
+  expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([
+    soon.id,
+  ]);
 
   await expect(
     chats.send(chat.id, { ...input("Too late"), sendAt: Date.now() - 1000 }),
@@ -2137,17 +2068,19 @@ it("holds a Send later message until its time, sends it now on request, and keep
 
   // Due while Relay was closed: it goes out once Relay arms it again.
   const missed = input("Sent after restart.");
-  await chats.send(chat.id, { ...missed, sendAt: Date.now() + 300 });
+  const missedAt = Date.now() + 3_600_000;
+  await chats.send(chat.id, { ...missed, sendAt: missedAt });
   await chats.dispose();
-  await new Promise((r) => setTimeout(r, 400));
-  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
-    events.push(e),
-  );
+  // Quit cleared the fake scheduler timers; startup uses real event-loop timers again.
+  vi.useRealTimers();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(missedAt + 1);
+  chats = new ProjectChats(store, projects, join(root, "chats"), recordEvent);
   expect((await chats.get(chat.id)).scheduled).toHaveLength(1);
   chats.armWakeups();
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id),
-  );
+  await waitForChatEvent(chat.id, ({ message }) => message.id === missed.id);
+  await waitForSummary(chat.id, (summary) => !summary.nextSend);
+  expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id);
 });
 it("lists and rolls back only the files a turn's agent changed", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2155,15 +2088,10 @@ it("lists and rolls back only the files a turn's agent changed", async () => {
     chat.id,
     input("@codex fixture edit files and a stray file"),
   );
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      );
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   const answer = (await chats.get(chat.id)).messages.at(-1)!;
   expect(answer.changes?.map((f) => f.path)).toEqual([
     "README.md",
@@ -2173,7 +2101,7 @@ it("lists and rolls back only the files a turn's agent changed", async () => {
   await chats.rewindTurn(chat.id, answer.id, null, "revert", false);
   await expect(readFile(join(repo, "src", "guard.ts"))).rejects.toThrow();
   expect(await readFile(join(repo, "stray.md"), "utf8")).toBe("Stray.\n");
-}, 20000);
+});
 it("shows the branch a turn left the checkout on, not the one it started on", async () => {
   const repo = join(root, "repo");
   const git = (...args: string[]) =>
@@ -2189,15 +2117,12 @@ it("shows the branch a turn left the checkout on, not the one it started on", as
   const turn = async (body: string) => {
     const sent = input(body);
     await chats.send(chat.id, sent);
-    await vi.waitFor(
-      async () => {
-        const saved = await chats.get(chat.id);
-        expect(saved.messages.at(-1)?.status).toBe("complete");
-        expect(saved.messages.at(-2)?.id).toBe(sent.id);
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const saved = await chats.get(chat.id);
+      expect(saved.messages.at(-1)?.status).toBe("complete");
+      expect(saved.messages.at(-2)?.id).toBe(sent.id);
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
     return (await chats.get(chat.id)).branch;
   };
   expect(await turn("@codex fixture switch branch to main")).toBe("main");
@@ -2205,7 +2130,7 @@ it("shows the branch a turn left the checkout on, not the one it started on", as
   expect(
     await turn("@codex fixture switch branch to detached"),
   ).toBeUndefined();
-}, 30000);
+});
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2214,16 +2139,13 @@ it("stops during provider initialization without waiting for the RPC timeout", a
     expect(await agentCalls()).toContain('"initializing"'),
   );
   await chats.cancel(chat.id);
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
-        status: "cancelled",
-        body: "",
-      });
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 2000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+      status: "cancelled",
+      body: "",
+    });
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
 });
 
@@ -2314,7 +2236,6 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
       chats.respond(chat.id, request.id, { kind: "approval", decision }),
     ).toThrow();
   },
-  10000,
 );
 
 it("stops while awaiting approval without leaving a request or replaying queued work", async () => {
@@ -2335,7 +2256,7 @@ it("stops while awaiting approval without leaving a request or replaying queued 
   expect(state.queuePaused).toBe(true);
   expect(state.queue).toHaveLength(1);
   expect(state.messages.at(-1)?.error).toBeUndefined();
-}, 10000);
+});
 
 it("uses native Plan mode and answers harness questions without adding answers to chat", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2374,7 +2295,7 @@ it("uses native Plan mode and answers harness questions without adding answers t
   expect(
     await readFile(join(root, "chats", chat.id + ".json"), "utf8"),
   ).not.toContain("Small change");
-}, 10000);
+});
 
 it("replaces automatic review policy when returning to Full access in a saved thread", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2387,12 +2308,10 @@ it("replaces automatic review policy when returning to Full access in a saved th
       ...input("@codex Explain the cache"),
       runtimeMode,
     });
-    await vi.waitFor(
-      async () =>
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-          "complete",
-        ),
-      { timeout: 6000 },
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
     );
     await vi.waitFor(() =>
       expect(chats.hasActiveProject(projectId)).toBe(false),
@@ -2415,7 +2334,7 @@ it("replaces automatic review policy when returning to Full access in a saved th
     ["never", "user", "dangerFullAccess"],
   ]);
   expect(calls.filter((c) => c.thread)).toHaveLength(1);
-}, 15000);
+});
 
 it("treats the approval menu's Cancel as a neutral stop", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2434,7 +2353,7 @@ it("treats the approval menu's Cancel as a neutral stop", async () => {
     ),
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
-}, 10000);
+});
 
 it.each(["accept", "decline", "acceptForSession"] as const)(
   "answers Claude SDK permission callbacks with %s",
@@ -2451,12 +2370,10 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
     const request = (await chats.get(chat.id)).requests![0];
     expect(request.title).toBe("Allow Bash?");
     chats.respond(chat.id, request.id, { kind: "approval", decision });
-    await vi.waitFor(
-      async () =>
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-          "complete",
-        ),
-      { timeout: 6000 },
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
     );
     const calls = (await agentCalls())
       .trim()
@@ -2477,7 +2394,6 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
         },
       ]);
   },
-  10000,
 );
 
 it("shows Claude planning questions and captures ExitPlanMode as a proposal without granting edits", async () => {
@@ -2496,27 +2412,18 @@ it("shows Claude planning questions and captures ExitPlanMode as a proposal with
     answers: { "0": ["Small change"] },
   });
   // "complete" shows a moment before the turn gives the thread back.
-  await vi.waitFor(
-    async () => {
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      );
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 6000 },
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
   await chats.send(chat.id, {
     ...input("@claude fixture propose plan"),
     provider: "claude",
     interactionMode: "plan",
     runtimeMode: "full-access",
   });
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const state = await chats.get(chat.id);
   expect(state.messages.at(-1)).toMatchObject({
@@ -2537,7 +2444,7 @@ it("shows Claude planning questions and captures ExitPlanMode as a proposal with
   expect(responses.at(-1).claudeResponse.response.response.behavior).toBe(
     "deny",
   );
-}, 15000);
+});
 
 it.each(["codex", "claude"] as const)(
   "keeps %s session approvals across turns but isolates a new thread",
@@ -2559,12 +2466,10 @@ it.each(["codex", "claude"] as const)(
       expect(chats.hasActiveProject(projectId)).toBe(false),
     );
     await chats.send(chat.id, request());
-    await vi.waitFor(
-      async () =>
-        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-          "complete",
-        ),
-      { timeout: 6000 },
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
     );
     const calls = (await agentCalls())
       .trim()
@@ -2587,7 +2492,6 @@ it.each(["codex", "claude"] as const)(
     );
     await chats.cancel(other.id);
   },
-  12000,
 );
 
 it("resumes Claude's own saved session after restart without mixing Codex's cursor", async () => {
@@ -2595,16 +2499,13 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
   // An answer reads complete before its turn lets go of the thread; asked
   // then, Claude would only queue, and the restart would drop it.
   const finished = (provider: "codex" | "claude") =>
-    vi.waitFor(
-      async () => {
-        expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
-          provider,
-          status: "complete",
-        });
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 6000 },
-    );
+    vi.waitFor(async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+        provider,
+        status: "complete",
+      });
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   await chats.send(chat.id, input("@codex Explain cache guard"));
   await finished("codex");
   await chats.send(chat.id, {
@@ -2635,7 +2536,7 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
   expect(turns.at(-1).prompt).not.toContain(
     "Claude found the same cache guard.",
   );
-}, 12000);
+});
 const captured = async () =>
   (await agentCalls())
     .trim()
@@ -2648,10 +2549,8 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     provider: "claude" as const,
   });
   await chats.send(chat.id, claude("@claude fixture wait for steer"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
   );
   const question = {
     ...claude("@claude where is the cache guard?"),
@@ -2666,7 +2565,7 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     expect(answers.every((m) => m.status === "complete")).toBe(true);
     return { saved, answers };
   };
-  const first = await vi.waitFor(answered, { timeout: 6000 });
+  const first = await vi.waitFor(answered);
   expect(first.answers.map((m) => m.body)).toEqual([
     "On the side: where is the cache guard?",
   ]);
@@ -2694,9 +2593,8 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     ...claude("@claude and why?"),
     parentId: question.id,
   });
-  await vi.waitFor(
-    async () => expect((await answered()).answers).toHaveLength(2),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await answered()).answers).toHaveLength(2),
   );
   const asked = (await captured()).filter((c) => c.side);
   expect(asked.map((c) => c.side.question)).toEqual([
@@ -2717,10 +2615,8 @@ it("fails a /btw question outright when its folder is gone, instead of leaving a
     provider: "claude" as const,
   });
   await chats.send(chat.id, claude("@claude fixture wait for steer"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
   );
   vi.spyOn(projects, "root").mockRejectedValue(new Error("Folder is gone."));
   const before = (await chats.get(chat.id)).messages.length;
@@ -2746,10 +2642,8 @@ it("refuses a /btw for an agent that can't fork the thread before saving anythin
 it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from the main session", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).sessions?.codex?.thread).toBeTruthy(),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).sessions?.codex?.thread).toBeTruthy(),
   );
   const question = {
     ...input("@codex which test covers the guard?"),
@@ -2763,14 +2657,12 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
     ],
   };
   await chats.send(chat.id, question);
-  await vi.waitFor(
-    async () =>
-      expect(
-        (await chats.get(chat.id)).messages.find(
-          (m) => m.parentId === question.id,
-        )?.status,
-      ).toBe("complete"),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.find(
+        (m) => m.parentId === question.id,
+      )?.status,
+    ).toBe("complete"),
   );
   expect((await chats.get(chat.id)).messages[1]!.status).toBe("streaming");
   const fork = (await captured()).find((c) => c.method === "thread/fork");
@@ -2789,18 +2681,12 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
     expect.objectContaining({ type: "localImage" }),
   );
   await chats.cancel(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages[1]!.status).toBe("cancelled"),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages[1]!.status).toBe("cancelled"),
   );
   await chats.send(chat.id, input("@codex Now fix it"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const main = (await captured()).filter((c) =>
     c.turn?.input.some((i: { text?: string }) =>
@@ -2809,7 +2695,7 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   );
   expect(main).toHaveLength(1);
   expect(JSON.stringify(main[0].turn.input)).not.toContain("which test covers");
-}, 20000);
+});
 it("keeps a handed-over thread's briefing for the retry when its first turn fails", async () => {
   const cli = await findExecutable("codex");
   vi.mocked(findExecutable).mockRejectedValue(
@@ -2830,13 +2716,10 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
     { path: projects.get(projectId)!.path, branch: "main" },
   );
   const settled = (status: string) =>
-    vi.waitFor(
-      async () => {
-        expect((await chats.get(id)).messages.at(-1)?.status).toBe(status);
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 8000 },
-    );
+    vi.waitFor(async () => {
+      expect((await chats.get(id)).messages.at(-1)?.status).toBe(status);
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   await settled("failed");
   vi.mocked(findExecutable).mockResolvedValue(cli);
   const prompts = async () =>
@@ -2859,7 +2742,7 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   expect((await prompts()).at(-1)).not.toContain(
     "handed over from another computer",
   );
-}, 30000);
+});
 
 it("pushes the thread list as a turn runs, waits and ends, and as it's triaged", async () => {
   // As main.ts wires it, without waiting for more changes.
@@ -2878,9 +2761,7 @@ it("pushes the thread list as a turn runs, waits and ends, and as it's triaged",
   const [request] = (await chats.get(chat.id)).requests!;
   chats.respond(chat.id, request!.id, { kind: "approval", decision: "accept" });
   await vi.waitFor(() => expect(latest()?.waiting).toBe(false));
-  await vi.waitFor(() => expect(latest()?.running).toBeUndefined(), {
-    timeout: 6000,
-  });
+  await vi.waitFor(() => expect(latest()?.running).toBeUndefined());
   const until = Date.now() + 60_000;
   await chats.triage(chat.id, { kind: "snooze", until });
   await vi.waitFor(() => expect(latest()?.snoozedUntil).toBe(until));
@@ -2890,7 +2771,7 @@ it("pushes the thread list as a turn runs, waits and ends, and as it's triaged",
   // Nothing goes out twice in a row.
   const sent = pushed.map((list) => JSON.stringify(list));
   expect(sent.filter((s, i) => s === sent[i - 1])).toEqual([]);
-}, 15000);
+});
 
 it("lists the answering agent while its answer streams, not once the turn ends", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
@@ -2909,14 +2790,10 @@ it("lists the answering agent while its answer streams, not once the turn ends",
       contextAgent: "codex",
     }),
   );
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
-}, 15000);
+});
 
 it("forks from the latest finished answer when none is named, on that answer's agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -2928,15 +2805,12 @@ it("forks from the latest finished answer when none is named, on that answer's a
       ...input(body),
       provider: body.startsWith("@claude") ? "claude" : "codex",
     });
-    await vi.waitFor(
-      async () => {
-        const messages = (await chats.get(chat.id)).messages;
-        expect(messages).toHaveLength(count);
-        expect(messages.at(-1)?.status).toBe("complete");
-        expect(chats.hasActiveProject(projectId)).toBe(false);
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(count);
+      expect(messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
   }
   const source = (await chats.get(chat.id)).messages;
   const fork = await chats.fork(chat.id);
@@ -2945,21 +2819,18 @@ it("forks from the latest finished answer when none is named, on that answer's a
   // The handoff note Codex left on the way out came along, but isn't the fork point.
   expect(forked.messages.map((m) => m.body)).toEqual(source.map((m) => m.body));
   expect(forked.forkedAt).toBe(forked.messages.at(-1)!.id);
-}, 25000);
+});
 
 it("regenerates a title from the whole thread, even over a name you typed", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
   await expect(chats.regenerateTitle(chat.id)).rejects.toThrow("first answer");
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () => {
-      const saved = await chats.get(chat.id);
-      expect(saved.title).toBe("Cache guard behavior");
-      expect(saved.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(async () => {
+    const saved = await chats.get(chat.id);
+    expect(saved.title).toBe("Cache guard behavior");
+    expect(saved.messages.at(-1)?.status).toBe("complete");
+  });
   await chats.rename(chat.id, "My name for it");
   expect(await chats.regenerateTitle(chat.id)).toMatchObject({
     title: "Cache guard rework",
@@ -2975,7 +2846,7 @@ it("regenerates a title from the whole thread, even over a name you typed", asyn
     );
   expect(prompt).toContain('already has the title "My name for it"');
   expect(prompt).toContain("USER:\nExplain the cache guard");
-}, 15000);
+});
 
 it("marks a thread unread until it's read again", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -3109,12 +2980,8 @@ it("starts a thread whose named branch got taken before its first message on rel
   // Someone else took the name while the thread waited to send.
   git("branch", "feature/cache");
   await chats.send(chat.id, input("@codex Explain the cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   expect((await chats.get(chat.id)).worktree).toMatchObject({
     branch: "relay/explain-the-cache-guard",
@@ -3126,4 +2993,4 @@ it("starts a thread whose named branch got taken before its first message on rel
   expect(
     chats.list(projectId).find((c) => c.id === chat.id)?.worktree?.wanted,
   ).toBeDefined();
-}, 15000);
+});

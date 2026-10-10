@@ -48,18 +48,46 @@ it("checks cancellation before publication and propagates its signal to every co
 it("waits for publication to stop, preserves the local repo, and reports recovery", async () => {
   const stop = new AbortController();
   let finished = false;
+  let started!: () => void;
+  const publishing = new Promise<void>((resolve) => (started = resolve));
+  let finish!: () => void;
+  const release = new Promise<void>((resolve) => (finish = resolve));
   vi.mocked(createGithubRepo).mockImplementation(
     async (_gh, _dir, _name, _visibility, signal) => {
       expect(signal).toBe(stop.signal);
       stop.abort();
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      started();
+      await release;
       finished = true;
       throw new Error("Cancelled.");
     },
   );
-  await expect(
-    createProjectFolder(spec(), join(dir, "web"), () => {}, stop.signal),
-  ).rejects.toThrow(/Open a folder/);
+  let settled = false;
+  const creating = createProjectFolder(
+    spec(),
+    join(dir, "web"),
+    () => {},
+    stop.signal,
+  );
+  void creating.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    },
+  );
+  const failed = expect(creating).rejects.toThrow(/Open a folder/);
+  await publishing;
+  // Give a premature rejection its microtasks, while publication stays gated.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  try {
+    expect(settled).toBe(false);
+    expect(finished).toBe(false);
+  } finally {
+    finish();
+  }
+  await failed;
   expect(finished).toBe(true);
   expect(await readdir(join(dir, "web"))).toEqual([".gitignore"]);
 });

@@ -235,7 +235,12 @@ describe("project language support", () => {
       join(root, reviewPath),
       reviewCode.replace("= 42", '= "Paused"'),
     );
-    await new Promise((r) => setTimeout(r, 1500));
+    // The worker clears stale files when its watcher sees the edit, even paused.
+    await expect
+      .poll(async () => (await service.state("pr", head))?.files, {
+        timeout: 30000,
+      })
+      .toEqual({});
     s = (await service.state("pr", head))!;
     expect(s.status).toBe("paused");
     expect(s.errors).toBe(1);
@@ -249,7 +254,7 @@ describe("project language support", () => {
     );
     service.stop("pr");
     expect((await service.state("pr", head))?.status).toBe("stopped");
-  }, 60000);
+  });
   it("rejects wrong checkout, handles cancellation during startup, and stops after checkout changes", async () => {
     const { root, head, git } = await languageProject(server);
     roots.push(root);
@@ -285,13 +290,14 @@ describe("project language support", () => {
     );
     await ready(service, head);
     git("commit", "--allow-empty", "--quiet", "-m", "Different checkout");
-    await expect
-      .poll(async () => (await service.state("pr", head))?.status, {
-        timeout: 10000,
-        interval: 500,
-      })
-      .toBe("failed");
-  }, 30000);
+    // Trigger the checkout validation interval without waiting three real seconds.
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3001);
+    try {
+      expect((await service.state("pr", head))?.status).toBe("failed");
+    } finally {
+      now.mockRestore();
+    }
+  });
   it.each(["typescript", "angular", "typescript 7"] as const)(
     "counts %s suggestions separately and refreshes strictness from config files",
     async (variant) => {
@@ -383,7 +389,6 @@ describe("project language support", () => {
         severity: "error",
       });
     },
-    30000,
   );
   it("keeps accurate totals and prioritizes errors when suggestions exceed the display limit", async () => {
     const { root, head } = await languageProject(server);
@@ -424,7 +429,7 @@ describe("project language support", () => {
       warnings: 0,
       suggestions: 1505,
     });
-  }, 30000);
+  });
   it("checks TypeScript 7 projects through its native language server", async () => {
     const { root, head, git } = await languageProject(server);
     roots.push(root);
@@ -489,7 +494,7 @@ describe("project language support", () => {
     expect(s.diagnostics.filter((d) => d.code === "TS2345")).toHaveLength(2);
     expect(await readFile(join(root, reviewPath), "utf8")).toBe(reviewCode);
     expect(git("status", "--porcelain")).toBe("M src/greeting.ts");
-  }, 60000);
+  });
   it("falls back to Relay's TypeScript when a TypeScript 7 language server cannot start", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);
@@ -533,5 +538,5 @@ describe("project language support", () => {
       path: reviewPath,
       code: "TS2322",
     });
-  }, 30000);
+  });
 });

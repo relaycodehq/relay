@@ -46,8 +46,8 @@ describe("DevServers", () => {
     now += IDLE_MS + 1;
     servers.sleepIdle();
     expect(servers.state(folder)).toEqual({ state: "asleep", port });
-    await expect.poll(() => listening(port), { timeout: 5000 }).toBe(false);
-  }, 30_000);
+    await expect.poll(() => listening(port)).toBe(false);
+  });
 
   it("leaves a server it didn't start alone", async () => {
     const port = await freePort();
@@ -73,7 +73,7 @@ describe("DevServers", () => {
     expect(state.state === "failed" && state.output).toMatch(
       /no such script[\s\S]*Exited with code 3/,
     );
-  }, 30_000);
+  });
 
   it("shares concurrent wakeups after a managed server sleeps", async () => {
     let now = Date.now();
@@ -101,7 +101,7 @@ describe("DevServers", () => {
     ).toEqual(["started", "started"]);
     servers.stop(folder);
     await expect.poll(() => listening(port)).toBe(false);
-  }, 30_000);
+  });
 
   it("cancels startup before the initial port probe finishes", async () => {
     const seen: DevServerState[] = [];
@@ -143,7 +143,7 @@ describe("DevServers", () => {
       port: nextPort,
       ours: true,
     });
-  }, 30_000);
+  });
 
   it("starts the saved command after an externally owned listener exits", async () => {
     const servers = new DevServers(() => {});
@@ -162,7 +162,7 @@ describe("DevServers", () => {
       port,
       ours: true,
     });
-  }, 30_000);
+  });
 
   it("rejects an invalid port without leaving a starting server", async () => {
     const servers = new DevServers(() => {});
@@ -202,6 +202,5 @@ describe("DevServers", () => {
       expect(answer).toContain("/path?q=1#details");
       expect(await links.note(chat)).toContain(`localhost:${port} → http://`);
     },
-    30_000,
   );
 });

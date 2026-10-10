@@ -91,14 +91,11 @@ const input = (body: string) => ({
 });
 
 async function answered(id: string, count: number) {
-  await vi.waitFor(
-    async () => {
-      const chat = await chats.get(id);
-      expect(chat.messages).toHaveLength(count);
-      expect(chat.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    const chat = await chats.get(id);
+    expect(chat.messages).toHaveLength(count);
+    expect(chat.messages.at(-1)?.status).toBe("complete");
+  });
   return chats.get(id);
 }
 

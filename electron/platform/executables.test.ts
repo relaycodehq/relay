@@ -7,7 +7,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { existsSync, watch, type FSWatcher } from "node:fs";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./shell-path", () => ({ pathReady: async () => {} }));
@@ -22,6 +23,23 @@ import {
 const posix = process.platform !== "win32";
 let root: string;
 const saved = { ...process.env };
+const watchers: FSWatcher[] = [];
+
+function fileSignal(file: string) {
+  return new Promise<void>((resolve, reject) => {
+    const watcher = watch(dirname(file), () => {
+      if (!existsSync(file)) return;
+      watcher.close();
+      resolve();
+    });
+    watchers.push(watcher);
+    watcher.on("error", reject);
+    if (existsSync(file)) {
+      watcher.close();
+      resolve();
+    }
+  });
+}
 
 async function program(dir: string, name: string, body: string) {
   await mkdir(dir, { recursive: true });
@@ -42,6 +60,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  for (const watcher of watchers.splice(0)) watcher.close();
   process.env = { ...saved };
   setLinkedAgents({});
   setLinkedTools({});
@@ -128,10 +147,34 @@ it.skipIf(!posix)(
   "waits for a cancelled executable to exit before rejecting",
   async () => {
     const ready = join(root, "ready"),
+      stopping = join(root, "stopping"),
+      release = join(root, "release"),
       done = join(root, "done");
     const stop = new AbortController();
     let settled = false;
-    const script = `const fs = require('node:fs'); process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(${JSON.stringify(done)}, 'done'); process.exit(); }, 100)); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+    const readySignal = fileSignal(ready);
+    const stoppingSignal = fileSignal(stopping);
+    const script = `
+      const fs = require('node:fs');
+      const signal = (file, text) => {
+        fs.writeFileSync(file + '.tmp', text);
+        fs.renameSync(file + '.tmp', file);
+      };
+      let cancelled = false;
+      const finish = () => {
+        if (cancelled && fs.existsSync(${JSON.stringify(release)})) {
+          fs.writeFileSync(${JSON.stringify(done)}, 'done');
+          process.exit();
+        }
+      };
+      fs.watch(${JSON.stringify(root)}, finish);
+      process.on('SIGTERM', () => {
+        cancelled = true;
+        signal(${JSON.stringify(stopping)}, 'stopping');
+        finish();
+      });
+      signal(${JSON.stringify(ready)}, 'ready');
+    `;
     const running = runExecutable(
       process.execPath,
       ["-e", script],
@@ -147,13 +190,19 @@ it.skipIf(!posix)(
         settled = true;
       },
     );
-    await vi.waitFor(async () =>
-      expect(await readFile(ready, "utf8")).toBe("ready"),
-    );
-    stop.abort();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(settled).toBe(false);
-    await failed;
+    try {
+      await readySignal;
+      expect(await readFile(ready, "utf8")).toBe("ready");
+      stop.abort();
+      await stoppingSignal;
+      expect(await readFile(stopping, "utf8")).toBe("stopping");
+      // SIGTERM arrived, but the fixture cannot exit until we release it.
+      expect(settled).toBe(false);
+    } finally {
+      stop.abort();
+      await writeFile(release, "release");
+      await failed;
+    }
     expect(await readFile(done, "utf8")).toBe("done");
   },
 );
@@ -161,7 +210,8 @@ it.skipIf(!posix)(
 it.skipIf(!posix)("cancels subprocesses spawned by an executable", async () => {
   const ready = join(root, "child-ready"),
     done = join(root, "child-done");
-  const childScript = `const fs = require('node:fs'); process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(done)}, 'stopped'); process.exit(); }); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+  const readySignal = fileSignal(ready);
+  const childScript = `const fs = require('node:fs'); process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(done)}, 'stopped'); process.exit(); }); fs.writeFileSync(${JSON.stringify(ready + ".tmp")}, 'ready'); fs.renameSync(${JSON.stringify(ready + ".tmp")}, ${JSON.stringify(ready)}); setInterval(() => {}, 1000);`;
   const parentScript = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(childScript)}], {stdio:'inherit'}); setInterval(() => {}, 1000);`;
   const stop = new AbortController();
   const running = runExecutable(
@@ -171,9 +221,8 @@ it.skipIf(!posix)("cancels subprocesses spawned by an executable", async () => {
     stop.signal,
   );
   const failed = expect(running).rejects.toThrow("Cancelled.");
-  await vi.waitFor(async () =>
-    expect(await readFile(ready, "utf8")).toBe("ready"),
-  );
+  await readySignal;
+  expect(await readFile(ready, "utf8")).toBe("ready");
   stop.abort();
   await failed;
   expect(await readFile(done, "utf8")).toBe("stopped");

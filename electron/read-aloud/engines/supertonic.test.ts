@@ -51,7 +51,7 @@ describe.skipIf(skip)("Supertonic on the real model", () => {
     const rms = Math.sqrt(pcm.reduce((sum, s) => sum + s * s, 0) / pcm.length);
     expect(rms).toBeGreaterThan(0.01);
     expect(Math.max(...pcm.map(Math.abs))).toBeLessThan(1);
-  }, 60_000);
+  });
 
   it("stops soon after the signal aborts", async () => {
     const model = await load();
@@ -76,5 +76,5 @@ describe.skipIf(skip)("Supertonic on the real model", () => {
     await model.release();
     expect(chunks).toBe(1);
     expect(stopped).toBeLessThan(500);
-  }, 60_000);
+  });
 });

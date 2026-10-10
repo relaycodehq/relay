@@ -12,22 +12,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentHosts, type HostedQuery } from "./client";
 import { HostedChild } from "./child";
-import type { Asks } from "./protocol";
+import type { Asks, Entry } from "./protocol";
 import { codexReplay } from "../agents/codex/codex-connection";
 
 // A Claude Code stand-in that asks to run a command before it answers, and
 // says what it was told. It logs its pid so the test can see it end.
 const cli = `#!${process.execPath}
-const { appendFileSync } = require("node:fs");
+const { appendFileSync, writeFileSync } = require("node:fs");
 appendFileSync(process.env.FAKE_LOG, process.pid + "\\n");
 let n = 0;
+let pendingSettings;
 const emit = (v) => process.stdout.write(JSON.stringify({ uuid: "f" + ++n, session_id: "fake", ...v }) + "\\n");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const m = JSON.parse(line);
   if (m.type === "control_request") {
     const answer = () => emit({ type: "control_response", response: { subtype: "success", request_id: m.request_id, response: { asked: m.request.subtype } } });
-    const slow = m.request.subtype !== "initialize" && Number(process.env.FAKE_DELAY);
-    return slow ? setTimeout(answer, slow) : answer();
+    if (m.request.subtype === "get_settings" && process.env.FAKE_REQUESTED) {
+      pendingSettings = answer;
+      writeFileSync(process.env.FAKE_REQUESTED, "received");
+      return;
+    }
+    // Release the old reply only once the next Relay's call is also in flight.
+    if (m.request.subtype === "get_context_usage") pendingSettings?.();
+    return answer();
   }
   if (m.type === "control_response" && m.response.request_id === "ask-1") {
     const text = "Told: " + m.response.response.behavior;
@@ -138,16 +145,19 @@ it("asks again, after a restart, what Claude asked while Relay was away", async 
     hooks: {},
   });
   expect(await answerOf(query)).toBe("Told: allow");
-}, 20_000);
+});
 
 it("doesn't hand the next Relay the answer to a call the last one made", async () => {
   const first = hostsFor();
+  const requested = join(root, "settings-requested");
   const old = await open(first, () => new Promise(() => {}), {
-    FAKE_DELAY: "800",
+    FAKE_REQUESTED: requested,
   });
   // Call 1 of the old Relay, answered only after it has gone.
   void old.getSettings().catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await expect
+    .poll(() => readFile(requested, "utf8").catch(() => ""))
+    .toBe("received");
   first.detach();
 
   const [found] = await hostsFor().discover();
@@ -157,7 +167,7 @@ it("doesn't hand the next Relay the answer to a call the last one made", async (
   });
   // Also call 1, of the new one.
   expect(await query.getContextUsage()).toEqual({ asked: "get_context_usage" });
-}, 20_000);
+});
 
 it("ends a session Relay closes, and its Claude Code with it", async () => {
   const hosts = hostsFor();
@@ -169,8 +179,8 @@ it("ends a session Relay closes, and its Claude Code with it", async () => {
   const pid = Number((await readFile(log, "utf8")).trim());
   expect(alive(pid)).toBe(true);
   query.close();
-  await expect.poll(() => alive(pid), { timeout: 5000 }).toBe(false);
-}, 20_000);
+  await expect.poll(() => alive(pid)).toBe(false);
+});
 
 it("gives a process back after a restart with what it said meanwhile, and keeps it running", async () => {
   // Echoes each line it's given, and ticks while nobody writes.
@@ -237,24 +247,55 @@ it("gives a process back after a restart with what it said meanwhile, and keeps 
   );
   back.write("again");
   await echoed;
-}, 20_000);
+});
 
 it("reports a process that died while Relay was away as ended", async () => {
   const first = hostsFor();
+  const release = join(root, "exit-process");
+  const script = `
+    const { existsSync, watch } = require("node:fs");
+    watch(${JSON.stringify(root)}, () => {
+      if (existsSync(${JSON.stringify(release)})) process.exit(3);
+    });
+    console.log("hi");
+  `;
   const running = await first.openProcess({
     key: "server",
     meta: { provider: "fixture" },
     process: {
       command: process.execPath,
-      args: ["-e", 'console.log("hi"); setTimeout(() => process.exit(3), 300)'],
+      args: ["-e", script],
       cwd: root,
       env: { ...process.env } as Record<string, string>,
       group: false,
     },
   });
+  await new Promise<void>((resolve) => {
+    const check = (entry: Entry) => {
+      if (entry.kind === "line" && entry.text === "hi") resolve();
+    };
+    running.read({
+      replayed: (entries) => entries.forEach(check),
+      entry: check,
+    });
+  });
   running.mark("start", { turn: "thread" });
   first.detach();
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  // Watch the host record the exit, then restart the Relay that adopts it.
+  const observer = hostsFor();
+  const [observed] = await observer.discover();
+  const ended = new Promise<void>((resolve) => {
+    const check = (entry: Entry) => {
+      if (entry.kind === "end") resolve();
+    };
+    observed.attachProcess().read({
+      replayed: (entries) => entries.forEach(check),
+      entry: check,
+    });
+  });
+  await writeFile(release, "");
+  await ended;
+  observer.detach();
 
   const [found] = await hostsFor().discover();
   expect(found.info.ended).toBe(true);
@@ -264,7 +305,7 @@ it("reports a process that died while Relay was away as ended", async () => {
   );
   child.release();
   expect(await exited).toBe(1);
-}, 20_000);
+});
 
 it("replays a cut-off Codex turn without the last Relay's replies or answered questions", () => {
   const line = (seq: number, value: unknown) =>

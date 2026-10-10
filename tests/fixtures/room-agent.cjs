@@ -1403,20 +1403,31 @@ if (args.includes("--permission-prompt-tool")) {
       }
     } else if (m.method === "turn/interrupt") {
       record({ interrupt: m.params });
-      // Real agents take a while to wind down after being stopped.
-      setTimeout(
-        () => {
-          send({ id: m.id, result: {} });
-          send({
-            method: "turn/completed",
-            params: {
-              threadId: "fixture-thread",
-              turn: { status: "interrupted" },
-            },
-          });
-        },
-        Number(process.env.RELAY_FIXTURE_STOP_DELAY ?? 0),
-      );
+      // Real agents take a while to wind down after being stopped; a test
+      // holds this one until it writes the release file.
+      const letGo = () => {
+        send({ id: m.id, result: {} });
+        send({
+          method: "turn/completed",
+          params: {
+            threadId: "fixture-thread",
+            turn: { status: "interrupted" },
+          },
+        });
+      };
+      const release = process.env.RELAY_FIXTURE_STOP_RELEASE;
+      if (!release) letGo();
+      else {
+        const watcher = fs.watch(require("node:path").dirname(release), () => {
+          if (!fs.existsSync(release)) return;
+          watcher.close();
+          letGo();
+        });
+        if (fs.existsSync(release)) {
+          watcher.close();
+          letGo();
+        }
+      }
     } else
       send({
         id: m.id,

@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { build } from "esbuild";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { AgentHosts, type ProcessReader } from "../../agent-host/client";
+import type { Entry } from "../../agent-host/protocol";
 import {
   acquireCursorConnection,
   closeCursorConnection,
@@ -91,7 +92,7 @@ const alive = (pid: number) => {
 };
 
 afterEach(async () => {
-  delete process.env.CURSOR_FAKE_LINGER;
+  delete process.env.CURSOR_FAKE_RELEASE;
   delete process.env.CURSOR_FAKE_CLOSED;
   await closeCursorConnection("thread-1");
   detachCursor();
@@ -129,17 +130,22 @@ function newRelay() {
 
 function threadTurn(extra: Partial<AgentOptions> = {}) {
   const seen = { text: [] as string[], ids: [] as string[] };
+  let partOne!: () => void;
+  const working = new Promise<void>((resolve) => (partOne = resolve));
   const options: AgentOptions = {
     job: { kind: "prompt" },
     cwd: root,
     prompt: "[[linger]]",
     choice: { model: "", fast: false, reasoningEffort: "" },
     signal: new AbortController().signal,
-    onText: (text) => seen.text.push(text),
+    onText: (text) => {
+      seen.text.push(text);
+      if (text.includes("part one")) partOne();
+    },
     session: { key: "thread-1", onId: async (id) => void seen.ids.push(id) },
     ...extra,
   };
-  return { seen, options };
+  return { seen, options, working };
 }
 
 const sentMessages = async () =>
@@ -148,19 +154,14 @@ const sentMessages = async () =>
     .filter(Boolean)
     .map((line) => JSON.parse(line));
 
-async function untilText(seen: { text: string[] }, wanted: string) {
-  await expect
-    .poll(() => seen.text.at(-1) ?? "", { timeout: 10_000 })
-    .toContain(wanted);
-}
-
 it("carries on a turn Relay restarted in, and shows the whole answer", async () => {
-  process.env.CURSOR_FAKE_LINGER = "2500";
+  const release = join(root, "continue-turn");
+  process.env.CURSOR_FAKE_RELEASE = release;
   newRelay();
   const first = threadTurn();
   const orphan = runCursor(first.options);
   orphan.catch(() => {});
-  await untilText(first.seen, "part one");
+  await first.working;
 
   // Relay restarts: its host connection goes, the host and the worker stay.
   const before = (await sentMessages())[0].pid;
@@ -172,23 +173,40 @@ it("carries on a turn Relay restarted in, and shows the whole answer", async () 
     job: { kind: "adopt" },
     session: { key: "thread-1", id: first.seen.ids[0], onId: async () => {} },
   });
-  expect(await runCursor(second.options)).toBe("part one part two");
+  const continued = runCursor(second.options);
+  await writeFile(release, "");
+  expect(await continued).toBe("part one part two");
   expect(second.seen.text.at(-1)).toBe("part one part two");
   // Still the worker the first Relay started, not a new one.
   expect((await sentMessages()).map((m) => m.pid)).toEqual([before]);
 });
 
 it("hands over a turn that finished while Relay was away", async () => {
-  process.env.CURSOR_FAKE_LINGER = "300";
+  const release = join(root, "finish-turn");
+  process.env.CURSOR_FAKE_RELEASE = release;
   newRelay();
   const first = threadTurn();
   const orphan = runCursor(first.options);
   orphan.catch(() => {});
-  await untilText(first.seen, "part one");
+  await first.working;
 
+  const observer = newRelay();
+  await writeFile(release, "");
+  // Observe the host's actual reply without letting Cursor adopt or finish the turn.
+  const [found] = await observer.discover();
+  const reply = new Promise<void>((resolve) => {
+    const check = (entry: Entry) => {
+      if (entry.kind !== "line") return;
+      const message = JSON.parse(entry.text);
+      if (message.result?.text === "part one part two") resolve();
+    };
+    found.attachProcess().read({
+      replayed: (entries) => entries.forEach(check),
+      entry: check,
+    });
+  });
+  await reply;
   newRelay();
-  // Long enough for the worker to finish with nobody listening.
-  await new Promise((resolve) => setTimeout(resolve, 1200));
   const back = await reattachCursorSessions((key) => key === "thread-1");
   expect(back).toEqual([{ key: "thread-1", open: true }]);
 
@@ -226,9 +244,7 @@ it("lets a worker in the host close its agents when its thread's session ends", 
   expect(await runCursor(turn.options)).toBe("Hello");
   await closeCursorConnection("thread-1");
   // Told to stop by its input closing, not killed before it gets to.
-  await expect
-    .poll(() => readFile(closed, "utf8"), { timeout: 5000 })
-    .toContain(turn.seen.ids[0]);
+  await expect.poll(() => readFile(closed, "utf8")).toContain(turn.seen.ids[0]);
 });
 
 it("numbers a picked-up worker's requests above the replies its log still holds", async () => {

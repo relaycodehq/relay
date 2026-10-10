@@ -184,18 +184,15 @@ const input = (body: string) => ({
 });
 
 async function finished(chats: ProjectChats, id: string, count?: number) {
-  await vi.waitFor(
-    async () => {
-      const chat = await chats.get(id);
-      if (count) expect(chat.messages).toHaveLength(count);
-      expect(chat.messages.at(-1)?.status).toBe("complete");
-      // The answer shows as finished a moment before it gives the thread back.
-      expect(
-        chats.list(chat.projectId).find((c) => c.id === id)?.running,
-      ).toBeFalsy();
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    const chat = await chats.get(id);
+    if (count) expect(chat.messages).toHaveLength(count);
+    expect(chat.messages.at(-1)?.status).toBe("complete");
+    // The answer shows as finished a moment before it gives the thread back.
+    expect(
+      chats.list(chat.projectId).find((c) => c.id === id)?.running,
+    ).toBeFalsy();
+  });
 }
 
 const prompts = async () =>
@@ -237,14 +234,11 @@ it("hands a worktree thread to the other computer and brings it back", async () 
   await expect(
     laptop.chats.send(thread.id, input("@codex One more thing")),
   ).rejects.toThrow(/This thread is on /);
-  await vi.waitFor(
-    async () => {
-      const view = await sender.view(thread.id);
-      expect(view?.sentTo.error).toBeUndefined();
-      expect(view?.sentTo.state).toBe("away");
-    },
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => {
+    const view = await sender.view(thread.id);
+    expect(view?.sentTo.error).toBeUndefined();
+    expect(view?.sentTo.state).toBe("away");
+  });
 
   // Settings lists it under the computer it went to.
   const overview = await sender.overview();
@@ -296,7 +290,7 @@ it("hands a worktree thread to the other computer and brings it back", async () 
         online: true,
         remote: { running: false, returned: false },
       }),
-    { timeout: 8000, interval: 500 },
+    { interval: 500 },
   );
 
   // More work there, then back.
@@ -305,10 +299,8 @@ it("hands a worktree thread to the other computer and brings it back", async () 
     "- 1.1 Second\n- 1.0 First\n",
   );
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   expect(await readFile(join(here.path!, "CHANGELOG.md"), "utf8")).toBe(
     "- 1.1 Second\n- 1.0 First\n",
@@ -334,7 +326,7 @@ it("hands a worktree thread to the other computer and brings it back", async () 
   const resumed = (await prompts()).at(-1)!;
   expect(resumed).toContain("What's left?");
   expect(resumed).toContain("handed over from another computer");
-}, 60000);
+});
 
 /** A worktree thread handed to the mini with CHANGELOG.md in it; the worktrees on both sides. */
 async function awayWithChangelog(changelog = true, branch?: string) {
@@ -352,10 +344,8 @@ async function awayWithChangelog(changelog = true, branch?: string) {
   const here = (await laptop.chats.get(thread.id)).worktree!.path!;
   if (changelog) await writeFile(join(here, "CHANGELOG.md"), "- 1.0 First\n");
   await sender.handOff(thread.id, computerId);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
   );
   const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
   await finished(mini.chats, arrived!.id);
@@ -375,10 +365,7 @@ it("replays work that comes back onto a worktree that moved on meanwhile", async
   await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () => expect(await sender.view(thread.id)).toBeNull(),
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => expect(await sender.view(thread.id)).toBeNull());
   expect(await readFile(join(here, "CHANGELOG.md"), "utf8")).toBe(
     "- 1.1 Second\n- 1.0 First\n",
   );
@@ -391,7 +378,7 @@ it("replays work that comes back onto a worktree that moved on meanwhile", async
   expect(git(here, "rev-list", "--merges", "HEAD")).toBe("");
   expect(git(here, "status", "--porcelain")).toBe("");
   expect(git(here, "for-each-ref", "refs/relay/handoffs/")).toBe("");
-}, 60000);
+});
 
 it("keeps a branch the user named on the other computer, and brings its work back", async () => {
   const { sender, mini, thread, here, there } = await awayWithChangelog(
@@ -405,15 +392,12 @@ it("keeps a branch the user named on the other computer, and brings its work bac
 
   await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () => expect(await sender.view(thread.id)).toBeNull(),
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => expect(await sender.view(thread.id)).toBeNull());
   expect(await readFile(join(here, "CHANGELOG.md"), "utf8")).toBe(
     "- 1.1 Second\n- 1.0 First\n",
   );
   expect(git(here, "branch", "--show-current")).toBe("feature/changelog");
-}, 60000);
+});
 
 /** A thread on a named branch, there and back again, then handed to the mini a second time. */
 async function secondTrip(meanwhile: (there: string) => Promise<void>) {
@@ -421,10 +405,7 @@ async function secondTrip(meanwhile: (there: string) => Promise<void>) {
   const { sender, laptop, mini, computerId, thread, there } = away;
   await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () => expect(await sender.view(thread.id)).toBeNull(),
-    { timeout: 15000 },
-  );
+  await vi.waitFor(async () => expect(await sender.view(thread.id)).toBeNull());
   // What the first trip left there: its copy, still holding the branch.
   const [first] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
   await vi.waitFor(async () =>
@@ -436,10 +417,8 @@ async function secondTrip(meanwhile: (there: string) => Promise<void>) {
   await laptop.chats.send(thread.id, input("@codex A date on each line"));
   await finished(laptop.chats, thread.id);
   await sender.handOff(thread.id, computerId);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
   );
   const second = mini.chats
     .list(mini.projectId)
@@ -492,28 +471,24 @@ it("brings a thread back with its clashing work set aside, to resolve it there",
   const head = git(here, "rev-parse", "HEAD");
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo).toMatchObject({
-        state: "returning",
-        conflicts: ["CHANGELOG.md"],
-      }),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo).toMatchObject({
+      state: "returning",
+      conflicts: ["CHANGELOG.md"],
+    }),
   );
   expect(git(here, "rev-parse", "HEAD")).toBe(head);
   expect(git(here, "status", "--porcelain")).toBe("");
 
   const { id } = (await laptop.chats.get(thread.id)).sentTo!;
   await sender.bringBack(thread.id, true);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   expect(git(here, "rev-parse", "HEAD")).toBe(head);
   const parked = `refs/relay/handoffs/${id}`;
   expect(git(here, "show", `${parked}:CHANGELOG.md`)).toBe("- 1.0 Made there");
-}, 60000);
+});
 
 it("tells the computer it came from when a turn there fails", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
@@ -525,21 +500,17 @@ it("tells the computer it came from when a turn there fails", async () => {
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);
   await sender.handOff(thread.id, computerId);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
   );
   const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
   await finished(mini.chats, arrived!.id);
 
   await mini.chats.send(arrived!.id, input("@codex fixture codex crash"));
-  await vi.waitFor(
-    async () =>
-      expect((await mini.chats.get(arrived!.id)).messages.at(-1)?.status).toBe(
-        "failed",
-      ),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await mini.chats.get(arrived!.id)).messages.at(-1)?.status).toBe(
+      "failed",
+    ),
   );
   await vi.waitFor(
     async () => {
@@ -550,11 +521,11 @@ it("tells the computer it came from when a turn there fails", async () => {
       });
       expect(view?.remote?.latest).toBeUndefined();
     },
-    { timeout: 8000, interval: 500 },
+    { interval: 500 },
   );
   const [shown] = (await sender.overview()).computers[0]!.threads;
   expect(shown).toMatchObject({ state: "stopped", error: expect.any(String) });
-}, 60000);
+});
 
 it("brings replies written there back under the messages they answer", async () => {
   const { laptop, mini, sender, thread } = await awayWithChangelog();
@@ -570,15 +541,12 @@ it("brings replies written there back under the messages they answer", async () 
   const ask = async (body: string, parentId?: string) => {
     const request = { ...input(body), ...(parentId ? { parentId } : {}) };
     await mini.chats.send(arrived!.id, request);
-    await vi.waitFor(
-      async () => {
-        const saved = await mini.chats.get(arrived!.id);
-        const index = saved.messages.findIndex((m) => m.id === request.id);
-        expect(index).toBeGreaterThanOrEqual(0);
-        expect(saved.messages[index + 1]?.status).toBe("complete");
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const saved = await mini.chats.get(arrived!.id);
+      const index = saved.messages.findIndex((m) => m.id === request.id);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(saved.messages[index + 1]?.status).toBe("complete");
+    });
     return request.id;
   };
   const sideQuestion = await ask("@codex Why a changelog?", carried[1]!.id);
@@ -592,10 +560,8 @@ it("brings replies written there back under the messages they answer", async () 
   );
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   const back = (await laptop.chats.get(thread.id)).messages;
   const find = (id: string) => back.find((m) => m.id === id)!;
@@ -621,10 +587,8 @@ it("keeps the worktree of a thread that hasn't gone back, so it can still be han
   expect(existsSync(there)).toBe(true);
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   // Back home, the copy there is just an archived thread again.
   await vi.waitFor(async () =>
@@ -634,7 +598,7 @@ it("keeps the worktree of a thread that hasn't gone back, so it can still be han
   );
   await mini.chats.removeWorktree(arrived!.id);
   expect(existsSync(there)).toBe(false);
-}, 60000);
+});
 
 it("hands a thread back whose worktree was deleted there, with the commits its branch kept", async () => {
   const { laptop, mini, sender, thread, here, there } =
@@ -647,10 +611,8 @@ it("hands a thread back whose worktree was deleted there, with the commits its b
   await rm(there, { recursive: true, force: true });
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   expect(await readFile(join(here, "NOTES.md"), "utf8")).toBe("kept\n");
   expect(existsSync(join(here, "LOST.md"))).toBe(false);
@@ -662,7 +624,7 @@ it("hands a thread back whose worktree was deleted there, with the commits its b
       (await mini.chats.get(arrived!.id)).cameFrom?.returnedAt,
     ).toBeTruthy(),
   );
-}, 60000);
+});
 
 it("hands a thread back without files when its worktree and branch are both gone there", async () => {
   const { laptop, mini, sender, thread, here, there } =
@@ -674,13 +636,11 @@ it("hands a thread back without files when its worktree and branch are both gone
   git(mini.clone, "branch", "-D", arrived!.worktree!.branch!);
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
   );
   expect(git(here, "rev-parse", "HEAD")).toBe(head);
-}, 60000);
+});
 
 it("refuses a hand-back whose messages are malformed, and changes nothing here", async () => {
   const { laptop, mini, sender, thread, here } = await awayWithChangelog(false);
@@ -699,19 +659,17 @@ it("refuses a hand-back whose messages are malformed, and changes nothing here",
   });
 
   await sender.bringBack(thread.id);
-  await vi.waitFor(
-    async () =>
-      expect((await laptop.chats.get(thread.id)).sentTo?.error).toMatch(
-        /message \d+'s body/,
-      ),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo?.error).toMatch(
+      /message \d+'s body/,
+    ),
   );
   const after = await laptop.chats.get(thread.id);
   expect(after.sentTo?.state).toBe("returning");
   expect(after.messages).toEqual(before);
   expect(git(here, "rev-parse", "HEAD")).toBe(head);
   expect(git(here, "for-each-ref", "refs/relay/handoffs/")).toBe("");
-}, 60000);
+});
 
 it("takes hand-back messages with a null parent and fields only the other side knows", () => {
   const message = {
@@ -741,10 +699,8 @@ it("lets the computer it came from peek at what the turn there is doing", async 
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);
   await sender.handOff(thread.id, computerId);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
   );
   const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
   await finished(mini.chats, arrived!.id);
@@ -763,7 +719,7 @@ it("lets the computer it came from peek at what the turn there is doing", async 
         says: "I'll inspect the cache guard first.",
         recent: expect.arrayContaining([expect.objectContaining(command)]),
       }),
-    { timeout: 8000, interval: 500 },
+    { interval: 500 },
   );
 
   // One that keeps going: running since about now, by this computer's clock.
@@ -780,7 +736,7 @@ it("lets the computer it came from peek at what the turn there is doing", async 
       expect(remote!.runningSince).toBeGreaterThanOrEqual(sent - 1000);
       expect(remote!.runningSince).toBeLessThanOrEqual(Date.now());
     },
-    { timeout: 10000, interval: 500 },
+    { interval: 500 },
   );
   // The sidebar asks for every away thread at once.
   expect((await sender.views())[thread.id]).toMatchObject({
@@ -794,7 +750,7 @@ it("lets the computer it came from peek at what the turn there is doing", async 
     delivery: "steer",
   });
   await finished(mini.chats, arrived!.id);
-}, 60000);
+});
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {
   const { laptop, remote, sender, computerId } = await pairedComputers();
@@ -819,7 +775,7 @@ it("refuses threads that work in the checkout, and takes nothing from a phone", 
   await expect(phone.call("computerProjects")).rejects.toThrow(
     "Only a paired computer can do that.",
   );
-}, 30000);
+});
 
 it("carries commits the shared remote never saw, and answers a repeated handoff the same", async () => {
   const { laptop, mini, sender, computers, computerId } =
@@ -836,12 +792,10 @@ it("carries commits the shared remote never saw, and answers a repeated handoff 
   await laptop.chats.send(thread.id, input("@codex Tidy the notes"));
   await finished(laptop.chats, thread.id, 2);
   await sender.handOff(thread.id, computerId);
-  await vi.waitFor(
-    async () =>
-      expect((await sender.view(thread.id))?.sentTo).toMatchObject({
-        state: "away",
-      }),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo).toMatchObject({
+      state: "away",
+    }),
   );
   const sentTo = (await laptop.chats.get(thread.id)).sentTo!;
   const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
@@ -860,7 +814,7 @@ it("carries commits the shared remote never saw, and answers a repeated handoff 
   expect(
     mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
   ).toHaveLength(1);
-}, 40000);
+});
 
 it("updates the other computer's Relay from here, and tells an older one apart", async () => {
   const { sender, updater, computerId } = await pairedComputers();
@@ -890,7 +844,7 @@ it("updates the other computer's Relay from here, and tells an older one apart",
       update: { status: "idle", current: "0.9.0" },
     }),
   ).toBe(false);
-}, 30000);
+});
 
 /** A worktree thread marked as handing off to the mini, with nothing sent: a handoff that got stuck. */
 async function stuckSending() {
@@ -922,7 +876,7 @@ it("keeps a stuck handoff here once the other computer says it never got the thr
   await sender.keepHere(thread.id);
   expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
   await laptop.chats.send(thread.id, input("@codex Carry on here"));
-}, 30000);
+});
 
 it("won't keep a handoff here while the other computer can't be asked", async () => {
   const { laptop, sender, computers, thread } = await stuckSending();
@@ -931,7 +885,7 @@ it("won't keep a handoff here while the other computer can't be asked", async ()
     /Can't tell whether .* got this thread.*take the thread back without/s,
   );
   expect((await laptop.chats.get(thread.id)).sentTo?.state).toBe("sending");
-}, 30000);
+});
 
 it("won't keep a handoff here when the other computer did take the thread", async () => {
   const { laptop, mini, sender, thread } = await awayWithChangelog(false);
@@ -950,7 +904,7 @@ it("won't keep a handoff here when the other computer did take the thread", asyn
   expect(
     mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
   ).toHaveLength(1);
-}, 60000);
+});
 
 it("takes a thread back without the computer that has it, as it was when it left", async () => {
   const { laptop, mini, sender, thread, here, there } =
@@ -987,7 +941,7 @@ it("takes a thread back without the computer that has it, as it was when it left
   // Abandoning a thread that's here changes nothing.
   await sender.abandon(thread.id);
   expect((await laptop.chats.get(thread.id)).abandonedHandoffs).toHaveLength(1);
-}, 60000);
+});
 
 it("takes a handoff back that never finished sending", async () => {
   const { laptop, sender, thread } = await stuckSending();
@@ -996,7 +950,7 @@ it("takes a handoff back that never finished sending", async () => {
   const after = await laptop.chats.get(thread.id);
   expect(after.sentTo).toBeUndefined();
   expect(after.abandonedHandoffs?.map((a) => a.id)).toEqual([id]);
-}, 30000);
+});
 
 it("tells the other computer a thread was taken back, so its copy is no longer owed and can't be handed back", async () => {
   const { laptop, mini, sender, computers, computerId, thread, there } =
@@ -1032,7 +986,7 @@ it("tells the other computer a thread was taken back, so its copy is no longer o
   await finished(mini.chats, arrived!.id);
   await mini.chats.removeWorktree(arrived!.id);
   expect(existsSync(there)).toBe(false);
-}, 60000);
+});
 
 it("tells a computer that was offline when the thread was taken back once it's online again", async () => {
   const { laptop, mini, sender, computers, computerId, thread } =
@@ -1077,7 +1031,7 @@ it("drops a notice the other computer is too old to understand instead of sendin
     expect(computers.get(computerId).abandoned).toBeUndefined(),
   );
   expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
-}, 60000);
+});
 
 it("leaves nothing owed on the other computer when the thread is taken back mid-transfer", async () => {
   const { laptop, mini, sender, computers, computerId } =
@@ -1117,4 +1071,4 @@ it("leaves nothing owed on the other computer when the thread is taken back mid-
   expect(after.sentTo).toBeUndefined();
   expect(after.abandonedHandoffs).toHaveLength(1);
   expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
-}, 60000);
+});

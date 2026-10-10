@@ -95,6 +95,20 @@ test("shows a thread's finished answer at once when it is opened again", async (
   try {
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1400, height: 900 });
+    // A streaming copy's one-second poll must not rescue a missing refetch on opening.
+    await page.addInitScript(() => {
+      const setInterval = window.setInterval.bind(window);
+      window.setInterval = ((
+        handler: TimerHandler,
+        delay?: number,
+        ...args: unknown[]
+      ) =>
+        setInterval(
+          delay === 1000 ? () => {} : handler,
+          delay,
+          ...args,
+        )) as typeof window.setInterval;
+    });
     await page.evaluate(() =>
       localStorage.setItem("relay-sidebar-view", "activity"),
     );
@@ -103,8 +117,8 @@ test("shows a thread's finished answer at once when it is opened again", async (
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
-    await page.waitForTimeout(1500);
     const input = page.getByLabel("Message project");
+    await expect(input).toBeEditable();
     await input.fill("@claude Count to twenty please");
     await input.press("Enter");
     const stop = page.getByRole("button", { name: "Stop answer", exact: true });
@@ -133,12 +147,25 @@ test("shows a thread's finished answer at once when it is opened again", async (
       })
       .not.toMatch(/Working|Running/i);
     // Finished for certain, but well inside the 30s a cached copy counts as fresh.
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const summaries = await window.relay.projectChats(id);
+          const chat = summaries.find((chat) =>
+            chat.title?.includes("Count to twenty"),
+          );
+          if (!chat || chat.running) return false;
+          const current = await window.relay.projectChat(chat.id);
+          const last = current.messages.at(-1);
+          return typeof last === "object" && last.status === "complete";
+        }, projectId),
+      )
+      .toBe(true);
     await card.first().click();
-    // The poll would take a second; the refetch on opening a few tens of ms.
+    // Polling is disabled: opening must refetch the cached streaming copy.
     await expect(
       page.locator(".project-messages [data-message-id]").last(),
-    ).toContainText("twenty", { timeout: 600 });
+    ).toContainText("twenty");
     await expect(page.getByText(/Working for/)).toHaveCount(0);
   } finally {
     await app.close();

@@ -89,14 +89,11 @@ const claudeText = (call: { prompt: string }) =>
 async function sendAndSettle(id: string, provider: "claude" | "codex") {
   const before = (await chats.get(id)).messages.length;
   await chats.send(id, input(provider, `@${provider} RELAY next`));
-  await vi.waitFor(
-    async () => {
-      const { messages } = await chats.get(id);
-      expect(messages).toHaveLength(before + 2);
-      expect(messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    const { messages } = await chats.get(id);
+    expect(messages).toHaveLength(before + 2);
+    expect(messages.at(-1)?.status).toBe("complete");
+  });
 }
 
 it("resumes a Claude session no terminal holds, sending only what's new", async () => {
@@ -155,7 +152,7 @@ it("resumes a Claude session no terminal holds, sending only what's new", async 
   expect(call.args).not.toContain("--fork-session");
   expect(claudeText(call)).not.toContain("TERMINAL first");
   expect(call.cwd).toBe(repo);
-}, 25000);
+});
 
 it("forks a Claude session a terminal still writes to, cut after its last finished answer", async () => {
   await writeClaudeSession(
@@ -193,7 +190,7 @@ it("forks a Claude session a terminal still writes to, cut after its last finish
     "continues a copy of your session from a terminal, where it is still open",
   );
   expect(claudeText(call)).not.toContain("TERMINAL first");
-}, 25000);
+});
 
 it("forks a quiet Claude session a running claude still lists, unless that pid now runs something else", async () => {
   const home = join(root, "claude-home");
@@ -283,7 +280,7 @@ it("forks Codex sessions at their last finished turn, whether or not one looks o
     "continues a copy of your session from a terminal, cut after",
   );
   expect(prompts[1]).toContain("where it is still open");
-}, 30000);
+});
 
 it("continues in a new worktree with a copy of the folder's edits when the toggle is on", async () => {
   await writeFile(join(repo, "cache.ts"), "guard fixed in the terminal\n");
@@ -347,7 +344,7 @@ it("continues in a new worktree with a copy of the folder's edits when the toggl
   );
   // Said once.
   expect((await chats.get(resumed.chat.id)).movedIn).toBeUndefined();
-}, 40000);
+});
 
 it("makes one thread for a session picked twice at once, none when its worktree fails, and keeps to an archived one", async () => {
   await writeClaudeSession(
@@ -401,7 +398,7 @@ it("makes one thread for a session picked twice at once, none when its worktree 
     chat: { id: first.chat.id },
     created: false,
   });
-}, 30000);
+});
 
 it("refuses a session from another folder or one that isn't there", async () => {
   await writeClaudeSession(

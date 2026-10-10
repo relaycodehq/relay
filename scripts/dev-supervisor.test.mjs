@@ -29,7 +29,7 @@ const alive = (pid) => {
 };
 const read = (file) => JSON.parse(readFileSync(file, "utf8"));
 async function waitFor(check) {
-  for (let i = 0; i < 150; i++) {
+  for (const until = Date.now() + 20_000; Date.now() < until;) {
     try {
       if (check()) return;
     } catch {}
@@ -93,21 +93,22 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     fixtureHome,
     readFileSync(fixtureHome, "utf8").replace(
       "const items = readdirSync(userData).filter(kept);",
-      `if (process.env.RELAY_FIXTURE_SLOW_COPY) {
-      delete process.env.RELAY_FIXTURE_SLOW_COPY;
+      `if (process.env.RELAY_FIXTURE_HOLD_COPY) {
+      delete process.env.RELAY_FIXTURE_HOLD_COPY;
       process.send?.({ type: "fixture:copying" });
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+      while (!existsSync("release-copy"))
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
     }
     const items = readdirSync(userData).filter(kept);`,
     ),
   );
   writeFileSync(
     join(repo, "scripts/build-electron.mjs"),
-    "await new Promise(r => setTimeout(r, process.env.RELAY_FIXTURE_SLOW_BUILD ? 1000 : 50));",
+    "await new Promise(r => { if (!process.env.RELAY_FIXTURE_HANG_BUILD) setTimeout(r, 50); });",
   );
   writeFileSync(
     join(repo, "scripts/electron-bundles.mjs"),
-    "export const bundles = process.env.RELAY_FIXTURE_BAD_BUNDLE ? [{name:'main',options:{outfile:'missing-bundle'}}] : process.env.RELAY_FIXTURE_SLOW_CONTEXT ? [{name:'main',options:{outfile:'bundle'}}] : [];",
+    "export const bundles = process.env.RELAY_FIXTURE_BAD_BUNDLE ? [{name:'main',options:{outfile:'missing-bundle'}}] : process.env.RELAY_FIXTURE_HANG_CONTEXT ? [{name:'main',options:{outfile:'bundle'}}] : [];",
   );
   writeFileSync(
     join(repo, "package.json"),
@@ -151,7 +152,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     );
     writeFileSync(
       join(root, "node_modules/esbuild/index.js"),
-      "import {writeFileSync} from 'node:fs'; export async function context() { if(!process.env.RELAY_FIXTURE_SLOW_CONTEXT) throw Error('No bundles in this fixture'); writeFileSync('context-started',''); await new Promise(r=>setTimeout(r,10000)); return {rebuild:async()=>{}}; }",
+      "import {writeFileSync} from 'node:fs'; export async function context() { if(!process.env.RELAY_FIXTURE_HANG_CONTEXT) throw Error('No bundles in this fixture'); writeFileSync('context-started',''); await new Promise(()=>{}); }",
     );
     writeFileSync(
       join(root, "node_modules/electron/package.json"),
@@ -170,7 +171,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
   }
   const child = spawn(process.execPath, ["scripts/dev-supervisor.mjs"], {
     cwd: repo,
-    env: { ...env, RELAY_FIXTURE_SLOW_COPY: "1" },
+    env: { ...env, RELAY_FIXTURE_HOLD_COPY: "1" },
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   const extraChildren = [];
@@ -189,7 +190,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     exec(process.execPath, ["scripts/dev-switch.mjs", ...args], {
       cwd: repo,
       env,
-      timeout: 10000,
+      timeout: 30_000,
     });
   try {
     await waitFor(() => existsSync(join(repo, "app-pid")));
@@ -237,6 +238,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     await copying;
     const status = await ask("--json");
     expect(JSON.parse(status.stdout).running).toBe(repo);
+    writeFileSync(join(repo, "release-copy"), "");
     await switching;
     expect(readFileSync(join(repo, "stop-mode"), "utf8")).toBe("true");
     await waitFor(() => existsSync(join(away, "app-pid")));
@@ -262,7 +264,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     for (const file of ["app-pid", "vite-pid"]) rmSync(join(repo, file));
     const startup = spawn(process.execPath, ["scripts/dev-supervisor.mjs"], {
       cwd: repo,
-      env: { ...env, RELAY_FIXTURE_SLOW_BUILD: "1" },
+      env: { ...env, RELAY_FIXTURE_HANG_BUILD: "1" },
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
     extraChildren.push(startup);
@@ -276,7 +278,7 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
     expect(existsSync(join(repo, "vite-pid"))).toBe(false);
     for (const [flag, marker] of [
       ["RELAY_FIXTURE_HANG_VITE", "vite-request"],
-      ["RELAY_FIXTURE_SLOW_CONTEXT", "context-started"],
+      ["RELAY_FIXTURE_HANG_CONTEXT", "context-started"],
     ]) {
       for (const file of [
         "app-pid",
@@ -299,17 +301,16 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
       const setupExited = new Promise((resolve) =>
         duringSetup.once("exit", resolve),
       );
-      const start = Date.now();
+      // What it hangs in never finishes, so exiting proves stop didn't wait for it.
       duringSetup.send({ type: "relay:dev-stop" });
       await setupExited;
-      expect(Date.now() - start).toBeLessThan(3000);
       expect(existsSync(join(repo, "app-pid"))).toBe(false);
       expect(alive(Number(readFileSync(join(repo, "vite-pid"))))).toBe(false);
       expect(existsSync(record)).toBe(false);
     }
     // Older worktrees and apps still building cannot safely close detached hosts.
     for (const flag of [
-      "RELAY_FIXTURE_SLOW_BUILD",
+      "RELAY_FIXTURE_HANG_BUILD",
       "RELAY_FIXTURE_NO_RESTORE",
     ]) {
       rmSync(join(repo, "app-pid"), { force: true });
@@ -373,4 +374,4 @@ it("runs the real runner through cancellation, switch, fallback, restore and shu
       if (extra.exitCode === null && !extra.signalCode) extra.kill("SIGKILL");
     rmSync(scratch, { recursive: true, force: true });
   }
-}, 30000);
+});

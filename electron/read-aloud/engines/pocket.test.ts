@@ -22,7 +22,7 @@ describe.skipIf(Boolean(skip))("Pocket TTS on the real model", () => {
   let model: ReadAloudModel;
   beforeAll(async () => {
     model = await pocketTts.load(await import("onnxruntime-node"), dir!, 4);
-  }, 60_000);
+  });
   afterAll(() => model?.release());
 
   it("streams speech for a short line", async () => {
@@ -47,7 +47,7 @@ describe.skipIf(Boolean(skip))("Pocket TTS on the real model", () => {
     expect(audio.every((x) => Number.isFinite(x) && Math.abs(x) <= 1)).toBe(
       true,
     );
-  }, 60_000);
+  });
 
   it("stops soon after it is aborted, with no audio after", async () => {
     const controller = new AbortController();
@@ -69,5 +69,5 @@ describe.skipIf(Boolean(skip))("Pocket TTS on the real model", () => {
     expect(abortedAt).toBeGreaterThan(0);
     expect(performance.now() - abortedAt).toBeLessThan(250);
     expect(afterAbort).toBe(0);
-  }, 60_000);
+  });
 });

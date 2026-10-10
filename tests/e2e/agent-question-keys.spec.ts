@@ -69,8 +69,7 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
     const editor = page.locator(
       '.project-inline-editor [contenteditable="true"]',
     );
-    await expect(editor).toBeAttached();
-    await page.waitForTimeout(500);
+    await expect(editor).toBeFocused();
     await editor.click();
     await page.keyboard.press("End");
     await page.keyboard.type("a");

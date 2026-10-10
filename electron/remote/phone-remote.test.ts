@@ -34,12 +34,34 @@ import { defaultAISettings } from "../../shared/settings";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   while (cleanup.length) await cleanup.pop()!();
   vi.restoreAllMocks();
 });
 
 const projectId = randomUUID(),
   chatId = randomUUID();
+
+/** Check retained history immediately, then wake only when another observation arrives. */
+function observations() {
+  const waiting = new Set<() => void>();
+  cleanup.push(async () => waiting.clear());
+  return {
+    notify: () => {
+      for (const check of waiting) check();
+    },
+    until: (matches: () => boolean) =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (!matches()) return;
+          waiting.delete(check);
+          resolve();
+        };
+        waiting.add(check);
+        check();
+      }),
+  };
+}
 
 function fakeHost(respond?: (method: string) => Promise<unknown>) {
   const dispatched: { method: string; args: unknown[] }[] = [];
@@ -121,12 +143,19 @@ function phone(
 ) {
   const statuses: { status: RemoteStatus; detail?: string }[] = [];
   const events: RemoteEvent[] = [];
+  const observed = observations();
   let credentials: RemoteCredentials | undefined;
   const client = new RemoteClient({
     start,
     timeoutMs: 2000,
-    onStatus: (status, detail) => statuses.push({ status, detail }),
-    onEvent: (e) => events.push(e),
+    onStatus: (status, detail) => {
+      statuses.push({ status, detail });
+      observed.notify();
+    },
+    onEvent: (e) => {
+      events.push(e);
+      observed.notify();
+    },
     onPaired: (c) => (credentials = c),
     ...extra,
   });
@@ -138,7 +167,9 @@ function phone(
     statuses,
     credentials: () => credentials,
     until: (status: RemoteStatus) =>
-      vi.waitFor(() => expect(client.status).toBe(status), { timeout: 5000 }),
+      observed.until(() => client.status === status),
+    untilEvents: (matches: (events: RemoteEvent[]) => boolean) =>
+      observed.until(() => matches(events)),
   };
 }
 
@@ -286,7 +317,9 @@ it("keeps a phone trying when its sign-in can't be checked, and says no only to 
 
   // As when saving lastSeen fails for a moment.
   const verify = vi.spyOn(remote.devices, "verify");
-  const save = vi.spyOn(store, "update").mockRejectedValueOnce(new Error("EBUSY"));
+  const save = vi
+    .spyOn(store, "update")
+    .mockRejectedValueOnce(new Error("EBUSY"));
   vi.spyOn(console, "warn").mockImplementation(() => {});
   const again = phone(credentials);
   await again.until("online");
@@ -294,6 +327,7 @@ it("keeps a phone trying when its sign-in can't be checked, and says no only to 
   expect(again.statuses.map((s) => s.status)).not.toContain("denied");
 
   save.mockClear().mockRejectedValue(new Error("EBUSY"));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const wrong = phone({ ...credentials, token: "not-the-token" });
   await wrong.until("denied");
   const missing = phone({ ...credentials, deviceId: randomUUID() });
@@ -301,33 +335,52 @@ it("keeps a phone trying when its sign-in can't be checked, and says no only to 
   expect(wrong.statuses.at(-1)?.detail).toBe(missing.statuses.at(-1)?.detail);
   expect(save).not.toHaveBeenCalled();
   const calls = verify.mock.calls.length;
-  await new Promise((r) => setTimeout(r, 1100));
+  const statuses = [wrong.statuses.slice(), missing.statuses.slice()];
+  await vi.advanceTimersByTimeAsync(1100);
+  expect([wrong.statuses, missing.statuses]).toEqual(statuses);
   expect(verify).toHaveBeenCalledTimes(calls);
 });
 
 it("does not retry or expose unexpected authentication failures", async () => {
   const { remote } = await desktop();
-  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  const first = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
   await first.until("online");
   first.client.close();
-  const verify = vi.spyOn(remote.devices, "verify").mockRejectedValue(new Error("private internal detail"));
+  const verify = vi
+    .spyOn(remote.devices, "verify")
+    .mockRejectedValue(new Error("private internal detail"));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const again = phone(first.credentials()!);
   await again.until("denied");
-  expect(again.statuses.at(-1)?.detail).not.toContain("private internal detail");
+  expect(again.statuses.at(-1)?.detail).not.toContain(
+    "private internal detail",
+  );
+  const statuses = again.statuses.slice();
   again.client.wake();
-  await new Promise((r) => setTimeout(r, 1100));
+  await vi.advanceTimersByTimeAsync(1100);
+  expect(again.statuses).toEqual(statuses);
   expect(verify).toHaveBeenCalledTimes(1);
 });
 
 it("drops forged and cross-session replayed sign-ins before token verification", async () => {
   const { remote } = await desktop();
-  const first = phone({ link: parsePairingUrl((await remote.pairing()).url)!, device: "Pixel" });
+  const first = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
   await first.until("online");
   const credentials = first.credentials()!;
   first.client.close();
   const verify = vi.spyOn(remote.devices, "verify");
   let recorded!: Uint8Array;
-  const attack = (payload: (channel: ReturnType<ReturnType<typeof clientHandshake>["finish"]>) => Uint8Array | undefined) =>
+  const attack = (
+    payload: (
+      channel: ReturnType<ReturnType<typeof clientHandshake>["finish"]>,
+    ) => Uint8Array | undefined,
+  ) =>
     new Promise<void>((resolve, reject) => {
       const handshake = clientHandshake(fromBase64Url(credentials.key));
       const socket = new WebSocket(`ws://127.0.0.1:${credentials.port}/`);
@@ -342,7 +395,11 @@ it("drops forged and cross-session replayed sign-ins before token verification",
         else socket.close();
       };
     });
-  const auth = JSON.stringify({ t: "auth", deviceId: credentials.deviceId, token: credentials.token });
+  const auth = JSON.stringify({
+    t: "auth",
+    deviceId: credentials.deviceId,
+    token: credentials.token,
+  });
   await attack((channel) => {
     const forged = channel.seal(auth);
     forged[0]! ^= 1;
@@ -369,16 +426,14 @@ it("gives up on a quiet link at once, even when the socket never finishes closin
   );
   await p.until("online");
   // The desktop ticks every 15s, so it's silent for longer than staleMs.
-  await vi.waitFor(
-    () =>
-      expect(p.statuses.map((s) => s.status)).toEqual([
-        "connecting",
-        "online",
-        "offline",
-        "connecting",
-        "online",
-      ]),
-    { timeout: 4000 },
+  await vi.waitFor(() =>
+    expect(p.statuses.map((s) => s.status)).toEqual([
+      "connecting",
+      "online",
+      "offline",
+      "connecting",
+      "online",
+    ]),
   );
 });
 
@@ -391,9 +446,10 @@ it("reconnects on coming back when the link went quiet meanwhile", async () => {
   p.client.wake();
   expect(p.client.status).toBe("online");
 
-  await new Promise((r) => setTimeout(r, 1100));
+  const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1100);
   p.client.wake();
   expect(p.client.status).toBe("connecting");
+  now.mockRestore();
   await p.until("online");
   await p.client.call("overview");
 });
@@ -476,9 +532,14 @@ it("lets a phone see the desktop's version and update it, but not take threads",
 });
 
 it("waits longer for calls that push, write or send, and not for the rest", async () => {
-  // Everything the desktop is asked takes a moment longer than a normal call may.
+  let dispatched!: () => void;
+  let finish!: () => void;
+  // Hold dispatch until the normal call deadline has passed on the controlled clock.
   const { remote } = await desktop(async (method) => {
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+      dispatched();
+    });
     return method === "projectCommitMessage" ? "Fix the flaky test" : [];
   });
   const link = parsePairingUrl((await remote.pairing()).url)!;
@@ -487,20 +548,37 @@ it("waits longer for calls that push, write or send, and not for the rest", asyn
     { timeoutMs: 500, slowTimeoutMs: 3000 },
   );
   await p.until("online");
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const delayedCall = async (call: () => Promise<unknown>) => {
+    const arrived = new Promise<void>((resolve) => (dispatched = resolve));
+    const result = call();
+    await arrived;
+    await vi.advanceTimersByTimeAsync(501);
+    finish();
+    return result;
+  };
   await expect(
-    p.client.desktop("projectCommitMessage", projectId, ["a.ts"]),
+    delayedCall(() =>
+      p.client.desktop("projectCommitMessage", projectId, ["a.ts"]),
+    ),
   ).resolves.toBe("Fix the flaky test");
   // A first send makes the worktree and may carry screenshots: no "Not sent" while it does.
   const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
     id: randomUUID(),
   });
   await expect(
-    p.client.desktop("sendProjectChat", chatId, send),
+    delayedCall(() => p.client.desktop("sendProjectChat", chatId, send)),
   ).resolves.toBeDefined();
   // Gone unanswered, it may have run all the same, and says so.
-  const late = p.client.desktop("projectFiles", projectId);
-  await expect(late).rejects.toThrow("didn't answer in time");
-  await expect(late).rejects.toBeInstanceOf(Unanswered);
+  const arrived = new Promise<void>((resolve) => (dispatched = resolve));
+  const late = p.client
+    .desktop("projectFiles", projectId)
+    .catch((error: unknown) => error);
+  await arrived;
+  await vi.advanceTimersByTimeAsync(501);
+  expect(await late).toBeInstanceOf(Unanswered);
+  expect(((await late) as Error).message).toContain("didn't answer in time");
+  finish();
 });
 
 it("checks unanswered sends while dispatch runs, after reconnect, and outside the history page", async () => {
@@ -656,6 +734,7 @@ async function olderPhone(
   const socket = new WebSocket(`ws://127.0.0.1:${port}/`);
   cleanup.push(async () => socket.close());
   const frames: any[] = [];
+  const observed = observations();
   let binary = 0;
   let channel: ReturnType<typeof handshake.finish> | undefined;
   const send = (frame: unknown) =>
@@ -670,15 +749,18 @@ async function olderPhone(
     }
     const frame = JSON.parse(channel.open(fromBase64Url(m.data)));
     frames.push(frame);
+    observed.notify();
     if (frame.t === "ready")
       send({ t: "call", id: 1, method: "overview", args: [] });
   };
-  await vi.waitFor(() =>
-    expect(frames.some((f) => f.t === "result")).toBe(true),
-  );
+  await observed.until(() => frames.some((f) => f.t === "result"));
+  const events = (): RemoteEvent[] =>
+    frames.flatMap((f) => (f.t === "event" ? [f.event] : []));
   return {
     binary: () => binary,
-    events: () => frames.flatMap((f) => (f.t === "event" ? [f.event] : [])),
+    events,
+    untilEvents: (matches: (events: RemoteEvent[]) => boolean) =>
+      observed.until(() => matches(events())),
   };
 }
 
@@ -721,8 +803,17 @@ it("streams patches to a current phone that add up to what an older one gets who
       text: `Step ${n}: reading the watcher.`,
     });
     remote.chatEvent({ chatId, message: snapshot(n, "streaming") });
-    // Past the bridge's throttle, so each step goes out on its own.
-    await new Promise((r) => setTimeout(r, 200));
+    // Both clients received this step before the next enters the throttle.
+    const received = (events: RemoteEvent[]) =>
+      events.filter((e) => e.kind === "message").length >= n;
+    await Promise.all([
+      current.p.untilEvents(received),
+      older.untilEvents(received),
+    ]);
+    expect(current.p.events.filter((e) => e.kind === "message")).toHaveLength(
+      n,
+    );
+    expect(older.events().filter((e) => e.kind === "message")).toHaveLength(n);
   }
   remote.chatEvent({ chatId, message: snapshot(6, "complete") });
   chats.push({ ...summary, id: randomUUID(), title: "Another", updated: 5 });
@@ -734,10 +825,7 @@ it("streams patches to a current phone that add up to what an older one gets who
   const done = (events: RemoteEvent[]) =>
     events.filter((e) => e.kind === "chats").length === 2 &&
     events.some((e) => e.kind === "message" && e.message.status === "complete");
-  await vi.waitFor(() => {
-    expect(done(current.p.events)).toBe(true);
-    expect(done(older.events())).toBe(true);
-  });
+  await Promise.all([current.p.untilEvents(done), older.untilEvents(done)]);
   expect(current.p.events).toEqual(older.events());
   expect(current.p.events.filter((e) => e.kind === "message")).toHaveLength(6);
   expect(older.binary()).toBe(0);

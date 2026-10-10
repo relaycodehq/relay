@@ -55,7 +55,8 @@ it("does not settle a cancelled clone until its process closes", async () => {
     "error",
     Object.assign(new Error("aborted"), { name: "AbortError" }),
   );
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  // Drain the error's microtasks while close is still withheld.
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(settled).toBe(false);
   child.emit("close", null);
   await failed;

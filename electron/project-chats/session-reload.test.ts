@@ -55,15 +55,12 @@ const input = (body: string) => ({
   choice: { ...defaultAISettings.questions, model: "fixture-model" },
 });
 const settled = (id: string, count: number) =>
-  vi.waitFor(
-    async () => {
-      const { messages } = await chats.get(id);
-      expect(messages).toHaveLength(count);
-      expect(messages.at(-1)?.status).toBe("complete");
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-    },
-    { timeout: 6000 },
-  );
+  vi.waitFor(async () => {
+    const { messages } = await chats.get(id);
+    expect(messages).toHaveLength(count);
+    expect(messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
 /** The thread's own app-server calls; a title's helper job runs elsewhere. */
 const threadCalls = async () =>
   (await readFile(join(root, "capture.jsonl"), "utf8"))
@@ -105,7 +102,7 @@ it("restarts Codex on the same thread and notes it quietly", async () => {
     "thread/resume",
   ]);
   expect(calls[1].thread.threadId).toBe("fixture-thread");
-}, 20000);
+});
 
 it("refuses while an answer runs, and for agents it can't reload", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -141,4 +138,4 @@ it("refuses while an answer runs, and for agents it can't reload", async () => {
   await internals.storage.save(saved);
   await expect(chats.reloadSessions(other.id)).rejects.toThrow("OpenCode");
   expect((await chats.get(other.id)).messages).toHaveLength(1);
-}, 20000);
+});

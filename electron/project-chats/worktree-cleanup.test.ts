@@ -301,17 +301,14 @@ describe("cleaning up a real thread's worktree", () => {
   }
 
   async function finished(id: string, count: number) {
-    await vi.waitFor(
-      async () => {
-        const chat = await chats!.get(id);
-        expect(chat.messages).toHaveLength(count);
-        expect(chat.messages.at(-1)?.status).toBe("complete");
-        expect(
-          chats!.list(chat.projectId).find((c) => c.id === id)?.running,
-        ).toBeFalsy();
-      },
-      { timeout: 10000 },
-    );
+    await vi.waitFor(async () => {
+      const chat = await chats!.get(id);
+      expect(chat.messages).toHaveLength(count);
+      expect(chat.messages.at(-1)?.status).toBe("complete");
+      expect(
+        chats!.list(chat.projectId).find((c) => c.id === id)?.running,
+      ).toBeFalsy();
+    });
   }
 
   it.each([
@@ -351,7 +348,6 @@ describe("cleaning up a real thread's worktree", () => {
         "- 1.0 First\n",
       );
     },
-    30000,
   );
 
   it("leaves a worktree with files Git doesn't have yet", async () => {
@@ -360,7 +356,7 @@ describe("cleaning up a real thread's worktree", () => {
     await chats.cleanUpWorktrees();
     expect(existsSync(join(worktree.path!, "notes.md"))).toBe(true);
     expect((await chats.get(id)).worktree!.removedAt).toBeUndefined();
-  }, 30000);
+  });
 
   it("leaves a thread moved back out of Settled, and the one on screen", async () => {
     const { chats, id, worktree } = await settledThread();
@@ -372,5 +368,5 @@ describe("cleaning up a real thread's worktree", () => {
     await chats.worktreeStatus(id);
     await chats.cleanUpWorktrees();
     expect(existsSync(worktree.path!)).toBe(true);
-  }, 30000);
+  });
 });

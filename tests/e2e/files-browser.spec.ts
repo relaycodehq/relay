@@ -129,8 +129,7 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
     const loaded = async () => {
       await expect(
         page.locator('.project-inline-editor [contenteditable="true"]'),
-      ).toBeAttached();
-      await page.waitForTimeout(500);
+      ).toBeFocused();
     };
     await loaded();
     await item.focus();

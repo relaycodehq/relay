@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UpdateState } from "../../shared/updates";
 import { keepUpdated, type Updates } from "./auto-update";
 
@@ -37,6 +37,12 @@ function fakeUpdates() {
 
 const quick = { firstAfter: 60_000, every: 60_000, poll: 10, waitAtMost: 200 };
 
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 it("installs what's out once no thread is working", async () => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   const { updates, steps } = fakeUpdates();
@@ -48,11 +54,12 @@ it("installs what's out once no thread is working", async () => {
   );
   try {
     const pass = keeper.run();
-    await vi.waitFor(() => expect(steps).toEqual(["check", "download"]));
     // Still working: it waits.
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(steps).toEqual(["check", "download"]);
     expect(steps).not.toContain("install");
     busy = false;
+    await vi.advanceTimersByTimeAsync(quick.poll);
     await pass;
     expect(steps).toEqual(["check", "download", "install"]);
   } finally {
@@ -69,7 +76,9 @@ it("installs anyway after waiting long enough, since agents carry on through it"
     quick,
   );
   try {
-    await keeper.run();
+    const pass = keeper.run();
+    await vi.advanceTimersByTimeAsync(quick.waitAtMost + quick.poll);
+    await pass;
     expect(steps).toEqual(["check", "download", "install"]);
   } finally {
     keeper.stop();
@@ -134,8 +143,10 @@ it("cancels a waiting install when disabled, and resumes the staged update when 
   );
   try {
     const pass = keeper.run();
-    await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(download).toHaveBeenCalledTimes(1);
     enabled = false;
+    await vi.advanceTimersByTimeAsync(quick.poll);
     await pass;
     expect(install).not.toHaveBeenCalled();
     expect(state.status).toBe("ready");

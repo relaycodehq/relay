@@ -107,12 +107,10 @@ const ask = (
   ...patch,
 });
 const settled = (chatId: string, request: string) =>
-  vi.waitFor(
-    async () =>
-      expect((await chats.get(chatId)).ultraplans?.[request]?.status).toBe(
-        "done",
-      ),
-    { timeout: 20000 },
+  vi.waitFor(async () =>
+    expect((await chats.get(chatId)).ultraplans?.[request]?.status).toBe(
+      "done",
+    ),
   );
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-ultraplan-")));
@@ -248,30 +246,25 @@ it("holds new messages until the lead has planned", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const request = ask("@claude Plan retries for the queue.", "angles");
   await chats.send(chat.id, request);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).ultraplans?.[request.id]?.status).toBe(
-        "thinking",
-      ),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).ultraplans?.[request.id]?.status).toBe(
+      "thinking",
+    ),
   );
   await chats.send(chat.id, ask("@claude Also keep the old API."));
   expect((await chats.get(chat.id)).queue).toHaveLength(1);
-  await vi.waitFor(
-    async () => {
-      const current = await chats.get(chat.id);
-      expect(current.queue ?? []).toHaveLength(0);
-      expect(current.messages.map((m) => m.role)).toEqual([
-        "user",
-        "assistant",
-        "assistant",
-        "user",
-        "assistant",
-      ]);
-      expect(current.messages.at(-1)?.status).toBe("complete");
-    },
-    { timeout: 20000 },
-  );
+  await vi.waitFor(async () => {
+    const current = await chats.get(chat.id);
+    expect(current.queue ?? []).toHaveLength(0);
+    expect(current.messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(current.messages.at(-1)?.status).toBe("complete");
+  });
   expect((await chats.get(chat.id)).ultraplans?.[request.id]?.status).toBe(
     "done",
   );
@@ -296,24 +289,19 @@ it("stops its thinkers with the thread, and resumes only the unfinished ones", a
         [...t.messages].reverse().find((m) => m.role === "assistant")?.status,
     );
   };
-  await vi.waitFor(
-    async () =>
-      expect(await thinking()).toEqual(["streaming", "complete", "complete"]),
-    { timeout: 15000 },
+  await vi.waitFor(async () =>
+    expect(await thinking()).toEqual(["streaming", "complete", "complete"]),
   );
   expect(chats.list(projectId)[0]?.running).toBe(true);
   await chats.cancel(chat.id);
   expect((await chats.get(chat.id)).ultraplans?.[request.id]?.status).toBe(
     "stopped",
   );
-  await vi.waitFor(
-    async () => {
-      expect(await thinking()).toEqual(["cancelled", "complete", "complete"]);
-      // The answer settles before the turn lets go of the thread.
-      expect(chats.list(projectId)[0]?.running).toBeFalsy();
-    },
-    { timeout: 10000 },
-  );
+  await vi.waitFor(async () => {
+    expect(await thinking()).toEqual(["cancelled", "complete", "complete"]);
+    // The answer settles before the turn lets go of the thread.
+    expect(chats.list(projectId)[0]?.running).toBeFalsy();
+  });
   // Nothing hands over to the lead after a stop.
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
 
@@ -345,12 +333,8 @@ it("carries on after a stopped brief without calling another council", async () 
   );
   // Resume answer continues the lead's session; it isn't a council.
   await chats.resume(chat.id);
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 10000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const resumed = await chats.get(chat.id);
   expect(Object.keys(resumed.ultraplans!)).toEqual([request.id]);

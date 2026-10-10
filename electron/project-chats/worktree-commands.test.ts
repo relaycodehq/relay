@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runWorktreeCommand, type WorktreeEnv } from "./worktree-commands";
@@ -51,21 +51,24 @@ it.skipIf(process.platform === "win32")(
   "stops the command and what it started on abort",
   async () => {
     const abort = new AbortController();
-    const pidFile = join(worktree.path, "child.pid");
+    let started!: (pid: number) => void;
+    const ready = new Promise<number>((resolve) => (started = resolve));
     const running = runWorktreeCommand(
-      `sleep 30 & echo $! > ${pidFile}; wait`,
+      'sleep 30 & child=$!; echo "pid:$child"; wait "$child"',
       worktree,
-      { timeoutMs: 10_000, signal: abort.signal },
+      {
+        timeoutMs: 10_000,
+        signal: abort.signal,
+        onOutput: (output) => {
+          const pid = /pid:(\d+)\n/.exec(output);
+          if (pid) started(Number(pid[1]));
+        },
+      },
     );
-    let pid = 0;
-    while (!pid) {
-      await new Promise((r) => setTimeout(r, 50));
-      pid = Number(await readFile(pidFile, "utf8").catch(() => "0"));
-    }
+    const pid = await ready;
     abort.abort();
     expect(await running).toMatchObject({ stopped: "cancelled" });
-    await new Promise((r) => setTimeout(r, 200));
-    expect(alive(pid)).toBe(false);
+    await expect.poll(() => alive(pid)).toBe(false);
   },
 );
 

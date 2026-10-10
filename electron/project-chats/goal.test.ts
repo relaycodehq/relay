@@ -53,17 +53,12 @@ const input = (body: string) => ({
   },
 });
 const answered = (id: string) =>
-  vi.waitFor(
-    async () => {
-      const chat = await chats.get(id);
-      expect(chat.messages.at(-1)?.status).toBe("complete");
-      expect(
-        chats.list(projectId).find((c) => c.id === id)?.running,
-      ).toBeFalsy();
-      return chat;
-    },
-    { timeout: 10_000 },
-  );
+  vi.waitFor(async () => {
+    const chat = await chats.get(id);
+    expect(chat.messages.at(-1)?.status).toBe("complete");
+    expect(chats.list(projectId).find((c) => c.id === id)?.running).toBeFalsy();
+    return chat;
+  });
 
 it("answers a Codex /goal once, across the turns Codex takes, and lists the goal", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -82,16 +77,15 @@ it("answers a Codex /goal once, across the turns Codex takes, and lists the goal
   // A goal that ended shows until the conversation moves on.
   await chats.send(chat.id, input("@codex Thanks"));
   expect((await answered(chat.id)).goal).toBeUndefined();
-}, 20_000);
+});
 
 it("pauses a running goal at once instead of queueing the pause behind it", async () => {
   vi.stubEnv("RELAY_GOAL_TURNS", "50");
   vi.stubEnv("RELAY_GOAL_TURN_MS", "300");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex /goal fifty turns"));
-  await vi.waitFor(
-    async () => expect((await chats.get(chat.id)).goal?.status).toBe("active"),
-    { timeout: 10_000 },
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).goal?.status).toBe("active"),
   );
   // As the goal row sends it while the thread works.
   await chats.send(chat.id, {
@@ -102,4 +96,4 @@ it("pauses a running goal at once instead of queueing the pause behind it", asyn
   expect(done.goal).toMatchObject({ status: "paused" });
   expect(done.queue ?? []).toEqual([]);
   expect(done.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
-}, 20_000);
+});

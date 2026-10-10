@@ -1,12 +1,26 @@
 // A stand-in for @cursor/sdk, scripted by the prompt, for the Cursor worker's tests.
 // It records what it was asked to $CURSOR_FAKE_LOG, one JSON object per line.
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, watch } from "node:fs";
+import { dirname } from "node:path";
 
 const log = (entry) => {
   if (process.env.CURSOR_FAKE_LOG)
     appendFileSync(process.env.CURSOR_FAKE_LOG, JSON.stringify(entry) + "\n");
 };
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A handoff test decides when the worker may finish, regardless of machine speed.
+const released = (file) =>
+  new Promise((resolve) => {
+    const watcher = watch(dirname(file), () => {
+      if (!existsSync(file)) return;
+      watcher.close();
+      resolve();
+    });
+    if (existsSync(file)) {
+      watcher.close();
+      resolve();
+    }
+  });
 const named = (name, message) => Object.assign(new Error(message), { name });
 
 const shell = (command, output) => ({
@@ -87,6 +101,7 @@ class FakeAgent {
           "The MCP server docs needs an API key in its settings.",
         );
       if (/\[\[slow\]\]/.test(prompt)) {
+        say({ type: "text-delta", text: "Working. " });
         await new Promise((resolve) => {
           run.wake = resolve;
         });
@@ -115,7 +130,7 @@ class FakeAgent {
       }
       if (/\[\[linger\]\]/.test(prompt)) {
         say({ type: "text-delta", text: "part one " });
-        await pause(Number(process.env.CURSOR_FAKE_LINGER ?? 800));
+        await released(process.env.CURSOR_FAKE_RELEASE);
         say({ type: "text-delta", text: "part two" });
         return { status: "finished", result: "part one part two" };
       }

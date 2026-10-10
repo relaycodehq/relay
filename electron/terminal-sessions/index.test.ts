@@ -202,7 +202,7 @@ it("lists terminal sessions behind hundreds of newer Relay ones, reading only th
     ),
   );
   expect(vi.mocked(claudeSummary)).toHaveBeenCalledTimes(30);
-}, 20000);
+});
 
 it("finds a picked session again by id, only in the project's folder", async () => {
   await writeClaudeSession(claude, repo, "c-terminal-1", claudeTurns(turns));

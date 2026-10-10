@@ -250,16 +250,19 @@ test("takes show_html at its page cap, and says so when a body is over the limit
 });
 
 test("a caller that hangs up stops its call", async () => {
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => (started = resolve));
   let aborted!: () => void;
   const stopped = new Promise<void>((resolve) => (aborted = resolve));
   const url = await serve(
     (_chat, _name, _args, signal) =>
-      new Promise((resolve) =>
+      new Promise((resolve) => {
         signal.addEventListener("abort", () => {
           aborted();
           resolve(toolText("Cancelled.", true));
-        }),
-      ),
+        });
+        started();
+      }),
   );
   const hangUp = new AbortController();
   const request = fetch(url, {
@@ -273,7 +276,7 @@ test("a caller that hangs up stops its call", async () => {
       params: { name: "wait_for_threads", arguments: {} },
     }),
   }).catch(() => undefined);
-  await new Promise((r) => setTimeout(r, 50));
+  await ready;
   hangUp.abort();
   await request;
   await stopped;
