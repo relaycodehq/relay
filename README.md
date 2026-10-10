@@ -1,155 +1,138 @@
-![Relay: one workspace for your coding agents. Claude, Codex, OpenCode, Cursor, Amp, Antigravity and any ACP agent. Open source, MIT, on macOS, Windows and Linux with an Android remote. Next to it, the app with a finished Claude thread and its changed files.](docs/media/relay-preview.png)
+<h1 align="center">Relay</h1>
 
 <p align="center">
-  <a href="https://relaycode.io/download/"><strong>Download Relay</strong></a>
+  <strong>One workspace for your coding agents.</strong><br>
+  Claude, Codex, OpenCode, Cursor, Amp, Antigravity and any ACP agent, on the subscriptions you already pay for.<br>
+  Open source (MIT) for macOS, Windows and Linux, with an Android app and a headless mode for servers.
+</p>
+
+<p align="center">
+  <a href="https://relaycode.io/download/"><strong>Download</strong></a>
   ·
   <a href="https://relaycode.io">Website</a>
   ·
-  <a href="#what-can-it-do">See what it can do</a>
+  <a href="#how-relay-compares">How it compares</a>
   ·
   <a href="#for-contributors">Build it yourself</a>
 </p>
 
-## Download, sign in, and go
+![Relay running on sample data: an Activity list of parallel threads, a staged diff in Changes, a deep review where Claude and Codex read the changes side by side, and a thread's terminal with the processes it left running](docs/media/relay-demo.gif)
 
-Relay is an **early preview**, built and used daily on macOS. Windows and Linux builds ship from the same release, with less mileage.
+## Get started
 
-Grab the file for your system from the [latest release](https://github.com/relaycodehq/relay/releases/latest):
+Relay is an **early preview**. Grab your build from the [latest release](https://github.com/relaycodehq/relay/releases/latest):
 
-| System | Download |
-| --- | --- |
-| macOS (Apple Silicon) | `Relay-<version>-mac-arm64.dmg` |
-| Windows 10/11 (x64) | `Relay-<version>-win-x64.exe` installer |
-| Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` |
-| Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then run `python3 install.py` inside it (no sudo) |
-| A server or a computer you only reach remotely | `relay`, the [headless Relay](docs/headless.md): see below, any OS with Node.js 22 |
+| System | Download | Status |
+| --- | --- | --- |
+| macOS (Apple Silicon) | `Relay-<version>-mac-arm64.dmg` | Used daily. Ad-hoc signed, not notarized. |
+| Windows 10/11 (x64) | `Relay-<version>-win-x64.exe` | Built every release, less daily use. |
+| Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` | Cross-built, thinly tested on real distributions. |
+| Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then `python3 install.py` inside it (no sudo) | As Linux. |
 
-For a server or a computer you only reach remotely, like a Mac mini in a cupboard, install the [headless Relay](docs/headless.md) with one command. It sets itself up, starts with the computer and pairs with your phone:
+1. Sign in to at least one agent CLI: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai) or [Amp](https://ampcode.com). Relay installs a missing one. Cursor, Antigravity and agents from the ACP registry are set up under **Settings → AI models**.
+2. Open Relay and add a project folder, or run `relay .` in it (choose **Relay → Install "relay" Command…** once on macOS or Linux).
+3. Type what you want done, pick the agent and model, and press **Send**.
+
+No Relay account, no API keys, and it updates itself.
+
+For a server or a spare computer, like a Mac mini in a cupboard, the [headless Relay](docs/headless.md) installs with one command, starts with the computer and pairs with your phone:
 
 ```console
 curl -fsSL https://relaycode.io/install.sh | sh
 ```
 
-Then:
-
-1. Sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://opencode.ai) or [Amp](https://ampcode.com); Relay installs a missing one. Or use Cursor: under **Settings → AI models**, choose **Set up…** to download Cursor's SDK and sign in. Antigravity and agents from the ACP registry are added there too.
-2. Open Relay and add a project folder.
-3. Type what you want done, pick the agent and model, and press **Send**.
-
-In a terminal, `relay .` opens the folder you're in as a project: choose **Relay → Install "relay" Command…** once on macOS or Linux.
-
-Relay runs the agents on your computer with your own subscriptions. No Relay account is required, and it updates itself when a new release is out.
-
 > [!NOTE]
-> Builds are not code-signed yet, so the first launch needs one extra click:
+> Builds aren't code-signed yet, so the first launch takes one extra click:
 >
-> - **macOS:** macOS says it can't verify the app. Close the dialog, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. Alternatively, run `xattr -cr /Applications/Relay.app` once in Terminal.
-> - **Windows:** SmartScreen says “Windows protected your PC”. Choose **More info → Run anyway**.
-> - **Linux:** make the AppImage executable (`chmod +x`). Some distributions need their FUSE compatibility package.
->
-> Move Relay to **Applications** on macOS before the first update; it can't replace itself while it runs from the Downloads quarantine.
+> - **macOS:** close the "can't verify" dialog, then **System Settings → Privacy & Security → Open Anyway** (or run `xattr -cr /Applications/Relay.app`). Move Relay to **Applications** first, or it can't update itself.
+> - **Windows:** SmartScreen's "Windows protected your PC" → **More info → Run anyway**.
+> - **Linux:** `chmod +x` the AppImage. Some distributions need their FUSE compatibility package.
 
-## What can it do?
+## How Relay compares
+
+People choosing between these apps tend to ask three things: can I use the subscription I already pay for, can the agents run on another machine, and can I follow and answer them from my phone. Relay does all three, for free, with no account and no server of ours in between:
+
+- **Your subscriptions.** Each agent runs through its own CLI and sign-in, so your Claude or ChatGPT plan does the work. Several agents side by side, and switch agent mid-thread.
+- **Remote.** Run the headless Relay on a box you own. Hand it a thread from your laptop mid-conversation and take it back later.
+- **Mobile.** A native Android app connects straight to your computer over your own Tailscale, end-to-end encrypted, with no hosted server in between. Start threads, answer approvals, dictate, review and commit.
+
+| | Your subscriptions | Agents on another machine | Phone | Source |
+| --- | --- | --- | --- | --- |
+| **Relay** | Claude, Codex, OpenCode, Cursor, Amp, Antigravity, ACP. Free | Headless Relay on your box; hand threads over mid-conversation | Native Android, direct over your Tailscale | MIT |
+| [T3 Code](https://github.com/pingdotgg/t3code) | Many vendors, ACP. Free | SSH, Tailscale or pairing; optional hosted tunnel | Native iOS and Android, direct or via their tunnel | MIT |
+| [Jean](https://jean.build) | Many vendors. Free | Headless Linux server | Web UI served by your server | Apache-2.0 |
+| [Conductor](https://conductor.build) | Claude Code, Codex, OpenCode, Cursor. Free tier, Pro $50/mo | Their managed cloud (Pro) | iOS, cloud workspaces only (Pro) | Proprietary |
+| [Superset](https://superset.sh) | 20+ CLI agents. Free tier, Pro $20/user/mo | Your host through their hosted relay (Pro) | iPhone and iPad, via their relay (Pro) | ELv2, source-available |
+| Claude Code desktop | Claude plans only | SSH or Anthropic's cloud | Claude app, via Anthropic | Proprietary |
+| Codex app | ChatGPT plans only | SSH or Codex Cloud | ChatGPT app, via OpenAI | CLI only (Apache-2.0) |
+
+Where Relay stands out: a thread moves to another of your computers mid-conversation, uncommitted changes and all, and comes back; and in deep review a lead agent checks every finding from several reviewing models before fixing what holds up. Where it's behind: no iOS app yet, and no managed cloud sandboxes.
+
+<sub>Checked October 2026 against each product's own docs and pricing. Something out of date? [Open an issue](https://github.com/relaycodehq/relay/issues/new/choose).</sub>
+
+## What it does
 
 | | |
-|---|---|
-| **Talk to your agents** | Claude, Codex, OpenCode, Cursor, Amp, Antigravity and any agent from the [ACP registry](https://agentclientprotocol.com) in one place. Pick the model and effort per thread, and switch agents mid-thread with a handoff note. |
-| **Run many threads at once** | The Activity list shows which thread is working, which is done and which needs you. Jump between them with ⌘1–9. |
-| **Watch every step** | Commands, file reads, edits and subagents appear live, then fold away behind **Worked for…** when the answer lands. |
-| **Review every edit** | See the working tree side by side next to the conversation. Stage, commit and push without leaving the thread, and browse history in a commit graph. |
-| **Work in isolation** | Give a thread its own Git worktree, then land it through a regular branch merge. |
-| **Use a terminal** | Every thread has its own shell, right under the conversation. |
-| **Deep review** | Several models read your changes, then a lead checks every finding and fixes what holds up. |
-| **Plan with a council** | In Ultraplan mode, thinkers on different models study the problem, then a lead checks their notes against the code and writes the plan. |
-| **Ask on the side** | `/btw` for a quick side question, Scratchpad (⌘⇧N) for chats that don't belong to a project. |
-| **Review pull requests** | A Gitea inbox with comments, viewed progress, Codex-grouped repeated changes and live TypeScript/Angular checks. CI status for GitHub and Gitea sits in the title bar. |
-| **Keep an eye on limits** | Usage meters for Claude and Codex, with the weekly limit paced on the hours you actually work. |
-| **Make it yours** | Built-in themes or any VS Code theme from Open VSX, plus fonts, sizes and interface scale. |
-
-![Deep review: a lead confirms four of seven findings from two reviewers and offers to fix them](docs/media/deep-review.png)
-
-## Platform status
-
-| Platform | Status |
 | --- | --- |
-| macOS (Apple Silicon) | Primary development target. Ad-hoc signed, not notarized. |
-| Windows x64 | Built with every release, with Windows-specific fixes landing regularly. Less daily use than macOS. |
-| Linux x86-64 | AppImage and Omarchy bundle are cross-built. Runtime testing on real distributions is still thin. |
-
-Automated tests do not cover real agent accounts, OS credential prompts, signing or every Linux desktop.
+| **Run many threads at once** | Activity shows which thread is working, which is done and which needs you. Jump between them with ⌘1–9. |
+| **Watch every step** | Commands, reads, edits and subagents appear live, then fold away when the answer lands. |
+| **Review every edit** | The working tree side by side with the conversation. Stage, commit and push from the thread; browse history in a commit graph. |
+| **Deep review** | Several models read your changes, then a lead checks every finding and fixes what holds up. |
+| **Plan with a council** | Ultraplan: thinkers on different models study the problem, a lead checks their notes against the code and writes the plan. |
+| **Work in isolation** | Give a thread its own Git worktree, even mid-conversation, and land it through a normal branch merge. |
+| **Use a terminal** | Every thread has its own shell under the conversation. |
+| **Review pull requests** | GitHub through your `gh` login, or Gitea, with CI status in the title bar. |
+| **Keep an eye on limits** | Usage meters for Claude and Codex, the weekly limit paced on the hours you actually work. |
+| **Make it yours** | Built-in themes or any VS Code theme from Open VSX, plus fonts and interface scale. |
 
 ## Good to know
 
-- Relay doesn't embed any agent or API key. Each agent runs through its own CLI and account, and only sends what that agent would send anyway.
-- Threads, drafts and settings stay local. Data lives in `~/Library/Application Support/Relay Experimental` on macOS, `%APPDATA%\Relay Experimental` on Windows and `~/.config/Relay Experimental` on Linux.
-- Saved tokens are encrypted with the OS credential store (Keychain on macOS). Chat history and folder paths are not encrypted.
-- Relay never checks out, resets, pulls, force-pushes or stages files on its own. Git actions that change your checkout or remote happen only when you click them.
-- Pull request review works with GitHub through your `gh` CLI login, or with a Gitea server. Everything else works with any local folder, Git or not.
-- Relay is an independent project and is not affiliated with OpenAI, Anthropic, Google, OpenCode, Cursor (Anysphere), Amp or the makers of other agents it runs. Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
+- Relay embeds no agent and no API key. Each agent sends only what it would send from its own CLI.
+- Threads, drafts and settings stay on your computer, in `~/Library/Application Support/Relay Experimental` (macOS), `%APPDATA%\Relay Experimental` (Windows) or `~/.config/Relay Experimental` (Linux). Saved tokens go to the OS credential store; chat history isn't encrypted.
+- Relay never checks out, resets, pulls, force-pushes or stages on its own. Git actions that change your checkout or remote happen only when you click them.
+- Relay is independent and not affiliated with OpenAI, Anthropic, Google, OpenCode, Cursor (Anysphere), Amp or the makers of other agents it runs. Cursor's SDK isn't part of Relay: it is downloaded from npm when you ask, under Cursor's Terms of Service.
 
-## More documentation
+## Documentation
 
 - [Project workspace](docs/project-workspace.md): threads, panes, agents, permissions, queues and composer commands.
-- [Pull request review](docs/pr-review.md): Gitea sign-in, the review workflow, grouping, live checks and local data.
-- [Phone app](docs/phone.md): pairing a phone to follow and answer threads, and how the connection is secured.
-- [Headless Relay](docs/headless.md): Relay without its window on a server or a spare computer, reached from your phone and handed threads by your laptop.
-- [Development and releases](docs/development.md): tests, packaging, automatic updates and release status.
+- [Phone app](docs/phone.md): pairing, what the phone can do, and how the connection is secured.
+- [Headless Relay](docs/headless.md): Relay without its window on a server or a spare computer.
+- [Pull request review](docs/pr-review.md): the review workflow, grouping and live checks.
+- [Development and releases](docs/development.md): tests, packaging, updates and release status.
 
 ## For contributors
 
-Adding an agent? Start with the [agent adapter architecture](docs/agent-adapters.md):
-integration routes, runtime and session contracts, and examples from previous additions.
-
-<details>
-<summary><strong>Build and run from source</strong></summary>
-
-You need Node.js 22+ and npm. Python 3 is only needed for the Omarchy bundle and its tests.
+Adding an agent? Start with the [agent adapter architecture](docs/agent-adapters.md): integration routes, runtime and session contracts, and examples from previous additions.
 
 ```console
 npm ci
 npm run dev
 ```
 
-Useful checks:
-
-```console
-npm run build
-npm run format:check
-npm test
-npm run test:e2e
-```
-
-`npm test` runs the whole unit suite; pass a file path to run just one. `npm run test:e2e` drives the real Electron app against an isolated local Gitea fixture, with windows hidden and synthetic credential storage.
-
-`npm run package:mac`, `package:win`, `package:linux` and `package:omarchy` build installers into `release/`. Every new `v*` tag on `main` builds and publishes all of them to this repository's [releases](https://github.com/relaycodehq/relay/releases); pushing to `main` alone ships nothing.
-
-</details>
+You need Node.js 22+ (and Python 3 only for the Omarchy bundle). `npm test` runs the unit suite, `npm run test:e2e` drives the real Electron app with hidden windows, and `npm run package:mac` (or `win`, `linux`, `omarchy`) builds installers into `release/`. A `v*` tag on `main` builds and publishes every installer; pushing to `main` alone ships nothing.
 
 <details>
-<summary><strong>Update the teaser</strong></summary>
+<summary><strong>Refresh the README demo and the teaser</strong></summary>
 
-The teaser is a regular preview page, rendered frame by frame from the app's own components on sample data. With the dev server running on port 5177 and `ffmpeg` installed:
+Both are recorded from preview pages that render the app's own components on sample data. With the dev server on port 5177, `ffmpeg` and `gifsicle` installed:
 
 ```console
-node scripts/record-teaser.mjs              # 1080p60
-node scripts/record-teaser.mjs --scale 2    # 4K
-node scripts/record-teaser.mjs --stills 28  # a PNG of one moment
+node scripts/record-readme-demo.mjs   # docs/media/relay-demo.gif, one loop of the website's tour
+node scripts/record-teaser.mjs        # test-results/teaser/, 1080p60 (--scale 2 for 4K)
 ```
 
-Output goes to `test-results/teaser/`. Copy the result to `docs/media/relay-teaser.mp4` when the UI changes, and refresh the screenshots in `docs/media/` with it.
-
-The image at the top of this README is `previews/readme-hero/`. Open it with `?shot` in a 1280×640 window and screenshot it at 2x into `docs/media/relay-preview.png`.
+Copy the teaser to `docs/media/relay-teaser.mp4` when the UI changes.
 
 </details>
 
 ## Troubleshooting
 
-- **An agent isn't found:** Relay reads your login shell's `PATH`, so a CLI that works in a new terminal should work in Relay too. Restart Relay after installing one.
-- **An agent says it's signed out:** sign in again in the thread's terminal, or run the CLI's login command in your own terminal.
-- **macOS keeps asking for Keychain access:** local builds are ad-hoc signed, so macOS may ask again after an update. Denying it only keeps you signed out of Gitea; threads keep working.
+- **An agent isn't found:** Relay reads your login shell's `PATH`, so a CLI that works in a new terminal works in Relay. Restart Relay after installing one.
+- **An agent says it's signed out:** sign in again in the thread's terminal, or with the CLI's login command in your own.
+- **macOS keeps asking for Keychain access:** ad-hoc signed builds can ask again after an update. Denying only keeps you signed out of Gitea.
 - **The update doesn't install on macOS:** move `Relay.app` into **Applications** (or any writable folder) and try again.
-- **Linux won't start:** check that user namespaces are enabled for Chromium's sandbox. Don't disable the sandbox to work around it.
-- **Corrupt state:** Relay preserves the unreadable file and reports an error instead of overwriting it. Back up the data folder above before repairing it.
+- **Linux won't start:** check that user namespaces are enabled for Chromium's sandbox. Don't disable the sandbox instead.
+- **Corrupt state:** Relay keeps the unreadable file and reports an error rather than overwriting it. Back up the data folder before repairing it.
 
 ## Contact
 
