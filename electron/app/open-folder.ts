@@ -28,6 +28,7 @@ export const relayCommands = [
   "setup",
   "version",
   "update",
+  "uninstall",
   "settings",
   "config",
   "call",

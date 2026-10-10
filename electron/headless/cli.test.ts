@@ -1,6 +1,15 @@
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -38,7 +47,7 @@ async function fixture() {
   await writeFile(join(root, "bin", "relay"), "// fixture");
   const cli = join(root, "lib", "relay.cjs");
   await writeFile(cli, bundled);
-  return { cli, home };
+  return { cli, home, root, dir };
 }
 
 it("rejects an empty explicit home instead of writing into the current folder", async () => {
@@ -104,3 +113,41 @@ it("rejects a following flag as a missing option value before connecting", async
   const result = await run(process.execPath, [cli, "--name=-server", "--help"]);
   expect(result.stdout).toContain("Options");
 });
+
+it.skipIf(process.platform === "win32")(
+  "uninstalls the release and its link but leaves the desktop's relay and, unless purged, the data",
+  async () => {
+    const { cli, home, root, dir } = await fixture();
+    const user = join(dir, "user"),
+      linked = join(user, ".local", "bin"),
+      desktop = join(dir, "desktop-bin");
+    await mkdir(linked, { recursive: true });
+    await mkdir(desktop);
+    await mkdir(home);
+    await writeFile(join(home, "state.json"), "{}");
+    await symlink(join(root, "bin", "relay"), join(linked, "relay"));
+    await writeFile(join(desktop, "relay"), "# relay-desktop-command");
+    const env = { ...process.env, HOME: user, RELAY_BIN: desktop };
+    const kept = await run(
+      process.execPath,
+      [cli, "uninstall", "--home", home],
+      {
+        env,
+      },
+    );
+    expect(kept.stdout).toContain(`Removed Relay from ${root}`);
+    expect(existsSync(root)).toBe(false);
+    expect(await lstat(join(linked, "relay")).catch(() => null)).toBeNull();
+    expect(existsSync(join(desktop, "relay"))).toBe(true);
+    expect(existsSync(join(home, "state.json"))).toBe(true);
+
+    const again = await fixture();
+    await mkdir(again.home);
+    await run(
+      process.execPath,
+      [again.cli, "uninstall", "--purge", "--home", again.home],
+      { env },
+    );
+    expect(existsSync(again.home)).toBe(false);
+  },
+);

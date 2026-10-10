@@ -3,8 +3,9 @@
 // The work itself happens on those; nothing here is a terminal UI for it.
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, openSync, readSync, statSync, closeSync } from "node:fs";
-import { readFile, realpath } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { lstat, readFile, realpath, rm } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { relayCommands } from "../app/open-folder";
 import { tailnetProbe } from "../remote/tailscale";
@@ -70,6 +71,7 @@ interface Flags {
   force: boolean;
   follow: boolean;
   yes: boolean;
+  purge: boolean;
   service: boolean;
   pair: boolean;
   background: boolean;
@@ -89,6 +91,7 @@ function parse(argv: string[]) {
     force: false,
     follow: false,
     yes: false,
+    purge: false,
     service: true,
     pair: true,
     background: false,
@@ -152,6 +155,9 @@ function parse(argv: string[]) {
       case "--yes":
         flags.yes = true;
         break;
+      case "--purge":
+        flags.purge = true;
+        break;
       case "--no-service":
         flags.service = false;
         break;
@@ -203,6 +209,7 @@ ${bold("Running")}
   relay logs [-f] [-n <lines>] Show the log; -f follows it
   relay update [--check]       Install the newest release; agents keep working through it
   relay run                    Run in the foreground (what the service runs)
+  relay uninstall [--purge]    Stop Relay and remove it; --purge deletes its data too
 
 ${bold("Settings")}
   relay settings               Change settings in a menu; set up dictation, read aloud,
@@ -285,6 +292,8 @@ async function main(argv: string[]) {
       return console.log(headlessVersion);
     case "update":
       return update(home, flags);
+    case "uninstall":
+      return uninstall(home, flags);
     case "settings":
     case "config":
       await ensureRunning(home, flags);
@@ -883,6 +892,93 @@ async function service(home: string, flags: Flags, [action]: string[]) {
       ? `Set up with ${kind} (${serviceFile(kind)}), for ${await serviceHome(kind)}.`
       : "Not set up as a service; relay service install does it.",
   );
+}
+
+async function uninstall(home: string, flags: Flags) {
+  const purge =
+    flags.purge &&
+    (!process.stdin.isTTY ||
+      flags.yes ||
+      (await confirm(
+        `Delete ${home} too: threads, their worktrees with any uncommitted work, paired devices and settings?`,
+      )));
+  if (await running(home)) {
+    await callControl(headlessPaths(home).control, "stop", {
+      force: flags.force,
+    });
+    await stopped(home);
+    console.log(ok("Relay stopped."));
+  }
+  const kind = await uninstallService();
+  if (kind)
+    console.log(ok(`Relay no longer starts with the computer (${kind}).`));
+  const root = installRoot(__dirname);
+  if (root) {
+    await removeCommand(root);
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+    console.log(ok(`Removed Relay from ${root}.`));
+  } else
+    console.log(
+      dim("This Relay runs from a build, not an install; its files stay."),
+    );
+  if (purge) {
+    await rm(home, { recursive: true, force: true, maxRetries: 5 });
+    console.log(ok(`Deleted ${home}.`));
+  } else
+    console.log(
+      `Threads, worktrees and settings stay in ${bold(home)}; delete it to remove them too.`,
+    );
+}
+
+async function confirm(question: string) {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    const answer = await prompt.question(`${question} ${dim("[y/N]")} `);
+    return answer.trim().toLowerCase().startsWith("y");
+  } finally {
+    prompt.close();
+  }
+}
+
+/**
+ * Takes `relay` off PATH where the installer put it: the user's Path on
+ * Windows, the link in ~/.local/bin elsewhere. The desktop app's own
+ * `relay` there is a file, not a link into the install, so it stays.
+ */
+async function removeCommand(root: string) {
+  if (process.platform === "win32") {
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `$bin = $env:RELAY_UNINSTALL_BIN.TrimEnd('\\')
+$path = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($path) { [Environment]::SetEnvironmentVariable('Path', (($path -split ';') | Where-Object { $_ -and $_.TrimEnd('\\') -ne $bin }) -join ';', 'User') }`,
+      ],
+      {
+        env: { ...process.env, RELAY_UNINSTALL_BIN: join(root, "bin") },
+        stdio: "ignore",
+        windowsHide: true,
+      },
+    );
+    return;
+  }
+  const real = await realpath(root);
+  for (const dir of new Set([
+    process.env.RELAY_BIN,
+    join(homedir(), ".local", "bin"),
+  ])) {
+    if (!dir) continue;
+    const link = join(dir, "relay");
+    if (!(await lstat(link).catch(() => null))?.isSymbolicLink()) continue;
+    const target = await realpath(link).catch(() => "");
+    if (target.startsWith(real + sep)) await rm(link, { force: true });
+  }
 }
 
 async function setup(home: string, flags: Flags) {

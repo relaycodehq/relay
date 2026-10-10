@@ -72,6 +72,7 @@ The speech engines come from npm, each checked against the SHA-512 Relay's lockf
 | `relay settings [set <key> <value>]` | See and change settings, set up dictation, read aloud, Cursor and Gitea; see above. |
 | `relay service install \| uninstall \| status` | Start Relay with the computer, or stop doing so. |
 | `relay update [--check]` | Install the newest release now; agents keep working through the restart. |
+| `relay uninstall [--purge]` | Stop Relay, stop starting it with the computer and remove it, `relay` on your PATH included; the desktop app's `relay` stays. `--purge` also deletes `~/.relay`: threads, their worktrees and settings. |
 | `relay run [--supervise]` | Run in the foreground, as the service does; `--supervise` starts it again after a crash, as Windows' Startup script runs it. |
 
 `--home <folder>` (or `RELAY_HOME`) runs a Relay with its data elsewhere, `--port <number>` changes the port phones and computers connect to (default 47821), and `--name <name>` what they call this computer (default: its host name). `--port` and `--name` are kept in `~/.relay/headless.json` for every start after. Most commands take `--json`.

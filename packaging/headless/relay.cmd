@@ -6,4 +6,6 @@ where "%node%" >nul 2>nul || if not exist "%node%" (
   echo Relay needs Node.js 22 or newer: https://nodejs.org/en/download 1>&2
   exit /b 1
 )
-"%node%" "%~dp0..\lib\relay.cjs" %*
+rem (goto) leaves this file first, so relay uninstall can delete it without cmd
+rem saying "The batch file cannot be found"; the line was read whole already.
+(goto) 2>nul & "%node%" "%~dp0..\lib\relay.cjs" %*
