@@ -1012,6 +1012,7 @@ small {
 }
 .markdown-quote-copy,
 .markdown-code-copy,
+.math-block-copy,
 .inline-command-run,
 .markdown-table-copy {
   display: grid;
@@ -1049,14 +1050,47 @@ small {
 .inline-command:hover > .inline-command-run,
 .inline-command-run:focus-visible,
 .markdown-table-frame:hover > .markdown-table-copy,
-.markdown-table-copy:focus-visible {
+.markdown-table-copy:focus-visible,
+.math-block:hover > .math-block-copy,
+.math-block-copy:focus-visible {
   opacity: 1;
 }
 .markdown-quote-copy:hover,
 .markdown-code-copy:hover,
+.math-block-copy:hover,
 .inline-command-run:hover,
 .markdown-table-copy:hover {
   color: var(--text);
+}
+/* KaTeX sets its own font and colour; the size follows the text around it. */
+.markdown .katex {
+  font-size: 1.1em;
+}
+.math-inline {
+  /* A tall formula must not push the line apart or break across it. */
+  white-space: nowrap;
+}
+.math-block {
+  position: relative;
+  margin: 10px 0;
+}
+.math-block-body {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 28px;
+  text-align: center;
+}
+.math-block-body .katex-display {
+  margin: 0;
+}
+.math-block-source {
+  margin: 0;
+  color: var(--muted);
+}
+.math-block-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
 }
 .markdown-code-error {
   display: block;

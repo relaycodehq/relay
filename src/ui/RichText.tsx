@@ -16,7 +16,9 @@ import Markdown, {
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { Position } from "unist";
+import type { PluggableList } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
 import {
   projectFileLink,
@@ -25,13 +27,19 @@ import {
 import { api } from "../lib/api";
 import { looksLikeColor } from "../lib/color-value";
 import { parentSuffixes } from "../lib/file-icons";
-import { fenceClosed, markdownBlocks } from "../lib/markdown-blocks";
+import {
+  fenceClosed,
+  markdownBlocks,
+  mathClosed,
+} from "../lib/markdown-blocks";
+import { normalizeMath } from "../lib/math-delimiters";
 import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { CodeBlock, InlineCommand } from "./CodeBlock";
 import { ColorCode } from "./ColorCode";
 import { FileEntryIcon } from "./FileEntryIcon";
 import { MarkdownTable } from "./MarkdownTable";
+import { BlockMath, InlineMath } from "./MathView";
 
 function markdownNodeText(node: unknown): string {
   if (!node || typeof node !== "object") return "";
@@ -55,10 +63,18 @@ function markdownCodeLanguage(node: unknown): string | undefined {
 const MarkdownSource = createContext("");
 function MarkdownFence({ node }: { node?: { position?: Position } }) {
   const source = useContext(MarkdownSource);
+  const lang = markdownCodeLanguage(node);
+  if (lang === "math")
+    return (
+      <BlockMath
+        tex={markdownNodeText(node).replace(/\n$/, "")}
+        closed={mathClosed(source, node?.position)}
+      />
+    );
   return (
     <CodeBlock
       code={markdownNodeText(node).replace(/\n$/, "")}
-      lang={markdownCodeLanguage(node)}
+      lang={lang}
       closed={fenceClosed(source, node?.position)}
     />
   );
@@ -153,7 +169,15 @@ const MarkdownBlock = memo(function MarkdownBlock({
   html: boolean;
 }) {
   // GFM parses tables, task lists, strikethrough and bare links before the incremental pass.
-  const remarkPlugins = useMemo(() => [remarkGfm, streamingMarkdownTail()], []);
+  // `$x$` is left to normalizeMath: alone it would turn "$5 and $10" into a formula.
+  const remarkPlugins = useMemo<PluggableList>(
+    () => [
+      remarkGfm,
+      [remarkMath, { singleDollarTextMath: false }],
+      streamingMarkdownTail(),
+    ],
+    [],
+  );
   return (
     <MarkdownSource.Provider value={text}>
       <Markdown
@@ -230,6 +254,8 @@ export const RichText = memo(function RichText({
         );
       },
       code: ({ children, className }) => {
+        if (className?.split(" ").includes("language-math"))
+          return <InlineMath tex={String(children).trim()} />;
         const value = String(children).trim();
         const shown = className ? undefined : inlineCode?.(value);
         if (shown) return shown;
@@ -276,7 +302,7 @@ export const RichText = memo(function RichText({
     // A new renderer redraws text that was shown before it arrived.
     [projectRoot, linksFiles, inlineCode, image],
   );
-  const blocks = useMemo(() => markdownBlocks(text), [text]);
+  const blocks = useMemo(() => markdownBlocks(normalizeMath(text)), [text]);
   // Streaming changes the text every token; keep the map (and the chips
   // reading it) unchanged until a clash actually appears.
   const lastSuffixes = useRef<ReadonlyMap<string, string>>(new Map());

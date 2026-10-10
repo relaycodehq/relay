@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { markdownBlocks } from "./markdown-blocks";
+import remarkMath from "remark-math";
+import { markdownBlocks, mathClosed } from "./markdown-blocks";
 
 const render = (text: string) =>
-  renderToStaticMarkup(<Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>);
+  renderToStaticMarkup(
+    <Markdown remarkPlugins={[remarkGfm, remarkMath]}>{text}</Markdown>,
+  );
 
 /** Split and rendered block by block, `text` must look like it does whole. */
 function expectSameAsWhole(text: string) {
@@ -96,5 +99,27 @@ describe("markdownBlocks", () => {
       expectSameAsWhole(text);
       expect(markdownBlocks(text)).toHaveLength(2);
     }
+  });
+
+  it("keeps a formula with blank lines in it in one piece", () => {
+    const text = "Before.\n\n$$\na = b\n\nc = d\n$$\n\nAfter.";
+    expectSameAsWhole(text);
+    expect(markdownBlocks(text)).toHaveLength(3);
+    expect(markdownBlocks("> $$\n> a\n>\n> b\n> $$\n\nAfter")).toHaveLength(2);
+  });
+
+  it("tells a formula that is still arriving from a finished one", () => {
+    const at = (source: string) => ({
+      start: { line: 1, column: 1, offset: 0 },
+      end: { line: 1, column: 1, offset: source.length },
+    });
+    for (const [source, closed] of [
+      ["$$\na", false],
+      ["$$\na\n$$", true],
+      ["> $$\n> a\n> $$", true],
+      ["```math\na", false],
+      ["```math\na\n```", true],
+    ] as const)
+      expect(mathClosed(source, at(source))).toBe(closed);
   });
 });
