@@ -1,0 +1,266 @@
+/* Preview chrome */
+.ql-page {
+  padding: 32px 40px 60px;
+  max-width: 820px;
+}
+.ql-bar {
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+.ql-bar button.selected {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ql-note {
+  font-size: 12px;
+  margin: 0 0 24px;
+  max-width: 560px;
+}
+.ql-live {
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+.ql-composer {
+  margin-top: 20px;
+  padding: 14px 16px 40px;
+}
+.ql-composer p {
+  margin: 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.ql-thread .project-message {
+  content-visibility: visible;
+}
+
+/* Buttons shared by the new looks: there, but quiet until the pointer is near. */
+.ql-tray li .queued-actions,
+.ql-cap .queued-actions,
+.ql-row .queued-actions {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.ql-tray li:hover .queued-actions,
+.ql-tray li:focus-within .queued-actions,
+.ql-ghost-item:hover .queued-actions,
+.ql-ghost-item:focus-within .queued-actions,
+.ql-rail li:hover .queued-actions,
+.ql-rail li:focus-within .queued-actions,
+.ql-row:hover .queued-actions,
+.ql-row:focus-within .queued-actions {
+  opacity: 1;
+}
+
+/* Tray: one box for the whole queue. */
+.ql-tray {
+  margin: 20px 0 0 auto;
+  max-width: 80%;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  overflow: hidden;
+}
+.ql-tray > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.ql-tray > header > span {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.ql-tray > ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ql-tray > ol > li {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 10px 10px 14px;
+}
+.ql-tray > ol > li + li {
+  border-top: 1px solid var(--border);
+}
+.ql-tray li > i {
+  font-style: normal;
+  font-size: 11px;
+  line-height: 20px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ql-tray li > p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ql-tray li .queued-actions {
+  margin: -2px 0;
+}
+.ql-tray > footer {
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Ghost bubbles: the sent message's shape, drawn as not-yet. */
+.ql-ghost {
+  margin: 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+.ql-ghost-item {
+  max-width: 80%;
+  min-width: 150px;
+}
+.ql-cap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ql-cap .queued-actions {
+  margin: 0;
+}
+.ql-bubble {
+  background: color-mix(in srgb, var(--toolbar) 55%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+}
+.ql-ghost-item:hover .ql-bubble {
+  color: var(--text);
+}
+
+/* Rail: a line down the right edge, one dot per waiting message. */
+.ql-rail {
+  position: relative;
+  margin: 20px 0 0;
+  padding-right: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.ql-rail::before {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 10px;
+  bottom: -26px;
+  width: 1px;
+  background: var(--border);
+}
+.ql-rail > ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  max-width: 80%;
+}
+.ql-rail li {
+  position: relative;
+}
+.ql-rail li::before {
+  content: "";
+  position: absolute;
+  right: -20px;
+  top: 27px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--muted);
+  background: var(--surface);
+  box-sizing: border-box;
+}
+.ql-rail li:first-child::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ql-rail li > p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+}
+.ql-rail li:hover > p {
+  color: var(--text);
+}
+.ql-rail .ql-cap {
+  padding: 0;
+}
+.ql-rail > .chat-queue-hint {
+  margin-top: 14px;
+}
+
+/* Rows: one line each, click to unfold. */
+.ql-rows {
+  margin: 20px 0 0 auto;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.ql-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 7px 4px 7px 8px;
+  border-top: 1px solid var(--border);
+  cursor: default;
+}
+.ql-row:last-of-type {
+  border-bottom: 1px solid var(--border);
+}
+.ql-row > i {
+  font-style: normal;
+  font-size: 11px;
+  line-height: 24px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ql-row > p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  color: color-mix(in srgb, var(--text) 80%, var(--muted));
+}
+.ql-row[data-open] > p {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  padding: 4px 0;
+  color: var(--text);
+}
+.ql-rows > .chat-queue-hint {
+  margin-top: 8px;
+  text-align: right;
+}
