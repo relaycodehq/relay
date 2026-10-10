@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
 import { listedModel, onWindow } from "../../../shared/model-fit";
@@ -88,6 +88,8 @@ export function ModelSheet({
     <Sheet open={open} title="Model" onClose={onClose}>
       <View style={styles.tabs}>
         <Segmented
+          scroll
+          inset={16}
           value={provider}
           options={agentProviders.map((p) => ({ value: p, label: agentName(p) }))}
           onChange={(p) => onChange(settings, p)}
@@ -96,7 +98,12 @@ export function ModelSheet({
       {efforts.length > 0 && (
         <>
           <Text style={[styles.section, styles.first, { color: t.muted }]}>Reasoning</Text>
-          <View style={styles.chips}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.chips}
+          >
             {(["", ...efforts] as ReasoningEffort[]).map((e) => {
               const on = e === settings.choice.reasoningEffort;
               return (
@@ -119,7 +126,7 @@ export function ModelSheet({
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         </>
       )}
       {error && (
@@ -228,7 +235,7 @@ function ModelRow({
 }
 
 const styles = StyleSheet.create({
-  tabs: { paddingHorizontal: 16, paddingBottom: 8 },
+  tabs: { paddingBottom: 8 },
   loading: { padding: 24 },
   note: { fontSize: type.small, padding: 20 },
   section: { fontSize: type.tiny, fontWeight: "600", paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 },
@@ -237,7 +244,7 @@ const styles = StyleSheet.create({
   label: { fontSize: type.body },
   hint: { fontSize: type.tiny, lineHeight: 17 },
   first: { paddingTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, paddingBottom: 8 },
+  chips: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingBottom: 8 },
   chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontSize: type.small },
 });

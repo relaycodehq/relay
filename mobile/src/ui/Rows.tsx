@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { useRef, useState, type ReactNode } from "react";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { Button } from "./Button";
 import { type, useTheme } from "./theme";
@@ -64,40 +64,76 @@ export function SectionTitle({ children }: { children: string }) {
   return <Text style={[styles.section, { color: t.muted }]}>{children}</Text>;
 }
 
-/** Two or three choices side by side, like the desktop's toggle groups. */
+/** Two or three choices side by side, like the desktop's toggle groups; `scroll` for more than fit, each on one line. */
 export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  scroll,
+  inset = 0,
 }: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  scroll?: boolean;
+  /** A scrolling row's margin on either side, which it scrolls through to the edge; the parent drops its padding. */
+  inset?: number;
 }) {
   const t = useTheme();
+  const list = useRef<ScrollView>(null);
+  // Brings the choice that opened selected into view once, not on every tap.
+  const fit = useRef<{ width?: number; on?: { x: number; width: number }; done?: boolean }>({});
+  const reveal = () => {
+    const { width, on, done } = fit.current;
+    if (done || width === undefined || !on) return;
+    fit.current.done = true;
+    const x = inset + on.x;
+    if (x + on.width > width - inset) list.current?.scrollTo({ x: x + on.width / 2 - width / 2, animated: false });
+  };
+  const segments = options.map((o) => {
+    const on = o.value === value;
+    return (
+      <Pressable
+        key={o.value}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        onPress={() => onChange(o.value)}
+        onLayout={
+          scroll && on
+            ? (e) => {
+                fit.current.on = e.nativeEvent.layout;
+                reveal();
+              }
+            : undefined
+        }
+        style={[styles.segment, scroll && styles.segmentScroll, on && { backgroundColor: t.raised }]}
+      >
+        <Text numberOfLines={scroll ? 1 : undefined} style={[styles.segmentText, { color: on ? t.text : t.muted }]}>
+          {o.label}
+        </Text>
+      </Pressable>
+    );
+  });
+  if (scroll)
+    return (
+      <ScrollView
+        ref={list}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        accessibilityRole="tablist"
+        onLayout={(e) => {
+          fit.current.width = e.nativeEvent.layout.width;
+          reveal();
+        }}
+        style={styles.segmentedScroll}
+        contentContainerStyle={[styles.segmentedFill, { paddingHorizontal: inset }]}
+      >
+        <View style={[styles.segmented, styles.segmentedFill, { backgroundColor: t.sidebar }]}>{segments}</View>
+      </ScrollView>
+    );
   return (
-    <View
-      style={[styles.segmented, { backgroundColor: t.sidebar }]}
-      accessibilityRole="tablist"
-    >
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <Pressable
-            key={o.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(o.value)}
-            style={[styles.segment, on && { backgroundColor: t.raised }]}
-          >
-            <Text
-              style={[styles.segmentText, { color: on ? t.text : t.muted }]}
-            >
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View style={[styles.segmented, { backgroundColor: t.sidebar }]} accessibilityRole="tablist">
+      {segments}
     </View>
   );
 }
@@ -200,6 +236,9 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
   },
+  segmentScroll: { flex: 0, flexGrow: 1, paddingHorizontal: 14 },
+  segmentedScroll: { flexGrow: 0 },
+  segmentedFill: { flexGrow: 1 },
   segmentText: { fontSize: type.small, fontWeight: "600" },
   failed: { alignItems: "center", gap: 14 },
   failedText: { fontSize: type.small, textAlign: "center", lineHeight: 20 },
