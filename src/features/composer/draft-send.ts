@@ -39,6 +39,7 @@ import {
   type ActivityDraft,
 } from "./drafts";
 import { numberImages } from "../../../shared/image-refs";
+import { startsWithCommand } from "../../../shared/commands";
 import { flattenSketch } from "../images/sketch";
 import { aiSettingsQuery } from "../agents/useAISettings";
 import { agentModelsQuery } from "../agents/useAgentPicks";
@@ -61,7 +62,7 @@ export async function sendDraft(
   const text = readDraft(key).trim();
   const scope = chat?.scope ?? loadDraftScope(id);
   // Commands run in the composer; a review starts from its setup.
-  if (!text || text.startsWith("/") || (scope.kind === "review" && !chat))
+  if (!text || startsWithCommand(text) || (scope.kind === "review" && !chat))
     return null;
   const ai = await qc.fetchQuery(aiSettingsQuery);
   const settings = loadComposerSettings(id);

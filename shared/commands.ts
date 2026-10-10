@@ -142,6 +142,10 @@ export function argumentTrigger(text: string, cursor = text.length) {
     inline: !!before.slice(0, start).trim(),
   };
 }
+/** A leading `/` names a command, unless it opens a path like `/Users/me/clip.mp4`. */
+export function startsWithCommand(text: string) {
+  return /^\/[^\s/]*(?:\s|$)/.test(text.trim());
+}
 /**
  * Slash actions start a message, and composer commands can follow other text
  * (`inline`); $skill references can appear anywhere.
@@ -149,7 +153,7 @@ export function argumentTrigger(text: string, cursor = text.length) {
 export function commandTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
   const match = /(^|\s)([$/])([^\s]*)$/.exec(before);
-  if (!match) return null;
+  if (!match || (match[2] === "/" && match[3].includes("/"))) return null;
   const start = match.index + match[1].length;
   return {
     prefix: match[2] as "/" | "$",

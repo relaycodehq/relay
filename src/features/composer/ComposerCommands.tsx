@@ -24,6 +24,7 @@ import {
   composerCommands,
   commandTrigger,
   argumentTrigger,
+  startsWithCommand,
   sideRefusal,
   type CommandOption,
   type RelayCommand,
@@ -90,7 +91,7 @@ export function useComposerCommands({
         provider === "message" ? "codex" : provider,
       ),
     enabled:
-      ((open && !inline) || draft.startsWith("/")) && provider !== "message",
+      ((open && !inline) || startsWithCommand(draft)) && provider !== "message",
     staleTime: 60000,
     retry: false,
   });
@@ -303,7 +304,7 @@ export function useComposerCommands({
     );
   }
   function interceptSend() {
-    if (!draft.trim().startsWith("/")) return false;
+    if (!startsWithCommand(draft)) return false;
     const action = relayCommand(draft);
     // The agent runs `/goal` itself; it goes out as a message.
     if (action?.name === "goal") {

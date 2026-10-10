@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { argumentTrigger, commandTrigger, relayCommand } from "./commands";
+import {
+  argumentTrigger,
+  commandTrigger,
+  relayCommand,
+  startsWithCommand,
+} from "./commands";
 
 describe("relay commands", () => {
   it("parses bare commands and arguments where a command takes them", () => {
@@ -67,5 +72,11 @@ describe("relay commands", () => {
       prefix: "$",
       inline: false,
     });
+  });
+  it("reads a leading absolute path as text, not a command", () => {
+    expect(startsWithCommand("/Users/me/clip.mp4 test")).toBe(false);
+    expect(commandTrigger("/Users/me/cl")).toBeNull();
+    expect(startsWithCommand("/review now")).toBe(true);
+    expect(startsWithCommand("/plugin:skill")).toBe(true);
   });
 });

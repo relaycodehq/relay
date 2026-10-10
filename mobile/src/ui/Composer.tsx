@@ -21,7 +21,7 @@ import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
 import { agentInfo, agentName, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
-import { isComposerCommand, relayCommand, sideRefusal, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
+import { isComposerCommand, relayCommand, sideRefusal, startsWithCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
 import { composerCommand } from "../../../shared/composer-commands";
 import { modelName } from "../../../shared/model-fit";
 import type { ContextUsage } from "../../../shared/projects";
@@ -386,7 +386,7 @@ export const Composer = forwardRef<
     }
     if ((!written.trim() && !images.length) || busy) return;
     const draft = written.trim();
-    if (draft.startsWith("/")) {
+    if (startsWithCommand(draft)) {
       const command = relayCommand(draft);
       // The agent runs `/goal` itself; it goes out as a message.
       if (command?.name === "goal" && provider !== "codex" && provider !== "claude")
