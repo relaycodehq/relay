@@ -125,6 +125,9 @@ describe("target", () => {
       "zeta",
     ]);
     expect(reviewBase("", [], ["main"]).base).toBeUndefined();
+    expect(
+      reviewBase("", branches, ["main", "develop"], "feature").bases,
+    ).toEqual(["main", "origin/develop", "zeta"]);
   });
 
   it("has a target only once it knows everything it needs", () => {

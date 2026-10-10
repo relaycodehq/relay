@@ -106,22 +106,22 @@ export const swapReviewer = (
 /**
  * The base a branch is reviewed against: the one chosen while it's still a
  * branch, else the repository's base, local or on origin, else any other.
+ * The repository's bases lead the list; the rest keep their recency order.
  */
 export function reviewBase(
   chosen: string,
-  branches: { name: string; current: boolean }[],
+  branches: { name: string; current: boolean; unrelated?: boolean }[],
   repositoryBases: string[],
   branch?: string,
 ) {
-  const bases = branches
-    .filter((b) => !b.current && b.name !== branch)
+  const others = branches
+    .filter((b) => !b.current && !b.unrelated && b.name !== branch)
     .map((b) => b.name);
-  const base =
-    chosen && bases.includes(chosen)
-      ? chosen
-      : (repositoryBases
-          .flatMap((b) => [b, `origin/${b}`])
-          .find((b) => bases.includes(b)) ?? bases[0]);
+  const usual = repositoryBases
+    .flatMap((b) => [b, `origin/${b}`])
+    .filter((b) => others.includes(b));
+  const bases = [...usual, ...others.filter((b) => !usual.includes(b))];
+  const base = chosen && bases.includes(chosen) ? chosen : bases[0];
   return { bases, base };
 }
 

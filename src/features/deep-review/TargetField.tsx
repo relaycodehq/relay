@@ -8,7 +8,7 @@ import {
 import type { ReviewTarget } from "../../../shared/deep-review";
 import type { Project } from "../../../shared/projects";
 import type { TargetPick } from "./useDeepReviewSetup";
-import { ComposerSelect } from "../../ui/ComposerSelect";
+import { SearchSelect } from "../../ui/SearchSelect";
 import { ProjectPullPicker } from "../pulls/ProjectPullPicker";
 
 const targets: {
@@ -92,11 +92,12 @@ export function TargetField({
                   <span className="muted">against</span>
                 </span>
                 {pick.base ? (
-                  <ComposerSelect
+                  <SearchSelect
                     label="Base branch"
                     value={pick.base}
                     onChange={onBase}
                     options={pick.bases.map((b) => ({ value: b, label: b }))}
+                    placeholder="Search branches…"
                   />
                 ) : (
                   <span className="muted">
@@ -122,7 +123,7 @@ export function TargetField({
             ))}
           {kind === "commit" &&
             (pick.commit ? (
-              <ComposerSelect
+              <SearchSelect
                 label="Commit"
                 value={pick.commit}
                 onChange={pick.setCommit}
@@ -130,6 +131,7 @@ export function TargetField({
                   value: c.sha,
                   label: `${c.sha.slice(0, 7)} ${c.subject}`,
                 }))}
+                placeholder="Search commits…"
               />
             ) : (
               <span className="deep-review-target-detail">

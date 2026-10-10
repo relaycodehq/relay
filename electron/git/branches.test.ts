@@ -103,3 +103,39 @@ it("offers origin's default branch first as the base to merge into", async () =>
     "trunk",
   ]);
 });
+it("marks a remote with unrelated history, but not one with an orphan branch", async () => {
+  const other = await realpath(await mkdtemp(join(tmpdir(), "relay-other-")));
+  const at = (dir: string, ...args: string[]) =>
+    execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+  try {
+    at(other, "init", "-q", "-b", "main");
+    at(
+      other,
+      "-c",
+      "user.name=T",
+      "-c",
+      "user.email=t@example.invalid",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "Elsewhere",
+    );
+    git("remote", "add", "old", other);
+    git("remote", "add", "origin", root);
+    git("fetch", "-q", "old");
+    git("switch", "-q", "--orphan", "gh-pages");
+    git("commit", "-q", "--allow-empty", "-m", "Pages");
+    git("switch", "-q", "main");
+    git("fetch", "-q", "origin");
+    const state = await branches(root);
+    const flag = (name: string) =>
+      state.branches.find((b) => b.name === name)?.unrelated;
+    expect(flag("old/main")).toBe(true);
+    expect(flag("origin/main")).toBe(false);
+    expect(flag("origin/gh-pages")).toBe(false);
+    expect(flag("feature")).toBe(false);
+  } finally {
+    await rm(other, { recursive: true, force: true });
+  }
+});

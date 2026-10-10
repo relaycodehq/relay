@@ -5,6 +5,8 @@ export interface BranchRef {
   current: boolean;
   remote: boolean;
   worktree: boolean;
+  /** On a remote whose history shares nothing with HEAD, so no use as a base. */
+  unrelated: boolean;
 }
 export interface BranchList {
   current: string;

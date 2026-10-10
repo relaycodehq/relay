@@ -19,6 +19,34 @@ export async function baseCandidates(root: string) {
     ),
   ];
 }
+/**
+ * Remotes whose base branch shares no history with HEAD: another repository,
+ * like the pre-rewrite copy of this one. Judged by the base alone, so an
+ * orphan gh-pages doesn't disown the whole remote.
+ */
+async function unrelatedRemotes(
+  root: string,
+  refs: string[],
+  bases: string[],
+): Promise<Set<string>> {
+  const remotes = (await git(root, ["remote"]).catch(() => ""))
+    .split("\n")
+    .filter(Boolean);
+  const unrelated = await Promise.all(
+    remotes.map(async (remote) => {
+      const base = bases
+        .map((b) => `refs/remotes/${remote}/${b}`)
+        .find((ref) => refs.includes(ref));
+      if (!base) return null;
+      const shared = await git(root, ["merge-base", "HEAD", base]).then(
+        () => true,
+        () => false,
+      );
+      return shared ? null : remote;
+    }),
+  );
+  return new Set(unrelated.filter((r) => r !== null));
+}
 export async function branches(root: string): Promise<BranchList> {
   const [current, head, refs, bases] = await Promise.all([
     git(root, ["branch", "--show-current"]),
@@ -32,16 +60,22 @@ export async function branches(root: string): Promise<BranchList> {
     ]),
     baseCandidates(root),
   ]);
+  const rows = refs
+    .trimEnd()
+    .split("\n")
+    .filter(Boolean)
+    .map((row) => row.split("\0"));
+  const elsewhere = await unrelatedRemotes(
+    root,
+    rows.map(([ref]) => ref),
+    bases,
+  );
   return {
     current: current.trim(),
     head: head.trim(),
     bases,
-    branches: refs
-      .trimEnd()
-      .split("\n")
-      .filter(Boolean)
-      .flatMap((row) => {
-        const [ref, symbolic, worktree] = row.split("\0");
+    branches: rows
+      .flatMap(([ref, symbolic, worktree]) => {
         if (symbolic) return [];
         const remote = ref.startsWith("refs/remotes/");
         const name = ref.slice(remote ? 13 : 11);
@@ -52,6 +86,8 @@ export async function branches(root: string): Promise<BranchList> {
             remote,
             worktree: !!worktree,
             current: !remote && name === current.trim(),
+            unrelated:
+              remote && [...elsewhere].some((r) => name.startsWith(`${r}/`)),
           },
         ];
       })
