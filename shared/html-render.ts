@@ -22,7 +22,7 @@ export const RENDER_WIDTHS = [320, 480, 640, 800, 960, 1120];
 export const RENDER_MIN_HEIGHT = 80;
 export const RENDER_MAX_HEIGHT = 2000;
 export const RENDER_MAX_PAGES = 4;
-/** One page's HTML; the tool call carrying all of them must fit the server's 1 MB body. */
+/** One page's HTML; the tools server sizes its body limit from this and the page cap. */
 export const RENDER_MAX_CHARS = 200_000;
 /** What a page may put in the composer through relay.compose(). */
 export const RENDER_COMPOSE_CHARS = 4000;

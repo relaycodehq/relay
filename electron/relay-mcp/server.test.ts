@@ -6,6 +6,8 @@ import {
   toolText,
   verifyRelayToken,
 } from ".";
+import { BODY_LIMIT } from "./server";
+import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 
 const secret = "a".repeat(64);
 let close: (() => Promise<void>) | undefined;
@@ -177,6 +179,40 @@ test("a failing call comes back as a tool error, not a dead request", async () =
   expect(body.result).toEqual(
     toolText("That isn't a thread you started.", true),
   );
+});
+
+test("takes show_html at its page cap, and says so when a body is over the limit", async () => {
+  const calls: unknown[] = [];
+  const url = await serve(async (_chat, _name, args) => {
+    calls.push(args);
+    return toolText("ok");
+  });
+  // Lines with quotes, which JSON escaping lengthens, up to the page cap.
+  const line = '<div class="row" data-x="1">Příliš žluťoučký kůň</div>\n';
+  const html = line.repeat(Math.floor(RENDER_MAX_CHARS / line.length));
+  const variants = Array.from({ length: RENDER_MAX_PAGES }, (_, i) => ({
+    label: `v${i}`,
+    html,
+  }));
+  const call = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "show_html", arguments: { title: "t", variants } },
+  };
+  expect((await (await post(url, call)).json()).result).toEqual(toolText("ok"));
+  expect(calls).toHaveLength(1);
+
+  const over = await post(url, {
+    ...call,
+    params: {
+      ...call.params,
+      arguments: { title: "x".repeat(BODY_LIMIT), variants },
+    },
+  });
+  expect(over.status).toBe(413);
+  expect((await over.json()).error.message).toMatch(/over \d+ MB/);
+  expect(calls).toHaveLength(1);
 });
 
 test("a caller that hangs up stops its call", async () => {

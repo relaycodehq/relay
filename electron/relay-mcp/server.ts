@@ -2,6 +2,7 @@
 // with JSON, no event streams, no sessions. The agent host serves it so a
 // call outlives a restart of Relay; Relay serves it itself when there's no host.
 import { createServer, type IncomingMessage, type Server } from "node:http";
+import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 import {
   relayToolList,
   startedToolList,
@@ -16,7 +17,12 @@ const toolsAt: Record<string, ToolList> = {
   "/mcp": relayToolList,
   [STARTED_PATH]: startedToolList,
 };
-const BODY_LIMIT = 1 << 20;
+/**
+ * The biggest call the tools allow is show_html at its page cap. A page's
+ * chars take up to three bytes each in UTF-8, or two once JSON escapes them,
+ * so three times the chars covers either, plus a megabyte for the envelope.
+ */
+export const BODY_LIMIT = RENDER_MAX_PAGES * RENDER_MAX_CHARS * 3 + (1 << 20);
 
 export interface McpHandlers {
   /** The thread a bearer token belongs to, or undefined for none. */
@@ -110,6 +116,12 @@ async function answer(
   }
 }
 
+class BodyTooLarge extends Error {}
+
+/**
+ * Keeps nothing past the limit but reads it all the same: a socket cut mid-
+ * upload reaches the client as a reset before the reply saying why does.
+ */
 function readBody(req: IncomingMessage) {
   return new Promise<string>((resolve, reject) => {
     let size = 0;
@@ -117,8 +129,8 @@ function readBody(req: IncomingMessage) {
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > BODY_LIMIT) {
-        reject(new Error("Too large."));
-        req.destroy();
+        chunks.length = 0;
+        reject(new BodyTooLarge());
       } else chunks.push(chunk);
     });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
@@ -157,7 +169,17 @@ export function serveRelayTools(port: number, handlers: McpHandlers) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(await readBody(req));
-    } catch {
+    } catch (error) {
+      if (error instanceof BodyTooLarge)
+        return send(
+          413,
+          failure(
+            null,
+            -32600,
+            `The request is over ${Math.floor(BODY_LIMIT / 1024 / 1024)} MB; send smaller or fewer pages.`,
+          ),
+          { connection: "close" },
+        );
       return send(400, failure(null, -32700, "Parse error."));
     }
     const batch = Array.isArray(parsed);
