@@ -26,9 +26,8 @@ export const StartedThreadsContext = createContext<
 >(undefined);
 export const useStartedThreads = () => useContext(StartedThreadsContext);
 
-/** Asking first, then working, then done, then settled. */
-const standing = (c: ChatSummary) =>
-  c.waiting ? 0 : c.running ? 1 : chatSettled(c) ? 3 : 2;
+/** Asking first, then working, then done. */
+const standing = (c: ChatSummary) => (c.waiting ? 0 : c.running ? 1 : 2);
 
 /** Still while it works, like a subagent: the turn's own row is what moves. */
 function StartedStatus({ chat }: { chat: ChatSummary }) {
@@ -103,8 +102,14 @@ export function StartedChip({
   const [focus, setFocus] = useState<string>();
   const lead = view?.lead;
   // Without a lead (a new thread's draft) undefined would match every thread.
+  // Settled threads are put away, so only live and freshly done ones show.
   const started = (view && lead ? view.threads : [])
-    .filter((c) => c.startedBy?.chatId === lead && (!ids || ids.includes(c.id)))
+    .filter(
+      (c) =>
+        c.startedBy?.chatId === lead &&
+        (!ids || ids.includes(c.id)) &&
+        !chatSettled(c),
+    )
     .sort((a, b) => standing(a) - standing(b) || a.created - b.created);
   if (!view || !started.length || (live && !started.some((c) => c.running)))
     return null;
