@@ -148,6 +148,15 @@ const asReview = (r: Review): Review => {
   };
 };
 
+/** `gh` has no GitHub login, as opposed to GitHub not answering. */
+export class GithubSignedOut extends Error {
+  constructor() {
+    super(
+      "Sign in to GitHub with `gh auth login` in a terminal, then try again.",
+    );
+  }
+}
+
 /**
  * Pull requests on github.com, signed in as whoever `gh` is. Answers in the
  * shapes the Gitea client gives, so the review UI doesn't care which it is.
@@ -174,10 +183,7 @@ export class GitHub {
   ) {}
   static async connect(fetchRequest: FetchRequest) {
     const token = await ghToken();
-    if (!token)
-      throw new Error(
-        "Sign in to GitHub with `gh auth login` in a terminal, then try again.",
-      );
+    if (!token) throw new GithubSignedOut();
     const client = new GitHub(
       {
         id: GITHUB_SERVER,

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Account } from "../../../shared/types";
 import { api } from "../../lib/api";
+import { errorMessage } from "../../lib/error-message";
 
 /**
  * Who the Pull requests page searches as: the Gitea account when one is
@@ -17,6 +18,8 @@ export function usePullsAccount(gitea: Account | null | undefined) {
     account: gitea ?? gh.data ?? null,
     /** The first `gh` check hasn't answered yet; don't say there's no host. */
     pending: !gitea && gh.isPending,
+    /** `gh` is signed in but GitHub didn't answer. */
+    error: !gitea && gh.error ? errorMessage(gh.error) : null,
     recheck: () => void gh.refetch(),
     checking: gh.isFetching,
   };
