@@ -95,6 +95,7 @@ export function ContinueSessionPicker({
         type="button"
         className="thread-context-button"
         aria-label="Continue a terminal session"
+        title="Continue a terminal session"
       >
         <SquareTerminal size={14} aria-hidden />
         <span>Continue a session…</span>
