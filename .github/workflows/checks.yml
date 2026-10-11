@@ -40,6 +40,8 @@ jobs:
       # The dev runner tests use stand-ins; no Electron/native SDK downloads.
       - run: npm ci --ignore-scripts
       - run: npm test -- scripts/dev-home.test.mjs scripts/dev-process.test.mjs scripts/dev-supervisor.test.mjs electron/app/quit.test.ts electron/app/dev-build.test.ts
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
   e2e:
     runs-on: ubuntu-22.04
