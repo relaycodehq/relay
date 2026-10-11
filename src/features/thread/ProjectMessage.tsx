@@ -291,6 +291,19 @@ export const Message = memo(function Message({
       image={m.status === "streaming" ? hiddenImage : answerImage}
     />
   );
+  // Your images sit above what you wrote; the images the agent read show
+  // once its turn ends, after the answer.
+  const strip = !!stripImages.length && m.status !== "streaming" && (
+    <div className="message-images">
+      {stripImages.map((image) => (
+        <ImageThumbnail
+          key={image.key}
+          image={image}
+          onOpen={() => setViewing(image.key)}
+        />
+      ))}
+    </div>
+  );
   if (m.handedOver) return null;
   if (m.resumed)
     return (
@@ -385,6 +398,7 @@ export const Message = memo(function Message({
           />
         )}
       </header>
+      {m.role === "user" && strip}
       {m.role === "assistant" && (
         <AgentTurn
           message={m}
@@ -457,18 +471,7 @@ export const Message = memo(function Message({
           }
         />
       )}
-      {/* The images the agent read show once its turn ends, after the answer. */}
-      {!!stripImages.length && m.status !== "streaming" && (
-        <div className="message-images">
-          {stripImages.map((image) => (
-            <ImageThumbnail
-              key={image.key}
-              image={image}
-              onOpen={() => setViewing(image.key)}
-            />
-          ))}
-        </div>
-      )}
+      {m.role === "assistant" && strip}
       {viewingIndex >= 0 && (
         <ImageViewer
           images={images}
