@@ -1,7 +1,7 @@
 import { Save } from "lucide-react";
 import type { FileEditor } from "../useEditableDiff";
 import type { LocalFileSession } from "../useLocalFile";
-import { EditHistory, ReloadButton } from "./controls";
+import { DiskState, EditHistory, ReloadButton } from "./controls";
 
 /** The modal editor's state and controls under the code, and where saves go. */
 export function EditorFooter({
@@ -18,7 +18,7 @@ export function EditorFooter({
   return (
     <>
       <div className="local-editor-footer">
-        <span role="status">
+        <DiskState file={file}>
           {saving
             ? "Saving…"
             : dirty
@@ -26,7 +26,7 @@ export function EditorFooter({
               : saved
                 ? "Saved to local folder"
                 : "Editing local checkout"}
-        </span>
+        </DiskState>
         <span className="editor-shortcuts">
           {saveKeys && `${saveKeys} · `}Save
           {large ? " · Large file, plain text" : ""}

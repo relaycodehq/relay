@@ -38,6 +38,7 @@ export default function LocalFileEditor({
   onClose,
   lead,
   actions,
+  stamp,
 }: {
   checks: ChecksController;
   pull?: Pull;
@@ -50,8 +51,10 @@ export default function LocalFileEditor({
   lead?: ReactNode;
   /** Extra buttons in the inline bar, after the editing controls. */
   actions?: ReactNode;
+  /** Changes when the file may have changed on disk, like the working tree's revision. */
+  stamp?: string;
 }) {
-  const file = useLocalFile(project, pull, path, onClose);
+  const file = useLocalFile(project, pull, path, onClose, stamp);
   const { source } = file;
   const plain = !!project?.plain;
   const [compare, toggleCompare] = useEditorCompare(inline, plain);
@@ -84,7 +87,14 @@ export default function LocalFileEditor({
     hash,
     file.setError,
   );
-  const view = useEditableDiff(path, source, file.revision, line, markers);
+  const view = useEditableDiff(
+    path,
+    source,
+    file.revision,
+    line,
+    markers,
+    file.quiet,
+  );
   const saveKeys = useShortcutLabel("save");
   useSaveShortcut(file.save);
   const markdown = inline && !!project && isMarkdown(path);

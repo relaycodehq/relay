@@ -301,6 +301,7 @@ export function ProjectFiles({
                 checks={checks}
                 path={file.path}
                 line={file.line}
+                stamp={tree.data?.revision}
                 inline
                 lead={listToggle}
                 actions={

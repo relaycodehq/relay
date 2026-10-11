@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
-import type { Marker } from "@pierre/diffs/edit";
+import type { EditorViewState, Marker } from "@pierre/diffs/edit";
 import type { CodeViewHandle, CodeViewProps } from "@pierre/diffs/react";
 import type { LocalFile } from "../../../shared/types";
 import { useFileDiff } from "../diff/useFileDiff";
@@ -11,7 +11,9 @@ export type FileEditor = NonNullable<ReturnType<Handle["getEditor"]>>;
 /**
  * The loaded file against its committed version, as the code view's one
  * editable item. Keeps `markers` on its editor and puts the caret on `line`
- * the first time each diff's editor attaches.
+ * the first time each diff's editor attaches. A reloaded file keeps the caret
+ * and scroll it had; a `quiet` one (read again because the disk changed)
+ * also leaves the focus where it is.
  */
 export function useEditableDiff(
   path: string,
@@ -19,6 +21,7 @@ export function useEditableDiff(
   revision: string,
   line: number | undefined,
   markers: Marker[],
+  quiet = false,
 ) {
   const compared = useFileDiff(
     useMemo(
@@ -42,6 +45,23 @@ export function useEditableDiff(
   );
   const diff = compared.diff;
   const viewer = useRef<Handle>(null);
+  // Read while the old editor is still there, before the new text replaces it.
+  const kept = useRef<{
+    source?: LocalFile;
+    view?: EditorViewState;
+    focused?: Element | null;
+  }>({});
+  if (kept.current.source !== source) {
+    let view: EditorViewState | undefined;
+    try {
+      view = viewer.current?.getEditor(path)?.getViewState();
+    } catch {
+      // Not attached yet: nothing to keep.
+    }
+    kept.current = { source, view, focused: document.activeElement };
+  }
+  const quietRef = useRef(quiet);
+  quietRef.current = quiet;
   const focusedDiff = useRef<FileDiffMetadata | undefined>(undefined);
   const markersRef = useRef(markers);
   markersRef.current = markers;
@@ -69,8 +89,21 @@ export function useEditableDiff(
         editor.setMarkers(markersRef.current);
         if (focusedDiff.current === diff) return;
         focusedDiff.current = diff;
+        const { view, focused } = kept.current;
+        if (view) {
+          try {
+            editor.setViewState(view);
+          } catch {
+            // The new text may be too short for the old caret; start over.
+          }
+          // Focus left with the old editor only if it was in there.
+          if (quietRef.current && focused?.isConnected !== false) return;
+        }
         requestAnimationFrame(() => {
-          if (live.current) editor.focus({ lineNumber: line ?? 1 });
+          if (live.current)
+            editor.focus(
+              view ? { preventScroll: true } : { lineNumber: line ?? 1 },
+            );
         });
       },
     }),
