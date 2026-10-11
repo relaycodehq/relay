@@ -362,7 +362,7 @@ function ThreadCard({
                 ) : (
                   <ChevronRight size={11} />
                 )}
-                {familyLine(family.started)}
+                <span>{familyLine(family.started)}</span>
               </button>
             ) : draft ? (
               <DraftLine draftKey={draft.key} />

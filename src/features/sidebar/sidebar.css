@@ -1041,8 +1041,14 @@
   font: inherit;
   color: inherit;
   white-space: nowrap;
+}
+/* Bare text in a flex box is cut mid-letter instead of getting its
+   ellipsis; the span gets one, with a pixel spare for the last glyph. */
+.sb-card-family > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-right: 1px;
 }
 .sb-card-family:hover {
   color: var(--text);
