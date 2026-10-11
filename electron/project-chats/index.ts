@@ -198,6 +198,7 @@ export class ProjectChats {
           .stopped(id, messageId, limit)
           .catch((e) => console.warn("Could not plan the resume:", e)),
       env: (chat) => this.worktrees.setup.env(chat),
+      keepShown: (chat, message) => this.files.keepShown(chat, message),
     });
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(core, this.schedule, this.councils, {
@@ -571,11 +572,11 @@ export class ProjectChats {
     if (!waiting) throw new Error("That message is no longer waiting.");
     return structuredClone(waiting.input.images ?? []);
   }
-  turnImagePath(chatId: string, messageId: string, path: string) {
-    return this.files.turnImagePath(chatId, messageId, path);
-  }
   readImage(chatId: string, messageId: string, path: string) {
     return this.files.readImage(chatId, messageId, path);
+  }
+  revealImagePath(chatId: string, messageId: string, path: string) {
+    return this.files.revealImagePath(chatId, messageId, path);
   }
   worktreeFolders(projectId: string) {
     return this.worktrees.folders(projectId);

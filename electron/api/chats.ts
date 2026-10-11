@@ -249,7 +249,7 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, idSchema, imagePathSchema],
       async (id, messageId, path) => {
         shell.showItemInFolder(
-          await projectChats.turnImagePath(id, messageId, path),
+          await projectChats.revealImagePath(id, messageId, path),
         );
       },
     ),

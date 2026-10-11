@@ -114,6 +114,11 @@ export class ThreadCreate {
     if (notes) chat.notes = notes;
     chat.forkedAt = chat.messages.at(-1)!.id;
     await this.core.storage.copyImages(source.id, chat.id, kept);
+    await this.core.storage.shown.copy(
+      source.id,
+      chat.id,
+      new Map(kept.map((m, i) => [m.id, chat.messages[i]!.id])),
+    );
     await this.core.storage.renders.copy(
       source.id,
       chat.id,

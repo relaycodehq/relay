@@ -26,6 +26,7 @@ import type { Store } from "../app/store";
 import { RenderFiles } from "../html-renders";
 import { imageMimeType } from "./images";
 import { reviveChat } from "./revive";
+import { ShownImages } from "./shown-images";
 
 /** The earliest scheduled message still waiting to go out on its own. */
 export function nextSend(scheduled: ScheduledChatMessage[] = []) {
@@ -118,8 +119,9 @@ function same(a: ChatSummary, b: ChatSummary) {
 const RECONCILE_MARGIN_MS = 5000;
 
 /**
- * The threads' files in Relay's data folder (`<id>.json` and their
- * screenshots under `images/<id>/`), the one cached copy of each, and their
+ * The threads' files in Relay's data folder (`<id>.json`, their screenshots
+ * under `images/<id>/` and copies of the images their answers show under
+ * `images/<id>/shown/<message id>/`), the one cached copy of each, and their
  * summaries in the store, with whoever listens for a list reading differently.
  */
 export class ChatStorage {
@@ -131,6 +133,7 @@ export class ChatStorage {
   private listeners = new Set<(projectId: string) => void>();
   /** The pages answers showed with show_html. */
   readonly renders: RenderFiles;
+  readonly shown: ShownImages;
   constructor(
     private store: Store,
     private dir: string,
@@ -138,6 +141,7 @@ export class ChatStorage {
     private resuming: (chatId: string, branch?: string) => boolean,
   ) {
     this.renders = new RenderFiles(join(dir, "renders"));
+    this.shown = new ShownImages(join(dir, "images"));
   }
 
   /** Loads wait for `ready` from here on. */
@@ -212,6 +216,12 @@ export class ChatStorage {
     this.cache.delete(chat.id);
     await this.writes(chat.id, () =>
       rm(join(this.dir, chat.id + ".json"), { force: true }),
+    );
+    await rm(join(this.dir, "images", chat.id), {
+      recursive: true,
+      force: true,
+    }).catch((e) =>
+      console.warn("Could not remove a dropped thread's images:", e),
     );
     await this.store.update((s) => {
       s.chats = (s.chats ?? []).filter((c) => c.id !== chat.id);

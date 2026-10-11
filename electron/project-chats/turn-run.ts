@@ -81,6 +81,8 @@ export interface TurnRunnerHost {
   limited(chatId: string, messageId: string, limit: AgentError): void;
   /** What the thread's agent process is told about its worktree. */
   env(chat: ProjectChat): Promise<Record<string, string>>;
+  /** Keeps copies of the images a finished answer shows. */
+  keepShown(chat: ProjectChat, message: ChatMessage): Promise<void>;
 }
 
 /** Runs one agent turn in a thread, recording its answer as it streams. */
@@ -492,6 +494,7 @@ export class TurnRunner {
       // unsettle it. Snoozed threads stay hidden until their wake time.
       chat.updated = ended.ended;
       if (committed) chat.committedAt = ended.ended;
+      await this.host.keepShown(chat, ended);
       answer.end();
       // The sidebar hears of the finished answer once the turn lets go of the thread.
       await this.core.storage.save(chat, { holdSummary: true });

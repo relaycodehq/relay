@@ -1,6 +1,9 @@
 // What Relay's preview tools do for an agent: open its thread's preview,
 // picture it, and read what its page logged. The tools are listed with the
 // others in electron/relay-mcp.
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   ConsoleEntry,
   DevServerState,
@@ -28,6 +31,15 @@ export const previewToolNames = new Set<string>([
 interface Caller {
   projectId: string;
   chatId: string;
+}
+
+/** Writes a screenshot to the temp folder, where the agent may embed it in its answer; Relay keeps its own copy once it does. */
+async function saveShot(chatId: string, png: Buffer) {
+  const folder = join(tmpdir(), "relay-screenshots", chatId);
+  await mkdir(folder, { recursive: true, mode: 0o700 });
+  const path = join(folder, `${Date.now()}.png`);
+  await writeFile(path, png, { mode: 0o600 });
+  return path;
 }
 
 const NO_PAGE =
@@ -165,16 +177,26 @@ export async function answerPreviewTool(
       const scaled =
         width > SHOT_WIDTH ? image.resize({ width: SHOT_WIDTH }) : image;
       const state = previews.current(key);
+      const png = scaled.toPNG();
+      const saved = await saveShot(caller.chatId, png).catch((e) => {
+        console.warn("Could not save a preview screenshot:", e);
+        return undefined;
+      });
       return {
         content: [
           {
             type: "image",
-            data: scaled.toPNG().toString("base64"),
+            data: png.toString("base64"),
             mimeType: "image/png",
           },
           {
             type: "text",
-            text: `${state?.url ?? ""}${state?.title ? ` (${state.title})` : ""}`,
+            text: [
+              `${state?.url ?? ""}${state?.title ? ` (${state.title})` : ""}`,
+              saved && `Saved as ${saved}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
           },
         ],
       };

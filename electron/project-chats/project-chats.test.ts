@@ -1326,6 +1326,30 @@ it("previews only the images a turn read, and only when they really are images",
     "no longer on disk",
   );
 });
+it("keeps the images an answer shows as they were, also in a fork", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const shot = join(root, "shot.png");
+  await writeFile(shot, Buffer.from(tinyPng, "base64"));
+  await chats.send(
+    chat.id,
+    input(`@codex fixture echo: Here ![the page](${shot})`),
+  );
+  const answer = await vi.waitFor(async () => {
+    const last = (await chats.get(chat.id)).messages.at(-1)!;
+    expect(last).toMatchObject({ role: "assistant", status: "complete" });
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+    return last;
+  });
+  const shown = `data:image/png;base64,${tinyPng}`;
+  // The agent's next screenshot lands on the same path.
+  await writeFile(shot, "drawn over");
+  expect(await chats.readImage(chat.id, answer.id, shot)).toBe(shown);
+  await rm(shot);
+  expect(await chats.readImage(chat.id, answer.id, shot)).toBe(shown);
+  const fork = await chats.get((await chats.fork(chat.id)).id);
+  const copied = fork.messages.find((m) => m.body === answer.body)!;
+  expect(await chats.readImage(fork.id, copied.id, shot)).toBe(shown);
+});
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();

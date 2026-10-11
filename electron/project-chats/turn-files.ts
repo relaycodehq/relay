@@ -1,6 +1,12 @@
+import { access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { threadWorktree, turnImages } from "../../shared/projects";
-import { answerImagePaths } from "../../shared/answer-images";
+import {
+  threadWorktree,
+  turnImages,
+  type ChatMessage,
+  type ProjectChat,
+} from "../../shared/projects";
+import { answerImagePaths, embedsImages } from "../../shared/answer-images";
 import {
   dropRevert,
   redoRevert,
@@ -11,6 +17,12 @@ import { worktreeExists } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { imageFileData } from "./images";
 import type { ThreadWorktrees } from "./worktrees";
+
+const exists = (path: string) =>
+  access(path).then(
+    () => true,
+    () => false,
+  );
 
 /**
  * Files a thread's turns read, showed or changed, which the renderer may
@@ -53,7 +65,35 @@ export class TurnFiles {
 
   async readImage(chatId: string, messageId: string, path: string) {
     await this.turnImagePath(chatId, messageId, path);
-    return imageFileData(path);
+    const kept = this.core.storage.shown.path(chatId, messageId, path);
+    return imageFileData((await exists(kept)) ? kept : path);
+  }
+
+  /** The image file to show in Finder: where the agent left it, or the answer's copy once that's gone. */
+  async revealImagePath(chatId: string, messageId: string, path: string) {
+    await this.turnImagePath(chatId, messageId, path);
+    const kept = this.core.storage.shown.path(chatId, messageId, path);
+    return !(await exists(path)) && (await exists(kept)) ? kept : path;
+  }
+
+  /**
+   * Copies the local images a finished answer shows into the thread, so one
+   * in a temp folder that's cleared, or a file the agent draws over for its
+   * next screenshot, still shows what the answer showed.
+   */
+  async keepShown(chat: ProjectChat, message: ChatMessage) {
+    if (message.role !== "assistant" || !embedsImages(message.body)) return;
+    const root = await this.worktrees
+      .terminalFolder(chat.projectId, chat.id)
+      .catch(() => null);
+    if (!root) return;
+    for (const path of answerImagePaths(message.body, root))
+      await this.core.storage.shown
+        .keep(chat.id, message.id, path)
+        .catch((e: NodeJS.ErrnoException) => {
+          if (e.code !== "ENOENT")
+            console.warn("Could not keep an image the answer shows:", e);
+        });
   }
 
   async diff(chatId: string, messageId: string, path: string) {
