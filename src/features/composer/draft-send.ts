@@ -37,7 +37,7 @@ import {
   writeDraft,
   type ActivityDraft,
 } from "./drafts";
-import { numberImages } from "../../../shared/image-refs";
+import { attachedImages, numberImages } from "../../../shared/image-refs";
 import { startsWithCommand } from "../../../shared/commands";
 import { flattenSketch } from "../images/sketch";
 import { aiSettingsQuery } from "../agents/useAISettings";
@@ -59,9 +59,14 @@ export async function sendDraft(
   { key, id, project, chat }: ActivityDraft,
 ): Promise<ChatSummary | null> {
   const text = readDraft(key).trim();
+  const draftImages = await loadDraftImages(key);
   const scope = chat?.scope ?? loadDraftScope(id);
   // Commands run in the composer; a review starts from its setup.
-  if (!text || startsWithCommand(text) || (scope.kind === "review" && !chat))
+  if (
+    (!text && !attachedImages(text, draftImages).length) ||
+    startsWithCommand(text) ||
+    (scope.kind === "review" && !chat)
+  )
     return null;
   const ai = await qc.fetchQuery(aiSettingsQuery);
   const settings = loadComposerSettings(id);
@@ -77,6 +82,8 @@ export async function sendDraft(
   );
   const recipient = draftRecipient(text, provider);
   if (takesOver(recipient, holder) && !agentSwitchNoticeHidden()) return null;
+  // A message to the thread alone needs words.
+  if (recipient === "message" && !text) return null;
   const selected = supportedChoice(
     settings.models.codex?.choice ?? codexQuestionChoice(ai),
     await codexModels(qc),
@@ -89,7 +96,6 @@ export async function sendDraft(
     : { model: "", reasoningEffort: "" as const };
   const choice = messageChoice(recipient, settings.models, selected, pick);
   if (!choice) return null;
-  const draftImages = await loadDraftImages(key);
   const outgoing = numberImages(text, draftImages);
   const images = await Promise.all(outgoing.images.map(flattenSketch));
   const value = buildSend(

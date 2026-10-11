@@ -3,6 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const images = new Map<string, unknown[]>();
 vi.mock("../images/draft-images", () => ({
   draftImageKeys: async () => [...images.keys()],
+  readDraftImageCounts: async () => {},
+  draftImageCount: (key: string) => images.get(key)?.length ?? 0,
+  draftsWithImages: () => [...images.keys()],
+  onDraftImageCount: () => () => {},
   saveDraftImages: async (key: string, list: unknown[]) => {
     if (list.length) images.set(key, list);
     else images.delete(key);
@@ -103,27 +107,28 @@ it("moves drafts kept key by key into records before it sweeps, dropping a gone 
   });
 });
 
-it("drops a new-thread slot left empty, keeping the base, the open slot and slots with text", async () => {
+it("drops a new-thread slot left empty, keeping the base, the open slot and slots with text or a screenshot", async () => {
   const base = "new:p1",
     abandoned = "new:p1:a",
     open = "new:p1:b",
-    written = "new:p1:c";
+    written = "new:p1:c",
+    pictured = "new:p1:d";
   const unsent = (id: string) => [
     `relay-draft:${id}`,
     `composer-settings:${id}`,
   ];
-  seed([base, abandoned, open].flatMap(unsent), "");
+  seed([base, abandoned, open, pictured].flatMap(unsent), "");
   seed(unsent(written));
   store.set("relay-new-thread:p1", open);
-  images.set("chat-draft:" + abandoned, [{}]);
+  images.set("chat-draft:" + pictured, [{}]);
   await sweep({ p1: [] });
   const left = [...store.keys()];
   expect(left.filter((k) => k.includes(":p1:a"))).toEqual([]);
-  for (const id of [base, open, written])
+  for (const id of [base, open, written, pictured])
     expect(left).toContain("composer-settings:" + id);
-  for (const id of [base, open, written])
+  for (const id of [base, open, written, pictured])
     expect(left).toContain("relay-draft:" + id);
-  expect(images.size).toBe(0);
+  expect([...images.keys()]).toEqual(["chat-draft:" + pictured]);
 });
 
 it("drops what a project that's gone kept, its unsent drafts included", async () => {

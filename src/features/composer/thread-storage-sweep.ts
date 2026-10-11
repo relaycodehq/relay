@@ -1,4 +1,8 @@
-import { draftImageKeys, saveDraftImages } from "../images/draft-images";
+import {
+  draftImageKeys,
+  readDraftImageCounts,
+  saveDraftImages,
+} from "../images/draft-images";
 import {
   currentNewThread,
   dropThreadDraft,
@@ -73,6 +77,8 @@ export async function sweepThreadStorage(source: ThreadSource) {
   // is kept for it, so every key listed here belongs to a thread the answer has.
   const keys = storageKeys();
   const images = await draftImageKeys().catch(() => []);
+  // An unsent slot holding only a screenshot is a draft too.
+  await readDraftImageCounts();
   const projects = await source.projects();
   const lists = await Promise.all(
     projects.map((p) => source.projectChats(p.id)),

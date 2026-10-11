@@ -166,6 +166,38 @@ test("keeps several new-thread drafts in Activity and sends them from their card
         ).length,
     );
     expect(slots).toBeLessThanOrEqual(1);
+
+    // A screenshot alone makes a draft, and it is still one after a reload.
+    const paste = async (element: HTMLElement) => {
+      const canvas = new OffscreenCanvas(200, 120);
+      canvas.getContext("2d")!.fillRect(0, 0, 200, 120);
+      const blob = await canvas.convertToBlob({ type: "image/png" });
+      const clipboard = new DataTransfer();
+      clipboard.items.add(new File([blob], "shot.png", { type: "image/png" }));
+      element.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: clipboard,
+        }),
+      );
+    };
+    await prompt.evaluate(paste);
+    await expect(prompt).toHaveText("");
+    await expect(card("Screenshot")).toHaveClass(/selected/);
+    await page.reload();
+    await expect(card("Screenshot")).toBeVisible();
+
+    // One whose pill was deleted is only kept for undo, and makes no draft.
+    await newThread();
+    await prompt.fill("Look at this ");
+    await prompt.evaluate(paste);
+    await expect(prompt.locator("[data-n]")).toHaveCount(1);
+    await expect(drafts).toHaveCount(2);
+    await prompt.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await prompt.press("Backspace");
+    await expect(prompt).toHaveText("");
+    await expect(drafts).toHaveCount(1);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

@@ -18,6 +18,12 @@ import {
   writeDraftText,
 } from "../../lib/thread-storage";
 import { DRAFT_PREFIX } from "../../lib/thread-draft";
+import {
+  draftImageCount,
+  draftsWithImages,
+  onDraftImageCount,
+  readDraftImageCounts,
+} from "../images/draft-images";
 
 // Chat drafts live outside React state so a keystroke re-renders only the
 // composer that shows the draft, not the whole conversation around it.
@@ -35,6 +41,13 @@ function changed(key: string, hadText: boolean, hasNow: boolean) {
     indexListeners.forEach((notify) => notify());
   }
 }
+
+// A screenshot makes a draft as text does.
+onDraftImageCount((key) => {
+  listeners.get(key)?.forEach((notify) => notify());
+  index = undefined;
+  indexListeners.forEach((notify) => notify());
+});
 
 export function writeDraft(key: string, value: string) {
   const had = !!readDraft(key).trim();
@@ -66,8 +79,8 @@ export function dropThreadDraft(thread: string) {
   for (const key of removeThreadDraft(thread)) changed(key, true, false);
 }
 
-export function useDraft(key: string): string {
-  const subscribe = useCallback(
+function useKeySubscription(key: string) {
+  return useCallback(
     (notify: () => void) => {
       const set = listeners.get(key) ?? new Set();
       listeners.set(key, set);
@@ -79,23 +92,36 @@ export function useDraft(key: string): string {
     },
     [key],
   );
-  return useSyncExternalStore(subscribe, () => readDraft(key));
+}
+
+export function useDraft(key: string): string {
+  return useSyncExternalStore(useKeySubscription(key), () => readDraft(key));
+}
+
+/** How many screenshots without a pill the draft holds. */
+export function useDraftImageCount(key: string): number {
+  return useSyncExternalStore(useKeySubscription(key), () =>
+    draftImageCount(key),
+  );
 }
 
 function draftKeys(): string[] {
   if (index) return index;
+  let keys: string[];
   try {
-    return (index = draftKeysWithText().sort());
+    keys = draftKeysWithText();
   } catch {
     // Storage is a convenience here.
-    return (index = []);
+    keys = [];
   }
+  return (index = [...new Set([...keys, ...draftsWithImages()])].sort());
 }
 const subscribeIndex = (notify: () => void) => {
+  void readDraftImageCounts();
   indexListeners.add(notify);
   return () => indexListeners.delete(notify);
 };
-/** The storage keys of every draft with text, sorted. */
+/** The storage keys of every draft with text or a screenshot, sorted. */
 export const useDraftKeys = () =>
   useSyncExternalStore(subscribeIndex, draftKeys);
 
@@ -112,7 +138,9 @@ export function newThreadProject(id: string): string | undefined {
 }
 const isSlot = (id: string) => id.split(":").length === 3;
 export const hasDraft = (id: string) =>
-  !!readDraft(threadDraftKey(id)).trim() || !!loadDraftLinks(id).length;
+  !!readDraft(threadDraftKey(id)).trim() ||
+  !!draftImageCount(threadDraftKey(id)) ||
+  !!loadDraftLinks(id).length;
 
 /** The new thread a project last showed. */
 export function currentNewThread(projectId: string): string {

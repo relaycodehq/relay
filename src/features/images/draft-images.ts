@@ -59,6 +59,49 @@ export const draftImageKeys = (): Promise<string[]> =>
     requested(store.getAllKeys()).then((keys) => keys.map(String)),
   );
 
+// How many screenshots without a pill each draft holds, so one with nothing
+// else in it still counts as a draft. One with a pill counts through its
+// text; with its pill deleted it is only kept for undo. Read from the store
+// once, then kept as it's written.
+const counts = new Map<string, number>();
+// Written while the first read was out, so it doesn't bring back what's gone.
+const written = new Set<string>();
+const countListeners = new Set<(key: string) => void>();
+let countsRead: Promise<void> | undefined;
+const loose = (images: DraftImage[]) =>
+  images.filter((image) => image.n === undefined).length;
+
+function setCount(key: string, count: number) {
+  if ((counts.get(key) ?? 0) === count) return;
+  if (count) counts.set(key, count);
+  else counts.delete(key);
+  countListeners.forEach((notify) => notify(key));
+}
+
+/** Reads every draft's screenshot count, once; later calls wait on the same read. */
+export const readDraftImageCounts = (): Promise<void> =>
+  (countsRead ??= withDrafts("readonly", async (store) => {
+    const [keys, values] = await Promise.all([
+      requested(store.getAllKeys()),
+      requested(store.getAll() as IDBRequest<DraftImage[][]>),
+    ]);
+    keys.forEach((key, i) => {
+      if (!written.has(String(key)))
+        setCount(String(key), loose(values[i] ?? []));
+    });
+  }).catch(() => {}));
+
+/** How many screenshots without a pill the draft holds, as far as is known yet. */
+export const draftImageCount = (key: string) => counts.get(key) ?? 0;
+/** The drafts known to hold a screenshot without a pill. */
+export const draftsWithImages = () => [...counts.keys()];
+
+/** Told the draft key whose screenshot count changed. */
+export function onDraftImageCount(notify: (key: string) => void) {
+  countListeners.add(notify);
+  return () => void countListeners.delete(notify);
+}
+
 /** Keeps a draft's screenshots; none clears its entry. */
 export const saveDraftImages = (
   key: string,
@@ -68,6 +111,9 @@ export const saveDraftImages = (
     if (images.length) store.put(images, key);
     else store.delete(key);
     return committed(store.transaction);
+  }).then(() => {
+    written.add(key);
+    setCount(key, loose(images));
   });
 
 /** The most a screenshot may weigh once stored. */

@@ -4,6 +4,7 @@ import { ArrowUp, SquarePen } from "lucide-react";
 import {
   loadDraftScope,
   useDraft,
+  useDraftImageCount,
   type ActivityDraft,
 } from "../composer/drafts";
 import { ProjectBadge } from "../projects/ProjectBadge";
@@ -79,10 +80,13 @@ export function DraftCard({
 /** The unsent text, where a card shows its branch. */
 export function DraftLine({ draftKey }: { draftKey: string }) {
   const text = useDraft(draftKey).replace(/\s+/g, " ").trim();
+  const images = useDraftImageCount(draftKey);
   return (
     <span className="sb-card-draft">
       <SquarePen size={11} aria-label="Draft" />
-      <span>{text}</span>
+      <span>
+        {text || (images === 1 ? "Screenshot" : `${images} screenshots`)}
+      </span>
     </span>
   );
 }

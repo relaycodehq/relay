@@ -9,18 +9,27 @@ import { readDraft, writeDraft } from "./drafts";
 import { sendDraft, unsent } from "./draft-send";
 
 const images = new Map<string, DraftImage[]>();
-const sends: { resolve: () => void; body: string }[] = [];
+const sends: { resolve: () => void; body: string; images?: unknown[] }[] = [];
 vi.mock("../images/draft-images", () => ({
   loadDraftImages: async (key: string) => images.get(key) ?? [],
   saveDraftImages: async (key: string, list: DraftImage[]) =>
     void images.set(key, list),
+  draftImageCount: (key: string) => images.get(key)?.length ?? 0,
+  draftsWithImages: () => [...images.keys()],
+  readDraftImageCounts: async () => {},
+  onDraftImageCount: () => () => {},
 }));
 vi.mock("../../lib/api", () => ({
   api: {
     aiSettings: async () => defaultAISettings,
     agentModels: async () => [],
-    sendProjectChat: (_id: string, send: { body: string }) =>
-      new Promise<void>((resolve) => sends.push({ resolve, body: send.body })),
+    sendProjectChat: (
+      _id: string,
+      send: { body: string; images?: unknown[] },
+    ) =>
+      new Promise<void>((resolve) =>
+        sends.push({ resolve, body: send.body, images: send.images }),
+      ),
   },
 }));
 
@@ -79,6 +88,7 @@ async function sendHeldBack() {
   await vi.waitFor(() => expect(sends).toHaveLength(1));
   return {
     body: sends[0].body,
+    images: sends[0].images,
     finish: async () => {
       sends[0].resolve();
       return sent;
@@ -116,6 +126,14 @@ it("empties a draft nobody touched while it went out", async () => {
   const send = await sendHeldBack();
   await send.finish();
   expect(readDraft(key)).toBe("");
+  expect(images.get(key)).toEqual([]);
+});
+
+it("sends a draft that holds only a screenshot", async () => {
+  images.set(key, [{ ...shot("a", 1), n: undefined }]);
+  const send = await sendHeldBack();
+  expect(send.images).toHaveLength(1);
+  await send.finish();
   expect(images.get(key)).toEqual([]);
 });
 
