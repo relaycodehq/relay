@@ -493,6 +493,7 @@ export class ThreadWorktrees {
       const { included: _, ...made } = worktree;
       chat.worktree = { ...made, setup: "done" };
       chat.branch = made.branch;
+      delete chat.commit;
       // The agent that asked knows; the thread's other agents hear it next time.
       const active = this.core.active.get(id);
       const caller = active?.input ?? chat.lastInput;

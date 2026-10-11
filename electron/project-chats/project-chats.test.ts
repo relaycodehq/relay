@@ -2208,13 +2208,20 @@ it("shows the branch a turn left the checkout on, not the one it started on", as
       expect(saved.messages.at(-2)?.id).toBe(sent.id);
       expect(chats.hasActiveProject(projectId)).toBe(false);
     });
-    return (await chats.get(chat.id)).branch;
+    const { branch, commit } = await chats.get(chat.id);
+    return { branch, commit };
   };
-  expect(await turn("@codex fixture switch branch to main")).toBe("main");
+  expect(await turn("@codex fixture switch branch to main")).toEqual({
+    branch: "main",
+  });
   // A detached checkout is on no branch; the old name would be a lie.
-  expect(
-    await turn("@codex fixture switch branch to detached"),
-  ).toBeUndefined();
+  const head = git("rev-parse", "--short", "HEAD").toString().trim();
+  expect(await turn("@codex fixture switch branch to detached")).toEqual({
+    commit: head,
+  });
+  expect(await turn("@codex fixture switch branch to main")).toEqual({
+    branch: "main",
+  });
 });
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");

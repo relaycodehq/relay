@@ -78,6 +78,8 @@ export interface ChatSummary {
   archivedAt?: number;
   /** Branch checked out when the latest message was sent or its answer ended. */
   branch?: string;
+  /** The short commit checked out instead, when that checkout was detached. */
+  commit?: string;
   /** Set on threads that work in their own worktree; fixed when the thread starts. */
   worktree?: ChatWorktree;
   /** Folders linked to this thread alone, with `/add-dir`; its project's links come on top. */

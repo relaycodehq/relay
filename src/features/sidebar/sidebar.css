@@ -930,6 +930,21 @@
   gap: 3px;
   flex: none;
 }
+.sb-card-ref {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.sb-card-ref > svg {
+  flex: none;
+  opacity: 0.8;
+}
+.sb-card-commit {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
 .sb-card-branch,
 .sb-card-goal {
   flex: 1;

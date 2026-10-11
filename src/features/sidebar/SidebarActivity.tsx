@@ -6,6 +6,9 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  FolderGit2,
+  GitBranch,
+  GitCommitHorizontal,
   GitPullRequest,
   RotateCcw,
   Sunrise,
@@ -16,7 +19,11 @@ import {
   type ChatActivitySection,
 } from "../../../shared/chat-activity";
 import type { HandoffView } from "../../../shared/handoff";
-import type { ChatSummary, Project } from "../../../shared/projects";
+import {
+  threadWorktree,
+  type ChatSummary,
+  type Project,
+} from "../../../shared/projects";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import type { ActivityDraft } from "../composer/drafts";
 import { mac } from "../../lib/mod-key";
@@ -364,11 +371,7 @@ function ThreadCard({
                 {c.goal.objective}
               </span>
             ) : (
-              <MiddleTruncate
-                className="sb-card-branch"
-                text={c.branch ?? ""}
-                kind="branch"
-              />
+              <CardRef chat={c} />
             )}
             <AwayWhere chatId={c.id} view={away} />
             {compact && state}
@@ -403,6 +406,37 @@ function ThreadCard({
       </AwayPeek>
       <ThreadRowMenu chat={c} rows={rows} />
     </ContextMenu.Root>
+  );
+}
+
+/** Where the thread works: its branch, its worktree's branch, or the commit a detached checkout is on. */
+function CardRef({ chat }: { chat: ChatSummary }) {
+  const worktree = !!chat.worktree || !!threadWorktree(chat);
+  if (!chat.branch && !chat.commit) return <span className="sb-card-ref" />;
+  if (!chat.branch)
+    return (
+      <span className="sb-card-ref" title={`Detached at ${chat.commit}`}>
+        <GitCommitHorizontal size={11} aria-hidden />
+        <span className="sb-card-commit">{chat.commit}</span>
+      </span>
+    );
+  return (
+    <span
+      className="sb-card-ref"
+      title={worktree ? `Worktree on ${chat.branch}` : chat.branch}
+    >
+      {worktree ? (
+        <FolderGit2 size={11} aria-hidden />
+      ) : (
+        <GitBranch size={11} aria-hidden />
+      )}
+      <MiddleTruncate
+        className="sb-card-branch"
+        text={chat.branch}
+        kind="branch"
+        title={null}
+      />
+    </span>
   );
 }
 

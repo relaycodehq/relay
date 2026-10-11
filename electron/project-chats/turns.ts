@@ -20,7 +20,7 @@ import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatTurn } from "./chat-turn";
-import { currentBranchOr } from "../git/git";
+import { checkedOutOr } from "../git/git";
 import { codexSkills, type CodexSkill } from "../agents/provider-commands";
 import { promptTitle } from "../agents/thread-titles";
 import { relayNote } from "./relay-note";
@@ -253,7 +253,10 @@ export class ChatTurns {
         delete chat.goal;
       this.councils.sent(chat, input);
       chat.updated = Date.now();
-      chat.branch = await currentBranchOr(root, chat.branch);
+      ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
+        root,
+        chat,
+      ));
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       this.core.storage.keep(chat);

@@ -274,6 +274,20 @@ export const currentBranchOr = (root: string, known: string | undefined) =>
     (name) => name || undefined,
     () => known,
   );
+/** What is checked out: a branch, or the short commit when detached; `known` when Git can't say. */
+export async function checkedOutOr(
+  root: string,
+  known: { branch?: string; commit?: string },
+): Promise<{ branch?: string; commit?: string }> {
+  try {
+    const branch = await currentBranch(root);
+    if (branch) return { branch };
+    const commit = (await git(root, ["rev-parse", "--short", "HEAD"])).trim();
+    return commit ? { commit } : {};
+  } catch {
+    return { branch: known.branch, commit: known.commit };
+  }
+}
 /** Git's output as bytes, up to `limit`; past it, the content isn't text Relay shows. */
 export async function gitBytes(
   root: string,

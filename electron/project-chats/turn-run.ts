@@ -23,7 +23,7 @@ import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
 import type { AgentWatch } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
-import { currentBranchOr } from "../git/git";
+import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { commitWatch } from "./turn-commit";
@@ -396,7 +396,10 @@ export class TurnRunner {
           );
           committed = !!(await commits?.ended());
           // The agent may have left the checkout on another branch, as landing one in main does.
-          chat.branch = await currentBranchOr(counted, chat.branch);
+          ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
+            counted,
+            chat,
+          ));
         }
         // The agent's session started in the folder it left; the next turn
         // starts it again in the worktree.
