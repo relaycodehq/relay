@@ -190,8 +190,6 @@ const RenderCard = memo(function RenderCard({
       else if (
         data.relayRender === "compose" &&
         typeof data.text === "string" &&
-        // A page composing as it loads would write over the draft unasked.
-        data.active === true &&
         onCompose
       ) {
         const text = data.text.slice(0, RENDER_COMPOSE_CHARS);
