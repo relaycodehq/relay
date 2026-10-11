@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/projects";
 import type { LineQuestion } from "../../../shared/questions";
 import { contextAgent } from "../../../shared/recipient";
+import { composeInto } from "../../../shared/html-render";
 import { api } from "../../lib/api";
 import { useRecordChatPane } from "../../lib/chat-width";
 import { readDraft, writeDraft } from "../composer/drafts";
@@ -224,6 +225,15 @@ export function ProjectChat({
     },
     [id],
   );
+  // Into the composer that shows, where the page's last text was. It leaves
+  // focus in the page, which may still be at work, like a slider being dragged.
+  const composeFromPage = useCallback(
+    (text: string, earlier?: string) => {
+      const key = threadDraftKey(id, rootId ?? undefined);
+      writeDraft(key, composeInto(readDraft(key), text, earlier));
+    },
+    [id, rootId],
+  );
   const actions = useMessageActions({
     handle,
     messages,
@@ -358,6 +368,7 @@ export function ProjectChat({
                 void resume(() => composer.current?.agentSettings())
               }
               onSteer={steerFromNote}
+              onCompose={composeFromPage}
             />
           </KeepBlock.Provider>
         </RunCommand.Provider>

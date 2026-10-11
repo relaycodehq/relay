@@ -35,6 +35,12 @@ const EXPANDED_MAX_HEIGHT = 8000;
 const STAGE_BAR = 52;
 const STAGE_PADDING = 24;
 
+/** Puts a page's relay.compose() text in the composer, in place of `earlier`, what the page composed before. */
+export type RenderCompose = (text: string, earlier?: string) => void;
+
+// What each page last composed, so its next call replaces it.
+const composed = new Map<string, string>();
+
 /** The pages an answer showed with show_html, above its reply. */
 export function HtmlRenders({
   chatId,
@@ -43,8 +49,7 @@ export function HtmlRenders({
 }: {
   chatId: string;
   renders: HtmlRender[];
-  /** Puts text in the composer: a picked variant, or a page's relay.compose(). */
-  onCompose?: (text: string) => void;
+  onCompose?: RenderCompose;
 }) {
   return (
     <>
@@ -75,7 +80,7 @@ const RenderCard = memo(function RenderCard({
 }: {
   chatId: string;
   render: HtmlRender;
-  onCompose?: (text: string) => void;
+  onCompose?: RenderCompose;
 }) {
   const [index, setIndex] = useState(0);
   const page = render.pages[index] ?? render.pages[0];
@@ -182,14 +187,24 @@ const RenderCard = memo(function RenderCard({
         /^(https?|mailto):/i.test(data.href)
       )
         void api.openExternal(data.href).catch(() => {});
-      else if (data.relayRender === "compose" && typeof data.text === "string")
-        onCompose?.(data.text.slice(0, RENDER_COMPOSE_CHARS));
+      else if (
+        data.relayRender === "compose" &&
+        typeof data.text === "string" &&
+        // A page composing as it loads would write over the draft unasked.
+        data.active === true &&
+        onCompose
+      ) {
+        const text = data.text.slice(0, RENDER_COMPOSE_CHARS);
+        const from = `${chatId}:${render.id}`;
+        onCompose(text, composed.get(from));
+        composed.set(from, text);
+      }
       else if (data.relayRender === "key" && typeof data.key === "string")
         stageKeyNow.current(data.key)?.();
     };
     window.addEventListener("message", listen);
     return () => window.removeEventListener("message", listen);
-  }, [index, onCompose]);
+  }, [index, onCompose, chatId, render.id]);
 
   // The frame's box goes to the top layer and back without leaving its place
   // in the document, so the page keeps whatever the user did in it.
