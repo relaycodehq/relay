@@ -6,6 +6,7 @@ import { ApiError, type Gitea } from "../pull-requests/gitea";
 import type { PullHost } from "../pull-requests/host";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import {
+  folderGoneMessage,
   projectTitle,
   linkedFoldersSchema,
   type LinkedFolder,
@@ -273,7 +274,11 @@ export class Projects {
   /** The project's folder: its repository's root, or a plain folder outside any. */
   async inspect(id: string) {
     const p = this.get(id),
-      root = await realpath(p.path),
+      root = await realpath(p.path).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === "ENOENT" || e.code === "ENOTDIR")
+          throw new Error(folderGoneMessage(p.path));
+        throw e;
+      }),
       repository = root === p.path ? await repositoryRoot(root) : undefined;
     if (repository === undefined || (repository && repository !== root))
       throw new Error(
@@ -283,6 +288,26 @@ export class Projects {
   }
   async root(id: string) {
     return (await this.inspect(id)).root;
+  }
+  /** Points the project at `path`, where its folder went; threads and settings stay. */
+  async relocate(id: string, path: string) {
+    this.get(id);
+    const root = await realpath(path);
+    const repository = await repositoryRoot(root);
+    if (repository && repository !== root)
+      throw new Error("Choose the root of its Git repository.");
+    const other = this.store
+      .get()
+      .projects?.find((p) => p.path === root && p.id !== id);
+    if (other)
+      throw new Error(
+        `${root} is already the project ${this.named(other).name}${other.removed ? ", removed from Relay. Add that folder again instead" : ""}.`,
+      );
+    await this.store.update((s) => {
+      const p = s.projects?.find((p) => p.id === id);
+      if (p) p.path = root;
+    });
+    return withKind(this.get(id));
   }
   /** Where the project's processes run. A folder deleted outside Relay still names them, so they can be stopped. */
   async taskFolder(id: string) {

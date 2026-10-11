@@ -166,6 +166,46 @@
   flex-direction: column;
   max-height: min(480px, calc(100vh - 80px));
 }
+/* Over a thread whose project folder went: one strip instead of every pane's error. */
+.folder-gone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, #d99a2b 9%, var(--surface));
+  font-size: 12px;
+}
+.folder-gone > svg {
+  flex: none;
+  color: light-dark(#a15c00, #e8b35a);
+}
+.folder-gone-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.folder-gone-text strong {
+  flex: none;
+  font-weight: 600;
+}
+.folder-gone-text .middle-truncate {
+  color: var(--muted);
+}
+.folder-gone-error {
+  flex: none;
+  color: light-dark(#c4323f, #f0707a);
+}
+.folder-gone > button {
+  flex: none;
+  font-size: 12px;
+}
+.folder-gone-empty p {
+  color: var(--muted);
+}
 .new-thread-picker .modal-heading {
   margin: 0;
   padding: 14px 13px 4px 16px;
