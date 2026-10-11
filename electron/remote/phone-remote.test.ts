@@ -294,6 +294,32 @@ it("streams thread changes to the phone and cuts it off when removed", async () 
   expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
 });
 
+it("stays connected when the phone's own event listener throws", async () => {
+  const { remote, summary } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  let heard = 0;
+  const p = phone(
+    { link, device: "Pixel" },
+    {
+      onEvent: () => {
+        heard++;
+        throw new Error("a bug in a screen");
+      },
+    },
+  );
+  await p.until("online");
+  await p.client.call("overview");
+  remote.chatsEvent({ projectId, chats: [summary] });
+  await vi.waitFor(() => expect(heard).toBe(1));
+  summary.updated = 9;
+  remote.chatsEvent({ projectId, chats: [summary] });
+  await vi.waitFor(() => expect(heard).toBe(2));
+  expect(p.client.status).toBe("online");
+  expect(p.statuses.map((s) => s.status)).not.toContain("offline");
+  warn.mockRestore();
+});
+
 it("ends the session of a phone removed without being cut off", async () => {
   const { remote, dispatched } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;

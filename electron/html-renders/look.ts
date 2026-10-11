@@ -10,8 +10,11 @@ import {
   type RenderTheme,
 } from "../../shared/html-render";
 import { renderDrafts, shotSession } from "./protocol";
+import { PageHung } from "./agent-tools";
 
 const LOAD_MS = 15_000;
+/** All of a look, its load included. */
+const LOOK_MS = 20_000;
 /** Time for scripts that draw after load, like a chart's first frame. */
 const SETTLE_MS = 400;
 const KEPT_LOGS = 30;
@@ -89,7 +92,22 @@ export async function lookAtPage(
   const close = () => {
     if (!win.isDestroyed()) win.destroy();
   };
-  signal?.addEventListener("abort", close, { once: true });
+  // A renderer stuck in a script never answers insertCSS or a measure, so
+  // the whole look ends at a deadline or an abort, and the window goes.
+  let stop!: (error: Error) => void;
+  const stopped = new Promise<never>((_, reject) => (stop = reject));
+  const deadline = setTimeout(
+    () =>
+      stop(
+        new PageHung(
+          `The page didn't finish within ${LOOK_MS / 1000}s; a script on it may never return.`,
+        ),
+      ),
+    LOOK_MS,
+  );
+  const abort = () => stop(new Error("Cancelled."));
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
   const wc = win.webContents;
   wc.setWindowOpenHandler(() => ({ action: "deny" }));
   wc.on("will-navigate", (e) => e.preventDefault());
@@ -107,8 +125,8 @@ export async function lookAtPage(
       });
   });
   const theme = options.theme ?? withSeries(LIGHT_RENDER_THEME);
-  let loadError: string | undefined;
-  try {
+  const look = async (): Promise<PageLook> => {
+    let loadError: string | undefined;
     await Promise.race([
       win.loadURL(`${RENDER_SCHEME}://${scale === 1 ? "draft" : `shot-${token}`}/${token}#theme=${encodeURIComponent(JSON.stringify(theme))}`),
       pause(LOAD_MS).then(() => {
@@ -117,7 +135,6 @@ export async function lookAtPage(
     ]).catch((error: Error) => {
       loadError = error.message;
     });
-    if (win.isDestroyed()) throw new Error("Cancelled.");
     // The thread shows through a page; here nothing would but white.
     await wc.insertCSS("html { background: var(--background) }");
     // Zoomed in a window as much larger, the page lays out at the same width.
@@ -152,9 +169,15 @@ export async function lookAtPage(
       loadError,
       scheme: theme.scheme,
     };
+  };
+  try {
+    const looking = look();
+    looking.catch(() => {});
+    return await Promise.race([looking, stopped]);
   } finally {
+    clearTimeout(deadline);
     renderDrafts.delete(token);
-    signal?.removeEventListener("abort", close);
+    signal?.removeEventListener("abort", abort);
     close();
   }
 }

@@ -101,6 +101,8 @@ export class DeviceHub {
   private child?: ChildProcess;
   private running?: RunningHub;
   private starting?: Promise<RunningHub>;
+  /** Asked to sleep while it was still starting. */
+  private sleepy = false;
   private disposed = false;
   private quitting = new AbortController();
 
@@ -130,6 +132,7 @@ export class DeviceHub {
 
   /** Where the hub answers, started and downloaded as needed. */
   start(): Promise<RunningHub> {
+    this.sleepy = false;
     if (this.running) return Promise.resolve(this.running);
     this.starting ??= this.boot().finally(() => (this.starting = undefined));
     return this.starting;
@@ -278,6 +281,13 @@ export class DeviceHub {
 
   /** Nobody is watching: stops it until the tab shows it again. */
   async sleep() {
+    if (this.starting) {
+      // Installing or starting: it goes to sleep once up, unless shown again by then.
+      this.sleepy = true;
+      await this.starting.catch(() => {});
+      if (!this.sleepy) return;
+    }
+    this.sleepy = false;
     const child = this.child;
     if (!child || this.status !== "running") return;
     this.child = this.running = undefined;

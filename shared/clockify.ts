@@ -132,20 +132,23 @@ export interface ClockifyApi {
 
 /**
  * Drops entries dragged down to nothing and joins neighbours that now go to
- * the same Clockify project back to back.
+ * the same Clockify project back to back, unless each says something else:
+ * one of the two descriptions would be lost.
  */
 export function tidy(blocks: ClockifyBlock[]) {
   const out: ClockifyBlock[] = [];
   for (const b of blocks) {
     if (!b.submittedId && b.end <= b.start) continue;
     const last = out.at(-1);
+    const [said, says] = [last?.description.trim(), b.description.trim()];
     if (
       last &&
       !last.submittedId &&
       !b.submittedId &&
       last.clockifyProjectId &&
       last.clockifyProjectId === b.clockifyProjectId &&
-      last.end === b.start
+      last.end === b.start &&
+      (!said || !says || said === says)
     ) {
       out[out.length - 1] = {
         ...last,

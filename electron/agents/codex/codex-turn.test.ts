@@ -5,6 +5,7 @@ import { expect, it, vi } from "vitest";
 import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
+import { agentError } from "../../../shared/agent-error";
 vi.mock("../../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../../platform/executables")>()),
   findExecutable: vi.fn(),
@@ -41,6 +42,7 @@ const fakeCodex = (
       params: { threadId: "thread", turn: { id: "turn", status: "completed" } },
     },
     refusing,
+    crash,
   }: {
     thread?: Wire;
     turn?: Wire;
@@ -48,6 +50,8 @@ const fakeCodex = (
     ending?: Wire | null;
     /** A JSON-RPC error answering `method` instead of its result. */
     refusing?: { method: string; error: Wire };
+    /** Dies at turn/start like a CLI whose runtime can't load. */
+    crash?: boolean;
   } = {},
 ) => `
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
@@ -60,6 +64,10 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   else if (m.method === "thread/start")
     send({ id: m.id, result: ${JSON.stringify(thread)} });
   else if (m.method === "turn/start") {
+    if (${JSON.stringify(!!crash)}) {
+      process.stderr.write("dyld: Library not loaded: libfixture.dylib\\n");
+      process.exit(134);
+    }
     require("node:fs").writeFileSync(${JSON.stringify(log)}, JSON.stringify(m.params));
     send({ id: m.id, result: ${JSON.stringify(turn)} });
     for (const said of ${JSON.stringify(said)}) send(said);
@@ -106,6 +114,20 @@ it("says what is missing when Codex's answer to starting the thread or the turn 
   await expect(
     (await ask({ turn: { started: true }, said: [], ending: null })).answer,
   ).rejects.toThrow(/unexpected turn\/start response \(turn/);
+});
+
+it("says how Codex died and keeps what it said last for the details", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const failed = await (await ask({ crash: true })).answer.catch((e) => e);
+  expect(agentError(failed.message)).toEqual({
+    message: "Codex stopped before finishing (exit code 134).",
+    details: "dyld: Library not loaded: libfixture.dylib",
+  });
+  expect(warn).toHaveBeenCalledWith(
+    "Codex stopped before finishing (exit code 134):",
+    "dyld: Library not loaded: libfixture.dylib",
+  );
+  warn.mockRestore();
 });
 
 it("fails the turn with the notification named when one it reads arrives malformed", async () => {

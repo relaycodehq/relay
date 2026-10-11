@@ -57,14 +57,43 @@ function freePort() {
   });
 }
 
-/** The saved port and secret, made on first use; `dir` must exist. */
+/**
+ * Whether another app answers on `port`: not Relay's tools (an agent host's,
+ * which keeps serving across restarts) and not nobody.
+ */
+export async function takenByAnother(port: number) {
+  try {
+    // No token: only Relay's tools turn it down in their own words.
+    const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: "POST",
+      signal: AbortSignal.timeout(2000),
+    });
+    return !(res.status === 401 && (await res.text()).includes("Not a Relay thread."));
+  } catch (error) {
+    // Something that doesn't speak HTTP; nobody there, a reset or a timeout
+    // could be a host coming or going.
+    const code = (error as { cause?: { code?: unknown } }).cause?.code;
+    return typeof code === "string" && code.startsWith("HPE_");
+  }
+}
+
+/**
+ * The saved port and secret, made on first use; `dir` must exist. A port
+ * another app took since is given up for a new one, which the agent host
+ * reads before each try to serve; sessions started on the old one lose the
+ * tools until they start again.
+ */
 export async function loadRelayMcp(dir: string): Promise<RelayMcpConfig> {
   const saved = readRelayMcp(dir);
-  if (saved) return saved;
+  if (saved && !(await takenByAnother(saved.port))) return saved;
   const config = {
     port: await freePort(),
-    secret: randomBytes(32).toString("hex"),
+    secret: saved?.secret ?? randomBytes(32).toString("hex"),
   };
+  if (saved)
+    console.warn(
+      `Another app took port ${saved.port}, where Relay's tools were served; they move to ${config.port}.`,
+    );
   const temp = `${configFile(dir)}.tmp`;
   writeFileSync(temp, JSON.stringify(config), { mode: 0o600 });
   renameSync(temp, configFile(dir));

@@ -6,6 +6,7 @@ import { findExecutable, spawnExecutable } from "../../platform/executables";
 import { ClaudeFailureWatch, claudeReason } from "./claude-failure";
 import { runAccount } from "../accounts";
 import { RequestUsage } from "./request-usage";
+import { exitedError, stderrTail } from "../errors";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   const { job } = options;
   // Only one-off jobs run as a bare `--print`; the rest are a thread's session.
@@ -77,14 +78,20 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
     );
     // "close", not "exit": stdout may still hold the final result line when
     // the process exits.
-    child.on("close", () =>
-      finish(
-        new Error(
-          "Claude stopped before finishing. Check your Claude Code sign-in and version (2.1.248 or newer).",
+    const stderr = stderrTail(child.stderr);
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      void stderr().then((said) =>
+        finish(
+          exitedError(
+            "Claude",
+            { code, signal },
+            said,
+            "Check your Claude Code sign-in and version (2.1.248 or newer).",
+          ),
         ),
-      ),
-    );
-    child.stderr.resume();
+      );
+    });
     child.stdin.on("error", () =>
       finish(new Error("The Claude connection closed.")),
     );

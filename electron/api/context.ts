@@ -87,6 +87,13 @@ export type Handlers = {
     ArgTypes<Parameters<Api[M]>, Parameters<Api[M]>>;
 };
 
+/** `value` as `schema` reads it; the error is the first problem in words, not Zod's JSON list of them. */
+function parsed(schema: z.ZodType, value: unknown) {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  throw new Error(result.error.issues[0]?.message ?? "Invalid request.");
+}
+
 /** A handler that parses each argument with the schema at its position. */
 export function takes<const S extends readonly z.ZodType[], R>(
   schemas: S,
@@ -95,7 +102,7 @@ export function takes<const S extends readonly z.ZodType[], R>(
   ArgTypes<z.input<z.ZodTuple<S, null>>, z.output<z.ZodTuple<S, null>>> {
   return (args) =>
     handle(
-      ...(schemas.map((schema, i) => schema.parse(args[i])) as z.output<
+      ...(schemas.map((schema, i) => parsed(schema, args[i])) as z.output<
         z.ZodTuple<S, null>
       >),
     );

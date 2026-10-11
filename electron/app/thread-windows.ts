@@ -85,6 +85,8 @@ export class ThreadWindows {
         if (!entry.closingToQuit) return;
         entry.closingToQuit = false;
         this.quitting = false;
+        // Windows the quit already closed didn't save their going.
+        this.save();
         this.hooks.quitCancelled();
       }),
     };

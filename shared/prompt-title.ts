@@ -1,5 +1,6 @@
 import { pastedTexts, replacePastedTexts } from "./pasted-texts";
 import { agentMentionPattern } from "./agents";
+import { sliceWhole } from "./truncate";
 
 /**
  * What a thread is called from its first message until a generated title
@@ -10,12 +11,9 @@ export function promptTitle(body: string): string {
   const text = replacePastedTexts(body, () => "\n\n");
   // A message that is only a paste is named after the paste's first line;
   // one that is only screenshots waits for a generated title as "Screenshot".
-  return (
-    (
-      text.replace(agentMentionPattern, "").trim() ||
-      (pastes[0]?.text.trimStart().split("\n", 1)[0] ?? "")
-    )
-      .trim()
-      .slice(0, 65) || "Screenshot"
-  );
+  const title = (
+    text.replace(agentMentionPattern, "").trim() ||
+    (pastes[0]?.text.trimStart().split("\n", 1)[0] ?? "")
+  ).trim();
+  return sliceWhole(title, 0, 65) || "Screenshot";
 }

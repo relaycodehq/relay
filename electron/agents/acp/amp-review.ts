@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  allowedFlags,
   disguisedFlag,
   gitBareWrites,
   gitListings,
@@ -24,15 +25,17 @@ const ends = "(?=[\\s;&|]|$)";
 /** No later argument of this command starts with one of `flags`, or hides a flag from that look. */
 const without = (flags: string) =>
   `(?![^;&|\\n]*(?:\\s(?:${flags})|${disguisedFlag}))`;
+/** Each word a flag `flags` allows or an argument; nothing hides a flag from that look. */
+const flagged = (flags: string) =>
+  `(?![^;&|\\n]*(?:${disguisedFlag}))(?:\\s+(?:(?:${flags})${ends}|(?!-)(?:>&|[^\\s;&|])+))*\\s*`;
 const gitPrefix = "git(?:\\s+(?:--no-pager|-C\\s+[^\\s;&|]+))*\\s+";
 const sedLines = "(?:\\d+|\\$)(?:,(?:\\d+|\\$))?p";
 
 const command = [
   `${oneOf(plain)}${ends}${rest}`,
-  `rg${ends}${without("--pre(?:=|\\s|$)")}${rest}`,
-  `sort${ends}${without("--o|-[^-\\s]*o")}${rest}`,
-  `tree${ends}${without("--o|-[^-\\s]*o")}${rest}`,
-  `find${ends}${without("-(?:exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)(?:\\s|$)")}${rest}`,
+  ...Object.entries(allowedFlags).map(
+    ([name, flags]) => `${name}${ends}${flagged(flags)}`,
+  ),
   `sed(?:\\s+-n)+\\s+(?:'${sedLines}'|"${sedLines}"|${sedLines})(?:\\s+[^\\s;&|<>-][^\\s;&|<>]*)*\\s*`,
   `${gitPrefix}${oneOf(gitReads)}${ends}${without("--(?:ou|op|ext)|-[^-\\s]*O")}${rest}`,
   ...Object.entries(gitListings).map(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { combine } from "./combine";
 import { takes, type Handlers } from "./context";
+import { NOTE_MAX_CHARS, noteTextSchema } from "../../shared/thread-notes";
 
 // The type checks are the point here: tsc fails if an @ts-expect-error below
 // stops erroring, which means the check it pins has gone quiet.
@@ -41,6 +42,13 @@ describe("takes", () => {
     expect(searchThemes(["dark", 30])).toEqual({ query: "dark", offset: 30 });
     expect(() => searchThemes(["dark", 1.5])).toThrow();
     expect(() => searchThemes([7])).toThrow();
+  });
+
+  it("turns a refused argument into a sentence the app can show", () => {
+    const keep = takes([noteTextSchema], (text) => text);
+    expect(() => keep(["n".repeat(NOTE_MAX_CHARS + 1)])).toThrow(
+      /^That note is too long \(20,000 characters at most\)\.$/,
+    );
   });
 
   it("holds the schemas against the method's declared parameters", () => {

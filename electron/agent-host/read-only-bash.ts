@@ -85,6 +85,99 @@ export const disguisedFlag = [
 ].join("|");
 const disguised = new RegExp(disguisedFlag);
 
+const value = "[^\\s;&|]*";
+/** Short flags that may cluster (`-in`), then at most one taking a value (`-A3`, `-t ts`). */
+const shorts = (bare: string, valued = "") =>
+  `-[${bare}]*${valued ? `(?:[${valued}]${value})?` : ""}`;
+const longs = (bare: string[], valued: string[] = []) =>
+  [
+    `--(?:${bare.join("|")})`,
+    ...(valued.length ? [`--(?:${valued.join("|")})(?:=${value})?`] : []),
+  ].join("|");
+
+/**
+ * The flags each command whose flags decide what it does may take, as regular
+ * expression sources for one word; anything else turns the command down, so a
+ * flag nobody thought of (`rg --hostname-bin`, `sort --compress-program`)
+ * can't run a program the reviewed repository ships. A word not starting
+ * with `-` is an argument. Long flags are spelled out whole: a cut-short one
+ * (`--out`) isn't on the list.
+ */
+export const allowedFlags: Record<string, string> = {
+  rg: [
+    "--",
+    // Not -z (it runs decompressors), and nothing of --pre or --hostname-bin.
+    shorts("0.abcFHhIiLlNnoPpqSsUuVvwx", "ABCdEefgjMmrTt"),
+    longs(
+      [
+        "files", "files-with-matches", "files-without-match", "count",
+        "count-matches", "type-list", "hidden", "no-ignore", "no-ignore-vcs",
+        "no-ignore-parent", "no-ignore-dot", "no-ignore-global", "no-config",
+        "no-heading", "heading", "line-number", "no-line-number", "column",
+        "no-column", "ignore-case", "smart-case", "case-sensitive",
+        "fixed-strings", "word-regexp", "line-regexp", "invert-match",
+        "multiline", "multiline-dotall", "follow", "text", "null",
+        "null-data", "only-matching", "vimgrep", "trim", "pcre2", "json",
+        "stats", "with-filename", "no-filename", "quiet", "passthru",
+        "no-messages", "crlf", "binary", "byte-offset", "one-file-system",
+        "unrestricted", "glob-case-insensitive", "no-require-git", "pretty",
+        "max-columns-preview", "no-unicode", "debug", "trace", "version",
+        "help",
+      ],
+      [
+        "after-context", "before-context", "context", "max-count",
+        "max-depth", "glob", "iglob", "type", "type-not", "regexp", "file",
+        "sort", "sortr", "color", "colors", "max-columns", "max-filesize",
+        "replace", "encoding", "threads", "engine", "path-separator",
+        "field-match-separator", "field-context-separator",
+      ],
+    ),
+  ].join("|"),
+  // Not -o, which writes, nor --compress-program, -T or --files0-from.
+  sort: [
+    shorts("bcCdfghiMmnRrsuVz", "kSt"),
+    longs(
+      [
+        "ignore-leading-blanks", "dictionary-order", "ignore-case",
+        "general-numeric-sort", "human-numeric-sort", "ignore-nonprinting",
+        "month-sort", "numeric-sort", "random-sort", "reverse",
+        "version-sort", "unique", "stable", "merge", "zero-terminated",
+        "version", "help",
+      ],
+      ["key", "field-separator", "buffer-size", "parallel", "sort", "check"],
+    ),
+  ].join("|"),
+  // Not -o, which writes, nor -R, which writes a listing into each folder.
+  tree: [
+    shorts("acdfghilnpqstuvxACDFJNQSUX", "ILP"),
+    longs(
+      ["noreport", "dirsfirst", "gitignore", "prune", "du", "si", "matchdirs",
+        "ignore-case", "version", "help"],
+      ["charset", "filelimit", "sort"],
+    ),
+  ].join("|"),
+  // Tests and actions by name; a number like `-mtime -1` is a test's value.
+  find: [
+    "-\\d[\\w.+-]*",
+    `-(?:${[
+      "name", "iname", "path", "ipath", "wholename", "iwholename", "lname",
+      "ilname", "regex", "iregex", "type", "xtype", "maxdepth", "mindepth",
+      "depth", "prune", "newer", "anewer", "cnewer", "samefile", "mtime",
+      "mmin", "atime", "amin", "ctime", "cmin", "size", "empty", "perm",
+      "user", "group", "uid", "gid", "nouser", "nogroup", "links", "inum",
+      "readable", "writable", "executable", "not", "a", "and", "o", "or",
+      "true", "false", "print", "print0", "printf", "ls", "quit", "follow",
+      "xdev", "mount", "H", "L", "P", "E", "X", "d", "s", "x",
+    ].join("|")})`,
+  ].join("|"),
+};
+const flagRules = Object.fromEntries(
+  Object.entries(allowedFlags).map(([name, flags]) => [
+    name,
+    new RegExp(`^(?:${flags})$`),
+  ]),
+);
+
 /** Whether every command in `command` is on Relay's list of ones that only read. */
 export function readsOnly(command: string): boolean {
   const bare = command.replace(
@@ -100,27 +193,14 @@ export function readsOnly(command: string): boolean {
 
 function segmentReads(segment: string) {
   const [name, ...args] = segment.split(/\s+/);
-  const has = (pattern: RegExp) => args.some((a) => pattern.test(a));
   // Their flags decide whether they write, so a flag has to be spelled plainly.
-  if (
-    ["git", "rg", "sort", "tree", "find"].includes(name) &&
-    disguised.test(segment)
-  )
+  if (["git", ...Object.keys(allowedFlags)].includes(name) && disguised.test(segment))
     return false;
+  const flags = flagRules[name];
+  if (flags) return args.every((a) => !a.startsWith("-") || flags.test(a));
   switch (name) {
     case "git":
       return gitReadsOnly(args);
-    case "rg":
-      return !has(/^--pre(=|$)/);
-    case "sort":
-      // Short flags cluster (`-ro`) and long ones may be cut short (`--out`).
-      return !has(/^(--o|-[^-]*o)/);
-    case "tree":
-      return !has(/^(--o|-[^-]*o)/);
-    case "find":
-      return !has(
-        /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/,
-      );
     case "sed":
       return sedPrints(args);
     default:

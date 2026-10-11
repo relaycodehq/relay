@@ -679,9 +679,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       return result;
     };
     // Stop also needs to interrupt initialization, not wait for its RPC timeout.
-    const answer = await Promise.race([start(), result]).catch((error) => {
-      throw codexRequestFailure(error);
-    });
+    const answer = await Promise.race([start(), result]).catch(
+      async (error) => {
+        throw codexRequestFailure(await connection.failure(error));
+      },
+    );
     succeeded = true;
     return answer;
   } finally {

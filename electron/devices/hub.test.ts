@@ -1,8 +1,14 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { androidSdk, hubEnv, tokenIn } from "./hub";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { androidSdk, DeviceHub, HUB_VERSION, hubEnv, tokenIn } from "./hub";
+
+vi.mock("../platform/executables", () => ({
+  findExecutable: async (name: string) =>
+    name === "node" ? process.execPath : "/usr/bin/false",
+  runExecutable: async () => ({ code: 1, output: "", timedOut: false }),
+}));
 
 describe("tokenIn", () => {
   it("reads the token from the hub's startup link", () => {
@@ -52,4 +58,42 @@ it("puts the SDK's tools first on the hub's PATH", () => {
   expect(env.PATH).toBe(
     [join("/sdk", "platform-tools"), join("/sdk", "emulator"), "/usr/bin"].join(delimiter),
   );
+});
+
+describe("DeviceHub", () => {
+  let hub: DeviceHub | undefined;
+  afterEach(async () => {
+    await hub?.dispose();
+    vi.unstubAllEnvs();
+  });
+
+  it("goes to sleep once up when the tab closed while it was starting", async () => {
+    const root = await mkdtemp(join(tmpdir(), "relay-hub-"));
+    const sdk = join(root, "sdk");
+    await mkdir(join(sdk, "platform-tools"), { recursive: true });
+    await writeFile(join(sdk, "platform-tools", "adb"), "");
+    vi.stubEnv("ANDROID_HOME", sdk);
+    const dir = join(root, "hub");
+    const entry = join(dir, HUB_VERSION, "node_modules", "expo-device-hub", "dist", "server");
+    await mkdir(entry, { recursive: true });
+    // Takes a moment to come up, then prints its link and stays.
+    await writeFile(
+      join(entry, "cli.mjs"),
+      `setTimeout(() => console.log("Local: http://localhost:1/?token=abcdefghijklmnopqrstuvwxyz \\n"), 300); setInterval(() => {}, 1000);`,
+    );
+    let starting!: () => void;
+    const isStarting = new Promise<void>((r) => (starting = r));
+    hub = new DeviceHub(
+      dir,
+      () => void hub!.state().then((s) => s.status === "starting" && starting()),
+      async () => ({ ok: true }) as Response,
+    );
+    const started = hub.start();
+    await isStarting;
+    const child = (hub as unknown as { child?: { exitCode: number | null; signalCode: string | null } }).child;
+    await hub.sleep();
+    await started;
+    expect((await hub.state()).status).toBe("asleep");
+    await vi.waitFor(() => expect(child?.exitCode ?? child?.signalCode).not.toBeNull());
+  }, 20_000);
 });

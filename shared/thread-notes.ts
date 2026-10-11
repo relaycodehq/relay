@@ -22,7 +22,14 @@ export interface ThreadNote {
   updated: number;
 }
 
-export const noteTextSchema = z.string().trim().min(1).max(NOTE_MAX_CHARS);
+export const noteTextSchema = z
+  .string()
+  .trim()
+  .min(1, "A note needs some text.")
+  .max(
+    NOTE_MAX_CHARS,
+    `That note is too long (${NOTE_MAX_CHARS.toLocaleString("en-US")} characters at most).`,
+  );
 export const noteIdSchema = z
   .string()
   .regex(/^n\d{1,6}$/, "A note id is like n3.");
