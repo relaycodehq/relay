@@ -79,19 +79,29 @@ function set(next: Outgoing[]) {
 const update = (id: string, change: Partial<Outgoing>) =>
   set(items.map((o) => (o.send.id === id ? { ...o, ...change } : o)));
 
+/** Sends on their way right now, by id. */
+const inFlight = new Map<string, Promise<void>>();
+/** Being asked about to take back for an edit; not sent again meanwhile. */
+const takingBack = new Set<string>();
+
 function run(desktop: Desktop, item: Outgoing) {
-  desktop("sendProjectChat", item.chatId, item.send).then(
+  const { id } = item.send;
+  const sending = desktop("sendProjectChat", item.chatId, item.send).then(
     () => {
-      unkeep(item.send.id);
-      update(item.send.id, { sent: stamp(), error: undefined, unsure: undefined });
+      unkeep(id);
+      update(id, { sent: stamp(), error: undefined, unsure: undefined });
     },
     (e) =>
-      update(item.send.id, {
+      update(id, {
         error: e instanceof Error ? e.message : String(e),
         // A refused retry doesn't prove that an earlier unanswered copy failed.
         unsure: item.unsure || e instanceof Unanswered,
       }),
   );
+  inFlight.set(id, sending);
+  void sending.finally(() => {
+    if (inFlight.get(id) === sending) inFlight.delete(id);
+  });
 }
 
 /** Sends in the background; the desktop drops a second copy of the same id, so trying again is safe. */
@@ -109,7 +119,7 @@ export function deliver(
 
 export function retry(desktop: Desktop, id: string) {
   const item = items.find((o) => o.send.id === id);
-  if (!item) return;
+  if (!item || takingBack.has(id)) return;
   update(id, { error: undefined });
   run(desktop, { ...item, error: undefined });
 }
@@ -148,12 +158,20 @@ export async function reached(
   o: Outgoing,
   known?: Record<string, number>,
 ) {
-  const thread = await call("chat", o.chatId, known, remoteHistory, o.send.id);
-  if (thread.hasSend === undefined)
-    throw new Error("Update Relay on the computer before taking back an unanswered send.");
-  // A receipt covers the full history, including an accepted send outside this page.
-  if (thread.hasSend && !thread.sendPending) drop(o.send.id);
-  return thread.hasSend;
+  const { id } = o.send;
+  // A copy still on its way, or resent as the link comes back, would land after a "no".
+  takingBack.add(id);
+  try {
+    await inFlight.get(id);
+    const thread = await call("chat", o.chatId, known, remoteHistory, id);
+    if (thread.hasSend === undefined)
+      throw new Error("Update Relay on the computer before taking back an unanswered send.");
+    // A receipt covers the full history, including an accepted send outside this page.
+    if (thread.hasSend && !thread.sendPending) drop(id);
+    return thread.hasSend;
+  } finally {
+    takingBack.delete(id);
+  }
 }
 
 const subscribe = (listener: () => void) => {
