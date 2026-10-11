@@ -46,3 +46,38 @@ it("names failed reads, edits and agents honestly", () => {
     "Agent failed: Review security",
   );
 });
+
+it("counts a call the user stopped as stopped, not failed", () => {
+  expect(
+    summarizeActivity([
+      call("ls", "command", "complete"),
+      call("rg", "command", "stopped", "rg cache src"),
+    ]),
+  ).toBe("Ran 1 command and 1 tool call stopped");
+  expect(doneLabel(call("rg", "command", "stopped", "rg cache src"))).toBe(
+    "Stopped rg",
+  );
+  expect(
+    doneLabel(call("img", "tool", "stopped", "Generating an image")),
+  ).toBe("Stopped: Generating an image");
+});
+
+it("counts every file a multi-file patch edited", () => {
+  const patch: AgentActivity = {
+    ...call("p", "file", "complete", "README.md +1 more"),
+    detail: "README.md\nsrc/app.ts",
+  };
+  expect(
+    summarizeActivity([patch, call("e", "file", "complete", "src/app.ts")]),
+  ).toBe("Edited 2 files");
+});
+
+it("adds the calls a full trace let go of to the summary", () => {
+  expect(
+    summarizeActivity([call("build", "command", "complete")], {
+      command: 140,
+      read: 3,
+      failed: 2,
+    }),
+  ).toBe("Ran 141 commands, read 3 files, and 2 tool calls failed");
+});

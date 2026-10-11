@@ -773,8 +773,11 @@ export class ProjectChats {
   }
   async cancel(id: string) {
     const chat = this.storage.cached(id);
-    if (chat) chat.queuePaused = true;
+    // Only a stopped turn holds the queue back; nothing queues behind a side answer.
+    if (chat && (this.active.has(id) || this.councils.busy(chat)))
+      chat.queuePaused = true;
     this.active.stop(id);
+    this.active.stopSides(id);
     if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }

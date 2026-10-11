@@ -22,7 +22,8 @@ export const imagePath = (a: AgentActivity) =>
 
 /** A call that looks at or made an image Relay can show; it's still running or done. */
 export const looksAtImage = (a: AgentActivity) =>
-  a.status !== "failed" && imagePath(a) !== undefined;
+  (a.status === "running" || a.status === "complete") &&
+  imagePath(a) !== undefined;
 
 /** The image a finished call looked at or made, which the desktop hands out for its turn. */
 export const imageRead = (a: AgentActivity) =>
@@ -105,7 +106,8 @@ export function turnHeading(
   if (!turn.live)
     return {
       kind: "done",
-      text: summarizeActivity(turn.activity) || "Thought",
+      text:
+        summarizeActivity(turn.activity, message.traceDropped) || "Thought",
       last: turn.activity.at(-1),
     };
   if (expanded) return { kind: "working" };

@@ -45,7 +45,8 @@ export function relayNote(
     (p) => !changed.includes(p),
   );
   const commands = done("command").map(
-    (a) => `${clip(a.label, 300)}${a.status === "failed" ? "  (failed)" : ""}`,
+    (a) =>
+      `${clip(a.label, 300)}${a.status === "failed" || a.status === "stopped" ? `  (${a.status})` : ""}`,
   );
   const name = agentName(from);
   const first = conversation.find((m) => m.role === "user" && m.body.trim());

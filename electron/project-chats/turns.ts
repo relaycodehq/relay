@@ -367,6 +367,11 @@ export class ChatTurns {
             active,
           )
         : undefined;
+      // Stopped while the outgoing agent wrote its note: no note from Relay, no answer.
+      if (active.abort.signal.aborted) {
+        this.core.active.release(id, active);
+        return;
+      }
       if (switchedFrom && !(note?.status === "complete" && note.body.trim()))
         note = await this.relayHandoff(
           chat,
@@ -384,7 +389,7 @@ export class ChatTurns {
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       await this.core.storage.save(chat);
-      this.core.emit({ chatId: id, message: answer });
+      this.core.emit({ chatId: id, message: structuredClone(answer) });
       const { prompt, caughtUp, briefed } = turnPrompt({
         chat,
         input,
@@ -478,6 +483,8 @@ export class ChatTurns {
     const abort = new AbortController();
     const stop = () => abort.abort();
     active.abort.signal.addEventListener("abort", stop, { once: true });
+    // A Stop during the save above has already fired.
+    if (active.abort.signal.aborted) stop();
     const timer = setTimeout(stop, HANDOFF_TIMEOUT);
     try {
       await this.runner.run(
@@ -668,6 +675,7 @@ export class ChatTurns {
             interrupt(m);
             failed = true;
           }
+        if (failed && chat.queue?.length) chat.queuePaused = true;
         if (failed)
           await this.core.storage
             .save(chat)
@@ -771,7 +779,7 @@ export class ChatTurns {
       this.core.active.release(id, active);
       throw e;
     }
-    this.core.emit({ chatId: id, message });
+    this.core.emit({ chatId: id, message: structuredClone(message) });
     active.job = this.runner
       .run(chat, message, root, instructions ?? "", input, abort, {
         kind: "compact",

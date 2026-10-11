@@ -1,5 +1,5 @@
 // Moved from the desktop's AgentTurn so the phone app words a turn the same way.
-import type { AgentActivity } from "./projects";
+import type { AgentActivity, TraceDropped } from "./projects";
 
 export function duration(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -21,23 +21,59 @@ const summaries: Record<AgentActivity["kind"], (count: number) => string> = {
   tool: (n) => `Used ${plural(n, "tool")}`,
 };
 
-/** "Read 3 files, ran 2 commands, and edited 1 file" */
-export function summarizeActivity(activity: AgentActivity[]) {
+/**
+ * The files one edit call wrote. A patch over several reads "a.ts +2 more",
+ * its paths one per line in `detail` when the agent says them.
+ */
+function editedFiles(a: AgentActivity) {
+  const more = / \+(\d+) more$/.exec(a.label);
+  if (!more) return [a.label];
+  const paths = a.detail?.split("\n") ?? [];
+  const count = Number(more[1]) + 1;
+  return paths.length === count
+    ? paths
+    : Array.from({ length: count }, (_, i) => `${a.id}\n${i}`);
+}
+
+/**
+ * "Read 3 files, ran 2 commands, and edited 1 file". `dropped` adds the
+ * calls a long turn's full trace let go of.
+ */
+export function summarizeActivity(
+  activity: AgentActivity[],
+  dropped: TraceDropped = {},
+) {
   const groups = new Map<AgentActivity["kind"], Set<string>>();
   const failed = new Set<string>();
+  const stopped = new Set<string>();
   const running = new Set<string>();
   for (const a of activity) {
     if (a.status !== "complete") {
-      (a.status === "failed" ? failed : running).add(a.id);
+      (a.status === "failed"
+        ? failed
+        : a.status === "stopped"
+          ? stopped
+          : running
+      ).add(a.id);
       continue;
     }
     const seen = groups.get(a.kind) ?? new Set();
     // Repeated reads or edits of one file count once; commands and tools count every call.
-    seen.add(a.kind === "read" || a.kind === "file" ? a.label : a.id);
+    if (a.kind === "file") for (const path of editedFiles(a)) seen.add(path);
+    else seen.add(a.kind === "read" ? a.label : a.id);
     groups.set(a.kind, seen);
   }
-  const labels = [...groups].map(([kind, seen]) => summaries[kind](seen.size));
-  if (failed.size) labels.push(`${plural(failed.size, "tool call")} failed`);
+  // The dropped calls came first.
+  const counts = new Map<AgentActivity["kind"], number>();
+  for (const [kind, n] of Object.entries(dropped))
+    if (kind !== "failed" && n) counts.set(kind as AgentActivity["kind"], n);
+  for (const [kind, seen] of groups)
+    counts.set(kind, (counts.get(kind) ?? 0) + seen.size);
+  const labels = [...counts].map(([kind, n]) => summaries[kind](n));
+  const failures = failed.size + (dropped.failed ?? 0);
+  if (failures) labels.push(`${plural(failures, "tool call")} failed`);
+  if (stopped.size)
+    labels.push(`${plural(stopped.size, "tool call")} stopped`);
   if (running.size)
     labels.push(`${plural(running.size, "tool call")} still running`);
   const parts = labels.map((text, index) => {
@@ -112,6 +148,25 @@ export function doneLabel(a: AgentActivity) {
         return `Agent failed: ${a.label}`;
       case "tool":
         return `Tool failed: ${a.label}`;
+    }
+  }
+  if (a.status === "stopped") {
+    switch (a.kind) {
+      case "command":
+        return `Stopped ${programName(a.label) ?? "command"}`;
+      case "read":
+        return `Stopped reading ${baseName(a.label)}`;
+      case "file":
+        return `Stopped editing ${baseName(a.label)}`;
+      case "search":
+        return `Search stopped: ${a.label}`;
+      case "web":
+        return "Web search stopped";
+      case "agent":
+        return `Agent stopped: ${a.label}`;
+      case "tool":
+        // Its label is still the running one, e.g. "Generating an image".
+        return `Stopped: ${a.label}`;
     }
   }
   switch (a.kind) {

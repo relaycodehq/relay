@@ -86,6 +86,9 @@ export class ThreadTriage {
       (this.core.active.requests(id).length || chat.waiting)
     )
       throw new Error("Answer the waiting request before snoozing.");
+    // Before anything changes: the loaded thread is the one kept in memory.
+    if (triage.kind === "snooze" && triage.until <= now)
+      throw new Error("Choose a future wake time.");
     delete chat.snoozedAt;
     delete chat.snoozedUntil;
     delete chat.settleWhenDone;
@@ -99,7 +102,6 @@ export class ThreadTriage {
     // Settled by hand or automatically, moving it back keeps it out until something new happens.
     if (triage.kind === "unsettle") chat.unsettledAt = now;
     if (triage.kind === "snooze") {
-      if (triage.until <= now) throw new Error("Choose a future wake time.");
       chat.snoozedAt = now;
       chat.snoozedUntil = triage.until;
     }

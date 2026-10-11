@@ -77,7 +77,8 @@ export class LinkSender {
       const [id, event] = this.held.entries().next().value!;
       this.held.delete(id);
       const prev = this.sent.get(id);
-      this.sent.set(id, event.message);
+      // A copy: the event may hold the live answer the recorder keeps writing into.
+      this.sent.set(id, structuredClone(event.message));
       const s = ++this.seq;
       const bytes = this.send({
         t: "event",

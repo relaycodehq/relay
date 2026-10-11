@@ -78,3 +78,15 @@ it("stops waiting for an acknowledgement that never comes", () => {
   link.event(answer("One two three four"));
   expect(frames).toHaveLength(2);
 });
+
+it("patches against what went out, even when the answer it sent keeps changing", () => {
+  const { link, frames } = slowLink(100);
+  // A turn's first emit can be the live answer the recorder goes on writing into.
+  const first = answer("");
+  link.event(first);
+  if (first.kind === "message") first.message.body = "Hello ";
+  link.event(answer("Hello world"));
+  expect(frames[1]).toMatchObject({
+    event: { kind: "messagePatch", patch: { body: { from: 0, text: "Hello world" } } },
+  });
+});
