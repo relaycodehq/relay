@@ -127,7 +127,8 @@
   }
 }
 @container (max-width: 420px) {
-  .thread-context-controls .workspace-trigger > span {
+  /* A deleted worktree's words are the warning, so they stay. */
+  .thread-context-controls .workspace-trigger:not(.deleted-worktree) > span {
     display: none;
   }
 }

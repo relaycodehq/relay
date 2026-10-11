@@ -148,6 +148,12 @@
 .thread-context-controls .deleted-worktree > svg {
   color: var(--danger);
 }
+/* Too narrow for all three, the actions wrap below rather than run off. */
+.thread-context-controls:has(.deleted-worktree) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 2px;
+}
 .thread-context-controls .deleted-worktree-action {
   flex: none;
   padding: 3px 6px;

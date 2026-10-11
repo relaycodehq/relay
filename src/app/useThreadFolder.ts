@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { workspaceId } from "../../shared/workspaces";
 import {
   agentWorktreeKey,
+  agentWorktreeUnavailable,
   goneFolder,
   threadWorktree,
 } from "../../shared/projects";
@@ -27,6 +28,8 @@ export function useThreadFolder({
 }: Pick<ShellNavigation, "project" | "chat" | "chats" | "inbox" | "pull">) {
   const inWorktree = worktreeThread(chat);
   const worktree = threadWorktree(inWorktree);
+  // Its agent worktree was deleted: Git there only fails until the composer's row picks where it goes on.
+  const deleted = agentWorktreeUnavailable(chat);
   const where = project
     ? workspaceId(
         project.id,
@@ -41,7 +44,7 @@ export function useThreadFolder({
   const tree = useQuery({
     queryKey: workingTreeKey(where),
     queryFn: () => api.projectWorkingTree(where),
-    enabled: !!project && !inbox && !project.plain,
+    enabled: !!project && !inbox && !project.plain && !deleted,
     refetchInterval: 3000,
   });
   // A plain folder has no tree to poll; its root listing, shared with the
@@ -65,7 +68,7 @@ export function useThreadFolder({
   // (one session at a time), so the working-tree checks stand aside there.
   const checks = useProjectChecks(
     undefined,
-    project && tree.data && !gone && !inbox && !pull
+    project && tree.data && !gone && !deleted && !inbox && !pull
       ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
@@ -75,12 +78,17 @@ export function useThreadFolder({
     /** Workspace id: the checkout, or the thread's worktree. */
     where,
     /** For pane headers: which worktree they show. */
-    detail: worktree && {
-      text: "worktree",
-      title: `${worktree.branch ?? "Detached HEAD"} · ${worktree.path}`,
-    },
-    tree: gone ? undefined : tree.data,
+    detail:
+      worktree && !deleted
+        ? {
+            text: "worktree",
+            title: `${worktree.branch ?? "Detached HEAD"} · ${worktree.path}`,
+          }
+        : undefined,
+    tree: gone || deleted ? undefined : tree.data,
     gone,
+    /** The thread's worktree was deleted; panes stand aside until it moves. */
+    deleted,
     checks,
   };
 }

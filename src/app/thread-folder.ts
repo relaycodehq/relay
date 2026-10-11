@@ -6,9 +6,12 @@ import type {
 } from "../../shared/projects";
 import {
   agentWorktreeUnavailable,
-  agentWorktreeUnavailableError,
   threadWorktree,
 } from "../../shared/projects";
+
+/** Where a pane would read a thread's worktree that was deleted under it. */
+export const WORKTREE_DELETED =
+  "This thread's worktree was deleted. Pick where it carries on, under the message box";
 
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
@@ -41,8 +44,7 @@ export function terminalBlocked(
   scope: ChatScope,
   draftWorkspace: ChatWorkspace,
 ) {
-  if (agentWorktreeUnavailable(chat))
-    return agentWorktreeUnavailableError;
+  if (agentWorktreeUnavailable(chat)) return WORKTREE_DELETED;
   return chat?.worktree
     ? chat.worktree.removedAt
       ? "This thread's worktree was removed. Its next message makes a new one"

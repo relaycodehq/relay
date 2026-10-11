@@ -61,12 +61,14 @@ export function FolderGone({
   );
 }
 
-/** Where a pane would read the missing folder. */
-export function FolderGoneEmpty() {
+/** Where a pane would read the missing folder: the project's, or with `reason` the thread's own. */
+export function FolderGoneEmpty({ reason }: { reason?: string }) {
   return (
     <div className="empty pane-empty folder-gone-empty">
       <FolderX size={24} />
-      <p>Nothing to show while the project’s folder is missing.</p>
+      <p>
+        {reason ?? "Nothing to show while the project’s folder is missing."}
+      </p>
     </div>
   );
 }

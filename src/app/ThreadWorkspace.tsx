@@ -99,7 +99,7 @@ export function ThreadHeaderActions({
           opens.openInEditor({ path, line, directory: false })
         }
       />
-      {!project.plain && !folder.gone && (
+      {!project.plain && !folder.gone && !folder.deleted && (
         <GitActions
           key={folder.where}
           project={project}

@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { ProjectChat } from "../../shared/projects";
 import { screenshot } from "../fixtures/screenshot";
-import { openInFileTree } from "../fixtures/navigation";
+import { openInFileTree, openSurface } from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { workspaceId } from "../../shared/workspaces";
 
@@ -205,7 +205,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     const changes = page.getByRole("region", { name: "Local changes" });
     await expect(changes).toContainText("feature.txt");
     await expect(changes).not.toContainText("main-only.txt");
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     await openInFileTree(page, "feature.txt");
     await expect(page.locator(".project-inline-editor")).toContainText(
       "Only in the worktree",
@@ -228,7 +228,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Worktree change");
     expect(gitIn(repo, "rev-parse", "HEAD")).toBe(mainHead);
     expect(gitIn(repo, "status", "--porcelain")).toBe("?? main-only.txt");
-    await page.getByRole("button", { name: "History", exact: true }).click();
+    await openSurface(page, "History");
     await expect(page.locator(".project-history")).toContainText(
       "Worktree change",
     );
@@ -265,6 +265,11 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     gitIn(repo, "worktree", "remove", worktree);
     const deleted = page.locator(".deleted-worktree");
     await expect(deleted).toHaveText("Worktree deleted");
+    // The Changes pane stands aside instead of failing on the missing folder.
+    await expect(changes).toHaveCount(0);
+    await expect(
+      page.getByText("This thread's worktree was deleted", { exact: false }),
+    ).not.toHaveCount(0);
     await expect(page.getByRole("button", { name: /^main$/ })).toHaveCount(0);
     await page.getByLabel("Message project").fill("must not edit main");
     await expect(
@@ -287,9 +292,11 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.getByRole("button", { name: "Recreate worktree" }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Continue in checkout" }).click();
-    await expect(
-      page.getByRole("button", { name: /Current checkout/ }),
-    ).toBeVisible();
+    await expect(changes).toBeVisible();
+    // With the panel open the row sheds its labels, so read the text, not the name.
+    await expect(page.locator(".agent-worktree-trigger")).toHaveText(
+      "Current checkout",
+    );
     await expect(page.getByRole("button", { name: /^main$/ })).toBeVisible();
   } finally {
     await app.close().catch(() => {});

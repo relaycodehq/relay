@@ -30,7 +30,7 @@ describe("worktreeThread", () => {
     };
     expect(worktreeThread(missing)).toBe(missing);
     expect(terminalBlocked(missing, { kind: "project" }, "checkout")).toContain(
-      "unavailable",
+      "worktree was deleted",
     );
   });
   it("follows the selected agent-created worktree, while a managed worktree takes priority", () => {

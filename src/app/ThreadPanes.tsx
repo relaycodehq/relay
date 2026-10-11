@@ -17,6 +17,7 @@ import { PullReviewPane } from "../features/review/PullReviewPane";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
+import { WORKTREE_DELETED } from "./thread-folder";
 import {
   NO_SLOTS,
   PaneHeader,
@@ -56,7 +57,7 @@ import {
 export function ThreadChanges({
   project,
   pull,
-  folder: { where, detail, gone },
+  folder: { where, detail, gone, deleted },
   view,
   opens,
   review,
@@ -149,8 +150,8 @@ export function ThreadChanges({
             )}
           </div>
         )
-      ) : gone ? (
-        <FolderGoneEmpty />
+      ) : gone || deleted ? (
+        <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
       ) : (
         <ProjectChanges
           key={where}
@@ -176,7 +177,7 @@ export function ThreadChanges({
 export function ThreadPanel({
   project,
   chatId,
-  folder: { where, detail, checks, gone },
+  folder: { where, detail, checks, gone, deleted },
   view,
   opens,
   panel,
@@ -294,8 +295,8 @@ export function ThreadPanel({
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
           {/* An unsaved edit stays on screen, to copy out before it goes. */}
-          {gone && !locked ? (
-            <FolderGoneEmpty />
+          {(gone || deleted) && !locked ? (
+            <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
           ) : (
             <ProjectFiles
               key={where}
@@ -310,8 +311,8 @@ export function ThreadPanel({
       )}
       {panel.has("history") && !project.plain && (
         <div className="panel-body" hidden={front?.surface !== "history"}>
-          {gone ? (
-            <FolderGoneEmpty />
+          {gone || deleted ? (
+            <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
           ) : (
             <ProjectHistory
               key={where}
