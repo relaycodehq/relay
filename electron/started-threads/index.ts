@@ -5,6 +5,7 @@
 // user lets it, and a started thread only reads, so nothing starts threads of
 // threads.
 import { inputBlocksThread } from "../../shared/thread-state";
+import { sliceWhole } from "../../shared/truncate";
 import { randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 import {
@@ -122,10 +123,10 @@ export function startedStatus(
 
 /** The start of what the user is asked about. */
 const head = (text: string, limit = 600) =>
-  text.length > limit ? `${text.slice(0, limit)}…` : text;
+  text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
 
 const tail = (text: string, limit = ANSWER_TAIL) =>
-  text.length > limit ? `…${text.slice(-limit)}` : text;
+  text.length > limit ? `…${sliceWhole(text, -limit)}` : text;
 
 const json = (value: unknown) => toolText(JSON.stringify(value, null, 1));
 
