@@ -242,6 +242,7 @@ export class RemoteClient {
             : message.data;
         if (typeof data !== "string" && !(data instanceof Uint8Array))
           return socket.close();
+        let opened: ServerFrame | undefined;
         try {
           if (!this.channel) {
             if (typeof data !== "string") throw new Error();
@@ -295,11 +296,18 @@ export class RemoteClient {
             resolve();
             return;
           }
-          this.receive(frame);
+          opened = frame;
         } catch {
           // Anything that doesn't open under the pinned key isn't our desktop.
           fail(new Error(`Couldn't verify ${this.name}. Pair again.`));
           socket.close();
+        }
+        if (!opened) return;
+        // A listener's or a patch's failure is ours, not the desktop's: the link stays.
+        try {
+          this.receive(opened);
+        } catch (error) {
+          console.warn(`Couldn't take in what ${this.name} sent:`, error);
         }
       };
     });
