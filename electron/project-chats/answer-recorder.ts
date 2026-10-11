@@ -12,6 +12,7 @@ import type { TurnModel } from "../../shared/turn-model";
 import type { WatchNote } from "../../shared/watch";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
+import { addStreamed, type Streamed } from "../../shared/usage";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -130,6 +131,12 @@ export class AnswerRecorder {
   /** Adds to this answer's cost, so a steer's answer below carries on from zero. */
   cost(usd: number) {
     this.message.cost = (this.message.cost ?? 0) + usd;
+    this.changed();
+  }
+  /** Adds a request's timed output, so a steer's answer below carries on from zero. */
+  streamed(timed: Streamed) {
+    if (this.stopped) return;
+    this.message.streamed = addStreamed(this.message.streamed, timed);
     this.changed();
   }
   setModel(model: TurnModel) {

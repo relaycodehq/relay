@@ -90,6 +90,24 @@ describe("summarizeUsage", () => {
     expect(s.totals.unpriced).toBe(true);
   });
 
+  it("tells a model's speed by its median run, skipping runs too short to time", () => {
+    const timed = (output: number, ms: number) => ({
+      "claude-opus-5-5": { ...spend(10, output), streamed: { output, ms } },
+    });
+    const s = summary([
+      run({ models: timed(1000, 10_000) }),
+      run({ models: timed(900, 10_000) }),
+      // One run stuck behind a slow stream doesn't drag the median down.
+      run({ models: timed(1000, 100_000) }),
+      run({ models: timed(20, 50) }),
+      run({ models: { "claude-opus-5-5": spend(10, 500) } }),
+    ]);
+    expect(s.models.find((m) => m.model === "Opus 5.5")?.speed).toEqual({
+      tps: 90,
+      runs: 3,
+    });
+  });
+
   it("splits Relay's own jobs from threads and old room runs", () => {
     const s = summary([
       run({ chat: "c1", models: { m: spend(100, 0, 1) } }),

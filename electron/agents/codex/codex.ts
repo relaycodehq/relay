@@ -5,6 +5,7 @@ import {
   sandboxPolicyFor,
 } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
+import { CodexRequestSpeed } from "./codex-speed";
 import { acquireCodexConnection } from "./codex-connection";
 import {
   codexTokens,
@@ -139,6 +140,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     !!policy &&
     !!options.session &&
     (job.kind === "prompt" || job.kind === "adopt" || job.kind === "goal");
+  const speed = new CodexRequestSpeed();
   const goals = new CodexGoalHold(
     connection.goal,
     (goal) => options.onGoal?.(goal),
@@ -167,6 +169,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     if (!n) return;
     const p = n.params;
     if (p.threadId && threadId && p.threadId !== threadId) return;
+    speed.observe(n);
     if (n.method === "account/rateLimits/updated")
       spentUntil = codexSpentUntil(n.params.rateLimits) ?? spentUntil;
     if (n.method === "thread/tokenUsage/updated") {
@@ -174,13 +177,19 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       if (usage) options.onContext?.(usage);
       watcher?.requested(n.params.tokenUsage);
       // `last` is the one request that just finished.
-      const last = (n.params.tokenUsage as { last?: object } | null)?.last;
+      const last = (
+        n.params.tokenUsage as {
+          last?: { outputTokens?: number; reasoningOutputTokens?: number };
+        } | null
+      )?.last;
       const model = options.choice.model || connection.started?.model;
+      const streamed = last && speed.finish(last);
       if (last && model)
         options.onUsage?.({
           model,
           tokens: codexTokens(last),
           fast: options.choice.fast,
+          ...(streamed && { streamed }),
         });
     }
     if (n.method === "thread/name/updated" && n.params.threadName != null)

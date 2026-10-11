@@ -4,6 +4,7 @@ import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
 import type { AgentQuestion } from "../agent-modes";
 import type { HtmlRender } from "../html-render";
+import type { Streamed } from "../usage";
 
 export interface PageAnswer {
   title: string;
@@ -91,6 +92,8 @@ export interface ChatMessage {
   context?: ContextUsage;
   /** Local: dollars this answer cost, as its agent priced it. */
   cost?: number;
+  /** Local: what the agent itself wrote and how long writing it took, for its speed; subagents aren't in it. */
+  streamed?: Streamed;
   /** Local: the model and settings this answer ran on. */
   model?: TurnModel;
   /** Local proposed-plan action. */

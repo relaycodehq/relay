@@ -21,7 +21,7 @@ import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
 import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
-import type { AgentWatch } from "../agents/types";
+import type { AgentWatch, UsageReport } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
@@ -257,6 +257,10 @@ export class TurnRunner {
         },
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
+        onUsage: (usage: UsageReport) => {
+          if (usage.streamed && !usage.subagent)
+            answer.streamed(usage.streamed);
+        },
         cwd: root,
         ...(links.length ? { links } : {}),
         ...(Object.keys(env).length ? { env } : {}),

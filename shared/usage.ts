@@ -36,11 +36,36 @@ export const relayJobLabels: Record<Exclude<UsageJob, "thread">, string> = {
   helper: "Other helpers",
 };
 
+/**
+ * Output a model wrote and the time it spent writing it, from its first token
+ * to its last; waiting for the first token and running tools aren't counted.
+ */
+export type Streamed = { output: number; ms: number };
+
+/**
+ * Faster than any model writes: frames that arrived in one burst, e.g. read
+ * back after Relay restarted, rather than as the model wrote them.
+ */
+const TOO_FAST = 2000;
+
+/** The time a request spent writing, when it reads as real. */
+export function streamedIfReal(output: number, ms: number) {
+  if (output < 2 || ms <= 0 || (output * 1000) / ms > TOO_FAST) return;
+  return { output, ms };
+}
+
+export const tokensPerSecond = (s: Streamed) => (s.output * 1000) / s.ms;
+
+export const addStreamed = (a: Streamed | undefined, b: Streamed): Streamed =>
+  a ? { output: a.output + b.output, ms: a.ms + b.ms } : { ...b };
+
 export type UsageModelSpend = {
   tokens: UsageTokens;
   /** Dollars at API list prices; absent for a model Relay has no price for. */
   usd?: number;
   requests: number;
+  /** The requests Relay could time; agents that don't stream tokens leave it out. */
+  streamed?: Streamed;
 };
 
 /** One agent run, or what a session did after its run had ended. */
@@ -116,6 +141,8 @@ export type UsageSummary = {
     fresh: number;
     usd: number;
     unpriced: boolean;
+    /** Median tokens a second over the runs timed long enough to tell. */
+    speed?: { tps: number; runs: number };
   }[];
   /** The busiest few by each measure, so either can rank them. */
   threads: {
@@ -230,6 +257,15 @@ function addBusy(
   }
 }
 
+/** A run that wrote less than this is too short for its speed to mean much. */
+const TIMED_OUTPUT = 100;
+
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 export function summarizeUsage(
   entries: readonly UsageEntry[],
   input: { range: UsageRange; now: number; chats: UsageChat[] },
@@ -266,6 +302,7 @@ export function summarizeUsage(
   for (const d of days) weekdays[weekday(d.day)].days++;
 
   const models = new Map<string, UsageSummary["models"][number]>();
+  const speeds = new Map<string, number[]>();
   const threads = new Map<
     string,
     { fresh: number; usd: number; by: PerProvider }
@@ -302,6 +339,12 @@ export function summarizeUsage(
       row.usd += spend.usd ?? 0;
       if (spend.usd === undefined && n) row.unpriced = totals.unpriced = true;
       models.set(key, row);
+      const timed = spend.streamed;
+      if (timed && timed.output >= TIMED_OUTPUT && timed.ms > 0) {
+        const rates = speeds.get(key) ?? [];
+        rates.push(tokensPerSecond(timed));
+        speeds.set(key, rates);
+      }
     }
     totals.fresh += fresh;
     totals.usd += usd;
@@ -334,6 +377,9 @@ export function summarizeUsage(
       threads.set(e.chat, t);
     }
   }
+
+  for (const [key, rates] of speeds)
+    models.get(key)!.speed = { tps: median(rates), runs: rates.length };
 
   const chats = new Map(input.chats.map((c) => [c.id, c]));
   const counted = [...threads.entries()];

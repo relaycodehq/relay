@@ -1,5 +1,6 @@
 import type { AgentProvider } from "../../shared/agents";
 import {
+  addStreamed,
   addTokens,
   noTokens,
   type UsageEntry,
@@ -40,7 +41,15 @@ export class CountedRun {
       listCost(report.model, report.tokens, { fast: report.fast });
     if (this.ended) {
       this.log(Date.now(), 0, false, [
-        [report.model, { tokens: report.tokens, usd, requests: 1 }],
+        [
+          report.model,
+          {
+            tokens: report.tokens,
+            usd,
+            requests: 1,
+            ...(report.streamed && { streamed: report.streamed }),
+          },
+        ],
       ]);
       return;
     }
@@ -49,12 +58,16 @@ export class CountedRun {
       usd: 0,
       requests: 0,
     };
+    const streamed = report.streamed
+      ? addStreamed(was.streamed, report.streamed)
+      : was.streamed;
     this.models.set(report.model, {
       tokens: addTokens(was.tokens, report.tokens),
       // One unpriced request leaves the model's dollars unknown, not short.
       usd:
         was.usd === undefined || usd === undefined ? undefined : was.usd + usd,
       requests: was.requests + 1,
+      ...(streamed && { streamed }),
     });
   };
 

@@ -482,6 +482,7 @@ export const Message = memo(function Message({
           text={text}
           readingKey={m.id}
           sent={m.created}
+          streamed={m.streamed}
           pending={m.status === "streaming"}
           onReply={() => onReply(m)}
           onFork={onFork && (() => onFork(m))}

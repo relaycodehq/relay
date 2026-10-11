@@ -151,6 +151,12 @@
   margin-left: 6px;
   font-size: 12px;
 }
+.message-speed {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 /* A user message's copy sits at the end of its header, so the bubble gains no row. */
 .project-message > header .message-copy {
   margin: -6px -5px -6px auto;

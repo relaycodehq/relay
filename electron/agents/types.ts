@@ -17,7 +17,7 @@ import type { GoalCommand, ThreadGoal } from "../../shared/goal";
 import type { ProviderCommand } from "../../shared/commands";
 import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
-import type { UsageJob, UsageTokens } from "../../shared/usage";
+import type { Streamed, UsageJob, UsageTokens } from "../../shared/usage";
 import type { RenderMode } from "../../shared/html-render";
 
 /** What one request of a run used, as the agent reported it. */
@@ -28,6 +28,10 @@ export type UsageReport = {
   usd?: number;
   /** Served in fast mode, which bills at a multiple of the list rates. */
   fast?: boolean;
+  /** The output it showed, thinking left out, and how long writing it took; left out when it can't be timed. */
+  streamed?: Streamed;
+  /** A subagent's request, not the agent's own. */
+  subagent?: boolean;
 };
 
 /** What the run is for; each runtime handles every kind. */

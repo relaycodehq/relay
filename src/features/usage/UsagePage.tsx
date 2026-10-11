@@ -218,6 +218,9 @@ function Rhythmic({
     models.length === OTHERS_AFTER + 1 ? models.length : OTHERS_AFTER,
   );
   const rest = models.slice(shown.length).reduce((n, x) => n + x[m], 0);
+  const speeds = summary.models
+    .flatMap((x) => (x.speed ? [{ ...x, speed: x.speed }] : []))
+    .sort((a, b) => b.speed.tps - a.speed.tps);
   const threads = [...summary.threads]
     .filter((t) => t[m] > 0)
     .sort((a, b) => b[m] - a[m])
@@ -318,6 +321,25 @@ function Rhythmic({
               </li>
             )}
           </ul>
+        </Block>
+      )}
+
+      {speeds.length > 0 && (
+        <Block title="How fast they write" aside="median, without thinking">
+          <Rows
+            rows={speeds}
+            value={(x) => x.speed.tps}
+            label={(x) => (
+              <>
+                <HarnessMark id={x.provider} />
+                {x.model}
+              </>
+            )}
+            detail={(x) =>
+              `${x.speed.runs.toLocaleString("en-US")} ${x.speed.runs === 1 ? "run" : "runs"}`
+            }
+            format={(v) => `${Math.round(v)} tok/s`}
+          />
         </Block>
       )}
 
