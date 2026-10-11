@@ -259,6 +259,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
+    await page.getByRole("option", { name: "Choose in Finder…" }).click();
     await expect(page.locator(".pane-header")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: /What should we work on/ }),
@@ -629,7 +630,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .getByRole("option", { name: "GPT-5.6-Luna", exact: true })
       .click();
     await expect(picker).toContainText("GPT-5.6-Luna");
-    await page.getByRole("button", { name: "2 replies", exact: true }).click();
+    await page.getByRole("button", { name: "3 replies", exact: true }).click();
     await expect(
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toBeVisible();
@@ -690,6 +691,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add project", exact: true })
       .click();
+    await page.getByRole("option", { name: "Choose in Finder…" }).click();
     await expect(
       page.getByRole("heading", {
         name: /What should we work on in Another Project/,

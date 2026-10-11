@@ -204,9 +204,9 @@ test("shares OpenRouter favorites between deep review reviewers and the lead", a
       .click();
     await page.getByLabel("Search models", { exact: true }).press("Escape");
     await page.reload();
-    await page
-      .getByRole("button", { name: "Deep review", exact: true })
-      .click();
+    await expect(
+      page.getByRole("button", { name: "Deep review", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
     await page
       .getByRole("button", { name: "Reviewer 1 model", exact: true })
       .click();
