@@ -155,6 +155,7 @@
 }
 .pane-header-actions .history-scope > button {
   border: 0;
+  gap: 0.3em;
   background: transparent;
   color: var(--muted);
   font-size: 11px;
@@ -199,6 +200,12 @@
 @container (max-width: 560px) {
   .history-author,
   .history-row code {
+    display: none;
+  }
+}
+/* A narrow panel keeps room for its tabs: "Current" and "All" say enough. */
+@container (max-width: 460px) {
+  .history-scope-word {
     display: none;
   }
 }
