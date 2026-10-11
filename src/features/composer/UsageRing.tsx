@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
+import { usePinOnClick } from "../../lib/usePinOnClick";
 import { Flame, RefreshCw } from "lucide-react";
 import {
   paceGap,
@@ -59,6 +60,7 @@ export const UsageRing = memo(function UsageRing({
   const [usage, setUsage] = useState<ProviderUsage>();
   const [now, setNow] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
+  const pinOnClick = usePinOnClick();
   const loadRef = useRef<(force: boolean) => Promise<void>>(undefined);
   useEffect(() => {
     let cancel = false;
@@ -96,7 +98,7 @@ export const UsageRing = memo(function UsageRing({
   if (usage && !usage.windows.length) return null;
   const hot = state?.pace === "hot" || state?.pace === "spent";
   return (
-    <Popover.Root>
+    <Popover.Root onOpenChange={pinOnClick}>
       <Popover.Trigger
         openOnHover
         delay={150}
