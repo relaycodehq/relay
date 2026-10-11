@@ -29,17 +29,6 @@ function generatedTitle(output: string): string | null {
   }
 }
 
-/**
- * A first title is a few words, so it runs on the agent's small model. Measured
- * 2026-10-08: Haiku 5.5 at low effort doesn't think and costs ~1/35 of Opus 5.5
- * per title, about a second sooner. Agents left out use the thread's model.
- */
-const titleModels: Partial<Record<AgentProvider, string>> = {
-  claude: "claude-haiku-5-5",
-  codex: "gpt-6-luna",
-};
-export const titleModel = (provider: AgentProvider) => titleModels[provider];
-
 /** Whether the first message says enough to name the thread before any answer. */
 export function namesItself(body: string): boolean {
   return !!replacePastedTexts(body, (paste) => paste.text)
@@ -49,9 +38,9 @@ export function namesItself(body: string): boolean {
 }
 
 const titleGuidance = `A useful title:
-- names the concrete topic and the person's intent, keeping the details someone would remember or search for later;
-- includes what distinguishes this thread: the affected feature, the specific problem or behavior, or both sides of a change. Keep relevant project, tool and model names when they help identify the topic;
-- usually uses 5-12 words, up to 120 characters. Use fewer words for a simple request; don't drop identifying details just to make it shorter, or add filler to make it longer;
+- names the concrete topic and the person's intent in the words they would search for later;
+- names what the thread works on, not what it is compared to: a product, repo or thread the person points to as an example or source of ideas stays out unless the thread is about it;
+- usually uses 3-8 words and stays under about 60 characters. Keep the one or two details that tell it apart (the feature, the specific problem, a key constraint) rather than listing every one;
 - uses sentence case and a direct action or clear subject phrase, without claiming the work is finished;
 - leaves out greetings, agent mentions, jokes, quotes, closing punctuation and workflow chores (review, test, commit, pull, merge, push) when they surround a more specific task. If a chore is the entire request, name it plainly.`;
 
@@ -75,7 +64,8 @@ ${titleGuidance}
 Examples:
 - "pull first, displayed timestamps ignore the timezone; fix it, then commit and push" → "Fix displayed timestamps ignoring the timezone"
 - "there's no option to remove a project folder; add one" → "Add an option to remove project folders"
-- "stop assuming every repo is on Gitea; support GitHub too" → "Remove Gitea-only dependency and support GitHub repositories"
+- "stop assuming every repo is on Gitea; support GitHub too" → "Support GitHub repositories, not only Gitea"
+- "can our file tree do keyboard nav like VS Code's? check how they do it" → "Keyboard navigation in the file tree"
 - "commit everything" → "Commit all changes"
 - "what's this again?" with a screenshot of a thread titled "Fix OAuth callback looping back to the login page" → "Ask what the OAuth login thread is"
 

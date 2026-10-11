@@ -371,7 +371,7 @@ it("names a thread from its first message while the answer is still running", as
     .map((line) => JSON.parse(line))
     .find((r) => r.turn?.input[0].text.startsWith("Generate a short title"));
   expect(titling.turn).toMatchObject({
-    model: "gpt-6-luna",
+    model: "fixture-model",
     effort: "low",
   });
   expect(titling.turn.input[0].text).toContain("Explain the cache guard");
@@ -799,27 +799,9 @@ it("generates a title for Claude conversations, which have no thread-name event"
     .filter((r) => r.provider === "claude" && r.prompt.includes("short title"));
   expect(titling).toHaveLength(1);
   expect(titling[0].args.join(" ")).toContain(
-    "--model claude-haiku-5-5 --effort low",
+    "--model fixture-model --effort low",
   );
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
-});
-it("names a thread on its own model when the small one isn't available", async () => {
-  vi.stubEnv("RELAY_AGENT_REJECT_MODEL", "claude-haiku-5-5");
-  const chat = await chats.create(projectId, { kind: "project" });
-  await chats.send(chat.id, {
-    ...input("@claude Explain the cache guard"),
-    provider: "claude",
-  });
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
-  );
-  const models = (await agentCalls({ helpers: true }))
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line))
-    .filter((r) => r.provider === "claude" && r.prompt.includes("short title"))
-    .map((r) => r.args[r.args.indexOf("--model") + 1]);
-  expect(models).toEqual(["claude-haiku-5-5", "fixture-model"]);
 });
 it("shows a turn Claude starts by itself as its own answer, so later answers stay under their questions", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
