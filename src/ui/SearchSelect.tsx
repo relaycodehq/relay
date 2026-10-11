@@ -23,6 +23,7 @@ export function SearchSelect({
   placeholder = "Search…",
   unset,
   trigger,
+  triggerLabel,
   triggerClassName = "composer-control",
   action,
   empty = "Nothing matches.",
@@ -40,6 +41,8 @@ export function SearchSelect({
   unset?: string;
   /** The trigger's content in place of the picked option and a chevron. */
   trigger?: ReactNode;
+  /** Names a custom `trigger` whose content doesn't say what it picks. */
+  triggerLabel?: string;
   triggerClassName?: string;
   /** A row under the list that does something else, e.g. open Finder. */
   action?: { label: string; icon?: ReactNode; onSelect: () => void };
@@ -90,7 +93,7 @@ export function SearchSelect({
     >
       <Popover.Trigger
         type="button"
-        aria-label={trigger ? undefined : label}
+        aria-label={trigger ? triggerLabel : label}
         title={trigger ? undefined : selectedLabel}
         className={triggerClassName}
         disabled={disabled}

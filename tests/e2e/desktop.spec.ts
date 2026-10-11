@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import {
   openSignIn,
@@ -108,12 +109,8 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .toBeGreaterThan(5);
   await screenshot(page, { path: join(screenshots, "02-review.png") });
   await page.getByRole("button", { name: "Viewed V" }).click();
-  await expect(
-    page.getByRole("combobox", { name: "Current file" }),
-  ).toHaveValue("src/components/ReviewPane.tsx");
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/hooks/useReview.ts");
+  await currentFilePicker(page).expectValue("src/components/ReviewPane.tsx");
+  await currentFilePicker(page).selectOption("src/hooks/useReview.ts");
   await expect(
     page.getByRole("heading", { name: "One file closer." }),
   ).toBeVisible();
@@ -172,9 +169,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect(
     page.getByText("Agreed, this should preserve the error state."),
   ).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/large.ts");
+  await currentFilePicker(page).selectOption("src/large.ts");
   await expect(page.locator("diffs-container")).toBeVisible();
   await expect
     .poll(() => page.locator("[data-line]").count())
@@ -189,9 +184,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   console.log("MEMORY_METRICS", JSON.stringify(memory));
   console.log("LIVE_CODE_ROWS", await page.locator("[data-line]").count());
   await screenshot(page, { path: join(screenshots, "04-large-diff.png") });
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("assets/logo.png");
+  await currentFilePicker(page).selectOption("assets/logo.png");
   await expect(
     page.getByRole("heading", { name: "Binary or Git LFS file" }),
   ).toBeVisible();
@@ -200,9 +193,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/hooks/useReview.ts");
+  await currentFilePicker(page).selectOption("src/hooks/useReview.ts");
   await page.getByRole("button", { name: "Expand file", exact: true }).click();
   await expect(page.locator("diffs-container")).toBeVisible();
   await screenshot(page, {
@@ -248,9 +239,7 @@ test("navigation, file pagination, stale reviews and line bookmarks", async () =
     )
     .toBe(true);
   await page.getByRole("textbox", { name: "Filter files" }).fill("");
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/lib/cache.ts");
+  await currentFilePicker(page).selectOption("src/lib/cache.ts");
   await expect(page.locator("diffs-container")).toBeVisible();
   await page.locator('[data-column-number="20"]').last().click();
   await page.getByRole("button", { name: "Mark for later" }).click();
@@ -323,28 +312,28 @@ test("viewed advances across file pages, skips read files and stops at completio
     /active/,
   );
   await page.getByRole("button", { name: "Side by side diff" }).click();
-  const currentFile = page.getByRole("combobox", { name: "Current file" });
+  const currentFile = currentFilePicker(page);
   await currentFile.selectOption(paths[49]);
   await expect(
     page.getByRole("button", { name: "Load more files" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Viewed V" }).click();
-  await expect(currentFile).toHaveValue(paths[51]);
+  await currentFile.expectValue(paths[51]);
   // Unmarking stays put; marking via the keyboard follows the same path as clicking.
   await currentFile.selectOption(paths[49]);
   await page.getByRole("button", { name: "Viewed V" }).click();
-  await expect(currentFile).toHaveValue(paths[49]);
+  await currentFile.expectValue(paths[49]);
   await page
     .getByRole("heading", {
       name: "Make pull request reviews faster and more reliable",
     })
     .click();
   await page.keyboard.press("v");
-  await expect(currentFile).toHaveValue(paths[51]);
+  await currentFile.expectValue(paths[51]);
   await page.keyboard.press("v");
-  await expect(currentFile).toHaveValue(paths[71]);
+  await currentFile.expectValue(paths[71]);
   await page.keyboard.press("v");
-  await expect(currentFile).toHaveValue(paths[71]);
+  await currentFile.expectValue(paths[71]);
   await expect(
     page.getByRole("heading", { name: "All files reviewed." }),
   ).toBeVisible();
@@ -360,9 +349,7 @@ test("a push unmarks only the viewed files it changed", async () => {
   await expect(
     page.locator(".file-row", { hasText: "cache.ts" }),
   ).toContainText("Changed since viewed · src/lib");
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/lib/cache.ts");
+  await currentFilePicker(page).selectOption("src/lib/cache.ts");
   await expect(
     page.getByText("Changed since viewed", { exact: true }),
   ).toBeVisible();
@@ -493,9 +480,9 @@ test("the app's sidebar and the file list hide independently, keep the review an
   );
   // The reload reopens the PR being reviewed.
   await page.reload();
-  const currentFile = page.getByRole("combobox", { name: "Current file" });
+  const currentFile = currentFilePicker(page);
   await currentFile.selectOption("src/hooks/useReview.ts");
-  await expect(currentFile).toHaveValue("src/hooks/useReview.ts");
+  await currentFile.expectValue("src/hooks/useReview.ts");
   await expect(page.locator("diffs-container")).toBeVisible();
   const path = await currentFile.inputValue();
   const filesWidth = (await files.boundingBox())!.width;
@@ -516,7 +503,7 @@ test("the app's sidebar and the file list hide independently, keep the review an
     .click();
   await expect(files).toHaveCount(0);
   await expect(filesToggle).toHaveAttribute("aria-pressed", "false");
-  await expect(currentFile).toHaveValue(path);
+  await currentFile.expectValue(path);
   expect((await page.getByRole("main").boundingBox())!.width).toBeGreaterThan(
     startingDiffWidth + filesWidth,
   );
@@ -526,7 +513,7 @@ test("the app's sidebar and the file list hide independently, keep the review an
   await screenshot(page, { path: join(screenshots, "07-review-only.png") });
 
   await page.reload();
-  await expect(currentFile).toHaveValue(path);
+  await currentFile.expectValue(path);
   await expect(files).toHaveCount(0);
   await expect(sidebar).toHaveClass(/overlay/);
   await page.keyboard.press(`${modifier}+b`);

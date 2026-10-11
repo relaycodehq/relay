@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
@@ -35,9 +36,7 @@ test.beforeAll(async () => {
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
   await openInbox(page);
   await openPull(page, /Make pull request reviews/);
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/lib/cache.ts");
+  await currentFilePicker(page).selectOption("src/lib/cache.ts");
 });
 test.afterAll(async () => {
   await app?.close();

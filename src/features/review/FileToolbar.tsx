@@ -1,11 +1,14 @@
 import {
   Check,
+  ChevronDown,
   FileCode2,
   Pencil,
   UnfoldVertical,
   WrapText,
 } from "lucide-react";
 import type { ChangedFile } from "../../../shared/types";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { SearchSelect } from "../../ui/SearchSelect";
 import { IconButton } from "../../ui/ui";
 
 /** The file under review and how its diff shows, with its Viewed toggle. */
@@ -49,17 +52,22 @@ export function FileToolbar({
     <div className="file-toolbar">
       <div className="file-name">
         <FileCode2 size={15} />
-        <select
-          aria-label="Current file"
-          value={file?.filename ?? ""}
-          onChange={(e) => onSelectFile(e.target.value)}
-        >
-          {files.map((f) => (
-            <option key={f.filename} value={f.filename}>
-              {f.filename}
-            </option>
-          ))}
-        </select>
+        <SearchSelect
+          label="Current file"
+          triggerLabel="Current file"
+          triggerClassName="file-name-trigger"
+          className="file-name-menu"
+          placeholder="Search changed files…"
+          value={file?.filename}
+          options={files.map((f) => ({ value: f.filename, label: f.filename }))}
+          onChange={onSelectFile}
+          trigger={
+            <>
+              <MiddleTruncate text={file?.filename ?? ""} kind="path" />
+              <ChevronDown size={12} />
+            </>
+          }
+        />
       </div>
       <div className="toolbar-actions">
         <button

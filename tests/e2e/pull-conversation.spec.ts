@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp } from "node:fs/promises";
@@ -57,9 +58,7 @@ test("Gitea single line comments read in the conversation, in order", async () =
       .nth(1)
       .getByRole("button", { name: /useReview.ts:14/ })
       .click();
-    await expect(
-      page.getByRole("combobox", { name: "Current file" }),
-    ).toHaveValue("src/hooks/useReview.ts");
+    await currentFilePicker(page).expectValue("src/hooks/useReview.ts");
   } finally {
     await app.close();
     await fixture.close();

@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
@@ -95,7 +96,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       }),
     );
     await page.reload();
-    const current = page.getByRole("combobox", { name: "Current file" });
+    const current = currentFilePicker(page);
     const list = page.locator(".file-virtual");
     const group = (name: string) =>
       page
@@ -153,38 +154,38 @@ test("group actions keep the sidebar position while explicit file navigation rev
     // Deliberately different from repository order: 0 → 4 → 1, then 13 → 12.
     await current.selectOption(path(4));
     await press("v");
-    await expect(current).toHaveValue(path(1));
+    await current.expectValue(path(1));
     await expectSelectionInView();
     await current.selectOption(path(0));
     await press("v");
-    await expect(current).toHaveValue(path(1)); // Skip already viewed 4.
+    await current.expectValue(path(1)); // Skip already viewed 4.
     await current.selectOption(path(11));
     await press("v");
-    await expect(current).toHaveValue(path(13));
+    await current.expectValue(path(13));
     await expectSelectionInView();
     await press("v");
-    await expect(current).toHaveValue(path(12));
+    await current.expectValue(path(12));
     await press("v");
-    await expect(current).toHaveValue(path(14));
+    await current.expectValue(path(14));
     await current.selectOption(path(11));
     await press("v"); // Unmarking stays put.
-    await expect(current).toHaveValue(path(11));
+    await current.expectValue(path(11));
     await press("v");
-    await expect(current).toHaveValue(path(14)); // Skip the complete second group.
+    await current.expectValue(path(14)); // Skip the complete second group.
     await current.selectOption(path(17));
     await press("v");
-    await expect(current).toHaveValue("src/hooks/useReview.ts");
+    await current.expectValue("src/hooks/useReview.ts");
     await press("k");
-    await expect(current).toHaveValue(path(17));
+    await current.expectValue(path(17));
     await press("j");
-    await expect(current).toHaveValue("src/hooks/useReview.ts");
+    await current.expectValue("src/hooks/useReview.ts");
     await resetProgress();
     await page
       .getByRole("button", { name: "Show all files", exact: true })
       .click();
     await current.selectOption(path(0));
     await press("v");
-    await expect(current).toHaveValue(path(1)); // Flat mode follows repository order.
+    await current.expectValue(path(1)); // Flat mode follows repository order.
     await resetProgress();
     await expectSelectionInView();
     // A restored file may open its containing group. Collapse it so the target
@@ -226,7 +227,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       .getByRole("button", { name: "Mark as viewed", exact: true })
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(current).toHaveValue(path(63));
+    await current.expectValue(path(63));
     await expect(header(b)).toHaveAttribute("aria-expanded", "false");
     await expectOffset(60);
 
@@ -246,7 +247,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       .getByRole("button", { name: "Mark as viewed", exact: true })
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(current).toHaveValue(path(14));
+    await current.expectValue(path(14));
     await expect(header(a)).toHaveAttribute("aria-expanded", "false");
     await expect(header(c)).toHaveAttribute("aria-expanded", "false");
     await expectOffset(0);
@@ -260,7 +261,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
     await page
       .getByRole("button", { name: "Next file · J", exact: true })
       .click();
-    await expect(current).toHaveValue(path(15));
+    await current.expectValue(path(15));
     await expect(header(c)).toHaveAttribute("aria-expanded", "true");
     await expectSelectionInView();
     await current.selectOption(path(63));
