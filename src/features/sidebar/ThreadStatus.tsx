@@ -32,6 +32,10 @@ export function CardAgents({ chat }: { chat: ChatSummary }) {
   );
 }
 
+/** Working, waiting on you or about to continue: worth showing even shelved. */
+export const isLive = (chat: ChatSummary) =>
+  inputBlocksThread(chat) || chat.running || !!chat.pending?.length;
+
 export function StatusMark({
   chat,
   unread,

@@ -44,7 +44,7 @@ import {
   type SidebarRows,
 } from "./SidebarThread";
 import { SnoozeMenu } from "./SnoozeMenu";
-import { CardAgents, CardState } from "./ThreadStatus";
+import { CardAgents, CardState, isLive, StatusMark } from "./ThreadStatus";
 import { rowKeys } from "../../ui/ui";
 import { useStoredState } from "../../lib/persisted-store";
 import { parseFamilyFolds, withFamilyFold } from "../../../shared/family-folds";
@@ -539,6 +539,7 @@ function CompactRow({
             regenerating={actions.regenerating.has(c.id)}
           />
         )}
+        {isLive(c) && <StatusMark chat={c} unread={false} now={now} />}
         <small
           title={
             c.autoSettled
