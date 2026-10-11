@@ -152,6 +152,7 @@ export function projectHandlers(ctx: ApiContext) {
     ),
     revealProject: takes([idSchema], (id) => openPath(projects.root(id))),
     projects: () => projects.list(ctx.login.client),
+    removedProjects: () => projects.removedIds(),
     addProject: async () => {
       const result = await dialog.showOpenDialog(ctx.window.caller()!, {
         title: "Add a project folder",

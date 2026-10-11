@@ -22,6 +22,7 @@ import {
   DeepReviewRequest,
   findingCode,
 } from "../deep-review/DeepReview";
+import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
@@ -85,6 +86,7 @@ export function ThreadMessages({
   worktree,
   onResume,
   onSteer,
+  onCompose,
 }: {
   handle: ThreadHandle;
   projectPath: string;
@@ -99,6 +101,8 @@ export function ThreadMessages({
   onResume: () => void;
   /** Puts a message for the agent in the composer. */
   onSteer: (text: string) => void;
+  /** Puts what a page in an answer composed in the composer below. */
+  onCompose: RenderCompose;
 }) {
   // Keyed on the report alone: a new renderer redraws the whole summary, and
   // the review changes with every finding dismissed or fixed.
@@ -197,6 +201,7 @@ export function ThreadMessages({
                 m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
               }
               onSteer={root?.side ? undefined : onSteer}
+              onCompose={onCompose}
               unread={
                 m.id === unread?.id && m.handoff ? (
                   <UnreadMark {...unreadProps!} />

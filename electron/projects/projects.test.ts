@@ -313,12 +313,14 @@ it("hides a removed project and brings it back, same id, when its folder is adde
     const project = await projects.add(root, null);
     await projects.remove(project.id);
     expect(await projects.list(null)).toEqual([]);
+    expect(projects.removedIds()).toEqual([project.id]);
     expect(await readFile(join(root, "keep.txt"), "utf8")).toBe("x");
     // Its threads still find the folder while it is hidden.
     expect(projects.get(project.id).path).toBe(root);
     const back = await projects.add(root, null);
     expect(back.id).toBe(project.id);
     expect((await projects.list(null)).map((p) => p.id)).toEqual([project.id]);
+    expect(projects.removedIds()).toEqual([]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

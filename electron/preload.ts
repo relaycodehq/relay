@@ -18,6 +18,7 @@ const methods = [
   "resolveStoppedWork",
   "setLimitResume",
   "projects",
+  "removedProjects",
   "addProject",
   "inspectFolder",
   "listFolders",

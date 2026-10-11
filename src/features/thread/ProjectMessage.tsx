@@ -23,7 +23,7 @@ import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
-import { HtmlRenders } from "../html-render/HtmlRenders";
+import { HtmlRenders, type RenderCompose } from "../html-render/HtmlRenders";
 import { AgentError } from "../agents/AgentError";
 import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
@@ -146,6 +146,7 @@ export const Message = memo(function Message({
   after,
   onSignIn,
   onSteer,
+  onCompose,
   onRerunSetup,
   unread,
 }: {
@@ -173,6 +174,8 @@ export const Message = memo(function Message({
   onSignIn?: (provider: AgentProvider) => Promise<boolean>;
   /** Puts a message for the agent in the composer, from a watch note. */
   onSteer?: (text: string) => void;
+  /** Puts what a page in the answer composed in the composer that shows. */
+  onCompose?: RenderCompose;
   /** Offered on the thread's latest worktree setup, when it didn't get through. */
   onRerunSetup?: (m: ChatMessage) => Promise<void>;
   /** Where the unseen part starts at a row that draws its own line, which carries the mark instead of a divider above it. */
@@ -381,7 +384,11 @@ export const Message = memo(function Message({
         />
       )}
       {chatId && !!m.renders?.length && (
-        <HtmlRenders chatId={chatId} renders={m.renders} onCompose={onSteer} />
+        <HtmlRenders
+          chatId={chatId}
+          renders={m.renders}
+          onCompose={onCompose}
+        />
       )}
       {!!parsed.refs.length && (
         <CodeReferenceList

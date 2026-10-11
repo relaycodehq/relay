@@ -135,7 +135,7 @@ export function useComposerSend({
         });
       if (sent) {
         if (parseGoalCommand(body)?.type === "set") noteUsed("goal");
-        await draft.forgetSent();
+        await outgoing.forget();
         after?.();
       }
     } finally {

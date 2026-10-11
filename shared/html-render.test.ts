@@ -3,6 +3,7 @@ import {
   RENDER_MAX_HEIGHT,
   RENDER_MIN_HEIGHT,
   RENDER_WIDTHS,
+  composeInto,
   injectRenderBootstrap,
   prependToHead,
   renderHeightAt,
@@ -27,6 +28,23 @@ describe("renderHeightAt", () => {
     );
     expect(renderHeightAt(undefined, 640)).toBeUndefined();
     expect(renderHeightAt([300, 200], 640)).toBeUndefined();
+  });
+});
+
+describe("composeInto", () => {
+  it("replaces what the page composed before instead of piling up values", () => {
+    let draft = composeInto("Please", "value: 10");
+    draft = composeInto(draft, "value: 11", "value: 10");
+    expect(composeInto(draft, "value: 12", "value: 11")).toBe(
+      "Please\n\nvalue: 12",
+    );
+  });
+
+  it("appends once the earlier text was edited away or sent", () => {
+    expect(composeInto("Please, value 10", "value: 11", "value: 10")).toBe(
+      "Please, value 10\n\nvalue: 11",
+    );
+    expect(composeInto("", "value: 11", "value: 10")).toBe("value: 11");
   });
 });
 

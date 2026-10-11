@@ -17,6 +17,7 @@ import { api } from "../../lib/api";
 import {
   isScreenshot,
   loadDraftImages,
+  onDraftImagesChanged,
   prepareScreenshot,
   saveDraftImages,
   type DraftImage,
@@ -63,8 +64,11 @@ export function useComposerDraft(
   const [images, setImages] = useState<DraftImage[]>([]);
   const [error, setError] = useState<string>();
   const [preparing, setPreparing] = useState(false);
-  const preparation = useRef(false);
+  const preparation = useRef<Promise<void>>(Promise.resolve());
+  const batches = useRef(0);
   const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
+  const shownKey = useRef(key);
+  shownKey.current = key;
   const [sketching, setSketching] = useState<string>();
   const sketchHistories = useRef(new Map<string, SketchHistory>());
   const imagePills = useImagePills();
@@ -96,14 +100,38 @@ export function useComposerDraft(
       live = false;
     };
   }, [key]);
-  async function addImages(files: File[], point?: Point) {
+  useEffect(() => {
+    let live = true;
+    // Another window showing this thread sent, drew on or dropped its screenshots.
+    const off = onDraftImagesChanged((changed) => {
+      if (changed !== key) return;
+      const loaded = loadDraftImages(key);
+      imageQueue.current = loaded;
+      void loaded.then((saved) => live && setImages(saved)).catch(() => {});
+    });
+    return () => {
+      live = false;
+      off();
+    };
+  }, [key]);
+  // Screenshots pasted while others are still being prepared wait their turn,
+  // so each batch counts the ones before it.
+  function addImages(files: File[], point?: Point) {
     if (!files.length) return;
-    if (preparation.current) return;
-    preparation.current = true;
+    batches.current++;
     setPreparing(true);
     setError(undefined);
+    preparation.current = preparation.current
+      .then(() => attachImages(files, point))
+      .finally(() => {
+        if (!--batches.current) setPreparing(false);
+      });
+  }
+  async function attachImages(files: File[], point?: Point) {
     try {
       const existing = await imageQueue.current;
+      // The draft as it is now, with the pills of any batch before this one.
+      const text = readDraft(key);
       const kept = attachedImages(text, existing);
       if (kept.length + files.length > 3)
         throw new Error("Attach up to three screenshots per message.");
@@ -118,6 +146,8 @@ export function useComposerDraft(
       // Screenshots whose pills were deleted make room here, not on undo.
       const next = [...kept, ...prepared];
       await saveDraftImages(key, next);
+      // Kept for the thread it was pasted in, even once another one shows.
+      if (shownKey.current !== key) return;
       imageQueue.current = Promise.resolve(next);
       setImages(next);
       editor.current?.insertImages(
@@ -128,9 +158,6 @@ export function useComposerDraft(
       setError(
         error instanceof Error ? error.message : "Could not attach screenshot.",
       );
-    } finally {
-      preparation.current = false;
-      setPreparing(false);
     }
   }
   /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
@@ -160,6 +187,25 @@ export function useComposerDraft(
         setError(failed);
         return next;
       });
+  }
+  /** Changes the screenshots `of` keeps, after any change still being saved, whether or not its thread still shows. */
+  function editImages(
+    of: string,
+    change: (now: DraftImage[]) => DraftImage[],
+    failed: string,
+  ): Promise<unknown> {
+    if (shownKey.current !== of)
+      return loadDraftImages(of)
+        .then((now) => saveDraftImages(of, change(now)))
+        .catch(() => setError(failed));
+    const edited = imageQueue.current.then(async (now) => {
+      const next = change(now);
+      setImages(next);
+      await saveDraftImages(of, next).catch(() => setError(failed));
+      return next;
+    });
+    imageQueue.current = edited;
+    return edited;
   }
   return {
     text,
@@ -260,33 +306,41 @@ export function useComposerDraft(
      */
     take(withImages: boolean) {
       let taken: { text: string; images: DraftImage[] } | undefined;
+      const takenIds = () => new Set(taken?.images.map((image) => image.id));
       return {
         dispatch() {
           taken = { text, images: withImages ? images : [] };
           set("");
-          if (withImages) setImages([]);
+          if (!withImages) return;
+          setImages([]);
+          // A screenshot pasted while this goes out starts a draft of its own.
+          imageQueue.current = Promise.resolve([]);
         },
         restore() {
           if (!taken) return;
           const { text, images: back } = taken,
             typed = readDraft(key).trim();
           set(typed ? `${text.trimEnd()}\n\n${typed}` : text);
-          if (back.length) setImages((now) => [...back, ...now]);
+          if (!back.length) return;
+          const ids = takenIds();
+          void editImages(
+            key,
+            (now) => [...back, ...now.filter((image) => !ids.has(image.id))],
+            "Could not put the screenshot back in the draft.",
+          );
+        },
+        /** The message went: its screenshots' draft copies go, any pasted since stay. */
+        async forget() {
+          if (!taken?.images.length) return;
+          const ids = takenIds();
+          for (const id of ids) sketchHistories.current.delete(id);
+          await editImages(
+            key,
+            (now) => now.filter((image) => !ids.has(image.id)),
+            "Screenshot was sent, but its draft copy could not be cleared.",
+          );
         },
       };
-    },
-    /** The screenshots went out: their draft copy goes too. */
-    async forgetSent() {
-      if (!images.length) return;
-      try {
-        await saveDraftImages(key, []);
-        imageQueue.current = Promise.resolve([]);
-        sketchHistories.current.clear();
-      } catch {
-        setError(
-          "Screenshot was sent, but its draft copy could not be cleared.",
-        );
-      }
     },
   };
 }

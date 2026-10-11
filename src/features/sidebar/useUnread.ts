@@ -14,6 +14,17 @@ function savedSeen(): Record<string, number> {
     : {};
 }
 
+/** The threads that have been read here. */
+export const seenThreads = () => Object.keys(savedSeen());
+
+/** Forgets when `gone` threads were read, so the marks don't pile up. */
+export function forgetSeen(gone: string[]) {
+  if (!gone.length) return;
+  const seen = savedSeen();
+  for (const id of gone) delete seen[id];
+  writeJson(SEEN, seen);
+}
+
 /**
  * Last time each thread was open here; drives the unread dot. The open thread
  * only counts as seen while Relay is in front: an answer that lands while
@@ -67,11 +78,10 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
       (seen[current.id] ?? 0) >= current.updated
     )
       return;
-    setSeen((s) => {
-      // Another window may have read threads since this one last looked.
-      const next = { ...s, [current.id]: current.updated };
-      for (const [id, at] of Object.entries(savedSeen()))
-        next[id] = Math.max(next[id] ?? 0, at);
+    setSeen(() => {
+      // Storage has what every window read, and not the threads swept as gone.
+      const next = savedSeen();
+      next[current.id] = Math.max(next[current.id] ?? 0, current.updated);
       writeJson(SEEN, next);
       return next;
     });

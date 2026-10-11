@@ -44,6 +44,18 @@ export const RENDER_MAX_PAGES = 12;
 export const RENDER_MAX_CHARS = 200_000;
 /** What a page may put in the composer through relay.compose(). */
 export const RENDER_COMPOSE_CHARS = 4000;
+
+/**
+ * The draft once a page composed `text`: in place of what the page composed
+ * before while the draft still holds it, so a slider doesn't pile up every
+ * value it passed, else after whatever is typed.
+ */
+export function composeInto(draft: string, text: string, earlier?: string) {
+  const at = earlier ? draft.lastIndexOf(earlier) : -1;
+  if (at >= 0)
+    return draft.slice(0, at) + text + draft.slice(at + earlier!.length);
+  return draft.trim() ? `${draft.trimEnd()}\n\n${text}` : text;
+}
 /** The most an ask_html page may hand back through relay.answer(), as JSON. */
 export const ASK_ANSWER_MAX_CHARS = 32_000;
 
@@ -134,7 +146,8 @@ export type RenderToFrame =
 export type RenderFromFrame =
   | { relayRender: "size"; height: number }
   | { relayRender: "link"; href: string }
-  | { relayRender: "compose"; text: string }
+  /** `active`: the user has clicked or typed in the page since it loaded. */
+  | { relayRender: "compose"; text: string; active?: boolean }
   /** relay.answer(): what the user would send back to an agent that asked with the page. */
   | { relayRender: "answer"; json: string }
   /** Esc or a zoom key pressed in the page that the page left alone. */
@@ -207,7 +220,7 @@ const BOOTSTRAP = `(() => {
     if (/^(https?|mailto):/i.test(a.href)) post({ relayRender: "link", href: a.href });
   }, true);
   window.relay = {
-    compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}) }),
+    compose: (text) => post({ relayRender: "compose", text: String(text).slice(0, ${RENDER_COMPOSE_CHARS}), active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive) }),
     answer: (value) => { let json; try { json = JSON.stringify(value === undefined ? null : value); } catch { return; } post({ relayRender: "answer", json }); },
   };
   // Focus in the page keeps keys from the thread, so Esc and the zoom keys go
@@ -274,5 +287,5 @@ export const RENDER_GUIDE = `The page sits in the chat column between your tool 
 - Use the app's theme through CSS variables, which follow light and dark: var(--text), var(--muted), var(--surface), var(--background), var(--border), var(--hover), var(--accent), var(--accent-soft), var(--danger), var(--code-background), var(--font-sans), var(--font-mono), and --series-1 … --series-6 for chart series. :root[data-theme="dark"] matches the dark theme.
 - Give charts and canvases a fixed height (like 280px); never 100vh or height:100% on html/body, which leave the frame no content height to fit.
 - Self-contained: inline CSS, JS and data. Libraries may load from https CDNs (like https://cdn.jsdelivr.net/npm/chart.js); local files and Relay can't be reached. Links open in the user's browser.
-- window.relay.compose(text) puts text in the user's message box, for pages that let them pick or adjust something.
+- window.relay.compose(text) puts text in the user's message box, for pages that let them pick or adjust something. Each call replaces what the page put there before, and it only works once the user has clicked or typed in the page.
 For a whole app or a page that needs a dev server, use a preview page instead.`;
