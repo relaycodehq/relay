@@ -19,6 +19,9 @@ export function mapLayout(heights: number[]) {
     y += h + gap;
   }
   const height = Math.max(y - gap + pad, nodeH + pad * 2);
+  // A column shorter than this computer's box centres on it, so its wire runs flat.
+  const shift = (height - (y - gap + pad)) / 2;
+  for (let i = 0; i < tops.length; i++) tops[i]! += shift;
   const selfY = height / 2;
   const x0 = selfW,
     x1 = mapW - nodeW;
