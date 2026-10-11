@@ -235,10 +235,12 @@ function Rhythmic({
             .
           </>
         ) : totals.answers > 0 ? (
-          m === "usd" && totals.tokens > 0 ? (
+          m === "fresh" ? (
+            "These answers came without token counts, so there's nothing to chart."
+          ) : totals.tokens > 0 ? (
             "These answers came without a price; Tokens shows what they used."
           ) : (
-            "These answers came without token counts, so there's nothing to chart."
+            "These answers came without a price or token counts, so there's nothing to chart."
           )
         ) : (
           "A quiet stretch: nothing counted in these days."
