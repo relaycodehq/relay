@@ -40,6 +40,7 @@ describe("the newest app, from the release feed", () => {
       url: apk.url,
       sha512: apk.sha512,
       size: apk.size,
+      runtime: apk.runtime,
     });
   });
 
@@ -83,13 +84,19 @@ describe("offering it", () => {
     expect(offersNewer({ version: "0.10.3" }, { apk: "0.9.1", running: "0.10.3" })).toBe(true);
   });
 
-  it("shows one APK when the desktop and the feed both have one", () => {
-    const desktop = { version: "0.11.0", from: "desktop" };
-    const feed = { version: "0.10.0", from: "feed" };
-    expect(pickApk(desktop, feed)).toBe(desktop);
-    expect(pickApk({ ...desktop, version: "0.10.0" }, feed)).toBe(feed);
-    expect(pickApk({ ...desktop, version: "0.9.0" }, feed)).toBe(feed);
-    expect(pickApk(undefined, feed)).toBe(feed);
+  it("asks for the APK a desktop's release carried on, under that APK's own version", () => {
+    // 0.10.3 left the native side alone since 0.10.1, so its release has the 0.10.1 APK.
+    const desktop = { version: "0.10.3", runtime: "R2", url: "https://example.test/v0.10.3.apk" };
+    const feed = { release: "0.10.3", version: "0.10.1", runtime: "R2" };
+    expect(pickApk(desktop, feed)).toBe(feed);
+    // A feed from an older release still knows that APK by its runtime.
+    expect(pickApk(desktop, { ...feed, release: "0.10.2" })?.version).toBe("0.10.1");
+    // A newer release's APK, even for a newer runtime, beats the desktop's guess.
+    expect(pickApk(desktop, { release: "0.11.0", version: "0.11.0", runtime: "R3" })?.version).toBe("0.11.0");
+    // Only a feed that knows neither leaves the desktop's guess.
+    const stale = { release: "0.10.0", version: "0.9.0", runtime: "R1" };
+    expect(pickApk(desktop, stale)).toBe(desktop);
     expect(pickApk(desktop, undefined)).toBe(desktop);
+    expect(pickApk(undefined, feed)).toBe(feed);
   });
 });

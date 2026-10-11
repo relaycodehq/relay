@@ -8,7 +8,8 @@ import { type, useTheme } from "./theme";
 
 /**
  * A newer version of this app: the desktop's arriving or ready to restart
- * into, or a new APK, the desktop's or the release feed's, whichever is newer.
+ * into, or a new APK: the one the desktop's version needs, or the release
+ * feed's newer one.
  */
 export function UpdateBanner() {
   const t = useTheme();
@@ -25,17 +26,20 @@ export function UpdateBanner() {
   const feedOffer = releaseBuild ? latestOffer(latest) : undefined;
   const ready = update.kind === "ready" && !feedOffer ? update : undefined;
   const fromDesktop = update.kind === "apk" ? update : undefined;
-  const offer = ready
-    ? undefined
-    : pickApk(fromDesktop, feedOffer);
+  const offer = ready ? undefined : pickApk(fromDesktop, feedOffer);
   if (!ready && !offer) return null;
+  // The feed's APK for the desktop's runtime may be older than the desktop's
+  // release; the user gets the desktop's version once it sends its code.
+  const forDesktop =
+    fromDesktop && offer && (offer === fromDesktop || offer.runtime === fromDesktop.runtime);
+  const shown = forDesktop ? fromDesktop.version : offer?.version;
   const mine = offer && "version" in apk && apk.version === offer.version ? apk : undefined;
   if ((mine?.kind === "downloading" && !mine.quiet) || mine?.kind === "installing")
     return (
       <Text style={[styles.banner, { color: t.muted }]}>
         {mine.kind === "downloading"
-          ? `Downloading Relay ${mine.version}… ${Math.round(mine.done * 100)}%`
-          : `Installing Relay ${mine.version}. It closes when it's done; open it again.`}
+          ? `Downloading Relay ${shown}… ${Math.round(mine.done * 100)}%`
+          : `Installing Relay ${shown}. It closes when it's done; open it again.`}
       </Text>
     );
   return (
@@ -47,7 +51,7 @@ export function UpdateBanner() {
       <Text style={[styles.banner, { color: t.text }]}>
         {ready
           ? `Relay ${ready.version} is ready. Tap to restart into it.`
-          : offer && apkPrompt(offer.version, offer === fromDesktop ? name : undefined, mine)}
+          : shown && apkPrompt(shown, forDesktop ? name : undefined, mine)}
       </Text>
     </Pressable>
   );

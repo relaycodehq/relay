@@ -32,6 +32,8 @@ export interface NewestApp {
   /** The version of the app it carries. */
   version: string;
   url: string;
+  /** The APK's native fingerprint; feeds from before 0.10 leave it out. */
+  runtime?: string;
   /** From the signed feed; feeds from before 0.10 leave it out. */
   sha512?: string;
   size?: number;
@@ -41,7 +43,12 @@ export interface NewestApp {
 export const newestAppSchema = updateFileSchema
   .omit({ name: true })
   .partial({ sha512: true, size: true })
-  .extend({ release: version, version, url: z.url({ protocol: /^https$/ }) });
+  .extend({
+    release: version,
+    version,
+    url: z.url({ protocol: /^https$/ }),
+    runtime: z.string().optional(),
+  });
 
 type Fetch = (url: string) => Promise<{
   ok: boolean;
@@ -84,6 +91,7 @@ export async function fetchNewestApp(
       url: android.url,
       sha512: android.sha512,
       size: android.size,
+      ...(android.runtime ? { runtime: android.runtime } : {}),
     };
   // Its release carries an APK of its own version under the usual name.
   return {
@@ -108,14 +116,20 @@ export const offersNewer = (
   !newerVersion(running, newest.version);
 
 /**
- * One APK to offer when the desktop and the feed both have one: the newer, and
- * the feed's at the same version since its download carries a checksum.
+ * One APK to offer when the desktop's version needs one and the feed has one
+ * too. The desktop only knows its own release, whose APK may be an earlier
+ * one carried on, and the phone refuses an APK whose version isn't the one it
+ * asked for. So the feed's entry wins whenever it is that APK (the runtime the
+ * desktop needs) or comes from a release at least as new as the desktop's.
  */
 export function pickApk<
-  A extends { version: string },
-  B extends { version: string },
+  A extends { version: string; runtime: string },
+  B extends { release: string; runtime?: string },
 >(desktop: A | undefined, feed: B | undefined): A | B | undefined {
   if (!desktop) return feed;
   if (!feed) return desktop;
-  return newerVersion(desktop.version, feed.version) ? desktop : feed;
+  return feed.runtime === desktop.runtime ||
+    !newerVersion(desktop.version, feed.release)
+    ? feed
+    : desktop;
 }

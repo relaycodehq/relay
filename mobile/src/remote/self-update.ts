@@ -31,13 +31,18 @@ export type SelfUpdate =
   | { kind: "none" }
   | { kind: "downloading"; version: string; done: number }
   | { kind: "ready"; version: string }
-  /** The desktop's version needs native changes this APK lacks. */
-  | { kind: "apk"; version: string; url: string };
+  /**
+   * The desktop's version needs native changes this APK lacks. `url` is a
+   * guess at its release's APK; the release feed knows that APK's own version.
+   */
+  | { kind: "apk"; version: string; runtime: string; url: string };
 
 let state: SelfUpdate = { kind: "none" };
+/** Committed for the next launch; it stays when a later download fails. */
+let staged: string | undefined;
 /** Installing an APK drops the staged bundle too; don't offer older code than that. */
 export const pendingVersion = () =>
-  state.kind === "ready" || state.kind === "downloading" ? state.version : runningVersion;
+  state.kind === "downloading" ? state.version : (staged ?? runningVersion);
 const listeners = new Set<() => void>();
 const set = (next: SelfUpdate) => {
   state = next;
@@ -56,11 +61,17 @@ export async function checkForUpdate(
   offer: PhoneAppRelease | undefined,
   fetchChunk: (path: string, offset: number) => Promise<string>,
 ) {
-  if (!native || !runtime || !offer || !newerVersion(offer.version, runningVersion)) return;
+  if (!native || !runtime || !offer) return;
+  if (!newerVersion(offer.version, pendingVersion())) {
+    // The APK another computer's version needed isn't this one's business.
+    if (state.kind === "apk") set(settled());
+    return;
+  }
   if (offer.runtime !== runtime) {
     set({
       kind: "apk",
       version: offer.version,
+      runtime: offer.runtime,
       url: `https://github.com/${releasesRepo}/releases/download/v${offer.version}/Relay-Android.apk`,
     });
     return;
@@ -86,14 +97,18 @@ export async function checkForUpdate(
       offer.version,
       offer.files.map(({ path, sha256 }) => ({ path, sha256 })),
     );
+    staged = offer.version;
     set({ kind: "ready", version: offer.version });
   } catch (e) {
     // A dropped link tries again on the next connection.
     console.warn(`Couldn't update to ${offer.version}:`, e);
     started = undefined;
-    set({ kind: "none" });
+    set(settled());
   }
 }
+
+const settled = (): SelfUpdate =>
+  staged ? { kind: "ready", version: staged } : { kind: "none" };
 
 export function useSelfUpdate() {
   return useSyncExternalStore(
