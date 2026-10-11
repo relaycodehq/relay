@@ -128,7 +128,7 @@ it("stops the handoff note when the Stop lands while the note is first saved", a
   expect(note?.status).toBe("cancelled");
 }, 30_000);
 
-it("stops a /btw answer that runs while the main thread is idle, without pausing the queue", async () => {
+it("leaves a /btw answer running when Stop lands while the main thread is idle, and doesn't pause the queue", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await vi.waitFor(async () =>
@@ -142,7 +142,7 @@ it("stops a /btw answer that runs while the main thread is idle, without pausing
     );
   await vi.waitFor(async () => expect((await side())?.status).toBe("streaming"));
   await chats.cancel(chat.id);
-  await vi.waitFor(async () => expect((await side())?.status).toBe("cancelled"));
+  expect((await side())?.status).toBe("streaming");
   expect((await chats.get(chat.id)).queuePaused).toBeFalsy();
 }, 30_000);
 

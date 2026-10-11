@@ -50,6 +50,10 @@ export function useChatThread(
     shown,
     listed: shown,
     running: messages.some((m) => m.status === "streaming"),
+    /** An answer of the conversation itself is running, not only a /btw one. */
+    mainRunning: messages.some(
+      (m) => m.status === "streaming" && !sides.has(roots.get(m.id) ?? ""),
+    ),
     replyCounts: counts,
     sideThreads: sides,
     leadAnswered: messages.some((m) => m.role === "assistant" && !m.parentId),

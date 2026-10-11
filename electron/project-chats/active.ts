@@ -180,11 +180,6 @@ export class ActiveTurns {
     }
   }
 
-  /** Stops the side questions being answered in the thread. */
-  stopSides(id: string) {
-    for (const [key, side] of this.sides)
-      if (key.startsWith(`${id}:`)) side.abort.abort();
-  }
   sideRunning(key: string) {
     return this.sides.has(key);
   }

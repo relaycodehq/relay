@@ -165,7 +165,7 @@ export function ThreadComposer({
   handle: { chat, id, busy, setError },
   project,
   scope,
-  thread: { root, messages, shown, running },
+  thread: { root, messages, shown, running, mainRunning },
   councils: { reviewing },
   background: { agentBatch, pending, stopped, leftBehind },
   session: {
@@ -230,8 +230,9 @@ export function ThreadComposer({
   );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
-  // A side thread doesn't wait for the main answer, nor queue behind it.
-  const waiting = root?.side ? false : running || reviewing;
+  // A side thread doesn't wait for the main answer, nor queue behind it, and
+  // the thread's Stop is for its own turn, not a /btw answer beside it.
+  const waiting = root?.side ? false : mainRunning || reviewing;
   const held =
     busy ||
     worktree.unavailable ||

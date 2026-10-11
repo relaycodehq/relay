@@ -777,7 +777,6 @@ export class ProjectChats {
     if (chat && (this.active.has(id) || this.councils.busy(chat)))
       chat.queuePaused = true;
     this.active.stop(id);
-    this.active.stopSides(id);
     if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }
