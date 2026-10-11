@@ -257,6 +257,16 @@ export interface AwayWindow {
   to: number;
 }
 
+/** The away window a message started or finished in, if any. */
+export function awayDuring(
+  m: Pick<ChatMessage, "created" | "ended">,
+  away: AwayWindow[],
+) {
+  const during = (at: number | undefined) =>
+    at === undefined ? undefined : away.find((w) => at > w.from && at <= w.to);
+  return during(m.created) ?? during(m.ended);
+}
+
 /**
  * Where a thread's "New" divider goes: above the first message that started
  * or finished while you were away, which `since` says when you'd read up to.
@@ -275,8 +285,6 @@ export function unreadStart(
     >)[],
   away: AwayWindow[],
 ): { id: string; since: number } | undefined {
-  const during = (at: number | undefined) =>
-    at === undefined ? undefined : away.find((w) => at > w.from && at <= w.to);
   for (const [index, m] of messages.entries()) {
     if (
       (m.role === "user" && !m.author) ||
@@ -285,7 +293,7 @@ export function unreadStart(
       m.worktreeCommand
     )
       continue;
-    const gap = during(m.created) ?? during(m.ended);
+    const gap = awayDuring(m, away);
     if (gap) return index ? { id: m.id, since: gap.from } : undefined;
   }
 }

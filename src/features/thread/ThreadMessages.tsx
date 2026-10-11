@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
-import { unreadStart } from "../../../shared/chat-activity";
+import { awayDuring, unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
 import { reviewReports } from "../../../shared/deep-review";
 import { api } from "../../lib/api";
@@ -133,14 +133,16 @@ export function ThreadMessages({
   const onScreen = listed.slice(-visible);
   // A row that draws its own line carries the unread mark instead of a second
   // line stacking against it: the one where the unseen part starts, or the one
-  // right above it.
+  // right above it when that also happened while you were away.
   const unreadAt = onScreen.findIndex((m) => m.id === unread?.id);
+  const above = onScreen[unreadAt - 1];
   const markOn =
     unreadAt < 0
       ? undefined
-      : [onScreen[unreadAt]!, onScreen[unreadAt - 1]].find(
-          (m) => m && !m.side && drawsLine(m),
-        )?.id;
+      : [
+          onScreen[unreadAt]!,
+          above && arrival && awayDuring(above, arrival.away) && above,
+        ].find((m) => m && !m.side && drawsLine(m))?.id;
   const unreadProps = unread && {
     chatId: arrival!.chatId,
     since: unread.since,
