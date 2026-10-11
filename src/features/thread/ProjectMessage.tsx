@@ -48,6 +48,7 @@ import { RichText } from "../../ui/RichText";
 import { pilledImages, UserText, type SentImage } from "./UserText";
 import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
+import { LineDivider } from "../../ui/LineDivider";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -100,7 +101,7 @@ function HandoffRow({
       data-status={m.status}
       role="status"
     >
-      <div className="context-compaction">
+      <LineDivider>
         {unread}
         <span>
           {m.status === "streaming"
@@ -119,7 +120,7 @@ function HandoffRow({
             {open ? "Hide note" : "Show note"}
           </button>
         )}
-      </div>
+      </LineDivider>
       {note && open && (
         <div className="agent-handoff-note">
           <RichText
@@ -132,6 +133,18 @@ function HandoffRow({
     </div>
   );
 }
+/** Message shows `m` as a one-line divider rather than a message. */
+export const drawsLine = (m: ChatMessage) =>
+  !m.handedOver &&
+  !!(
+    m.resumed ||
+    m.handoff ||
+    m.reload ||
+    (m.role === "user" && m.pageAnswer) ||
+    m.worktreeCommand ||
+    m.compaction
+  );
+
 export const Message = memo(function Message({
   message: m,
   chatId,
@@ -179,7 +192,7 @@ export const Message = memo(function Message({
   onCompose?: RenderCompose;
   /** Offered on the thread's latest worktree setup, when it didn't get through. */
   onRerunSetup?: (m: ChatMessage) => Promise<void>;
-  /** Where the unseen part starts at a row that draws its own line, which carries the mark instead of a divider above it. */
+  /** The unread mark, on a row that draws its own line (see drawsLine) instead of a divider stacking against it. */
   unread?: ReactNode;
 }) {
   /** The key of the image open in the viewer. */
@@ -281,19 +294,20 @@ export const Message = memo(function Message({
   if (m.handedOver) return null;
   if (m.resumed)
     return (
-      <div
-        className="context-compaction resume-divider"
+      <LineDivider
+        className="resume-divider"
         data-message-id={m.id}
         role="separator"
         aria-label={`Resumed at ${clock(m.created)}`}
       >
+        {unread}
         <span>
           Resumed ·{" "}
           <time dateTime={new Date(m.created).toISOString()}>
             {clock(m.created)}
           </time>
         </span>
-      </div>
+      </LineDivider>
     );
   if (m.handoff)
     return (
@@ -304,14 +318,16 @@ export const Message = memo(function Message({
         unread={unread}
       />
     );
-  if (m.reload) return <SessionReloadRow message={m} reload={m.reload} />;
+  if (m.reload)
+    return <SessionReloadRow message={m} reload={m.reload} unread={unread} />;
   if (m.role === "user" && m.pageAnswer)
-    return <PageAnswerRow message={m} answer={m.pageAnswer} />;
+    return <PageAnswerRow message={m} answer={m.pageAnswer} unread={unread} />;
   if (m.worktreeCommand)
     return (
       <WorktreeCommandRow
         message={m}
         onRerun={onRerunSetup && (() => onRerunSetup(m))}
+        unread={unread}
       />
     );
   if (m.compaction)
@@ -320,6 +336,7 @@ export const Message = memo(function Message({
         message={m}
         projectRoot={projectRoot}
         onOpenFile={onOpenFile}
+        unread={unread}
       />
     );
   return (

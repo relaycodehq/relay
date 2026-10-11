@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { sentLabel } from "../../../shared/chat-activity";
 import { useWindowFocused } from "../../lib/window-focus";
+import { LineDivider } from "../../ui/LineDivider";
 import { markArrivalRead } from "./arrival";
 
 /** How long the divider stays once it's been seen. */
@@ -60,8 +61,8 @@ function unreadLabel(since: number) {
 }
 
 /**
- * The line above the first message you haven't seen: the compaction row's
- * shape in the unread dot's colour. Once seen it fades but keeps its height,
+ * The line above the first message you haven't seen, in the unread dot's
+ * colour so it doesn't read as another compaction. Once seen it fades but keeps its height,
  * so the thread pinned to the bottom doesn't move.
  */
 export function UnreadDivider(props: UnreadProps) {
@@ -69,8 +70,9 @@ export function UnreadDivider(props: UnreadProps) {
   useReadWhenSeen(row, props);
   const label = unreadLabel(props.since);
   return (
-    <div
+    <LineDivider
       ref={row}
+      tone="accent"
       className="unread-divider"
       data-read={props.read || undefined}
       aria-hidden={props.read || undefined}
@@ -78,13 +80,13 @@ export function UnreadDivider(props: UnreadProps) {
       aria-label={label}
     >
       <span>{label}</span>
-    </div>
+    </LineDivider>
   );
 }
 
 /**
  * The divider folded into a row that already draws a line, like an agent
- * switch, so the two don't stack. Once seen the time folds away and the row's
+ * switch or a compaction, so the two don't stack. Once seen the time folds away and the row's
  * own label slides back to the middle.
  */
 export function UnreadMark(props: UnreadProps) {

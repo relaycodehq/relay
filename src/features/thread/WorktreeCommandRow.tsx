@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import {
   copiedNote,
@@ -6,6 +6,7 @@ import {
   worktreeCommandNote,
 } from "../../../shared/worktree-command";
 import { ErrorBox } from "../../ui/ui";
+import { LineDivider } from "../../ui/LineDivider";
 
 /**
  * The line where the project's setup or teardown command ran in the thread's
@@ -15,10 +16,12 @@ import { ErrorBox } from "../../ui/ui";
 export function WorktreeCommandRow({
   message: m,
   onRerun,
+  unread,
 }: {
   message: ChatMessage;
   /** Only on the thread's latest setup run. */
   onRerun?: () => Promise<void>;
+  unread?: ReactNode;
 }) {
   const run = m.worktreeCommand!;
   const [open, setOpen] = useState(false);
@@ -54,10 +57,14 @@ export function WorktreeCommandRow({
       data-status={m.status}
       role="status"
     >
-      <div
-        className="context-compaction"
-        data-status={m.status === "cancelled" ? "failed" : m.status}
+      <LineDivider
+        tone={
+          m.status === "failed" || m.status === "cancelled"
+            ? "danger"
+            : undefined
+        }
       >
+        {unread}
         <span title={run.command}>{worktreeCommandNote(run, m.status)}</span>
         {!!text && (
           <button
@@ -79,7 +86,7 @@ export function WorktreeCommandRow({
             Run setup again
           </button>
         )}
-      </div>
+      </LineDivider>
       {open && !!text && (
         <pre
           ref={output}

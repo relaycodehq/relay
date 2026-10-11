@@ -1,0 +1,26 @@
+.line-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.line-divider::before,
+.line-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.line-divider[data-tone="danger"] {
+  color: var(--danger);
+}
+.line-divider[data-tone="accent"] {
+  color: var(--accent);
+  font-weight: 500;
+}
+.line-divider[data-tone="accent"]::before,
+.line-divider[data-tone="accent"]::after {
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}

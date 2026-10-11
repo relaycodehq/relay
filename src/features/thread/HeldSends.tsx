@@ -7,6 +7,7 @@ import { clock } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import { Message } from "./ProjectMessage";
+import { LineDivider } from "../../ui/LineDivider";
 
 const noop = () => {};
 
@@ -129,10 +130,10 @@ export function RanHereDivider({
   since: number;
 }) {
   return (
-    <div className="context-compaction" role="separator">
+    <LineDivider role="separator">
       <span>
         Back here · {computer}'s code changes since {clock(since)} stay there
       </span>
-    </div>
+    </LineDivider>
   );
 }

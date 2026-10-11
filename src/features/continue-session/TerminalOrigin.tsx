@@ -1,5 +1,6 @@
 import type { FromTerminal } from "../../../shared/terminal-sessions";
 import { agentName } from "../../../shared/agents";
+import { LineDivider } from "../../ui/LineDivider";
 
 function note({ how, open }: FromTerminal) {
   if (how === "resumed") return "Continued from a terminal session";
@@ -14,12 +15,12 @@ function note({ how, open }: FromTerminal) {
 /** The line under a terminal session's conversation, where the thread takes over. */
 export function TerminalOrigin({ from }: { from: FromTerminal }) {
   return (
-    <div className="context-compaction" role="note">
+    <LineDivider role="note">
       <span
         title={`Brought over from ${agentName(from.provider)} session ${from.session}. Not shown from the terminal: thinking, images, subagents' own transcripts, local command output, and each turn's changes.`}
       >
         {note(from)}
       </span>
-    </div>
+    </LineDivider>
   );
 }

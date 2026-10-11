@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import type { ChatMessage, PageAnswer } from "../../../shared/projects";
+import { LineDivider } from "../../ui/LineDivider";
 
 /**
  * The message that answers a page the agent asked with (ask_html), as a quiet
@@ -8,16 +10,19 @@ import type { ChatMessage, PageAnswer } from "../../../shared/projects";
 export function PageAnswerRow({
   message: m,
   answer,
+  unread,
 }: {
   message: ChatMessage;
   answer: PageAnswer;
+  unread?: ReactNode;
 }) {
   return (
-    <div className="context-compaction" data-message-id={m.id} role="status">
+    <LineDivider data-message-id={m.id} role="status">
+      {unread}
       <span>
         {answer.skipped ? "You skipped" : "You answered"} “{answer.title}”
         {answer.skipped && " and left it to the agent"}
       </span>
-    </div>
+    </LineDivider>
   );
 }

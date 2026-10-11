@@ -5,11 +5,13 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
+import { LineDivider } from "../../ui/LineDivider";
 import { compactedTokens } from "../../../shared/tokens";
 import { MessageAgentName } from "./MessageAgentName";
 import { RichText } from "../../ui/RichText";
@@ -19,10 +21,12 @@ export function CompactionRow({
   message: m,
   projectRoot,
   onOpenFile,
+  unread,
 }: {
   message: ChatMessage;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
+  unread?: ReactNode;
 }) {
   const row = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
@@ -62,13 +66,14 @@ export function CompactionRow({
     };
   }, [pinned]);
   return (
-    <div
+    <LineDivider
       ref={row}
-      className="context-compaction"
+      tone={m.status === "failed" ? "danger" : undefined}
       data-message-id={m.id}
       data-status={m.status}
       role="status"
     >
+      {unread}
       <span className="compaction-note">
         <Minimize2 size={12} aria-hidden />
         {m.status === "streaming"
@@ -109,7 +114,7 @@ export function CompactionRow({
           />,
           document.body,
         )}
-    </div>
+    </LineDivider>
   );
 }
 

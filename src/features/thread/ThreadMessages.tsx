@@ -23,7 +23,7 @@ import {
   findingCode,
 } from "../deep-review/DeepReview";
 import type { RenderCompose } from "../html-render/HtmlRenders";
-import { Message } from "./ProjectMessage";
+import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { HeldSends, RanHereDivider } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
@@ -130,6 +130,17 @@ export function ThreadMessages({
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
     [arrival, root, listed],
   );
+  const onScreen = listed.slice(-visible);
+  // A row that draws its own line carries the unread mark instead of a second
+  // line stacking against it: the one where the unseen part starts, or the one
+  // right above it.
+  const unreadAt = onScreen.findIndex((m) => m.id === unread?.id);
+  const markOn =
+    unreadAt < 0
+      ? undefined
+      : [onScreen[unreadAt]!, onScreen[unreadAt - 1]].find(
+          (m) => m && !m.side && drawsLine(m),
+        )?.id;
   const unreadProps = unread && {
     chatId: arrival!.chatId,
     since: unread.since,
@@ -165,8 +176,8 @@ export function ThreadMessages({
             Earlier messages
           </button>
         )}
-        {listed.slice(-visible).flatMap((m) => [
-          m.id === unread?.id && !m.handoff && (
+        {onScreen.flatMap((m) => [
+          m.id === unread?.id && !markOn && (
             <UnreadDivider key="unread-divider" {...unreadProps!} />
           ),
           m.side ? (
@@ -211,9 +222,7 @@ export function ThreadMessages({
               onSteer={root?.side ? undefined : onSteer}
               onCompose={onCompose}
               unread={
-                m.id === unread?.id && m.handoff ? (
-                  <UnreadMark {...unreadProps!} />
-                ) : undefined
+                m.id === markOn ? <UnreadMark {...unreadProps!} /> : undefined
               }
               onRerunSetup={
                 // Setup changes files the running answer may be using.

@@ -438,21 +438,6 @@
 .resume-answer:hover {
   color: var(--text);
 }
-.context-compaction {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-.context-compaction::before,
-.context-compaction::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
 .compaction-note {
   display: inline-flex;
   align-items: center;
@@ -461,32 +446,14 @@
 .compaction-tokens {
   font-variant-numeric: tabular-nums;
 }
-.context-compaction[data-status="failed"] {
-  color: var(--danger);
-}
-.resume-divider {
+.line-divider.resume-divider {
   margin: 8px 0;
 }
-/* Where the messages you haven't seen start: the compaction row's shape in
-   the unread dot's colour, so it doesn't read as another compaction. Read, it
-   fades and keeps its height until the thread is opened again; under reduced
-   motion the global rule drops the transition and it goes at once. */
+/* Read, the unread divider fades and keeps its height until the thread is
+   opened again; under reduced motion the global rule drops the transition and
+   it goes at once. */
 .unread-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 500;
   transition: opacity 0.6s ease;
-}
-.unread-divider::before,
-.unread-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 .unread-divider[data-read] {
   opacity: 0;
@@ -522,20 +489,20 @@
   padding: 16px 0;
   content-visibility: visible;
 }
-.agent-handoff .context-compaction .text-button {
+.agent-handoff .line-divider .text-button {
   padding: 0;
   font-size: 11px;
 }
-/* The unread divider folded into an agent switch's row. Read, the time
+/* The unread divider folded into a row that draws its own line. Read, the time
    collapses and the row's label glides back to the middle as the lines grow
    into its room; the row's height never changes. The negative margin and the
    dot's padding cancel the row's gap, so a collapsed mark leaves no hole. */
-.agent-handoff .context-compaction::before,
-.agent-handoff .context-compaction::after {
+.line-divider:has(> .unread-mark)::before,
+.line-divider:has(> .unread-mark)::after {
   transition: background-color 0.6s ease;
 }
-.agent-handoff .context-compaction:has(> .unread-mark:not([data-read]))::before,
-.agent-handoff .context-compaction:has(> .unread-mark:not([data-read]))::after {
+.line-divider:has(> .unread-mark:not([data-read]))::before,
+.line-divider:has(> .unread-mark:not([data-read]))::after {
   background: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 .unread-mark {
