@@ -10,6 +10,7 @@ import {
   answerImagePaths,
   localImagePath,
 } from "../../../shared/answer-images";
+import { stoppedNote } from "../../../shared/agent-trace";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { parseContextReport } from "../../../shared/context-report";
 import { WatchNotes } from "../watch/WatchNotes";
@@ -462,7 +463,7 @@ export const Message = memo(function Message({
       )}
       {m.status === "cancelled" && (
         <p className="muted" role="status">
-          Stopped · partial output kept
+          {stoppedNote(m)}
         </p>
       )}
       {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
