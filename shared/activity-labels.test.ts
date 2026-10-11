@@ -57,6 +57,9 @@ it("counts a call the user stopped as stopped, not failed", () => {
   expect(doneLabel(call("rg", "command", "stopped", "rg cache src"))).toBe(
     "Stopped rg",
   );
+  expect(
+    doneLabel(call("img", "tool", "stopped", "Generating an image")),
+  ).toBe("Stopped: Generating an image");
 });
 
 it("counts every file a multi-file patch edited", () => {

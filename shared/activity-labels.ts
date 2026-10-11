@@ -165,7 +165,8 @@ export function doneLabel(a: AgentActivity) {
       case "agent":
         return `Agent stopped: ${a.label}`;
       case "tool":
-        return `Tool stopped: ${a.label}`;
+        // Its label is still the running one, e.g. "Generating an image".
+        return `Stopped: ${a.label}`;
     }
   }
   switch (a.kind) {
