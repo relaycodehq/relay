@@ -81,8 +81,9 @@ function Section(props: SectionProps) {
           onChange={() => toggle(s.files.map((c) => c.path))}
         />
         <strong>{s.title}</strong>
-        <span>
-          {s.files.length} {s.files.length === 1 ? "file" : "files"}
+        <span className="change-section-count">
+          {s.files.length}{" "}
+          <span>{s.files.length === 1 ? "file" : "files"}</span>
         </span>
       </header>
       {open &&

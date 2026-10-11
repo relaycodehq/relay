@@ -108,6 +108,8 @@
 }
 .composer-tools .send-message {
   flex: none;
+  /* Wrapped onto a row of its own in a narrow pane, it still sits right. */
+  margin-left: auto;
   width: 32px;
   height: 32px;
   padding: 6px;

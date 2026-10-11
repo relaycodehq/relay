@@ -171,10 +171,22 @@
 .changed-files-item.reverted .diff-stat {
   opacity: 0.5;
 }
-/* Narrow threads wrap the header's buttons instead of clipping them. */
+/* Narrow threads wrap the header's buttons instead of clipping them; a
+   narrow chat pane first sheds their words (the title still names them). */
 .changed-files > header {
   flex-wrap: wrap;
   row-gap: 2px;
+}
+@container (max-width: 480px) {
+  .changed-files-label {
+    display: none;
+  }
+  .changed-files > header {
+    gap: 6px;
+  }
+  .changed-files > header .changed-files-open {
+    padding: 4px;
+  }
 }
 .changed-files > header strong,
 .changed-files-note {

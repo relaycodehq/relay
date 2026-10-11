@@ -410,11 +410,42 @@
   .working-commit small {
     display: none;
   }
+  /* The section counts read as numbers beside a narrow list's titles. */
+  .change-section-count > span {
+    display: none;
+  }
+  .working-review > .empty {
+    padding: 24px 14px;
+  }
+  .working-review > .empty h2 {
+    font-size: 15px;
+  }
 }
 @container (max-width: 460px) {
-  .editor-bar .symbol-actions,
-  .editor-bar-state {
+  .editor-bar .symbol-actions {
     display: none;
+  }
+  /* The path keeps the diff header; which sides it compares gives way. */
+  .working-review > header > span:not(.split-diff-toggle) {
+    display: none;
+  }
+  /* The unsaved dot stays; its words don't. */
+  .editor-bar-state {
+    font-size: 0;
+    gap: 0;
+    margin-left: 6px;
+  }
+}
+/* Too narrow for the path beside the controls: the path gets its own row. */
+@container (max-width: 360px) {
+  .editor-bar {
+    flex-wrap: wrap;
+    padding-block: 4px;
+  }
+  .editor-bar-path {
+    flex-basis: calc(100% - 40px);
+    min-height: 28px;
+    align-items: center;
   }
 }
 

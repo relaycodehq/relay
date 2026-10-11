@@ -231,7 +231,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           onClick={() => onOpen(files[0]?.path)}
         >
           <FileDiff size={14} />
-          Open diff
+          <span className="changed-files-label">Open diff</span>
         </button>
         {onRewind && (
           <button
@@ -254,12 +254,12 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
             {reverted === files.length ? (
               <>
                 <Redo2 size={14} />
-                Redo
+                <span className="changed-files-label">Redo</span>
               </>
             ) : (
               <>
                 <Undo2 size={14} />
-                Roll back
+                <span className="changed-files-label">Roll back</span>
               </>
             )}
           </button>
