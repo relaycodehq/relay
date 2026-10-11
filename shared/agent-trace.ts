@@ -48,6 +48,12 @@ type TracePart =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "run"; id: string; activity: AgentActivity[] };
 
+/** The line under a stopped turn, which only claims output was kept when there is some. */
+export const stoppedNote = (message: ChatMessage) =>
+  message.body.trim() || traceOf(message).length || message.changes?.length
+    ? "Stopped · partial output kept"
+    : "Stopped";
+
 /** Consecutive tool calls become one run; commentary splits them. */
 export function groupTrace(entries: AgentTrace[]) {
   const parts: TracePart[] = [];

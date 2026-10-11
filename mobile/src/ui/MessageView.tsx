@@ -5,6 +5,7 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
 import { agentError } from "../../../shared/agent-error";
+import { stoppedNote } from "../../../shared/agent-trace";
 import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
@@ -256,7 +257,7 @@ export const MessageView = memo(function MessageView({
       )}
       {m.status === "cancelled" && (
         <Text style={[styles.note, { color: t.muted }]}>
-          Stopped · partial output kept
+          {stoppedNote(m)}
         </Text>
       )}
       {/* A lost login's error only says to sign in again, which the note says better from here. */}

@@ -95,3 +95,41 @@ describe("RichText math", () => {
     expect(out).toContain("<code>y</code>");
   });
 });
+
+describe("RichText typed", () => {
+  const typed = (text: string) =>
+    renderToStaticMarkup(<RichText text={text} typed />);
+
+  it("shows a person's lines, indentation and symbols as typed", () => {
+    const out = typed(
+      [
+        "Fix the test",
+        "# not a heading",
+        "- not a list",
+        "    at Object.<anonymous> (src/cache.ts:12:3)",
+        "call f(*args, **kwargs) in ~/src and ~/dist, pay $x$ <b>",
+      ].join("\n"),
+    );
+    expect(out).not.toMatch(/<h1|<ul|<li|<em|<strong|<del|<b>|katex/);
+    expect(out).toContain("Fix the test\n# not a heading\n- not a list\n");
+    expect(out).toContain(" ".repeat(4) + "at Object.");
+    expect(out).toContain("~/src and ~/dist, pay $x$ &lt;b&gt;");
+  });
+
+  it("keeps fences, quotes, code spans and links", () => {
+    const out = typed(
+      [
+        "> quoted from the answer",
+        "",
+        "see `cache.ts` at https://example.com",
+        "```ts",
+        "  const x = 1;",
+        "```",
+      ].join("\n"),
+    );
+    expect(out).toContain("<blockquote");
+    expect(out).toContain("<code>cache.ts</code>");
+    expect(out).toContain('href="https://example.com"');
+    expect(out).toContain("  const x = 1;");
+  });
+});

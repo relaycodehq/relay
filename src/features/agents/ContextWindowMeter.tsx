@@ -1,5 +1,6 @@
 import { useEffect, useId, useReducer, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
+import { usePinOnClick } from "../../lib/usePinOnClick";
 import { Check, Eye, EyeOff, Minimize2 } from "lucide-react";
 import type {
   ChatMessage,
@@ -345,6 +346,7 @@ export function ContextWindowMeter({
       : `Context window, ${rounded}% used`;
   const agent = agentName(provider);
   const [open, setOpen] = useState(false);
+  const pinOnClick = usePinOnClick(setOpen);
   // Only a signal sent while mounted: the composer remounts the meter.
   const [signal, setSignal] = useState(openSignal);
   if (signal !== openSignal) {
@@ -372,7 +374,7 @@ export function ContextWindowMeter({
     saved: claude ? savedReport : undefined,
   });
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={pinOnClick}>
       <Popover.Trigger
         openOnHover
         delay={150}

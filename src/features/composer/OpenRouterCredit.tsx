@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
+import { usePinOnClick } from "../../lib/usePinOnClick";
 import { Flame, RefreshCw } from "lucide-react";
 import {
   creditLeft,
@@ -33,6 +34,7 @@ export const OpenRouterCreditButton = memo(function OpenRouterCreditButton({
 }) {
   const [credit, setCredit] = useState<OpenRouterCredit>();
   const [refreshing, setRefreshing] = useState(false);
+  const pinOnClick = usePinOnClick();
   const loadRef = useRef<(force: boolean) => Promise<void>>(undefined);
   useEffect(() => {
     let cancel = false;
@@ -71,7 +73,7 @@ export const OpenRouterCreditButton = memo(function OpenRouterCreditButton({
   const hot = pace === "hot" || pace === "spent";
   const amount = left == null ? null : formatDollars(left);
   return (
-    <Popover.Root>
+    <Popover.Root onOpenChange={pinOnClick}>
       <Popover.Trigger
         openOnHover
         delay={150}

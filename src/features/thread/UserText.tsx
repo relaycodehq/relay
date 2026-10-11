@@ -83,7 +83,12 @@ export function UserText({
       {parts.map((part, i) =>
         typeof part === "string" ? (
           part.trim() ? (
-            <RichText key={i} text={part} inlineCode={inlineCode} />
+            <RichText
+              key={i}
+              text={part}
+              inlineCode={inlineCode}
+              typed
+            />
           ) : null
         ) : (
           <p key={i} className="message-paste">

@@ -484,22 +484,30 @@ export function ProjectComposer({
                 />
               ),
             }}
+            end={
+              <>
+                {running && onStop && (
+                  <StopButton
+                    armed={stop.armed}
+                    keys={stop.keys}
+                    onStop={onStop}
+                  />
+                )}
+                {(!running ||
+                  !onStop ||
+                  !!draft.text.trim() ||
+                  !!draft.attached.length) && (
+                  <SendButton
+                    disabled={sending.disabled}
+                    running={running}
+                    sendKey={sendKey}
+                    runningAction={runningAction}
+                    onSendLater={(at) => void sending.send(false, at)}
+                  />
+                )}
+              </>
+            }
           />
-          {running && onStop && (
-            <StopButton armed={stop.armed} keys={stop.keys} onStop={onStop} />
-          )}
-          {(!running ||
-            !onStop ||
-            !!draft.text.trim() ||
-            !!draft.attached.length) && (
-            <SendButton
-              disabled={sending.disabled}
-              running={running}
-              sendKey={sendKey}
-              runningAction={runningAction}
-              onSendLater={(at) => void sending.send(false, at)}
-            />
-          )}
         </div>
       </form>
       {draft.images

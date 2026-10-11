@@ -24,6 +24,30 @@ function settle(list: HTMLElement | null) {
   for (const row of rows) row.style.transition = "";
 }
 
+type Box = Pick<DOMRect, "top" | "bottom" | "height">;
+const middle = (box: Box) => box.top + box.height / 2;
+
+/**
+ * How far row `from` follows a pointer moved `dy`: up to a little past the
+ * list's ends, and always far enough for its middle to pass the first or
+ * last row's middle, which is what moves it there. A row taller than the
+ * last one would otherwise stop before it could.
+ */
+export function dragOffset(boxes: Box[], from: number, dy: number) {
+  const row = boxes[from]!,
+    first = boxes[0]!,
+    last = boxes[boxes.length - 1]!;
+  const min = Math.min(
+    first.top - row.top - 8,
+    middle(first) - middle(row) - 8,
+  );
+  const max = Math.max(
+    last.bottom - row.bottom + 8,
+    middle(last) - middle(row) + 8,
+  );
+  return Math.max(min, Math.min(max, dy));
+}
+
 /**
  * Reorders a list by dragging with the pointer: the picked row follows it,
  * the rows it passes slide aside, and the drop becomes a `DragDrop`. The
@@ -69,17 +93,13 @@ export function useDragSort(
         row.classList.add("lifted");
         root.classList.add("sorting");
       }
-      const d = Math.max(
-        boxes[0].top - boxes[from].top - 8,
-        Math.min(boxes[boxes.length - 1].bottom - boxes[from].bottom + 8, dy),
-      );
+      const d = dragOffset(boxes, from, dy);
       row.style.transform = `translateY(${d}px)`;
-      const middle = boxes[from].top + boxes[from].height / 2 + d;
+      const centre = middle(boxes[from]) + d;
       to = from;
       boxes.forEach((box, i) => {
-        const m = box.top + box.height / 2;
-        if (i < from && middle < m) to = Math.min(to, i);
-        if (i > from && middle > m) to = Math.max(to, i);
+        if (i < from && centre < middle(box)) to = Math.min(to, i);
+        if (i > from && centre > middle(box)) to = Math.max(to, i);
       });
       rows.forEach((other, i) => {
         if (i === from) return;

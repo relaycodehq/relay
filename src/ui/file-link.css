@@ -1,36 +1,38 @@
-/* File chip: a faintly tinted pill whose metrics are in em, so it
-   sits the same in 14px answers and 12px trace notes. */
+/* File link: the file's glyph and a faintly underlined name, sitting on
+   the text's baseline in em so it fits 14px answers and 12px trace notes. */
 .chat-file-link {
-  --chip-accent: oklch(0.62 0.11 215);
   display: inline-flex;
-  align-items: center;
-  gap: 0.33em;
+  align-items: baseline;
+  gap: 0.3em;
   max-width: 100%;
-  height: 1.41em;
-  padding: 0 0.5em;
-  border: 1px solid color-mix(in oklab, var(--chip-accent) 34%, var(--border));
-  border-radius: 0.5em;
-  background: color-mix(in oklab, var(--chip-accent) 11%, transparent);
-  color: color-mix(in oklab, var(--chip-accent) 22%, var(--text));
+  padding: 0;
+  border: 0;
+  border-radius: 0.25em;
+  background: none;
+  color: inherit;
   font: inherit;
-  font-size: 0.86em;
   font-weight: 500;
-  line-height: 1;
-  vertical-align: middle;
+  line-height: inherit;
+  vertical-align: baseline;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background-color 0.15s;
 }
 .chat-file-link:hover {
-  border-color: color-mix(in oklab, var(--chip-accent) 48%, var(--border));
-  background: color-mix(in oklab, var(--chip-accent) 17%, transparent);
+  background: none;
+}
+.chat-file-link > svg {
+  align-self: center;
 }
 .chat-file-link-label {
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.25;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 0.15s;
+}
+.chat-file-link:hover .chat-file-link-label {
+  text-decoration-color: currentColor;
 }
 .file-entry-icon {
   flex: none;

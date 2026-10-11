@@ -33,7 +33,7 @@ const modes: {
     value: "default",
     label: "Build",
     hint: "edits files",
-    icon: <Bot size={16} />,
+    icon: <Bot size={14} />,
   },
   {
     value: "plan",

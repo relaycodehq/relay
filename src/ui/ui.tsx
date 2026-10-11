@@ -63,7 +63,17 @@ export function Modal({
   const headingId = useId();
   useReturnFocus();
   useEffect(() => {
+    // Unmounting skips close(), which is what hands focus back on its own.
+    const opener = document.activeElement;
     ref.current?.showModal();
+    return () => {
+      if (
+        opener instanceof HTMLElement &&
+        opener.isConnected &&
+        (!document.activeElement || document.activeElement === document.body)
+      )
+        opener.focus();
+    };
   }, []);
   return (
     <dialog

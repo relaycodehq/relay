@@ -21,8 +21,9 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import type { Root } from "mdast";
 import type { Position } from "unist";
-import type { PluggableList } from "unified";
+import type { PluggableList, Plugin } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
 import {
   projectFileLink,
@@ -269,24 +270,72 @@ const urlTransform: UrlTransform = (url, key, node) =>
     : defaultUrlTransform(url);
 // GitHub's allowlist, so a README's HTML can't restyle or script the app.
 const htmlPlugins = [rehypeRaw, rehypeSanitize];
+/**
+ * What someone typed reads as typed: of the block syntax only fences and
+ * quotes (the composer's quote pill sends one) are kept, and of the inline
+ * syntax only code spans and links. A `#` comment, a `-` line, `*args` or
+ * `~/src and ~/dist` stay text.
+ */
+const typedSyntax: Plugin<[], Root> = function () {
+  // The key remark-parse reads; its types aren't a direct dependency.
+  const data = this.data() as { micromarkExtensions?: object[] };
+  (data.micromarkExtensions ??= []).push({
+    disable: {
+      null: [
+        "headingAtx",
+        "setextUnderline",
+        "list",
+        "thematicBreak",
+        "codeIndented",
+        "htmlFlow",
+        "htmlText",
+        "definition",
+        "table",
+        "attention",
+        "strikethrough",
+        "characterEscape",
+        "characterReference",
+        "hardBreakEscape",
+      ],
+    },
+  });
+};
+const typedFence = /((?<![^\n])[ \t]{0,3}```[\s\S]*?(?:\n[ \t]{0,3}```[^\n]*|$))/;
+/** The parser drops the spaces a line starts with; no-break ones survive it. */
+const keepIndent = (text: string) =>
+  text
+    .split(typedFence)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part.replace(/^[ \t]+(?=\S)/gm, (indent) =>
+            indent.replace(/\t/g, "    ").replace(/ /g, "\u00a0"),
+          ),
+    )
+    .join("");
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   components,
   html,
+  typed,
 }: {
   text: string;
   components: Components;
   html: boolean;
+  typed: boolean;
 }) {
   // GFM parses tables, task lists, strikethrough and bare links before the incremental pass.
   // `$x$` is left to normalizeMath: alone it would turn "$5 and $10" into a formula.
   const remarkPlugins = useMemo<PluggableList>(
-    () => [
-      remarkGfm,
-      [remarkMath, { singleDollarTextMath: false }],
-      streamingMarkdownTail(),
-    ],
-    [],
+    () =>
+      typed
+        ? [remarkGfm, typedSyntax, streamingMarkdownTail()]
+        : [
+            remarkGfm,
+            [remarkMath, { singleDollarTextMath: false }],
+            streamingMarkdownTail(),
+          ],
+    [typed],
   );
   return (
     <MarkdownSource.Provider value={text}>
@@ -308,6 +357,7 @@ export const RichText = memo(function RichText({
   inlineCode,
   image,
   html = false,
+  typed = false,
 }: {
   text: string;
   projectRoot?: string;
@@ -318,6 +368,8 @@ export const RichText = memo(function RichText({
   image?: (src: string, alt: string) => ReactNode | undefined;
   /** Renders HTML in the text, sanitized, instead of dropping it: for files, not answers. */
   html?: boolean;
+  /** Shows text a person typed with its lines and indentation, untypeset; see typedSyntax. */
+  typed?: boolean;
 }) {
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
@@ -421,7 +473,10 @@ export const RichText = memo(function RichText({
     // A new renderer redraws text that was shown before it arrived.
     [projectRoot, linksFiles, inlineCode, image],
   );
-  const blocks = useMemo(() => markdownBlocks(normalizeMath(text)), [text]);
+  const blocks = useMemo(
+    () => markdownBlocks(typed ? keepIndent(text) : normalizeMath(text)),
+    [text, typed],
+  );
   // Streaming changes the text every token; keep the map (and the chips
   // reading it) unchanged until a clash actually appears.
   const lastSuffixes = useRef<ReadonlyMap<string, string>>(new Map());
@@ -440,11 +495,16 @@ export const RichText = memo(function RichText({
   }, [text, projectRoot, linksFiles]);
   return (
     <FileLinkSuffixes.Provider value={suffixes}>
-      <div className="markdown">
+      <div className={typed ? "markdown typed" : "markdown"}>
         {blocks.map((block, index) => (
           <Fragment key={index}>
             {index > 0 && "\n"}
-            <MarkdownBlock text={block} components={components} html={html} />
+            <MarkdownBlock
+              text={block}
+              components={components}
+              html={html}
+              typed={typed}
+            />
           </Fragment>
         ))}
       </div>
