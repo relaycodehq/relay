@@ -29,7 +29,7 @@ import { ProviderIcon } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { StartedInTurn } from "./StartedThreads";
 import { AgentErrorNote, SignInNote } from "./TurnNotices";
-import { RenderCards } from "./renders/Renders";
+import { RenderCards, type RenderCompose } from "./renders/Renders";
 import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
 
@@ -57,6 +57,7 @@ export const MessageView = memo(function MessageView({
   onRewind,
   onRerunSetup,
   onSteer,
+  onCompose,
 }: {
   chatId: string;
   message: ChatMessage;
@@ -79,6 +80,8 @@ export const MessageView = memo(function MessageView({
   onRerunSetup?: (message: ChatMessage) => void;
   /** Puts a message for the agent in the composer, for a watch note's Tell. */
   onSteer?: (text: string) => void;
+  /** Puts what a page's relay.compose() says in the composer that shows. */
+  onCompose?: RenderCompose;
 }) {
   const t = useTheme();
   const { active } = useRemote();
@@ -201,7 +204,7 @@ export const MessageView = memo(function MessageView({
       )}
       {!user && startCalls(m).length > 0 && <StartedInTurn chatId={chatId} message={m} />}
       {!!m.renders?.length && (
-        <RenderCards chatId={chatId} renders={m.renders} onCompose={onSteer} />
+        <RenderCards chatId={chatId} renders={m.renders} onCompose={onCompose} />
       )}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.

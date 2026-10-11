@@ -287,6 +287,12 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       Alert.alert("Couldn't add it", e instanceof Error ? e.message : String(e));
     }
   }, []);
+  // A page's relay.compose() goes into the composer that shows, the reply's
+  // too, without taking focus from the page.
+  const composeFromPage = useCallback(
+    (text: string, earlier?: string) => composer.current?.compose(text, earlier),
+    [],
+  );
   const rewind = useCallback(
     async (
       m: ChatMessage,
@@ -696,6 +702,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
                 onRewind={rewind}
                 onRerunSetup={!running && item.id === setupId ? rerunSetup : undefined}
                 onSteer={rootId ? undefined : steerFromNote}
+                onCompose={composeFromPage}
               />
             )}
             ListHeaderComponent={

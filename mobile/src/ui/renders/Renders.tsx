@@ -20,6 +20,11 @@ import { renderTheme } from "./render-theme";
 const pages = new ImageCache();
 // The height each page last settled at, so a row mounted again opens at it.
 const settled = new Map<string, number>();
+// What each render last composed, so its next relay.compose() replaces it.
+const composed = new Map<string, string>();
+
+/** Puts a page's relay.compose() text in the composer, in place of `earlier`, what the page composed before. */
+export type RenderCompose = (text: string, earlier?: string) => void;
 
 export function usePage(chatId: string, renderId: string, page: number) {
   const { call, status, active } = useRemote();
@@ -48,8 +53,7 @@ export function RenderCards({
 }: {
   chatId: string;
   renders: HtmlRender[];
-  /** Puts what a page's `relay.compose()` says in the composer. */
-  onCompose?: (text: string) => void;
+  onCompose?: RenderCompose;
 }) {
   const { overview } = useRemote();
   if ((overview?.bridge ?? 1) < renderBridge) return <RenderNotes renders={renders} />;
@@ -65,7 +69,7 @@ function RenderCard({
 }: {
   chatId: string;
   render: HtmlRender;
-  onCompose?: (text: string) => void;
+  onCompose?: RenderCompose;
 }) {
   const t = useTheme();
   const [index, setIndex] = useState(0);
@@ -123,7 +127,7 @@ function RenderPage({
   chatId: string;
   render: HtmlRender;
   index: number;
-  onCompose?: (text: string) => void;
+  onCompose?: RenderCompose;
 }) {
   const t = useTheme();
   const { html, failed } = usePage(chatId, render.id, index);
@@ -134,6 +138,14 @@ function RenderPage({
     renderHeightAt(render.pages[index]?.heights, width) ??
     clampRenderHeight(RENDER_MIN_HEIGHT * 2);
   const theme = useMemo(() => renderTheme(t), [t]);
+  const compose = useMemo(() => {
+    if (!onCompose) return undefined;
+    const from = `${chatId}:${render.id}`;
+    return (text: string) => {
+      onCompose(text, composed.get(from));
+      composed.set(from, text);
+    };
+  }, [onCompose, chatId, render.id]);
   const page = useMemo(
     () => (html === undefined ? undefined : phoneRenderDocument(html, theme)),
     [html, theme],
@@ -151,7 +163,7 @@ function RenderPage({
       page={page}
       height={estimate}
       placeholder={note}
-      onCompose={onCompose}
+      onCompose={compose}
       onSize={(height) => settled.set(key, height)}
     />
   );

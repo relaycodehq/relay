@@ -17,6 +17,7 @@ import { ArrowUp, ChevronDown, ClipboardPaste, ImagePlus, ListEnd, Square, X, Za
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
+import { composeInto } from "../../../shared/html-render";
 import { returnedDraft } from "../../../shared/returned-draft";
 import type { TakenBack } from "../../../shared/remote-queued";
 import { agentInfo, agentName, agentProviders, type AgentProvider } from "../../../shared/agents";
@@ -81,6 +82,8 @@ export interface ComposerHandle {
   blur(): void;
   /** Adds a Markdown blockquote after the draft and puts the cursor under it. */
   quote(markdown: string): void;
+  /** A page's relay.compose(): `text` in place of `earlier`, what the page put in before, leaving focus where it is. */
+  compose(text: string, earlier?: string): void;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -195,6 +198,11 @@ export const Composer = forwardRef<
     settingsOn: (to) => switched(settings, to),
     focus: () => input.current?.focus(),
     blur: () => input.current?.blur(),
+    compose: (text, earlier) => {
+      const next = composeInto(typed.current, text, earlier);
+      typed.current = next;
+      setText(next);
+    },
     quote: async (markdown) => {
       const now = dictationSnapshot();
       const finishing = now.owner === dictationOwner && now.phase !== "idle";
