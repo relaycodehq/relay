@@ -17,10 +17,12 @@ public class RelayMicModule: Module {
   private var pending: [Int16] = []
   private var running = false
   private var sent = 0
+  private var observers: [NSObjectProtocol] = []
 
   public func definition() -> ModuleDefinition {
     Name("RelayMic")
-    Events("onAudio")
+    /** onEnd: the phone took the microphone away mid-dictation. */
+    Events("onAudio", "onEnd")
 
     AsyncFunction("getPermission") { () -> [String: Any] in
       ["granted": Self.permission() == .granted]
@@ -82,11 +84,9 @@ public class RelayMicModule: Module {
         let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: rate, channels: 1, interleaved: true),
         let converter = AVAudioConverter(from: format, to: target)
       else {
+        Self.release(session)
         throw MicException("The microphone isn't available.")
       }
-      self.converter = converter
-      pending = []
-      sent = 0
       input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
         self?.queue.async { self?.convert(buffer) }
       }
@@ -94,10 +94,37 @@ public class RelayMicModule: Module {
         try engine.start()
       } catch {
         input.removeTap(onBus: 0)
+        Self.release(session)
         throw MicException("The microphone isn't available.")
       }
+      self.converter = converter
+      pending = []
+      sent = 0
       running = true
+      watch()
     }
+  }
+
+  /**
+   * A call, Siri or new headphones stop the engine without a word, so this
+   * ends the dictation itself and tells the app, which keeps what was heard.
+   */
+  private func watch() {
+    let center = NotificationCenter.default
+    let end: (Notification) -> Void = { [weak self] _ in
+      self?.queue.async {
+        guard let self, self.running else { return }
+        self.teardown()
+        self.sendEvent("onEnd", [:])
+      }
+    }
+    observers = [
+      center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil, using: end),
+      center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { note in
+        let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+        if type == .began { end(note) }
+      },
+    ]
   }
 
   private func convert(_ buffer: AVAudioPCMBuffer) {
@@ -139,21 +166,30 @@ public class RelayMicModule: Module {
   }
 
   private func stop() -> Int {
-    // Off the queue: the tap may be waiting to hand it a buffer.
-    let wasRunning = queue.sync { running }
-    if wasRunning {
-      engine.inputNode.removeTap(onBus: 0)
-      engine.stop()
-    }
-    return queue.sync {
-      guard running else { return sent }
-      running = false
-      if !pending.isEmpty { emit(pending) }
-      pending = []
-      converter = nil
-      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    queue.sync {
+      teardown()
       return sent
     }
+  }
+
+  /** On the queue. Sends what's left of the last chunk. */
+  private func teardown() {
+    guard running else { return }
+    running = false
+    for observer in observers { NotificationCenter.default.removeObserver(observer) }
+    observers = []
+    engine.inputNode.removeTap(onBus: 0)
+    engine.stop()
+    if !pending.isEmpty { emit(pending) }
+    pending = []
+    converter = nil
+    Self.release(AVAudioSession.sharedInstance())
+  }
+
+  /** Unless read aloud has taken the session over since. */
+  private static func release(_ session: AVAudioSession) {
+    guard session.category == .playAndRecord else { return }
+    try? session.setActive(false, options: .notifyOthersOnDeactivation)
   }
 }
 
