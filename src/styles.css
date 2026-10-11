@@ -899,6 +899,9 @@ small {
 .markdown p:last-child {
   margin-bottom: 0;
 }
+.markdown.typed p {
+  white-space: pre-wrap;
+}
 .markdown-image,
 .answer-image img {
   display: block;
