@@ -22,6 +22,7 @@ import { Button } from "./Button";
 import { useForeground } from "./motion";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
+import { formatTokens } from "../../../shared/tokens";
 
 const rank: Record<MeterPace, number> = { ok: 0, warn: 1, hot: 2, spent: 3 };
 const warn = "#e3a23a",
@@ -166,14 +167,6 @@ function BarMeter({
       </View>
     </View>
   );
-}
-
-function formatTokens(value: number) {
-  if (value < 1_000) return `${Math.round(value)}`;
-  if (value < 10_000)
-    return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  if (value < 1_000_000) return `${Math.round(value / 1_000)}k`;
-  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
 /** What the composer's ring and context meter open: the context window, then the plan's limits. */

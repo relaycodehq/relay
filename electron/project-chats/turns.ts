@@ -15,6 +15,7 @@ import {
   helperProviders,
   agentInfo,
 } from "../../shared/agents";
+import { latestContext } from "../../shared/context-usage";
 import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
@@ -768,8 +769,12 @@ export class ChatTurns {
     const input = sessionInput(chat, provider, this.core.store, parentId);
     const active = this.core.active.claim(id, input);
     const { abort } = active;
+    const before = latestContext(
+      chat.messages.filter((m) => (m.parentId ?? undefined) === parentId),
+    )?.usage.usedTokens;
     const message = streamingAnswer(provider, {
       compaction: true,
+      ...(before ? { compactedFrom: before } : {}),
       ...(parentId ? { parentId } : {}),
     });
     chat.messages.push(message);

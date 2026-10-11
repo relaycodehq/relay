@@ -420,6 +420,14 @@
   height: 1px;
   background: var(--border);
 }
+.compaction-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.compaction-tokens {
+  font-variant-numeric: tabular-nums;
+}
 .context-compaction[data-status="failed"] {
   color: var(--danger);
 }

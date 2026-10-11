@@ -15,7 +15,7 @@ import {
 } from "./cache-heat";
 import { agentName } from "../../../shared/agents";
 import { ContextBreakdown } from "./ContextBreakdown";
-import { formatTokens } from "./tokens";
+import { formatTokens } from "../../../shared/tokens";
 import {
   useContextReport,
   type ContextCounter,

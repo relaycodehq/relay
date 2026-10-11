@@ -3,7 +3,7 @@ import type {
   ContextItem,
   ContextReport,
 } from "../../../shared/context-report";
-import { formatTokens } from "./tokens";
+import { formatTokens } from "../../../shared/tokens";
 import "./context-breakdown.css";
 
 // Each category keeps its colour whatever else the report holds; the slots

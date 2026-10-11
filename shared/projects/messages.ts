@@ -81,6 +81,8 @@ export interface ChatMessage {
   compaction?: boolean;
   /** Local: what a compaction left the agent with, when the provider hands it back readable. */
   compactSummary?: string;
+  /** Local: how full the context was when a compaction started; `context` is what it left. */
+  compactedFrom?: number;
   handoff?: AgentHandoff;
   reload?: SessionReload;
   worktreeCommand?: WorktreeCommandRun;

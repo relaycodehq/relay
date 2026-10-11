@@ -7,6 +7,7 @@ import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
 import { agentError } from "../../../shared/agent-error";
 import { stoppedNote } from "../../../shared/agent-trace";
 import { sentLabel } from "../../../shared/chat-activity";
+import { compactedTokens } from "../../../shared/tokens";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
 import { reloadNote } from "../../../shared/session-reload";
@@ -151,7 +152,7 @@ export const MessageView = memo(function MessageView({
           {m.status === "streaming"
             ? "Compacting context…"
             : m.status === "complete"
-              ? "Context compacted"
+              ? `Context compacted ${compactedTokens(m.compactedFrom, m.context?.usedTokens)}`.trim()
               : m.status === "cancelled"
                 ? "Compaction stopped"
                 : m.error && !m.signIn

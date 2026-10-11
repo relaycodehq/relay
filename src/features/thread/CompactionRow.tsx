@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info, Minimize2 } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
+import { compactedTokens } from "../../../shared/tokens";
 import { MessageAgentName } from "./MessageAgentName";
 import { RichText } from "../../ui/RichText";
 
@@ -30,6 +31,9 @@ export function CompactionRow({
   const [pinned, setPinned] = useState(false);
   const closing = useRef<ReturnType<typeof setTimeout>>(undefined);
   const summary = m.status === "complete" ? m.compactSummary : undefined;
+  const tokens =
+    m.status === "complete" &&
+    compactedTokens(m.compactedFrom, m.context?.usedTokens);
   const hover = (on: boolean) => {
     clearTimeout(closing.current);
     if (on) setOpen(true);
@@ -65,7 +69,8 @@ export function CompactionRow({
       data-status={m.status}
       role="status"
     >
-      <span>
+      <span className="compaction-note">
+        <Minimize2 size={12} aria-hidden />
         {m.status === "streaming"
           ? "Compacting context…"
           : m.status === "complete"
@@ -73,6 +78,7 @@ export function CompactionRow({
             : m.status === "cancelled"
               ? "Compaction stopped"
               : (m.error ?? "Compaction failed")}
+        {tokens && <span className="compaction-tokens">{tokens}</span>}
       </span>
       {summary && (
         <button
