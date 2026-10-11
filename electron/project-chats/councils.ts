@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
 import type {
   DeepReviewStart,
@@ -71,15 +72,20 @@ export class Councils {
   /**
    * Where a review thread, or one of its reviewers, works when the reviewed
    * code isn't in the project's checkout; undefined otherwise. A worktree
-   * Relay made and has since cleaned up is made again.
+   * Relay made and has since cleaned up is made again, unless `make` is
+   * false: then it's undefined too.
    */
-  async root(chat: ProjectChat) {
+  async root(chat: ProjectChat, make = true) {
     const state = chat.reviewer
       ? (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
           ?.deepReview
       : chat.deepReview;
     const checkout = state?.scope.checkout;
     if (!checkout || !state.scope.head) return;
+    if (!make)
+      return (await stat(checkout.path).catch(() => null))
+        ? checkout.path
+        : undefined;
     return ensureReviewCheckout(
       await this.core.projects.root(chat.projectId),
       checkout,

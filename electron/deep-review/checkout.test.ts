@@ -116,8 +116,34 @@ it("makes a pull request's worktree with no branch to fix on, and makes it again
   expect(git(made.path, "rev-parse", "HEAD")).toBe(head);
 });
 
+it("makes its own worktree on a branch no other folder has, so commits by hand land on it", async () => {
+  const made = (await openReviewCheckout(repo, scope(), worktrees, "c4"))!;
+  expect(made).toEqual({
+    path: join(worktrees, "deep-reviews", "c4"),
+    made: true,
+    branch: "panel",
+  });
+  expect(git(made.path, "branch", "--show-current")).toBe("panel");
+  git(made.path, "commit", "-q", "--allow-empty", "-m", "Fix by hand");
+  expect(git(repo, "log", "-1", "--format=%s", "panel")).toBe("Fix by hand");
+});
+
+it("stays detached at the reviewed commit once the branch moved on", async () => {
+  const reviewed = head;
+  git(repo, "branch", "-f", "panel", "main");
+  const made = (await openReviewCheckout(
+    repo,
+    scope({ head: reviewed }),
+    worktrees,
+    "c5",
+  ))!;
+  expect(git(made.path, "rev-parse", "HEAD")).toBe(reviewed);
+  expect(git(made.path, "branch", "--show-current")).toBe("");
+});
+
 it("keeps a review's worktree that holds commits on no branch", async () => {
   const made = (await openReviewCheckout(repo, scope(), worktrees, "c3"))!;
+  git(made.path, "switch", "-q", "--detach");
   git(made.path, "commit", "-q", "--allow-empty", "-m", "Detached fix");
   await sweepReviewCheckouts(worktrees, () => true);
   expect(await exists(made.path)).toBe(true);

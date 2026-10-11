@@ -15,6 +15,7 @@ import type {
   ActiveAgentWorktree,
   AgentWorktree,
   ChatWorktree,
+  ReviewFolder,
 } from "./worktrees";
 
 export const threadTitleSchema = z
@@ -88,6 +89,8 @@ export interface ChatSummary {
   agentWorktrees?: AgentWorktree[];
   /** Explicit workspace choice; unset means the project folder, regardless of discovered worktrees. */
   activeAgentWorktree?: ActiveAgentWorktree;
+  /** A deep review's own checkout of the reviewed code; its Git, files and agent work there. */
+  reviewFolder?: ReviewFolder;
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */

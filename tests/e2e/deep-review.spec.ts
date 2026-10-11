@@ -447,6 +447,8 @@ test("reviews another branch into main from a checkout on main", async () => {
   git("add", ".");
   git("commit", "-qm", "Add the panel");
   git("switch", "-q", "main");
+  // Work in progress in the checkout, which the review mustn't show as its own.
+  await writeFile(join(repo, "README.md"), "# Queue\n\nDraft\n");
   const app = await launch(root);
   try {
     const page = await app.firstWindow();
@@ -461,13 +463,9 @@ test("reviews another branch into main from a checkout on main", async () => {
       .getByRole("button", { name: "Deep review", exact: true })
       .click();
     await page.getByRole("radio", { name: "Branch" }).click();
-    // The checked-out branch first, into the only other one.
+    // On main it opens on the other branch, going into main.
     const head = page.getByRole("button", { name: "Branch to review" });
     const base = page.getByRole("button", { name: "Base branch" });
-    await expect(head).toHaveText("main");
-    await expect(base).toHaveText("device-panel");
-    await head.click();
-    await page.getByRole("option", { name: "device-panel" }).click();
     await expect(head).toHaveText("device-panel");
     await expect(base).toHaveText("main");
     await screenshot(page, {
@@ -490,7 +488,27 @@ test("reviews another branch into main from a checkout on main", async () => {
       path: "test-results/deep-review-other-branch-started.png",
     });
     expect(git("branch", "--show-current").trim()).toBe("main");
-    expect(git("worktree", "list")).toContain("deep-reviews");
+    const folder = git("worktree", "list", "--porcelain")
+      .split("\n")
+      .find((l) => l.startsWith("worktree ") && l.includes("deep-reviews"))!
+      .slice("worktree ".length);
+    expect(
+      execFileSync("git", ["-C", folder, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("device-panel");
+
+    // The thread's branch and changes are the review folder's, not the checkout's.
+    await expect(
+      page.locator(".composer-branch-trigger.workspace-trigger.static"),
+    ).toHaveText("device-panel");
+    const stat = page.locator(".pane-toggle-stat");
+    await expect(stat).toHaveCount(0);
+    await writeFile(join(folder, "fix.ts"), "export const a = 1;\n");
+    await expect(stat).toHaveAttribute("aria-label", "1 lines added, 0 removed");
+    await screenshot(page, {
+      path: "test-results/deep-review-other-branch-folder.png",
+    });
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

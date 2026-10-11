@@ -29,6 +29,7 @@ import { WorktreeSetup } from "./worktree-setup";
 import {
   agentWorktreeKey,
   agentWorktreeUnavailableError,
+  reviewFolder,
   selectedAgentWorktree,
   threadWorktree,
 } from "../../shared/projects";
@@ -626,11 +627,17 @@ export class ThreadWorktrees {
     });
   }
 
-  /** A thread's worktree folder, for a workspace id; only while it exists. */
+  /** A thread's worktree folder, or its review's, for a workspace id; only while it exists, though a review's falls back to the checkout. */
   async rootFor(projectId: string, id: string, expectedWorktree?: string) {
     const chat = await this.core.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
+    // Panes poll this, so a review folder already cleaned up isn't made
+    // again just by looking; the thread reads the checkout until a turn or
+    // its terminal makes it.
+    const review = await this.councils.root(chat, false);
+    if (review) return review;
+    if (reviewFolder(chat)) return this.core.projects.root(projectId);
     if (chat.worktree && expectedWorktree)
       throw new Error(
         "This thread's active workspace changed. Refresh before trying again.",

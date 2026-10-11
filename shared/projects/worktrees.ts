@@ -1,3 +1,4 @@
+import type { ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
 /** A thread that works in its own git worktree, leaving the checkout alone. */
@@ -65,10 +66,27 @@ export type ActiveAgentWorktree = Pick<
   /** Relay moved the thread in after its agent made it; once that worktree is gone the thread goes back to the project folder. */
   followed?: true;
 };
+/** Where a deep review reads and fixes the reviewed code when the project's checkout doesn't have it. */
+export type ReviewFolder = Pick<ReviewCheckout, "path" | "branch">;
 type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
   activeAgentWorktree?: ActiveAgentWorktree;
+  /** On summaries; the full thread has it as `deepReview.scope.checkout`. */
+  reviewFolder?: ReviewFolder;
+  deepReview?: { scope: { checkout?: ReviewCheckout } };
+};
+
+export const reviewFolder = (
+  chat: ThreadWorkspace | undefined,
+): ReviewFolder | undefined => {
+  const checkout = chat?.reviewFolder ?? chat?.deepReview?.scope.checkout;
+  return (
+    checkout && {
+      path: checkout.path,
+      ...(checkout.branch ? { branch: checkout.branch } : {}),
+    }
+  );
 };
 
 export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
@@ -95,6 +113,8 @@ export const agentWorktreeUnavailable = (chat: ThreadWorkspace | undefined) =>
 
 /** The folder a thread's Git, files, terminal and agent follow. */
 export function threadWorktree(chat: ThreadWorkspace | undefined) {
+  const review = reviewFolder(chat);
+  if (review) return review;
   if (chat?.worktree)
     return chat.worktree.path && !chat.worktree.removedAt
       ? chat.worktree

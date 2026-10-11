@@ -1,7 +1,7 @@
 // Where a review of a branch or pull request that isn't checked out reads its
-// files: a clean worktree that already has the branch, or a detached one
-// Relay makes for the review, so reviewers open the reviewed code itself
-// rather than the thread's checkout.
+// files: a clean worktree that already has the branch, or one Relay makes for
+// the review, so reviewers open the reviewed code itself rather than the
+// thread's checkout. The thread's Git and file panes follow it there.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { currentBranchOrNull, git } from "../git/git";
@@ -59,18 +59,39 @@ export function needsCheckout(scope: ReviewScope) {
   return t.kind === "branch" && (t.head ?? scope.branch) !== scope.branch;
 }
 
-async function addDetached(root: string, path: string, head: string) {
+/**
+ * Makes the review's worktree on `branch` when no other folder has it and it
+ * still sits at `head`, so a commit made there by hand lands on the branch;
+ * otherwise detached at `head`.
+ */
+async function addWorktree(
+  root: string,
+  path: string,
+  head: string,
+  branch?: string,
+) {
   await mkdir(dirname(path), { recursive: true });
   // A folder deleted by hand leaves Git's record of it behind.
   await git(root, ["worktree", "prune"]).catch(() => {});
-  await git(root, ["worktree", "add", "-q", "--detach", path, head], 120000);
+  const onBranch =
+    branch &&
+    !(await checkedOutElsewhere(root, branch, path)) &&
+    (await git(root, ["rev-parse", `refs/heads/${branch}`]).catch(() => ""))
+      .trim() === head;
+  await git(
+    root,
+    onBranch
+      ? ["worktree", "add", "-q", path, branch]
+      : ["worktree", "add", "-q", "--detach", path, head],
+    120000,
+  );
 }
 
 /**
  * Where the review reads the code `scope` covers. A branch already checked
  * out in a clean worktree is reviewed there; otherwise Relay makes a
- * detached worktree at its head in `dir`, named after the review thread
- * `chatId`. Undefined when the thread's checkout already has it. Nothing is
+ * worktree at its head in `dir`, named after the review thread `chatId`, on
+ * the branch when it can be. Undefined when the thread's checkout already has it. Nothing is
  * copied in and no setup runs: reviewers only read.
  */
 export async function openReviewCheckout(
@@ -91,7 +112,7 @@ export async function openReviewCheckout(
       return { path: at, made: false, branch };
   }
   const path = join(reviewCheckoutsIn(dir), chatId);
-  await addDetached(root, path, scope.head);
+  await addWorktree(root, path, scope.head, branch);
   return { path, made: true, ...(branch ? { branch } : {}) };
 }
 
@@ -106,7 +127,7 @@ export async function ensureReviewCheckout(
     throw new Error(
       `The worktree this review reads from, ${checkout.path}, is gone.`,
     );
-  await addDetached(root, checkout.path, head);
+  await addWorktree(root, checkout.path, head, checkout.branch);
   return checkout.path;
 }
 

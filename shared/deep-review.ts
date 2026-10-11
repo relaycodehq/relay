@@ -118,7 +118,7 @@ export interface ReviewScope {
 /** A worktree the review reads from and fixes in. */
 export interface ReviewCheckout {
   path: string;
-  /** Relay made it for this review, detached, and removes it after; otherwise it already had the branch. */
+  /** Relay made it for this review, on the branch when no other folder had it, and removes it after; otherwise it already had the branch. */
   made: boolean;
   /** The local branch fixes go on, checked out there before the first fix; none for a pull request. */
   branch?: string;

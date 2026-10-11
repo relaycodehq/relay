@@ -18,6 +18,7 @@ import type {
   ProjectChatSend,
   ScheduledChatMessage,
 } from "../../shared/projects";
+import { reviewFolder } from "../../shared/projects";
 import { contextAgent } from "../../shared/recipient";
 import { notesMark } from "../../shared/thread-notes";
 import { keyedQueue } from "../util/keyed-queue";
@@ -91,6 +92,7 @@ export function chatSummary({
   const open = messages.some((m) =>
     m.questions?.some((group) => !group.answers && !group.dismissed),
   );
+  const review = reviewFolder({ deepReview });
   return {
     ...summary,
     providers,
@@ -100,6 +102,7 @@ export function chatSummary({
     ...(mark ? { queueMark: mark } : {}),
     ...(notesAt ? { notesMark: notesAt } : {}),
     ...(open ? { asking: true as const } : {}),
+    ...(review ? { reviewFolder: review } : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }

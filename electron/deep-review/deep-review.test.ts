@@ -627,6 +627,12 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(git(checkout.path, "rev-parse", "HEAD")).toBe(head);
   // The thread's checkout stays on its branch.
   expect(git(repo, "branch", "--show-current")).toBe(main);
+  // On the branch from the start, and the thread's Git and file panes work there.
+  expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
+  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(checkout.path);
+  expect(
+    (await chats.list(projectId)).find((c) => c.id === chat.id)?.reviewFolder,
+  ).toEqual({ path: checkout.path, branch: "panel" });
 
   // Reviewers and the lead work in it, with their own reviews.
   const records = await capture();
@@ -665,6 +671,9 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   await rm(join(checkout.path, "fix.ts"));
   await chats.cleanUpWorktrees();
   await expect(readFile(join(checkout.path, ".git"))).rejects.toThrow();
+  expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
+  // Looking at the thread reads the checkout, without making the folder again.
+  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(repo);
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
 });

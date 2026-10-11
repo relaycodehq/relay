@@ -70,11 +70,7 @@ export function DeepReviewRequest({
           </div>
           {state.focus && <p>{state.focus}</p>}
           {scope.checkout && (
-            // The thread's Changes pane shows its own checkout, not this folder.
-            <p className="muted">
-              Reviewed and fixed in {scope.checkout.path}, not this thread's
-              checkout.
-            </p>
+            <p className="muted">Reviewed and fixed in {scope.checkout.path}.</p>
           )}
         </div>
       </div>

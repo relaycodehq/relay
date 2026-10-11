@@ -548,9 +548,13 @@ export async function performGitAction(
           "\n",
       );
     } else {
-      if (!state.branch || state.operation)
+      if (state.operation)
         throw new Error(
           "Finish the current Git operation on a branch before committing or pushing here.",
+        );
+      if (!state.branch)
+        throw new Error(
+          "This folder is on a detached HEAD. Check out a branch here before committing or pushing.",
         );
       if (state.changes.some((c) => c.conflict))
         throw new Error("Resolve and stage all merge conflicts first.");
