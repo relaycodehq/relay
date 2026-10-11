@@ -172,6 +172,8 @@ export interface AgentActivity {
   progress?: string;
   /** An MCP tool call: which server's tool it was. */
   mcp?: { server: string; tool: string };
+  /** The picture the call made, by absolute path; the turn shows it as an image it read. */
+  image?: string;
 }
 /** Private turn events. */
 export type AgentTrace =

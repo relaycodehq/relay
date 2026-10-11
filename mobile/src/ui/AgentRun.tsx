@@ -35,6 +35,7 @@ import {
   batchHead,
   groupTrace,
   imageRead,
+  imagePath,
   looksAtImage,
   readTurn,
   thinkingWord,
@@ -291,13 +292,14 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
 /** The picture a call looked at, under its row. */
 function Preview({ activity: a, name }: { activity: AgentActivity; name: string }) {
   const { chatId, messageId, openImage } = useContext(Subagents);
+  const path = imagePath(a)!;
   return (
     <ReadPreview
-      key={a.label}
-      source={{ kind: "read", chatId, messageId, path: a.label }}
+      key={path}
+      source={{ kind: "read", chatId, messageId, path }}
       name={name}
       done={a.status === "complete"}
-      onOpen={openImage && (() => openImage(a.label))}
+      onOpen={openImage && (() => openImage(path))}
     />
   );
 }

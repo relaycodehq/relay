@@ -101,6 +101,16 @@ function liveItem(item: Record<string, any>): unknown {
       };
     case "ImageView":
       return { type: "imageView", id: item.id, path: path(item.path) };
+    case "Extension":
+      if (item.kind === "image_gen.generation")
+        return {
+          type: "imageGeneration",
+          id: item.id,
+          savedPath: path(item.savedPath),
+          failure: item.failure,
+          status,
+        };
+      return;
     case "McpToolCall":
       return {
         type: "mcpToolCall",

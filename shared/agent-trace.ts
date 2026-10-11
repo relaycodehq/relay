@@ -16,13 +16,17 @@ function traceOf(message: ChatMessage): AgentTrace[] {
   );
 }
 
-/** A call that looks at an image Relay can show; it's still running or done. */
-export const looksAtImage = (a: AgentActivity) =>
-  a.kind === "read" && a.status !== "failed" && isImagePath(a.label);
+/** The picture a call looked at or made, by path. */
+export const imagePath = (a: AgentActivity) =>
+  a.image ?? (a.kind === "read" && isImagePath(a.label) ? a.label : undefined);
 
-/** The image a finished call looked at, which the desktop hands out for its turn. */
+/** A call that looks at or made an image Relay can show; it's still running or done. */
+export const looksAtImage = (a: AgentActivity) =>
+  a.status !== "failed" && imagePath(a) !== undefined;
+
+/** The image a finished call looked at or made, which the desktop hands out for its turn. */
 export const imageRead = (a: AgentActivity) =>
-  looksAtImage(a) && a.status === "complete" ? a.label : undefined;
+  looksAtImage(a) && a.status === "complete" ? imagePath(a) : undefined;
 
 /** Takes the calls subagents made out of the trace, keyed by the agent call that ran them. */
 function nestSubagents(entries: AgentTrace[]) {

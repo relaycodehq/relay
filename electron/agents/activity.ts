@@ -1,4 +1,5 @@
 import type { AgentActivity } from "../../shared/projects";
+import { isImagePath } from "../../shared/answer-images";
 
 /** Keep a small, local-only activity trace. Never retain raw tool arguments or patches. */
 export function codexActivity(
@@ -13,6 +14,7 @@ export function codexActivity(
     item.status === "failed" ||
     item.status === "declined" ||
     item.success === false ||
+    item.failure != null ||
     (typeof item.exitCode === "number" && item.exitCode !== 0)
       ? "failed"
       : method === "item/started"
@@ -46,6 +48,23 @@ export function codexActivity(
   }
   if (item.type === "imageView" && typeof item.path === "string")
     return { ...base, kind: "read", label: item.path.slice(0, 500) };
+  // The picture comes as base64 too; only the copy Codex saved is kept.
+  if (item.type === "imageGeneration")
+    return {
+      ...base,
+      kind: "tool",
+      label:
+        status === "running"
+          ? "Generating an image"
+          : status === "failed"
+            ? "Image generation"
+            : "Generated an image",
+      ...(status === "complete" &&
+      typeof item.savedPath === "string" &&
+      isImagePath(item.savedPath)
+        ? { image: item.savedPath }
+        : {}),
+    };
   if (
     (item.type === "mcpToolCall" || item.type === "dynamicToolCall") &&
     typeof item.tool === "string"
