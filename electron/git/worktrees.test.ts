@@ -142,18 +142,27 @@ it("removes the folder and branch but keeps a snapshot of what it held", async (
   );
 });
 
-it("links the project's ignored node_modules into a new worktree", async () => {
-  await writeFile(join(root, ".gitignore"), "node_modules\n");
-  git(root, "add", ".gitignore");
-  git(root, "commit", "-qm", "Ignore modules");
+it.each(["node_modules", "node_modules/", "/node_modules/"])(
+  "links the project's node_modules, ignored as %s, into a new worktree",
+  async (rule) => {
+    await writeFile(join(root, ".gitignore"), `${rule}\n`);
+    git(root, "add", ".gitignore");
+    git(root, "commit", "-qm", "Ignore modules");
+    await mkdir(join(root, "node_modules", "left-pad"), { recursive: true });
+
+    const worktree = await made();
+
+    expect(existsSync(join(worktree.path, "node_modules", "left-pad"))).toBe(
+      true,
+    );
+    expect(await paths(worktree)).toEqual([]);
+    expect(git(worktree.path, "status", "--porcelain")).toBe("");
+  },
+);
+it("links no node_modules the project doesn't ignore", async () => {
   await mkdir(join(root, "node_modules", "left-pad"), { recursive: true });
-
   const worktree = await made();
-
-  expect(existsSync(join(worktree.path, "node_modules", "left-pad"))).toBe(
-    true,
-  );
-  expect(await paths(worktree)).toEqual([]);
+  expect(existsSync(join(worktree.path, "node_modules"))).toBe(false);
 });
 
 it("copies what .worktreeinclude lists into new and reattached worktrees", async () => {
