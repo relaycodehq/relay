@@ -17,7 +17,11 @@ import {
   threadStorage,
   writeDraftText,
 } from "../../lib/thread-storage";
-import { DRAFT_PREFIX } from "../../lib/thread-draft";
+import {
+  DRAFT_PREFIX,
+  RECORD_PREFIX,
+  splitDraftKey,
+} from "../../lib/thread-draft";
 import {
   draftImageCount,
   draftsWithImages,
@@ -56,14 +60,49 @@ export function writeDraft(key: string, value: string) {
 }
 
 // When each thread last had a draft go out, so Activity can tell a sent
-// draft from one cleared away.
-const sentAt = new Map<string, number>();
+// draft from one cleared away. Kept in storage and written before the draft
+// empties, so a thread's own window tells the main one why its draft went.
+const SENT = "relay-draft-sent";
+const SENT_KEPT = 50;
+let sentRead: { raw: string | null; marks: Record<string, number> } = {
+  raw: null,
+  marks: {},
+};
+
+function sentMarks(): Record<string, number> {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(SENT);
+  } catch {
+    // Storage is a convenience here.
+  }
+  if (raw === sentRead.raw) return sentRead.marks;
+  let marks: Record<string, number> = {};
+  try {
+    const saved: unknown = raw && JSON.parse(raw);
+    if (saved && typeof saved === "object")
+      marks = saved as Record<string, number>;
+  } catch {
+    // A malformed record counts as no marks.
+  }
+  sentRead = { raw, marks };
+  return marks;
+}
 
 /** Called before a thread's draft empties to go out. */
-export const markDraftSent = (chatId: string) =>
-  void sentAt.set(chatId, Date.now());
+export function markDraftSent(chatId: string) {
+  const marks = Object.entries({ ...sentMarks(), [chatId]: Date.now() })
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, SENT_KEPT);
+  try {
+    localStorage.setItem(SENT, JSON.stringify(Object.fromEntries(marks)));
+  } catch {
+    // Activity then takes the draft as cleared rather than sent.
+  }
+}
 
-export const draftSentAt = (chatId: string) => sentAt.get(chatId);
+export const draftSentAt = (chatId: string): number | undefined =>
+  sentMarks()[chatId];
 
 /** Moves a composer's text and pills to another's, as when a draft follows its thread. */
 export function moveDraft(from: string, to: string) {
@@ -105,8 +144,7 @@ export function useDraftImageCount(key: string): number {
   );
 }
 
-function draftKeys(): string[] {
-  if (index) return index;
+function readIndex(): string[] {
   let keys: string[];
   try {
     keys = draftKeysWithText();
@@ -114,8 +152,29 @@ function draftKeys(): string[] {
     // Storage is a convenience here.
     keys = [];
   }
-  return (index = [...new Set([...keys, ...draftsWithImages()])].sort());
+  return [...new Set([...keys, ...draftsWithImages()])].sort();
 }
+const draftKeys = () => (index ??= readIndex());
+
+/**
+ * A thread popped into its own window shares storage with this one: a draft
+ * written, sent or cleared there shows here, and the other way round, so
+ * neither composer keeps text the other already sent and saves it back.
+ */
+function heardFromOtherWindow(event: StorageEvent) {
+  if (event.key !== null && !event.key.startsWith(RECORD_PREFIX)) return;
+  // A null key is storage cleared altogether.
+  const thread = event.key?.slice(RECORD_PREFIX.length);
+  for (const [key, notify] of listeners)
+    if (thread === undefined || splitDraftKey(key)?.thread === thread)
+      notify.forEach((n) => n());
+  const was = index;
+  index = readIndex();
+  if (was?.join("\n") !== index.join("\n"))
+    indexListeners.forEach((notify) => notify());
+}
+if (typeof window !== "undefined")
+  window.addEventListener("storage", heardFromOtherWindow);
 const subscribeIndex = (notify: () => void) => {
   void readDraftImageCounts();
   indexListeners.add(notify);

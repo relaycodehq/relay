@@ -13,6 +13,21 @@ import {
 import { threadStorage } from "../../lib/thread-storage";
 import type { ChatSummary, Project } from "../../../shared/projects";
 
+// What the draft hooks subscribe to, as React would.
+const subscriptions = vi.hoisted(
+  () => [] as { subscribe: (notify: () => void) => void; read: () => unknown }[],
+);
+vi.mock("react", () => ({
+  useCallback: <T,>(fn: T) => fn,
+  useSyncExternalStore: (
+    subscribe: (notify: () => void) => void,
+    read: () => unknown,
+  ) => {
+    subscriptions.push({ subscribe, read });
+    return read();
+  },
+}));
+
 const store = new Map<string, string>();
 beforeEach(() => {
   store.clear();
@@ -113,4 +128,35 @@ it("reserves a draft holding only linked folders and clears links after it becom
   expect(threadStorage(base).links.load()).toHaveLength(1);
   forgetNewThread(base);
   expect(threadStorage(base).links.load()).toEqual([]);
+});
+
+it("hears a draft written, then sent, in a thread's own window", async () => {
+  const win = new EventTarget();
+  vi.stubGlobal("window", win);
+  const heard = (key: string) =>
+    win.dispatchEvent(Object.assign(new Event("storage"), { key }));
+  // Two windows: two module instances over one storage.
+  vi.resetModules();
+  const main = await import("./drafts");
+  vi.resetModules();
+  const popped = await import("./drafts");
+
+  expect(main.useDraftKeys()).toEqual([]);
+  const index = subscriptions.at(-1)!;
+  let reindexed = 0;
+  index.subscribe(() => reindexed++);
+  popped.writeDraft("chat-draft:t1", "Half-written question");
+  heard("relay-draft:t1");
+  expect(index.read()).toEqual(["chat-draft:t1"]);
+  expect(reindexed).toBe(1);
+
+  expect(main.useDraft("chat-draft:t1")).toBe("Half-written question");
+  let redrawn = 0;
+  subscriptions.at(-1)!.subscribe(() => redrawn++);
+  popped.markDraftSent("t1");
+  popped.writeDraft("chat-draft:t1", "");
+  heard("relay-draft:t1");
+  expect(redrawn).toBe(1);
+  expect(index.read()).toEqual([]);
+  expect(main.draftSentAt("t1")).toBeGreaterThan(0);
 });
