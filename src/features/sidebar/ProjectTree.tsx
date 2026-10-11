@@ -327,17 +327,17 @@ function ProjectSection({
               onClick={() => folds.setOpen(p.id, !isOpen)}
             >
               <span>{p.name}</span>
+              {busy && !isOpen && (
+                <span className="sb-status running" title="Working">
+                  <Spinner size={11} steady />
+                </span>
+              )}
               <ChevronRight
                 size={11}
                 className="sb-project-chevron"
                 data-open={isOpen || undefined}
                 aria-hidden
               />
-              {busy && !isOpen && (
-                <span className="sb-status running" title="Working">
-                  <Spinner size={11} steady />
-                </span>
-              )}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>

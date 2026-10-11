@@ -429,6 +429,10 @@
     transform 0.15s,
     opacity 0.12s;
 }
+/* At the row's end, so collapsed projects' chevrons line up whatever their names. */
+.sb .sb-project-name > span:first-child + * {
+  margin-left: auto;
+}
 .sb .sb-project-chevron:hover {
   color: var(--text);
 }

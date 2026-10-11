@@ -45,6 +45,7 @@ export function ThreadTitle({
   return (
     <span
       className={`${className} ${regenerating ? "sb-title-regenerating" : ""}`}
+      title={title}
       aria-busy={regenerating || undefined}
     >
       {title}
