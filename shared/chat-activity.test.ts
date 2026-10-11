@@ -60,16 +60,21 @@ describe("chat activity", () => {
     ).toBe("active");
   });
 
-  it("wakes a snoozed thread on its timer, new activity or a request", () => {
+  it.each([
+    {},
+    { running: true, updated: 8_000 },
+    { running: true, waiting: true, updated: 8_000 },
+    { waiting: true, updated: 9_000 },
+    { updated: 9_000 },
+  ])("keeps a snoozed thread off Activity until its timer: %j", (activity) => {
     const snoozed = { snoozedAt: 6_000, snoozedUntil: 20_000 };
-    expect(chatActivitySection(chat(snoozed), 10_000)).toBe("snoozed");
-    expect(chatActivitySection(chat(snoozed), 20_000)).toBe("active");
-    expect(
-      chatActivitySection(chat({ ...snoozed, updated: 8_000 }), 10_000),
-    ).toBe("active");
-    expect(
-      chatActivitySection(chat({ ...snoozed, waiting: true }), 10_000),
-    ).toBe("active");
+    const thread = chat({ ...snoozed, ...activity });
+    expect(chatActivitySections([thread], 19_999)).toEqual({
+      active: [],
+      snoozed: [thread],
+      settled: [],
+    });
+    expect(chatActivitySection(thread, 20_000)).toBe("active");
   });
 
   it("keeps the latest settled threads on the shelf, not the latest updated", () => {
@@ -223,6 +228,7 @@ describe("auto-settle", () => {
       { autoSettleOff: true as const },
       { archivedAt: 2_000 },
       { snoozedAt: 1_000, snoozedUntil: later + day },
+      { snoozedAt: 500, snoozedUntil: later + day },
       {
         pending: [
           {

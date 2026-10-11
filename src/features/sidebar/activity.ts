@@ -71,7 +71,8 @@ export function attention(
 
 /**
  * Activity with the threads holding unsent text first, newest first as
- * `all` lists them, settled and snoozed ones included: the draft waits on you.
+ * `all` lists them, settled ones included: the draft waits on you. Snoozed
+ * threads stay on their shelf, even when their draft is edited or sent.
  * One whose draft is gone keeps its place by when it last had one, until
  * newer activity passes it. Off a shelf, it stays only if the draft went out
  * and it hasn't been settled or snoozed since; a cleared one goes back.
@@ -84,6 +85,8 @@ export function draftsFirst<C extends ChatSummary>(
 ): Record<ChatActivitySection, C[]> {
   if (!drafted.size && !raised.size) return sections;
   const active = new Set(sections.active);
+  const snoozed = new Set(sections.snoozed);
+  const awake = all.filter((c) => !snoozed.has(c));
   const sentOff = (c: C) => {
     const raise = raised.get(c.id);
     return (
@@ -94,14 +97,12 @@ export function draftsFirst<C extends ChatSummary>(
   };
   const stays = (c: C) => !drafted.has(c.id) && (active.has(c) || sentOff(c));
   const key = (c: C) => Math.max(c.updated, raised.get(c.id)?.at ?? 0);
-  const shelf = (list: C[]) =>
-    list.filter((c) => !drafted.has(c.id) && !sentOff(c));
   return {
     active: [
-      ...all.filter((c) => drafted.has(c.id)),
-      ...all.filter(stays).sort((a, b) => key(b) - key(a)),
+      ...awake.filter((c) => drafted.has(c.id)),
+      ...awake.filter(stays).sort((a, b) => key(b) - key(a)),
     ],
-    snoozed: shelf(sections.snoozed),
-    settled: shelf(sections.settled),
+    snoozed: sections.snoozed,
+    settled: sections.settled.filter((c) => !drafted.has(c.id) && !sentOff(c)),
   };
 }

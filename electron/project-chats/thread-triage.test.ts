@@ -133,6 +133,25 @@ async function runningThread() {
   return { id: thread.id, end, listed };
 }
 
+it.each(["complete", "failed", "cancelled"] as const)(
+  "keeps a running thread snoozed after its answer ends as %s, until explicitly woken",
+  async (status) => {
+    const thread = await runningThread();
+    const until = Date.now() + 3_600_000;
+    await chats.triage(thread.id, { kind: "snooze", until });
+    expect(chatActivitySection(thread.listed(), Date.now())).toBe("snoozed");
+
+    await thread.end(status);
+    const after = thread.listed();
+    expect(after.updated).toBeGreaterThan(after.snoozedAt!);
+    expect(after.snoozedUntil).toBe(until);
+    expect(chatActivitySection(after, Date.now())).toBe("snoozed");
+
+    await chats.triage(thread.id, { kind: "wake" });
+    expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+  },
+);
+
 it("settles a running thread when its answer finishes, and it stays settled", async () => {
   const thread = await runningThread();
   await chats.triage(thread.id, { kind: "settle-when-done" });

@@ -1,8 +1,7 @@
 import type { ChatMessage, ChatSummary, ChatTriageState } from "./projects";
 
-// Settling and snoozing are overlays on an open thread, and newer activity
-// always outranks them. `updated` moves on every sent message and finished
-// answer, so comparing against it is the "raised hand" check.
+// Settling and snoozing are overlays on an open thread. New activity can
+// unsettle a thread; snoozing lasts until its wake time or an explicit triage action.
 export type ChatActivitySection = "active" | "snoozed" | "settled";
 
 /** What triage reads; the phone's thread summaries carry just these. */
@@ -12,7 +11,6 @@ type Triaged = Pick<
   | "waiting"
   | "settledAt"
   | "settleWhenDone"
-  | "snoozedAt"
   | "snoozedUntil"
   | "updated"
 >;
@@ -25,12 +23,7 @@ export function chatSettled(chat: Triaged): boolean {
 }
 
 function chatSnoozed(chat: Triaged, now: number): boolean {
-  return (
-    !chat.waiting &&
-    chat.snoozedUntil != null &&
-    chat.snoozedUntil > now &&
-    (chat.snoozedAt == null || chat.updated <= chat.snoozedAt)
-  );
+  return chat.snoozedUntil != null && chat.snoozedUntil > now;
 }
 
 export function chatActivitySection(

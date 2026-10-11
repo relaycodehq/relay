@@ -174,7 +174,7 @@ export function ActivityView({
           );
         })}
       </div>
-      {!sections.active.length && !drafts.length && (
+      {!sections.active.length && !unsent.length && (
         <div className="sb-empty">
           <span className="sb-empty-icon">
             <Check size={18} />
@@ -286,7 +286,7 @@ function ThreadCard({
               </span>
               {state}
               <div className="sb-card-actions">
-                {/* Its draft keeps it here: settling or snoozing would change nothing. */}
+                {/* Sending its draft is the card's primary action. */}
                 {draft ? (
                   <DraftSendButton send={unsent} title={`Send to ${c.title}`} />
                 ) : (

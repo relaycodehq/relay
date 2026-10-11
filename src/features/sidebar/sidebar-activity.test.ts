@@ -77,13 +77,13 @@ describe("attention", () => {
 });
 
 describe("draftsFirst", () => {
-  it("puts threads with unsent text first, off the shelves too", () => {
+  it("puts threads with unsent text first, including settled ones, but keeps snoozed ones shelved", () => {
     const [a, b, c, d] = ["a", "b", "c", "d"].map((id) => chat({ id }));
     const sections = { active: [a, b], snoozed: [c], settled: [d] };
     const moved = draftsFirst(
       sections,
       [a, b, c, d],
-      new Set(["b", "d"]),
+      new Set(["b", "c", "d"]),
       new Map(),
     );
     expect(moved.active.map((x) => x.id)).toEqual(["b", "d", "a"]);
@@ -110,7 +110,7 @@ describe("draftsFirst", () => {
     expect(order(9_500)).toEqual(["b", "a"]);
   });
 
-  it("sends a shelved thread back when its draft is cleared, not when it went out", () => {
+  it("keeps snoozed threads shelved after sending a draft, while settled ones return to Activity", () => {
     const a = chat({ id: "a", updated: 9_000 });
     const s = chat({ id: "s", updated: 4_000, settledAt: 4_500 });
     const z = chat({
@@ -136,8 +136,8 @@ describe("draftsFirst", () => {
       );
     };
     expect(place(false)).toEqual([["a"], ["z"], ["s"]]);
-    expect(place(true)).toEqual([["s", "z", "a"], [], []]);
+    expect(place(true)).toEqual([["s", "a"], ["z"], []]);
     // Settled again after it went out, it stays on the shelf.
-    expect(place(true, 9_800)).toEqual([["z", "a"], [], ["s"]]);
+    expect(place(true, 9_800)).toEqual([["a"], ["z"], ["s"]]);
   });
 });
