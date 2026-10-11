@@ -18,6 +18,12 @@ it("lets the commands a reviewer reads with through", () => {
     "sort -t, -k2,2 -rn data.csv",
     "find . -type f -mtime -1 -size +10k -print",
     "tree -L 2 -I node_modules",
+    "rg --no-hidden --no-follow --no-multiline -uu TODO",
+    "rg --type-add 'web:*.html' -t web --sort-files color",
+    "rg --ignore-file .reviewignore --no-ignore-messages --context-separator=-- foo",
+    // Quoted, a brace list is a glob for rg, not shell expansion.
+    "rg -g '*.{ts,tsx}' useEffect src",
+    'find src -name "*.{ts,tsx}"',
   ])
     expect(readsOnly(command), command).toBe(true);
 });
@@ -38,6 +44,11 @@ it("turns down anything that writes, runs or hides another command", () => {
     "rg --hostname-bin ./evil.sh --hyperlink-format file://{host}{path} hello .",
     "rg --pre-glob '*.pdf' --pre ./evil.sh x",
     "rg -z hello .",
+    "rg --search-zip hello .",
+    "rg {--pre=./evil.sh,TODO} .",
+    "rg 'x'{--pre=./evil.sh,y}'z' .",
+    "rg \\'{--pre=./evil.sh,a}\\' .",
+    "rg --generate=man",
     "rg --search-zip hello .",
     "rg -nz hello .",
     "sort -S 1000 --compress-program=./scripts/evil.sh package-lock.json",

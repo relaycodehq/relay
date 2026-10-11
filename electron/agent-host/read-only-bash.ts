@@ -76,14 +76,27 @@ export const gitBareWrites = new Set(["stash"]);
  * expansions (`${X:--delete}`, `$'\x2ddelete'`). A `$` ending a word, as in
  * `rg 'foo$'`, and sed's `'1,$p'` stay allowed.
  */
-export const disguisedFlag = [
+const respellings = [
   `(?:^|\\s)['"\\\\]+-`,
   `(?:^|\\s)-[\\w-]*['"\\\\]+[\\w-]`,
   `(?:^|\\s)-[\\w-]*[*?[{]`,
-  `\\{[^\\s}]*(?:,|\\.\\.)`,
   `\\$(?!['"]?(?:[\\s;&|]|$)|p['"])`,
-].join("|");
-const disguised = new RegExp(disguisedFlag);
+];
+const braceList = `\\{[^\\s}]*(?:,|\\.\\.)`;
+export const disguisedFlag = [...respellings, braceList].join("|");
+const respelled = new RegExp(respellings.join("|"));
+const braces = new RegExp(braceList);
+// Quotes keep the shell from expanding braces, so `rg -g '*.{ts,tsx}'` reads;
+// with a backslash about, a quote may not be one, so any brace counts.
+const disguised = {
+  test: (segment: string) =>
+    respelled.test(segment) ||
+    braces.test(
+      segment.includes("\\")
+        ? segment
+        : segment.replace(/'[^']*'|"[^"]*"/g, "''"),
+    ),
+};
 
 const value = "[^\\s;&|]*";
 /** Short flags that may cluster (`-in`), then at most one taking a value (`-A3`, `-t ts`). */
@@ -106,7 +119,8 @@ const longs = (bare: string[], valued: string[] = []) =>
 export const allowedFlags: Record<string, string> = {
   rg: [
     "--",
-    // Not -z (it runs decompressors), and nothing of --pre or --hostname-bin.
+    // Not -z/--search-zip (it runs decompressors), --pre/--pre-glob or
+    // --hostname-bin/--hyperlink-format, which run a program, nor --generate.
     shorts("0.abcFHhIiLlNnoPpqSsUuVvwx", "ABCdEefgjMmrTt"),
     longs(
       [
@@ -122,14 +136,29 @@ export const allowedFlags: Record<string, string> = {
         "no-messages", "crlf", "binary", "byte-offset", "one-file-system",
         "unrestricted", "glob-case-insensitive", "no-require-git", "pretty",
         "max-columns-preview", "no-unicode", "debug", "trace", "version",
-        "help",
+        "help", "mmap", "stop-on-nonmatch", "auto-hybrid-regex",
+        "ignore-file-case-insensitive", "no-ignore-exclude", "no-ignore-files",
+        "no-ignore-messages", "block-buffered", "line-buffered",
+        "no-context-separator", "include-zero", "sort-files", "pcre2-version",
+        "no-pcre2-unicode",
+        // The negations only turn a behaviour back off.
+        "no-hidden", "no-follow", "no-text", "no-binary", "no-multiline",
+        "no-multiline-dotall", "no-fixed-strings", "no-invert-match",
+        "no-pcre2", "no-crlf", "no-mmap", "no-search-zip", "no-sort-files",
+        "no-max-columns-preview", "no-glob-case-insensitive",
+        "no-ignore-file-case-insensitive", "no-include-zero",
+        "no-block-buffered", "no-line-buffered", "no-stats", "no-json",
+        "no-trim", "no-byte-offset", "no-one-file-system",
+        "no-auto-hybrid-regex", "no-encoding",
       ],
       [
         "after-context", "before-context", "context", "max-count",
         "max-depth", "glob", "iglob", "type", "type-not", "regexp", "file",
         "sort", "sortr", "color", "colors", "max-columns", "max-filesize",
         "replace", "encoding", "threads", "engine", "path-separator",
-        "field-match-separator", "field-context-separator",
+        "field-match-separator", "field-context-separator", "type-add",
+        "type-clear", "ignore-file", "context-separator", "dfa-size-limit",
+        "regex-size-limit",
       ],
     ),
   ].join("|"),
