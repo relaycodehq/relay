@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { X } from "lucide-react";
-import type { PaneId } from "../lib/workspace-panes";
+import { PANE_MIN, type PaneId } from "../lib/workspace-panes";
 import { IconButton } from "./ui";
 import "./workspace-panes.css";
 import { Splitter } from "./Splitter";
@@ -18,7 +18,6 @@ export interface PaneSlots {
 export const NO_SLOTS: PaneSlots = { title: null, actions: null };
 
 const DRAG_TYPE = "application/x-relay-pane";
-const MIN_PANE = 300;
 
 function useDropTarget(
   id: PaneId,
@@ -195,7 +194,7 @@ export function Pane({
         data-pane={id}
         aria-label={label}
         hidden={!open}
-        style={{ order, flexGrow: grow }}
+        style={{ order, flexGrow: grow, minWidth: PANE_MIN[id] }}
         {...drop.handlers}
       >
         {children}
@@ -217,7 +216,10 @@ function PaneSplitter({
 }) {
   const resizeBy = (leftWidth: number, total: number) => {
     const share = left.weight + right.weight;
-    const next = Math.max(MIN_PANE, Math.min(total - MIN_PANE, leftWidth));
+    const next = Math.max(
+      PANE_MIN[left.id],
+      Math.min(total - PANE_MIN[right.id], leftWidth),
+    );
     onResize({
       [left.id]: (next / total) * share,
       [right.id]: ((total - next) / total) * share,

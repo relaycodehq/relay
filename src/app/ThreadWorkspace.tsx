@@ -5,7 +5,7 @@ import { threadWorktree } from "../../shared/projects";
 import type { Account } from "../../shared/types";
 import type { SettingsCategory } from "../lib/settings-page";
 import type { NavigationLock } from "../lib/navigation-lock";
-import { paneFrame, type PaneId } from "../lib/workspace-panes";
+import { paneFrame, usePaneRow, type PaneId } from "../lib/workspace-panes";
 import { usePanelTabs } from "../features/panel/panel-tabs";
 import { useHostAccount } from "../features/pulls/useHostAccount";
 import { NO_VIEWING, type ThreadView } from "../features/thread/useThreadView";
@@ -186,14 +186,15 @@ export function ThreadWorkspace({
   const codeOpen =
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
+  const row = usePaneRow(panes.measure);
   const frame = (id: PaneId) => ({
-    ...paneFrame(panes.layout, id),
+    ...paneFrame(panes.layout, id, panes.visible),
     onResize: panes.resize,
     onMove: panes.move,
   });
   return (
     <div className="workspace-column" hidden={hidden}>
-      <div className="workspace-panes">
+      <div className="workspace-panes" ref={row}>
         <Pane
           id="chat"
           label="Chat"

@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   flex-basis: 0;
-  min-width: 300px;
+  /* min-width comes from PANE_MIN, which also decides which panes fit. */
   min-height: 0;
   background: var(--surface);
   overflow: hidden;
@@ -36,9 +36,6 @@
 }
 .workspace-pane.drop-after::after {
   right: 0;
-}
-.workspace-pane[data-pane="chat"] {
-  min-width: 320px;
 }
 .workspace-pane[data-pane="chat"] > .project-chat {
   flex: 1;

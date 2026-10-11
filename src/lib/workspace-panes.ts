@@ -7,6 +7,21 @@ const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   changes: 1.6,
   panel: 1.4,
 };
+/**
+ * The narrowest each pane gets. Panes that can't all have this much yield,
+ * the least recently opened first, rather than run past the window's edge.
+ * Changes and the panel each hold a list beside a view, which below 360 px
+ * left the view a sliver. All three fit the 1050 px window's minimum once
+ * the sidebar steps aside.
+ */
+export const PANE_MIN: Record<PaneId, number> = {
+  chat: 320,
+  changes: 360,
+  panel: 360,
+};
+/** The room `panes` need side by side. */
+export const roomFor = (panes: PaneId[]) =>
+  panes.reduce((sum, id) => sum + PANE_MIN[id], 0);
 /** Panes that became tabs in the panel; saved layouts still name them. */
 const LEGACY = ["files", "history"];
 const paneOf = (id: unknown): PaneId | undefined =>
@@ -33,6 +48,8 @@ interface PaneLayout {
   weights: Record<PaneId, number>;
   /** The pane filling the row while the others are hidden, not closed. */
   zoomed?: PaneId;
+  /** Every pane, the most recently opened last. */
+  recent: PaneId[];
 }
 
 const CHAT_ONLY: OpenPanes = {
@@ -129,15 +146,40 @@ export const restoredLayout = (thread: string): PaneLayout => ({
   ...restore(),
   thread,
   open: recall(thread) ?? CHAT_ONLY,
+  recent: [...PANE_IDS],
 });
 
-/** The panes on screen, in order: the zoomed one alone, else every open one. */
-const visiblePanes = ({
+/** The panes asked for, in order: the zoomed one alone, else every open one. */
+export const shownPanes = ({
   order,
   open,
   zoomed,
 }: Pick<PaneLayout, "order" | "open" | "zoomed">) =>
   order.filter((id) => (zoomed ? id === zoomed : open[id]));
+
+/**
+ * The `shown` panes that fit `room` px side by side. The latest opened goes
+ * first, even when nothing fits, then the chat, then the rest from the most
+ * recently opened; those left out stay open, off screen, until there's room.
+ */
+export function fitPanes(shown: PaneId[], recent: PaneId[], room?: number) {
+  if (room === undefined || roomFor(shown) <= room) return shown;
+  const byRecency = [...recent].reverse().filter((id) => shown.includes(id));
+  const [latest, ...rest] = byRecency;
+  const kept = new Set<PaneId>();
+  let left = room;
+  for (const id of new Set<PaneId>([latest, "chat", ...rest])) {
+    if (!shown.includes(id) || (kept.size && PANE_MIN[id] > left)) continue;
+    kept.add(id);
+    left -= PANE_MIN[id];
+  }
+  return shown.filter((id) => kept.has(id));
+}
+
+const bump = (recent: PaneId[], id: PaneId) => [
+  ...recent.filter((p) => p !== id),
+  id,
+];
 
 /** A folder without Git has no changes to show. */
 export const panesOf = (order: PaneId[], plain?: boolean) =>
@@ -145,15 +187,15 @@ export const panesOf = (order: PaneId[], plain?: boolean) =>
 
 /**
  * Where pane `id` sits in the row: its place in the order and its share of
- * the row, the open panes' shares adding up to 1 so they always fill it.
- * `previous` is the open pane before it, which its splitter resizes against.
+ * the row, the visible panes' shares adding up to 1 so they always fill it.
+ * `previous` is the visible pane before it, which its splitter resizes against.
  */
 export function paneFrame(
   layout: Pick<PaneLayout, "order" | "open" | "weights" | "zoomed">,
   id: PaneId,
+  visible = shownPanes(layout),
 ) {
   const { order, weights } = layout;
-  const visible = visiblePanes(layout);
   const index = visible.indexOf(id);
   const previous = index > 0 ? visible[index - 1] : undefined;
   const total = visible.reduce((sum, pane) => sum + weights[pane], 0);
@@ -166,6 +208,25 @@ export function paneFrame(
   };
 }
 
+/**
+ * A ref for the panes' row that keeps `measure` told how wide it is. Hidden
+ * behind Settings it measures nothing, and the last width stands.
+ */
+export function usePaneRow(measure: (width: number) => void) {
+  return useCallback(
+    (row: HTMLElement | null) => {
+      if (!row) return;
+      const observer = new ResizeObserver(([entry]) => {
+        const width = Math.round(entry.contentRect.width);
+        if (width) measure(width);
+      });
+      observer.observe(row);
+      return () => observer.disconnect();
+    },
+    [measure],
+  );
+}
+
 export type WorkspacePanes = ReturnType<typeof useWorkspacePanes>;
 
 /**
@@ -176,6 +237,8 @@ export function useWorkspacePanes(thread: string) {
   const [layout, setLayout] = useState<PaneLayout>(() =>
     restoredLayout(thread),
   );
+  // The row's width, once measured; until then every shown pane fits.
+  const [room, setRoom] = useState<number>();
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
@@ -225,7 +288,12 @@ export function useWorkspacePanes(thread: string) {
         if (!PANE_IDS.some((p) => next[p])) next.chat = true;
         // Asking for another pane, or closing the zoomed one, ends the zoom.
         const zoomOver = l.zoomed && (id === l.zoomed) !== open;
-        return { ...l, open: next, zoomed: zoomOver ? undefined : l.zoomed };
+        return {
+          ...l,
+          open: next,
+          zoomed: zoomOver ? undefined : l.zoomed,
+          recent: open ? bump(l.recent, id) : l.recent,
+        };
       }),
     [],
   );
@@ -234,7 +302,12 @@ export function useWorkspacePanes(thread: string) {
     (id: PaneId | undefined) =>
       setLayout((l) =>
         id
-          ? { ...l, zoomed: id, open: { ...l.open, [id]: true } }
+          ? {
+              ...l,
+              zoomed: id,
+              open: { ...l.open, [id]: true },
+              recent: bump(l.recent, id),
+            }
           : { ...l, zoomed: undefined },
       ),
     [],
@@ -255,6 +328,21 @@ export function useWorkspacePanes(thread: string) {
       setLayout((l) => ({ ...l, weights: { ...l.weights, ...weights } })),
     [],
   );
-  const visible = visiblePanes(layout);
-  return { layout, visible, setOpen, show, zoom, switchTo, move, resize };
+  const shown = shownPanes(layout);
+  const visible = fitPanes(shown, layout.recent, room);
+  return {
+    layout,
+    /** The panes asked for, whether or not the row has room for them all. */
+    shown,
+    /** The panes on screen. */
+    visible,
+    setOpen,
+    show,
+    zoom,
+    switchTo,
+    move,
+    resize,
+    /** Tells the panes how wide their row is. */
+    measure: setRoom,
+  };
 }

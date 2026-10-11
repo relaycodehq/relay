@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { popupOpen, useShortcut } from "../lib/shortcuts";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
 
@@ -14,12 +15,36 @@ export type SidebarVisibility = ReturnType<typeof useSidebarVisibility>;
  * PR's Review, say). Until toggled there, the latter follows the "make room"
  * setting. While a pane is zoomed it is hidden whatever was chosen, and
  * toggling it ends the zoom instead of changing the choice.
+ *
+ * `need` is the room the panes beside it need. It narrows to fit them, and
+ * when even its narrowest won't fit it steps aside until the window grows
+ * or a pane closes. Toggled back meanwhile, it stays and the least recently
+ * opened pane steps aside instead.
  */
 export function useSidebarVisibility(
   besidePane: boolean,
   zoom: { on: boolean; exit: () => void },
+  need: number,
 ) {
   const autoHide = useSidebarAutoHide();
+  // The sidebar's and the panes' row, measured as one.
+  const [layout, setLayout] = useState<HTMLDivElement | null>(null);
+  const [room, setRoom] = useState<number>();
+  useLayoutEffect(() => {
+    if (!layout) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setRoom(Math.round(entry.contentRect.width)),
+    );
+    observer.observe(layout);
+    return () => observer.disconnect();
+  }, [layout]);
+  const crowded = !!room && need > room - SIDEBAR_WIDTH.min;
+  useLayoutEffect(() => {
+    const style = document.documentElement.style;
+    if (room && !crowded)
+      style.setProperty("--sidebar-room", `${room - need}px`);
+    else style.removeProperty("--sidebar-room");
+  }, [room, need, crowded]);
   const [hiddenAlone, setHiddenAlone] = useState(
     () => localStorage.getItem("relay-projects-hidden") === "true",
   );
@@ -27,11 +52,15 @@ export function useSidebarVisibility(
     const saved = localStorage.getItem(BESIDE_PANE_KEY);
     return saved ? saved === "true" : null;
   });
-  const hidden =
-    zoom.on ||
-    (besidePane
-      ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
-      : hiddenAlone);
+  // Asked back while crowded: it stays, and a pane yields instead.
+  const [kept, setKept] = useState(false);
+  useEffect(() => {
+    if (!crowded) setKept(false);
+  }, [crowded]);
+  const chosenHidden = besidePane
+    ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
+    : hiddenAlone;
+  const hidden = zoom.on || (crowded && !kept) || chosenHidden;
   // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<number | undefined>(undefined);
@@ -47,7 +76,10 @@ export function useSidebarVisibility(
     window.clearTimeout(peekTimer.current);
     setPeek(false);
     if (zoom.on) return zoom.exit();
-    (besidePane ? setHiddenBesidePane : setHiddenAlone)(!hidden);
+    const choose = besidePane ? setHiddenBesidePane : setHiddenAlone;
+    if (!crowded) return choose(!hidden);
+    setKept(hidden);
+    if (hidden) choose(false);
   };
   useShortcut("sidebar", true, toggle);
   useEffect(() => {
@@ -69,7 +101,6 @@ export function useSidebarVisibility(
   // watched rather than covered, so the edge still takes clicks and
   // selections; the short dwell keeps a pointer flung past it, or a drag,
   // from opening it.
-  const layoutRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const edgePeekOn = hidden && !peek;
   useEffect(() => {
@@ -80,7 +111,7 @@ export function useSidebarVisibility(
       timer = undefined;
     };
     const onMove = (e: MouseEvent) => {
-      const top = layoutRef.current?.getBoundingClientRect().top ?? 0;
+      const top = layout?.getBoundingClientRect().top ?? 0;
       if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
         return cancel();
       timer ??= window.setTimeout(() => {
@@ -96,7 +127,7 @@ export function useSidebarVisibility(
       window.removeEventListener("mousemove", onMove);
       document.documentElement.removeEventListener("mouseleave", cancel);
     };
-  }, [edgePeekOn]);
+  }, [edgePeekOn, layout]);
   // The sidebar slides in under a pointer that hasn't entered it, so its own
   // mouseleave can't close it; until the pointer gets in, leaving the edge does.
   const peekFromEdge = useRef(false);
@@ -113,5 +144,13 @@ export function useSidebarVisibility(
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
   }, [peek]);
-  return { hidden, peek, toggle, peekOpen, peekClose, layoutRef, asideRef };
+  return {
+    hidden,
+    peek,
+    toggle,
+    peekOpen,
+    peekClose,
+    layoutRef: setLayout,
+    asideRef,
+  };
 }

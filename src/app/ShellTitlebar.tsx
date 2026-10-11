@@ -221,9 +221,9 @@ export function ThreadPaneToggles({
         id,
         open: visible.includes(id),
         // The panel stays open over an unsaved edit in Files, and so does
-        // the last open pane.
+        // the last open pane. One off screen for lack of room still comes back.
         disabled:
-          (id === "panel" && locked && layout.open.panel && filesOpen) ||
+          (id === "panel" && locked && visible.includes(id) && filesOpen) ||
           (visible.includes(id) && visible.length === 1),
         ...(id === "chat"
           ? { label: "Chat", icon: <MessageSquare size={14} /> }
