@@ -98,6 +98,9 @@ install() { # <dir>: npm ci, skipped while the lockfile is unchanged
 step "Installing dependencies"
 install .
 install mobile
+# Electron 44 fetches its binary on first use instead of at install. Fetch it
+# here, or two test workers race to unpack it into the same folder.
+node -e 'require("electron")' >/dev/null
 
 node scripts/sync-version.mjs "$version"
 
