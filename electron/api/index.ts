@@ -56,6 +56,9 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     // Own keys only: names the renderer made up, "toString" among them, stay unknown.
     if (!Object.hasOwn(handlers, method))
       throw new Error(`Unknown application method: ${String(method)}.`);
+    // A thread live on another computer runs there.
+    const sender = ctx.handoffs()?.sender;
+    if (sender?.forwards(method, args)) return sender.forward(method, args);
     const handler = handlers[method] as (args: unknown[]) => unknown;
     return handler(args);
   };

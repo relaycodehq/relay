@@ -1,6 +1,13 @@
 import type { ThreadGoal } from "./goal";
 import type { DictationModelState } from "./dictation";
-import type { ComputerInfo, HandBack, HandoffRemoteStatus } from "./handoff";
+import type {
+  ComputerInfo,
+  HandBack,
+  HandoffChat,
+  HandoffChatMethod,
+  HandoffLive,
+  HandoffRemoteStatus,
+} from "./handoff";
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
 import type { PhoneAppReport } from "./phone-app";
@@ -157,7 +164,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 17;
+export const remoteBridgeVersion = 18;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -207,6 +214,12 @@ export const awayBridge = 13;
 export const compactBridge = 14;
 /** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
 export const handoffBridge = 11;
+/**
+ * From here a computer that took a thread keeps the one it came from up to
+ * date (`handoff` events, `handoffChat`) and runs its calls (`handoffCall`),
+ * so the thread carries on from there as if it were still there.
+ */
+export const liveHandoffBridge = 18;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -532,6 +545,14 @@ export interface RemoteApi {
   computerInfo(): Promise<ComputerInfo>;
   /** Checks for Relay's latest release, downloads it and restarts into it. */
   updateNow(): Promise<UpdateState>;
+  /** A live handoff's thread as written here; missing before `liveHandoffBridge`. */
+  handoffChat(id: string, known?: KnownMessages): Promise<HandoffChat>;
+  /** Runs one of `handoffChatMethods` on the thread, its id in place of the first argument. */
+  handoffCall(
+    id: string,
+    method: HandoffChatMethod,
+    args: unknown[],
+  ): Promise<unknown>;
 }
 export type HandoffPart = "thread" | "bundle";
 /** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
@@ -566,6 +587,8 @@ export const remoteMethods = [
   "handoffAbandoned",
   "computerInfo",
   "updateNow",
+  "handoffChat",
+  "handoffCall",
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
@@ -579,6 +602,8 @@ export const computerMethods = [
   "handoffAbandoned",
   "computerInfo",
   "updateNow",
+  "handoffChat",
+  "handoffCall",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
 /** The bridge from which phones may call `updateMethods` too. */
@@ -627,7 +652,9 @@ export type RemoteEvent =
   | { kind: "message"; chatId: string; message: ChatMessage; title?: string }
   /** Thread states moved: something started, finished or asked a question. */
   | { kind: "chats"; chats: RemoteChatSummary[] }
-  | { kind: "appearance"; appearance: PhoneAppearance };
+  | { kind: "appearance"; appearance: PhoneAppearance }
+  /** To the computer a live handoff came from: what runs and waits in its thread now. */
+  | { kind: "handoff"; id: string; live: HandoffLive };
 
 /** What goes over the wire: events, or from `compactBridge` patches the client turns back into them. */
 export type WireEvent =

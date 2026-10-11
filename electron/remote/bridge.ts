@@ -73,6 +73,10 @@ export interface RemoteHost {
       args: unknown[],
       device: { id: string; name: string },
     ): Promise<unknown>;
+    /** Keeps the computers live handoffs came from up to date. */
+    connect?(link: { send(deviceId: string, event: RemoteEvent): void }): void;
+    chatEvent?(event: { chatId: string; message: ChatMessage }): void;
+    chatsChanged?(projectId: string): void;
   };
 }
 

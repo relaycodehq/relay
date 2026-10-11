@@ -21,6 +21,7 @@ import type { ThreadWorktree } from "./useThreadWorktree";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
+import { liveAway } from "../../../shared/handoff";
 import {
   ProjectComposer,
   type ComposerHandle,
@@ -243,7 +244,7 @@ export function ThreadComposer({
   const held =
     busy ||
     worktree.unavailable ||
-    !!chat?.sentTo ||
+    (!!chat?.sentTo && !liveAway(chat)) ||
     !!chat?.cameFrom?.returnedAt;
   // Read on ↑ only, so streaming answers don't rebuild it.
   const shownNow = useRef(shown);

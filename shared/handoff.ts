@@ -9,10 +9,13 @@
 import { z } from "zod";
 import { agentProviderSchema, type AgentProvider } from "./agents";
 import type { UpdateState } from "./updates";
+import type { ApiMethod } from "./types";
 import type {
   AgentActivity,
   ChatMessage,
   ChatScope,
+  ChatSummary,
+  ProjectChat,
   ProjectChatSend,
 } from "./projects";
 
@@ -32,7 +35,78 @@ export interface ChatSentTo {
   error?: string;
   /** Coming back, its work clashed with commits made here meanwhile, in these files. */
   conflicts?: string[];
+  /**
+   * The thread carries on from here while it runs there: what is written
+   * there mirrors into it, and sends, stops and answers go across. Set when
+   * the other computer speaks `liveHandoffBridge`; with an older one the
+   * thread stays still here until it comes back.
+   */
+  live?: true;
+  /** Live: the messages it left with; every one after mirrors the other computer's. */
+  kept?: number;
 }
+
+/**
+ * What runs and waits in a live handoff's thread on the other computer, laid
+ * over the thread as saved here.
+ */
+export type HandoffLive = Pick<
+  ChatSummary,
+  | "runningAgents"
+  | "blocked"
+  | "asking"
+  | "pending"
+  | "stopped"
+  | "limitResume"
+  | "goal"
+> &
+  Pick<ProjectChat, "requests" | "queue" | "scheduled"> & {
+    running?: true;
+    /** How long the running turn has run; the sender turns it into `runningSince`. */
+    runningFor?: number;
+    waiting?: true;
+    queuePaused?: true;
+  };
+
+/** A live handoff's thread as written on the other computer since it arrived. */
+/** The thread runs on the computer it was handed to and is followed live from here. */
+export const liveAway = (chat: Pick<ChatSummary, "sentTo">) =>
+  !!chat.sentTo?.live && chat.sentTo.state === "away";
+
+export interface HandoffChat {
+  /** Those the caller holds at the same version come as their ids. */
+  messages: (ChatMessage | string)[];
+  live: HandoffLive;
+}
+
+/**
+ * Calls on a thread, its id first, that a live handoff runs on the computer
+ * the thread is on. The rest (reading it, triage, notes, its name) stay here.
+ */
+export const handoffChatMethods = [
+  "sendProjectChat",
+  "resumeProjectChat",
+  "compactProjectChat",
+  "reloadProjectChatSession",
+  "rerunWorktreeSetup",
+  "projectChatQueueAction",
+  "respondProjectChat",
+  "answerProjectChatQuestion",
+  "setProjectChatQuestionDismissed",
+  "cancelProjectChat",
+  "resolveStoppedWork",
+  "setLimitResume",
+  "stopProjectChatPending",
+  "projectChatAgents",
+  "projectChatContext",
+  "projectChatAgent",
+  "stopProjectChatAgent",
+  "projectChatImage",
+  "projectChatQueuedImages",
+  "projectChatReadImage",
+  "closeWatchNote",
+] as const satisfies readonly ApiMethod[];
+export type HandoffChatMethod = (typeof handoffChatMethods)[number];
 
 /** A handoff the user took back without the other computer's say; it can't return anymore. */
 export interface ChatAbandonedHandoff {

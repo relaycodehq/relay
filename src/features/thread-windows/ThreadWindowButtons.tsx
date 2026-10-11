@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SquareArrowDownLeft, SquareArrowOutUpRight } from "lucide-react";
+import { liveAway } from "../../../shared/handoff";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
@@ -37,8 +38,8 @@ export function PopOutButton({
   chat: ChatSummary;
   onError: (error: unknown) => void;
 }) {
-  // A thread on another computer has nothing to show in a window here.
-  if (chat.sentTo) return null;
+  // A thread on another computer has nothing to show in a window here, unless it's followed live.
+  if (chat.sentTo && !liveAway(chat)) return null;
   return (
     <MoveButton
       label="Open in new window"

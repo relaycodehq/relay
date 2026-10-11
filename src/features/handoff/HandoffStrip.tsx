@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import type { HandoffView } from "../../../shared/handoff";
+import { liveAway, type HandoffView } from "../../../shared/handoff";
 import { liveLabel } from "../../../shared/activity-labels";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
@@ -20,7 +20,7 @@ export function awayPlaceholder(chat: ChatSummary) {
     return sentTo.error
       ? "The handoff didn't finish. Try again, or keep the thread here."
       : `Handing off to ${sentTo.computer}…`;
-  if (sentTo)
+  if (sentTo && !liveAway(chat))
     return `This thread is on ${sentTo.computer}. Bring it back to continue here.`;
   if (cameFrom?.returnedAt)
     return `This thread continues on ${cameFrom.computer}.`;

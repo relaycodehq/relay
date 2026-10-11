@@ -200,6 +200,11 @@ export class ComputerHandoff {
         ...(chat.abandonedHandoffs ?? []),
         { id: sentTo.id, computer: sentTo.computer, at: Date.now() },
       ];
+      // What mirrored the other computer goes with it.
+      if (sentTo.kept !== undefined) {
+        chat.messages = chat.messages.slice(0, sentTo.kept);
+        this.core.away?.delete(id);
+      }
       delete chat.sentTo;
       chat.updated = Date.now();
       await this.core.storage.save(chat);
@@ -461,6 +466,11 @@ export class ComputerHandoff {
       const chat = await this.core.storage.load(id);
       const sentTo = chat.sentTo;
       if (sentTo?.id !== handoffId) throw new Error("This thread isn't away.");
+      // A live handoff's mirror makes way for the thread as it came back.
+      if (sentTo.kept !== undefined) {
+        chat.messages = chat.messages.slice(0, sentTo.kept);
+        this.core.away?.delete(id);
+      }
       const known = new Set(chat.messages.map((m) => m.id));
       const renamed = new Map<string, string>();
       for (const m of messages)

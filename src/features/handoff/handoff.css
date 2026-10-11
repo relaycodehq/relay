@@ -112,3 +112,35 @@
   background: transparent;
   color: inherit;
 }
+
+/* A thread followed live from another computer: one quiet line, nothing docked. */
+.handoff-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.handoff-live > svg {
+  flex: none;
+}
+.handoff-live > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.handoff-live > button {
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.handoff-live > button:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}

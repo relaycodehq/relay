@@ -8,6 +8,8 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../handoff/HandoffStrip";
+import { LiveAwayLine } from "../handoff/LiveAwayLine";
+import { liveAway } from "../../../shared/handoff";
 import type { ThreadGoal } from "../../../shared/goal";
 import { GoalStrip } from "./GoalStrip";
 import {
@@ -31,7 +33,8 @@ export function ThreadNotice(props: {
   ) => Promise<boolean>;
 }) {
   const { chat, onGoal, ...rest } = props;
-  const goal = chat.goal && !chat.sentTo && (
+  const live = liveAway(chat);
+  const goal = chat.goal && (!chat.sentTo || live) && (
     <GoalStrip
       goal={chat.goal}
       running={!!chat.running}
@@ -43,6 +46,7 @@ export function ThreadNotice(props: {
   );
   return (
     <>
+      {live && <LiveAwayLine chat={chat} onError={rest.onError} />}
       {goal}
       <PressingStrip chat={chat} {...rest} />
     </>
@@ -93,7 +97,8 @@ function PressingStrip({
       void qc.invalidateQueries({ queryKey: ["project-chats"] });
     }
   };
-  if (chat.sentTo) return <HandoffStrip chat={chat} onError={onError} />;
+  if (chat.sentTo && !liveAway(chat))
+    return <HandoffStrip chat={chat} onError={onError} />;
   if (chat.cameFrom?.returnedAt)
     return <ReturnedStrip computer={chat.cameFrom.computer} />;
   if (chat.limitResume && !chat.running)

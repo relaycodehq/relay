@@ -356,6 +356,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     worktrees: join(home, "worktrees"),
     dir: join(handoffDir, "in"),
     version: () => headlessVersion,
+    dispatch,
     // A paired computer or phone may update this one, as on the desktop.
     updates: {
       state: () => updater.now,

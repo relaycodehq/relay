@@ -2,6 +2,7 @@ import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+  handoffChatMethods,
   handoffChunk,
   handoffMessagesSchema,
   maxHandoffBundle,
@@ -11,12 +12,18 @@ import {
   type HandoffRemoteStatus,
   type HandoffThread,
 } from "../../shared/handoff";
-import { chatScopeSchema, projectChatSendSchema } from "../../shared/projects";
+import {
+  chatScopeSchema,
+  knownMessagesSchema,
+  projectChatSendSchema,
+  type ChatMessage,
+} from "../../shared/projects";
 import {
   remoteBridgeVersion,
   type ComputerMethod,
   type ComputerProject,
 } from "../../shared/remote";
+import type { ApiMethod } from "../../shared/types";
 import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/validation";
 import { branchNameProblem } from "../../shared/branch-names";
@@ -30,6 +37,7 @@ import {
   hasCommit,
   repositoryNames,
 } from "../git/bundles";
+import { LiveFeed, type FeedLink } from "./live-feed";
 
 const partSchema = z.enum(["thread", "bundle"]);
 const base64 = z
@@ -78,6 +86,8 @@ export interface ReceiverHost {
   dir: string;
   /** This Relay's version. */
   version(): string;
+  /** Runs an Api call, as the window would; a live handoff's calls go through it. */
+  dispatch?(method: ApiMethod, args: unknown[]): Promise<unknown>;
   /** Its updater, which a paired computer may set going. */
   updates?: {
     state(): UpdateState;
@@ -100,7 +110,22 @@ export class HandoffReceiver {
     string,
     Promise<{ chatId: string; project: string }>
   >();
-  constructor(private host: ReceiverHost) {}
+  private feed: LiveFeed;
+  constructor(private host: ReceiverHost) {
+    this.feed = new LiveFeed(host.chats);
+  }
+  /** How the computers threads came from are reached; the phone remote's server. */
+  connect(link: FeedLink) {
+    this.feed.connect(link);
+  }
+  /** A message written in a thread here. */
+  chatEvent(event: { chatId: string; message: ChatMessage }) {
+    this.feed.message(event.chatId, event.message);
+  }
+  /** A project's threads may read differently. */
+  chatsChanged(projectId: string) {
+    this.feed.changed(projectId);
+  }
   /** A thread is arriving or going back; an update waits for it. */
   get busy() {
     return this.receiving.size > 0 || this.handingBack.size > 0;
@@ -162,6 +187,23 @@ export class HandoffReceiver {
         );
       case "handoffAbandoned":
         return this.abandoned(idSchema.parse(args[0]), device.id);
+      case "handoffChat": {
+        const id = idSchema.parse(args[0]);
+        const chat = this.mine(id, device.id);
+        const known =
+          args[1] == null ? undefined : knownMessagesSchema.parse(args[1]);
+        return this.feed.follow(chat, known);
+      }
+      case "handoffCall": {
+        const chat = this.mine(idSchema.parse(args[0]), device.id);
+        const method = z.enum(handoffChatMethods).parse(args[1]);
+        const rest = z.array(z.unknown()).max(9).parse(args[2]).slice(1);
+        if (!this.host.dispatch) throw new Error("This Relay can't do that.");
+        return this.host.dispatch(method, [
+          chat.id,
+          ...(await this.host.chats.handoffArgs(chat.id, rest)),
+        ]);
+      }
       case "handedBack": {
         const id = idSchema.parse(args[0]);
         const chat = this.mine(id, device.id);

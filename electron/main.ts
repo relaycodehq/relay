@@ -557,6 +557,7 @@ app
           worktrees: join(app.getPath("userData"), "worktrees"),
           dir: join(handoffDir, "in"),
           version: () => app.getVersion(),
+          dispatch,
           updates: {
             state: () => updater.current,
             check: () => updater.check(),

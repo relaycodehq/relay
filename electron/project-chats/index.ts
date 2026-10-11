@@ -5,6 +5,7 @@ import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
 import type {
   ChatCameFrom,
   ChatSentTo,
+  HandoffLive,
   HandoffThread,
 } from "../../shared/handoff";
 import type {
@@ -39,6 +40,7 @@ import { threadControl } from "./control";
 import type { ChatCore } from "./core";
 import { Councils } from "./councils";
 import { assertHere, ComputerHandoff } from "./handoff";
+import { LiveHandoff } from "./handoff-live";
 import { ChatQueue } from "./queue";
 import { LimitResumes } from "./limit-resume";
 import { ChatSchedule } from "./schedule";
@@ -77,6 +79,7 @@ export class ProjectChats {
   private cleanup: WorktreeCleanup;
   private files: TurnFiles;
   private handoffs: ComputerHandoff;
+  private liveHandoff: LiveHandoff;
   private runner: TurnRunner;
   private asides: SideQuestions;
   private queue: ChatQueue;
@@ -123,6 +126,7 @@ export class ProjectChats {
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
+      away: new Map(),
     };
     this.core = core;
     this.questions = new AsyncQuestions(core, (id, input) =>
@@ -182,6 +186,9 @@ export class ProjectChats {
           computer,
         ),
     });
+    this.liveHandoff = new LiveHandoff(core, (projectId) =>
+      this.threads.list(projectId),
+    );
     this.runner = new TurnRunner(core, this.titles, {
       unprompted: (chat, root, provider, parentId) =>
         this.turns.unprompted(chat, root, provider, parentId),
@@ -405,6 +412,53 @@ export class ProjectChats {
   returned(id: string, handoffId: string, messages: ChatMessage[]) {
     return this.handoffs.returned(id, handoffId, messages);
   }
+  /** On the computer a thread was handed to: see LiveHandoff. */
+  handoffOutgoing(id: string, message: ChatMessage) {
+    return this.liveHandoff.outgoing(id, message);
+  }
+  handoffWritten(id: string, known?: KnownMessages) {
+    return this.liveHandoff.writtenHere(id, known);
+  }
+  handoffLive(id: string) {
+    return this.liveHandoff.live(id);
+  }
+  handoffArgs(id: string, args: unknown[]) {
+    return this.liveHandoff.inbound(id, args);
+  }
+  /** On the computer a thread came from: see LiveHandoff. */
+  mirrorHandoff(id: string, handoffId: string, message: ChatMessage) {
+    return this.liveHandoff.mirror(id, handoffId, message);
+  }
+  handoffHeld(id: string) {
+    return this.liveHandoff.held(id);
+  }
+  handoffSynced(
+    id: string,
+    handoffId: string,
+    messages: (ChatMessage | string)[],
+  ) {
+    return this.liveHandoff.synced(id, handoffId, messages);
+  }
+  setHandoffLive(id: string, live: HandoffLive | undefined) {
+    this.liveHandoff.setLive(id, live);
+  }
+  /**
+   * What waits in the thread now, which isn't saved with it; for a live
+   * handoff, what its computer last said, over what's saved here.
+   */
+  private waitingIn(chat: ProjectChat) {
+    if (!chat.sentTo?.live) return { requests: this.active.requests(chat.id) };
+    const {
+      requests = [],
+      queue,
+      scheduled,
+      queuePaused,
+      stopped,
+      limitResume,
+      goal,
+    } = this.core.away?.get(chat.id) ?? {};
+    return { requests, queue, scheduled, queuePaused, stopped, limitResume, goal };
+  }
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.councils.startReview(id, config, pull);
   }
@@ -471,7 +525,7 @@ export class ProjectChats {
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
     await this.worktrees.refreshAgentWorktrees(chat);
-    return { ...structuredClone(chat), requests: this.active.requests(id) };
+    return { ...structuredClone(chat), ...structuredClone(this.waitingIn(chat)) };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
@@ -483,7 +537,7 @@ export class ProjectChats {
       messages: messages.map((m) =>
         known[m.id] === m.version ? m.id : structuredClone(m),
       ),
-      requests: this.active.requests(id),
+      ...structuredClone(this.waitingIn(saved)),
     };
   }
   image(chatId: string, imageId: string) {
@@ -833,6 +887,7 @@ export class ProjectChats {
   /** Commit teardown only after preparation, or an explicit discard. */
   async dispose({ detach = false, save = true } = {}) {
     if (!this.disposing) await this.prepareToQuit({ detach, save });
+    this.liveHandoff.dispose();
     this.sessions.stopListening();
     if (detach) {
       for (const runtime of everyAgentRuntime()) runtime.detach?.();

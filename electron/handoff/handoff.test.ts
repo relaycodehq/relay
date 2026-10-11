@@ -17,6 +17,9 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
+import type { ChatMessage } from "../../shared/projects";
+
+type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { awaitsReturn } from "../project-chats/handoff";
@@ -78,9 +81,12 @@ async function computer(name: string) {
   await store.load();
   const projects = new Projects(store);
   const projectId = (await projects.add(clone, null)).id;
-  const chats = new ProjectChats(store, projects, join(dir, "chats"), () => {});
+  const pushes: { to?: (event: ChatEvent) => void } = {};
+  const chats = new ProjectChats(store, projects, join(dir, "chats"), (e) =>
+    pushes.to?.(e),
+  );
   cleanup.push(() => chats.dispose());
-  return { dir, clone, store, projects, projectId, chats };
+  return { dir, clone, store, projects, projectId, chats, pushes };
 }
 
 /** The mini's updater: one newer release on the feed, installed when asked. */
@@ -138,6 +144,16 @@ async function pairedComputers() {
         dir: join(mini.dir, "handoffs"),
         version: () => "0.9.0",
         updates: updater,
+        // What a live handoff's computer has run here, as the app's dispatch would.
+        dispatch: async (method, args) => {
+          const [id, ...rest] = args as [string, ...unknown[]];
+          if (method === "sendProjectChat")
+            return mini.chats.sendYours(id, rest[0] as never);
+          if (method === "respondProjectChat")
+            return mini.chats.respond(id, rest[0] as string, rest[1] as never);
+          if (method === "cancelProjectChat") return mini.chats.cancel(id);
+          throw new Error(`Not in this test: ${method}`);
+        },
       }),
     },
     0,
@@ -145,6 +161,11 @@ async function pairedComputers() {
   );
   await remote.setEnabled(true);
   cleanup.push(() => remote.close());
+  // As the app wires them: what's written and what runs, out to paired devices.
+  mini.pushes.to = (event) => remote.chatEvent(event);
+  mini.chats.onSummaries((projectId) =>
+    remote.chatsEvent({ projectId, chats: mini.chats.list(projectId) }),
+  );
   const computers = new Computers(laptop.store, seal, unseal, {
     timeoutMs: 5000,
   });
@@ -258,6 +279,8 @@ it("hands a worktree thread to the other computer and brings it back", async () 
 
   // The note was written here, in the outgoing agent's session, and the work committed.
   const left = await laptop.chats.get(thread.id);
+  // What it left with; everything after mirrors what the mini writes.
+  left.messages = left.messages.slice(0, left.sentTo!.kept);
   expect(left.messages.at(-1)).toMatchObject({
     handoff: { from: "codex", to: "codex", computer: expect.any(String) },
     status: "complete",
@@ -752,6 +775,161 @@ it("lets the computer it came from peek at what the turn there is doing", async 
   await finished(mini.chats, arrived!.id);
 });
 
+/** A thread handed off live, once the mini has answered on arrival. */
+async function liveThread() {
+  const paired = await pairedComputers();
+  const { laptop, mini, sender, computerId } = paired;
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+      live: true,
+    }),
+  );
+  const kept = (await laptop.chats.get(thread.id)).sentTo!.kept!;
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+  return { ...paired, thread, kept, there: arrived!.id };
+}
+
+/** What the mini wrote since the thread arrived, as the laptop should mirror it. */
+async function writtenThere(mini: { chats: ProjectChats }, id: string) {
+  const chat = await mini.chats.get(id);
+  return chat.messages
+    .slice(chat.cameFrom!.carried)
+    .map((m: ChatMessage) => ({ id: m.id, body: m.body, status: m.status }));
+}
+
+async function mirrored(chats: ProjectChats, id: string, kept: number) {
+  return (await chats.get(id)).messages
+    .slice(kept)
+    .map((m) => ({ id: m.id, body: m.body, status: m.status }));
+}
+
+it("keeps a live handoff's thread here as the other computer writes it, and runs what's sent from here there", async () => {
+  const { laptop, mini, sender, thread, kept, there } = await liveThread();
+  await vi.waitFor(async () =>
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    ),
+  );
+
+  const more = input("@codex One more thing");
+  expect(sender.forwards("sendProjectChat", [thread.id, more])).toBe(true);
+  expect(sender.forwards("renameProjectChat", [thread.id, "x"])).toBe(false);
+  await sender.forward("sendProjectChat", [thread.id, more]);
+  await finished(mini.chats, there);
+  expect((await prompts()).at(-1)).toContain("One more thing");
+  await finished(laptop.chats, thread.id);
+  await vi.waitFor(async () =>
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    ),
+  );
+  // Saved too, not only held in memory.
+  const saved = JSON.parse(
+    await readFile(join(laptop.dir, "chats", `${thread.id}.json`), "utf8"),
+  ) as { messages: ChatMessage[] };
+  expect(saved.messages.at(-1)?.body).toBe(
+    (await mini.chats.get(there)).messages.at(-1)?.body,
+  );
+
+  // Back here: the thread as it came back, nothing twice.
+  await sender.bringBack(thread.id);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+  );
+  const back = (await laptop.chats.get(thread.id)).messages;
+  expect(new Set(back.map((m) => m.id)).size).toBe(back.length);
+  expect(back.filter((m) => m.body.includes("One more thing"))).toHaveLength(1);
+});
+
+it("shows what runs and waits on the other computer, and answers and stops it from here", async () => {
+  const { laptop, mini, sender, thread, there } = await liveThread();
+  await sender.forward("sendProjectChat", [
+    thread.id,
+    input("@codex fixture request approval"),
+  ]);
+  await vi.waitFor(async () => {
+    expect((await laptop.chats.get(thread.id)).requests).toHaveLength(1);
+    expect(
+      laptop.chats.list(laptop.projectId).find((c) => c.id === thread.id),
+    ).toMatchObject({ running: true, blocked: true });
+  });
+  const [request] = (await laptop.chats.get(thread.id)).requests!;
+  expect(request!.id).toBe((await mini.chats.get(there)).requests![0]!.id);
+  await sender.forward("respondProjectChat", [
+    thread.id,
+    request!.id,
+    { kind: "approval", decision: "accept" },
+  ]);
+  await finished(laptop.chats, thread.id);
+  expect((await laptop.chats.get(thread.id)).requests).toEqual([]);
+
+  await sender.forward("sendProjectChat", [
+    thread.id,
+    input("@codex fixture codex steer"),
+  ]);
+  await vi.waitFor(() =>
+    expect(
+      laptop.chats.list(laptop.projectId).find((c) => c.id === thread.id)
+        ?.running,
+    ).toBe(true),
+  );
+  await sender.forward("cancelProjectChat", [thread.id]);
+  await vi.waitFor(() =>
+    expect(
+      mini.chats.list(mini.projectId).find((c) => c.id === there)?.running,
+    ).toBeFalsy(),
+  );
+  await vi.waitFor(() =>
+    expect(
+      laptop.chats.list(laptop.projectId).find((c) => c.id === thread.id)
+        ?.running,
+    ).toBeFalsy(),
+  );
+});
+
+it("catches up on what a live handoff wrote while the computers were apart, without doubling any", async () => {
+  const { laptop, mini, computers, thread, kept, there } = await liveThread();
+  computers.close();
+  await mini.chats.send(there, input("@codex Written while apart"));
+  await finished(mini.chats, there);
+
+  const again = new Computers(
+    laptop.store,
+    async (v) => "sealed:" + v,
+    async (v) => v.slice(7),
+    { timeoutMs: 5000 },
+  );
+  cleanup.push(() => again.close());
+  new Handoffs(
+    laptop.store,
+    again,
+    laptop.chats,
+    laptop.projects,
+    join(laptop.dir, "handoffs"),
+  );
+  await again.start();
+  await vi.waitFor(async () =>
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    ),
+  );
+  expect(
+    (await mirrored(laptop.chats, thread.id, kept)).filter((m) =>
+      m.body.includes("Written while apart"),
+    ),
+  ).toHaveLength(1);
+});
+
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {
   const { laptop, remote, sender, computerId } = await pairedComputers();
   const thread = await laptop.chats.create(laptop.projectId, {
@@ -910,6 +1088,7 @@ it("takes a thread back without the computer that has it, as it was when it left
   const { laptop, mini, sender, thread, here, there } =
     await awayWithChangelog();
   const left = await laptop.chats.get(thread.id);
+  left.messages = left.messages.slice(0, left.sentTo!.kept);
   const { id, computer } = left.sentTo!;
   await writeFile(join(there, "CHANGELOG.md"), "- 1.1 only there\n");
   await expect(

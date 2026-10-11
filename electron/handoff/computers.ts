@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { PairedComputer } from "../../shared/handoff";
-import { parsePairingUrl, type RemoteCredentials } from "../../shared/remote";
+import {
+  parsePairingUrl,
+  type RemoteCredentials,
+  type RemoteEvent,
+} from "../../shared/remote";
 import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import type { SavedComputer } from "../app/store-types";
@@ -22,6 +26,8 @@ export class Computers {
     { client: RemoteClient; detail?: string }
   >();
   private online = new Set<(id: string) => void>();
+  private offline = new Set<(id: string) => void>();
+  private events = new Set<(id: string, event: RemoteEvent) => void>();
   constructor(
     private store: Store,
     private seal: (value: string) => Promise<string | null>,
@@ -66,6 +72,16 @@ export class Computers {
   onOnline(listener: (id: string) => void) {
     this.online.add(listener);
     return () => this.online.delete(listener);
+  }
+  /** Called each time a computer that was online drops. */
+  onOffline(listener: (id: string) => void) {
+    this.offline.add(listener);
+    return () => this.offline.delete(listener);
+  }
+  /** What a computer says by itself: how live handoffs on it move. */
+  onEvent(listener: (id: string, event: RemoteEvent) => void) {
+    this.events.add(listener);
+    return () => this.events.delete(listener);
   }
   /** Pairs with the link the other computer shows; pairing the same one again replaces it. */
   async pair(text: string) {
@@ -170,6 +186,7 @@ export class Computers {
     const token = computer.token.startsWith("plain:")
       ? computer.token.slice(6)
       : await this.unseal(computer.token);
+    let wasOnline = false;
     const entry: { client: RemoteClient; detail?: string } = {
       client: new RemoteClient({
         start: {
@@ -187,6 +204,12 @@ export class Computers {
           entry.detail = status === "online" ? undefined : detail;
           if (status === "online")
             for (const listener of this.online) listener(computer.id);
+          else if (wasOnline)
+            for (const listener of this.offline) listener(computer.id);
+          wasOnline = status === "online";
+        },
+        onEvent: (event) => {
+          for (const listener of this.events) listener(computer.id, event);
         },
         // Where the other computer listens now, for the next connect.
         onCredentials: ({ hosts, name }) =>

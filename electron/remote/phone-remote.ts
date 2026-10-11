@@ -177,6 +177,10 @@ export class PhoneRemote {
           [...this.server.online()].some((id) => !this.isComputer(id)),
         ),
     });
+    host.handoffs?.connect?.({
+      send: (deviceId, event) =>
+        this.server.broadcast(event, (id) => id === deviceId),
+    });
   }
   private isComputer(deviceId: string) {
     return (
@@ -204,10 +208,14 @@ export class PhoneRemote {
       );
   }
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
-    if (this.server.listening) this.bridge.chatEvent(event);
+    if (!this.server.listening) return;
+    this.bridge.chatEvent(event);
+    this.host.handoffs?.chatEvent?.(event);
   }
   chatsEvent(event: ProjectChatsEvent) {
-    if (this.server.listening) this.bridge.chatsChanged(event.projectId);
+    if (!this.server.listening) return;
+    this.bridge.chatsChanged(event.projectId);
+    this.host.handoffs?.chatsChanged?.(event.projectId);
   }
   async state(): Promise<PhoneRemoteState> {
     const [tailnet, phoneApp] = await Promise.all([

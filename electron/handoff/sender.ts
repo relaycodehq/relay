@@ -2,8 +2,12 @@ import { inputBlocksThread } from "../../shared/thread-state";
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { z } from "zod";
 import {
+  handoffChatMethods,
   handoffChunk,
+  liveAway,
+  handoffMessageSchema,
   handoffMessagesSchema,
   needsFullBundle,
   type ComputerInfo,
@@ -12,10 +16,16 @@ import {
   type HandoffRemoteStatus,
   type HandoffTarget,
   type HandoffThread,
+  type HandoffChatMethod,
   type HandoffView,
 } from "../../shared/handoff";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
-import { handoffBridge, type HandoffPart } from "../../shared/remote";
+import {
+  handoffBridge,
+  liveHandoffBridge,
+  type HandoffPart,
+  type RemoteEvent,
+} from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
 import { git } from "../git/git";
@@ -64,7 +74,86 @@ export class Handoffs {
     computers.onOnline((id) => {
       void this.acknowledge(id);
       void this.notifyAbandoned(id);
+      void this.follow(id);
     });
+    computers.onOffline((id) => {
+      for (const c of this.liveOn(id)) this.chats.setHandoffLive(c.id, undefined);
+    });
+    computers.onEvent((id, event) => this.event(id, event));
+  }
+  /** Whether the call is for a thread live on another computer, so runs there. */
+  forwards(method: string, args: unknown[]): method is HandoffChatMethod {
+    if (!(handoffChatMethods as readonly string[]).includes(method))
+      return false;
+    const chat =
+      typeof args[0] === "string"
+        ? this.store.get().chats?.find((c) => c.id === args[0])
+        : undefined;
+    return !!chat && liveAway(chat);
+  }
+  /** Runs the call on the computer the thread is live on. */
+  async forward(method: HandoffChatMethod, args: unknown[]) {
+    const sentTo = this.summary(args[0] as string).sentTo!;
+    if (this.computers.status(sentTo.computerId) !== "online")
+      throw new Error(
+        `${sentTo.computer} is offline. The thread carries on once it's back.`,
+      );
+    const client = await this.computers.connected(sentTo.computerId);
+    return client.call("handoffCall", sentTo.id, method, args);
+  }
+  /** Threads live on the computer, rather than on their way or coming back. */
+  private liveOn(computerId: string) {
+    return (this.store.get().chats ?? []).filter(
+      (c) => c.sentTo?.computerId === computerId && liveAway(c),
+    );
+  }
+  /** Asks the computer to keep these threads up to date here, and for what's missed. */
+  private async follow(computerId: string, chatId?: string) {
+    const chats = this.liveOn(computerId).filter(
+      (c) => !chatId || c.id === chatId,
+    );
+    if (!chats.length) return;
+    try {
+      const client = await this.computers.connected(computerId);
+      await Promise.all(
+        chats.map(async (c) => {
+          const { id } = c.sentTo!;
+          const known = await this.chats.handoffHeld(c.id);
+          const answer = await client.call("handoffChat", id, known);
+          const messages = z
+            .array(z.union([z.string(), handoffMessageSchema]))
+            .parse(answer.messages) as (ChatMessage | string)[];
+          await this.chats.handoffSynced(c.id, id, messages);
+          this.chats.setHandoffLive(c.id, answer.live);
+        }),
+      );
+    } catch (e) {
+      console.warn("Live handoffs couldn't be followed:", e);
+    }
+  }
+  /** What a computer says about the threads live on it. */
+  private event(computerId: string, event: RemoteEvent) {
+    const handoffId =
+      event.kind === "message"
+        ? event.chatId
+        : event.kind === "handoff"
+          ? event.id
+          : undefined;
+    const chat =
+      handoffId &&
+      this.liveOn(computerId).find((c) => c.sentTo!.id === handoffId);
+    if (!chat) return;
+    if (event.kind === "handoff") {
+      this.chats.setHandoffLive(chat.id, event.live);
+      return;
+    }
+    if (event.kind !== "message") return;
+    const parsed = handoffMessageSchema.safeParse(event.message);
+    if (!parsed.success)
+      return console.warn("A live handoff's message didn't read:", parsed.error);
+    void this.chats
+      .mirrorHandoff(chat.id, handoffId, parsed.data as ChatMessage)
+      .catch((e) => console.warn("A live handoff's message wasn't kept:", e));
   }
   private summary(chatId: string): ChatSummary {
     const chat = this.store.get().chats?.find((c) => c.id === chatId);
@@ -405,7 +494,8 @@ export class Handoffs {
           `This project has no Git remote, so ${name} can't find its copy.`,
         );
       const client = await this.computers.connected(computerId);
-      if (outdated(await this.info(computerId, client, true)))
+      const info = await this.info(computerId, client, true);
+      if (outdated(info))
         throw new Error(
           `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
         );
@@ -452,11 +542,14 @@ export class Handoffs {
         if (message(e) !== needsFullBundle) throw e;
         await across(true);
       }
+      const live = info!.bridge >= liveHandoffBridge;
       await this.chats.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
+        ...(live ? { live: true, kept: chat.messages.length } : {}),
       });
       await rm(folder, { recursive: true, force: true });
+      if (live) void this.follow(computerId, chatId);
     } catch (e) {
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
     }

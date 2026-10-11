@@ -11,8 +11,38 @@ import type {
 import { DEFAULT_WORKTREE_CLEANUP_DAYS } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import type { ActiveChat } from "./active";
-import type { ChatCore } from "./core";
+import type { AwayLive, ChatCore } from "./core";
 import type { CleanupCandidate } from "./worktree-cleanup";
+
+/** A thread on another computer through a live handoff, as running and waiting there. */
+function awaySummary(
+  c: ChatSummary,
+  {
+    running,
+    runningSince,
+    runningAgents,
+    waiting,
+    blocked,
+    asking,
+    pending,
+    stopped,
+    limitResume,
+    goal,
+  }: AwayLive,
+): ChatSummary {
+  const { asking: _a, stopped: _s, limitResume: _l, goal: _g, ...rest } = c;
+  return {
+    ...rest,
+    ...(running ? { running, runningSince, runningAgents, waiting: !!waiting } : {}),
+    ...(waiting && !running ? { waiting } : {}),
+    ...(blocked ? { blocked } : {}),
+    ...(asking ? { asking } : {}),
+    ...(pending?.length ? { pending } : {}),
+    ...(stopped ? { stopped } : {}),
+    ...(limitResume ? { limitResume } : {}),
+    ...(goal ? { goal } : {}),
+  };
+}
 
 /** A project's threads as the sidebar lists them: saved summaries, what runs in each now, and how they settle. */
 export class ThreadList {
@@ -75,6 +105,10 @@ export class ThreadList {
       .filter((c) => !c.reviewer)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
+        if (c.sentTo?.live) {
+          const away = this.core.away?.get(c.id);
+          return away ? awaySummary(c, away) : c;
+        }
         const crew = [
           this.core.active.get(c.id),
           ...(helpers.get(c.id) ?? []).sort((a, b) => a.started - b.started),

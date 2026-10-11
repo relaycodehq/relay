@@ -22,6 +22,7 @@ import {
   Sunrise,
   Unlink,
 } from "lucide-react";
+import { liveAway } from "../../../shared/handoff";
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
 import {
   chatActivitySection,
@@ -112,7 +113,7 @@ export function ThreadMenu({
           Back to the main window
         </MenuAction>
       ) : (
-        !chat.sentTo && (
+        (!chat.sentTo || liveAway(chat)) && (
           <MenuAction
             icon={<SquareArrowOutUpRight size={13} />}
             hint={windowKeys}

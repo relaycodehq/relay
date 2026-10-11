@@ -1,6 +1,6 @@
 // Threads handed off to another computer, as that computer has them.
 import { useQuery } from "@tanstack/react-query";
-import type { HandoffView } from "../../../shared/handoff";
+import { liveAway, type HandoffView } from "../../../shared/handoff";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 
@@ -20,6 +20,8 @@ export function useAwayViews(chats: ChatSummary[]) {
  * you, and moving up and lighting up as it writes.
  */
 export function withAway(chat: ChatSummary, view?: HandoffView): ChatSummary {
+  // A live one's summary already says what runs there, fresher than this.
+  if (liveAway(chat)) return chat;
   const remote =
     view?.online && view.sentTo.state === "away" ? view.remote : undefined;
   if (!remote) return chat;
