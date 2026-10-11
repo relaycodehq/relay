@@ -134,8 +134,9 @@ export function ProjectSidebar({
   });
   const activity = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
-    // The shortcuts count the cards, which started threads and settled leads don't get.
-    active: families.cards,
+    active: sections.active,
+    // ⌘1–9 count the cards, which started threads and settled leads don't get.
+    cards: families.cards,
     chatId,
     jumping: activity,
     actions,
