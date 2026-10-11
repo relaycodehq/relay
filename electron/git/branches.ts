@@ -50,7 +50,8 @@ async function unrelatedRemotes(
 export async function branches(root: string): Promise<BranchList> {
   const [current, head, refs, bases] = await Promise.all([
     git(root, ["branch", "--show-current"]),
-    git(root, ["rev-parse", "HEAD"]),
+    // A repository with no commits yet has no HEAD to resolve.
+    git(root, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => ""),
     git(root, [
       "for-each-ref",
       "--sort=-committerdate",
@@ -65,11 +66,14 @@ export async function branches(root: string): Promise<BranchList> {
     .split("\n")
     .filter(Boolean)
     .map((row) => row.split("\0"));
-  const elsewhere = await unrelatedRemotes(
-    root,
-    rows.map(([ref]) => ref),
-    bases,
-  );
+  // Nothing committed yet shares history with no one, so no remote is foreign.
+  const elsewhere = head.trim()
+    ? await unrelatedRemotes(
+        root,
+        rows.map(([ref]) => ref),
+        bases,
+      )
+    : new Set<string>();
   return {
     current: current.trim(),
     head: head.trim(),

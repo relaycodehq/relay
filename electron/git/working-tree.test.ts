@@ -293,6 +293,34 @@ it("ignores exactly the chosen untracked files, in .gitignore or this clone's ex
       file: "gitignore",
     }),
   ).rejects.toThrow("Only untracked files");
+  // One rule a line: "notes\nb" would also ignore every file named b.
+  await writeFile(join(root, "notes\nb"), "x\n");
+  await expect(
+    performGitAction(root, {
+      kind: "ignore",
+      revision: (await workingTree(root)).revision,
+      paths: ["notes\nb"],
+      file: "gitignore",
+    }),
+  ).rejects.toThrow("line break");
+});
+it("lists changes after a tracked folder is replaced by a file of its name", async () => {
+  await mkdir(join(root, "foo"));
+  await writeFile(join(root, "foo", "bar.txt"), "x\n");
+  git("add", ".");
+  git("commit", "-qm", "Folder");
+  await rm(join(root, "foo"), { recursive: true });
+  await writeFile(join(root, "foo"), "now a file\n");
+  const tree = await workingTree(root);
+  expect(tree.changes.map((c) => c.path).sort()).toEqual(["foo", "foo/bar.txt"]);
+});
+it("reads the index side of a file named like an index stage", async () => {
+  await writeFile(join(root, "1:notes.txt"), "old\n");
+  git("add", ".");
+  git("commit", "-qm", "Notes");
+  await writeFile(join(root, "1:notes.txt"), "new\n");
+  const pair = await workingDiff(root, "1:notes.txt", "unstaged");
+  expect([pair.old?.contents, pair.next?.contents]).toEqual(["old\n", "new\n"]);
 });
 it("discards back to the index or to HEAD, keeping a copy of each file in the Trash", async () => {
   await writeFile(join(root, "code.ts"), "staged\n");

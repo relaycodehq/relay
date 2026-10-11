@@ -23,6 +23,15 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
+it("lists branches in a repository with no commits yet", async () => {
+  const empty = await realpath(await mkdtemp(join(tmpdir(), "relay-unborn-")));
+  try {
+    execFileSync("git", ["-C", empty, "init", "-q", "-b", "trunk"]);
+    expect(await branches(empty)).toMatchObject({ current: "trunk", head: "" });
+  } finally {
+    await rm(empty, { recursive: true, force: true });
+  }
+});
 async function run(kind: "create" | "switch", name: string) {
   const { current, head } = await branches(root);
   return changeBranch(root, { kind, name, current, head });

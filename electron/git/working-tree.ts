@@ -281,7 +281,8 @@ export async function workingTree(root: string): Promise<WorkingTree> {
         changes.map(async (c) => {
           const s = await lstat(join(root, c.path)).catch(
             (e: NodeJS.ErrnoException) => {
-              if (e.code !== "ENOENT") throw e;
+              // ENOTDIR: a tracked folder was replaced by a file of its name.
+              if (e.code !== "ENOENT" && e.code !== "ENOTDIR") throw e;
               return null;
             },
           );
@@ -400,10 +401,10 @@ async function keepCopies(
     if (!staged || !change || !/[MARCT]/.test(change.index)) continue;
     if (change.worktree === " ") continue;
     const size = Number(
-      await git(root, ["cat-file", "-s", `:${path}`]).catch(() => NaN),
+      await git(root, ["cat-file", "-s", `:0:${path}`]).catch(() => NaN),
     );
     if (!Number.isFinite(size)) continue;
-    const blob = await gitBytes(root, ["cat-file", "blob", `:${path}`], size);
+    const blob = await gitBytes(root, ["cat-file", "blob", `:0:${path}`], size);
     const ext = extname(path);
     await keep(`${basename(path, ext)} (staged)${ext}`, (copy) =>
       writeFile(copy, blob),
@@ -484,6 +485,9 @@ export async function performGitAction(
         )
       )
         throw new Error("Only untracked files can be ignored.");
+      // A .gitignore rule is one line, so it can't name such a file.
+      if (action.paths.some((p) => /[\r\n]/.test(p)))
+        throw new Error("Git can’t ignore a file with a line break in its name.");
       const file =
         action.file === "gitignore"
           ? join(root, ".gitignore")
@@ -623,11 +627,11 @@ export async function workingDiff(
         : { name: oldName, spec: `HEAD:${oldName}` }
       : c.index === "?" || c.index === "D"
         ? null
-        : { name: path, spec: `:${path}` },
+        : { name: path, spec: `:0:${path}` },
     nextSource: FileSource | null = staged
       ? c.index === "D"
         ? null
-        : { name: path, spec: `:${path}` }
+        : { name: path, spec: `:0:${path}` }
       : c.worktree === "D"
         ? null
         : { name: path, disk: true };
