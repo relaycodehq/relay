@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { projectNameSchema, threadTitleSchema } from "../../shared/projects";
 import { projectGroupNameSchema } from "../../shared/project-folders";
 
@@ -25,6 +25,13 @@ export function NameInput({
 }) {
   const [value, setValue] = useState(initial);
   const done = useRef(false);
+  // A menu that started this field hands focus back to whatever it last
+  // remembered as it closes, in the same task the field mounted in.
+  const settling = useRef(true);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => (settling.current = false));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const parsed = schema.safeParse(value);
   const invalid = !!value.trim() && !parsed.success;
   const finish = (commit: boolean) => {
@@ -59,7 +66,12 @@ export function NameInput({
           if (e.key === "Enter") finish(true);
           if (e.key === "Escape") finish(false);
         }}
-        onBlur={() => {
+        onBlur={(e) => {
+          if (settling.current) {
+            const input = e.currentTarget;
+            queueMicrotask(() => input.isConnected && input.focus());
+            return;
+          }
           if (!invalid) return finish(true);
           done.current = true;
           onCancel();
