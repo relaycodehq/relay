@@ -5,6 +5,7 @@ export function CommitForm({
   message,
   onMessage,
   busy,
+  blocked,
   canCommit,
   canSplit,
   onCommit,
@@ -13,6 +14,8 @@ export function CommitForm({
   message: string;
   onMessage: (message: string) => void;
   busy: boolean;
+  /** Why no commit can start here for now, shown on the disabled buttons. */
+  blocked?: string;
   canCommit: boolean;
   canSplit: boolean;
   onCommit: () => void;
@@ -24,7 +27,7 @@ export function CommitForm({
       className="working-commit"
       onSubmit={(e) => {
         e.preventDefault();
-        onCommit();
+        if (canCommit && !blocked) onCommit();
       }}
     >
       <textarea
@@ -38,7 +41,8 @@ export function CommitForm({
       <button
         className="primary"
         aria-label="Commit staged changes"
-        disabled={!canCommit}
+        disabled={!canCommit || !!blocked}
+        title={blocked}
       >
         {busy ? "Working…" : "Commit staged"}
       </button>
@@ -46,7 +50,8 @@ export function CommitForm({
         <button
           type="button"
           className="working-split"
-          disabled={!canSplit}
+          disabled={!canSplit || !!blocked}
+          title={blocked}
           onClick={onSplit}
         >
           <Split size={12} />

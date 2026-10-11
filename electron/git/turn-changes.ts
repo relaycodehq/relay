@@ -3,6 +3,7 @@ import {
   copyFile,
   lstat,
   mkdtemp,
+  readlink,
   rm,
   rmdir,
   stat,
@@ -374,12 +375,28 @@ const blobId = (root: string, rev: string, path: string) =>
     () => null,
   );
 
-/** The worktree file's blob id as `git add` would store it; "other" for anything but a file. */
+/**
+ * The worktree entry's blob id as `git add` would store it, and whether it is
+ * a plain file; "other" for a folder and the like.
+ */
 async function worktreeId(root: string, path: string) {
   const info = await lstat(join(root, path)).catch(() => null);
   if (!info) return null;
-  if (!info.isFile()) return "other";
-  return (await run(root, [...noMonitor, "hash-object", "--", path])).trim();
+  if (info.isSymbolicLink()) {
+    // Git stores a link as its target text, unfiltered.
+    const dir = await mkdtemp(join(tmpdir(), "relay-link-"));
+    try {
+      const text = join(dir, "link");
+      await writeFile(text, await readlink(join(root, path), "buffer"));
+      const id = await run(root, ["hash-object", "--no-filters", "--", text]);
+      return { id: id.trim(), file: false };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+  if (!info.isFile()) return { id: "other", file: false };
+  const id = await run(root, [...noMonitor, "hash-object", "--", path]);
+  return { id: id.trim(), file: true };
 }
 
 /** A blob as it would be checked out, line endings and filters applied. */
@@ -424,16 +441,17 @@ export async function plan(
   const conflicts: string[] = [];
   await Promise.all(
     paths.map(async (path) => {
-      const [had, want, now] = await Promise.all([
+      const [had, want, entry] = await Promise.all([
         blobId(root, from, path),
         blobId(root, to, path),
         worktreeId(root, path),
       ]);
+      const now = entry?.id ?? null;
       if (now === want) return steps.push({ path, kind: "keep" });
       const replace: Step = { path, kind: want ? "restore" : "delete" };
       if (force || now === had) return steps.push(replace);
       const contents =
-        had && want && now && now !== "other"
+        had && want && entry?.file
           ? await mergeBack(root, path, from, to)
           : null;
       if (contents) steps.push({ path, kind: "merge", contents });

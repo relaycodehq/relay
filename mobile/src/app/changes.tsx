@@ -16,6 +16,8 @@ import {
   changeKind,
   isStaged,
   isUnstaged,
+  operationInProgress,
+  operationName,
   type ChangeArea,
   type GitAction,
   type WorkingChange,
@@ -40,7 +42,7 @@ function everyPath(tree: WorkingTree) {
 
 /** Why nothing can be committed right now, when something stands in the way. */
 function blocker(tree: WorkingTree) {
-  if (tree.operation) return `Finish the ${tree.operation} on your computer first.`;
+  if (tree.operation) return `Finish the ${operationName(tree.operation)} on your computer first.`;
   if (tree.changes.some((c) => c.conflict)) return "Resolve the conflicts on your computer first.";
   if (!tree.branch) return "Check out a branch on your computer to commit.";
 }
@@ -279,7 +281,7 @@ export default function ChangesScreen() {
       >
         {tree.operation && (
           <Text style={[styles.note, { color: t.danger }]}>
-            A {tree.operation} is in progress. Finish it on your computer.
+            {operationInProgress(tree.operation)}. Finish it on your computer.
           </Text>
         )}
         {!tree.changes.length && (

@@ -70,7 +70,7 @@ export function WorkingDiff({
   const syntaxThemes = useSyntaxThemes();
   const { wrap } = useTypography();
   const theme = useTheme(),
-    { diff, error } = useFileDiff(pair),
+    { diff, error, eol } = useFileDiff(pair),
     [selection, setSelection] = useState<CodeViewLineSelection | null>(null),
     [selectionError, setSelectionError] = useState("");
   // Side-by-side needs room; narrow panes read better as a unified diff.
@@ -211,6 +211,13 @@ export function WorkingDiff({
             <X size={14} />
           </IconButton>
         </div>
+      )}
+      {eol && diff && !pair.binary && (
+        <p className="diff-eol-note">
+          Line endings differ: {sideLabels?.additions ?? "the new side"} uses{" "}
+          {eol}, {sideLabels?.deletions ?? "the old side"}{" "}
+          {eol === "CRLF" ? "LF" : "CRLF"}. Only other changes are shown.
+        </p>
       )}
       {body}
     </div>

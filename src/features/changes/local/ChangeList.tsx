@@ -68,6 +68,7 @@ function Section(props: SectionProps) {
       <header>
         <button
           className="change-section-toggle"
+          aria-label={s.title}
           aria-expanded={open}
           onClick={() => props.onCollapse(s.area, open)}
         >

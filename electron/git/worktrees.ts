@@ -1,6 +1,15 @@
-import { lstat, mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
+import {
+  appendFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { git as gitIn } from "./git";
 import { copyIncluded } from "./worktree-include";
 import {
@@ -518,17 +527,42 @@ async function linkModules(root: string, path: string) {
     (await lstat(join(path, "node_modules")).catch(() => null))
   )
     return;
-  await symlink(source, join(path, "node_modules"), "dir").catch(() => {});
-  // A link Git doesn't ignore would show up as the thread's own change.
+  // Judged on the checkout's real folder: the usual `node_modules/` rule
+  // matches folders only, never the link standing in for one.
+  if (!(await ignoresModules(root))) return;
+  const link = join(path, "node_modules");
+  await symlink(source, link, "dir").catch(() => {});
+  if (await ignoresModules(path)) return;
+  // The repository's shared exclude keeps the link out of the thread's
+  // changes; the checkout already ignores its folder, so nothing shows there.
+  try {
+    const file = resolve(
+      path,
+      (await gitIn(path, ["rev-parse", "--git-path", "info/exclude"])).trim(),
+    );
+    const before = await readFile(file, "utf8").catch(() => "");
+    if (!before.split(/\r?\n/).includes("/node_modules")) {
+      await mkdir(dirname(file), { recursive: true });
+      await appendFile(
+        file,
+        `${before && !before.endsWith("\n") ? "\n" : ""}/node_modules\n`,
+      );
+    }
+  } catch (e) {
+    console.warn("[worktrees] could not exclude the node_modules link", e);
+  }
+  // A link Git still doesn't ignore would show up as the thread's own change.
+  if (!(await ignoresModules(path))) await rm(link, { force: true });
+}
+
+const ignoresModules = (dir: string) =>
   // check-ignore rejects literal pathspec magic outright.
-  const ignored = await gitIn(path, ["check-ignore", "-q", "node_modules"], {
+  gitIn(dir, ["check-ignore", "-q", "node_modules"], {
     env: { GIT_LITERAL_PATHSPECS: undefined },
   }).then(
     () => true,
     () => false,
   );
-  if (!ignored) await rm(join(path, "node_modules"), { force: true });
-}
 
 export const worktreeExists = (worktree: ChatWorktree) =>
   !!worktree.path && !worktree.removedAt && exists(worktree.path);

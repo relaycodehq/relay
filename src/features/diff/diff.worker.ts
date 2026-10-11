@@ -1,8 +1,22 @@
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { FilePair } from "../../../shared/types";
+import { matchLineEndings, type LineEnding } from "./line-endings";
 self.onmessage = (event: MessageEvent<FilePair & { editable?: boolean }>) => {
   try {
-    const { old, next } = event.data;
+    const { next } = event.data;
+    let { old } = event.data,
+      eol: LineEnding | undefined;
+    if (old && next) {
+      const matched = matchLineEndings(old.contents, next.contents);
+      if (matched.eol) {
+        eol = matched.eol;
+        old = {
+          ...old,
+          contents: matched.old,
+          cacheKey: `${old.cacheKey}:${eol}`,
+        };
+      }
+    }
     const value = parseDiffFromFile(old, next, { context: 4 }, true);
     // Identical files have no patch hunks, but an editor still needs a text surface.
     if (event.data.editable && !value.hunks.length && next) {
@@ -39,7 +53,7 @@ self.onmessage = (event: MessageEvent<FilePair & { editable?: boolean }>) => {
         },
       ];
     }
-    self.postMessage({ value });
+    self.postMessage({ value, eol });
   } catch (e) {
     self.postMessage({
       error: e instanceof Error ? e.message : "Could not compute diff.",

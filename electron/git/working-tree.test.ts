@@ -115,6 +115,21 @@ it("commits chosen files that were deleted or renamed through the index", async 
   ).toEqual(["D\ta.txt", "R100\tc.txt\td.txt"]);
   expect(tree.changes.map((c) => c.path)).toEqual(["other.ts"]);
 });
+it("counts lines the way the commit will: renames by their edits, every untracked file", async () => {
+  await writeFile(join(root, "old.ts"), "a\nb\nc\nd\n");
+  git("add", ".");
+  git("commit", "-qm", "Four lines");
+  git("mv", "old.ts", "new.ts");
+  await writeFile(join(root, "new.ts"), "a\nB\nc\nd\n");
+  git("add", "new.ts");
+  await mkdir(join(root, "many"));
+  for (let i = 0; i < 300; i++)
+    await writeFile(join(root, "many", `${i}.txt`), "one\ntwo\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 1 + 600,
+    deletions: 1,
+  });
+});
 it("works in a repository with no commits yet, first commit included", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {
@@ -293,6 +308,54 @@ it("ignores exactly the chosen untracked files, in .gitignore or this clone's ex
       file: "gitignore",
     }),
   ).rejects.toThrow("Only untracked files");
+  // One rule a line: "notes\nb" would also ignore every file named b.
+  await writeFile(join(root, "notes\nb"), "x\n");
+  await expect(
+    performGitAction(root, {
+      kind: "ignore",
+      revision: (await workingTree(root)).revision,
+      paths: ["notes\nb"],
+      file: "gitignore",
+    }),
+  ).rejects.toThrow("line break");
+});
+it("lists changes after a tracked folder is replaced by a file of its name", async () => {
+  await mkdir(join(root, "foo"));
+  await writeFile(join(root, "foo", "bar.txt"), "x\n");
+  git("add", ".");
+  git("commit", "-qm", "Folder");
+  await rm(join(root, "foo"), { recursive: true });
+  await writeFile(join(root, "foo"), "now a file\n");
+  const tree = await workingTree(root);
+  expect(tree.changes.map((c) => c.path).sort()).toEqual(["foo", "foo/bar.txt"]);
+});
+it("reads the index side of a file named like an index stage", async () => {
+  await writeFile(join(root, "1:notes.txt"), "old\n");
+  git("add", ".");
+  git("commit", "-qm", "Notes");
+  await writeFile(join(root, "1:notes.txt"), "new\n");
+  const pair = await workingDiff(root, "1:notes.txt", "unstaged");
+  expect([pair.old?.contents, pair.next?.contents]).toEqual(["old\n", "new\n"]);
+});
+it("refuses to unstage a conflicted file, which would drop its conflict mark", async () => {
+  git("switch", "-qc", "other");
+  await writeFile(join(root, "code.ts"), "theirs\n");
+  git("commit", "-qam", "Theirs");
+  git("switch", "-q", "review");
+  await writeFile(join(root, "code.ts"), "ours\n");
+  git("commit", "-qam", "Ours");
+  expect(() => git("merge", "other")).toThrow();
+  const tree = await workingTree(root);
+  await expect(
+    performGitAction(root, {
+      kind: "unstage",
+      revision: tree.revision,
+      paths: ["code.ts"],
+    }),
+  ).rejects.toThrow("merge conflicts");
+  expect((await workingTree(root)).changes[0]).toMatchObject({
+    conflict: true,
+  });
 });
 it("discards back to the index or to HEAD, keeping a copy of each file in the Trash", async () => {
   await writeFile(join(root, "code.ts"), "staged\n");
@@ -523,6 +586,29 @@ it("pushes to the branch's push remote and keeps tracking the remote it fetches 
   } finally {
     await rm(fork, { recursive: true, force: true });
   }
+});
+it("pushes a branch tracking another name under its own name, as git push would", async () => {
+  const onRemote = (ref: string) =>
+    execFileSync("git", ["-C", remote, "rev-parse", ref], {
+      encoding: "utf8",
+    }).trim();
+  git("config", "push.default", "simple");
+  git("switch", "-q", "-c", "feature", "origin/review");
+  git("commit", "-q", "--allow-empty", "-m", "Feature");
+  const review = onRemote("review");
+  let tree = await workingTree(root);
+  expect(tree.pushTarget).toBe("origin/feature");
+  tree = await performGitAction(root, { kind: "push", revision: tree.revision });
+  expect(onRemote("review")).toBe(review);
+  expect(onRemote("feature")).toBe(git("rev-parse", "HEAD"));
+  expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
+
+  git("config", "push.default", "upstream");
+  git("branch", "-q", "--set-upstream-to", "origin/review");
+  tree = await workingTree(root);
+  expect(tree.pushTarget).toBe("origin/review");
+  await performGitAction(root, { kind: "push", revision: tree.revision });
+  expect(onRemote("review")).toBe(git("rev-parse", "HEAD"));
 });
 it("hides a token kept in the push remote's address", async () => {
   // Gitea and GitHub both accept a token in place of the user name.

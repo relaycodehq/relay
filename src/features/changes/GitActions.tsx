@@ -17,6 +17,7 @@ import { CreatePullSheet } from "./BranchPullRequest";
 import { CommitSheet } from "./CommitSheet";
 import { MergeSheet } from "./MergeSheet";
 import { Spinner } from "../../ui/ui";
+import { gitBlockedReason } from "./working-changes";
 import "./git-actions.css";
 
 type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
@@ -34,7 +35,7 @@ export function GitActions({
   project,
   where,
   connected,
-  disabled,
+  locked,
   ref,
   onConnect,
   onReview,
@@ -45,7 +46,8 @@ export function GitActions({
   /** Workspace id: the checkout, or the thread's worktree and its branch. */
   where: string;
   connected: boolean;
-  disabled: boolean;
+  /** Why every action waits for now, such as a file with unsaved edits. */
+  locked?: string;
   ref?: Ref<GitActionsHandle>;
   onConnect: () => void;
   onReview: (ref: PullRef) => void;
@@ -54,6 +56,7 @@ export function GitActions({
 }) {
   const qc = useQueryClient();
   const key = workingTreeKey(where);
+  const disabled = !!locked;
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
     queryKey: key,
@@ -170,6 +173,26 @@ export function GitActions({
           : primary === "merge"
             ? `Merge ${t.branch} into ${plan.data?.base} without leaving it`
             : "Open or create a pull request for the current branch";
+  /** Why `action` can't run now, for its tooltip. */
+  const blocked = (action: Action) => {
+    if (locked) return locked;
+    if (enabled[action] || action === "pr" || (action === "push" && pushing))
+      return undefined;
+    if (action === "merge") return "Nothing to merge yet.";
+    const why =
+      action === "push"
+        ? gitBlockedReason(t, "push")
+        : (gitBlockedReason(t, "commit") ??
+          (action === "commit_push"
+            ? gitBlockedReason(t, "push")
+            : undefined));
+    if (why) return why;
+    if (action === "push")
+      return changes ? "Commit the changed files first." : "Nothing to push.";
+    return changes
+      ? `Over ${MAX_COMMIT_FILES} changed files. Commit them in a terminal.`
+      : "Nothing to commit.";
+  };
   const menu: Action[] = [
     "commit",
     "commit_push",
@@ -187,7 +210,7 @@ export function GitActions({
             className="git-actions-main"
             onClick={() => run(primary)}
             disabled={disabled || !enabled[primary]}
-            title={hint}
+            title={blocked(primary) ?? hint}
           >
             {icons[primary]}
             <span className="git-actions-label">{labels[primary]}</span>
@@ -200,7 +223,7 @@ export function GitActions({
           <Menu.Trigger
             className={`git-actions-more ${idle ? "idle" : ""}`}
             aria-label={idle ? "Git actions" : "More Git actions"}
-            title={idle ? "Git actions" : undefined}
+            title={locked ?? (idle ? "Git actions" : undefined)}
             disabled={disabled}
           >
             {idle && <GitBranch size={14} />}
@@ -218,6 +241,7 @@ export function GitActions({
                     key={action}
                     className="composer-select-item"
                     disabled={!enabled[action]}
+                    title={blocked(action)}
                     onClick={() => run(action)}
                   >
                     {icons[action]}

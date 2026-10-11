@@ -40,6 +40,8 @@ export interface WorkingTree {
   behind: number;
   pushTarget: string | null;
   pushUrl: string | null;
+  /** Pushing makes `pushTarget` the upstream in place of another, as `git push -u` does. */
+  pushRetracks?: boolean;
   operation: string | null;
   /** Lines added and removed across all uncommitted changes, against HEAD. */
   lines: { additions: number; deletions: number };
@@ -47,6 +49,25 @@ export interface WorkingTree {
   /** Gitignored files agents wrote since the last commit; a project's checkout only. */
   ignored?: IgnoredTouch[];
 }
+const operationNames: Record<string, string> = {
+  MERGE_HEAD: "merge",
+  CHERRY_PICK_HEAD: "cherry-pick",
+  REVERT_HEAD: "revert",
+  "rebase-merge": "rebase",
+  "rebase-apply": "rebase",
+};
+/** The Git operation under way as people say it: `MERGE_HEAD` is a "merge". */
+export const operationName = (operation: string) =>
+  operationNames[operation] ?? operation;
+/** "Merge in progress". */
+export function operationInProgress(operation: string) {
+  const name = operationName(operation);
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} in progress`;
+}
+/** What the checkout is on: its branch, or the commit a detached HEAD sits at. */
+export const checkoutLabel = (tree: Pick<WorkingTree, "branch" | "head">) =>
+  tree.branch ||
+  (tree.head ? `Detached at ${tree.head.slice(0, 7)}` : "Local checkout");
 /** A gitignored file an agent's file tools wrote, which Git's status can't show. */
 export interface IgnoredTouch {
   path: string;

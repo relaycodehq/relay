@@ -1,6 +1,8 @@
 // The local changes list: which files sit in the staged and working lists,
 // how they're named and grouped, and where a selection goes as they move.
 import {
+  checkoutLabel,
+  operationInProgress,
   isStaged,
   isUnstaged,
   type ChangeArea,
@@ -43,12 +45,18 @@ export interface ChangeSection {
   kind: "stage" | "unstage";
 }
 
+/**
+ * In the staged list. A conflict only sits in the working one: nothing of it is
+ * staged yet, and staging it is how it gets resolved.
+ */
+const listedStaged = (c: WorkingChange) => isStaged(c) && !c.conflict;
+
 /** The staged list, then the working one; a partly staged file is in both. */
 export const changeSections = (changes: WorkingChange[]): ChangeSection[] => [
   {
     area: "staged",
     title: "Staged changes",
-    files: changes.filter(isStaged),
+    files: changes.filter(listedStaged),
     kind: "unstage",
   },
   {
@@ -82,7 +90,7 @@ export function settleSelection(
   if (!change) return null;
   if (selected.area === "unstaged" && !isUnstaged(change))
     return { ...selected, area: "staged" };
-  if (selected.area === "staged" && !isStaged(change))
+  if (selected.area === "staged" && !listedStaged(change))
     return { ...selected, area: "unstaged" };
   return selected;
 }
@@ -97,12 +105,23 @@ export function otherArea(
   area: ChangeArea,
 ): ChangeArea | null {
   if (area === "staged") return isUnstaged(change) ? "unstaged" : null;
-  return isStaged(change) ? "staged" : null;
+  return listedStaged(change) ? "staged" : null;
 }
 
-/** Why no commit can start here: a conflict, a Git operation, or no branch. */
-export const commitBlocked = (tree: WorkingTree) =>
-  tree.changes.some((c) => c.conflict) || !!tree.operation || !tree.branch;
+/**
+ * Why Git can't commit or push here for now, said to the user: a Git
+ * operation, no branch, a conflict, no push remote. Undefined when it can.
+ */
+export function gitBlockedReason(tree: WorkingTree, action: "commit" | "push") {
+  if (tree.operation)
+    return `${operationInProgress(tree.operation)}. Finish it in your terminal first.`;
+  if (!tree.branch)
+    return `${checkoutLabel(tree)}. Switch to a branch to ${action}.`;
+  if (action === "commit" && tree.changes.some((c) => c.conflict))
+    return "Resolve the merge conflicts and stage them first.";
+  if (action === "push" && !tree.pushTarget)
+    return "This branch has no remote to push to.";
+}
 
 export const sideLabels = (area: ChangeArea) =>
   area === "staged"

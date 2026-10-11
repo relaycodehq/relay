@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { Pull } from "../../../shared/types";
-import type { ChangeArea } from "../../../shared/working-tree";
+import {
+  operationInProgress,
+  type ChangeArea,
+} from "../../../shared/working-tree";
 import type { CodeReference } from "../../../shared/code-references";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import type { RequestChannel } from "../../lib/request-channel";
 import {
   changeSections,
-  commitBlocked,
+  gitBlockedReason,
   folderKey,
 } from "./working-changes";
 import { parentOf } from "../../lib/file-tree";
@@ -109,8 +112,8 @@ export function LocalChanges({
       )}
       {tree?.operation && (
         <p role="status" className="working-notice">
-          Git operation in progress: {tree.operation}. Finish it in your
-          terminal before committing here.
+          {operationInProgress(tree.operation)}. Finish it in your terminal
+          before committing here.
         </p>
       )}
       {state.isPending ? (
@@ -165,15 +168,11 @@ export function LocalChanges({
                 message={message}
                 onMessage={setMessage}
                 busy={busy}
+                blocked={gitBlockedReason(tree, "commit")}
                 canCommit={
-                  !busy &&
-                  !!message.trim() &&
-                  !!sections[0]?.files.length &&
-                  !commitBlocked(tree)
+                  !busy && !!message.trim() && !!sections[0]?.files.length
                 }
-                canSplit={
-                  !busy && !!tree.changes.length && !commitBlocked(tree)
-                }
+                canSplit={!busy && !!tree.changes.length}
                 onCommit={() =>
                   void act(
                     { kind: "commit", revision: tree.revision, message },

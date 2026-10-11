@@ -15,6 +15,27 @@
   color: var(--text);
 }
 
+/* In a short window the file list gives up its height first, so the message
+   and the Commit button stay in view. */
+.commit-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+.commit-sheet > form {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.commit-sheet > form > * {
+  flex-shrink: 0;
+}
+/* The fieldset only disables; the list inside it is what shrinks. */
+.commit-sheet > form > .commit-files-fieldset {
+  display: contents;
+}
+.commit-sheet .commit-files {
+  flex-shrink: 1;
+  min-height: 120px;
+}
 .commit-files-fieldset {
   margin: 0;
   padding: 0;
@@ -22,10 +43,23 @@
   border: 0;
 }
 .commit-files {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--toolbar);
   overflow: hidden;
+}
+/* Hook output keeps its lines, and a long one scrolls in place. */
+.commit-sheet .error-box {
+  margin: 0;
+}
+.commit-sheet .error-box > div {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .commit-files-head {
   display: flex;
@@ -57,6 +91,7 @@
   padding: 4px;
 }
 .commit-files-list {
+  min-height: 0;
   max-height: 232px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -78,6 +113,7 @@
   width: 13px;
   height: 13px;
   margin: 0;
+  accent-color: var(--accent);
 }
 .create-pull-sheet .commit-folder {
   margin: 6px 4px 1px;

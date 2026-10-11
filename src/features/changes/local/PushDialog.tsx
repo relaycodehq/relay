@@ -26,9 +26,11 @@ export function PushDialog({
       </p>
       <p className="muted">
         Only commits are published. Uncommitted changes aren’t pushed
-        {tree.upstream
-          ? ". Counts reflect the last Git fetch."
-          : ". This sets the branch’s upstream."}
+        {tree.pushRetracks
+          ? `. It tracks ${tree.upstream}; this makes ${tree.pushTarget} its upstream.`
+          : tree.upstream
+            ? ". Counts reflect the last Git fetch."
+            : ". This sets the branch’s upstream."}
       </p>
       {tree.outgoing.length > 0 && (
         <ul className="outgoing-commits">
