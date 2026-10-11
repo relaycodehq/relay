@@ -194,12 +194,17 @@ const BOOTSTRAP = `(() => {
     else if (e.data.relayRender === "pause") pause(!!e.data.paused);
   });
   let last = 0;
+  // A page wider than the frame scrolls sideways; that scrollbar's height is
+  // added so it doesn't take the content's room and bring a vertical one too.
+  // The scrolling element's clientHeight is the viewport's, also in quirks mode.
   const size = () => {
-    const h = Math.ceil(root.getBoundingClientRect().height);
+    const bar = innerHeight - (document.scrollingElement || root).clientHeight;
+    const h = Math.ceil(root.getBoundingClientRect().height) + bar;
     if (h !== last) post({ relayRender: "size", height: (last = h) });
   };
   new ResizeObserver(size).observe(root);
   addEventListener("load", size);
+  addEventListener("resize", size);
   document.addEventListener("click", (e) => {
     const a = e.target instanceof Element && e.target.closest("a[href]");
     if (!a || (a.getAttribute("href") || "").startsWith("#")) return;
