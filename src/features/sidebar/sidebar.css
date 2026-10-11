@@ -521,7 +521,8 @@
 .sb-thread-list.flat .sb-thread {
   padding-left: 10px;
 }
-.sb .sb-thread:hover:not(:disabled) {
+.sb .sb-thread:hover:not(:disabled),
+.sb .sb-thread.highlighted {
   background: var(--hover);
 }
 .sb .sb-thread.selected {
@@ -595,6 +596,15 @@
   white-space: nowrap;
   font-size: 10.5px;
   color: var(--muted);
+}
+/* Among search results the project name gives way before the title does. */
+.sb-thread:has(.sb-thread-project) .sb-thread-title {
+  flex: 0 1 auto;
+}
+.sb .sb-thread-project {
+  flex: 0 50 auto;
+  min-width: 3em;
+  margin-left: auto;
 }
 .sb-thread-pr {
   font-variant-numeric: tabular-nums;

@@ -158,7 +158,7 @@ export function ProjectSidebar({
   return (
     <div className="sb">
       <div className="sb-top">
-        <SearchField search={search} />
+        <SearchField search={search} onOpen={openChat} />
         <button
           className="sb-top-button"
           aria-label="New thread"

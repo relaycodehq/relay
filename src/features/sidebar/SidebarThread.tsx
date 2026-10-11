@@ -13,6 +13,9 @@ import { ThreadMenu } from "./ThreadMenu";
 import { StatusMark } from "./ThreadStatus";
 
 const THREADS_PER_PROJECT = 5;
+
+const scrollIntoView = (row: HTMLElement | null) =>
+  row?.scrollIntoView({ block: "nearest" });
 const STALE_AFTER = 24 * 60 * 60 * 1000;
 
 /** How the sidebar shows and acts on any thread it lists. */
@@ -146,11 +149,14 @@ export function ThreadRow({
   chat: c,
   rows,
   withProject = false,
+  highlighted = false,
 }: {
   chat: ChatSummary;
   rows: SidebarRows;
   /** Its project's name instead of a PR number, among other projects' threads. */
   withProject?: boolean;
+  /** The search result Enter opens. */
+  highlighted?: boolean;
 }) {
   const { chatId, now, unread, projects, actions } = rows;
   const stale =
@@ -173,7 +179,8 @@ export function ThreadRow({
     <ContextMenu.Root>
       <ContextMenu.Trigger className={`sb-thread-row ${stale ? "stale" : ""}`}>
         <button
-          className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
+          ref={highlighted ? scrollIntoView : undefined}
+          className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""} ${highlighted ? "highlighted" : ""}`}
           title={c.title}
           onClick={() => actions.open(c)}
         >
