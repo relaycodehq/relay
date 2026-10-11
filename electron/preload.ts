@@ -333,6 +333,8 @@ const methods = [
   "bringBackThread",
   "keepThreadHere",
   "abandonHandoff",
+  "runThreadHere",
+  "dropHeldSend",
   "updateComputer",
   "threadWindows",
   "openThreadWindow",

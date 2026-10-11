@@ -820,6 +820,11 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
       await writtenThere(mini, there),
     ),
   );
+  // The prompt that started it there stands as the note's row, not as a message.
+  expect((await laptop.chats.get(thread.id)).messages[kept]).toMatchObject({
+    role: "user",
+    handedOver: true,
+  });
 
   const more = input("@codex One more thing");
   expect(sender.forwards("sendProjectChat", [thread.id, more])).toBe(true);
@@ -928,6 +933,112 @@ it("catches up on what a live handoff wrote while the computers were apart, with
       m.body.includes("Written while apart"),
     ),
   ).toHaveLength(1);
+});
+
+it("holds what's sent while a live thread's computer is away, and sends it once it's back", async () => {
+  const { laptop, mini, sender, computers, thread, kept, there } =
+    await liveThread();
+  computers.close();
+  const later = input("@codex Sent while apart");
+  await sender.forward("sendProjectChat", [thread.id, later]);
+  expect((await laptop.chats.get(thread.id)).outbox).toMatchObject([
+    { input: { id: later.id } },
+  ]);
+
+  const again = new Computers(
+    laptop.store,
+    async (v) => "sealed:" + v,
+    async (v) => v.slice(7),
+    { timeoutMs: 5000 },
+  );
+  cleanup.push(() => again.close());
+  new Handoffs(
+    laptop.store,
+    again,
+    laptop.chats,
+    laptop.projects,
+    join(laptop.dir, "handoffs"),
+  );
+  await again.start();
+  await vi.waitFor(async () =>
+    expect(
+      (await mini.chats.get(there)).messages.filter((m) => m.id === later.id),
+    ).toHaveLength(1),
+  );
+  await finished(mini.chats, there);
+  await vi.waitFor(async () => {
+    expect((await laptop.chats.get(thread.id)).outbox).toBeUndefined();
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    );
+  });
+});
+
+it("carries a live thread on here while its computer is away, with what waited, and tells the agent the code stayed there", async () => {
+  const { laptop, mini, sender, computers, thread, kept, there } =
+    await liveThread();
+  await vi.waitFor(async () =>
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    ),
+  );
+  await expect(sender.runHere(thread.id)).rejects.toThrow(/is back/);
+  const before = (await laptop.chats.get(thread.id)).messages;
+  computers.close();
+  const waiting = input("@codex Carry on without the mini");
+  await sender.forward("sendProjectChat", [thread.id, waiting]);
+  await sender.runHere(thread.id);
+
+  const chat = await laptop.chats.get(thread.id);
+  expect(chat.sentTo).toBeUndefined();
+  expect(chat.outbox).toBeUndefined();
+  // The conversation from there stays.
+  expect(chat.messages.slice(0, before.length).map((m) => m.id)).toEqual(
+    before.map((m) => m.id),
+  );
+  expect(chat.abandonedHandoffs?.at(-1)?.ranHere?.after).toBe(
+    before.at(-1)!.id,
+  );
+  await finished(laptop.chats, thread.id, before.length + 2);
+  const prompt = (await prompts()).at(-1);
+  expect(prompt).toContain("Carry on without the mini");
+  expect(prompt).toMatch(/changed in the code is in this checkout/);
+});
+
+it("puts back what fails to go out here, with what came after it, and sends it once asked again", async () => {
+  const { laptop, mini, sender, computers, thread, kept, there } =
+    await liveThread();
+  await vi.waitFor(async () =>
+    expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
+      await writtenThere(mini, there),
+    ),
+  );
+  const before = (await laptop.chats.get(thread.id)).messages.length;
+  computers.close();
+  const empty = input("@codex");
+  const next = input("@codex Then this one");
+  await sender.forward("sendProjectChat", [thread.id, empty]);
+  await sender.forward("sendProjectChat", [thread.id, next]);
+  await sender.runHere(thread.id);
+
+  let chat = await laptop.chats.get(thread.id);
+  expect(chat.sentTo).toBeUndefined();
+  expect(chat.messages).toHaveLength(before);
+  expect(chat.outbox).toMatchObject([
+    {
+      input: { id: empty.id },
+      error: "Add a question after the agent mention.",
+    },
+    { input: { id: next.id } },
+  ]);
+  expect(chat.outbox![1]!.error).toBeUndefined();
+
+  await sender.dropHeld(thread.id, empty.id);
+  await sender.runHere(thread.id);
+  await finished(laptop.chats, thread.id, before + 2);
+  chat = await laptop.chats.get(thread.id);
+  expect(chat.outbox).toBeUndefined();
+  expect(chat.messages.at(-2)).toMatchObject({ id: next.id, body: next.body });
 });
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {

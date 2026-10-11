@@ -2,7 +2,7 @@ import type { AgentRequest } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { DeepReviewState } from "../deep-review";
 import type { ThreadNote } from "../thread-notes";
-import type { ChatHandover } from "../handoff";
+import type { ChatHandover, HeldSend } from "../handoff";
 import type { ChatMessage } from "./messages";
 import type { ProjectChatSend } from "./send";
 import type { ChatSummary } from "./threads";
@@ -57,6 +57,8 @@ export interface ProjectChat extends ChatSummary {
   replySessions?: Record<string, AgentSessions>;
   /** Local: what the next turn hears about a handoff between computers. */
   handover?: ChatHandover;
+  /** Local: sends that wait for the computer a live thread is on, oldest first. */
+  outbox?: HeldSend[];
   /** Local: on a thread that came from another computer, each carried message's id there by its id here. */
   carriedIds?: Record<string, string>;
   /** What the user keeps at hand in the thread; see shared/thread-notes. */

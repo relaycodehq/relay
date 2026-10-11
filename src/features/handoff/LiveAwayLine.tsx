@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorOff, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { AbandonDialog } from "./AbandonDialog";
+import { chatKey, fetchChat } from "../../lib/chat-events";
 import "./handoff.css";
 
 /**
@@ -19,18 +19,24 @@ export function LiveAwayLine({
 }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [abandoning, setAbandoning] = useState(false);
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
     refetchInterval: 3000,
   });
+  // The thread view fetches it; this only reads along.
+  const thread = useQuery({
+    queryKey: chatKey(chat.id),
+    queryFn: () => fetchChat(qc, chat.id),
+    enabled: false,
+  });
   const computer = chat.sentTo!.computer;
   const online = view.data?.online ?? true;
-  const bringBack = () => {
+  // A message waiting offers it right under itself.
+  const waiting = !!thread.data?.outbox?.length;
+  const act = (job: () => Promise<void>) => {
     setBusy(true);
-    api
-      .bringBackThread(chat.id)
+    job()
       .catch(onError)
       .finally(() => {
         setBusy(false);
@@ -39,40 +45,30 @@ export function LiveAwayLine({
       });
   };
   return (
-    <>
-      <div className={`handoff-live ${online ? "" : "offline"}`} role="status">
-        {online ? <MonitorUp size={12} /> : <MonitorOff size={12} />}
-        <span>
-          {online
-            ? `Running on ${computer}`
-            : `${computer} is offline · it carries on there`}
-        </span>
-        {online ? (
+    <div className={`handoff-live ${online ? "" : "offline"}`} role="status">
+      {online ? <MonitorUp size={12} /> : <MonitorOff size={12} />}
+      <span>{online ? `Running on ${computer}` : `${computer} is offline`}</span>
+      {online ? (
+        <button
+          type="button"
+          disabled={busy}
+          title={`Stop the work on ${computer} and carry on here`}
+          onClick={() => act(() => api.bringBackThread(chat.id))}
+        >
+          Bring back
+        </button>
+      ) : (
+        !waiting && (
           <button
             type="button"
             disabled={busy}
-            title={`Stop the work on ${computer} and carry on here`}
-            onClick={bringBack}
+            title={`Carry on here with the conversation; what ${computer} changed in the code stays there`}
+            onClick={() => act(() => api.runThreadHere(chat.id))}
           >
-            Bring back
+            Run here instead
           </button>
-        ) : (
-          <button
-            type="button"
-            title={`If ${computer} can't hand it back: unlock it here as it left`}
-            onClick={() => setAbandoning(true)}
-          >
-            Take it back without {computer}
-          </button>
-        )}
-      </div>
-      {abandoning && (
-        <AbandonDialog
-          chatId={chat.id}
-          computer={computer}
-          onClose={() => setAbandoning(false)}
-        />
+        )
       )}
-    </>
+    </div>
   );
 }

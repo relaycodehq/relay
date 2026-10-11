@@ -6,6 +6,7 @@ import type {
   ChatCameFrom,
   ChatSentTo,
   HandoffLive,
+  HeldSend,
   HandoffThread,
 } from "../../shared/handoff";
 import type {
@@ -382,6 +383,9 @@ export class ProjectChats {
   abandonHandoff(id: string, handoffId: string) {
     return this.handoffs.abandon(id, handoffId);
   }
+  runHandoffHere(id: string, handoffId: string) {
+    return this.handoffs.takeBack(id, handoffId);
+  }
   leave(id: string, computer: string, since = 0) {
     return this.handoffs.leave(id, computer, since);
   }
@@ -441,6 +445,21 @@ export class ProjectChats {
   }
   setHandoffLive(id: string, live: HandoffLive | undefined) {
     this.liveHandoff.setLive(id, live);
+  }
+  handoffOutbox(id: string) {
+    return this.liveHandoff.outbox(id);
+  }
+  holdHandoffSend(id: string, handoffId: string, input: ProjectChatSend) {
+    return this.liveHandoff.hold(id, handoffId, input);
+  }
+  takeHandoffSends(id: string) {
+    return this.liveHandoff.takeOut(id);
+  }
+  putBackHandoffSends(id: string, held: HeldSend[], error: string) {
+    return this.liveHandoff.putBack(id, held, error);
+  }
+  settleHandoffSend(id: string, sendId: string, error?: string) {
+    return this.liveHandoff.settle(id, sendId, error);
   }
   /**
    * What waits in the thread now, which isn't saved with it; for a live

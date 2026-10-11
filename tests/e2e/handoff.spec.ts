@@ -206,7 +206,7 @@ test("a worktree thread goes to another computer from its header and comes back 
       /This thread is on /,
     );
     await expect(
-      laptop.page.getByText(/Handoff note for /).first(),
+      laptop.page.getByText(/Continued on /).first(),
     ).toBeVisible();
     await screenshot(laptop.page, { path: "test-results/handoff-back.png" });
 

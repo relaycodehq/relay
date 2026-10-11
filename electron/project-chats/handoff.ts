@@ -212,6 +212,44 @@ export class ComputerHandoff {
     });
   }
   /**
+   * Carries on a live thread here without the computer it's on: what
+   * mirrored it stays, an answer cut off there ends, and the next turn hears
+   * that the code is as it left. Returns the sends that waited for it;
+   * nothing when it wasn't live on that handoff.
+   */
+  takeBack(id: string, handoffId: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      const { sentTo } = chat;
+      if (sentTo?.id !== handoffId || sentTo.kept === undefined) return;
+      const after = chat.messages.at(-1)?.id;
+      chat.abandonedHandoffs = [
+        ...(chat.abandonedHandoffs ?? []),
+        {
+          id: sentTo.id,
+          computer: sentTo.computer,
+          at: Date.now(),
+          ...(after ? { ranHere: { after, since: sentTo.at } } : {}),
+        },
+      ];
+      const cut = chat.messages.filter((m) => m.status === "streaming");
+      for (const m of cut) {
+        m.status = "cancelled";
+        m.version += 1;
+      }
+      const held = (chat.outbox ?? []).map(({ error: _, ...h }) => h);
+      delete chat.outbox;
+      chat.handover = { computer: sentTo.computer, fresh: false, left: true };
+      this.core.away?.delete(id);
+      delete chat.sentTo;
+      chat.updated = Date.now();
+      await this.core.storage.save(chat);
+      for (const m of cut)
+        this.core.emit({ chatId: id, message: structuredClone(m) });
+      return held;
+    });
+  }
+  /**
    * The thread leaves for `computer`: its agent stops and is waited for,
    * writes a handoff note in its own session, and everything in the worktree
    * is committed. `since` limits the note to turns from that message on,
@@ -296,6 +334,7 @@ export class ComputerHandoff {
       .find(
         (m) => m.handoff?.computer && m.status === "complete" && m.body.trim(),
       );
+    const kickoff = randomUUID();
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
@@ -312,6 +351,7 @@ export class ComputerHandoff {
       handover: {
         computer: thread.from,
         fresh: true,
+        kickoff,
         ...(note
           ? { note: { provider: note.handoff!.from, body: note.body } }
           : {}),
@@ -322,7 +362,7 @@ export class ComputerHandoff {
     void this.host
       .send(chat.id, {
         ...settings,
-        id: randomUUID(),
+        id: kickoff,
         body: `@${provider} Carry on with this work, handed over from ${thread.from}.${
           worktree.branch === thread.git.branch
             ? ""

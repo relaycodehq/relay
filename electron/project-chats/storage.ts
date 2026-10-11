@@ -65,6 +65,7 @@ export function chatSummary({
   setupNote,
   deepReview,
   handover,
+  outbox,
   carriedIds,
   notes,
   // Worked out below; a stale copy on the thread itself doesn't count.

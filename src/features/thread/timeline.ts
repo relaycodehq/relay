@@ -60,7 +60,9 @@ function textOf(m: ChatMessage): MessageText {
       ...(mention && { agent: mention.provider }),
       said: m.resumed
         ? "Resumed"
-        : plainText(mention ? mention.question : m.body, 160),
+        : m.handedOver
+          ? "Handed over"
+          : plainText(mention ? mention.question : m.body, 160),
       note: "",
       activity: [],
     };

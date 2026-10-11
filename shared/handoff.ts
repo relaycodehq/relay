@@ -113,6 +113,8 @@ export interface ChatAbandonedHandoff {
   id: string;
   computer: string;
   at: number;
+  /** It carried on here after this message, without the code changed there since `since`. */
+  ranHere?: { after: string; since: number };
 }
 
 /** On the computer that took a thread over: where it came from. */
@@ -143,6 +145,17 @@ export interface ChatHandover {
   computer: string;
   fresh: boolean;
   note?: { provider: AgentProvider; body: string };
+  /** The prompt that starts the thread here, by id; it's marked `handedOver`. */
+  kickoff?: string;
+  /** It carries on here without what `computer` changed in the code. */
+  left?: true;
+}
+
+/** A send that waits for the computer a live thread is on; `error` when it turned it down. */
+export interface HeldSend {
+  input: ProjectChatSend;
+  at: number;
+  error?: string;
 }
 
 /** The settings the next turn goes out with, as the last one did. */
@@ -342,6 +355,15 @@ export interface ComputersApi {
    * computer. What was done there stays there; it is told when it can be.
    */
   abandonHandoff(chatId: string): Promise<void>;
+  /**
+   * Carries on a live thread here while its computer is offline: the
+   * conversation stays, the code is as it left, and what waited goes out
+   * here. That computer is told when it can be. What fails to go out, and
+   * all after it, waits again; called once the thread is here, it sends those.
+   */
+  runThreadHere(chatId: string): Promise<void>;
+  /** Drops a send that waits for the computer a live thread is on. */
+  dropHeldSend(chatId: string, sendId: string): Promise<void>;
   /** Has a paired computer update Relay and restart; it reconnects by itself. */
   updateComputer(id: string): Promise<UpdateState>;
 }

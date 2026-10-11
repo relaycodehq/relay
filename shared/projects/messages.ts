@@ -78,6 +78,8 @@ export interface WorktreeCommandRun {
 export interface ChatMessage {
   /** Local marker: Relay sent this prompt to resume a stopped answer; shown as a divider. */
   resumed?: boolean;
+  /** The prompt Relay sent to start a handed-over thread on the computer that took it; the handoff note's row stands for it. */
+  handedOver?: true;
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
   /** Local: what a compaction left the agent with, when the provider hands it back readable. */

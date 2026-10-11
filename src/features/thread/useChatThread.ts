@@ -26,6 +26,7 @@ export function useChatThread(
     refetchOnMount: "always",
     refetchInterval: (query) =>
       query.state.data?.queue?.length ||
+      (chat?.sentTo && query.state.data?.outbox?.length) ||
       query.state.data?.messages.some((m) => m.status === "streaming")
         ? 1000
         : false,

@@ -1,9 +1,10 @@
-import type { HandoffLive } from "../../shared/handoff";
+import type { HandoffLive, HeldSend } from "../../shared/handoff";
 import type {
   ChatMessage,
   ChatSummary,
   KnownMessages,
   ProjectChat,
+  ProjectChatSend,
 } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { awaitsReturn } from "./handoff";
@@ -185,6 +186,57 @@ export class LiveHandoff {
     if (JSON.stringify(away.get(id)) === JSON.stringify(next)) return;
     if (next) away.set(id, next);
     else away.delete(id);
+    this.core.storage.chatChanged(id);
+  }
+  /** Sends that wait for the computer the thread is live on. */
+  async outbox(id: string): Promise<HeldSend[]> {
+    return structuredClone((await this.core.storage.load(id)).outbox ?? []);
+  }
+  /** A send waits for the computer the thread is live on to be back. */
+  async hold(id: string, handoffId: string, input: ProjectChatSend) {
+    const chat = await this.core.storage.load(id);
+    if (chat.sentTo?.id !== handoffId || !chat.sentTo.live)
+      throw new Error("This thread isn't live on another computer.");
+    if (chat.outbox?.some((h) => h.input.id === input.id)) return;
+    chat.outbox = [...(chat.outbox ?? []), { input, at: Date.now() }];
+    await this.core.storage.save(chat);
+  }
+  /** Takes every held send out, to go out here instead. */
+  async takeOut(id: string): Promise<HeldSend[]> {
+    const chat = await this.core.storage.load(id);
+    const held = (chat.outbox ?? []).map(({ error: _, ...h }) => h);
+    if (!held.length) return [];
+    delete chat.outbox;
+    await this.core.storage.save(chat);
+    return held;
+  }
+  /**
+   * Sends that didn't go out here wait in the thread again, ahead of any
+   * held since; the first says why. One that landed after all stays out.
+   */
+  async putBack(id: string, held: HeldSend[], error: string) {
+    const chat = await this.core.storage.load(id);
+    const landed = new Set([
+      ...chat.messages.map((m) => m.id),
+      ...(chat.queue ?? []).map((q) => q.input.id),
+    ]);
+    const back = held
+      .filter((h) => !landed.has(h.input.id))
+      .map((h, i) => (i ? h : { ...h, error }));
+    if (!back.length) return;
+    chat.outbox = [...back, ...(chat.outbox ?? [])];
+    await this.core.storage.save(chat);
+    this.core.storage.chatChanged(id);
+  }
+  /** A held send went out, or was dropped; `error` keeps it, turned down. */
+  async settle(id: string, sendId: string, error?: string) {
+    const chat = await this.core.storage.load(id);
+    const held = chat.outbox?.find((h) => h.input.id === sendId);
+    if (!held) return;
+    if (error) held.error = error;
+    else chat.outbox = chat.outbox!.filter((h) => h !== held);
+    if (!chat.outbox?.length) delete chat.outbox;
+    await this.core.storage.save(chat);
     this.core.storage.chatChanged(id);
   }
   private saveSoon(chat: ProjectChat) {

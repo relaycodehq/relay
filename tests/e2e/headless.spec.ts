@@ -232,7 +232,7 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     await expect(strip).toContainText("finished", { timeout: 60_000 });
     await strip.getByRole("button", { name: "Bring back" }).click();
     await expect(strip).toBeHidden({ timeout: 60_000 });
-    await expect(page.getByText(/Handoff note for /).first()).toBeVisible();
+    await expect(page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(page, { path: "test-results/headless-handoff-back.png" });
 
     // Stopping from the terminal; the phone hears it go.

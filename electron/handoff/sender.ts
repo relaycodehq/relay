@@ -18,8 +18,13 @@ import {
   type HandoffThread,
   type HandoffChatMethod,
   type HandoffView,
+  type HeldSend,
 } from "../../shared/handoff";
-import type { ChatMessage, ChatSummary } from "../../shared/projects";
+import {
+  projectChatSendSchema,
+  type ChatMessage,
+  type ChatSummary,
+} from "../../shared/projects";
 import {
   handoffBridge,
   liveHandoffBridge,
@@ -56,6 +61,8 @@ const unsupportedCall = (e: unknown) =>
  */
 export class Handoffs {
   private jobs = new Map<string, Promise<void>>();
+  /** Threads whose waiting sends are going out now. */
+  private flushing = new Set<string>();
   private telling: Promise<unknown> = Promise.resolve();
   private statuses = new Map<
     string,
@@ -91,15 +98,105 @@ export class Handoffs {
         : undefined;
     return !!chat && liveAway(chat);
   }
-  /** Runs the call on the computer the thread is live on. */
+  /**
+   * Runs the call on the computer the thread is live on. A send waits here
+   * while that computer is away, and behind any send already waiting.
+   */
   async forward(method: HandoffChatMethod, args: unknown[]) {
-    const sentTo = this.summary(args[0] as string).sentTo!;
-    if (this.computers.status(sentTo.computerId) !== "online")
+    const chatId = args[0] as string;
+    const sentTo = this.summary(chatId).sentTo!;
+    const online = () => this.computers.status(sentTo.computerId) === "online";
+    const send =
+      method === "sendProjectChat"
+        ? projectChatSendSchema.parse(args[1])
+        : undefined;
+    const waiting = send && (await this.chats.handoffOutbox(chatId)).length;
+    if (online() && !waiting)
+      try {
+        const client = await this.computers.connected(sentTo.computerId);
+        return await client.call("handoffCall", sentTo.id, method, args);
+      } catch (e) {
+        // Turned down there, rather than lost on the way.
+        if (!send || online()) throw e;
+      }
+    if (!send)
       throw new Error(
         `${sentTo.computer} is offline. The thread carries on once it's back.`,
       );
-    const client = await this.computers.connected(sentTo.computerId);
-    return client.call("handoffCall", sentTo.id, method, args);
+    await this.chats.holdHandoffSend(chatId, sentTo.id, send);
+    if (online()) void this.flush(chatId);
+  }
+  /** Sends what waited for the computer a thread is live on, oldest first. */
+  private async flush(chatId: string) {
+    if (this.flushing.has(chatId)) return;
+    this.flushing.add(chatId);
+    try {
+      for (;;) {
+        const chat = this.store.get().chats?.find((c) => c.id === chatId);
+        const sentTo = chat && liveAway(chat) ? chat.sentTo! : undefined;
+        if (!sentTo || this.computers.status(sentTo.computerId) !== "online")
+          return;
+        const next = (await this.chats.handoffOutbox(chatId)).find(
+          (h) => !h.error,
+        );
+        if (!next) return;
+        try {
+          const client = await this.computers.connected(sentTo.computerId);
+          await client.call("handoffCall", sentTo.id, "sendProjectChat", [
+            chatId,
+            next.input,
+          ]);
+          await this.chats.settleHandoffSend(chatId, next.input.id);
+        } catch (e) {
+          if (this.computers.status(sentTo.computerId) !== "online") return;
+          await this.chats.settleHandoffSend(chatId, next.input.id, message(e));
+        }
+      }
+    } catch (e) {
+      console.warn("A live handoff's waiting messages didn't go out:", e);
+    } finally {
+      this.flushing.delete(chatId);
+    }
+  }
+  /**
+   * Carries on a live thread here while its computer is offline, with what
+   * waited for it sent here. That computer keeps its copy and is told. On a
+   * thread already back, sends here what didn't go out last time.
+   */
+  async runHere(chatId: string) {
+    const sentTo = this.summary(chatId).sentTo;
+    if (!sentTo) return this.sendHere(chatId, await this.chats.takeHandoffSends(chatId));
+    if (!sentTo.live || sentTo.state !== "away")
+      throw new Error("This thread isn't live on another computer.");
+    if (this.computers.status(sentTo.computerId) === "online")
+      throw new Error(
+        `${sentTo.computer} is back. Bring the thread back instead, with what it did there.`,
+      );
+    const held = await this.chats.runHandoffHere(chatId, sentTo.id);
+    if (!held) return;
+    this.statuses.delete(sentTo.id);
+    await this.saveAbandoned(sentTo.computerId, sentTo.id);
+    void this.notifyAbandoned(sentTo.computerId);
+    await this.sendHere(chatId, held);
+  }
+  /**
+   * Nothing runs here yet: the first goes out, the rest queue behind it.
+   * The one that fails, and every one after it, wait in the thread again.
+   */
+  private async sendHere(chatId: string, held: HeldSend[]) {
+    for (const [i, { input }] of held.entries()) {
+      const { delivery: _, ...send } = input;
+      try {
+        await this.chats.sendYours(chatId, send);
+      } catch (e) {
+        await this.chats.putBackHandoffSends(chatId, held.slice(i), message(e));
+        return;
+      }
+    }
+  }
+  /** Drops a send that waits for the computer a live thread is on. */
+  async dropHeld(chatId: string, sendId: string) {
+    await this.chats.settleHandoffSend(chatId, sendId);
   }
   /** Threads live on the computer, rather than on their way or coming back. */
   private liveOn(computerId: string) {
@@ -125,6 +222,7 @@ export class Handoffs {
             .parse(answer.messages) as (ChatMessage | string)[];
           await this.chats.handoffSynced(c.id, id, messages);
           this.chats.setHandoffLive(c.id, answer.live);
+          void this.flush(c.id);
         }),
       );
     } catch (e) {

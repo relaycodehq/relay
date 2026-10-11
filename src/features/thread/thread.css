@@ -638,3 +638,26 @@
 .worktree-command-line {
   color: var(--text);
 }
+.held-send > .project-message {
+  opacity: 0.55;
+}
+.held-send-line {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: -4px 0 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.held-send-line > button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.held-send-line > button:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}

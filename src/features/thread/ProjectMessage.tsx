@@ -90,7 +90,7 @@ function HandoffRow({
   const [open, setOpen] = useState(false);
   const { from, to, computer, byRelay } = m.handoff!;
   const switched = computer
-    ? `Handoff note for ${computer}`
+    ? `Continued on ${computer} · ${clock(m.created)}`
     : `Switched from ${agentName(from)} to ${agentName(to)}${byRelay ? ` · ${agentName(from)} couldn't write a note, Relay did` : ""}`;
   const note = m.status === "complete" && m.body.trim();
   return (
@@ -278,6 +278,7 @@ export const Message = memo(function Message({
       image={m.status === "streaming" ? hiddenImage : answerImage}
     />
   );
+  if (m.handedOver) return null;
   if (m.resumed)
     return (
       <div

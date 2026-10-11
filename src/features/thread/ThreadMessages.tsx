@@ -25,6 +25,7 @@ import {
 import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
+import { HeldSends, RanHereDivider } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
@@ -143,6 +144,10 @@ export function ThreadMessages({
   /** Queued and scheduled messages wait in the conversation they were sent in, main or side. */
   const inView = (waiting: { input: { parentId?: string | null } }) =>
     (waiting.input.parentId ?? null) === (root?.id ?? null);
+  // One that went out shows as itself as soon as its computer says so.
+  const held = history.data?.outbox?.filter(
+    (h) => inView(h) && !listed.some((m) => m.id === h.input.id),
+  );
   return (
     <div className="project-messages" ref={scroll} onScroll={onScroll}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}
@@ -249,6 +254,17 @@ export function ThreadMessages({
           !root && m.id === chat?.fromTerminal?.through && (
             <TerminalOrigin key="terminal-origin" from={chat.fromTerminal} />
           ),
+          ...(!root
+            ? (chat?.abandonedHandoffs ?? [])
+                .filter((a) => a.ranHere?.after === m.id)
+                .map((a) => (
+                  <RanHereDivider
+                    key={`ran-here-${a.id}`}
+                    computer={a.computer}
+                    since={a.ranHere!.since}
+                  />
+                ))
+            : []),
         ])}
         {!root && worktree.status && (
           <WorktreeLanded status={worktree.status} />
@@ -263,6 +279,14 @@ export function ThreadMessages({
               <RotateCcw size={13} /> Resume answer
             </button>
           )}
+        {chat && held && (
+          <HeldSends
+            chat={chat}
+            held={held}
+            projectRoot={worktree.folder}
+            onOpenFile={openFile}
+          />
+        )}
         <QueuedMessages
           queue={history.data?.queue?.filter(inView)}
           paused={history.data?.queuePaused}

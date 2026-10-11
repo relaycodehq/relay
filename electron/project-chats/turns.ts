@@ -278,6 +278,7 @@ export class ChatTurns {
         provider: asked?.provider ?? input.provider,
         version: 1,
         ...(resumed && { resumed: true }),
+        ...(chat.handover?.kickoff === input.id && { handedOver: true as const }),
         ...(input.images?.length
           ? { images: await this.core.storage.saveImages(id, input.images) }
           : {}),
