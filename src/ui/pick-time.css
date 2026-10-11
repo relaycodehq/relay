@@ -185,6 +185,15 @@
   color: var(--accent);
   font-weight: 650;
 }
+.time-drum-repeated {
+  text-align: center;
+  line-height: 1.1;
+}
+.time-drum-repeated small {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+}
 .time-drum-row[aria-disabled] {
   color: color-mix(in srgb, var(--muted) 55%, transparent);
   cursor: default;

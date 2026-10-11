@@ -1,15 +1,5 @@
 import { useId, useRef, type CSSProperties } from "react";
-
-const SLOTS = 48;
-
-/** Half-hours of `day` by the clock, so a DST day still reads 0:00…23:30. */
-function slotsOf(day: number) {
-  return Array.from({ length: SLOTS }, (_, i) => {
-    const at = new Date(day);
-    at.setHours(Math.floor(i / 2), (i % 2) * 30, 0, 0);
-    return at.getTime();
-  });
-}
+import { timeSlots } from "./time-slots";
 
 const timeOf = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, {
@@ -36,22 +26,22 @@ export function TimeDrum({
   onPick: (at: number) => void;
   onCommit: () => void;
 }) {
-  const slots = slotsOf(day);
-  const index = Math.max(
-    0,
-    slots.findIndex((slot) => slot >= at),
-  );
-  const first = Math.max(
-    0,
-    slots.findIndex((slot) => slot >= earliest),
+  const slots = timeSlots(day);
+  const selected = slots.findIndex((slot) => slot >= at);
+  const index = selected < 0 ? slots.length - 1 : selected;
+  const available = slots.findIndex((slot) => slot >= earliest);
+  const first = available < 0 ? slots.length : available;
+  const labels = slots.map(timeOf);
+  const repeated = new Set(
+    labels.filter((label, i) => labels.indexOf(label) !== i),
   );
   // Trackpads send several events per frame; each must step from the last
   // step, not from the last render.
   const live = useRef(index);
   live.current = index;
   const go = (to: number) => {
-    const next = Math.min(SLOTS - 1, Math.max(first, to));
-    if (next === live.current) return;
+    const next = Math.min(slots.length - 1, Math.max(first, to));
+    if (next < first || next === live.current) return;
     live.current = next;
     onPick(slots[next]);
   };
@@ -83,7 +73,7 @@ export function TimeDrum({
           PageUp: from - 4,
           PageDown: from + 4,
           Home: first,
-          End: SLOTS - 1,
+          End: slots.length - 1,
         }[e.key];
         if (to !== undefined) {
           e.preventDefault();
@@ -97,6 +87,11 @@ export function TimeDrum({
       <span className="time-drum-band" aria-hidden />
       {slots.map((slot, i) => {
         const d = i - index;
+        const zone = repeated.has(labels[i])
+          ? new Intl.DateTimeFormat(undefined, { timeZoneName: "shortOffset" })
+              .formatToParts(slot)
+              .find((part) => part.type === "timeZoneName")?.value
+          : undefined;
         return (
           <div
             // By position, not time: a new day turns the same rows.
@@ -104,6 +99,7 @@ export function TimeDrum({
             id={`${id}-${i}`}
             role="option"
             className="time-drum-row"
+            aria-label={zone ? `${labels[i]} ${zone}` : labels[i]}
             aria-selected={d === 0}
             aria-disabled={i < first || undefined}
             style={
@@ -116,7 +112,14 @@ export function TimeDrum({
             }
             onClick={() => i >= first && go(i)}
           >
-            {timeOf(slot)}
+            {zone ? (
+              <span className="time-drum-repeated">
+                {labels[i]}
+                <small>{zone}</small>
+              </span>
+            ) : (
+              labels[i]
+            )}
           </div>
         );
       })}

@@ -139,6 +139,27 @@ test("snoozes a thread until a picked time", async () => {
     await expect(
       page.locator(".sb-compact", { hasText: "Later" }),
     ).toContainText(await label(at(14, 30)));
+
+    // Late on a month's last day, the default time belongs to next month.
+    const monthEnd = await page.evaluate(() =>
+      new Date(2026, 9, 31, 23, 10).getTime(),
+    );
+    await page.clock.setFixedTime(monthEnd);
+    await other.hover();
+    await other.getByRole("button", { name: "Snooze" }).click();
+    await page.getByRole("button", { name: "Pick a time…" }).click();
+    const selectedDay = picker.locator(".pick-time-day[aria-selected=true]");
+    await expect(picker.locator(".pick-time-month")).toHaveText(
+      "November 2026",
+    );
+    await expect(selectedDay).toHaveText("1");
+    await expect(selectedDay).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(selectedDay).toHaveText("31");
+    await expect(selectedDay).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(selectedDay).toHaveText("1");
+    await expect(selectedDay).toBeFocused();
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

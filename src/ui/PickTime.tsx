@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { TimeDrum } from "./TimeDrum";
 import "./pick-time.css";
@@ -99,37 +99,42 @@ export function PickTime({
     () => Math.ceil((now.getTime() + 60 * MIN) / SLOT) * SLOT,
   );
   const [month, setMonth] = useState(
-    () => new Date(now.getFullYear(), now.getMonth(), 1),
+    () => new Date(new Date(at).getFullYear(), new Date(at).getMonth(), 1),
   );
   const start = useMemo(weekStart, []);
   const today = midnight(now);
   const day = midnight(new Date(at));
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonth = new Date(now.getFullYear(), now.getMonth() + 11, 1);
+  const grid = useRef<HTMLDivElement>(null);
+  const focusDay = useRef(false);
 
   /** The same time on another day, or the first one still ahead. */
   const pickDay = (next: Date) => {
+    // Capture focus before changing months can remove the focused cell.
+    focusDay.current = !!grid.current?.contains(document.activeElement);
     if (next < today) next = today;
     const wake = new Date(next);
     const time = new Date(at);
     wake.setHours(time.getHours(), time.getMinutes(), 0, 0);
-    setAt(Math.max(wake.getTime(), firstSlot));
-    setMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+    const picked = new Date(Math.max(wake.getTime(), firstSlot));
+    setAt(picked.getTime());
+    setMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
   };
 
-  const grid = useRef<HTMLDivElement>(null);
   // The row that opened the picker is gone; the keyboard picks up on the day.
   useEffect(() => {
     grid.current
       ?.querySelector<HTMLElement>('[aria-selected="true"]')
       ?.focus({ preventScroll: true });
   }, []);
-  useEffect(() => {
-    if (!grid.current?.contains(document.activeElement)) return;
+  useLayoutEffect(() => {
+    if (!focusDay.current) return;
+    focusDay.current = false;
     grid.current
-      .querySelector<HTMLElement>(`[data-day="${dayKey(day)}"]`)
+      ?.querySelector<HTMLElement>(`[data-day="${dayKey(day)}"]`)
       ?.focus({ preventScroll: true });
-  }, [at]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [at, month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const weekdays = Array.from({ length: 7 }, (_, i) =>
     // 4 Jan 2026 was a Sunday.
