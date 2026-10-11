@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { restoreFocus } from "../../lib/focus-return";
 import type { SettingsCategory } from "../../lib/settings-page";
 
 /**
@@ -15,6 +16,8 @@ export function useSettingsPage(
     [project, setProject] = useState<string>(),
     [query, setQuery] = useState(""),
     [where, setWhere] = useState("");
+  // What had focus before Settings covered it, the composer usually.
+  const returnTo = useRef<Element | null>(null);
   useEffect(() => {
     setOpen(false);
     setCategory(undefined);
@@ -33,6 +36,7 @@ export function useSettingsPage(
     where,
     setWhere,
     show(at?: SettingsCategory, projectId?: string) {
+      if (!open) returnTo.current = document.activeElement;
       setCategory(at);
       setProject(at === "project" ? projectId : undefined);
       setOpen(true);
@@ -41,6 +45,8 @@ export function useSettingsPage(
       setOpen(false);
       setCategory(undefined);
       setProject(undefined);
+      restoreFocus(returnTo.current);
+      returnTo.current = null;
     },
   };
 }

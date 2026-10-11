@@ -31,6 +31,7 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { timeAgo } from "../../lib/relative-date";
+import { useReturnFocus } from "../../lib/focus-return";
 import { ErrorBox } from "../../ui/ui";
 import { GitHubMark } from "../settings/BrandIcons";
 import {
@@ -100,6 +101,7 @@ export function AddProjectPalette({
     private: true,
     ...spec,
   };
+  useReturnFocus();
   useEffect(() => {
     dialog.current?.showModal();
   }, []);

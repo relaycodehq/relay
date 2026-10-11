@@ -8,6 +8,7 @@ import {
   type ErrorInfo,
 } from "react";
 import { X, AlertCircle } from "lucide-react";
+import { useReturnFocus } from "../lib/focus-return";
 /**
  * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
  * or in a menu they open, bubble up here and are left to them.
@@ -60,6 +61,7 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const headingId = useId();
+  useReturnFocus();
   useEffect(() => {
     ref.current?.showModal();
   }, []);
