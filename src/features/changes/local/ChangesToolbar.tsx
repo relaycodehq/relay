@@ -1,6 +1,10 @@
 import { createPortal } from "react-dom";
 import { ArrowUp, FolderTree, GitBranch, List, RefreshCw } from "lucide-react";
-import type { WorkingTree } from "../../../../shared/working-tree";
+import {
+  checkoutLabel,
+  type WorkingTree,
+} from "../../../../shared/working-tree";
+import { gitBlockedReason } from "../working-changes";
 import { IconButton } from "../../../ui/ui";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
 
@@ -25,6 +29,7 @@ export function ChangesToolbar({
   onRefresh: () => void;
   onPush: () => void;
 }) {
+  const blocked = tree && gitBlockedReason(tree, "push");
   const actions = (
     <>
       <span className="change-list-view">
@@ -51,7 +56,8 @@ export function ChangesToolbar({
         <RefreshCw size={15} />
       </IconButton>
       <button
-        disabled={busy || !tree?.pushTarget || !!tree.operation || !tree.branch}
+        disabled={busy || !tree || !!blocked}
+        title={blocked}
         onClick={onPush}
       >
         <ArrowUp size={15} />
@@ -67,7 +73,7 @@ export function ChangesToolbar({
             <>
               <span className="pane-chip">
                 <GitBranch size={12} />
-                {tree?.branch || "Local checkout"}
+                {tree ? checkoutLabel(tree) : "Local checkout"}
               </span>
               {tree?.upstream && (tree.ahead > 0 || tree.behind > 0) && (
                 <span className="pane-chip">
@@ -85,7 +91,7 @@ export function ChangesToolbar({
   return (
     <header className="working-toolbar">
       <GitBranch size={15} />
-      <strong>{tree?.branch || "Local checkout"}</strong>
+      <strong>{tree ? checkoutLabel(tree) : "Local checkout"}</strong>
       {tree?.upstream && (
         <span className="muted">
           {tree.ahead} ahead · {tree.behind} behind

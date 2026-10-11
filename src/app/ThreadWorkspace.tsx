@@ -4,7 +4,7 @@ import type { ChatSummary, Project } from "../../shared/projects";
 import { threadWorktree } from "../../shared/projects";
 import type { Account } from "../../shared/types";
 import type { SettingsCategory } from "../lib/settings-page";
-import type { NavigationLock } from "../lib/navigation-lock";
+import { LOCKED_MESSAGE, type NavigationLock } from "../lib/navigation-lock";
 import { paneFrame, type PaneId } from "../lib/workspace-panes";
 import { usePanelTabs } from "../features/panel/panel-tabs";
 import { useHostAccount } from "../features/pulls/useHostAccount";
@@ -104,7 +104,7 @@ export function ThreadHeaderActions({
           project={project}
           where={folder.where}
           connected={!!host.account}
-          disabled={lock.locked}
+          locked={lock.locked ? LOCKED_MESSAGE : undefined}
           ref={gitActions}
           onConnect={onConnectHost}
           onReview={(ref) => void prs.review(ref)}

@@ -10,7 +10,7 @@ import {
   SquareTerminal,
 } from "lucide-react-native";
 import type { ProjectTask } from "../../../../shared/tasks";
-import type { WorkingTree } from "../../../../shared/working-tree";
+import { operationInProgress, type WorkingTree } from "../../../../shared/working-tree";
 import { useRemote } from "../../remote/RemoteProvider";
 import { Row, SectionTitle, rowStyles } from "../../ui/Rows";
 import { ThreadRow } from "../../ui/ThreadRow";
@@ -90,7 +90,7 @@ export default function ProjectScreen() {
             <Row
               icon={<GitBranch size={17} color={t.muted} />}
               title={tree?.branch || "Branch"}
-              subtitle={tree?.operation ? `${tree.operation} in progress` : "Switch or create a branch"}
+              subtitle={tree?.operation ? operationInProgress(tree.operation) : "Switch or create a branch"}
               onPress={() => router.push({ pathname: "/branches", params: { project: id } })}
             />
           </>
