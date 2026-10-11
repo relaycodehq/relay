@@ -88,7 +88,9 @@ it("keeps nested lines and code inside their item", () => {
 
 it("leaves notes that aren't only a list as text", () => {
   expect(noteList("Just a thought")).toBeUndefined();
-  expect(noteList("- only one")).toBeUndefined();
+  expect(noteList("- only one")?.items).toEqual([
+    { number: "", text: "only one" },
+  ]);
   expect(noteList("- a\n- b\n\nAnd then prose after it.")).toBeUndefined();
   // A list inside a code fence is code.
   expect(noteList("```\n- a\n- b\n```")).toBeUndefined();
@@ -137,21 +139,30 @@ it("reorders and drops list items, numbering them again and keeping their ticks"
     "First",
   ]);
   // A list that started at 9 still does, and a wider number re-indents its lines.
-  const [late] = arrangeNote(
-    [note("9. a\n10. b\n    more")],
-    "n1",
-    [2, 1],
-  );
+  const [late] = arrangeNote([note("9. a\n10. b\n    more")], "n1", [2, 1]);
   expect(late!.text).toBe("9. b\n   more\n10. a");
   expect(arrangeNote([note("- a\n- b\n- c")], "n1", [3, 1])[0]!.text).toBe(
     "- c\n- a",
   );
 });
 
-it("turns a list arranged down to one item into a plain note, and none into no note", () => {
+it("keeps a last item's completion state and quote exclusion until it is unchecked", () => {
   const [one] = arrangeNote([note("1. a\n2. b", [1])], "n1", [2]);
   expect(one!.text).toBe("1. b");
-  expect(one!.done).toBeUndefined();
+  expect(one!.done).toEqual([0]);
+  expect(noteQuote(one!)).toBe("");
+  expect(noteQuote(one!, 0)).toBe("");
+  expect(noteForAgent(one!)).toEqual({
+    id: "n1",
+    items: [{ item: 1, text: "b", done: true }],
+  });
+  const [unchecked] = tickNote([one!], "n1", 1, false);
+  expect(noteQuote(unchecked!)).toBe("1. b");
+  expect(noteQuote(unchecked!, 0)).toBe("1. b");
+  expect(arrangeNote([one!], "n1", [])).toEqual([]);
+});
+
+it("drops an empty list and rejects invalid arrangements", () => {
   expect(arrangeNote([note("1. a\n2. b")], "n1", [])).toEqual([]);
   expect(() => arrangeNote([note("1. a\n2. b")], "n1", [1, 1])).toThrow();
   expect(() => arrangeNote([note("1. a\n2. b")], "n1", [3])).toThrow();

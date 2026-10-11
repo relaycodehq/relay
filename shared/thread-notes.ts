@@ -90,7 +90,6 @@ export function noteList(text: string): NoteList | undefined {
       items.at(-1)!.text += `\n${line.trim()}`;
     } else return undefined;
   }
-  if (items.length < 2) return undefined;
   return { lead: lines.slice(0, start).join("\n").trim(), items };
 }
 
@@ -198,7 +197,7 @@ export function tickNote(
  * A list note with its items in a new `order`, numbered from 1 as the user
  * sees them; items left out are dropped. Numbers count up again from where
  * the list started and ticks go with their items. Dropping every item drops
- * the note, and one left over makes it a plain note.
+ * the note; one left over keeps its checkbox and completion state.
  */
 export function arrangeNote(
   notes: ThreadNote[] | undefined,
@@ -225,9 +224,9 @@ export function arrangeNote(
   const body = items.join(loose ? "\n\n" : "\n");
   const text = list.lead ? `${list.lead}\n\n${body}` : body;
   const was = new Set(note.done);
-  const done = noteList(text)
-    ? order.flatMap((item, index) => (was.has(item - 1) ? [index] : []))
-    : [];
+  const done = order.flatMap((item, index) =>
+    was.has(item - 1) ? [index] : [],
+  );
   return notes!.map((n) =>
     n === note
       ? {

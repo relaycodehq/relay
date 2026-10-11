@@ -255,6 +255,43 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       "true",
     );
     await expect(again.locator(".notes-note")).toHaveCount(4);
+
+    // Removing the unfinished item must not resurrect the completed last item.
+    const firstNote = again.locator(".notes-note").first();
+    await firstNote.locator(".notes-items > li").first().hover();
+    await firstNote
+      .getByRole("button", { name: "Remove this item" })
+      .first()
+      .click();
+    await expect(firstNote.getByRole("checkbox")).toHaveCount(1);
+    await expect(firstNote.getByRole("checkbox")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(firstNote.getByRole("status")).toHaveText("All done");
+    await expect(firstNote.locator(".notes-grip")).toHaveCount(0);
+    await page.reload();
+    await page.locator(".notes-chip").hover();
+    await expect(firstNote.getByRole("checkbox")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(
+      firstNote.getByRole("button", {
+        name: "All done — uncheck an item to quote it",
+      }),
+    ).toBeDisabled();
+    await screenshot(page, {
+      path: "test-results/screenshots/notes-last-item-done.png",
+      animations: "disabled",
+    });
+    await firstNote.getByRole("checkbox").click();
+    await firstNote
+      .getByRole("button", { name: "Quote it in your message", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Message project").locator(".composer-quote-chip").last(),
+    ).toHaveAttribute("data-quote", "1. Skip the re-render on every heartbeat");
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true, maxRetries: 10 });

@@ -172,13 +172,15 @@ function Note({
           >
             {list.items.map((item, index) => (
               <li key={index} className={done.has(index) ? "done" : undefined}>
-                <span
-                  className="notes-grip"
-                  title="Drag to reorder"
-                  aria-hidden="true"
-                >
-                  <GripVertical size={12} />
-                </span>
+                {items.length > 1 && (
+                  <span
+                    className="notes-grip"
+                    title="Drag to reorder"
+                    aria-hidden="true"
+                  >
+                    <GripVertical size={12} />
+                  </span>
+                )}
                 <button
                   type="button"
                   className="notes-tick"
@@ -252,10 +254,6 @@ function Note({
 /** The items, from 1, after item `from` (from 0) is dropped by item `to`. */
 function moved(count: number, from: number, to: number, target: DragDrop) {
   const order = [...Array(count).keys()].filter((index) => index !== from);
-  order.splice(
-    order.indexOf(to) + (target.where === "after" ? 1 : 0),
-    0,
-    from,
-  );
+  order.splice(order.indexOf(to) + (target.where === "after" ? 1 : 0), 0, from);
   return order.map((index) => index + 1);
 }
