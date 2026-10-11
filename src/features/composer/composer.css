@@ -21,6 +21,12 @@
   border-radius: 7px;
   padding: 7px;
 }
+.composer-tools-end {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  margin-left: auto;
+}
 .thread-compose-wrap {
   width: 100%;
   max-width: var(--thread-width);
