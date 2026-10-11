@@ -403,7 +403,18 @@ export function ProjectChat({
             onRespond={async (response) => {
               if (!chat) return;
               await api.respondProjectChat(chat.id, request.id, response);
-              await history.refetch();
+              const { data } = await history.refetch();
+              // The answered card takes the clicked button, and the focus, with it.
+              if (!data?.requests?.length)
+                requestAnimationFrame(() => {
+                  const active = document.activeElement;
+                  if (
+                    !active ||
+                    active === document.body ||
+                    active.closest(".agent-request")
+                  )
+                    composer.current?.focus();
+                });
             }}
           />
         ))}
@@ -480,7 +491,11 @@ export function ProjectChat({
         <AgentSwitchDialog
           from={agentSwitch.asking.from}
           to={agentSwitch.asking.to}
-          onDecide={agentSwitch.decide}
+          onDecide={(proceed) => {
+            agentSwitch.decide(proceed);
+            // Back to the draft that was about to go out.
+            if (!proceed) requestAnimationFrame(() => composer.current?.focus());
+          }}
         />
       )}
       {chat && agentView && (
