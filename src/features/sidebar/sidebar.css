@@ -556,7 +556,7 @@
   position: absolute;
   top: 50%;
   right: 6px;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
@@ -565,6 +565,9 @@
   border-radius: 5px;
   color: var(--muted);
   transform: translateY(-50%);
+  /* Hidden but still in the Tab order; display:none would take it out. */
+  opacity: 0;
+  pointer-events: none;
 }
 .sb .sb-thread-archive:hover {
   background: color-mix(in srgb, var(--text) 10%, transparent);
@@ -572,12 +575,15 @@
 }
 .sb-thread-row:hover .sb-thread-archive,
 .sb .sb-thread-archive:focus-visible {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 /* Only where Archive takes its place; a running thread has none and keeps
    its spinner. */
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-age,
-.sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status {
+.sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status,
+.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-age,
+.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-status {
   visibility: hidden;
 }
 .sb .sb-thread.sb-ghost {
@@ -813,11 +819,18 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+/* Out of the way but still focusable until the card shows them: Chrome
+   drops focus headed for a display:none control, and the card loses
+   :focus-visible before its button gains it. */
 .sb-card-actions {
-  display: none;
+  position: absolute;
+  right: 0;
+  display: flex;
   align-items: center;
   gap: 2px;
   margin: -3px -5px -3px 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .sb-card-shortcut {
   flex: none;
@@ -847,7 +860,9 @@
 .sb-card:has(:focus-visible) .sb-card-actions,
 .sb-card-actions:has([data-popup-open]),
 .sb-card-actions:has([data-popup-shown]) {
-  display: flex;
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
 }
 .sb .sb-card-action {
   display: inline-flex;
