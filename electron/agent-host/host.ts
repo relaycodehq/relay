@@ -158,6 +158,8 @@ const replayable = new Set([
   "list_projects",
 ]);
 let tools: ReturnType<typeof serveRelayTools> | undefined;
+/** Tries in a row that found the tools' port taken. */
+let portTries = 0;
 
 function serveTools() {
   const config = readRelayMcp(dir);
@@ -189,12 +191,22 @@ function serveTools() {
   });
   tools = serving;
   serving.ready.then(
-    () => log(`serving Relay's tools on ${config.port}`),
+    () => {
+      portTries = 0;
+      log(`serving Relay's tools on ${config.port}`);
+    },
     (error) => {
       tools = undefined;
-      // The host before this one lets the port go once it drains.
-      if (error?.code === "EADDRINUSE") setTimeout(serveTools, 2000).unref();
-      else log(`can't serve Relay's tools: ${error?.message}`);
+      // The host before this one lets the port go once it drains; a port
+      // still taken after a minute is another app's, until Relay picks a
+      // new one on its next start (see loadRelayMcp), read here each try.
+      if (error?.code === "EADDRINUSE") {
+        if (++portTries === 30)
+          log(
+            `port ${config.port} for Relay's tools is still taken after a minute; another app may hold it, so agents get no Relay tools until Relay restarts`,
+          );
+        setTimeout(serveTools, 2000).unref();
+      } else log(`can't serve Relay's tools: ${error?.message}`);
     },
   );
 }
