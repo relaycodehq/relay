@@ -27,6 +27,10 @@ const reads = [
   "git log --oneline --no-ext-diff",
   "git show HEAD@{1}",
   "sort -k2 -n a",
+  "rg -n -C3 --glob '*.ts' -t ts useEffect src 2>&1",
+  "sort -t, -k2,2 -rn data.csv",
+  "find . -type f -mtime -1 -size +10k -print",
+  "tree -L 2 -I node_modules",
 ];
 /** Flags the shell hands the command in a form a look at the words misses. */
 const disguised = [
@@ -60,6 +64,10 @@ const writes = [
   "git diff --output=patch.diff",
   "git status && rm -rf src",
   "rg --pre ./run.sh foo",
+  "rg --hostname-bin=./evil.sh --hyperlink-format='file://{host}{path}' TODO .",
+  "rg -z hello .",
+  "sort -S 1000 --compress-program=./evil.sh package-lock.json",
+  "sort --comp=./comp.sh big.txt",
   "find . -name '*.tmp' -delete",
   "find . -exec rm {} ;",
   "sed -i 's/a/b/' file.ts",
