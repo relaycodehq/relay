@@ -15,3 +15,9 @@ __pycache__/
 .idea/
 dist-website/
 .wrangler/
+
+# Previews are local scratch; only the website, promo films and their shared stub are tracked
+/previews/*
+!/previews/website/
+!/previews/promo/
+!/previews/_shared/
