@@ -27,11 +27,6 @@
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-/* CI hasn't seen the newest commits, so the verdict is about older code. */
-.ci-trigger[data-stale] > * {
-  opacity: 0.5;
-}
-
 /* The sidebar's status dot, pinned to the icon like the Relay mark's. */
 .ci-dot.sb-status {
   position: absolute;
@@ -41,14 +36,19 @@
   height: auto;
 }
 .ci-dot.sb-status i {
-  background: var(--ci);
+  background: var(--ci-dot, var(--ci));
   box-shadow: 0 0 0 2px var(--surface);
+}
+/* CI hasn't seen the newest commits, so the verdict is about older code. The
+   colour fades rather than the dot, so the badge doesn't show through its ring. */
+.ci-trigger[data-stale] .ci-dot i {
+  --ci-dot: color-mix(in srgb, var(--ci) 45%, var(--surface));
 }
 /* Building: hollow and still, like a thread whose next turn is pending. */
 .ci-dot[data-state="running"] i {
   background: var(--surface);
   box-shadow:
-    inset 0 0 0 1.5px var(--ci),
+    inset 0 0 0 1.5px var(--ci-dot, var(--ci)),
     0 0 0 2px var(--surface);
 }
 .ci-trigger [data-state="success"],
