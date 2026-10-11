@@ -233,6 +233,22 @@
   background: var(--accent-soft);
   color: var(--accent);
 }
+/* The mode menu: one line per mode. */
+.composer-mode-menu {
+  min-width: 250px;
+}
+.composer-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-mode-option > svg,
+.composer-mode-option small {
+  color: var(--muted);
+}
+.composer-mode-option small {
+  font-size: 11px;
+}
 .composer-plan-action {
   display: flex;
   justify-content: flex-end;
