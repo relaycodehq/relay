@@ -1,4 +1,8 @@
-import type { ChatMessage, ProjectChat } from "../../shared/projects";
+import type {
+  ChatImage,
+  ChatMessage,
+  ProjectChat,
+} from "../../shared/projects";
 import type { CodexSkill } from "../agents/provider-commands";
 import type { GoalCommand } from "../../shared/goal";
 import type { AgentJob } from "../agents/types";
@@ -13,6 +17,8 @@ export type ChatTurn =
       caughtUp?: boolean;
       /** Crosses off what the prompt told the agent, once the turn didn't fail. */
       briefed?: () => void;
+      /** Screenshots from steers the agent missed, which the prompt carries. */
+      carried?: ChatImage[];
       /** A `/goal` Codex runs through its goal API rather than as a prompt. */
       goal?: GoalCommand;
     }

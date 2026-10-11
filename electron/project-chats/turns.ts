@@ -103,11 +103,24 @@ export class ChatTurns {
       })
       .catch((e) => console.warn("Could not send the queued messages:", e));
   }
-  /** A steer the agent never confirmed reading still went to it; stop waiting. */
+  /**
+   * A steer the agent never confirmed reading went to it if its turn finished.
+   * A stopped or failed turn drops what the agent hadn't picked up yet.
+   */
   private settleUnread(chat: ProjectChat) {
     const unread = chat.messages.filter((m) => m.unread);
     for (const m of unread) {
       delete m.unread;
+      const steered = [...chat.messages.slice(0, chat.messages.indexOf(m))]
+        .reverse()
+        .find(
+          (a) =>
+            a.role === "assistant" &&
+            a.provider === m.provider &&
+            (a.parentId ?? null) === (m.parentId ?? null),
+        );
+      if (steered?.status === "cancelled" || steered?.status === "failed")
+        m.missed = true;
       m.version++;
       this.core.emit({ chatId: chat.id, message: structuredClone(m) });
     }
@@ -133,6 +146,14 @@ export class ChatTurns {
       );
     // Picking another agent before resuming hands the work to it.
     const provider = settings?.provider ?? sentAgent(chat.lastInput);
+    // Steers the stopped turn never read lead the prompt; a plain "continue"
+    // after them would carry on with what they meant to change.
+    const missed = chat.messages.some(
+      (m) =>
+        m.missed &&
+        m.provider === provider &&
+        (m.parentId ?? null) === (chat.lastInput!.parentId ?? null),
+    );
     await this.sendNow(
       id,
       {
@@ -141,7 +162,9 @@ export class ChatTurns {
         ...settings,
         id: randomUUID(),
         to: provider,
-        body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
+        body: missed
+          ? `@${provider} Your previous response was stopped before you read what I wrote above. Check what has already been done before repeating any actions.`
+          : `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
         images: undefined,
         selection: undefined,
         delivery: undefined,
@@ -394,7 +417,7 @@ export class ChatTurns {
       chat.messages.push(answer);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: structuredClone(answer) });
-      const { prompt, caughtUp, briefed } = turnPrompt({
+      const { prompt, caughtUp, briefed, carried } = turnPrompt({
         chat,
         input,
         provider: asked.provider,
@@ -415,6 +438,7 @@ export class ChatTurns {
         skills,
         caughtUp,
         briefed,
+        carried,
         ...(goal ? { goal } : {}),
       });
     } catch (e) {

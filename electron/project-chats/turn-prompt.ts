@@ -5,7 +5,7 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { agentName } from "../../shared/agents";
+import { agentMention, agentName } from "../../shared/agents";
 import { reviewReports } from "../../shared/deep-review";
 
 export interface TurnPromptInput {
@@ -63,12 +63,20 @@ export function turnPrompt({
         : -1;
   // A steering message went straight into the session of the agent it steered.
   const heard = (m: ChatMessage) =>
-    known >= 0 && m.steered && m.provider === provider;
+    known >= 0 && m.steered && !m.missed && m.provider === provider;
+  // Unless its turn stopped first: then it's still the user talking to this
+  // agent, so it goes out as part of the request rather than as reference.
+  const missed = command
+    ? []
+    : previous
+        .slice(known + 1)
+        .filter((m) => m.missed && m.provider === provider);
   const updates = previous
     .slice(known + 1)
     .filter(
       (m) =>
         !heard(m) &&
+        !missed.includes(m) &&
         !m.compaction &&
         !m.handoff &&
         !m.reload &&
@@ -147,6 +155,10 @@ export function turnPrompt({
       chat.movedIn.owed = chat.movedIn.owed.filter((k) => k !== heardKey);
       if (!chat.movedIn.owed.length) delete chat.movedIn;
     }
+    for (const m of missed) {
+      delete m.missed;
+      m.version++;
+    }
     // A command goes out alone, so a session it starts hears the scope next turn.
     (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
   };
@@ -161,11 +173,18 @@ export function turnPrompt({
     chat.deepReview && !parent && !command
       ? `\n\nIf you discover new confirmed issues, publish only the new findings as a fresh report at the end of your answer in a fenced block tagged relay-findings. Use JSON shaped like {"findings":[{"id":"F${nextFinding}","priority":"P2","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[],"check":"How you confirmed it"}],"dropped":[]}. Continue numbering from F${nextFinding}; never reuse earlier IDs or repeat old findings. Relay shows this batch under this answer with its own fix controls. For a normal answer or fix summary with no new findings, omit the block.`
       : "";
+  const request = [
+    ...missed.map((m) => agentMention(m.body)?.question ?? m.body),
+    question,
+  ]
+    .filter((part) => part.trim())
+    .join("\n\n");
   const prompt = command
     ? question
-    : `${question ? `My request: ${question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
+    : `${request ? `My request: ${request}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
   return {
     prompt,
+    carried: missed.flatMap((m) => m.images ?? []),
     // What a command couldn't carry, the session hears next turn.
     caughtUp: !command || !updates.length,
     briefed,

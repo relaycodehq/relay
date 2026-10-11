@@ -102,6 +102,8 @@ async function callRelayTool(tool, input) {
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,
     lateSteer = false,
+    // Busy in a long tool: steers stay queued until it returns.
+    busyTool = false,
     // A lead that waits for a steer, then reports its findings.
     leading = false;
   const rl = require("node:readline").createInterface({ input: process.stdin });
@@ -197,6 +199,7 @@ if (args.includes("--permission-prompt-tool")) {
           session_id: "fixture-claude",
         });
       lifecycle("queued");
+      if (busyTool) return;
       // A steer that arrives after the last step runs as a turn of its own.
       if (lateSteer) finish("Done before your note.");
       setTimeout(() => {
@@ -284,6 +287,7 @@ if (args.includes("--permission-prompt-tool")) {
       const text = m.message.content
         .find((p) => p.type === "text")
         .text.split("\n\n")[0];
+      busyTool = false;
       if (
         (!approvalGranted && text.includes("fixture request approval")) ||
         text.includes("fixture ask question") ||
@@ -340,10 +344,12 @@ if (args.includes("--permission-prompt-tool")) {
         );
       } else if (
         text.includes("fixture wait for steer") ||
-        text.includes("fixture late steer")
+        text.includes("fixture late steer") ||
+        text.includes("fixture long tool")
       ) {
         // Keeps working until a steer arrives.
         lateSteer = text.includes("fixture late steer");
+        busyTool = text.includes("fixture long tool");
         emit({
           type: "stream_event",
           uuid: "fixture-event",

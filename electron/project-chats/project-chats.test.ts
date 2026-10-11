@@ -1632,7 +1632,7 @@ it("discovers an enabled skill and sends its native input to Codex without trust
   });
 });
 
-it("steers an active Codex turn natively and resumes its saved session after stop", async () => {
+it("steers an active Codex turn natively, and resumes its saved session with the steer it never read after stop", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
   await vi.waitFor(async () =>
@@ -1670,8 +1670,8 @@ it("steers an active Codex turn natively and resumes its saved session after sto
     input: [{ type: "text", text: "Focus only on the cache key" }],
   });
   expect(calls.some((c) => c.interrupt)).toBe(true);
-  expect(calls.filter((c) => c.turn).at(-1).turn.input[0].text).not.toContain(
-    "Focus only on the cache key",
+  expect(calls.filter((c) => c.turn).at(-1).turn.input[0].text).toMatch(
+    /^My request: Focus only on the cache key\n\nYour previous response was stopped/,
   );
   expect(calls.filter((c) => c.thread).map((c) => c.method)).toEqual([
     "thread/start",
@@ -1859,6 +1859,65 @@ it("tells an agent about steering that went to the other agent", async () => {
     .map((c) => JSON.parse(c.prompt).message.content[0].text as string)
     .find((text) => text.startsWith("My request: Carry on"))!;
   expect(prompt).toContain("Focus only on the cache key");
+});
+
+it("carries a steer Claude never read before the stop, screenshot included, into the resumed turn, once", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  const idle = () =>
+    vi.waitFor(async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).not.toBe(
+        "streaming",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    });
+  await chats.send(chat.id, claude("@claude fixture long tool"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+      "Looking into it.",
+    ),
+  );
+  const steer = {
+    ...claude("@claude I meant better matching"),
+    delivery: "steer" as const,
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png" as const,
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
+  };
+  await chats.send(chat.id, steer);
+  await chats.cancel(chat.id);
+  await idle();
+  expect(
+    (await chats.get(chat.id)).messages.find((m) => m.id === steer.id),
+  ).toMatchObject({ steered: true, missed: true });
+  await chats.resume(chat.id);
+  await idle();
+  await chats.send(chat.id, claude("@claude Carry on"));
+  await idle();
+  const prompts = (await agentCalls())
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((c) => c.provider === "claude" && !c.args.includes("--print"))
+    .map((c) => JSON.parse(c.prompt))
+    .filter((m) => !m.priority)
+    .map((m) => m.message.content as { type: string; text?: string }[]);
+  expect(prompts.at(-2)![0]!.text).toMatch(
+    /^My request: I meant better matching\n\nYour previous response was stopped before you read/,
+  );
+  expect(prompts.at(-2)!.map((part) => part.type)).toEqual(["text", "image"]);
+  expect(prompts.at(-1)![0]!.text).toMatch(/^My request: Carry on/);
+  expect(prompts.at(-1)![0]!.text).not.toContain("better matching");
+  expect(prompts.at(-1)!.map((part) => part.type)).toEqual(["text"]);
+  const saved = await chats.get(chat.id);
+  expect(saved.messages.find((m) => m.id === steer.id)?.missed).toBeUndefined();
 });
 
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {

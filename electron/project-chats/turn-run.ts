@@ -133,7 +133,10 @@ export class TurnRunner {
     }
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
-    const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
+    const attached = [
+      ...((turn.kind === "reply" && turn.carried) || []),
+      ...(chat.messages.find((m) => m.id === input.id)?.images ?? []),
+    ];
     const sessionKey = this.core.sessions.key(
       chat.id,
       input.parentId ?? undefined,

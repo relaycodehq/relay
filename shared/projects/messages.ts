@@ -104,6 +104,11 @@ export interface ChatMessage {
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**
+   * Local: a steer whose turn stopped or failed before the agent read it, so
+   * its session never got it. The agent's next turn carries it as the request.
+   */
+  missed?: boolean;
+  /**
    * Local marker: a `/btw` question, asked beside the main conversation. It
    * roots a side thread its agent answers without changing anything, and the
    * main session never hears it.
