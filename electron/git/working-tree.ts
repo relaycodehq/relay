@@ -128,9 +128,11 @@ function parseStatus(raw: string): WorkingChange[] {
 }
 /**
  * Where `git push` would send the branch: its push remote (`pushRemote`, then
- * `remote.pushDefault`) or else the remote it tracks. A push remote of its own
- * takes the branch under its own name; `tracks` says the push goes where the
- * branch fetches from, so pushing may set its upstream.
+ * `remote.pushDefault`) or else the remote it tracks, under the branch's own
+ * name. Only `push.default=upstream` follows an upstream of another name, so a
+ * `feature` made from origin/main goes to origin/feature, not onto main.
+ * `tracks` says the push goes where the branch fetches from, so pushing may
+ * set its upstream.
  */
 export async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
@@ -150,8 +152,9 @@ export async function pushDestination(root: string, branch: string) {
     ]);
   const remote = pushTo || pushDefault || fetched;
   const tracks = remote === fetched;
+  const followsUpstream = mode === "upstream" || mode === "tracking";
   const ref =
-    tracks && merge && mode !== "current" ? merge : `refs/heads/${branch}`;
+    tracks && merge && followsUpstream ? merge : `refs/heads/${branch}`;
   if (!remotes.includes(remote) || !ref.startsWith("refs/heads/")) return null;
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref, tracks, label: `${remote}/${ref.slice(11)}` };
@@ -349,6 +352,9 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     lines,
     pushTarget: destination?.label ?? null,
     pushUrl: destination ? redactCredentials(destination.url) : null,
+    ...(destination?.tracks && upstream && upstream !== destination.label
+      ? { pushRetracks: true }
+      : {}),
     outgoing: log
       .trim()
       .split("\n")

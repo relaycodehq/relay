@@ -587,6 +587,29 @@ it("pushes to the branch's push remote and keeps tracking the remote it fetches 
     await rm(fork, { recursive: true, force: true });
   }
 });
+it("pushes a branch tracking another name under its own name, as git push would", async () => {
+  const onRemote = (ref: string) =>
+    execFileSync("git", ["-C", remote, "rev-parse", ref], {
+      encoding: "utf8",
+    }).trim();
+  git("config", "push.default", "simple");
+  git("switch", "-q", "-c", "feature", "origin/review");
+  git("commit", "-q", "--allow-empty", "-m", "Feature");
+  const review = onRemote("review");
+  let tree = await workingTree(root);
+  expect(tree.pushTarget).toBe("origin/feature");
+  tree = await performGitAction(root, { kind: "push", revision: tree.revision });
+  expect(onRemote("review")).toBe(review);
+  expect(onRemote("feature")).toBe(git("rev-parse", "HEAD"));
+  expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
+
+  git("config", "push.default", "upstream");
+  git("branch", "-q", "--set-upstream-to", "origin/review");
+  tree = await workingTree(root);
+  expect(tree.pushTarget).toBe("origin/review");
+  await performGitAction(root, { kind: "push", revision: tree.revision });
+  expect(onRemote("review")).toBe(git("rev-parse", "HEAD"));
+});
 it("hides a token kept in the push remote's address", async () => {
   // Gitea and GitHub both accept a token in place of the user name.
   for (const [url, shown] of [

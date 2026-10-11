@@ -40,6 +40,8 @@ export interface WorkingTree {
   behind: number;
   pushTarget: string | null;
   pushUrl: string | null;
+  /** Pushing makes `pushTarget` the upstream in place of another, as `git push -u` does. */
+  pushRetracks?: boolean;
   operation: string | null;
   /** Lines added and removed across all uncommitted changes, against HEAD. */
   lines: { additions: number; deletions: number };
