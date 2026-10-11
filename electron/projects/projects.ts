@@ -168,6 +168,12 @@ export class Projects {
       if (p) p.removed = Date.now();
     });
   }
+  /** The projects removed this way, which `list` leaves out. */
+  removedIds() {
+    return (this.store.get().projects ?? [])
+      .filter((p) => p.removed)
+      .map((p) => p.id);
+  }
   /** Removes a group; what was inside moves up one level. */
   removeGroup(path: string) {
     return this.rebaseGroup(path, parentGroup(path));

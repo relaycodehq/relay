@@ -59,6 +59,8 @@ function storageKeys(): string[] {
 
 interface ThreadSource {
   projects(): Promise<{ id: string }[]>;
+  /** Removed projects are only hidden: adding one again brings back its threads, drafts and all. */
+  removedProjects(): Promise<string[]>;
   projectChats(projectId: string): Promise<{ id: string }[]>;
 }
 
@@ -66,9 +68,12 @@ let swept = false;
 /**
  * Once a launch, drops what's kept for threads and projects that are gone and
  * for unsent slots left empty, screenshots included. Nothing is dropped
- * unless every project's threads were read.
+ * unless every project's threads were read. Gives every thread there is, for
+ * other stores to sweep by, or undefined once this launch has swept.
  */
-export async function sweepThreadStorage(source: ThreadSource) {
+export async function sweepThreadStorage(
+  source: ThreadSource,
+): Promise<Set<string> | undefined> {
   if (swept) return;
   swept = true;
   // Drafts kept the old way become records first, so the list below has them.
@@ -79,12 +84,14 @@ export async function sweepThreadStorage(source: ThreadSource) {
   const images = await draftImageKeys().catch(() => []);
   // An unsent slot holding only a screenshot is a draft too.
   await readDraftImageCounts();
-  const projects = await source.projects();
-  const lists = await Promise.all(
-    projects.map((p) => source.projectChats(p.id)),
-  );
+  const [shown, removed] = await Promise.all([
+    source.projects(),
+    source.removedProjects(),
+  ]);
+  const projects = [...shown.map((p) => p.id), ...removed];
+  const lists = await Promise.all(projects.map((id) => source.projectChats(id)));
   const known: KnownThreads = {
-    projects: new Set(projects.map((p) => p.id)),
+    projects: new Set(projects),
     threads: new Set(lists.flat().map((c) => c.id)),
   };
   for (const key of staleKeys(keys, known))
@@ -92,4 +99,5 @@ export async function sweepThreadStorage(source: ThreadSource) {
       dropThreadDraft(key.slice(RECORD_PREFIX.length));
     else localStorage.removeItem(key);
   for (const key of staleKeys(images, known)) await saveDraftImages(key, []);
+  return known.threads;
 }

@@ -78,6 +78,8 @@ export interface ProjectApi
 /** The sidebar's projects, their groups and Scratchpad. */
 export interface ProjectListApi {
   projects(): Promise<Project[]>;
+  /** The ids of removed projects, whose threads stay for when they're added again. */
+  removedProjects(): Promise<string[]>;
   addProject(): Promise<Project | null>;
   /** The Scratchpad project for a new chat: the unused one, or a fresh folder. */
   createScratch(): Promise<Project>;

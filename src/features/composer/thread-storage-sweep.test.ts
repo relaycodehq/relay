@@ -34,10 +34,15 @@ afterEach(() => vi.unstubAllGlobals());
 const sweep = async (
   threads: Record<string, string[]>,
   during?: () => void,
+  removed: string[] = [],
 ) => {
   const { sweepThreadStorage } = await import("./thread-storage-sweep");
   await sweepThreadStorage({
-    projects: async () => Object.keys(threads).map((id) => ({ id })),
+    projects: async () =>
+      Object.keys(threads)
+        .filter((id) => !removed.includes(id))
+        .map((id) => ({ id })),
+    removedProjects: async () => removed,
     projectChats: async (projectId) => {
       during?.();
       return threads[projectId].map((id) => ({ id }));
@@ -142,6 +147,16 @@ it("drops what a project that's gone kept, its unsent drafts included", async ()
   expect([...store.keys()]).toEqual(["relay-project-chat:p1"]);
 });
 
+it("keeps what a removed project's threads kept, for when it's added again", async () => {
+  seed([...threadKeys("t1"), "relay-draft:new:p2", "relay-new-thread:p2"]);
+  images.set("chat-draft:t1", [{}]);
+  await sweep({ p1: [], p2: ["t1"] }, undefined, ["p2"]);
+  expect([...store.keys()].sort()).toEqual(
+    [...threadKeys("t1"), "relay-draft:new:p2", "relay-new-thread:p2"].sort(),
+  );
+  expect([...images.keys()]).toEqual(["chat-draft:t1"]);
+});
+
 it("keeps keys written while the threads were being read", async () => {
   seed(threadKeys("live"));
   // A thread made meanwhile that the answer already missed.
@@ -157,6 +172,7 @@ it("drops nothing when a thread list can't be read", async () => {
   await expect(
     sweepThreadStorage({
       projects: async () => [{ id: "p1" }],
+      removedProjects: async () => [],
       projectChats: async () => {
         throw new Error("offline");
       },
@@ -167,7 +183,11 @@ it("drops nothing when a thread list can't be read", async () => {
 
 it("sweeps once a launch", async () => {
   const { sweepThreadStorage } = await import("./thread-storage-sweep");
-  const source = { projects: vi.fn(async () => []), projectChats: vi.fn() };
+  const source = {
+    projects: vi.fn(async () => []),
+    removedProjects: async () => [],
+    projectChats: vi.fn(),
+  };
   await sweepThreadStorage(source);
   await sweepThreadStorage(source);
   expect(source.projects).toHaveBeenCalledTimes(1);
