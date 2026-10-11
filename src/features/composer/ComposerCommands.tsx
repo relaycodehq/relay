@@ -395,9 +395,10 @@ export function useComposerCommands({
               >
                 <strong title={item.label}>{item.label}</strong>
                 <small title={item.description}>{item.description}</small>
+                {/* Most rows are Relay's own; only the others name where they come from. */}
                 <em>
                   <item.Icon size={13} aria-hidden="true" />
-                  {item.source}
+                  {item.source !== "Relay" && item.source}
                 </em>
               </button>
             ))}

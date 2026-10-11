@@ -65,6 +65,7 @@ export function AgentQuestionForm({
     return () => document.removeEventListener("keydown", keydown);
   }, [question, busy, collapsed, deferred]);
   if (!question) return null;
+  const place = `Question ${index + 1} of ${questions.length}`;
   return (
     <form
       onSubmit={(event) => {
@@ -80,13 +81,9 @@ export function AgentQuestionForm({
         onClick={() => setCollapsed(!collapsed)}
       >
         <span className="agent-question-topic">
-          {question.header || "Question"}
+          {question.header || (questions.length > 1 ? place : "Question")}
         </span>
-        {questions.length > 1 && (
-          <small>
-            Question {index + 1} of {questions.length}
-          </small>
-        )}
+        {question.header && questions.length > 1 && <small>{place}</small>}
         {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
       </button>
       {!collapsed && (

@@ -334,13 +334,6 @@
   color: var(--muted);
   font-size: 12px;
 }
-.setting-pill {
-  padding: 3px 9px;
-  border-radius: 10px;
-  font-size: 11px;
-  color: var(--accent);
-  background: var(--accent-soft);
-}
 .settings-empty {
   display: grid;
   justify-items: center;
