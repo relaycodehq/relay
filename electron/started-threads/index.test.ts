@@ -413,6 +413,37 @@ test("reading and waiting never ask", async () => {
   expect(asked).toEqual([]);
 });
 
+test("reading on from `next` returns an answer that was still streaming, finished", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", { threads: [{ prompt: "A" }] }),
+  );
+  const answer = {
+    id: "a1",
+    role: "assistant" as const,
+    body: "Working on",
+    status: "streaming" as const,
+    created: 4,
+    provider: "claude" as const,
+    version: 1,
+  };
+  chats.get(child.id)!.messages.push(answer);
+  const read = (args: object = {}) =>
+    call(threads, lead.id, "read_thread", { id: child.id, ...args });
+  const first = parse(await read());
+  expect(first.messages.at(-1)).toMatchObject({ id: "a1", status: "streaming" });
+  Object.assign(answer, { body: "Working on it. Done.", status: "complete" });
+  const second = parse(await read({ after: first.next }));
+  expect(second.messages).toEqual([
+    expect.objectContaining({ id: "a1", body: "Working on it. Done." }),
+  ]);
+  expect(second.next).toBe("a1");
+  expect(parse(await read({ after: "a1" })).messages).toEqual([]);
+  // An id from elsewhere doesn't pass for the start of the thread.
+  expect(await read({ after: "gone" })).toMatchObject({ isError: true });
+});
+
 test("a message to a started thread asks first too, unless the lead has full access; stopping never asks", async () => {
   const { lead, sent, asked, answer, chats, api } = fakeChats();
   const threads = new StartedThreads(api);

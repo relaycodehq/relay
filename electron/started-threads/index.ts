@@ -829,8 +829,20 @@ export class StartedThreads {
       throw new Error("There's no such thread; see find_threads.");
     });
     const main = chat.messages.filter((m) => !m.parentId);
-    const from = after ? main.findIndex((m) => m.id === after) + 1 : 0;
-    const messages = main.slice(from).map((m) => ({
+    const at = after ? main.findIndex((m) => m.id === after) : -1;
+    if (after && at < 0)
+      throw new Error(
+        "That `after` isn't a message in this thread; read it again without `after`.",
+      );
+    const shown = main.slice(at + 1);
+    // `next` stops before an answer still streaming, so the next read
+    // returns it again, finished.
+    const unfinished = shown.findIndex((m) => m.status === "streaming");
+    const next =
+      (unfinished < 0 ? shown.at(-1) : shown[unfinished - 1])?.id ??
+      after ??
+      null;
+    const messages = shown.map((m) => ({
       id: m.id,
       from: m.role === "user" ? (m.author ?? "user") : agentName(m.provider),
       ...(m.status === "complete" ? {} : { status: m.status }),
@@ -843,7 +855,7 @@ export class StartedThreads {
     return json({
       ...(notes.length ? { notes } : {}),
       messages,
-      next: main.at(-1)?.id ?? after ?? null,
+      next,
     });
   }
 
