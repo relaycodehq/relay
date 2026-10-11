@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type { FilePair } from "../../../shared/types";
 import DiffWorker from "./diff.worker?worker";
+import type { LineEnding } from "./line-endings";
 
 type Request = FilePair & { editable?: boolean };
-type Compared = { diff?: FileDiffMetadata; error?: Error };
+type Compared = {
+  diff?: FileDiffMetadata;
+  error?: Error;
+  /** The new side's line endings, when the old side's differed and were matched to them. */
+  eol?: LineEnding;
+};
 
 /** Compares a file pair on a worker that lives only until it answers. */
 export function useFileDiff(pair: Request | null | undefined): Compared {
@@ -25,7 +31,7 @@ export function useFileDiff(pair: Request | null | undefined): Compared {
       finish(
         e.data.error
           ? { error: new Error(e.data.error) }
-          : { diff: e.data.value },
+          : { diff: e.data.value, eol: e.data.eol },
       );
     worker.onerror = () =>
       finish({ error: new Error("Could not compare this file.") });

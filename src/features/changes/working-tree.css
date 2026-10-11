@@ -261,6 +261,14 @@
   min-height: 0;
   min-width: 0;
 }
+.diff-eol-note {
+  margin: 0;
+  padding: 5px 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
 .image-diff {
   flex: 1;
   min-height: 0;
