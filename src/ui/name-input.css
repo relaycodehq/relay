@@ -1,0 +1,23 @@
+.name-input {
+  position: relative;
+}
+/* Floats under the field so the rows below don't move while you type. */
+.name-input-error {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 4px;
+  right: 4px;
+  z-index: 5;
+  margin: 0;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px -4px #0003;
+  color: var(--danger);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: normal;
+  text-transform: none;
+}
