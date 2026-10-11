@@ -4,6 +4,12 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"]
   },
-  "include": ["src", "previews", "shared"],
+  "include": [
+    "src",
+    "previews/website",
+    "previews/promo",
+    "previews/_shared",
+    "shared"
+  ],
   "exclude": ["**/*.test.*"]
 }
