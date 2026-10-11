@@ -26,3 +26,15 @@ it("spaces words dictated into plain text from what's around them", () => {
   expect(placeDictation("fix\n.", 4, 4, "Tests").text).toBe("fix\nTests.");
   expect(placeDictation("a  b", 1, 3, "").text).toBe("ab");
 });
+
+it("drops the model's sentence ending in the middle of one", () => {
+  expect(placeDictation("Hello  world", 6, 6, "Shiny.").text).toBe(
+    "Hello shiny world",
+  );
+  expect(placeDictation("Hello new .", 10, 10, "World.").text).toBe(
+    "Hello new world.",
+  );
+  expect(placeDictation("Done.  Ship it", 6, 6, "Test it.").text).toBe(
+    "Done. Test it. Ship it",
+  );
+});

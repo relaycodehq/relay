@@ -101,6 +101,18 @@ export function fitCase(words: string, before: string) {
 }
 
 /**
+ * The model also ends every phrase like a sentence. Before more of the same
+ * sentence, or before punctuation already there, that ending goes:
+ * "fix the shiny test", not "fix the shiny. test".
+ */
+export function fitEnd(words: string, after: string) {
+  const next = after.trimStart();
+  if (/^[.,!?;:…]/.test(next)) return words.replace(/[.,!?;:…]+$/, "");
+  if (/^\p{Ll}/u.test(next)) return words.replace(/\.$/, "");
+  return words;
+}
+
+/**
  * Dictated `words` in plain `text` in place of `from`–`to`, spaced from the
  * text around them; `start`–`end` is where they landed.
  */
@@ -112,7 +124,10 @@ export function placeDictation(
 ) {
   const before = text.slice(0, from),
     after = text.slice(to);
-  const fitted = fitCase(words, before.slice(before.lastIndexOf("\n") + 1));
+  const fitted = fitEnd(
+    fitCase(words, before.slice(before.lastIndexOf("\n") + 1)),
+    after.split("\n", 1)[0],
+  );
   if (!fitted) return { text: before + after, start: from, end: from };
   const lead = before && !/\s$/.test(before) ? " " : "",
     trail = after && !/^[\s.,!?;:)\]]/.test(after) ? " " : "";

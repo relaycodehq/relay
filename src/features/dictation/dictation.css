@@ -126,7 +126,12 @@
   border-radius: 1px;
   background: var(--accent);
 }
-.composer-prompt-input:has(.dictation-caret) {
+.dictation-spinner {
+  margin: 0 1px 0 4px;
+  vertical-align: -0.05em;
+  color: var(--muted);
+}
+.composer-prompt-input:has(.dictation-caret, .dictation-spinner) {
   caret-color: transparent;
 }
 
