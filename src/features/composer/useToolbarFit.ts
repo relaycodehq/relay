@@ -15,8 +15,10 @@ export function useToolbarFit(row: RefObject<HTMLElement | null>) {
     if (!el) return;
     const oneLine = () => {
       const end = el.querySelector<HTMLElement>(":scope > .composer-tools-end");
+      // An open popover puts a fixed-position focus guard before its trigger,
+      // which would read as the row's first control.
       const first = el.querySelector<HTMLElement>(
-        ":scope > :not(input, .composer-tools-end)",
+        ":scope > :not(input, .composer-tools-end, [data-base-ui-focus-guard])",
       );
       // A pixel or two of baseline difference isn't a wrap.
       return !end || !first || end.offsetTop < first.offsetTop + 8;
