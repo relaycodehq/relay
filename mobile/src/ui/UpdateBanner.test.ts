@@ -3,9 +3,9 @@ import type { ReactElement } from "react";
 import { UpdateBanner } from "./UpdateBanner";
 
 const mocks = vi.hoisted(() => ({
-  update: { kind: "ready", version: "0.10.0" } as { kind: string; version: string; url?: string },
+  update: { kind: "ready", version: "0.10.0" } as { kind: string; version: string; runtime?: string; url?: string },
   offer: { version: "0.10.0", url: "https://example.test/Relay.apk", sha512: "checksum" } as
-    { version: string; url: string; sha512: string } | undefined,
+    { version: string; url: string; sha512: string; release?: string; runtime?: string } | undefined,
   install: vi.fn(),
   restart: vi.fn(),
 }));
@@ -51,8 +51,18 @@ it("still restarts a ready desktop bundle when there is no suitable APK", () => 
 });
 
 it("still offers the desktop's newer APK over an older public one", () => {
-  mocks.update = { kind: "apk", version: "0.11.0", url: "https://example.test/newer.apk" };
+  mocks.update = { kind: "apk", version: "0.11.0", runtime: "R2", url: "https://example.test/newer.apk" };
+  mocks.offer = { ...mocks.offer!, release: "0.10.0", runtime: "R1" };
   tap();
   expect(mocks.install).toHaveBeenCalledWith(mocks.update);
   expect(mocks.restart).not.toHaveBeenCalled();
+});
+
+it("installs the APK the desktop's release carried on, named after the desktop's version", () => {
+  mocks.update = { kind: "apk", version: "0.10.3", runtime: "R2", url: "https://example.test/v0.10.3.apk" };
+  mocks.offer = { release: "0.10.3", version: "0.10.1", runtime: "R2", url: "https://example.test/v0.10.3.apk", sha512: "checksum" };
+  const banner = UpdateBanner() as ReactElement<{ onPress: () => void; children: ReactElement<{ children: string }> }>;
+  expect(banner.props.children.props.children).toMatch(/^Relay 0\.10\.3 needs a new app; Older Relay/);
+  banner.props.onPress();
+  expect(mocks.install).toHaveBeenCalledWith(mocks.offer);
 });

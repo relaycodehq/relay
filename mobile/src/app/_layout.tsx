@@ -7,7 +7,7 @@ import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
-import { useLatestAppChecks } from "../remote/latest-app";
+import { checkLatestAppFor, useLatestAppChecks } from "../remote/latest-app";
 import { useThreadNotifications } from "../remote/watch";
 import {
   FullWidthContext,
@@ -71,11 +71,15 @@ function Screens() {
   }, [offer, call]);
   // So the desktop's Settings can tell what this phone runs. The report
   // leaves out download progress, so it goes out at start and finish only.
-  const reported = JSON.stringify(appReport(useSelfUpdate()));
+  const update = useSelfUpdate();
+  const reported = JSON.stringify(appReport(update));
   useEffect(() => {
     // Older desktops don't take the report.
     if (status === "online") void call("reportApp", JSON.parse(reported)).catch(() => {});
   }, [status, reported, call]);
+  useEffect(() => {
+    if (update.kind === "apk") void checkLatestAppFor(update);
+  }, [update]);
   // Beside the list: an unfolded foldable or a tablet, once paired.
   const panes =
     width >= paneBreakpoint &&

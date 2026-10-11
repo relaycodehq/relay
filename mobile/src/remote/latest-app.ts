@@ -137,6 +137,20 @@ export async function checkLatestApp(force = false) {
   prefetchLatestApp();
 }
 
+let lookedFor: string | undefined;
+/**
+ * The desktop's release needs an APK of `runtime`. Only the feed knows which
+ * APK that release carries, so look again unless the last look already has it.
+ */
+export async function checkLatestAppFor({ version, runtime }: { version: string; runtime: string }) {
+  await loaded;
+  const { newest } = state;
+  if (lookedFor === version || (newest && (newest.runtime === runtime || !newerVersion(version, newest.release))))
+    return;
+  lookedFor = version;
+  await checkLatestApp(true);
+}
+
 /** Looks at start and whenever the app comes back to the front, at most every few hours. */
 export function useLatestAppChecks() {
   useEffect(() => {

@@ -64,6 +64,9 @@ export function useStartedPeeks(started: RemoteChatSummary[]) {
   const states = started.map((c) => `${c.id}=${!!c.running}:${!!c.waiting}`).join(" ");
   useEffect(() => {
     let live = true;
+    // A thread can answer again while the link is down and still read idle,
+    // so the next connection fetches every row once more.
+    if (status !== "online") fetchedAt.clear();
     for (const pair of states.split(" ").filter(Boolean)) {
       const [id, state] = pair.split("=") as [string, string];
       const key = `${computer}:${id}`;
