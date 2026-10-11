@@ -15,6 +15,7 @@ export function FindingRow({
   status,
   chatId,
   reviewers,
+  reviewerLabels,
   ticked,
   busy,
   onToggle,
@@ -25,6 +26,8 @@ export function FindingRow({
   status: FindingStatus;
   chatId: string;
   reviewers: DeepReviewState["reviewers"];
+  /** One line per reviewer, for the hover on who found it. */
+  reviewerLabels: string[];
   ticked: boolean;
   busy: boolean;
   onToggle: () => void;
@@ -75,7 +78,10 @@ export function FindingRow({
         )}
         <span
           className="deep-review-found-by"
-          title={`Found by reviewer ${f.reviewers.join(", ")}`}
+          title={[
+            "Found by",
+            ...f.reviewers.map((n) => reviewerLabels[n - 1] ?? `${n}.`),
+          ].join("\n")}
         >
           {f.reviewers.map((n) => {
             const reviewer = reviewers[n - 1];

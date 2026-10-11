@@ -8,6 +8,8 @@ import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { findingStatus, fixAllLabel } from "./finding-picks";
 import { useFindingPicks } from "./useFindingPicks";
 import { FindingRow } from "./FindingRow";
+import { reviewerLabel } from "./reviewer-label";
+import { useAgentName } from "./useAgentName";
 
 /** The lead's findings, each with its files, to fix all or some of. */
 export function DeepReviewReport({
@@ -33,6 +35,10 @@ export function DeepReviewReport({
     state.statuses,
     onFix,
   );
+  const name = useAgentName();
+  const reviewerLabels = state.reviewers.map((r, i) =>
+    reviewerLabel(r, name(r), i + 1),
+  );
   const dropped = report?.dropped ?? [];
   if (!findings.length && !dropped.length) return null;
   return (
@@ -47,6 +53,7 @@ export function DeepReviewReport({
                 status={findingStatus(state.statuses, f.id)}
                 chatId={chatId}
                 reviewers={state.reviewers}
+                reviewerLabels={reviewerLabels}
                 ticked={selected.includes(f.id)}
                 busy={busy}
                 onToggle={() => toggle(f.id)}
