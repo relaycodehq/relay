@@ -38,6 +38,8 @@ import {
 } from "../preview";
 import {
   answerRenderTool,
+  hungPage,
+  PageHung,
   type RenderToolName,
   type RenderTools,
 } from "../html-renders";
@@ -295,7 +297,11 @@ export class StartedThreads {
     signal: AbortSignal,
   ) {
     const look =
-      this.look && (await this.look(html, {}, signal).catch(() => undefined));
+      this.look &&
+      (await this.look(html, {}, signal).catch((error) =>
+        error instanceof PageHung ? error : undefined,
+      ));
+    if (look instanceof PageHung) return hungPage(look);
     const page: HtmlRender = {
       id: randomUUID(),
       title,

@@ -22,6 +22,16 @@ export interface RenderTools {
 
 const PREVIEW_WIDTH = 800;
 
+/** A look whose page kept its renderer busy past the deadline; see look.ts. */
+export class PageHung extends Error {}
+
+/** Why a page that hung wasn't shown, for the agent to fix it. */
+export const hungPage = (error: PageHung, label?: string) =>
+  toolText(
+    `Not shown. ${label ? `${label}: ` : ""}${error.message} Fix it, check it with preview_html, then show it again.`,
+    true,
+  );
+
 const logText = (look: PageLook) =>
   [
     ...(look.loadError ? [`[error] ${look.loadError}`] : []),
@@ -41,7 +51,14 @@ export async function answerRenderTool(
     const { html, width = PREVIEW_WIDTH } = input as RelayToolArgs<"preview_html">;
     if (!tools.look)
       return toolText("This Relay runs without windows, so it can't load pages.", true);
-    const look = await tools.look(html, { shotWidth: width }, signal);
+    const look = await tools
+      .look(html, { shotWidth: width }, signal)
+      .catch((error) => {
+        if (error instanceof PageHung) return error;
+        throw error;
+      });
+    if (look instanceof PageHung)
+      return toolText(`${look.message} Fix it and preview it again.`, true);
     const logs = logText(look);
     const height = look.shotHeight ?? 0;
     return {
@@ -70,13 +87,20 @@ export async function answerRenderTool(
   if (!html === !variants)
     return toolText("Give either html, for one page, or variants.", true);
   const pages = variants ?? [{ html: html!, label: undefined }];
+  let hung: { error: PageHung; label?: string } | undefined;
   const looks = tools.look
     ? await Promise.all(
         pages.map((p) =>
-          tools.look!(p.html, {}, signal).catch(() => undefined),
+          tools.look!(p.html, {}, signal).catch((error) => {
+            if (error instanceof PageHung)
+              hung ??= { error, label: variants && (p.label ?? "A variant") };
+            return undefined;
+          }),
         ),
       )
     : [];
+  // Shown, it would keep spinning in the user's thread.
+  if (hung) return hungPage(hung.error, hung.label);
   const render: HtmlRender = {
     id: randomUUID(),
     title,
