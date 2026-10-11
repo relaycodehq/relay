@@ -39,7 +39,7 @@ export function namesItself(body: string): boolean {
 
 const titleGuidance = `A useful title:
 - names the concrete topic and the person's intent in the words they would search for later;
-- names what the thread works on, not what it is compared to: a product, repo or thread the person points to as an example or source of ideas stays out unless the thread is about it;
+- names what the thread works on as its subject. A product, repo or thread the person points to as a reference or source of ideas isn't the subject; it can follow as a short mention when it helps recognize the thread;
 - usually uses 3-8 words and stays under about 60 characters. Keep the one or two details that tell it apart (the feature, the specific problem, a key constraint) rather than listing every one;
 - uses sentence case and a direct action or clear subject phrase, without claiming the work is finished;
 - leaves out greetings, agent mentions, jokes, quotes, closing punctuation and workflow chores (review, test, commit, pull, merge, push) when they surround a more specific task. If a chore is the entire request, name it plainly.`;
@@ -65,7 +65,7 @@ Examples:
 - "pull first, displayed timestamps ignore the timezone; fix it, then commit and push" → "Fix displayed timestamps ignoring the timezone"
 - "there's no option to remove a project folder; add one" → "Add an option to remove project folders"
 - "stop assuming every repo is on Gitea; support GitHub too" → "Support GitHub repositories, not only Gitea"
-- "can our file tree do keyboard nav like VS Code's? check how they do it" → "Keyboard navigation in the file tree"
+- "can our file tree do keyboard nav like VS Code's? check how they do it" → "Keyboard navigation in the file tree, like VS Code"
 - "commit everything" → "Commit all changes"
 - "what's this again?" with a screenshot of a thread titled "Fix OAuth callback looping back to the login page" → "Ask what the OAuth login thread is"
 
