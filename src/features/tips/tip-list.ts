@@ -74,6 +74,7 @@ export const tips: Tip[] = [
     WATCHABLE.has(f.provider ?? ""),
   ),
   feature("mention", "Type @ in your message to attach a file"),
+  feature("resume", "/resume picks up a Claude Code or Codex terminal session"),
   keys("quote", "Select part of an answer, {quote} quotes it in your reply"),
   keys("dictate", "{dictate} lets you talk instead of type"),
   keys("quick-next", "{quick-next} flips through your model presets", {
