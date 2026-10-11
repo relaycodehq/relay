@@ -495,9 +495,6 @@
 .sb-card[data-popup-open]:not(.selected) {
   background: color-mix(in srgb, var(--hover) 60%, transparent);
 }
-.sb-card.dim[data-popup-open] {
-  opacity: 1;
-}
 .sb-nav,
 .sb-thread-list,
 .sb-cards,
@@ -767,13 +764,26 @@
 .sb-card.selected {
   background: color-mix(in srgb, var(--text) 9%, transparent);
 }
-.sb-card.dim {
-  opacity: 0.45;
+/* Dimmed by colour, not opacity: a faded card dropped its project and branch
+   under 2:1 in the light themes. */
+.sb-card.dim .sb-card-title {
+  color: var(--muted);
 }
-.sb-card.dim:hover,
-.sb-card.dim:focus-visible,
-.sb-card.dim:has(:focus-visible),
-.sb-card.dim:has([data-popup-open]) {
+.sb-card.dim .sb-project-badge {
+  opacity: 0.6;
+}
+.sb-card.dim:hover .sb-card-title,
+.sb-card.dim:focus-visible .sb-card-title,
+.sb-card.dim:has(:focus-visible) .sb-card-title,
+.sb-card.dim:has([data-popup-open]) .sb-card-title,
+.sb-card.dim[data-popup-open] .sb-card-title {
+  color: var(--text);
+}
+.sb-card.dim:hover .sb-project-badge,
+.sb-card.dim:focus-visible .sb-project-badge,
+.sb-card.dim:has(:focus-visible) .sb-project-badge,
+.sb-card.dim:has([data-popup-open]) .sb-project-badge,
+.sb-card.dim[data-popup-open] .sb-project-badge {
   opacity: 1;
 }
 .sb-card-top {

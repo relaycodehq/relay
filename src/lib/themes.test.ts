@@ -109,9 +109,7 @@ describe("resolveAppearance", () => {
       light: { theme: "solarized-light" },
       dark: { theme: "nord", accent: "#b48ead" },
     };
-    expect(resolveAppearance(value, false).palette.syntax).toBe(
-      "solarized-light",
-    );
+    expect(resolveAppearance(value, false).theme.id).toBe("solarized-light");
     const dark = resolveAppearance(value, true);
     expect(dark.theme.id).toBe("nord");
     expect(dark.accent).toBe("#b48ead");
