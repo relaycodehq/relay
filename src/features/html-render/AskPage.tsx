@@ -7,6 +7,7 @@ import {
   type HtmlRender,
   type RenderFromFrame,
   type RenderToFrame,
+  RENDER_SANDBOX,
 } from "../../../shared/html-render";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
@@ -100,7 +101,7 @@ export function AskPage({
           ref={frame}
           src={src}
           title={page.title}
-          sandbox="allow-scripts allow-forms"
+          sandbox={RENDER_SANDBOX}
           referrerPolicy="no-referrer"
           style={{ height, colorScheme: theme.scheme }}
         />

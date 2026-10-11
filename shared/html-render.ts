@@ -140,9 +140,12 @@ export type RenderFromFrame =
   /** Esc or a zoom key pressed in the page that the page left alone. */
   | { relayRender: "key"; key: string };
 
+/** The frame's sandbox; downloads end in Electron's save dialog. */
+export const RENDER_SANDBOX = "allow-scripts allow-forms allow-downloads";
+
 /** What the page's response allows: its own inline code and public https assets, no Relay origin. */
 export const RENDER_CSP = [
-  "sandbox allow-scripts allow-forms",
+  `sandbox ${RENDER_SANDBOX}`,
   "default-src 'none'",
   "script-src 'unsafe-inline' 'unsafe-eval' https: blob:",
   "style-src 'unsafe-inline' https:",
