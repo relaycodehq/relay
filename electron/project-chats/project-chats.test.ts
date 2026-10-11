@@ -1793,11 +1793,14 @@ it("resumes a stopped answer with the agent picked since", async () => {
     runtimeMode: "approval-required",
     interactionMode: "default",
   });
+  // Codex's handoff note lands complete before Claude's answer is added.
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+    expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+      provider: "claude",
+      status: "complete",
+    }),
   );
   const after = await chats.get(chat.id);
-  expect(after.messages.at(-1)?.provider).toBe("claude");
   expect(after.lastInput).toMatchObject({ provider: "claude", choice });
   expect(after.lastInput?.body).toMatch(/^@claude Continue/);
   const resume = after.messages.find((m) => m.resumed);
