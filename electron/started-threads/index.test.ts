@@ -117,6 +117,10 @@ function fakeChats() {
       triage: async (id: string, triage: { kind: string }) => {
         if (triage.kind === "settle") chats.get(id)!.settledAt = Date.now();
       },
+      settleItself: async (id: string) => {
+        chats.get(id)!.settleWhenDone = Date.now();
+        return true;
+      },
       worktreeFrom: async (id: string, from: string) => {
         copies.push({ id, from });
         return 2;
@@ -543,9 +547,6 @@ test("settling a started thread waits until it's done and never asks", async () 
   ).toMatchObject({ content: [{ text: "Settled." }] });
   expect(thread.settledAt).toBeDefined();
   expect(asked).toHaveLength(asks);
-  expect(
-    await call(threads, lead.id, "settle_thread", { id: lead.id }),
-  ).toMatchObject({ isError: true });
 });
 
 test("usage limits read each agent on the account the thread pinned for it", async () => {
@@ -902,15 +903,19 @@ test("any other thread asks once to drive, then never again", async () => {
   expect(asked).toHaveLength(5);
 });
 
-test("a thread doesn't drive itself, and waits on any thread without asking", async () => {
+test("a thread doesn't stop itself, settles itself only once done, and waits on any thread without asking", async () => {
   const { lead, chats, api, asked } = fakeChats();
   const threads = new StartedThreads(api);
   const stranger = await api.create("p", { kind: "project" });
   await api.send(stranger.id, { ...lead.lastInput!, id: "m1", body: "Go" });
-  for (const tool of ["stop_thread", "settle_thread"])
-    expect(
-      resultText(await call(threads, lead.id, tool, { id: lead.id })),
-    ).toMatch(/That's this thread/);
+  expect(
+    resultText(await call(threads, lead.id, "stop_thread", { id: lead.id })),
+  ).toMatch(/That's this thread/);
+  expect(
+    resultText(await call(threads, lead.id, "settle_thread", { id: lead.id })),
+  ).toMatch(/once this answer ends/);
+  expect(chats.get(lead.id)!.settledAt).toBeUndefined();
+  expect(chats.get(lead.id)!.settleWhenDone).toBeDefined();
   chats.get(stranger.id)!.messages.push({
     id: "answer",
     role: "assistant",

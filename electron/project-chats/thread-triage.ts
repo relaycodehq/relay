@@ -1,5 +1,6 @@
 import type { AccountProvider } from "../../shared/agent-accounts";
 import {
+  chatSettled,
   sameTriageState,
   setTriageState,
   triageState,
@@ -128,17 +129,38 @@ export class ThreadTriage {
       .at(-1);
     // A turn a restart left running, about to be taken back.
     if (answer?.status === "streaming") return;
-    delete chat.settleWhenDone;
-    const now = Date.now();
-    if (
+    const failed =
       chatSummary(chat).asking ||
       answer?.status !== "complete" ||
-      (chat.stopped && chat.stopped.at >= since)
-    )
-      delete chat.settledAt;
+      (chat.stopped && chat.stopped.at >= since);
+    // Its agent asked, not the user: it waits for them to read the answer.
+    if (!failed && chat.settledAt == null && !this.read(chat)) return;
+    delete chat.settleWhenDone;
+    const now = Date.now();
+    if (failed) delete chat.settledAt;
     else chat.settledAt = now;
     await this.core.storage.save(chat);
     if (chat.settledAt) await this.settleStarted(id, now);
+  }
+  /**
+   * Its own agent asks to settle it. Unlike a settle by hand it stays in
+   * Activity meanwhile, and settles once this answer and its queue end
+   * cleanly and the user has read it; a thread another started doesn't wait
+   * for that, its lead reads it. False when it's settled already.
+   */
+  async settleItself(id: string) {
+    const chat = await this.core.storage.load(id);
+    if (chatSettled(chat)) return false;
+    chat.settleWhenDone = Date.now();
+    await this.core.storage.save(chat);
+    return true;
+  }
+  /** The user has read its latest answer; a lead reads the threads it started. */
+  private read(chat: ProjectChat) {
+    return (
+      !!chat.startedBy ||
+      (!chat.markedUnread && (chat.seenAt ?? 0) >= chat.updated)
+    );
   }
   /**
    * After Relay starts: a quit cut off the runs of threads settled while
@@ -231,6 +253,8 @@ export class ThreadTriage {
     chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
     delete chat.markedUnread;
     await this.core.storage.save(chat);
+    // Its agent asked to settle it once read.
+    if (chat.settleWhenDone && chat.settledAt == null) await this.ended(id);
   }
   /** Runs `provider` on another account here, from the thread's next turn. */
   async setAccount(id: string, provider: AccountProvider, account: string) {

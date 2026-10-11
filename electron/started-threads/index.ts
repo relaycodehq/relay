@@ -82,6 +82,7 @@ type Chats = Pick<
   | "askInTurn"
   | "worktreeFrom"
   | "triage"
+  | "settleItself"
   | "showRender"
   | "askWithPage"
   | "enterWorktree"
@@ -242,7 +243,10 @@ export class StartedThreads {
       case "stop_thread":
         return this.stop(lead, input.id, signal);
       case "settle_thread":
+        if (input.id === lead.id) return this.settleSelf(lead);
         return this.settle(lead, input.id, signal);
+      case "settle_this_thread":
+        return this.settleSelf(lead);
       case "usage_limits":
         return json(await this.usage(lead));
       case "list_notes":
@@ -546,6 +550,17 @@ export class StartedThreads {
       return this.refused("settle it");
     await this.chats.triage(id, { kind: "settle" });
     return toolText("Settled.");
+  }
+
+  /** The lead's own thread, once this answer ends; see ThreadTriage.settleItself. */
+  private async settleSelf(lead: ProjectChat) {
+    if (!(await this.chats.settleItself(lead.id)))
+      return toolText("Already settled.");
+    return toolText(
+      lead.startedBy
+        ? "It settles once this answer ends cleanly."
+        : "It settles once this answer ends cleanly and the user has read it.",
+    );
   }
 
   /** Who the lead's messages say they're from, and on what it last ran. */

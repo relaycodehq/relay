@@ -99,8 +99,8 @@ it("snoozing or unsettling a thread leaves the threads it started as they were",
 });
 
 /** A thread with a turn running, and the way to end it as `status`. */
-async function runningThread() {
-  const thread = await chats.create(projectId, scope);
+async function runningThread(startedBy?: { chatId: string; agent: "claude" }) {
+  const thread = await chats.create(projectId, scope, "checkout", startedBy);
   const core = (chats as unknown as { core: ChatCore }).core;
   const triaging = (chats as unknown as { triaging: ThreadTriage }).triaging;
   const active = core.active.claim(thread.id, {
@@ -179,6 +179,71 @@ it("unsettling a thread settled while running lets its answer come back as usual
   await chats.triage(thread.id, { kind: "unsettle" });
   await thread.end("complete");
   expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+});
+
+/** The thread's own agent asks to settle it, through Relay's tool. */
+async function settleItself(id: string) {
+  const tools = new StartedThreads(chats);
+  return resultText(
+    await tools.handle(
+      id,
+      "settle_this_thread",
+      {},
+      new AbortController().signal,
+    ),
+  );
+}
+
+it("a thread its agent settles stays in Activity until the user reads its answer", async () => {
+  const thread = await runningThread();
+  expect(await settleItself(thread.id)).toBe(
+    "It settles once this answer ends cleanly and the user has read it.",
+  );
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+
+  await thread.end("complete");
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+
+  await chats.markSeen(thread.id, thread.listed().updated);
+  const after = thread.listed();
+  expect(after.settleWhenDone).toBeUndefined();
+  expect(chatActivitySection(after, Date.now())).toBe("settled");
+});
+
+it("a thread its agent settles while the user watches settles when the answer ends", async () => {
+  const thread = await runningThread();
+  await settleItself(thread.id);
+  await chats.markSeen(thread.id, Date.now() + 60_000);
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("active");
+  await thread.end("complete");
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("settled");
+});
+
+it("a started thread that settles itself doesn't wait for the user to read it", async () => {
+  const lead = await chats.create(projectId, scope);
+  const thread = await runningThread({ chatId: lead.id, agent: "claude" });
+  expect(await settleItself(thread.id)).toBe(
+    "It settles once this answer ends cleanly.",
+  );
+  await thread.end("complete");
+  expect(chatActivitySection(thread.listed(), Date.now())).toBe("settled");
+});
+
+it("a thread its agent settles stays in Activity when the answer fails or the user writes", async () => {
+  const failing = await runningThread();
+  await settleItself(failing.id);
+  await failing.end("failed");
+  await chats.markSeen(failing.id, failing.listed().updated);
+  expect(failing.listed().settleWhenDone).toBeUndefined();
+  expect(chatActivitySection(failing.listed(), Date.now())).toBe("active");
+
+  const answered = await runningThread();
+  await settleItself(answered.id);
+  await answered.end("complete");
+  const triaging = (chats as unknown as { triaging: ThreadTriage }).triaging;
+  await triaging.sent(answered.id);
+  await chats.markSeen(answered.id, answered.listed().updated);
+  expect(chatActivitySection(answered.listed(), Date.now())).toBe("active");
 });
 
 /** Relay quits with `id` settled while it runs, after `left` saves what the quit left; then starts again. */

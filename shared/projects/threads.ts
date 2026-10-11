@@ -59,6 +59,8 @@ export interface ChatSummary {
    * Settled by hand while its answer ran: it stays settled through that
    * answer and whatever was queued behind it, and becomes a plain settle once
    * they finish cleanly. A question, a failure or your own message drops it.
+   * Without `settledAt` its own agent asked: it stays in Activity until then,
+   * and until the user read it.
    */
   settleWhenDone?: number;
   /** Moved back to activity by hand; auto-settle leaves it alone until newer activity. */

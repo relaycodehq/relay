@@ -88,6 +88,7 @@ const relayToolLabels: Record<string, string> = {
   wait_for_threads: "Waited for started threads",
   stop_thread: "Stopped a started thread",
   settle_thread: "Settled a started thread",
+  settle_this_thread: "Settles this thread when done",
   usage_limits: "Checked usage limits",
   list_projects: "Listed projects",
   add_project: "Added a project",

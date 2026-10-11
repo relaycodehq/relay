@@ -313,6 +313,9 @@ export class ProjectChats {
   markSeen(id: string, seenAt: number) {
     return this.triaging.markSeen(id, seenAt);
   }
+  settleItself(id: string) {
+    return this.triaging.settleItself(id);
+  }
   detach(id: string) {
     return this.triaging.detach(id);
   }

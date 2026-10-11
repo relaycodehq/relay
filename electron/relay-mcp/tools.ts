@@ -166,6 +166,7 @@ export const relayToolSchemas = {
     .strict(),
   stop_thread: z.object({ id: threadId }).strict(),
   settle_thread: z.object({ id: threadId }).strict(),
+  settle_this_thread: z.object({}).strict(),
   usage_limits: z.object({}).strict(),
   list_notes: z
     .object({
@@ -347,7 +348,9 @@ const descriptions: Record<RelayToolName, string> = {
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
   stop_thread: `Stop the answer a thread is working on.\n\n${DRIVE_NOTE}`,
-  settle_thread: `Settle a thread once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user.\n\n${DRIVE_NOTE}`,
+  settle_thread: `Settle a thread once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user. For your own thread, settle_this_thread.\n\n${DRIVE_NOTE}`,
+  settle_this_thread:
+    "Settle this thread once this answer ends, the way the user settles one: it leaves their Activity and they can bring it back. Only when the user asked you to, or when your work here is finished and needs nothing more from them. It settles once the answer ends cleanly with nothing queued, and after the user has read it; a thread another thread started settles without, as its lead reads it. An open question, a failure, a stop or the user's next message keeps it in Activity.",
   usage_limits:
     "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
   move_to_worktree:
@@ -385,6 +388,7 @@ export const startedTools = new Set<string>([
   "add_note",
   "tick_note",
   "move_to_worktree",
+  "settle_this_thread",
   "find_threads",
   "read_thread",
   "list_projects",
