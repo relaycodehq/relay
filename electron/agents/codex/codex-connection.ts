@@ -11,6 +11,9 @@ import { threadStartedSchema, type CodexThreadStarted } from "./codex-schemas";
 import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
 import type { ThreadGoal } from "../../../shared/goal";
 import { codexGoal } from "./codex-goal";
+import { exitedError, stderrTail } from "../errors";
+
+type ProcessEnd = { code: number | null; signal: NodeJS.Signals | null };
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
 export const codexMetaSchema = z
@@ -44,6 +47,8 @@ class CodexConnection {
   /** Watch state for "Flag what I'd miss", made the first time a turn asks. */
   watch?: CodexWatch;
   private release!: () => void;
+  /** Why its process went, once it's going. */
+  private death?: Promise<Error>;
   constructor(
     open: () => Promise<ChildProcessWithoutNullStreams | HostedChild>,
   ) {
@@ -65,17 +70,37 @@ class CodexConnection {
         child.on("error", (e: Error) =>
           fail(new Error(`Could not start Codex: ${e.message}`)),
         );
-        child.on("exit", () =>
-          fail(
-            new Error(
-              "Codex stopped before finishing. Check your local Codex sign-in.",
-            ),
+        const stderr = stderrTail(child.stderr);
+        const exit = new Promise<ProcessEnd>((resolve) =>
+          child.once("exit", (code: number | null, signal: NodeJS.Signals | null) =>
+            resolve({ code, signal }),
           ),
         );
+        // Its output ending or the exit, whichever comes first: an exit says
+        // best why, with what the process said last.
+        const ended = (noticed?: Error) => {
+          if (this.death) return;
+          this.death = (async () => {
+            const how = await Promise.race([
+              exit,
+              new Promise<undefined>((r) => setTimeout(() => r(undefined), 300)),
+            ]);
+            if (!how || this.closed)
+              return noticed ?? new Error("Codex stopped before finishing.");
+            return exitedError(
+              "Codex",
+              // A hosted one's code is the host's; its own is in what it said.
+              child instanceof HostedChild ? undefined : how,
+              await stderr(),
+              "Check your local Codex sign-in.",
+            );
+          })();
+          void this.death.then(fail);
+        };
+        child.on("exit", () => ended());
         child.stdin.on("error", () =>
-          fail(new Error("The Codex connection closed.")),
+          ended(new Error("The Codex connection closed.")),
         );
-        child.stderr.resume();
         return withCodexTransport(
           // Hosted or not, it reads and writes like the child it was.
           child as ChildProcessWithoutNullStreams,
@@ -89,7 +114,7 @@ class CodexConnection {
             if (this.onNotification) this.onNotification(method, params);
             else this.unheard(method, params);
           },
-          fail,
+          ended,
           async (wire) => {
             ready(wire);
             await lifetime;
@@ -126,6 +151,10 @@ class CodexConnection {
           await wire.request("turn/interrupt", { threadId, turnId });
       })
       .catch((e) => console.warn("Could not stop a Codex goal turn:", e));
+  }
+  /** Why a call failed: a process that died meanwhile says best, rather than the closed connection its calls saw. */
+  failure(error: unknown) {
+    return this.death ?? Promise.resolve(error);
   }
   /** Sends one thread's notifications and requests to `listen` until the returned function stops it. */
   side(threadId: string, listen: (method: string, params: any) => void) {

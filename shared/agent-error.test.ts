@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { agentError } from "./agent-error";
+import { agentError, withDetails } from "./agent-error";
 
 it("explains an unsupported account model while keeping the exact diagnostic", () => {
   const error = JSON.stringify({
@@ -60,4 +60,14 @@ it("doesn't misclassify a model error with a different cause", () => {
     message: "The model is not supported in this region.",
     details: error,
   });
+});
+
+it("folds a crashed process's last words into the details, even when they look like JSON", () => {
+  const said = 'panic: {"error":"boom"}';
+  const message = "Codex stopped before finishing (exit code 2).";
+  expect(agentError(withDetails(message, said))).toEqual({
+    message,
+    details: said,
+  });
+  expect(withDetails("Codex stopped.", "  ")).toBe("Codex stopped.");
 });

@@ -11,11 +11,24 @@ function envelopeMessage(value: unknown): string | undefined {
   );
 }
 
+/** Where an error's own technical details start; see `withDetails`. */
+const DETAILS = "\n\nTechnical details:\n";
+
+/** `message` with `details` (a crashed process's last words) for the error's fold. */
+export const withDetails = (message: string, details?: string) =>
+  details?.trim() ? `${message}${DETAILS}${details.trim()}` : message;
+
 export function agentError(error: string): {
   message: string;
   hint?: string;
   details?: string;
 } {
+  const at = error.indexOf(DETAILS);
+  if (at >= 0)
+    return {
+      ...agentError(error.slice(0, at)),
+      details: error.slice(at + DETAILS.length),
+    };
   const raw = error.trim();
   let message = raw;
   let structured = false;
