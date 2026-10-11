@@ -60,6 +60,11 @@ export const relayCommands = [
     description: "Let the agent reach another folder in this thread",
     args: "<folder>",
   },
+  {
+    name: "resume",
+    description: "Continue a Claude Code or Codex session from a terminal",
+    args: "<session>",
+  },
 ] as const;
 export type RelayCommand = (typeof relayCommands)[number]["name"];
 /** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */
@@ -114,6 +119,8 @@ export interface CommandOption {
   fill?: string;
   /** It names a folder, shown with a folder's icon. */
   folder?: boolean;
+  /** It names a terminal session, shown with a terminal's icon. */
+  terminal?: boolean;
 }
 /** Relay commands take arguments only where they declare them. */
 export function relayCommand(
@@ -133,10 +140,10 @@ export function relayCommand(
  */
 export function argumentTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
-  // A folder's path may have spaces in it.
+  // A folder's path, or words searching sessions, may have spaces in them.
   const match =
     /(^|\s)\/([a-z]+(?:-[a-z]+)*) (\S*)$/i.exec(before) ??
-    /(^)\/(add-dir) ([^\n]*)$/i.exec(before);
+    /(^)\/(add-dir|resume) ([^\n]*)$/i.exec(before);
   if (!match) return null;
   const start = match.index + match[1].length;
   return {

@@ -119,7 +119,13 @@ export function useComposerCommands({
           label: `/${argCommand.name} ${o.label}`,
           description: o.description ?? "",
           source: o.current ? "Current" : (o.source ?? "Relay"),
-          Icon: o.current ? Check : o.fill || o.folder ? Folder : Zap,
+          Icon: o.current
+            ? Check
+            : o.fill || o.folder
+              ? Folder
+              : o.terminal
+                ? SquareTerminal
+                : Zap,
           current: o.current,
           fill: o.fill,
         }))

@@ -56,7 +56,7 @@ import { ThreadComposer } from "./ThreadComposer";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMessages } from "./ThreadMessages";
 import { ThreadTimeline } from "./ThreadTimeline";
-import { ContinueSessionPicker } from "../continue-session/ContinueSessionPicker";
+import { useResumeCommand } from "../continue-session/useResumeCommand";
 import {
   ScopeButtons,
   ThreadIntroduction,
@@ -183,6 +183,24 @@ export function ProjectChat({
     draftId,
     onError: handle.setError,
   });
+  // In a started thread the session opens beside it, from the checkout.
+  const terminalResume = useResumeCommand({
+    project,
+    settingsKey: id,
+    links: links.draftLinks,
+    workspace:
+      !chat && scope.kind === "project" && !project.plain
+        ? workspace
+        : "checkout",
+    branch: chat ? undefined : worktree.newBranch.trim() || undefined,
+    onContinued: async (created) => {
+      if (chat) return onOpenThread(created);
+      await onCreated(created);
+      threadStorage(draftId).links.clear();
+    },
+    onOpenThread,
+    onError: handle.setError,
+  });
   const session = useSessionCommands({
     handle,
     shown,
@@ -190,7 +208,9 @@ export function ProjectChat({
     running,
     queue: history.data?.queue,
     onCommand: (command, args) =>
-      links.command(command, args) ?? onCommand(command, args),
+      links.command(command, args) ??
+      terminalResume.command(command, args) ??
+      onCommand(command, args),
   });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
   useLayoutEffect(() => {
@@ -326,22 +346,6 @@ export function ProjectChat({
       choosing={isEmpty}
       {...scopes}
       onReviewChanges={openChanges}
-      continueSession={
-        <ContinueSessionPicker
-          project={project}
-          settingsKey={id}
-          links={links.draftLinks}
-          workspace={
-            scope.kind === "project" && !project.plain ? workspace : "checkout"
-          }
-          branch={worktree.newBranch.trim() || undefined}
-          onContinued={async (created) => {
-            await onCreated(created);
-            threadStorage(draftId).links.clear();
-          }}
-          onOpenThread={onOpenThread}
-        />
-      }
     />
   );
   return (
@@ -478,6 +482,9 @@ export function ProjectChat({
               />
             }
             links={links}
+            commandOptions={(command, query) =>
+              links.options(command, query) ?? terminalResume.options(command, query)
+            }
             onProjectSettings={onProjectSettings}
             onSend={send}
             onEditQueued={() => queue.editLast(root?.id ?? null)}

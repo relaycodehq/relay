@@ -136,27 +136,24 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     const newThread = page
       .getByRole("button", { name: "New thread", exact: true })
       .first();
-    const trigger = page.getByRole("button", {
-      name: "Continue a terminal session",
-    });
+    const composer = page.getByLabel("Message project");
+    const trigger = { click: () => composer.fill("/resume ") };
     await trigger.click();
-    const popup = page.getByRole("dialog", {
-      name: "Continue a terminal session",
-    });
+    const popup = page.getByRole("listbox", { name: "Commands" });
     const rows = popup.getByRole("option");
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText("Docs pass");
-    await expect(rows.nth(0).locator(".continue-session-detail")).toHaveText(
+    await expect(rows.nth(0).locator("small")).toHaveText(
       "Codex · just now · 2 turns · open in a terminal, continues as a copy",
     );
     await expect(rows.nth(1)).toContainText(
       "Why does the cache guard never trip?",
     );
-    await expect(rows.nth(1).locator(".continue-session-detail")).toHaveText(
+    await expect(rows.nth(1).locator("small")).toHaveText(
       "Claude · 2h ago · 2 turns",
     );
     await expect(rows.nth(2)).toContainText("Bump the lockfile");
-    await expect(rows.nth(2).locator(".continue-session-detail")).toHaveText(
+    await expect(rows.nth(2).locator("small")).toHaveText(
       "Codex · 3h ago · 1 turn · continues as a copy",
     );
     for (const theme of ["light", "dark"] as const) {
@@ -166,7 +163,7 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
       });
     }
     await page.emulateMedia({ colorScheme: "light" });
-    await popup.getByLabel("Search terminal sessions").fill("cache");
+    await composer.fill("/resume cache");
     await expect(rows).toHaveCount(1);
     await page.keyboard.press("Enter");
 
@@ -209,7 +206,7 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
       page.getByRole("button", { name: /New worktree/ }),
     ).toBeVisible();
     await trigger.click();
-    await expect(popup).toContainText("continued in a new worktree");
+    await expect(popup).toContainText("Continues in a new worktree");
     await rows.filter({ hasText: "Docs pass" }).click();
     await expect(popup).toHaveCount(0);
     await expect(thread.filter({ hasText: "Tidied." })).toBeVisible();

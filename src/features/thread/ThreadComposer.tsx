@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, type ReactNode, type Ref } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch, X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
+import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
 import { openPlan } from "../../../shared/open-plan";
@@ -183,6 +184,7 @@ export function ThreadComposer({
   scopeButtons,
   notesChip,
   links,
+  commandOptions,
   onProjectSettings,
   onSend,
   onEditQueued,
@@ -205,6 +207,11 @@ export function ThreadComposer({
   /** The notes kept in the thread, first of the controls on the right. */
   notesChip: ReactNode;
   links: ThreadLinks;
+  /** Values offered after a command, e.g. folders after /add-dir. */
+  commandOptions: (
+    command: RelayCommand,
+    query: string,
+  ) => CommandOption[] | undefined;
   onProjectSettings: () => void;
   onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
   /** Takes the newest queued message back into the composer; false when none waits. */
@@ -387,7 +394,7 @@ export function ThreadComposer({
             }
       }
       onCommand={runCommand}
-      commandOptions={links.options}
+      commandOptions={commandOptions}
     />
   );
 }

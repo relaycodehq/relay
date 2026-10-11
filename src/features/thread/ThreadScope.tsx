@@ -31,7 +31,6 @@ export function ScopeButtons({
   onSelectPR,
   onDeepReview,
   onReviewChanges,
-  continueSession,
 }: ScopeChoice & {
   project: Project;
   scope: ChatScope;
@@ -39,8 +38,6 @@ export function ScopeButtons({
   choosing: boolean;
   /** A PR thread's way to its diff. */
   onReviewChanges: () => void;
-  /** The terminal session picker, offered while choosing. */
-  continueSession?: ReactNode;
 }) {
   return (
     <>
@@ -98,7 +95,6 @@ export function ScopeButtons({
           </Chosen>
         </>
       )}
-      {choosing && !project.scratch && continueSession}
       {scope.kind === "pr" && (
         <button className="thread-review-action" onClick={onReviewChanges}>
           Review changes →
