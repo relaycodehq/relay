@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
 import type { AgentActivity, ProjectChat } from "../../shared/projects";
+import { readTurn, turnHeading } from "../../shared/agent-trace";
 
 const call = (id: string, parentId?: string): AgentActivity =>
   ({
@@ -36,6 +37,54 @@ it("keeps the agent's own calls once the trace is full, dropping subagent ones f
     activity: { status: "complete" },
   });
   answer.end();
+  vi.useRealTimers();
+});
+
+it("lets a long turn's oldest finished calls go, so the live row shows what runs now", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("codex");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => {},
+  );
+  answer.activity(call("watch"));
+  for (let i = 0; i < 120; i++)
+    answer.activity({ ...call(`ls-${i}`), status: "complete" });
+  answer.activity(call("build"));
+  answer.commentary("note", "Now building the whole thing.");
+  const turn = readTurn(message);
+  expect(turn.current?.id).toBe("build");
+  expect(message.trace!.length).toBeLessThanOrEqual(100);
+  // The running call from the start stays; the summary still counts every call.
+  expect(message.trace![0]!.id).toBe("watch");
+  expect(message.trace!.at(-1)!.id).toBe("note");
+  answer.activity({ ...call("build"), status: "complete" });
+  answer.activity({ ...call("watch"), status: "complete" });
+  message.status = "complete";
+  answer.end();
+  expect(turnHeading(message, false)).toMatchObject({
+    text: "Ran 122 commands",
+  });
+  vi.useRealTimers();
+});
+
+it("marks the calls a Stop cut short as stopped, not failed", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("codex");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => {},
+  );
+  answer.activity({ ...call("ls"), status: "complete" });
+  answer.activity(call("rg"));
+  answer.stop();
+  expect(message.trace!.map((e) => e.kind === "activity" && e.activity.status)).toEqual(["complete", "stopped"]);
   vi.useRealTimers();
 });
 

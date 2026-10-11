@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentProvider } from "../../shared/agents";
 import type {
   AgentActivity,
+  AgentTrace,
   AsyncAgentQuestions,
   ChatMessage,
   ContextUsage,
@@ -30,7 +31,7 @@ export const streamingAnswer = (
 /** What an ended answer still showed as running ends with it. */
 export function settleActivities(
   message: ChatMessage,
-  status: "complete" | "failed",
+  status: Exclude<AgentActivity["status"], "running">,
 ) {
   for (const a of message.activity ?? [])
     if (a.status === "running") a.status = status;
@@ -39,8 +40,49 @@ export function settleActivities(
       entry.activity.status = status;
 }
 
-/** The trace keeps this many calls and notes; a long turn drops the rest. */
+/** The trace keeps this many calls and notes; a long turn lets its oldest finished ones go. */
 const TRACE_LIMIT = 100;
+/**
+ * A full trace lets go of this many entries at once: each time it does, every
+ * entry moves up and a phone's patch resends the whole list.
+ */
+const TRACE_TRIM = 10;
+
+/**
+ * Makes room in a full trace for a call or note of the agent's own: a
+ * subagent's call goes first, else the oldest finished entries, counted on
+ * the message so the turn's summary still adds them up. Running calls stay.
+ */
+function makeRoom(message: ChatMessage, trace: AgentTrace[]) {
+  if (trace.length < TRACE_LIMIT) return true;
+  const nested = trace.findIndex(
+    (e) => e.kind === "activity" && e.activity.parentId,
+  );
+  if (nested >= 0) {
+    trace.splice(nested, 1);
+    return true;
+  }
+  const gone = new Set<string>();
+  for (const e of trace) {
+    if (gone.size >= TRACE_TRIM) break;
+    if (e.kind === "commentary") gone.add(e.id);
+    else if (e.activity.status !== "running") {
+      gone.add(e.id);
+      const kind =
+        e.activity.status === "complete" ? e.activity.kind : "failed";
+      const dropped = (message.traceDropped ??= {});
+      dropped[kind] = (dropped[kind] ?? 0) + 1;
+    }
+  }
+  // An agent row's calls go with it.
+  const kept = trace.filter(
+    (e) =>
+      !gone.has(e.id) &&
+      !(e.kind === "activity" && gone.has(e.activity.parentId ?? "")),
+  );
+  trace.splice(0, trace.length, ...kept);
+  return trace.length < TRACE_LIMIT;
+}
 
 /**
  * The answer an agent is writing. The window sees it at most every 40ms and
@@ -100,15 +142,14 @@ export class AnswerRecorder {
     const trace = (this.message.trace ??= []);
     const index = trace.findIndex((a) => a.id === activity.id);
     const entry = { kind: "activity" as const, id: activity.id, activity };
-    // A busy subagent mustn't crowd out Claude's own later calls.
-    if (index < 0 && trace.length >= TRACE_LIMIT && !activity.parentId) {
-      const nested = trace.findIndex(
-        (e) => e.kind === "activity" && e.activity.parentId,
-      );
-      if (nested >= 0) trace.splice(nested, 1);
-    }
     if (index >= 0) trace[index] = entry;
-    else if (trace.length < TRACE_LIMIT) trace.push(entry);
+    // A busy subagent mustn't crowd out the agent's own later calls.
+    else if (
+      activity.parentId
+        ? trace.length < TRACE_LIMIT
+        : makeRoom(this.message, trace)
+    )
+      trace.push(entry);
     this.changed();
   }
   /** A side check flagged something; it can land after the turn ended, on the answer it was about. */
@@ -143,7 +184,7 @@ export class AnswerRecorder {
         text: text.slice(0, 12000),
       };
       if (index >= 0) trace[index] = entry;
-      else if (trace.length < TRACE_LIMIT) trace.push(entry);
+      else if (makeRoom(this.message, trace)) trace.push(entry);
     }
     this.changed();
   }
@@ -205,9 +246,14 @@ export class AnswerRecorder {
   }
   /** The turn ended with the message's status: what still ran ends with it, and the window hears it now. */
   end() {
+    const { status } = this.message;
     settleActivities(
       this.message,
-      this.message.status === "complete" ? "complete" : "failed",
+      status === "complete"
+        ? "complete"
+        : status === "cancelled"
+          ? "stopped"
+          : "failed",
     );
     if (this.flush) clearTimeout(this.flush);
     if (this.checkpoint) clearTimeout(this.checkpoint);

@@ -110,6 +110,8 @@ export interface ChatMessage {
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
+  /** Finished calls a long turn's full trace let go of, by kind; failed ones under `failed`. */
+  traceDropped?: TraceDropped;
   /** Questions stay answerable after the turn ends or Relay restarts. */
   questions?: AsyncAgentQuestions[];
   /** Local: what the side check flagged during this turn; see shared/watch. */
@@ -162,7 +164,8 @@ export interface AgentActivity {
   id: string;
   kind: "command" | "file" | "read" | "search" | "web" | "agent" | "tool";
   label: string;
-  status: "running" | "complete" | "failed";
+  /** `stopped`: still running when the turn was stopped. */
+  status: "running" | "complete" | "failed" | "stopped";
   detail?: string;
   /** Phones only: how many characters the desktop left out of `detail`; `activityDetail` has them all. */
   detailCut?: number;
@@ -175,6 +178,9 @@ export interface AgentActivity {
   /** The picture the call made, by absolute path; the turn shows it as an image it read. */
   image?: string;
 }
+export type TraceDropped = Partial<
+  Record<AgentActivity["kind"] | "failed", number>
+>;
 /** Private turn events. */
 export type AgentTrace =
   | { kind: "commentary"; id: string; text: string }
