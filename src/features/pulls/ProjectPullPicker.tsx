@@ -76,7 +76,13 @@ export function ProjectPullPicker({
             : "project-pull-trigger"
         }
         aria-label={selected ? `PR #${selected.number}` : "Review a PR"}
-        title={selected && title ? `#${selected.number} ${title}` : undefined}
+        title={
+          selected && title
+            ? `#${selected.number} ${title}`
+            : compact && !selected
+              ? "Review a PR"
+              : undefined
+        }
         disabled={disabled}
       >
         <GitPullRequest size={compact ? 14 : 16} aria-hidden />

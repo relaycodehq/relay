@@ -28,7 +28,9 @@
   display: inline-flex;
   align-items: baseline;
   position: relative;
-  max-width: min(55vw, 440px);
+  /* The column, not the window: side panes take most of a wide one. Room
+     is left for the "?" after it. */
+  max-width: min(calc(100% - 0.6em), 440px);
   white-space: nowrap;
   vertical-align: baseline;
   padding: 0 0 10px;

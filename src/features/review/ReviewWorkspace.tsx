@@ -16,7 +16,7 @@ import { revisionOf } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { DiffViewer } from "../diff/DiffViewer";
-import { useSplitDiff } from "../diff/WorkingDiff";
+import { roomForSplit, useSplitDiff } from "../diff/WorkingDiff";
 import { useElementWidth } from "../../lib/useElementWidth";
 import { useTypography } from "../../lib/typography";
 import { persistedStore } from "../../lib/persisted-store";
@@ -115,7 +115,7 @@ export function ReviewWorkspace({
   // Side-by-side needs room; a narrow pane falls back to a unified diff.
   const tabsRef = useRef<HTMLDivElement>(null),
     width = useElementWidth(tabsRef),
-    narrow = !!width && width < 480,
+    narrow = !roomForSplit(width),
     layout = narrow || !split ? "unified" : "split";
   const steps = useReviewSteps(
     files,

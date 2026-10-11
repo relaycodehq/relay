@@ -35,8 +35,10 @@ export function PaneResizer({
       value={width}
       min={min}
       max={max}
-      begin={() => {
-        const origin = width;
+      begin={(handle) => {
+        // From what shows: the layout can hold the pane narrower than asked.
+        const shown = handle.parentElement?.getBoundingClientRect().width;
+        const origin = shown ? Math.round(shown) : width;
         return (delta) => update(origin + delta);
       }}
       onReset={() => update(initial)}

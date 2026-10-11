@@ -12,8 +12,9 @@
 .project-layout [hidden] {
   display: none !important;
 }
+/* --sidebar-room is what the side panes leave it (useSidebarVisibility). */
 .projects-sidebar {
-  width: var(--sidebar-width, 250px);
+  width: min(var(--sidebar-width, 250px), var(--sidebar-room, 100vw));
   flex-shrink: 0;
   position: relative;
   display: flex;
@@ -34,6 +35,7 @@
   top: 0;
 }
 .projects-sidebar.overlay {
+  width: var(--sidebar-width, 250px);
   position: absolute;
   top: 0;
   bottom: 0;
@@ -54,7 +56,6 @@
 .project-chat-pane {
   flex: 1;
   width: auto;
-  min-width: 300px;
   position: relative;
   border-right: 0;
   background: var(--surface);

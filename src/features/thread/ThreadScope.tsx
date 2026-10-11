@@ -46,38 +46,41 @@ export function ScopeButtons({
     <>
       {choosing && !project.plain && (
         <>
-          <Chosen
-            when={scope.kind === "pr"}
-            label={scope.kind === "pr" ? `PR #${scope.ref.number}` : ""}
-            onClear={onClearScope}
-            reserve={
-              <>
-                <GitPullRequest size={14} />
-                Review a PR
-                <ChevronDown size={12} />
-              </>
-            }
-          >
-            {canChoosePR ? (
-              <ProjectPullPicker
-                project={project}
-                selected={scope.kind === "pr" ? scope.ref : null}
-                onSelect={onSelectPR}
-                compact
-              />
-            ) : onChoosePR ? (
-              <button
-                className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
-                onClick={onChoosePR}
-              >
-                <GitPullRequest size={14} />
-                {scope.kind === "pr"
-                  ? `PR #${scope.ref.number}`
-                  : "Review a PR"}
-                <ChevronDown size={12} />
-              </button>
-            ) : null}
-          </Chosen>
+          {(canChoosePR || onChoosePR) && (
+            <Chosen
+              when={scope.kind === "pr"}
+              label={scope.kind === "pr" ? `PR #${scope.ref.number}` : ""}
+              onClear={onClearScope}
+              reserve={
+                <>
+                  <GitPullRequest size={14} />
+                  Review a PR
+                  <ChevronDown size={12} />
+                </>
+              }
+            >
+              {canChoosePR ? (
+                <ProjectPullPicker
+                  project={project}
+                  selected={scope.kind === "pr" ? scope.ref : null}
+                  onSelect={onSelectPR}
+                  compact
+                />
+              ) : (
+                <button
+                  className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
+                  title="Review a PR"
+                  onClick={onChoosePR}
+                >
+                  <GitPullRequest size={14} />
+                  {scope.kind === "pr"
+                    ? `PR #${scope.ref.number}`
+                    : "Review a PR"}
+                  <ChevronDown size={12} />
+                </button>
+              )}
+            </Chosen>
+          )}
           <Chosen
             when={scope.kind === "review"}
             label="Deep review"
@@ -86,6 +89,7 @@ export function ScopeButtons({
             <button
               className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
               aria-pressed={scope.kind === "review"}
+              title="Deep review"
               onClick={scope.kind === "review" ? onClearScope : onDeepReview}
             >
               <ScanSearch size={14} />

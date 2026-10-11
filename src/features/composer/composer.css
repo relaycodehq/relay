@@ -89,6 +89,21 @@
 .thread-context-controls .thread-scope-clear:hover {
   opacity: 1;
 }
+/* A narrow chat pane sheds the scope buttons' words before they overlap,
+   keeping their icons; the words stay as their names and tooltips. A
+   picked one keeps its label. */
+@container (max-width: 640px) {
+  .thread-context-controls .thread-context-button:not(.selected),
+  .thread-context-controls .thread-scope-ghost {
+    font-size: 0;
+    gap: 2px;
+  }
+}
+@container (max-width: 420px) {
+  .thread-context-controls .workspace-trigger > span {
+    display: none;
+  }
+}
 .thread-context-controls .thread-review-action {
   color: var(--accent);
   padding-right: 2px;

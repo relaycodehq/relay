@@ -6,6 +6,20 @@
   height: 100%;
   overflow: hidden;
 }
+/* Labels that don't all fit go together, leaving icons (the label stays the
+   tab's name and tooltip); too narrow even for those, the strip scrolls. */
+.pane-tabs.icons-only {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pane-tabs.icons-only > * {
+  flex-shrink: 0;
+}
+.pane-tabs.icons-only .pane-tab-label {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
 .pane-tab {
   display: inline-flex;
   align-items: center;
@@ -21,7 +35,7 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.pane-tab > span {
+.pane-tab > .pane-tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
 }

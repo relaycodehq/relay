@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { paneFrame, panesOf, type PaneId } from "./workspace-panes";
+import { fitPanes, paneFrame, panesOf, type PaneId } from "./workspace-panes";
 
 const order: PaneId[] = ["chat", "changes", "panel"];
 const weights = { chat: 1, changes: 2, panel: 3 };
@@ -43,6 +43,28 @@ describe("paneFrame", () => {
     expect(paneFrame(l, "chat").open).toBe(false);
     expect(paneFrame(l, "changes").open).toBe(false);
     expect(l.open.chat && l.open.changes).toBe(true);
+  });
+});
+
+describe("fitPanes", () => {
+  const all: PaneId[] = ["chat", "changes", "panel"];
+  it("keeps every pane while the row has their minimum widths", () => {
+    expect(fitPanes(all, all, 1040)).toBe(all);
+    expect(fitPanes(all, all, undefined)).toBe(all);
+  });
+  it("keeps the latest pane and the chat, hiding the least recent other", () => {
+    expect(fitPanes(all, ["chat", "changes", "panel"], 800)).toEqual([
+      "chat",
+      "panel",
+    ]);
+    expect(fitPanes(all, ["changes", "panel", "chat"], 800)).toEqual([
+      "chat",
+      "panel",
+    ]);
+  });
+  it("gives the latest pane the row before the chat when only one fits", () => {
+    expect(fitPanes(["chat", "changes"], all, 560)).toEqual(["changes"]);
+    expect(fitPanes(["chat", "panel"], all, 200)).toEqual(["panel"]);
   });
 });
 

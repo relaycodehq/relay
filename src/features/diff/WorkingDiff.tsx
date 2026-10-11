@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { persistedStore } from "../../lib/persisted-store";
 import { useElementWidth } from "../../lib/useElementWidth";
 import type {
@@ -34,6 +34,16 @@ const splitDiff = persistedStore(
 );
 /** Side-by-side or inline diffs, shared by every diff and kept across restarts. */
 export const useSplitDiff = () => [splitDiff.use(), splitDiff.set] as const;
+/**
+ * Side by side needs about 400 px a side to show a line of code; a narrower
+ * diff, or one not measured yet, shows inline.
+ */
+export const roomForSplit = (width?: number) => !width || width >= 800;
+/**
+ * Switches every diff between side by side and inline. It reads the width of
+ * the header it sits in, which spans the diff: too narrow for side by side,
+ * it says so instead of claiming a layout the diff can't show.
+ */
 export function SplitDiffToggle({
   split,
   onChange,
@@ -41,14 +51,28 @@ export function SplitDiffToggle({
   split: boolean;
   onChange: (split: boolean) => void;
 }) {
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  const width = useElementWidth(useMemo(() => ({ current: bar }), [bar]));
+  const roomy = roomForSplit(width);
+  const findBar = useCallback(
+    (span: HTMLElement | null) => setBar(span?.closest("header") ?? null),
+    [],
+  );
   return (
-    <IconButton
-      label="Side-by-side diff"
-      active={split}
-      onClick={() => onChange(!split)}
-    >
-      <Columns2 size={14} />
-    </IconButton>
+    <span className="split-diff-toggle" ref={findBar}>
+      <IconButton
+        label={
+          roomy
+            ? "Side-by-side diff"
+            : "Widen this pane for a side-by-side diff"
+        }
+        active={split && roomy}
+        disabled={!roomy}
+        onClick={() => onChange(!split)}
+      >
+        <Columns2 size={14} />
+      </IconButton>
+    </span>
   );
 }
 export function WorkingDiff({
@@ -130,7 +154,7 @@ export function WorkingDiff({
         <ImageDiff
           images={pair.images}
           sideLabels={sideLabels}
-          split={split && !(width && width < 480)}
+          split={split && roomForSplit(width)}
         />
       );
     if (pair.binary)
@@ -173,7 +197,7 @@ export function WorkingDiff({
           theme: syntaxThemes,
           themeType: theme,
           preferredHighlighter: "shiki-js",
-          diffStyle: split && !(width && width < 480) ? "split" : "unified",
+          diffStyle: split && roomForSplit(width) ? "split" : "unified",
           disableFileHeader: true,
           hunkSeparators: "line-info",
           expansionLineCount: 20,

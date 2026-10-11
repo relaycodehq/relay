@@ -25,6 +25,7 @@ import { ConnectHost } from "../features/pulls/ConnectHost";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
 import { useShellNavigation } from "./useShellNavigation";
+import { roomFor } from "../lib/workspace-panes";
 import { useSidebarVisibility } from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
 import { useThreadView } from "../features/thread/useThreadView";
@@ -83,15 +84,18 @@ export default function ProjectShell() {
   const usage = nav.surface === "usage";
   // Pull requests or Usage instead of a project.
   const elsewhere = nav.surface !== "project";
+  const poppedOut = useHasOwnWindow(chat?.id);
+  const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
+  const noPanes = elsewhere || settings.open || !project || (chat && poppedOut);
   // A page stands in for the chat alone.
   const sidebar = useSidebarVisibility(
-    !elsewhere && panes.visible.some((id) => id !== "chat"),
+    !elsewhere && panes.shown.some((id) => id !== "chat"),
     {
       on: !elsewhere && !!panes.layout.zoomed,
       exit: () => panes.zoom(undefined),
     },
+    noPanes ? 0 : roomFor(panes.shown),
   );
-  const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
   const showSettings = useStableCallback(settings.show);
   useEffect(() => onOpenSettings(showSettings), [showSettings]);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
@@ -191,7 +195,6 @@ export default function ProjectShell() {
     void api.takeOpenThread().then(show).catch(setError);
     return api.onOpenThread(show);
   }, [loaded]);
-  const poppedOut = useHasOwnWindow(chat?.id);
   const pullsHost = usePullsAccount(boot.data?.account);
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;

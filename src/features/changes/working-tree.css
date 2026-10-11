@@ -93,6 +93,10 @@
   color: var(--text);
   font-weight: 600;
 }
+.change-section-count {
+  flex: none;
+  white-space: nowrap;
+}
 .local-changes input[type="checkbox"] {
   flex: none;
   width: 13px;
@@ -228,10 +232,15 @@
 }
 .working-review > header > span {
   color: var(--muted);
+  white-space: nowrap;
 }
-/* A long path in "no local changes" wraps instead of widening the pane. */
+.working-review > header > .split-diff-toggle {
+  display: contents;
+}
+/* A long path in "no local changes" wraps instead of widening the pane;
+   ordinary words still break only between them. */
 .working-review > .empty h2 {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .working-diff {
   flex: 1;

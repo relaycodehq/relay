@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   flex-basis: 0;
-  min-width: 300px;
+  /* min-width comes from PANE_MIN, which also decides which panes fit. */
   min-height: 0;
   background: var(--surface);
   overflow: hidden;
@@ -36,9 +36,6 @@
 }
 .workspace-pane.drop-after::after {
   right: 0;
-}
-.workspace-pane[data-pane="chat"] {
-  min-width: 320px;
 }
 .workspace-pane[data-pane="chat"] > .project-chat {
   flex: 1;
@@ -179,8 +176,15 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
+/* Room for three digits each, so counts growing as an agent edits don't
+   slide the buttons beside the toggle. */
+.pane-toggle-add,
+.pane-toggle-del {
+  min-width: 4ch;
+}
 .pane-toggle-add {
   color: light-dark(#1a7f45, #4cc38a);
+  text-align: right;
 }
 .pane-toggle-del {
   color: light-dark(#c4323f, #f0707a);
@@ -422,11 +426,42 @@
   .working-commit small {
     display: none;
   }
+  /* The section counts read as numbers beside a narrow list's titles. */
+  .change-section-count > span {
+    display: none;
+  }
+  .working-review > .empty {
+    padding: 24px 14px;
+  }
+  .working-review > .empty h2 {
+    font-size: 15px;
+  }
 }
 @container (max-width: 460px) {
-  .editor-bar .symbol-actions,
-  .editor-bar-state:not(.stale) {
+  .editor-bar .symbol-actions {
     display: none;
+  }
+  /* The path keeps the diff header; which sides it compares gives way. */
+  .working-review > header > span:not(.split-diff-toggle) {
+    display: none;
+  }
+  /* The unsaved dot stays; its words don't, unless the file changed on disk. */
+  .editor-bar-state:not(.stale) {
+    font-size: 0;
+    gap: 0;
+    margin-left: 6px;
+  }
+}
+/* Too narrow for the path beside the controls: the path gets its own row. */
+@container (max-width: 360px) {
+  .editor-bar {
+    flex-wrap: wrap;
+    padding-block: 4px;
+  }
+  .editor-bar-path {
+    flex-basis: calc(100% - 40px);
+    min-height: 28px;
+    align-items: center;
   }
 }
 

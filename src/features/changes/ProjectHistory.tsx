@@ -77,7 +77,10 @@ export function ProjectHistory({
                 aria-pressed={scope === s}
                 onClick={() => changeScope(s)}
               >
-                {s === "head" ? "Current branch" : "All branches"}
+                {s === "head" ? "Current" : "All"}
+                <span className="history-scope-word">
+                  {s === "head" ? "branch" : "branches"}
+                </span>
               </button>
             ))}
           </div>,
