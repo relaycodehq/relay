@@ -19,6 +19,13 @@ export default defineConfig({
     },
   ],
   server: { host: "127.0.0.1", port, strictPort: true },
-  build: { target: "es2022", reportCompressedSize: false },
+  build: {
+    target: "es2022",
+    // Electron's own Chromium. An older target makes LightningCSS polyfill
+    // light-dark() with prefers-color-scheme, which follows the OS instead of
+    // the color-scheme Relay's theme sets on <html>.
+    cssTarget: "chrome152",
+    reportCompressedSize: false,
+  },
   worker: { format: "es" },
 });
