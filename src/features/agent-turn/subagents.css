@@ -1,8 +1,8 @@
-/* Subagents: the indicator beside the Project folder control, its card, and
+/* Subagents: the indicator beside the Current checkout control, its card, and
    an agent's run as a side thread. Nothing here loops: the running turn is
    the one thing that moves. */
 
-/* An icon and a count, left of the Project folder control. */
+/* An icon and a count, left of the Current checkout control. */
 .thread-context-controls .subagents-chip {
   flex: none;
   gap: 6px;

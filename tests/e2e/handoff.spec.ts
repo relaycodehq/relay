@@ -113,7 +113,7 @@ test("a worktree thread goes to another computer from its header and comes back 
     expect(link).toMatch(/^relay-remote:\/\/pair\?h=127\.0\.0\.1/);
 
     // A worktree thread on the laptop; the fixture agent edits a file there.
-    await laptop.page.getByRole("button", { name: /Project folder/ }).click();
+    await laptop.page.getByRole("button", { name: /Current checkout/ }).click();
     await laptop.page.getByRole("menuitem", { name: "New worktree" }).click();
     await laptop.page.getByLabel("Message project").fill("fixture edit files");
     await laptop.page

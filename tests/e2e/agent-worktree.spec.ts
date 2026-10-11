@@ -142,12 +142,12 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       ".composer-branch-trigger.workspace-trigger.static",
     );
     await expect(page.locator(".agent-worktree-trigger")).toHaveText(
-      "Project folder",
+      "Current checkout",
     );
     await expect(page.getByRole("button", { name: /^main$/ })).toBeVisible();
     await page.locator(".agent-worktree-trigger").click();
     await expect(
-      page.getByRole("menuitemradio", { name: "Project folder", exact: true }),
+      page.getByRole("menuitemradio", { name: "Current checkout", exact: true }),
     ).toHaveAttribute("aria-checked", "true");
     await screenshot(page, { path: "test-results/agent-worktree-picker.png" });
     await page.getByRole("menuitemradio", { name: /^local-urls/ }).click();
@@ -279,10 +279,10 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       path: "test-results/agent-worktree-unavailable.png",
     });
     await page
-      .getByRole("menuitemradio", { name: "Project folder", exact: true })
+      .getByRole("menuitemradio", { name: "Current checkout", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: /Project folder/ }),
+      page.getByRole("button", { name: /Current checkout/ }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /^main$/ })).toBeVisible();
   } finally {

@@ -105,7 +105,7 @@ const workspaces: Record<
   ChatWorkspace,
   { label: string; icon: typeof Folder }
 > = {
-  checkout: { label: "Project folder", icon: Folder },
+  checkout: { label: "Current checkout", icon: Folder },
   worktree: { label: "New worktree", icon: FolderGit2 },
 };
 
@@ -197,7 +197,7 @@ export function CheckoutControl({
         title={
           active
             ? `Active workspace: ${selected?.path ?? active.path}${unavailable ? " (unavailable)" : ""}`
-            : "Active workspace: project folder. Select a worktree here to use it."
+            : "Active workspace: current checkout. Select a worktree here to use it."
         }
       >
         <Icon size={13} />
@@ -206,7 +206,7 @@ export function CheckoutControl({
             ? "Worktree unavailable"
             : selected
               ? folderName(selected.path)
-              : "Project folder"}
+              : "Current checkout"}
         </span>
         <ChevronDown size={12} />
       </Menu.Trigger>
@@ -239,7 +239,7 @@ export function CheckoutControl({
                 className="composer-select-item worktree-item"
               >
                 <Folder size={14} />
-                <span className="agent-worktree-label">Project folder</span>
+                <span className="agent-worktree-label">Current checkout</span>
                 <Menu.RadioItemIndicator className="agent-worktree-selected">
                   <Check size={13} />
                 </Menu.RadioItemIndicator>

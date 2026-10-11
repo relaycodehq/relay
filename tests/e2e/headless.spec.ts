@@ -173,7 +173,7 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     await page.evaluate(() => window.relay.addProject());
     await page.reload();
 
-    await page.getByRole("button", { name: /Project folder/ }).click();
+    await page.getByRole("button", { name: /Current checkout/ }).click();
     await page.getByRole("menuitem", { name: "New worktree" }).click();
     await page.getByLabel("Message project").fill("fixture edit files");
     await page

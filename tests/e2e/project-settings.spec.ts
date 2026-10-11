@@ -203,7 +203,7 @@ test("a project's settings change where its threads start and settle them after 
     );
     await page.getByRole("button", { name: "New thread in Other" }).click();
     await expect(page.locator(".workspace-trigger").first()).toHaveText(
-      /Project folder/,
+      /Current checkout/,
     );
   } finally {
     await app.close();

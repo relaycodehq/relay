@@ -154,7 +154,7 @@ export function ProjectWorkspaceSelect({ project }: { project: Project }) {
           options={[
             {
               value: "checkout",
-              label: "Project folder",
+              label: "Current checkout",
               description: "Works in the checkout, on whatever branch it has.",
             },
             {

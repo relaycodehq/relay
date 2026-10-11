@@ -1,4 +1,4 @@
-// The subagents Claude has working, beside the Project folder control: an
+// The subagents Claude has working, beside the Current checkout control: an
 // icon with how many are back, and a card previewing each. It shows only
 // while one runs; each opens its own run in a side thread.
 import { useState } from "react";
