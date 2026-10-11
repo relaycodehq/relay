@@ -115,6 +115,21 @@ it("commits chosen files that were deleted or renamed through the index", async 
   ).toEqual(["D\ta.txt", "R100\tc.txt\td.txt"]);
   expect(tree.changes.map((c) => c.path)).toEqual(["other.ts"]);
 });
+it("counts lines the way the commit will: renames by their edits, every untracked file", async () => {
+  await writeFile(join(root, "old.ts"), "a\nb\nc\nd\n");
+  git("add", ".");
+  git("commit", "-qm", "Four lines");
+  git("mv", "old.ts", "new.ts");
+  await writeFile(join(root, "new.ts"), "a\nB\nc\nd\n");
+  git("add", "new.ts");
+  await mkdir(join(root, "many"));
+  for (let i = 0; i < 300; i++)
+    await writeFile(join(root, "many", `${i}.txt`), "one\ntwo\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 1 + 600,
+    deletions: 1,
+  });
+});
 it("works in a repository with no commits yet, first commit included", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {

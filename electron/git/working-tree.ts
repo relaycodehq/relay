@@ -25,7 +25,6 @@ import {
 import { digest } from "../util/hash";
 import { imageSides, type FileSource } from "./image-pair";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
-import { parseNumstat } from "./turn-changes";
 import { ignoredTouches } from "./ignored-touches";
 import {
   checkoutChanged,
@@ -169,8 +168,11 @@ export async function fetchUpstream(root: string, branch: string) {
   if (!remote || remote === ".") return;
   await git(root, ["fetch", "--prune", "--quiet", remote], 60000);
 }
-const untrackedLimit = 200,
-  untrackedBytes = 1024 * 1024;
+// Untracked files read for their line counts in one refresh; the rest are
+// read by the next ones, so a big batch of new files adds up over a few polls.
+const untrackedBytesPerRefresh = 32 * 1024 * 1024,
+  // Bigger untracked files are left out of the count.
+  untrackedFileBytes = 16 * 1024 * 1024;
 // The tree is polled every few seconds and untracked files rarely change
 // between polls, so their line counts are kept per checkout by size and mtime.
 const untrackedCache = new Map<string, Map<string, number>>();
@@ -183,11 +185,7 @@ async function lineCounts(
   changes: WorkingChange[],
   head: string,
 ) {
-  const untracked = changes
-    .filter((c) => c.index === "?")
-    .slice(0, untrackedLimit);
-  const previous = untrackedCache.get(root),
-    seen = new Map<string, number>();
+  const untracked = changes.filter((c) => c.index === "?");
   const [diff, added] = await Promise.all([
     untracked.length === changes.length
       ? ""
@@ -197,47 +195,75 @@ async function lineCounts(
             base,
             "--numstat",
             "-z",
-            "--no-renames",
+            // A rename counts as the lines it changed, as its commit will.
+            "-M",
             "--no-color",
             "--no-ext-diff",
             "--no-textconv",
           ]),
         ),
-    Promise.all(
-      untracked.map((c) => untrackedLines(join(root, c.path), previous, seen)),
+    untrackedLineCount(
+      root,
+      untracked.map((c) => c.path),
     ),
   ]);
-  if (seen.size) untrackedCache.set(root, seen);
-  else untrackedCache.delete(root);
-  const tracked = parseNumstat(diff);
+  const tracked = numstatTotals(diff);
   return {
-    additions:
-      tracked.reduce((sum, f) => sum + f.additions, 0) +
-      added.reduce((sum, n) => sum + n, 0),
-    deletions: tracked.reduce((sum, f) => sum + f.deletions, 0),
+    additions: tracked.additions + added,
+    deletions: tracked.deletions,
   };
 }
-async function untrackedLines(
-  path: string,
-  previous: Map<string, number> | undefined,
-  seen: Map<string, number>,
-) {
-  const s = await lstat(path).catch(() => null);
-  if (!s?.isFile() || !s.size || s.size > untrackedBytes) return 0;
-  const key = `${path}\0${s.size}\0${s.mtimeMs}`;
-  let lines = previous?.get(key);
-  if (lines === undefined) {
-    const bytes = await readFile(path).catch(() => null);
-    // Git counts a file with a NUL byte as binary, with no lines.
-    lines = 0;
-    if (bytes && !bytes.includes(0)) {
-      for (let i = bytes.indexOf(10); i !== -1; i = bytes.indexOf(10, i + 1))
-        lines++;
-      if (bytes[bytes.length - 1] !== 10) lines++;
-    }
+/** Sums `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
+function numstatTotals(output: string) {
+  const fields = output.split("\0");
+  let additions = 0,
+    deletions = 0;
+  for (let i = 0; i < fields.length; i++) {
+    const row = /^(\d+|-)\t(\d+|-)\t(.*)$/s.exec(fields[i]);
+    if (!row) continue;
+    if (!row[3]) i += 2;
+    additions += Number(row[1]) || 0;
+    deletions += Number(row[2]) || 0;
   }
-  seen.set(key, lines);
-  return lines;
+  return { additions, deletions };
+}
+async function untrackedLineCount(root: string, paths: string[]) {
+  const previous = untrackedCache.get(root),
+    seen = new Map<string, number>();
+  let budget = untrackedBytesPerRefresh,
+    total = 0;
+  for (const part of chunks(paths, 64)) {
+    const stats = await Promise.all(
+      part.map((path) => lstat(join(root, path)).catch(() => null)),
+    );
+    const counts = await Promise.all(
+      part.map(async (path, i) => {
+        const s = stats[i];
+        if (!s?.isFile() || !s.size || s.size > untrackedFileBytes) return 0;
+        const key = `${path}\0${s.size}\0${s.mtimeMs}`;
+        let lines = previous?.get(key);
+        if (lines === undefined) {
+          if (s.size > budget) return 0;
+          budget -= s.size;
+          lines = textLines(await readFile(join(root, path)).catch(() => null));
+        }
+        seen.set(key, lines);
+        return lines;
+      }),
+    );
+    total += counts.reduce((sum, n) => sum + n, 0);
+  }
+  if (seen.size) untrackedCache.set(root, seen);
+  else untrackedCache.delete(root);
+  return total;
+}
+function textLines(bytes: Buffer | null) {
+  // Git counts a file with a NUL byte as binary, with no lines.
+  if (!bytes?.length || bytes.includes(0)) return 0;
+  let lines = 0;
+  for (let i = bytes.indexOf(10); i !== -1; i = bytes.indexOf(10, i + 1))
+    lines++;
+  return bytes[bytes.length - 1] === 10 ? lines : lines + 1;
 }
 export async function workingTree(root: string): Promise<WorkingTree> {
   // This runs every few seconds and around every Git action, so reads that
