@@ -2,6 +2,7 @@ import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../../shared/chat-activity";
 import { tokensPerSecond, type Streamed } from "../../../shared/usage";
 import { useCopy } from "../../lib/useCopy";
+import { PinMessageButton } from "../../ui/KeepBlock";
 import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
 
 /** Fewer tokens than this stream too briefly for a speed to mean much. */
@@ -11,8 +12,9 @@ const speedDetail = (s: Streamed) =>
   `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
   "of writing; thinking, waiting and tool runs don't count";
 
-/** The row under an agent's answer: copy, read aloud, fork, reply, how fast it wrote and when it was sent. */
+/** The row under an agent's answer: copy, read aloud, fork, reply, how fast it wrote, when it was sent, and pin. */
 export function MessageActions({
+  id,
   text,
   readingKey,
   sent,
@@ -21,6 +23,7 @@ export function MessageActions({
   onReply,
   onFork,
 }: {
+  id: string;
   text?: string;
   /** What identifies the answer while it is read aloud. */
   readingKey?: string;
@@ -66,6 +69,8 @@ export function MessageActions({
       >
         {sentLabel(sent, new Date())}
       </time>
+      {/* Last, at the edge, where a pinned answer's pin stays on its own. */}
+      {!!text?.trim() && <PinMessageButton id={id} />}
     </footer>
   );
 }

@@ -33,13 +33,12 @@ async function ask(page: Page, body: string) {
   return answers.last();
 }
 
-test("keeps lists, selections and an agent's note in the thread's notes, across a restart", async () => {
-  test.setTimeout(150000);
+/** A Relay on its own data, with fake agents and one empty project open. */
+async function start() {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-notes-")));
   const bin = join(root, "bin"),
     repo = join(root, "app"),
     data = join(root, "data");
-  let app: ElectronApplication | undefined;
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -56,27 +55,38 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
         RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
-  try {
-    await mkdir(bin);
-    const script = await readFile(
-      resolve("tests/fixtures/room-agent.cjs"),
-      "utf8",
-    );
-    for (const name of ["codex", "claude"])
-      await fakeCli(join(bin, name), script);
-    await mkdir(repo);
-    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  await mkdir(bin);
+  const script = await readFile(
+    resolve("tests/fixtures/room-agent.cjs"),
+    "utf8",
+  );
+  for (const name of ["codex", "claude"])
+    await fakeCli(join(bin, name), script);
+  await mkdir(repo);
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  const app = await launch();
+  const page = await app.firstWindow();
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [folder],
+    });
+  }, repo);
+  await page.evaluate(() => window.relay.addProject());
+  await page.reload();
+  return { root, app, page, launch };
+}
 
-    app = await launch();
-    let page = await app.firstWindow();
-    await app.evaluate(({ dialog }, folder) => {
-      dialog.showOpenDialog = async () => ({
-        canceled: false,
-        filePaths: [folder],
-      });
-    }, repo);
-    await page.evaluate(() => window.relay.addProject());
-    await page.reload();
+test("keeps lists, selections and an agent's note in the thread's notes, across a restart", async () => {
+  test.setTimeout(150000);
+  let root: string | undefined;
+  let app: ElectronApplication | undefined;
+  try {
+    const started = await start();
+    root = started.root;
+    app = started.app;
+    let page = started.page;
+    const launch = started.launch;
 
     const answer = await ask(page, `fixture echo: ${ANSWER}`);
     const chip = page.locator(".notes-chip");
@@ -294,6 +304,108 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     ).toHaveAttribute("data-quote", "1. Skip the re-render on every heartbeat");
   } finally {
     await app?.close();
-    await rm(root, { recursive: true, force: true, maxRetries: 10 });
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 10 });
+  }
+});
+
+test("pins a whole answer as a pointer that brings you back to it", async () => {
+  test.setTimeout(90000);
+  let root: string | undefined;
+  let app: ElectronApplication | undefined;
+  try {
+    const started = await start();
+    root = started.root;
+    app = started.app;
+    const page = started.page;
+    const latest = await ask(
+      page,
+      "fixture echo: ## Cache plan\n\nOpen threads from the cache first, then the rest.",
+    );
+    // That answer for good: `latest` moves on to whichever is last.
+    const answer = page.locator(
+      `[data-message-id="${await latest.getAttribute("data-message-id")}"]`,
+    );
+    const chip = page.locator(".notes-chip");
+    await answer.hover();
+    await answer.getByRole("button", { name: "Pin to notes" }).click();
+    await expect(chip).toHaveText("1");
+    await expect(
+      answer.getByRole("button", { name: "Unpin from notes" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // A long answer after it scrolls it out of view.
+    const filler = Array.from(
+      { length: 80 },
+      (_, i) => `Paragraph ${i + 1} of filler.`,
+    ).join("\n\n");
+    await ask(page, `fixture echo: ${filler}`);
+    await expect(answer).not.toBeInViewport();
+
+    await chip.hover();
+    const card = page.getByRole("dialog", { name: "Notes" });
+    const pinned = card.locator(".notes-pinned");
+    await expect(pinned).toHaveText("Cache plan");
+    await screenshot(page, {
+      path: "test-results/screenshots/notes-pinned-answer.png",
+      animations: "disabled",
+    });
+    await pinned.getByRole("button", { name: "Cache plan" }).click();
+    await expect(card).toBeHidden();
+    await expect(answer).toBeInViewport();
+    await expect(answer).toHaveAttribute("data-flash", "");
+    await expect(answer).not.toHaveAttribute("data-flash");
+
+    // Away from the answer its row hides, all but the pin.
+    await page.mouse.move(5, 5);
+    await expect(answer.locator(".message-actions time")).toHaveCSS(
+      "opacity",
+      "0",
+    );
+    await expect(answer.locator(".message-pin")).toHaveCSS("opacity", "1");
+
+    // Ask points the draft at it by its opening, not the whole answer.
+    await chip.hover();
+    await pinned.hover();
+    await pinned
+      .getByRole("button", { name: "Point your message at it" })
+      .click();
+    await expect(
+      page.getByLabel("Message project").locator(".composer-quote-chip"),
+    ).toHaveAttribute("data-quote", "Cache plan");
+
+    // Pinning it again from the answer unpins it.
+    await answer.hover();
+    await answer.getByRole("button", { name: "Unpin from notes" }).click();
+    await expect(chip).toHaveCount(0);
+
+    // A pinned reply opens its side conversation when jumped to from the main one.
+    await answer.hover();
+    await answer.getByRole("button", { name: "Reply to message" }).click();
+    const side = page.getByRole("heading", { name: "Side conversation" });
+    await expect(side).toBeVisible();
+    const replied = await ask(
+      page,
+      "fixture echo: Side answer about the cache.",
+    );
+    const reply = page.locator(
+      `[data-message-id="${await replied.getAttribute("data-message-id")}"]`,
+    );
+    await reply.hover();
+    await reply.getByRole("button", { name: "Pin to notes" }).click();
+    await expect(chip).toHaveText("1");
+    await page
+      .getByRole("button", { name: "Back to conversation", exact: true })
+      .click();
+    await expect(reply).toHaveCount(0);
+    await chip.hover();
+    await card
+      .getByRole("button", { name: "Side answer about the cache." })
+      .click();
+    await expect(side).toBeVisible();
+    await expect(reply).toBeInViewport();
+    await expect(reply).toHaveAttribute("data-flash", "");
+  } finally {
+    await app?.close();
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 10 });
   }
 });

@@ -21,6 +21,10 @@ export interface ThreadNotesHandle {
   notes: ThreadNote[];
   /** Keeps markdown from message `from`; resolves once it's saved. */
   keep: (text: string, from?: string) => Promise<void>;
+  /** Pins message `from` whole, or unpins it when it's pinned already. */
+  togglePin: (from: string) => void;
+  /** Message `from` is pinned whole. */
+  pinned: (from: string) => boolean;
   tick: (note: string, item: number, done: boolean) => void;
   /** Puts a list note's items (from 1) in `order`, dropping those left out. */
   arrange: (note: string, order: number[]) => void;
@@ -99,6 +103,25 @@ export function useThreadNotes(
           errors.current(error);
         }
       },
+      togglePin: (from) => {
+        if (!id) return;
+        const pin = notes.find((n) => n.ref && n.from === from);
+        if (pin) {
+          change(
+            (list) => removeNote(list, pin.id),
+            () => api.removeThreadNote(id, pin.id),
+          );
+          return;
+        }
+        api.pinThreadMessage(id, from).then(
+          (note) =>
+            qc.setQueryData<ThreadNote[]>(key, (list = []) =>
+              list.some((n) => n.id === note.id) ? list : [...list, note],
+            ),
+          (error: unknown) => errors.current(error),
+        );
+      },
+      pinned: (from) => notes.some((n) => n.ref && n.from === from),
       tick: (note, item, done) =>
         id &&
         change(
@@ -121,7 +144,8 @@ export function useThreadNotes(
       kept: (text) => {
         const block = text.trim();
         return notes.some(
-          (n) => n.text === block || n.text.endsWith(`\n\n${block}`),
+          (n) =>
+            !n.ref && (n.text === block || n.text.endsWith(`\n\n${block}`)),
         );
       },
     }),

@@ -16,6 +16,8 @@ export interface ThreadNote {
   done?: number[];
   /** The message it was kept from, to jump back to. */
   from?: string;
+  /** A pin on the whole message `from`: `text` is only its label. */
+  ref?: true;
   /** The agent that kept it, at the user's ask; left out when the user did. */
   by?: AgentProvider;
   created: number;
@@ -102,6 +104,8 @@ export function noteList(text: string): NoteList | undefined {
 
 /** Markdown for the draft: only unfinished work, or one unfinished item. */
 export function noteQuote(note: ThreadNote, index?: number): string {
+  // The agent still has the message itself; its opening points it there.
+  if (note.ref) return index === undefined ? note.text : "";
   const list = noteList(note.text);
   if (!list) return index === undefined ? note.text : "";
   const done = new Set(note.done);
@@ -138,7 +142,40 @@ export function notesMark(notes: ThreadNote[] | undefined) {
 export interface NewNote {
   text: string;
   from?: string;
+  ref?: boolean;
   by?: AgentProvider;
+}
+
+const LABEL_CHARS = 80;
+
+/** A short label for a pinned message: its opening line, markdown stripped, cut at a word. */
+export function messageLabel(markdown: string): string {
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  let fence = false;
+  let line = "";
+  for (const raw of lines) {
+    if (FENCE.test(raw)) {
+      fence = !fence;
+      continue;
+    }
+    const plain = raw
+      .replace(/^ {0,3}(?:#{1,6}\s+|>\s*|(?:[-*+]|\d{1,9}[.)])\s+)+/, "")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/(\*\*|__|\*|_|~~|`)(.+?)\1/g, "$2")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!fence && plain && !/^[-*_=|: ]+$/.test(plain)) {
+      line = plain;
+      break;
+    }
+  }
+  if (!line) return "An answer";
+  const sentence = /^.{12,}?[.!?:](?=\s|$)/.exec(line)?.[0] ?? line;
+  if (sentence.length <= LABEL_CHARS) return sentence.replace(/:$/, "");
+  const cut = sentence.slice(0, LABEL_CHARS);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > LABEL_CHARS / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
 }
 
 /** `notes` with `input` kept at the end, unless the same text is kept already. */
@@ -148,7 +185,10 @@ export function addNote(
   now = Date.now(),
 ): { notes: ThreadNote[]; note: ThreadNote } {
   const text = input.text.trim();
-  const same = notes.find((n) => n.text === text);
+  const ref = !!input.ref && !!input.from;
+  const same = notes.find((n) =>
+    ref ? n.ref && n.from === input.from : !n.ref && n.text === text,
+  );
   if (same) return { notes, note: same };
   if (notes.length >= NOTES_LIMIT)
     throw new Error(
@@ -159,6 +199,7 @@ export function addNote(
     id: `n${next}`,
     text,
     ...(input.from ? { from: input.from } : {}),
+    ...(ref ? { ref: true as const } : {}),
     ...(input.by ? { by: input.by } : {}),
     created: now,
     updated: now,
@@ -181,7 +222,7 @@ export function tickNote(
   now = Date.now(),
 ): ThreadNote[] {
   const note = find(notes, id);
-  const list = noteList(note.text);
+  const list = note.ref ? undefined : noteList(note.text);
   if (!list) throw new Error(`Note ${id} isn't a list.`);
   if (item < 1 || item > list.items.length)
     throw new Error(`Note ${id} has items 1 to ${list.items.length}.`);
@@ -213,7 +254,7 @@ export function arrangeNote(
   now = Date.now(),
 ): ThreadNote[] {
   const note = find(notes, id);
-  const list = noteList(note.text);
+  const list = note.ref ? undefined : noteList(note.text);
   if (!list) throw new Error(`Note ${id} isn't a list.`);
   const count = list.items.length;
   if (order.some((item) => !Number.isInteger(item) || item < 1 || item > count))
@@ -253,6 +294,13 @@ export function removeNote(notes: ThreadNote[] | undefined, id: string) {
 
 /** A note as an agent reads it: list items numbered, ticked ones marked. */
 export function noteForAgent(note: ThreadNote) {
+  if (note.ref)
+    return {
+      id: note.id,
+      ...(note.by ? { keptBy: note.by } : {}),
+      pinnedMessage: note.from,
+      opening: note.text,
+    };
   const list = noteList(note.text);
   return {
     id: note.id,

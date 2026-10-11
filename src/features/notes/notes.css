@@ -261,3 +261,40 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+.notes-pinned-jump {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: -3px 0;
+  padding: 3px 4px 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.notes-pinned-jump svg {
+  flex: none;
+  color: var(--muted);
+}
+.notes-pinned-jump span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-pinned-jump:hover:not(:disabled) span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--muted);
+}
+.notes-pinned[data-gone] .notes-pinned-jump {
+  color: var(--muted);
+  cursor: default;
+}
+.notes-pinned[data-gone] .notes-pinned-jump span {
+  text-decoration: line-through;
+}

@@ -122,11 +122,15 @@
      instead of adding a band of empty space before the next message. */
   margin-top: 2px;
   margin-bottom: -27px;
+}
+/* Hidden child by child, so a pinned answer's pin can stay in sight. */
+.message-actions > * {
   opacity: 0;
   transition: opacity 120ms;
 }
-.project-message:hover .message-actions,
-.message-actions:focus-within {
+.project-message:hover .message-actions > *,
+.message-actions:focus-within > *,
+.message-actions > .message-pin[aria-pressed="true"] {
   opacity: 1;
 }
 .message-actions[inert] {
@@ -146,6 +150,29 @@
 .project-message > header .message-copy:hover {
   background: var(--toolbar);
   color: var(--text);
+}
+.message-actions .message-pin[aria-pressed="true"] {
+  color: var(--accent);
+}
+/* A message jumped to from a note lights up for a moment. */
+.project-message[data-flash] {
+  position: relative;
+}
+.project-message[data-flash]::after {
+  content: "";
+  position: absolute;
+  inset: 8px -14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  animation: message-flash 1.4s ease-out;
+}
+@keyframes message-flash {
+  0%,
+  30% {
+    opacity: 1;
+  }
 }
 .message-actions time {
   margin-left: 6px;

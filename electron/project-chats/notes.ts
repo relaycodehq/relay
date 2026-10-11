@@ -1,6 +1,7 @@
 import {
   addNote,
   arrangeNote,
+  messageLabel,
   removeNote,
   tickNote,
   type NewNote,
@@ -26,6 +27,20 @@ export class ThreadNotes {
     return structuredClone(note);
   }
 
+  /** Pins message `from` whole, labelled by how it opens; the pin it already has, if any. */
+  async pin(id: string, from: string) {
+    const chat = await this.core.storage.load(id);
+    const message = chat.messages.find((m) => m.id === from);
+    if (!message) throw new Error("That message isn't in the thread.");
+    const { notes, note } = addNote(chat.notes, {
+      text: messageLabel(message.body),
+      from,
+      ref: true,
+    });
+    if (notes !== chat.notes) await this.write(chat, notes);
+    return structuredClone(note);
+  }
+
   async tick(id: string, note: string, item: number, done: boolean) {
     const chat = await this.core.storage.load(id);
     return this.write(chat, tickNote(chat.notes, note, item, done));
@@ -47,10 +62,13 @@ export class ThreadNotes {
     ids: Map<string, string>,
   ): ThreadNote[] | undefined {
     if (!notes?.length) return undefined;
-    return notes.map(({ from, ...note }) => {
+    const kept = notes.flatMap(({ from, ...note }) => {
       const copy = from && ids.get(from);
-      return { ...structuredClone(note), ...(copy ? { from: copy } : {}) };
+      // A pin points at its message and nothing else; without it there's nothing to keep.
+      if (note.ref && !copy) return [];
+      return [{ ...structuredClone(note), ...(copy ? { from: copy } : {}) }];
     });
+    return kept.length ? kept : undefined;
   }
 
   /** `chat` is the one cached copy, so a turn saving it meanwhile keeps these too. */

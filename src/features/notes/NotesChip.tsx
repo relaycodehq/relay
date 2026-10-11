@@ -7,6 +7,7 @@ import {
   ArrowUpToLine,
   Check,
   GripVertical,
+  MessageSquare,
   Pin,
   TextQuote,
   X,
@@ -26,12 +27,15 @@ export function NotesChip({
   notes,
   onQuote,
   onJump,
+  present,
 }: {
   notes: ThreadNotesHandle;
   /** Puts text in the composer as a quote. */
   onQuote: (text: string) => void;
-  /** Brings message `id` into view; absent when it isn't in the thread. */
+  /** Brings message `id` into view. */
   onJump: (id: string) => void;
+  /** Message `id` is still in the thread; a rewind can drop one. */
+  present: (id: string) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!notes.notes.length) return null;
@@ -58,12 +62,15 @@ export function NotesChip({
           <Popover.Popup className="notes-card" aria-label="Notes">
             <div className="notes-card-head">
               <b>Notes</b>
-              <span>Select text or hover a list, code or table to keep it</span>
+              <span>
+                Select text, or pin a list, code, table or whole answer
+              </span>
             </div>
             <div className="notes-card-list">
               {notes.notes.map((note) => (
                 <Note
                   key={note.id}
+                  gone={!!note.from && !present(note.from)}
                   note={note}
                   notes={notes}
                   onQuote={(text) => {
@@ -71,7 +78,7 @@ export function NotesChip({
                     onQuote(text);
                   }}
                   onJump={
-                    note.from
+                    note.from && present(note.from)
                       ? () => {
                           setOpen(false);
                           onJump(note.from!);
@@ -89,6 +96,84 @@ export function NotesChip({
 }
 
 function Note({
+  note,
+  notes,
+  gone,
+  onQuote,
+  onJump,
+}: {
+  note: ThreadNote;
+  notes: ThreadNotesHandle;
+  gone: boolean;
+  onQuote: (text: string) => void;
+  onJump?: () => void;
+}) {
+  if (note.ref)
+    return (
+      <PinnedMessage
+        note={note}
+        notes={notes}
+        gone={gone}
+        onQuote={onQuote}
+        onJump={onJump}
+      />
+    );
+  return (
+    <ListOrText note={note} notes={notes} onQuote={onQuote} onJump={onJump} />
+  );
+}
+
+/** A whole answer pinned: its opening, which takes you back to it. */
+function PinnedMessage({
+  note,
+  notes,
+  gone,
+  onQuote,
+  onJump,
+}: {
+  note: ThreadNote;
+  notes: ThreadNotesHandle;
+  gone: boolean;
+  onQuote: (text: string) => void;
+  onJump?: () => void;
+}) {
+  return (
+    <section className="notes-note notes-pinned" data-gone={gone || undefined}>
+      <button
+        type="button"
+        className="notes-pinned-jump"
+        title={gone ? "That answer is no longer in the thread" : "Show it"}
+        disabled={!onJump}
+        onClick={onJump}
+      >
+        <MessageSquare size={13} />
+        <span>{note.text}</span>
+      </button>
+      <div className="notes-note-tools">
+        <button
+          type="button"
+          title="Point your message at it"
+          aria-label="Point your message at it"
+          disabled={gone}
+          onClick={() => onQuote(noteQuote(note))}
+        >
+          <TextQuote size={13} />
+        </button>
+        <button
+          type="button"
+          title="Unpin"
+          aria-label="Unpin"
+          onClick={() => notes.remove(note.id)}
+        >
+          <X size={13} />
+        </button>
+      </div>
+      {note.by && <div className="notes-by">Kept by {agentName(note.by)}</div>}
+    </section>
+  );
+}
+
+function ListOrText({
   note,
   notes,
   onQuote,

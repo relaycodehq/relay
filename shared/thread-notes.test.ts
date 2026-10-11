@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   addNote,
   arrangeNote,
+  messageLabel,
   noteForAgent,
   noteList,
   noteQuote,
@@ -167,4 +168,48 @@ it("drops an empty list and rejects invalid arrangements", () => {
   expect(() => arrangeNote([note("1. a\n2. b")], "n1", [1, 1])).toThrow();
   expect(() => arrangeNote([note("1. a\n2. b")], "n1", [3])).toThrow();
   expect(() => arrangeNote([note("just text")], "n1", [1])).toThrow();
+});
+
+it("labels a pinned answer by its opening line, markdown stripped and cut at a word", () => {
+  expect(messageLabel("## The **plan**\n\nMore")).toBe("The plan");
+  expect(
+    messageLabel(
+      "```ts\nrun()\n```\n\n- [Fix](a.ts) the `cache` first. Then more.",
+    ),
+  ).toBe("Fix the cache first.");
+  expect(messageLabel("Here's what I changed:\n\n1. a")).toBe(
+    "Here's what I changed",
+  );
+  const long = messageLabel(
+    "This answer runs on and on without any full stop in sight because it just keeps describing things",
+  );
+  expect(long.length).toBeLessThanOrEqual(81);
+  expect(long).toMatch(/ sight…$|[a-z]…$/);
+  expect(long).not.toMatch(/ …$/);
+  expect(messageLabel("   \n---\n")).toBe("An answer");
+});
+
+it("pins a message once, apart from text kept from it, and quotes only its label", () => {
+  const { notes } = addNote([], { text: "Fix the cache", from: "m1" });
+  const pinned = addNote(
+    notes,
+    { text: "Fix the cache", from: "m1", ref: true },
+    2,
+  );
+  expect(pinned.notes).toHaveLength(2);
+  expect(pinned.note).toMatchObject({ id: "n2", ref: true, from: "m1" });
+  expect(
+    addNote(pinned.notes, { text: "Other label", from: "m1", ref: true }).note
+      .id,
+  ).toBe("n2");
+  expect(addNote(pinned.notes, { text: "Fix the cache" }).note.id).toBe("n1");
+  expect(noteQuote(pinned.note)).toBe("Fix the cache");
+  expect(noteQuote(pinned.note, 0)).toBe("");
+  expect(noteForAgent(pinned.note)).toEqual({
+    id: "n2",
+    pinnedMessage: "m1",
+    opening: "Fix the cache",
+  });
+  const listy = { ...pinned.note, text: "- looks like a list" };
+  expect(() => tickNote([listy], "n2", 1, true)).toThrow("isn't a list");
 });

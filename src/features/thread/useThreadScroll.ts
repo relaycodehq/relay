@@ -15,6 +15,29 @@ const FIRST_MESSAGES = 20,
   MESSAGE_STEP = 20;
 /** A message jumped to lands this far below the top of the view. */
 const JUMP_OFFSET = 12;
+/** How long a message jumped to stays lit, matching its CSS animation. */
+const FLASH_MS = 1400;
+
+/** Lights message `id` up once it's in `view`, which may take a render or two. */
+function flashWhenShown(view: { current: HTMLElement | null }, id: string) {
+  let frames = 0;
+  const look = () => {
+    const message = view.current?.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(id)}"]`,
+    );
+    if (!message) {
+      if (++frames < 60) requestAnimationFrame(look);
+      return;
+    }
+    // Again on a message still lit starts it over.
+    delete message.dataset.flash;
+    void message.offsetWidth;
+    message.dataset.flash = "";
+    // A timer, not animationend: with reduced motion there's no animation to end.
+    setTimeout(() => delete message.dataset.flash, FLASH_MS);
+  };
+  requestAnimationFrame(look);
+}
 /** The message at the top of the thread's view, and how far below it starts. */
 function placeInView(view: HTMLElement): ReadingPlace | undefined {
   const top = view.getBoundingClientRect().top;
@@ -232,7 +255,7 @@ export function useThreadScroll({
     },
     /** Brings message `id` to the top of the view, mounting back to it if it
      * is further up than the messages shown, and holds it there. */
-    jumpTo(id: string) {
+    jumpTo(id: string, { flash = false } = {}) {
       const view = scroll.current,
         index = shown.findIndex((m) => m.id === id);
       if (!view || index < 0) return;
@@ -241,6 +264,13 @@ export function useThreadScroll({
       if (shown.length - index > visible) setVisible(shown.length - index);
       else if (scrollToPlace(view, returning.current))
         placed.current = view.scrollTop;
+      if (flash) flashWhenShown(scroll, id);
+    },
+    /** Opens the view at `to` on message `id`, lit, for a jump that has to
+     * switch conversations first. */
+    jumpInto(to: string, id: string) {
+      readingPlaces.set(to, { id, offset: JUMP_OFFSET });
+      flashWhenShown(scroll, id);
     },
     /** The reader is far enough up that the composer folds away. */
     scrolledUp,

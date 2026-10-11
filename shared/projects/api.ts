@@ -211,6 +211,8 @@ export interface ProjectChatApi {
   threadNotes(id: string): Promise<ThreadNote[]>;
   /** Keeps markdown from the thread, kept from message `from`; the note already holding it, if one does. */
   keepThreadNote(id: string, text: string, from?: string): Promise<ThreadNote>;
+  /** Pins a whole message as a note that points at it; the pin it already has, if any. */
+  pinThreadMessage(id: string, messageId: string): Promise<ThreadNote>;
   /** Ticks item `item` (from 1) of a list note, or unticks it. */
   tickThreadNote(
     id: string,

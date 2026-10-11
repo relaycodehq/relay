@@ -56,6 +56,7 @@ const methods = [
   "forkProjectChat",
   "threadNotes",
   "keepThreadNote",
+  "pinThreadMessage",
   "tickThreadNote",
   "arrangeThreadNote",
   "removeThreadNote",

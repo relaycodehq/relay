@@ -155,7 +155,8 @@ export function ProjectChat({
     { busy, error } = handle;
   const attachments = useComposerAttachments(id),
     { setSelection, workItem, setWorkItem } = attachments;
-  const place = `${id}:${rootId ?? ""}`;
+  const placeOf = (root: string | null) => `${id}:${root ?? ""}`;
+  const place = placeOf(rootId);
   const composer = useRef<ComposerHandle>(null);
   const pane = useRef<HTMLElement>(null);
   useRecordChatPane(pane);
@@ -280,6 +281,17 @@ export function ProjectChat({
     isEmpty,
   });
   const { scroll, composerDock, scrolledUp, dockHeight, followAnswer } = view;
+  // A note's message may sit in another conversation than the one shown, or
+  // under an open subagent: go there first.
+  const jumpToNote = (messageId: string) => {
+    setAgentView(null);
+    if (shown.some((m) => m.id === messageId))
+      return view.jumpTo(messageId, { flash: true });
+    if (!messages.some((m) => m.id === messageId)) return;
+    const to = thread.roots.get(messageId) ?? null;
+    view.jumpInto(placeOf(to), messageId);
+    setRootId(to);
+  };
   const notes = useThreadNotes(chat, handle.setError);
   const chatId = chat?.id;
   const keeper = useMemo<Keeper | null>(
@@ -292,6 +304,8 @@ export function ProjectChat({
                 at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
               ),
             kept: notes.kept,
+            togglePin: notes.togglePin,
+            pinned: notes.pinned,
           }
         : null,
     [chatId, notes],
@@ -478,7 +492,8 @@ export function ProjectChat({
               <NotesChip
                 notes={notes}
                 onQuote={(text) => composer.current?.insertQuote(text)}
-                onJump={view.jumpTo}
+                onJump={jumpToNote}
+                present={(id) => messages.some((m) => m.id === id)}
               />
             }
             links={links}

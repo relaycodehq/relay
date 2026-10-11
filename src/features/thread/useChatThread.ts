@@ -50,6 +50,8 @@ export function useChatThread(
     root,
     shown,
     listed: shown,
+    /** Each reply's side conversation, by the message it starts from. */
+    roots,
     running: messages.some((m) => m.status === "streaming"),
     /** An answer of the conversation itself is running, not only a /btw one. */
     mainRunning: messages.some(

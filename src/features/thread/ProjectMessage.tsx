@@ -480,6 +480,7 @@ export const Message = memo(function Message({
       )}
       {m.role === "assistant" && (
         <MessageActions
+          id={m.id}
           text={text}
           readingKey={m.id}
           sent={m.created}
