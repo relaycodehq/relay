@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, Search } from "lucide-react";
 import { ProjectBadge } from "./ProjectBadge";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import "./projects.css";
 
@@ -132,7 +133,11 @@ export function ProjectSearch({
                 <ProjectBadge id={item.id} name={item.name} />
                 <span className="headline-project-row-label">
                   <strong>{item.name}</strong>
-                  <small>{item.path}</small>
+                  <MiddleTruncate
+                    className="headline-project-path"
+                    text={item.path}
+                    kind="path"
+                  />
                 </span>
                 {item.id === current && <Check size={14} aria-hidden />}
               </Combobox.Item>

@@ -131,7 +131,8 @@
   font-size: 12px;
   font-weight: 500;
 }
-.headline-project-row-label small {
+.headline-project-row-label small,
+.headline-project-row-label .headline-project-path {
   color: var(--muted);
   font-size: 10px;
 }

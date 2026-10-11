@@ -11,6 +11,7 @@ import {
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 /** Project settings are scoped to the project their entry point asked for. */
 export function useSettingsProject(
@@ -124,9 +125,11 @@ export function ProjectFolderRow({ project }: { project: Project }) {
   const [error, setError] = useState<unknown>();
   return (
     <>
-      <span className="settings-project-path" title={project.path}>
-        {project.path}
-      </span>
+      <MiddleTruncate
+        className="settings-project-path"
+        text={project.path}
+        kind="path"
+      />
       <button
         type="button"
         onClick={() => void api.revealProject(project.id).catch(setError)}
