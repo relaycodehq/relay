@@ -1,0 +1,65 @@
+{
+  "results": {
+    "B1": {
+      "quoted": "1. Already shipped"
+    },
+    "B2": {
+      "wide": {
+        "class": "queued-bubble",
+        "width": 1048,
+        "visible": 69,
+        "content": 69
+      },
+      "narrow": {
+        "class": "queued-bubble",
+        "width": 742,
+        "visible": 74,
+        "content": 92
+      }
+    },
+    "B3": {
+      "timezone": "Europe/Prague",
+      "times": [
+        "1:30 AM",
+        "3:00 AM",
+        "3:30 AM",
+        "3:00 AM",
+        "3:30 AM",
+        "3:00 AM",
+        "3:30 AM"
+      ]
+    },
+    "B4": {
+      "month": "October 2026",
+      "selected": 0
+    },
+    "U1": {
+      "before": {
+        "x": 90,
+        "y": 193,
+        "width": 340,
+        "height": 410
+      },
+      "after": {
+        "x": 90,
+        "y": 647,
+        "width": 340,
+        "height": 81
+      },
+      "moved": 454
+    },
+    "U2": {
+      "focus": [
+        "Steer now",
+        "Cancel and return to the composer",
+        "BODY"
+      ],
+      "bubble": {
+        "class": "queued-bubble long",
+        "tabIndex": -1,
+        "role": null
+      }
+    }
+  },
+  "errors": []
+}

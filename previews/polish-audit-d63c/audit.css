@@ -1,0 +1,238 @@
+body {
+  overflow: auto;
+  margin: 0;
+}
+#root {
+  height: auto;
+  min-height: 100vh;
+}
+.audit-lab {
+  max-width: 1160px;
+  margin: auto;
+  padding: 32px 30px 70px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.audit-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.audit-lab h1 {
+  font-size: 28px;
+  margin: 12px 0;
+}
+.audit-lab > header > p,
+.audit-lab > section > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.audit-lab nav {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0;
+}
+.audit-lab button {
+  cursor: pointer;
+}
+.audit-lab nav button,
+.audit-lab > section > button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 7px 12px;
+  margin-right: 6px;
+}
+.audit-lab nav button[data-on="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.audit-lab > section {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.audit-lab > section > h2 {
+  font-size: 18px;
+}
+.note-stage {
+  height: 230px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.audit-lab textarea {
+  display: block;
+  min-height: 100px;
+  width: 100%;
+  max-width: 700px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 12px;
+  margin-top: 8px;
+}
+.audit-lab label {
+  font-size: 12px;
+}
+.queue-stage {
+  max-width: 100%;
+  margin-top: 22px;
+}
+.audit-lab output {
+  display: block;
+  margin-top: 16px;
+  color: var(--accent);
+  font-size: 13px;
+}
+.picker-stage {
+  padding-top: 340px;
+}
+.audit-lab .pick-time {
+  width: 370px;
+  margin-top: 24px;
+}
+.audit-lead {
+  max-width: 800px;
+}
+.audit-lead p {
+  line-height: 1.6;
+  color: var(--muted);
+}
+.audit-filters {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0;
+}
+.audit-filters button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 7px 16px;
+}
+.audit-filters button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.audit-findings {
+  display: grid;
+  gap: 24px;
+}
+.audit-finding {
+  padding: 24px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+}
+.audit-finding-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.audit-finding-meta b {
+  color: var(--accent);
+}
+.audit-finding-meta a {
+  margin-left: auto;
+  color: var(--accent);
+}
+.audit-finding h3 {
+  font-size: 19px;
+  margin: 14px 0 8px;
+}
+.audit-finding > p {
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 830px;
+  color: var(--muted);
+}
+.audit-shots {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+}
+.audit-shots.pair {
+  grid-template-columns: 1fr 1fr;
+}
+.audit-shots figure {
+  margin: 0;
+  min-width: 0;
+}
+.audit-shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 430px;
+  object-fit: contain;
+  object-position: left top;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.audit-shots figcaption {
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.audit-finding summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  padding: 7px 0;
+}
+.audit-finding dl {
+  display: grid;
+  grid-template-columns: 125px 1fr;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.audit-finding dt {
+  color: var(--muted);
+}
+.audit-finding dd {
+  margin: 0;
+  min-width: 0;
+}
+.audit-finding code {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.audit-scope {
+  margin-top: 32px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.audit-scope h3 {
+  color: var(--text);
+}
+.audit-lab a {
+  color: var(--accent);
+}
+@media (max-width: 700px) {
+  .audit-lab {
+    padding: 20px 16px;
+  }
+  .audit-lab nav {
+    flex-wrap: wrap;
+  }
+  .audit-finding {
+    padding: 16px;
+  }
+  .audit-shots.pair {
+    grid-template-columns: 1fr;
+  }
+  .audit-finding dl {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .audit-finding dd {
+    margin-bottom: 10px;
+  }
+}
