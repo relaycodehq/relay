@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, Plus, Trash2 } from "lucide-react";
+import { Play, Plus, Trash2, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import type { Project } from "../../../shared/projects";
@@ -18,6 +18,7 @@ import {
   type SoundSettings,
 } from "../../../shared/sounds";
 import { SettingsSelect } from "../../ui/SettingsCard";
+import { Slider } from "../../ui/Slider";
 import { ErrorBox } from "../../ui/ui";
 import { useProjectSetting } from "../projects/ProjectSettings";
 import { forgetSound, playSound, soundLength } from "./player";
@@ -115,7 +116,7 @@ export function SoundVolumeSetting() {
   const saved = settings.value?.volume ?? defaultSoundVolume;
   const [volume, setVolume] = useState(saved);
   useEffect(() => setVolume(saved), [saved]);
-  const commit = () => {
+  const commit = (volume: number) => {
     if (volume === saved) return;
     settings.set({ ...settings.value, volume });
     void playSound(settings.value?.finished ?? "marimba", volume).catch(
@@ -124,16 +125,17 @@ export function SoundVolumeSetting() {
   };
   return (
     <div className="sound-volume">
-      <input
-        type="range"
+      <Slider
         min={0}
         max={1}
         step={0.05}
+        defaultValue={defaultSoundVolume}
+        icon={<Volume2 />}
         value={volume}
         aria-label="Volume"
-        onChange={(e) => setVolume(Number(e.target.value))}
-        onPointerUp={commit}
-        onKeyUp={commit}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onChange={setVolume}
+        onCommit={commit}
       />
       <span className="settings-row-value">{Math.round(volume * 100)}%</span>
     </div>

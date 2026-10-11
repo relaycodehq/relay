@@ -691,22 +691,10 @@
   outline: none;
   box-shadow: none;
 }
-.settings-row-control input[type="range"] {
-  width: 180px;
-  padding: 0;
-  border: 0;
-  background: none;
-  accent-color: var(--accent);
-}
 .chat-width-slider {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.chat-width-slider input[type="range"] {
-  width: 200px;
-  margin: 0;
-  accent-color: var(--accent);
 }
 .chat-width-slider .settings-row-value {
   min-width: 52px;

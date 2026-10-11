@@ -1,0 +1,144 @@
+.slider {
+  --h: 6px;
+  --r: 3px;
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: 200px;
+  height: 24px;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  cursor: ew-resize;
+}
+.slider:is(:hover, [data-drag]),
+.slider:focus-visible:not([data-pointer]) {
+  --h: 22px;
+  --r: 6px;
+}
+.slider:focus-visible:not([data-pointer]) .slider-bar {
+  outline: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+.slider-bar {
+  position: relative;
+  flex: 1;
+  height: var(--h);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: color-mix(in oklab, var(--text) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 6%, transparent);
+  transform-origin: var(--origin) center;
+  transform: scale(
+    calc(1 + var(--stretch) * 1.6),
+    calc(1 - var(--stretch) * 1.5)
+  );
+  transition:
+    height 0.28s cubic-bezier(0.3, 1.5, 0.5, 1),
+    border-radius 0.28s,
+    transform 0.5s cubic-bezier(0.3, 1.7, 0.45, 1),
+    box-shadow 0.2s;
+}
+.slider[data-drag] .slider-bar {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--accent) 40%, transparent);
+  transition:
+    height 0.28s cubic-bezier(0.3, 1.5, 0.5, 1),
+    border-radius 0.28s,
+    box-shadow 0.2s;
+}
+.slider-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--muted);
+}
+.slider-layer > * {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  opacity: 0;
+  transform: scale(0.7);
+  transition:
+    opacity 0.12s,
+    transform 0.2s;
+}
+.slider:is(:hover, [data-drag]) .slider-layer > *,
+.slider:focus-visible:not([data-pointer]) .slider-layer > * {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.07s;
+}
+.slider-fill {
+  color: var(--accent-foreground);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--accent) 82%, var(--background)),
+    var(--accent)
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
+  clip-path: inset(0 calc(100% - var(--t) * 100%) 0 0);
+  transition: clip-path 0.34s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.slider[data-drag] .slider-fill {
+  transition: none;
+}
+.slider-fill[data-bump] {
+  animation: slider-bump 0.4s ease-out;
+}
+@keyframes slider-bump {
+  30% {
+    filter: brightness(1.25);
+  }
+}
+.slider-grip {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--t) * 100% - 6px);
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 2px;
+  background: var(--accent-foreground);
+  opacity: clamp(0, calc((var(--t) - 0.05) * 12), 0.55);
+  transition:
+    left 0.34s cubic-bezier(0.2, 0.9, 0.25, 1),
+    opacity 0.2s;
+}
+.slider[data-drag] .slider-grip {
+  opacity: clamp(0, calc((var(--t) - 0.05) * 12), 0.9);
+  transition: opacity 0.2s;
+}
+.slider:not(:hover):not([data-drag]) .slider-grip {
+  opacity: 0;
+}
+.slider-notch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--d) * 100%);
+  width: 1px;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.slider-notch::before,
+.slider-notch::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 4px;
+  background: var(--text);
+  opacity: 0.35;
+}
+.slider-notch::before {
+  top: 0;
+}
+.slider-notch::after {
+  bottom: 0;
+}
+.slider[data-default] .slider-notch {
+  opacity: 0;
+}

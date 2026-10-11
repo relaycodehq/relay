@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Monitor, Moon, RotateCcw, Sun } from "lucide-react";
+import { Check, Contrast, Monitor, Moon, RotateCcw, Sun } from "lucide-react";
 import { setMode, setThemeChoice } from "../../lib/appearance";
 import {
   DEFAULT_CONTRAST,
@@ -14,6 +14,7 @@ import {
   type ThemeChoice,
   type ThemeKind,
 } from "../../lib/themes";
+import { Slider } from "../../ui/Slider";
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import {
   SettingsCard,
@@ -271,18 +272,18 @@ export function ThemeChoiceCard({
         label="Contrast"
         hint="How far sidebars, borders and secondary text stand apart."
       >
-        <input
-          type="range"
+        <Slider
           min={0}
           max={100}
+          defaultValue={DEFAULT_CONTRAST}
+          icon={<Contrast />}
           aria-label={`${label} contrast`}
           value={contrast}
-          onChange={(e) => {
-            const value = Number(e.target.value);
+          onChange={(value) =>
             change({
               contrast: value === DEFAULT_CONTRAST ? undefined : value,
-            });
-          }}
+            })
+          }
         />
         <span className="settings-row-value">{contrast}</span>
       </SettingsRow>

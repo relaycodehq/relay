@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { RotateCcw } from "lucide-react";
+import { MoveHorizontal, RotateCcw } from "lucide-react";
+import { Slider } from "../../ui/Slider";
 import {
   chatPaneInsets,
   chatWidths,
@@ -12,14 +13,16 @@ export function ChatWidthSlider() {
   const width = useChatWidth();
   return (
     <div className="chat-width-slider">
-      <input
-        type="range"
+      <Slider
         min={chatWidths.min}
         max={chatWidths.max}
         step={chatWidths.step}
+        defaultValue={chatWidths.default}
+        icon={<MoveHorizontal />}
         aria-label="Chat width"
+        format={(v) => `${v} px`}
         value={width}
-        onChange={(e) => setChatWidth(Number(e.target.value))}
+        onChange={setChatWidth}
       />
       <span className="settings-row-value">{width} px</span>
       <button

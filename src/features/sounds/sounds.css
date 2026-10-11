@@ -4,11 +4,6 @@
   align-items: center;
   gap: 8px;
 }
-.sound-volume input[type="range"] {
-  width: 180px;
-  margin: 0;
-  accent-color: var(--accent);
-}
 .sound-volume .settings-row-value {
   min-width: 40px;
   text-align: right;

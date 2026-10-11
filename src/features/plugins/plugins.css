@@ -198,10 +198,6 @@
   outline: none;
   border-color: var(--accent);
 }
-.settings-row-control input[type="range"] {
-  width: 160px;
-  accent-color: var(--accent);
-}
 .plugin-range-value {
   min-width: 3ch;
   font-size: 12px;

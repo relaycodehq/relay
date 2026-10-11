@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Target } from "lucide-react";
 import {
+  defaultDevOpsSettings,
   devopsSettingsSchema,
   organizationLabel,
   organizationUrl,
@@ -26,6 +28,7 @@ import {
   Switch,
 } from "../../ui/SettingsCard";
 import { CliPathField, withCode } from "../../ui/ToolRow";
+import { Slider } from "../../ui/Slider";
 import { ErrorBox } from "../../ui/ui";
 import {
   FieldSuggestions,
@@ -164,9 +167,9 @@ export function DevOpsSettings() {
   const setFilter = (next: Partial<Settings["filter"]>) =>
     void save({ filter: { ...filter, ...next } });
   const percent = Math.round((threshold ?? filter.threshold) * 100);
-  const commitThreshold = () => {
-    if (threshold !== undefined && threshold !== filter.threshold)
-      setFilter({ threshold });
+  const commitThreshold = (percent: number) => {
+    if (percent / 100 !== filter.threshold)
+      setFilter({ threshold: percent / 100 });
     setThreshold(undefined);
   };
 
@@ -301,19 +304,19 @@ export function DevOpsSettings() {
                     hint="How sure Jev must be before an item counts."
                   >
                     <span className="plugin-range-value">{percent}%</span>
-                    <input
-                      type="range"
+                    <Slider
                       aria-label="Match confidence"
                       min={5}
                       max={95}
                       step={5}
-                      value={percent}
-                      onChange={(e) =>
-                        setThreshold(Number(e.target.value) / 100)
+                      defaultValue={
+                        defaultDevOpsSettings.filter.threshold * 100
                       }
-                      onPointerUp={commitThreshold}
-                      onKeyUp={commitThreshold}
-                      onBlur={commitThreshold}
+                      icon={<Target />}
+                      format={(v) => `${v}%`}
+                      value={percent}
+                      onChange={(v) => setThreshold(v / 100)}
+                      onCommit={commitThreshold}
                     />
                   </SettingsRow>
                 </>
