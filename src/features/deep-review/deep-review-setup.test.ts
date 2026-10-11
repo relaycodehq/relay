@@ -60,7 +60,6 @@ describe("setup", () => {
     );
     expect(firstSetup("p1")).toMatchObject({
       kind: "uncommitted",
-      base: "",
       reviewers: [codex, codex],
     });
   });
@@ -77,7 +76,6 @@ describe("setup", () => {
     const setup = withOpus(
       {
         kind: "uncommitted",
-        base: "",
         reviewers: [claude, chosen, codex],
         lead: claude,
         runChecks: true,
@@ -147,6 +145,11 @@ describe("target", () => {
       base: "main",
     });
     expect(pick("zeta", "main", "main").bases).not.toContain("zeta");
+    // On a repository base, the newest other branch goes into it.
+    expect(pick("", "", "main", ["main"])).toMatchObject({
+      head: "feature",
+      base: "main",
+    });
     // Choosing the base as the branch to review moves the base on.
     expect(pick("main", "main", "feature")).toMatchObject({
       head: "main",

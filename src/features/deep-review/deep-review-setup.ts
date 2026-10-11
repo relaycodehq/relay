@@ -30,7 +30,6 @@ const lineup = [
 
 export interface Setup {
   kind: ReviewTarget["kind"];
-  base: string;
   reviewers: ReviewAgent[];
   lead: LeadAgent;
   runChecks: boolean;
@@ -44,8 +43,9 @@ const setupSchema = deepReviewStartSchema
     kind: z
       .enum(["uncommitted", "branch", "pr", "commit"])
       .catch("uncommitted"),
-    base: z.string().catch(""),
-  });
+  })
+  // Setups saved before the base stopped being kept still carry one.
+  .strip();
 export const savedSetup = (projectId: string): Setup | undefined =>
   setupSchema.safeParse(readJson(setupKey(projectId))).data;
 
@@ -55,7 +55,6 @@ export function firstSetup(projectId: string): Setup {
   return (
     savedSetup(projectId) ?? {
       kind: "uncommitted",
-      base: "",
       ...(latest ?? {
         reviewers: lineup
           .slice(0, 2)
@@ -105,7 +104,8 @@ export const swapReviewer = (
 
 /**
  * The branch a branch review covers and the base it goes into. The branch is
- * the one chosen, else the one checked out; a detached checkout has none
+ * the one chosen, else the one checked out unless that is one of the
+ * repository's bases, then the newest other; a detached checkout has none
  * until one is chosen. The base is the one chosen while it's still a branch
  * other than that, else the repository's base, local or on origin, else any
  * other. The repository's bases lead the list; the rest keep their order.
@@ -117,7 +117,15 @@ export function reviewBranches(
   checkedOut?: string,
 ) {
   const heads = branches.filter((b) => !b.unrelated).map((b) => b.name);
-  const head = [chosen.head, checkedOut].find((b) => b && heads.includes(b));
+  const isBase = (b: string) =>
+    repositoryBases.some((r) => b === r || b === `origin/${r}`);
+  const onBase =
+    checkedOut && isBase(checkedOut)
+      ? heads.find((b) => !isBase(b))
+      : undefined;
+  const head = [chosen.head, onBase, checkedOut].find(
+    (b) => b && heads.includes(b),
+  );
   const others = heads.filter((b) => b !== head);
   const usual = repositoryBases
     .flatMap((b) => [b, `origin/${b}`])

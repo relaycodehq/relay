@@ -39,7 +39,6 @@ export function TargetField({
   changes,
   canChoosePR,
   onKind,
-  onBase,
 }: {
   project: Project;
   kind: ReviewTarget["kind"];
@@ -48,7 +47,6 @@ export function TargetField({
   changes: number;
   canChoosePR: boolean;
   onKind: (kind: ReviewTarget["kind"]) => void;
-  onBase: (base: string) => void;
 }) {
   return (
     <div className="deep-review-field">
@@ -96,7 +94,7 @@ export function TargetField({
                   <SearchSelect
                     label="Base branch"
                     value={pick.base}
-                    onChange={onBase}
+                    onChange={pick.setBase}
                     options={pick.bases.map((b) => ({ value: b, label: b }))}
                     placeholder="Search branches…"
                   />

@@ -76,7 +76,6 @@ export function DeepReviewSetup({
             changes={changes}
             canChoosePR={canChoosePR}
             onKind={(kind) => update({ kind })}
-            onBase={(base) => update({ base })}
           />
           <ReviewersField
             projectId={project.id}

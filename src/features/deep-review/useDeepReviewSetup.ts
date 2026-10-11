@@ -73,10 +73,11 @@ function useTargetPick(
       (await api.projectHistory(projectId, "head", 40)).commits,
     enabled: setup.kind === "commit",
   });
-  // Unlike the base, the reviewed branch isn't kept: the next review starts on the checkout's.
+  // Neither branch is kept: the next review starts from the checkout into the repository's base.
   const [chosenHead, setHead] = useState("");
+  const [chosenBase, setBase] = useState("");
   const { heads, head, bases, base } = reviewBranches(
-    { head: chosenHead, base: setup.base },
+    { head: chosenHead, base: chosenBase },
     branches.data?.branches ?? [],
     branches.data?.bases ?? [],
     branch,
@@ -96,6 +97,7 @@ function useTargetPick(
     setHead,
     bases,
     base,
+    setBase,
     branchesPending: branches.isPending,
     pull,
     setPull,
