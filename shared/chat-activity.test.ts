@@ -125,6 +125,13 @@ describe("chat activity", () => {
     ).not.toContain("evening");
   });
 
+  it("keeps Next week past Tomorrow on a Sunday", () => {
+    const sunday = snoozePresets(new Date(2026, 9, 11, 10, 0));
+    const at = (id: string) => sunday.find((p) => p.id === id)!.until;
+    expect(new Date(at("tomorrow")).getDate()).toBe(12);
+    expect(new Date(at("next-week")).getDate()).toBe(19);
+  });
+
   it("counts a running turn by the second, then by the minute past an hour", () => {
     expect(elapsedLabel(10_000, 5_000)).toBe("0s");
     expect(elapsedLabel(0, 59_999)).toBe("59s");

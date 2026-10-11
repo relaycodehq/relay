@@ -206,8 +206,12 @@ function dayAt(from: Date, days: number, hour: number): number {
   ).getTime();
 }
 
-/** Days to the coming Monday; a Monday waits for the next one. */
-const daysToMonday = (date: Date) => 7 - ((date.getDay() + 6) % 7);
+/**
+ * Days to the coming Monday; a Monday waits for the next one, and so does a
+ * Sunday, whose coming Monday is already Tomorrow.
+ */
+const daysToMonday = (date: Date) =>
+  date.getDay() === 0 ? 8 : 7 - ((date.getDay() + 6) % 7);
 
 export function snoozePresets(now: Date): SnoozePreset[] {
   const choices: (SnoozePreset | false)[] = [

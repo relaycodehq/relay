@@ -115,22 +115,19 @@
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
+/* The count sits beside the bell, plain, so the bell stays whole. */
+.sb .sb-bell:has(.sb-bell-count) {
+  display: flex;
+  gap: 4px;
+  width: auto;
+  padding: 0 8px 0 7px;
+}
 .sb-bell-count {
-  position: absolute;
-  top: 2px;
-  right: 1px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 650;
   line-height: 1;
-  color: var(--surface);
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--sidebar);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
   animation: sb-pop 0.25s ease-out;
 }
 
@@ -432,6 +429,10 @@
     transform 0.15s,
     opacity 0.12s;
 }
+/* At the row's end, so collapsed projects' chevrons line up whatever their names. */
+.sb .sb-project-name > span:first-child + * {
+  margin-left: auto;
+}
 .sb .sb-project-chevron:hover {
   color: var(--text);
 }
@@ -524,7 +525,8 @@
 .sb-thread-list.flat .sb-thread {
   padding-left: 10px;
 }
-.sb .sb-thread:hover:not(:disabled) {
+.sb .sb-thread:hover:not(:disabled),
+.sb .sb-thread.highlighted {
   background: var(--hover);
 }
 .sb .sb-thread.selected {
@@ -556,7 +558,7 @@
   position: absolute;
   top: 50%;
   right: 6px;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
@@ -565,6 +567,9 @@
   border-radius: 5px;
   color: var(--muted);
   transform: translateY(-50%);
+  /* Hidden but still in the Tab order; display:none would take it out. */
+  opacity: 0;
+  pointer-events: none;
 }
 .sb .sb-thread-archive:hover {
   background: color-mix(in srgb, var(--text) 10%, transparent);
@@ -572,12 +577,15 @@
 }
 .sb-thread-row:hover .sb-thread-archive,
 .sb .sb-thread-archive:focus-visible {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 /* Only where Archive takes its place; a running thread has none and keeps
    its spinner. */
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-age,
-.sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status {
+.sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status,
+.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-age,
+.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-status {
   visibility: hidden;
 }
 .sb .sb-thread.sb-ghost {
@@ -592,6 +600,15 @@
   white-space: nowrap;
   font-size: 10.5px;
   color: var(--muted);
+}
+/* Among search results the project name gives way before the title does. */
+.sb-thread:has(.sb-thread-project) .sb-thread-title {
+  flex: 0 1 auto;
+}
+.sb .sb-thread-project {
+  flex: 0 50 auto;
+  min-width: 3em;
+  margin-left: auto;
 }
 .sb-thread-pr {
   font-variant-numeric: tabular-nums;
@@ -813,11 +830,18 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+/* Out of the way but still focusable until the card shows them: Chrome
+   drops focus headed for a display:none control, and the card loses
+   :focus-visible before its button gains it. */
 .sb-card-actions {
-  display: none;
+  position: absolute;
+  right: 0;
+  display: flex;
   align-items: center;
   gap: 2px;
   margin: -3px -5px -3px 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .sb-card-shortcut {
   flex: none;
@@ -847,7 +871,9 @@
 .sb-card:has(:focus-visible) .sb-card-actions,
 .sb-card-actions:has([data-popup-open]),
 .sb-card-actions:has([data-popup-shown]) {
-  display: flex;
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
 }
 .sb .sb-card-action {
   display: inline-flex;
@@ -1271,6 +1297,19 @@
 .sb-snooze-presets button.sb-menu-item:focus-visible {
   background: var(--hover);
   outline: none;
+}
+.modal.sb-snooze-dialog {
+  width: fit-content;
+  padding: 14px 14px 10px;
+}
+.sb-snooze-dialog .modal-heading {
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+.sb-snooze-dialog .modal-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 /* Footer. */

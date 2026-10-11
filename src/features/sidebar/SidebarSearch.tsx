@@ -1,8 +1,15 @@
 import { Search, X } from "lucide-react";
+import type { ChatSummary } from "../../../shared/projects";
 import type { ThreadSearch } from "./useThreadSearch";
 import { ThreadRow, type SidebarRows } from "./SidebarThread";
 
-export function SearchField({ search }: { search: ThreadSearch }) {
+export function SearchField({
+  search,
+  onOpen,
+}: {
+  search: ThreadSearch;
+  onOpen: (chat: ChatSummary) => void;
+}) {
   return (
     <label className="sb-search">
       <Search size={13} />
@@ -13,6 +20,15 @@ export function SearchField({ search }: { search: ThreadSearch }) {
         onChange={(e) => search.setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") search.setText("");
+          if (!search.query || e.nativeEvent.isComposing) return;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            search.move(e.key === "ArrowDown" ? 1 : -1);
+          }
+          if (e.key === "Enter" && search.highlighted) {
+            e.preventDefault();
+            onOpen(search.highlighted);
+          }
         }}
       />
       {search.text && (
@@ -30,7 +46,7 @@ export function SearchField({ search }: { search: ThreadSearch }) {
 
 /** The threads matching the search, across projects, in place of the view. */
 export function SearchResults({
-  search: { results, listed, listAll },
+  search: { results, listed, listAll, highlighted },
   rows,
 }: {
   search: ThreadSearch;
@@ -44,7 +60,13 @@ export function SearchResults({
       </div>
       <div className="sb-thread-list flat">
         {listed.map((c) => (
-          <ThreadRow key={c.id} chat={c} rows={rows} withProject />
+          <ThreadRow
+            key={c.id}
+            chat={c}
+            rows={rows}
+            withProject
+            highlighted={c === highlighted}
+          />
         ))}
         {listed.length < results.length && (
           <button className="sb-thread sb-ghost" onClick={listAll}>

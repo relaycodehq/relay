@@ -9,6 +9,7 @@ import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
 import { initFocusRing } from "./lib/focus-ring";
+import { initContextMenuKey } from "./lib/context-menu-key";
 import { initTypography } from "./lib/typography";
 import { initChatWidth } from "./lib/chat-width";
 import { initShortcuts } from "./lib/shortcuts";
@@ -31,6 +32,7 @@ function startApp() {
   initChatWidth();
   initWindowFocus();
   initFocusRing();
+  initContextMenuKey();
   initShortcuts();
   const client = new QueryClient({
     defaultOptions: {

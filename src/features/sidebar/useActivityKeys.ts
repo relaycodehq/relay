@@ -17,12 +17,15 @@ const CMD_HINT_DELAY_MS = 500;
  */
 export function useActivityKeys({
   active,
+  cards,
   chatId,
   jumping,
   actions: { open, settle },
 }: {
-  /** Activity's open threads, in order. */
+  /** Every open thread, started ones included, for `settle`. */
   active: ChatSummary[];
+  /** The numbered cards, in order, for `jump-thread`. */
+  cards: ChatSummary[];
   /** The open thread. */
   chatId: string | undefined;
   jumping: boolean;
@@ -81,7 +84,7 @@ export function useActivityKeys({
     };
   }, []);
   jumpTo.current = (index) => {
-    const c = active[index];
+    const c = cards[index];
     if (!jumping || !c) return false;
     open(c);
     return true;

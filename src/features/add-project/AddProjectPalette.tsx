@@ -31,7 +31,9 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { timeAgo } from "../../lib/relative-date";
+import { useReturnFocus } from "../../lib/focus-return";
 import { ErrorBox } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { GitHubMark } from "../settings/BrandIcons";
 import {
   JobProgress,
@@ -51,6 +53,8 @@ interface Item {
   icon: ReactNode;
   label: ReactNode;
   detail?: string;
+  /** The detail is a path, which loses its middle rather than its end. */
+  detailIsPath?: boolean;
   right?: ReactNode;
   section?: string;
   run: () => void;
@@ -100,6 +104,7 @@ export function AddProjectPalette({
     private: true,
     ...spec,
   };
+  useReturnFocus();
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
@@ -217,6 +222,7 @@ export function AddProjectPalette({
             ),
             label: linkName(f.path),
             detail: tildePath(f.path),
+            detailIsPath: true,
             right: timeAgo(new Date(f.when).toISOString()),
             section: "Folders your agents worked in",
             run: () => void adding.pick(f.path).then(finish),
@@ -247,6 +253,7 @@ export function AddProjectPalette({
         icon: <FolderOpen size={15} />,
         label: "This folder",
         detail: dir,
+        detailIsPath: true,
         run: () => void adding.pick(dir).then(finish),
       });
     for (const f of listing.data ?? []) {
@@ -500,7 +507,16 @@ export function AddProjectPalette({
                       {item.icon}
                       <span className="headline-project-row-label">
                         <strong>{item.label}</strong>
-                        {item.detail && <small>{item.detail}</small>}
+                        {item.detail &&
+                          (item.detailIsPath ? (
+                            <MiddleTruncate
+                              className="headline-project-path"
+                              text={item.detail}
+                              kind="path"
+                            />
+                          ) : (
+                            <small>{item.detail}</small>
+                          ))}
                       </span>
                       {item.right && <em>{item.right}</em>}
                     </button>

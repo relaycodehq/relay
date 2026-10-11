@@ -26,6 +26,7 @@ import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
+import { SnoozePickDialog } from "./SnoozeMenu";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchField, SearchResults } from "./SidebarSearch";
 import { ActivityView } from "./SidebarActivity";
@@ -134,8 +135,9 @@ export function ProjectSidebar({
   });
   const activity = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
-    // The shortcuts count the cards, which started threads and settled leads don't get.
-    active: families.cards,
+    active: sections.active,
+    // ⌘1–9 count the cards, which started threads and settled leads don't get.
+    cards: families.cards,
     chatId,
     jumping: activity,
     actions,
@@ -156,7 +158,7 @@ export function ProjectSidebar({
   return (
     <div className="sb">
       <div className="sb-top">
-        <SearchField search={search} />
+        <SearchField search={search} onOpen={openChat} />
         <button
           className="sb-top-button"
           aria-label="New thread"
@@ -246,6 +248,17 @@ export function ProjectSidebar({
         )}
       </div>
       {viewError && <ErrorBox error={viewError} />}
+      {actions.pickingSnooze && (
+        <SnoozePickDialog
+          onSnooze={(until) =>
+            void actions.triage(actions.pickingSnooze!, {
+              kind: "snooze",
+              until,
+            })
+          }
+          onClose={() => actions.setPickingSnooze(undefined)}
+        />
+      )}
       {actions.moving && (
         <MoveToWorktreeDialog
           chatId={actions.moving}
