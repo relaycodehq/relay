@@ -115,6 +115,30 @@ describe("threadNews", () => {
     expect(news).toEqual([]);
   });
 
+  it("stays quiet when a thread settled while it ran finishes, but tells of one that woke up on its own", () => {
+    const whileRunning = { settledAt: 15, settleWhenDone: 15 };
+    const news = threadNews(
+      list(
+        chat("settling", { running: true, ...whileRunning }),
+        chat("settled", { running: true, ...whileRunning }),
+        chat("failed", { running: true, ...whileRunning }),
+        // Settled long ago; Claude started a turn itself since.
+        chat("woke", { running: true, settledAt: 5 }),
+      ),
+      [
+        chat("settling", { updated: 20, ...whileRunning }),
+        chat("settled", { updated: 20, settledAt: 21 }),
+        chat("failed", { updated: 20, ...whileRunning }),
+        chat("woke", { updated: 20, settledAt: 5 }),
+      ],
+      new Map([["failed", answer({ status: "failed", error: "Boom." })]]),
+    );
+    expect(news.map((n) => [n.chatId, n.kind])).toEqual([
+      ["failed", "failed"],
+      ["woke", "finished"],
+    ]);
+  });
+
   it("clears a notification once the thread is read somewhere", () => {
     expect(
       threadsRead(list(chat("a", { updated: 20, seenAt: 10 }), chat("b")), [

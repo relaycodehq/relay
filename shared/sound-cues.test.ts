@@ -63,6 +63,27 @@ describe("SoundCues", () => {
     expect(heard).toEqual([]);
   });
 
+  it("stays quiet when a thread settled while it ran finishes, not when it fails", async () => {
+    cues.list("p", [
+      chat({ id: "a", running: true, settledAt: 1, settleWhenDone: 1 }),
+      chat({ id: "b", running: true, settledAt: 1, settleWhenDone: 1 }),
+    ]);
+    cues.message("b", {
+      id: "m",
+      role: "assistant",
+      body: "",
+      status: "failed",
+      error: "boom",
+      created: 2,
+    } as never);
+    cues.list("p", [
+      chat({ id: "a", updated: 2, settledAt: 1, settleWhenDone: 1 }),
+      chat({ id: "b", updated: 2, settledAt: 1, settleWhenDone: 1 }),
+    ]);
+    await vi.runAllTimersAsync();
+    expect(heard).toEqual([[{ event: "failed", projectId: "p" }]]);
+  });
+
   it("plays a thread that needs you right after another sound once the rest is over", async () => {
     cues.list("p", [
       chat({ id: "a", running: true }),

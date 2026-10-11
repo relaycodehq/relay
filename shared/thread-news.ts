@@ -3,7 +3,7 @@
 // notification.
 import { agentError } from "./agent-error";
 import { agentName } from "./agents";
-import { wakeLabel } from "./chat-activity";
+import { chatSettled, wakeLabel } from "./chat-activity";
 import type { ChatMessage } from "./projects";
 import type { RemoteChatSummary } from "./remote";
 
@@ -30,6 +30,8 @@ export type NewsChat = Pick<
   | "waiting"
   | "limitResume"
   | "snoozedUntil"
+  | "settledAt"
+  | "settleWhenDone"
   | "seenAt"
   | "updated"
 >;
@@ -79,6 +81,10 @@ export function threadNews(
     if (c.waiting && answer?.status !== "failed") continue;
     // Someone stopped it, so someone knows.
     if (answer?.status === "cancelled") continue;
+    // Settled while it ran: it finishes out of sight, and news of it would
+    // leave you guessing which thread it was. A failure comes back to Activity.
+    if (answer?.status !== "failed" && (chatSettled(was) || chatSettled(c)))
+      continue;
     news.push(
       answer?.status === "failed"
         ? {
