@@ -82,7 +82,7 @@ export function TargetField({
           )}
           {kind === "branch" &&
             (pick.heads.length ? (
-              <>
+              <div className="deep-review-branches">
                 <SearchSelect
                   label="Branch to review"
                   value={pick.head ?? ""}
@@ -103,7 +103,7 @@ export function TargetField({
                 ) : (
                   <span className="muted">no other branch</span>
                 )}
-              </>
+              </div>
             ) : (
               <span className="deep-review-target-detail">
                 {pick.branchesPending ? "Loading branches…" : "No branches yet"}

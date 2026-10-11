@@ -5,6 +5,7 @@
   width: 340px;
   min-width: var(--anchor-width);
   max-width: calc(100vw - 24px);
+  height: min(410px, var(--available-height));
   max-height: min(410px, var(--available-height));
   padding: 0;
   overflow: hidden;

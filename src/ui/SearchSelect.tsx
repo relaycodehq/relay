@@ -52,6 +52,8 @@ export function SearchSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label ?? (value || unset);
   const query = search.trim().toLowerCase();
   const matches = options.filter((o) =>
     `${o.label} ${o.detail ?? ""}`.toLowerCase().includes(query),
@@ -90,15 +92,13 @@ export function SearchSelect({
       <Popover.Trigger
         type="button"
         aria-label={trigger ? undefined : label}
+        title={trigger ? undefined : selectedLabel}
         className={triggerClassName}
         disabled={disabled}
       >
         {trigger ?? (
           <>
-            <span>
-              {options.find((o) => o.value === value)?.label ??
-                (value || unset)}
-            </span>
+            <span>{selectedLabel}</span>
             <ChevronDown size={12} />
           </>
         )}
