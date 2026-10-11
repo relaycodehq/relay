@@ -8,7 +8,12 @@ import {
   subscribe,
   type OpenCodeEvent,
 } from "./client";
-import { askPermission, askQuestions, permissionRules } from "./permissions";
+import {
+  askPermission,
+  askQuestions,
+  permissionRules,
+  readOnlyReply,
+} from "./permissions";
 import {
   commandListSchema,
   messageListSchema,
@@ -368,7 +373,9 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
             ? await askPermission(request, ask, signal).catch(
                 () => "reject" as const,
               )
-            : ("reject" as const);
+            : options.readOnly
+              ? readOnlyReply(request)
+              : ("reject" as const);
           if (reply === "reject") deniedPermissions.add(request.permission);
           await call("POST", `/permission/${request.id}/reply`, { reply });
         })().catch((error) =>

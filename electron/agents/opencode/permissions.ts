@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { realpathSync } from "node:fs";
 import type { LinkedFolder } from "../../../shared/projects";
 import type { PermissionRequest, QuestionRequest } from "./events";
+import { readsOnly } from "../../agent-host/read-only-bash";
 
 type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRule = {
@@ -35,27 +36,6 @@ const reading = [
   rule("todowrite", "allow"),
   rule("question", "allow"),
 ];
-/** Commands a reviewer may run: they read the repository and change nothing. */
-const readOnlyCommands = [
-  "git status*",
-  "git diff*",
-  "git log*",
-  "git show*",
-  "git blame*",
-  "git branch*",
-  "git rev-parse*",
-  "git ls-files*",
-  "git grep*",
-  "ls*",
-  "cat *",
-  "head *",
-  "tail *",
-  "wc *",
-  "rg *",
-  "grep *",
-  "find *",
-];
-
 /**
  * A session's rules for a runtime mode; later rules win in OpenCode.
  * `auto` asks like Supervised: OpenCode has no reviewer to approve routine
@@ -113,8 +93,9 @@ function modeRules(
     return [
       rule("*", "ask"),
       ...reading,
-      rule("bash", "deny"),
-      ...readOnlyCommands.map((pattern) => rule("bash", "allow", pattern)),
+      // Each command goes to readOnlyReply, the check Claude's reviewers go
+      // through too; a glob like `rg *` would also let `rg --pre=…` through.
+      rule("bash", "ask"),
       rule("edit", "deny"),
       rule("question", "deny"),
       // A general subagent is not guaranteed to inherit the reviewer's restrictions.
@@ -144,6 +125,19 @@ function modeRules(
     rule("external_directory", "ask"),
     rule("doom_loop", "ask"),
   ];
+}
+
+/**
+ * A reviewer's answer, with nobody to ask: a command runs when every part of
+ * it only reads, and nothing else does. OpenCode hands the whole command
+ * along; the patterns are its parts, with their redirects.
+ */
+export function readOnlyReply(request: PermissionRequest): "once" | "reject" {
+  if (request.permission !== "bash") return "reject";
+  const command = request.metadata?.command;
+  const commands =
+    typeof command === "string" ? [command] : (request.patterns ?? []);
+  return commands.length && commands.every(readsOnly) ? "once" : "reject";
 }
 
 /**

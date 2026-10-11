@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { permissionRules, type PermissionRule } from "./permissions";
+import {
+  permissionRules,
+  readOnlyReply,
+  type PermissionRule,
+} from "./permissions";
+import type { PermissionRequest } from "./events";
 import { tmpdir } from "node:os";
 import { realpathSync } from "node:fs";
 
@@ -35,8 +40,31 @@ describe("linked folders under OpenCode", () => {
     );
     expect(decide(rules, "task", "general")).toBe("deny");
     expect(decide(rules, "task", "explore")).toBe("deny");
-    expect(decide(rules, "bash", "git show HEAD:src/app.ts")).toBe("allow");
-    expect(decide(rules, "bash", "rm src/app.ts")).toBe("deny");
+    // Every command goes to readOnlyReply.
+    expect(decide(rules, "bash", "git show HEAD:src/app.ts")).toBe("ask");
+  });
+  it("runs a reviewer's command only when all of it reads", () => {
+    const request = (permission: string, command: string) =>
+      ({
+        id: "p",
+        sessionID: "s",
+        permission,
+        patterns: [command],
+        metadata: { command },
+      }) as PermissionRequest;
+    const bash = (command: string) => readOnlyReply(request("bash", command));
+    expect(bash("git show HEAD:src/app.ts")).toBe("once");
+    expect(bash("rg -n TODO src | head -20")).toBe("once");
+    for (const command of [
+      "rm src/app.ts",
+      "git branch -D main",
+      "git diff --output=x",
+      "find . -delete",
+      "rg --pre=./evil.sh x",
+      "git status > out.txt",
+    ])
+      expect(bash(command), command).toBe("reject");
+    expect(readOnlyReply(request("edit", "a.ts"))).toBe("reject");
   });
   it("reaches linked folders without asking, and asks before editing a read-only one", () => {
     const rules = permissionRules("auto-accept-edits", {
