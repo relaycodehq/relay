@@ -24,6 +24,7 @@ type Props = {
   line?: number;
   onLineShown: () => void;
   onOpenFile?: (path: string, line?: number) => void;
+  onReveal?: (path: string) => void;
   onAsk?: (ref: CodeReference) => void;
 };
 
@@ -73,6 +74,7 @@ function SelectedDiff({
   line,
   onLineShown,
   onOpenFile,
+  onReveal,
   onAsk,
 }: Omit<Props, "missing"> & { selected: SelectedChange }) {
   const touch =
@@ -80,6 +82,8 @@ function SelectedDiff({
       ? tree.ignored?.find((t) => t.path === selected.path)
       : undefined;
   const ignored = touch && ignoredSides(touch);
+  const deleted =
+    tree.changes.find((c) => c.path === selected.path)?.worktree === "D";
   const sides =
     ignored?.sides ??
     sideLabels(selected.area === "staged" ? "staged" : "unstaged");
@@ -96,10 +100,7 @@ function SelectedDiff({
         {onOpenFile && (
           <IconButton
             label="Open in editor"
-            disabled={
-              tree.changes.find((c) => c.path === selected.path)?.worktree ===
-              "D"
-            }
+            disabled={deleted}
             onClick={() => onOpenFile(selected.path)}
           >
             <SquarePen size={14} />
@@ -115,6 +116,9 @@ function SelectedDiff({
           split={split}
           line={line}
           onLineShown={onLineShown}
+          onReveal={
+            onReveal && !deleted ? () => onReveal(selected.path) : undefined
+          }
           onAsk={
             onAsk &&
             ((t) =>

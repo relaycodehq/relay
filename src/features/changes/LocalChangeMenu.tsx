@@ -16,7 +16,7 @@ import type { ChangeArea, WorkingChange } from "../../../shared/working-tree";
 import { api } from "../../lib/api";
 import { otherArea } from "./working-changes";
 import { ContextMenuItem } from "../../ui/ContextMenuItem";
-import { revealLabel } from "../files/FileTree";
+import { revealLabel } from "../../lib/mod-key";
 
 /** Right-click actions for one row of the local changes list. */
 export function LocalChangeMenu({

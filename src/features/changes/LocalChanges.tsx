@@ -193,6 +193,14 @@ export function LocalChanges({
               line={line}
               onLineShown={() => setLine(undefined)}
               onOpenFile={onOpenFile}
+              onReveal={
+                projectId
+                  ? (path) =>
+                      void api
+                        .revealProjectPath(projectId, path)
+                        .catch(working.setError)
+                  : undefined
+              }
               onAsk={onAsk}
             />
           </div>

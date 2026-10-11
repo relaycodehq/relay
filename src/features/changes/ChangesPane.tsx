@@ -52,6 +52,7 @@ export function ChangesReview({
   loading,
   empty,
   onOpenFile,
+  onReveal,
 }: {
   path: string | undefined;
   sides: { deletions: string; additions: string };
@@ -59,6 +60,7 @@ export function ChangesReview({
   loading: string;
   empty: string;
   onOpenFile: (path: string) => void;
+  onReveal?: (path: string) => void;
 }) {
   const [split, setSplit] = useSplitDiff();
   return (
@@ -80,7 +82,12 @@ export function ChangesReview({
           {diff.error ? (
             <ErrorBox error={diff.error} />
           ) : diff.data ? (
-            <WorkingDiff pair={diff.data} sideLabels={sides} split={split} />
+            <WorkingDiff
+              pair={diff.data}
+              sideLabels={sides}
+              split={split}
+              onReveal={onReveal && (() => onReveal(path))}
+            />
           ) : (
             <Loading text={loading} />
           )}

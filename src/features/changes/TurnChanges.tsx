@@ -8,6 +8,7 @@ import type { TurnDiffTarget } from "./turn-diff";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { ErrorBox } from "../../ui/ui";
+import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
@@ -43,6 +44,14 @@ export function TurnChanges({
     // Snapshots never change, so a turn's diff stays valid for the session.
     staleTime: target.worktree ? 0 : Infinity,
   });
+  const reveal = (file: string) =>
+    void api
+      .revealProjectTurnFile(
+        target.chatId,
+        target.worktree ? null : target.messageId,
+        file,
+      )
+      .catch((e) => setRevealError(e instanceof Error ? e.message : String(e)));
   return (
     <section className="local-changes" aria-label="Turn changes">
       {slots.title &&
@@ -91,23 +100,11 @@ export function TurnChanges({
                   <ContextMenu.Popup className="sb-menu">
                     <ContextMenu.Item
                       className="sb-menu-item"
-                      onClick={() =>
-                        void api
-                          .revealProjectTurnFile(
-                            target.chatId,
-                            target.worktree ? null : target.messageId,
-                            f.path,
-                          )
-                          .catch((e) =>
-                            setRevealError(
-                              e instanceof Error ? e.message : String(e),
-                            ),
-                          )
-                      }
+                      onClick={() => reveal(f.path)}
                     >
                       <span className="sb-menu-label">
                         <FolderOpen size={13} />
-                        Show in Finder
+                        {revealLabel}
                       </span>
                     </ContextMenu.Item>
                   </ContextMenu.Popup>
@@ -128,6 +125,7 @@ export function TurnChanges({
               : "This turn changed no files."
           }
           onOpenFile={onOpenFile}
+          onReveal={reveal}
         />
       </div>
     </section>

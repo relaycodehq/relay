@@ -16,6 +16,7 @@ import type { TurnFileChange } from "../../../shared/projects";
 import { buildTurnTree, sumStats, type TurnTreeNode } from "./turn-diff-tree";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { IconButton } from "../../ui/ui";
+import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./changed-files.css";
 
@@ -183,7 +184,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
               >
                 <span className="sb-menu-label">
                   <FolderOpen size={13} />
-                  Show in Finder
+                  {revealLabel}
                 </span>
               </ContextMenu.Item>
             </ContextMenu.Popup>
