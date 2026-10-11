@@ -1,4 +1,4 @@
-import type { AgentProvider } from "./agents";
+import { agentInfo, isCliProvider, type AgentProvider } from "./agents";
 
 /** Who put the CLI where Relay finds it, proven from its path. */
 export type AgentInstaller =
@@ -89,6 +89,32 @@ function split(version: string): [number[], string | undefined] {
 
 export const isUpdating = (agent: AgentVersion) =>
   agent.update?.status === "queued" || agent.update?.status === "running";
+
+/**
+ * Relay hasn't looked for it yet: until the first check, about 20 s after
+ * launch, an agent is only its name.
+ */
+export const notLookedFor = (agent: AgentVersion) =>
+  !(
+    agent.path ||
+    agent.current ||
+    agent.error ||
+    agent.installer ||
+    agent.missing
+  );
+
+/** Why the agent can't run on this computer, once Relay has looked; else undefined. */
+export function cantRun(agent: AgentVersion): string | undefined {
+  if (notLookedFor(agent)) return undefined;
+  const { cli } = agentInfo(agent.provider);
+  if (isCliProvider(agent.provider) && !agent.path)
+    return `${cli} isn't installed on this computer.`;
+  if (agent.missing?.length)
+    return `${cli} runs in Relay through ${agent.missing.join(", ")}, which isn't installed.`;
+  if (!isCliProvider(agent.provider) && !agent.current)
+    return agent.error ?? `${cli} isn't set up yet.`;
+  return undefined;
+}
 
 export const isBehind = (agent: AgentVersion) =>
   !!agent.current &&

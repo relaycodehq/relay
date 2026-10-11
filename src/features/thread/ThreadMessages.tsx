@@ -29,6 +29,7 @@ import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
 import { TerminalOrigin } from "../continue-session/TerminalOrigin";
+import { agentError } from "../../../shared/agent-error";
 
 const isAnswer = (m: ChatMessage) =>
   m.role === "assistant" &&
@@ -48,6 +49,8 @@ function resumable(
   return (
     !!last &&
     ["cancelled", "failed"].includes(last.status) &&
+    // A missing agent fails the same way again.
+    !(last.error && agentError(last.error).notInstalled) &&
     !!lastInput &&
     (lastInput.parentId ?? null) === rootId
   );

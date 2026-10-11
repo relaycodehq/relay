@@ -15,8 +15,20 @@ export function agentError(error: string): {
   message: string;
   hint?: string;
   details?: string;
+  /** The agent's program isn't on this computer; going again won't help. */
+  notInstalled?: boolean;
 } {
   const raw = error.trim();
+  // electron/platform/executables.ts, when no copy of the CLI turns up.
+  const missing = raw.match(
+    /^(\S+) was not found\. Install it in Settings → AI models → Agents, or put it on PATH\.$/,
+  );
+  if (missing)
+    return {
+      message: `${missing[1]} isn't installed on this computer.`,
+      hint: "Set it up in Settings → AI models → Agents, or put it on PATH, then send again.",
+      notInstalled: true,
+    };
   let message = raw;
   let structured = false;
   // CLIs sometimes prefix the response with an HTTP status or "API Error:".

@@ -23,6 +23,7 @@ import {
 import {
   isBehind,
   isUpdating,
+  notLookedFor,
   type AgentInstaller,
   type AgentVersion,
 } from "../../../shared/agent-updates";
@@ -137,15 +138,8 @@ function AgentCard({
   const wantsSignIn = registryId
     ? agent.account?.signedIn === false
     : !agent.account?.signedIn;
-  // Until the first look (about 20 s after launch) an agent is only its
-  // name; offering to link or set up a working one would be a false alarm.
-  const unknown = !(
-    agent.path ||
-    agent.current ||
-    agent.error ||
-    agent.installer ||
-    agent.missing
-  );
+  // Offering to link or set up an agent not looked for yet would be a false alarm.
+  const unknown = notLookedFor(agent);
   const status = unknown
     ? "Looking for it…"
     : !agent.current

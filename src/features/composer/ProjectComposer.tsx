@@ -24,6 +24,7 @@ import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
 import { draftRecipient } from "../../../shared/recipient";
+import { AgentMissingNotice } from "./AgentMissingNotice";
 import { useComposerSend } from "./useComposerSend";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
@@ -288,6 +289,7 @@ export function ProjectComposer({
       {typeof notice === "function"
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
+      <AgentMissingNotice provider={to} />
       <QuickSwitchHud
         style={quick.style}
         open={quick.hud.open && quick.presets.length > 0}
