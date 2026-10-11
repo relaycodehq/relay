@@ -49,6 +49,9 @@ export interface DraftEditor {
   insertText: (range: { start: number; end: number; text: string }) => void;
 }
 
+const PASTE_TOO_LONG =
+  "That paste is too long. A message holds up to 32,000 characters.";
+
 /**
  * The composer's draft: its text, kept under `key`, and what comes into it
  * besides typing. Screenshots are kept beside the text, long pastes become
@@ -81,6 +84,10 @@ export function useComposerDraft(
   );
   // Paste pills live in the draft text; their cards mirror them in order.
   const pastes = useMemo(() => pastedTexts(text), [text]);
+  // A refused paste leaves the draft as it was; the next edit moves on from it.
+  useEffect(() => {
+    setError((error) => (error === PASTE_TOO_LONG ? undefined : error));
+  }, [text]);
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(key);
@@ -241,11 +248,7 @@ export function useComposerDraft(
       if (!isLongPaste(pasted) || pastedTexts(pasted).length) return;
       event.preventDefault();
       event.stopPropagation();
-      if (editor.current?.insertPaste(pasted)) setError(undefined);
-      else
-        setError(
-          "That paste is too long. A message holds up to 32,000 characters.",
-        );
+      setError(editor.current?.insertPaste(pasted) ? undefined : PASTE_TOO_LONG);
     },
     drop(event: DragEvent) {
       const files = Array.from(event.dataTransfer.files);
