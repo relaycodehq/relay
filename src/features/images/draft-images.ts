@@ -78,9 +78,10 @@ function setCount(key: string, count: number) {
   countListeners.forEach((notify) => notify(key));
 }
 
-/** Reads every draft's screenshot count, once; later calls wait on the same read. */
+/** Reads every draft's screenshot count, once, then follows other windows' changes; later calls wait on the same read. */
 export const readDraftImageCounts = (): Promise<void> =>
   (countsRead ??= withDrafts("readonly", async (store) => {
+    changes();
     const [keys, values] = await Promise.all([
       requested(store.getAllKeys()),
       requested(store.getAll() as IDBRequest<DraftImage[][]>),
@@ -102,6 +103,32 @@ export function onDraftImageCount(notify: (key: string) => void) {
   return () => void countListeners.delete(notify);
 }
 
+// Thread windows share the database; each tells the others which draft it
+// changed. A channel never hears its own messages, so a window isn't told its own.
+let channel: BroadcastChannel | undefined;
+function changes() {
+  if (channel || typeof BroadcastChannel === "undefined") return channel;
+  channel = new BroadcastChannel("relay-draft-images");
+  // Another window's screenshots count in this one's Activity too.
+  channel.addEventListener("message", ({ data: key }: MessageEvent) => {
+    if (typeof key !== "string") return;
+    written.add(key);
+    void loadDraftImages(key)
+      .then((images) => setCount(key, loose(images)))
+      .catch(() => {});
+  });
+  return channel;
+}
+
+/** Calls `listener` with the draft key another window saved screenshots for. */
+export function onDraftImagesChanged(listener: (key: string) => void) {
+  const heard = (event: MessageEvent) => {
+    if (typeof event.data === "string") listener(event.data);
+  };
+  changes()?.addEventListener("message", heard);
+  return () => changes()?.removeEventListener("message", heard);
+}
+
 /** Keeps a draft's screenshots; none clears its entry. */
 export const saveDraftImages = (
   key: string,
@@ -114,6 +141,7 @@ export const saveDraftImages = (
   }).then(() => {
     written.add(key);
     setCount(key, loose(images));
+    changes()?.postMessage(key);
   });
 
 /** The most a screenshot may weigh once stored. */
