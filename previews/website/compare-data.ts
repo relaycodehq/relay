@@ -228,10 +228,10 @@ export const groups: { title: string; rows: Row[] }[] = [
         cells: {
           relay: yes("Keep chatting from either one"),
           "t3-code": no("Threads stay where they started"),
-          conductor: no("Not documented"),
-          superset: no("Not documented"),
-          jean: no("Not documented"),
-          orca: no("Not documented"),
+          conductor: no("Not between your own Macs"),
+          superset: unknown(),
+          jean: no("A project stays on its one server"),
+          orca: no("Sessions stay on the server that owns them"),
         },
       },
       {
@@ -268,7 +268,7 @@ export const groups: { title: string; rows: Row[] }[] = [
           relay: yes("Any mix of agents"),
           "t3-code": no(),
           conductor: no("One-model review"),
-          superset: no("Not documented"),
+          superset: unknown(),
           jean: part("Up to 5 side by side, no lead"),
           orca: no("Not built in"),
         },
