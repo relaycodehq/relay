@@ -93,16 +93,22 @@ export class SoundCues {
       return;
     }
     this.gathered = cues;
+    this.playIn(gatherMs);
+  }
+
+  /** Plays what gathered once `ms` and any rest after a sound are over; cues meanwhile join in. */
+  private playIn(ms: number) {
     setTimeout(() => {
+      const resting = this.restUntil - Date.now();
+      if (resting > 0) return this.playIn(resting);
       const all = this.gathered ?? [];
       this.gathered = undefined;
-      if (Date.now() < this.restUntil) return;
       void this.hooks.play(all).then(
         (played) => {
           if (played) this.restUntil = Date.now() + restMs;
         },
         () => {},
       );
-    }, gatherMs);
+    }, ms);
   }
 }

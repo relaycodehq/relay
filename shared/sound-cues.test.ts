@@ -62,6 +62,30 @@ describe("SoundCues", () => {
     await vi.runAllTimersAsync();
     expect(heard).toEqual([]);
   });
+
+  it("plays a thread that needs you right after another sound once the rest is over", async () => {
+    cues.list("p", [
+      chat({ id: "a", running: true }),
+      chat({ id: "b", running: true }),
+    ]);
+    cues.list("p", [
+      chat({ id: "a", updated: 2 }),
+      chat({ id: "b", running: true }),
+    ]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(heard).toEqual([[{ event: "finished", projectId: "p" }]]);
+    cues.list("p", [
+      chat({ id: "a", updated: 2 }),
+      chat({ id: "b", updated: 3, waiting: true }),
+    ]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(heard).toHaveLength(1);
+    await vi.runAllTimersAsync();
+    expect(heard).toEqual([
+      [{ event: "finished", projectId: "p" }],
+      [{ event: "waiting", projectId: "p" }],
+    ]);
+  });
 });
 
 describe("pickSound", () => {
