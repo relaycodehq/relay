@@ -1,5 +1,12 @@
-import { useDeferredValue, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code2, Eye, SquareSplitHorizontal } from "lucide-react";
 import { imageMime } from "../../../../shared/project-files";
 import { api } from "../../../lib/api";
@@ -7,6 +14,7 @@ import { persistedStore } from "../../../lib/persisted-store";
 import { RichText } from "../../../ui/RichText";
 import { Splitter } from "../../../ui/Splitter";
 import { IconButton } from "../../../ui/ui";
+import { headingSlugs, markdownLink, projectPath } from "./markdown-links";
 
 export type MarkdownMode = "code" | "split" | "preview";
 
@@ -96,24 +104,6 @@ export function MarkdownModes({
   );
 }
 
-/** A relative image path from the file's folder to the project root, or null if it leaves it. */
-function projectPath(from: string, src: string): string | null {
-  if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(src)) return null;
-  let clean: string;
-  try {
-    clean = decodeURI(src.split(/[?#]/)[0]);
-  } catch {
-    return null;
-  }
-  const parts = clean.startsWith("/") ? [] : from.split("/").slice(0, -1);
-  for (const part of clean.split("/")) {
-    if (!part || part === ".") continue;
-    if (part !== "..") parts.push(part);
-    else if (!parts.pop()) return null;
-  }
-  return parts.join("/") || null;
-}
-
 function LocalImage({
   where,
   path,
@@ -136,17 +126,87 @@ function LocalImage({
   ) : null;
 }
 
-/** The buffer as it reads, following the edits a beat behind the typing. */
+/** The heading `id` names in `root`, by GitHub's anchors or a sanitized HTML id. */
+function findSection(root: HTMLElement, id: string) {
+  const named = root.querySelector<HTMLElement>(
+    `[id="user-content-${CSS.escape(id)}"], [name="user-content-${CSS.escape(id)}"]`,
+  );
+  if (named) return named;
+  const headings = [
+    ...root.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+  ];
+  const slugs = headingSlugs(headings.map((h) => h.textContent ?? ""));
+  return headings[slugs.indexOf(id.toLowerCase())];
+}
+
+/**
+ * The buffer as it reads, following the edits a beat behind the typing. A
+ * `#section` link scrolls to its heading and a relative link opens its file
+ * or folder through `onOpen`; one that leads nowhere says so.
+ */
 export function MarkdownPreview({
   where,
   path,
   text,
+  onOpen,
 }: {
   where: string;
   path: string;
   text: string;
+  onOpen?: (target: { path: string; directory: boolean }) => void;
 }) {
   const shown = useDeferredValue(text);
+  const box = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const follow = async (href: string) => {
+    const target = markdownLink(path, href);
+    if (!target) return;
+    setNotice("");
+    if (target.kind === "outside")
+      return setNotice(`${href} leads outside this project.`);
+    if (target.kind === "section") {
+      const heading = box.current && findSection(box.current, target.id);
+      if (!heading) return setNotice(`No “${target.id}” section in this file.`);
+      heading.scrollIntoView({ block: "start" });
+      return;
+    }
+    if (!onOpen || target.path === path) return;
+    const files = qc.getQueryData<string[]>(["project-files", where]);
+    if (files?.includes(target.path))
+      return onOpen({ path: target.path, directory: false });
+    if (files?.some((file) => file.startsWith(`${target.path}/`)))
+      return onOpen({ path: target.path, directory: true });
+    // Not listed: ignored by Git, or missing.
+    try {
+      await api.projectFileInfo(where, target.path);
+      onOpen({ path: target.path, directory: false });
+    } catch {
+      setNotice(`Can’t find ${target.path} in this project.`);
+    }
+  };
+  const followRef = useRef(follow);
+  followRef.current = follow;
+  const link = useMemo(
+    () => (href: string, children: ReactNode) =>
+      markdownLink("", href) ? (
+        <a
+          href={href}
+          onClick={(e) => {
+            e.preventDefault();
+            void followRef.current(href);
+          }}
+        >
+          {children}
+        </a>
+      ) : undefined,
+    [],
+  );
   const image = useMemo(
     () => (src: string, alt: string) => {
       const target = projectPath(path, src);
@@ -157,8 +217,15 @@ export function MarkdownPreview({
     [where, path],
   );
   return (
-    <div className="markdown-preview">
-      <RichText text={shown} image={image} html />
-    </div>
+    <>
+      <div className="markdown-preview" ref={box}>
+        <RichText text={shown} image={image} link={link} html />
+      </div>
+      {notice && (
+        <p className="markdown-preview-notice" role="status">
+          {notice}
+        </p>
+      )}
+    </>
   );
 }

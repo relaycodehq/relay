@@ -307,6 +307,7 @@ export const RichText = memo(function RichText({
   onOpenFile,
   inlineCode,
   image,
+  link,
   html = false,
 }: {
   text: string;
@@ -316,6 +317,8 @@ export const RichText = memo(function RichText({
   inlineCode?: (value: string) => ReactNode | undefined;
   /** Shows an `![alt](src)`; undefined leaves it to the default, which only draws data URLs. */
   image?: (src: string, alt: string) => ReactNode | undefined;
+  /** Shows a link that isn't a project file chip; undefined leaves it to the default. */
+  link?: (href: string, children: ReactNode) => ReactNode | undefined;
   /** Renders HTML in the text, sanitized, instead of dropping it: for files, not answers. */
   html?: boolean;
 }) {
@@ -353,6 +356,8 @@ export const RichText = memo(function RichText({
           projectRoot && linksFiles && href
             ? projectFileLink(href, projectRoot)
             : null;
+        const shown = !target && href ? link?.(href, children) : undefined;
+        if (shown !== undefined) return shown;
         return target ? (
           <FileLinkChip
             target={target}
@@ -419,7 +424,7 @@ export const RichText = memo(function RichText({
       },
     }),
     // A new renderer redraws text that was shown before it arrived.
-    [projectRoot, linksFiles, inlineCode, image],
+    [projectRoot, linksFiles, inlineCode, image, link],
   );
   const blocks = useMemo(() => markdownBlocks(normalizeMath(text)), [text]);
   // Streaming changes the text every token; keep the map (and the chips

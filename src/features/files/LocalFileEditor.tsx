@@ -39,6 +39,7 @@ export default function LocalFileEditor({
   lead,
   actions,
   stamp,
+  onOpenLink,
 }: {
   checks: ChecksController;
   pull?: Pull;
@@ -53,6 +54,8 @@ export default function LocalFileEditor({
   actions?: ReactNode;
   /** Changes when the file may have changed on disk, like the working tree's revision. */
   stamp?: string;
+  /** Opens a file or folder a Markdown preview links to. */
+  onOpenLink?: (target: { path: string; directory: boolean }) => void;
 }) {
   const file = useLocalFile(project, pull, path, onClose, stamp);
   const { source } = file;
@@ -203,6 +206,7 @@ export default function LocalFileEditor({
                   where={project.id}
                   path={path}
                   text={file.buffer ?? ""}
+                  onOpen={onOpenLink}
                 />
               )}
             </div>
