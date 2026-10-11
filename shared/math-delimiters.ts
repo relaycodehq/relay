@@ -176,8 +176,9 @@ function singleDollarEnd(text: string, from: number): number {
       /\d/.test(text[k + 1] ?? "")
     )
       return -1;
-    // "$HOME/$USER" and "$a-$b": a formula doesn't end on a separator.
-    return /[/:,;.-]/.test(text[k - 1]!) ? -1 : k;
+    // "$HOME/$USER", "$a-$b", "cost=$cost, total=$total" and "/^\d+$/ … /^\w+$/":
+    // a formula doesn't end on a separator or an operator waiting for its operand.
+    return /[/:,;.\-=+*^_([{<>&]/.test(text[k - 1]!) ? -1 : k;
   }
   return -1;
 }
