@@ -75,6 +75,21 @@
   max-height: none;
   mask-image: none;
 }
+.queued-expand {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.queued-expand:hover,
+.queued-expand:focus-visible {
+  color: var(--text);
+}
 .queued-bubble > p.queued-compact {
   display: flex;
   align-items: center;

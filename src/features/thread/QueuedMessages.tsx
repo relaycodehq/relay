@@ -1,4 +1,10 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowUp,
   CalendarClock,
@@ -84,11 +90,17 @@ function QueuedRow({
   actions: ReactNode;
 }) {
   const bubble = useRef<HTMLDivElement>(null);
+  const id = useId();
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
   useLayoutEffect(() => {
     const p = bubble.current?.querySelector("p");
-    if (p && !open) setLong(p.scrollHeight > p.clientHeight + 1);
+    if (!p || open) return;
+    const measure = () => setLong(p.scrollHeight > p.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(p);
+    return () => observer.disconnect();
   }, [text, open]);
   return (
     <li
@@ -103,6 +115,7 @@ function QueuedRow({
       )}
       <div
         ref={bubble}
+        id={id}
         className={["queued-bubble", long && "long", open && "open"]
           .filter(Boolean)
           .join(" ")}
@@ -111,6 +124,20 @@ function QueuedRow({
         }}
       >
         {children(!open)}
+        {(long || open) && (
+          <button
+            type="button"
+            className="queued-expand"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(!open);
+            }}
+          >
+            {open ? "Show less" : "Show more"}
+          </button>
+        )}
       </div>
       <span className="queued-actions">{actions}</span>
     </li>
