@@ -4,7 +4,13 @@ import type { FetchRequest } from "../pull-requests/gitea";
 import { ghToken } from "../pull-requests/github";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
-import { statusRuns, type CommitStatus } from "./statuses";
+import {
+  groupRuns,
+  statusEntry,
+  statusRuns,
+  type CiEntry,
+  type CommitStatus,
+} from "./statuses";
 
 const API = "https://api.github.com";
 const MAX_JSON = 4 * 1024 * 1024;
@@ -25,7 +31,9 @@ export interface GithubRun {
   head_commit?: { message?: string; author?: { name?: string } } | null;
 }
 
-export function githubRunState(run: GithubRun): CiState {
+export function githubRunState(
+  run: Pick<GithubRun, "status" | "conclusion">,
+): CiState {
   // Queued, in progress, waiting for a runner or for approval.
   if (run.status !== "completed") return "running";
   switch (run.conclusion) {
@@ -60,6 +68,111 @@ export function latestGithubRuns(runs: GithubRun[]) {
   return { head, runs: latest };
 }
 
+/** How far back a branch is walked for a commit CI reported on, 100 commits a page. */
+const HISTORY_PAGES = 5;
+
+const HISTORY_QUERY = `query($owner: String!, $name: String!, $ref: String!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    ref(qualifiedName: $ref) {
+      target {
+        ... on Commit {
+          history(first: 100, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              oid
+              messageHeadline
+              author { name }
+              statusCheckRollup {
+                contexts(first: 100) {
+                  nodes {
+                    __typename
+                    ... on CheckRun { name status conclusion detailsUrl startedAt completedAt checkSuite { workflowRun { url workflow { name } } } }
+                    ... on StatusContext { context state targetUrl createdAt }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+export type RollupContext =
+  | {
+      __typename: "CheckRun";
+      name: string;
+      status: string;
+      conclusion: string | null;
+      detailsUrl: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+      checkSuite: {
+        workflowRun: { url: string; workflow: { name: string } } | null;
+      } | null;
+    }
+  | {
+      __typename: "StatusContext";
+      context: string;
+      state: string;
+      targetUrl: string | null;
+      createdAt: string;
+    };
+
+interface HistoryCommit {
+  oid: string;
+  messageHeadline: string;
+  author: { name: string | null } | null;
+  statusCheckRollup: { contexts: { nodes: (RollupContext | null)[] } } | null;
+}
+
+interface HistoryAnswer {
+  repository: {
+    ref: {
+      target: {
+        history?: {
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+          nodes: HistoryCommit[];
+        };
+      };
+    } | null;
+  } | null;
+}
+
+/** A commit's checks and statuses as workflows: an Actions job under its workflow, any other check or status on its own. */
+export function rollupRuns(contexts: (RollupContext | null)[]): CiRun[] {
+  return groupRuns(
+    contexts.flatMap((c): CiEntry[] => {
+      if (c?.__typename === "StatusContext")
+        return [
+          statusEntry({
+            context: c.context,
+            state: c.state.toLowerCase(),
+            target_url: c.targetUrl,
+            updated_at: c.createdAt,
+          }),
+        ];
+      if (c?.__typename !== "CheckRun") return [];
+      const state = githubRunState({
+        status: c.status.toLowerCase(),
+        conclusion: c.conclusion?.toLowerCase() ?? null,
+      });
+      const run = c.checkSuite?.workflowRun;
+      const at = state === "running" ? c.startedAt : c.completedAt;
+      return [
+        {
+          workflow: run?.workflow.name ?? c.name,
+          job: run ? c.name : undefined,
+          state,
+          url: run?.url ?? c.detailsUrl ?? "",
+          at: Date.parse(at ?? c.startedAt ?? "") || 0,
+        },
+      ];
+    }),
+  );
+}
+
 export class GitHub {
   private token?: Promise<string | null>;
   /** Unchanged answers come back as 304s, which don't count against the rate limit. */
@@ -67,16 +180,23 @@ export class GitHub {
   /** The token the cache was filled under; a private repo's answer must not outlive its login. */
   private cacheToken: string | null = null;
   private failedJobs = new Map<string, string | undefined>();
-  constructor(private fetchRequest: FetchRequest) {}
+  constructor(
+    private fetchRequest: FetchRequest,
+    private login: () => Promise<string | null> = ghToken,
+  ) {}
 
-  private async get<T>(path: string): Promise<T> {
-    const token = await (this.token ??= ghToken());
+  /** A GET, or a POST of `body` (never cached). */
+  private async get<T>(path: string, body?: unknown): Promise<T> {
+    const token = await (this.token ??= this.login());
     if (token !== this.cacheToken) {
       this.cache.clear();
       this.cacheToken = token;
     }
-    const cached = this.cache.get(path);
+    const cached = body === undefined ? this.cache.get(path) : undefined;
     const response = await this.fetchRequest(API + path, {
+      ...(body !== undefined
+        ? { method: "POST", body: JSON.stringify(body) }
+        : {}),
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -119,7 +239,7 @@ export class GitHub {
         "GitHub returned more data than Relay can safely handle.",
       ),
     ) as T;
-    const etag = response.headers.get("etag");
+    const etag = body === undefined && response.headers.get("etag");
     if (etag) {
       this.cache.delete(path);
       this.cache.set(path, { etag, data });
@@ -155,7 +275,66 @@ export class GitHub {
     return this.failedJobs.get(key);
   }
 
+  /**
+   * The newest commit on `branch` that CI reported on. Signed in, that walks
+   * back past commits CI never saw (a build machine that only posts statuses
+   * for releases); without a login GraphQL is closed, so only the tip's
+   * statuses and the Actions runs count.
+   */
   async read(repo: CiRepo, branch: string): Promise<CiReading | null> {
+    return (await (this.token ??= this.login()))
+      ? this.readHistory(repo, branch)
+      : this.readTip(repo, branch);
+  }
+
+  private async readHistory(
+    repo: CiRepo,
+    branch: string,
+  ): Promise<CiReading | null> {
+    let after: string | null = null;
+    for (let page = 0; page < HISTORY_PAGES; page++) {
+      const answer: {
+        data?: HistoryAnswer;
+        errors?: { type?: string; message: string }[];
+      } = await this.get("/graphql", {
+        query: HISTORY_QUERY,
+        variables: {
+          owner: repo.owner,
+          name: repo.name,
+          ref: `refs/heads/${branch}`,
+          after,
+        },
+      });
+      if (answer.errors?.length || !answer.data)
+        throw new Error(
+          answer.errors?.[0]?.type === "NOT_FOUND"
+            ? "GitHub can't find this repository, or your gh login can't see it."
+            : `GitHub refused the CI query: ${answer.errors?.[0]?.message ?? "no answer"}`,
+        );
+      const history = answer.data.repository?.ref?.target.history;
+      if (!history) return null;
+      for (const commit of history.nodes) {
+        const runs = rollupRuns(commit.statusCheckRollup?.contexts.nodes ?? []);
+        if (runs.length)
+          return {
+            commit: {
+              sha: commit.oid,
+              message: commit.messageHeadline || undefined,
+              author: commit.author?.name ?? undefined,
+            },
+            runs,
+          };
+      }
+      if (!history.pageInfo.hasNextPage) return null;
+      after = history.pageInfo.endCursor;
+    }
+    return null;
+  }
+
+  private async readTip(
+    repo: CiRepo,
+    branch: string,
+  ): Promise<CiReading | null> {
     const ref = `heads/${branch.split("/").map(encodeURIComponent).join("/")}`;
     const [{ workflow_runs }, tip] = await Promise.all([
       this.get<{ workflow_runs: GithubRun[] }>(

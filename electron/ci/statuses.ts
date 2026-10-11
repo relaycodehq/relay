@@ -23,23 +23,26 @@ function statusState(state: string): CiState {
   }
 }
 
+/** One job, check or status, before it's grouped under its workflow. */
+export interface CiEntry {
+  workflow: string;
+  job?: string;
+  state: CiState;
+  url: string;
+  at: number;
+}
+
 /**
- * Commit statuses as workflows. Gitea Actions posts one status per job,
- * named `Workflow / job (event)`; those group under their workflow. Any other
- * CI posting statuses shows as a workflow of its own.
+ * Entries as workflows: the worst state of a workflow's entries decides it,
+ * and it opens that entry's page.
  */
-export function statusRuns(statuses: CommitStatus[]): CiRun[] {
+export function groupRuns(entries: CiEntry[]): CiRun[] {
   const workflows = new Map<string, CiRun>();
-  for (const s of statuses) {
-    const [workflow, ...rest] = s.context.split(" / ");
-    const job = rest.join(" / ").replace(/\s*\([^)]*\)$/, "");
-    const state = statusState(s.state);
-    const at = Date.parse(s.updated_at);
-    const url = s.target_url ?? "";
-    const run = workflows.get(workflow!);
+  for (const { workflow, job, state, url, at } of entries) {
+    const run = workflows.get(workflow);
     if (!run) {
-      workflows.set(workflow!, {
-        workflow: workflow!,
+      workflows.set(workflow, {
+        workflow,
         state,
         failedJob: state === "failure" && job ? job : undefined,
         url,
@@ -56,3 +59,22 @@ export function statusRuns(statuses: CommitStatus[]): CiRun[] {
   }
   return [...workflows.values()];
 }
+
+/**
+ * A commit status as an entry. Gitea Actions posts one status per job, named
+ * `Workflow / job (event)`; those group under their workflow. Any other CI
+ * posting statuses shows as a workflow of its own.
+ */
+export function statusEntry(s: CommitStatus): CiEntry {
+  const [workflow, ...rest] = s.context.split(" / ");
+  return {
+    workflow: workflow!,
+    job: rest.join(" / ").replace(/\s*\([^)]*\)$/, "") || undefined,
+    state: statusState(s.state),
+    url: s.target_url ?? "",
+    at: Date.parse(s.updated_at),
+  };
+}
+
+export const statusRuns = (statuses: CommitStatus[]) =>
+  groupRuns(statuses.map(statusEntry));

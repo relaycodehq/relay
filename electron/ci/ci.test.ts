@@ -9,6 +9,7 @@ import {
   latestGithubRuns,
   githubRunState,
   type GithubRun,
+  type RollupContext,
 } from "./github";
 import { statusRuns } from "./statuses";
 import { remoteRepo } from "./index";
@@ -71,14 +72,18 @@ it("shows commit statuses from CI outside Actions next to Actions runs", async (
     target_url: "https://mini.example/log",
     updated_at: at,
   };
+  // Without a gh login, so the REST reading of the tip.
   const answer = (routes: Record<string, unknown>) =>
-    new GitHub(async (url) => {
-      const path = new URL(url).pathname;
-      const body = routes[path];
-      return body === undefined
-        ? new Response("{}", { status: 404 })
-        : Response.json(body);
-    });
+    new GitHub(
+      async (url) => {
+        const path = new URL(url).pathname;
+        const body = routes[path];
+        return body === undefined
+          ? new Response("{}", { status: 404 })
+          : Response.json(body);
+      },
+      async () => null,
+    );
   const actions = "/repos/o/r/actions/runs";
   const tip = "/repos/o/r/commits/heads/feature/x/status";
 
@@ -111,6 +116,119 @@ it("shows commit statuses from CI outside Actions next to Actions runs", async (
   }).read({ owner: "o", name: "r" }, "feature/x");
   expect(actionsOnly?.commit.sha).toBe("old");
   expect(actionsOnly?.runs.map((r) => r.workflow)).toEqual(["Checks"]);
+});
+
+it("walks back past commits CI never saw to the last one it reported on", async () => {
+  const commit = (oid: string, contexts?: RollupContext[]) => ({
+    oid,
+    messageHeadline: `Commit ${oid}`,
+    author: { name: "Ada" },
+    statusCheckRollup: contexts ? { contexts: { nodes: contexts } } : null,
+  });
+  const pages = [
+    { nodes: [commit("c3"), commit("c2")], next: "cursor" },
+    {
+      nodes: [
+        commit("c1", [
+          {
+            __typename: "StatusContext",
+            context: "Release",
+            state: "SUCCESS",
+            targetUrl: "https://github.com/o/r/releases/tag/v1",
+            createdAt: "2026-10-09T22:12:55Z",
+          },
+          {
+            __typename: "CheckRun",
+            name: "unit",
+            status: "COMPLETED",
+            conclusion: "SUCCESS",
+            detailsUrl: "https://github.com/o/r/runs/1",
+            startedAt: "2026-10-09T22:00:00Z",
+            completedAt: "2026-10-09T22:05:00Z",
+            checkSuite: {
+              workflowRun: {
+                url: "https://github.com/o/r/actions/runs/9",
+                workflow: { name: "Checks" },
+              },
+            },
+          },
+          {
+            __typename: "CheckRun",
+            name: "e2e",
+            status: "COMPLETED",
+            conclusion: "FAILURE",
+            detailsUrl: "https://github.com/o/r/runs/2",
+            startedAt: "2026-10-09T22:00:00Z",
+            completedAt: "2026-10-09T22:06:00Z",
+            checkSuite: {
+              workflowRun: {
+                url: "https://github.com/o/r/actions/runs/9",
+                workflow: { name: "Checks" },
+              },
+            },
+          },
+        ]),
+        commit("c0", [
+          {
+            __typename: "StatusContext",
+            context: "Release",
+            state: "FAILURE",
+            targetUrl: null,
+            createdAt: "2026-10-08T00:00:00Z",
+          },
+        ]),
+      ],
+    },
+  ];
+  const asked: unknown[] = [];
+  const github = new GitHub(
+    async (_url, init) => {
+      const { variables } = JSON.parse(init.body as string);
+      asked.push(variables.after);
+      const page = pages[variables.after ? 1 : 0]!;
+      return Response.json({
+        data: {
+          repository: {
+            ref: {
+              target: {
+                history: {
+                  pageInfo: {
+                    hasNextPage: !!page.next,
+                    endCursor: page.next ?? null,
+                  },
+                  nodes: page.nodes,
+                },
+              },
+            },
+          },
+        },
+      });
+    },
+    async () => "token",
+  );
+  const reading = await github.read({ owner: "o", name: "r" }, "main");
+  expect(asked).toEqual([null, "cursor"]);
+  expect(reading?.commit).toEqual({
+    sha: "c1",
+    message: "Commit c1",
+    author: "Ada",
+  });
+  // Actions jobs group under their workflow; the release status stands alone.
+  expect(reading?.runs).toEqual([
+    {
+      workflow: "Release",
+      state: "success",
+      url: "https://github.com/o/r/releases/tag/v1",
+      at: Date.parse("2026-10-09T22:12:55Z"),
+    },
+    {
+      workflow: "Checks",
+      state: "failure",
+      failedJob: "e2e",
+      url: "https://github.com/o/r/actions/runs/9",
+      at: Date.parse("2026-10-09T22:06:00Z"),
+    },
+  ]);
 });
 
 it("groups Gitea Actions job statuses under their workflow", () => {
