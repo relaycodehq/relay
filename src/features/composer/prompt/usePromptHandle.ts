@@ -100,7 +100,12 @@ export function usePromptHandle(
       replace: (text) =>
         editor ? replaceDraft(editor, pills.content(text)) : undefined,
       dictation: {
-        begin: () => editor?.isDestroyed === false && beginDictation(editor),
+        begin: () => {
+          if (editor?.isDestroyed !== false) return;
+          beginDictation(editor);
+          // The words land here, so Enter sends them.
+          editor.view.focus();
+        },
         update: (settled, tentative) =>
           editor?.isDestroyed === false &&
           updateDictation(editor, settled, tentative),

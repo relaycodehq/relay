@@ -235,6 +235,9 @@ export function DictationButton({
                 : label
           }
           disabled={disabled && !mine}
+          // Focus stays in the draft: a focused mic would take Enter as a
+          // press, finishing or restarting dictation instead of sending.
+          onMouseDown={(e) => e.preventDefault()}
           onPointerEnter={() => {
             if (model.status === "ready" && !mine) void api.warmDictation();
           }}
