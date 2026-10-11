@@ -152,6 +152,7 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Relay listens while you dictate a message. Speech is transcribed on this computer.",
+        "NSLocalNetworkUsageDescription": "Relay connects to your phone and your other computers on this network when you allow the local network for them.",
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "Folder",

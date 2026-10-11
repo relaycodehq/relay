@@ -6,6 +6,13 @@ import type { ChatMessage } from "./projects";
 import { clientHandshake, fromBase64Url, type Channel } from "./remote-crypto";
 import { applyChatsPatch, applyMessagePatch } from "./remote-delta";
 import { jsCodec, openFrame, sealFrame, type Codec } from "./remote-wire";
+import {
+  defaultRoutes,
+  learnHosts,
+  orderHosts,
+  routeKind,
+  type RouteKind,
+} from "./remote-routes";
 import type {
   ClientFrame,
   DesktopCall,
@@ -27,6 +34,7 @@ import {
   remoteBridgeVersion,
   slowPhoneMethods,
   slowRemoteMethods,
+  validHost,
 } from "./remote";
 
 export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
@@ -41,8 +49,14 @@ export interface RemoteClientOptions {
   onEvent?: (event: RemoteEvent) => void;
   /** First contact traded the pairing code for these; keep them to reconnect. */
   onPaired?: (credentials: RemoteCredentials) => void;
+  /** The desktop named new addresses, or the route order changed; keep these instead. */
+  onCredentials?: (credentials: RemoteCredentials) => void;
   /** Per host while connecting, and per call. */
   timeoutMs?: number;
+  /** How long one route gets before the next is tried beside it. */
+  staggerMs?: number;
+  /** How often a link on a later route looks for an earlier one. */
+  betterRouteMs?: number;
   /** Per call for `slowPhoneMethods` and `slowRemoteMethods`. */
   slowTimeoutMs?: number;
   /** Silence after which a link counts as dead; the desktop ticks every 15s. */
@@ -68,8 +82,14 @@ export class RemoteClient {
   private watchdog?: ReturnType<typeof setTimeout>;
   /** When the desktop was last heard from. */
   private heard = 0;
-  private preferred = 0;
   private attempt = 0;
+  /** The host the link runs over, once online. */
+  private host?: string;
+  /** Routes being tried that haven't answered yet; each cancels itself. */
+  private dials = new Set<() => void>();
+  private betterTimer?: ReturnType<typeof setInterval>;
+  /** When each host last failed to beat the current route, so a flaky one isn't retried every round. */
+  private worse = new Map<string, number>();
   /** The connected desktop's bridge version; older desktops don't say. */
   private bridge?: number;
   /** What the desktop patches next, from this connection's events: answers still streaming and the thread list. */
@@ -90,8 +110,27 @@ export class RemoteClient {
   close() {
     this.closed = true;
     clearTimeout(this.retryTimer);
+    this.cancelDials();
     this.drop("Disconnected.");
     this.setStatus("offline");
+  }
+  /** Which way the link runs now. */
+  get route(): { host: string; kind: RouteKind } | undefined {
+    return this.status === "online" && this.host
+      ? { host: this.host, kind: routeKind(this.host) }
+      : undefined;
+  }
+  get routes(): readonly RouteKind[] {
+    return ("link" in this.target ? undefined : this.target.routes) ??
+      defaultRoutes;
+  }
+  /** A new order: kept with the credentials, and the link moves if an earlier route answers. */
+  setRoutes(routes: RouteKind[]) {
+    if ("link" in this.target) return;
+    this.target = { ...this.target, routes };
+    this.options.onCredentials?.(this.target);
+    this.worse.clear();
+    this.tryBetter();
   }
   /**
    * Reconnects now instead of waiting out the backoff, e.g. when the app
@@ -110,6 +149,10 @@ export class RemoteClient {
       clearTimeout(this.retryTimer);
       this.retry = 0;
       void this.connect();
+    } else if (this.status === "online") {
+      // Back on the home Wi-Fi, say: worth a look for the shorter way at once.
+      this.worse.clear();
+      this.tryBetter();
     }
   }
   call<M extends RemoteMethod>(
@@ -174,80 +217,270 @@ export class RemoteClient {
       ? { hosts: t.link.hosts, port: t.link.port, key: t.link.key }
       : { hosts: t.hosts, port: t.port, key: t.key };
   }
-  private async connect() {
+  private connect() {
     const attempt = ++this.attempt;
+    this.cancelDials();
     this.setStatus("connecting");
-    const { hosts, port, key } = this.hosts;
-    const order = [
-      ...hosts.slice(this.preferred),
-      ...hosts.slice(0, this.preferred),
-    ];
+    const order = orderHosts(this.hosts.hosts, this.routes);
     let reason = `Can't reach ${this.name}.`;
-    for (const host of order) {
-      if (this.closed || attempt !== this.attempt) return;
-      try {
-        await this.open(host, port, fromBase64Url(key));
-        this.preferred = hosts.indexOf(host);
-        this.retry = 0;
-        return;
-      } catch (e) {
-        this.drop("Connection lost.");
-        if (e instanceof Denied) {
+    this.race(order, {
+      stale: () => this.closed || attempt !== this.attempt,
+      claim: (link) => {
+        this.attach(link);
+        return true;
+      },
+      failed: (error) => {
+        if (error instanceof Denied) {
           this.closed = true;
-          this.setStatus("denied", e.message);
+          this.setStatus("denied", error.message);
           return;
         }
-        reason = e instanceof Error ? e.message : reason;
+        reason = error.message || reason;
+      },
+      done: () => {
+        this.setStatus("offline", reason);
+        this.scheduleRetry();
+      },
+    });
+  }
+  /**
+   * Dials the hosts in order, each a little after the one before unless that
+   * one already failed, and keeps the first that signs in. A pairing code
+   * works once, so when pairing, the first channel to open alone sends it.
+   */
+  private race(
+    order: string[],
+    on: {
+      stale: () => boolean;
+      claim: (link: Link) => boolean;
+      failed?: (error: Error) => void;
+      done: () => void;
+    },
+  ) {
+    const { port, key } = this.hosts;
+    const serverKey = fromBase64Url(key);
+    const stagger = this.options.staggerMs ?? 1500;
+    const pairing = "link" in this.target;
+    const mine = new Set<() => void>();
+    let next = 0,
+      won = false,
+      signing: (() => void) | undefined,
+      timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      clearTimeout(timer);
+      for (const cancel of mine) {
+        cancel();
+        this.dials.delete(cancel);
       }
-    }
-    if (this.closed || attempt !== this.attempt) return;
-    this.setStatus("offline", reason);
-    this.scheduleRetry();
+    };
+    const launch = () => {
+      clearTimeout(timer);
+      if (won || signing || on.stale() || next >= order.length) return;
+      const host = order[next++]!;
+      const cancel = this.dial(host, port, serverKey, {
+        signIn: () => {
+          if (!pairing) return true;
+          if (won || signing || on.stale()) return false;
+          signing = cancel;
+          clearTimeout(timer);
+          for (const other of mine)
+            if (other !== cancel) {
+              other();
+              mine.delete(other);
+              this.dials.delete(other);
+            }
+          return true;
+        },
+        claim: (link) => {
+          mine.delete(cancel);
+          this.dials.delete(cancel);
+          if (won || on.stale() || !on.claim(link)) return false;
+          won = true;
+          settle();
+          return true;
+        },
+        failed: (error) => {
+          mine.delete(cancel);
+          this.dials.delete(cancel);
+          if (signing === cancel) signing = undefined;
+          if (won || on.stale()) return;
+          on.failed?.(error);
+          // A refusal from the pinned desktop holds for every route.
+          if (error instanceof Denied) return settle();
+          if (next < order.length) launch();
+          else if (!mine.size) on.done();
+        },
+      });
+      mine.add(cancel);
+      this.dials.add(cancel);
+      if (next < order.length) timer = setTimeout(launch, stagger);
+    };
+    if (!order.length) on.done();
+    else launch();
+  }
+  private cancelDials() {
+    for (const cancel of this.dials) cancel();
+    this.dials.clear();
   }
   private scheduleRetry() {
     clearTimeout(this.retryTimer);
     const delay = Math.min(15000, 1000 * 2 ** this.retry++);
     this.retryTimer = setTimeout(() => void this.connect(), delay);
   }
-  /** Resolves once authenticated; later failures reconnect by themselves. */
-  private open(host: string, port: number, serverKey: Uint8Array) {
+  /** Takes a signed-in link as the connection, the desktop's word on its addresses with it. */
+  private attach({ socket, channel, host, frame }: Link) {
+    this.socket = socket;
+    this.channel = channel;
+    this.host = host;
+    this.bridge = frame.bridge;
+    this.streaming.clear();
+    this.chats = undefined;
+    const fresh = frame.hosts?.filter(validHost);
+    if (frame.t === "paired" && "link" in this.target) {
+      const { link } = this.target;
+      this.target = {
+        hosts: fresh?.length ? learnHosts(fresh, host) : link.hosts,
+        port: link.port,
+        key: link.key,
+        name: frame.name,
+        deviceId: frame.deviceId,
+        token: frame.token,
+      };
+      this.options.onPaired?.(this.target);
+    } else if (!("link" in this.target)) {
+      const hosts = fresh?.length
+        ? learnHosts(fresh, host)
+        : this.target.hosts;
+      const changed =
+        hosts.join(",") !== this.target.hosts.join(",") ||
+        frame.name !== this.target.name;
+      this.target = { ...this.target, name: frame.name, hosts };
+      if (changed) this.options.onCredentials?.(this.target);
+    }
+    this.retry = 0;
+    this.keepAlive(socket);
+    this.watchRoutes();
+    this.setStatus("online");
+  }
+  /** While the link runs over a later route than it could, looks for an earlier one now and then. */
+  private watchRoutes() {
+    clearInterval(this.betterTimer);
+    this.betterTimer = undefined;
+    if (!this.better().length) return;
+    this.betterTimer = setInterval(
+      () => this.tryBetter(),
+      this.options.betterRouteMs ?? 60_000,
+    );
+  }
+  /** Hosts ahead of the current one in the order, but not those that just lost to it. */
+  private better() {
+    const order = orderHosts(this.hosts.hosts, this.routes);
+    const at = this.host ? order.indexOf(this.host) : -1;
+    const cooled = Date.now() - 5 * 60_000;
+    return (at < 0 ? [] : order.slice(0, at)).filter(
+      (h) => (this.worse.get(h) ?? 0) < cooled,
+    );
+  }
+  /**
+   * Signs in over an earlier route beside the running link and swaps to it
+   * once it's in, so nothing shows as offline. Only between calls: an answer
+   * on its way comes back on the socket it went out on.
+   */
+  private tryBetter() {
+    if (this.status !== "online" || this.dials.size) return;
+    const hosts = this.better();
+    if (!hosts.length) return this.watchRoutes();
+    const socket = this.socket;
+    let busy = false;
+    this.race(hosts, {
+      stale: () => this.closed || this.socket !== socket,
+      claim: (link) => {
+        if (this.calls.size) return !(busy = true);
+        const old = this.socket;
+        if (old) {
+          old.onclose = old.onmessage = old.onerror = old.onopen = null;
+          try {
+            old.close();
+          } catch {}
+        }
+        clearTimeout(this.watchdog);
+        this.attach(link);
+        return true;
+      },
+      failed: () => {},
+      done: () => {
+        if (!busy) for (const host of hosts) this.worse.set(host, Date.now());
+        this.watchRoutes();
+      },
+    });
+  }
+  /**
+   * One route: connects, opens the channel under the pinned key and signs in.
+   * `claim` decides whether the signed-in link is wanted; after that its
+   * frames are the connection's. Returns a cancel for while it's dialing.
+   */
+  private dial(
+    host: string,
+    port: number,
+    serverKey: Uint8Array,
+    on: {
+      /** The channel is open; false leaves this route before it signs in. */
+      signIn: () => boolean;
+      claim: (link: Link) => boolean;
+      failed: (error: Error) => void;
+    },
+  ): () => void {
     const Socket = this.options.WebSocket ?? globalThis.WebSocket;
     const url = `ws://${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}/`;
-    return new Promise<void>((resolve, reject) => {
-      const socket = new Socket(url);
-      socket.binaryType = "arraybuffer";
-      this.socket = socket;
-      const handshake = clientHandshake(serverKey);
-      let settled = false;
-      const fail = (error: Error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error);
-      };
-      const timer = setTimeout(
-        () => fail(new Error(`${host} didn't answer.`)),
-        this.options.timeoutMs ?? 15000,
-      );
-      socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
-      socket.onerror = () => fail(new Error(`Can't reach ${this.name}.`));
-      socket.onclose = () => {
-        if (!settled) return fail(new Error(`Can't reach ${this.name}.`));
-        if (this.socket === socket) this.lost();
-      };
-      socket.onmessage = (message) => {
-        const data =
-          message.data instanceof ArrayBuffer
-            ? new Uint8Array(message.data)
-            : message.data;
-        if (typeof data !== "string" && !(data instanceof Uint8Array))
-          return socket.close();
-        let opened: ServerFrame | undefined;
-        try {
-          if (!this.channel) {
-            if (typeof data !== "string") throw new Error();
-            this.channel = handshake.finish(JSON.parse(data) as HelloFrame);
-            this.sendFrame(
+    const codec = this.options.codec ?? jsCodec;
+    const socket = new Socket(url);
+    socket.binaryType = "arraybuffer";
+    const handshake = clientHandshake(serverKey);
+    let channel: Channel | undefined;
+    let state: "dialing" | "won" | "done" = "dialing";
+    const quit = () => {
+      clearTimeout(timer);
+      socket.onclose = socket.onmessage = socket.onerror = socket.onopen = null;
+      try {
+        socket.close();
+      } catch {}
+    };
+    const fail = (error: Error) => {
+      if (state !== "dialing") return;
+      state = "done";
+      quit();
+      on.failed(error);
+    };
+    const timer = setTimeout(
+      () => fail(new Error(`${host} didn't answer.`)),
+      this.options.timeoutMs ?? 15000,
+    );
+    socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+    socket.onerror = () => fail(new Error(`Can't reach ${this.name}.`));
+    socket.onclose = () => {
+      if (state === "dialing") return fail(new Error(`Can't reach ${this.name}.`));
+      if (state === "won" && this.socket === socket) this.lost();
+    };
+    socket.onmessage = (message) => {
+      const data =
+        message.data instanceof ArrayBuffer
+          ? new Uint8Array(message.data)
+          : message.data;
+      if (typeof data !== "string" && !(data instanceof Uint8Array))
+        return socket.close();
+      let opened: ServerFrame | undefined;
+      try {
+        if (!channel) {
+          if (typeof data !== "string") throw new Error();
+          channel = handshake.finish(JSON.parse(data) as HelloFrame);
+          if (!on.signIn()) {
+            state = "done";
+            return quit();
+          }
+          // Sealed whole: nothing compact before the desktop says it reads it.
+          socket.send(
+            sealFrame(
+              channel,
               "link" in this.target
                 ? {
                     t: "pair",
@@ -262,55 +495,47 @@ export class RemoteClient {
                     token: this.target.token,
                     bridge: remoteBridgeVersion,
                   },
-            );
-            return;
-          }
-          const frame = openFrame(
-            this.channel,
-            data,
-            this.options.codec ?? jsCodec,
-          ) as ServerFrame;
-          this.keepAlive(socket);
-          if (!settled) {
-            if (frame.t === "denied") return fail(new Denied(frame.reason));
-            if (frame.t === "paired" || frame.t === "ready")
-              this.bridge = frame.bridge;
-            if (frame.t === "paired" && "link" in this.target) {
-              const { link } = this.target;
-              this.target = {
-                hosts: link.hosts,
-                port: link.port,
-                key: link.key,
-                name: frame.name,
-                deviceId: frame.deviceId,
-                token: frame.token,
-              };
-              this.options.onPaired?.(this.target);
-            } else if (frame.t === "ready") {
-              if (!("link" in this.target))
-                this.target = { ...this.target, name: frame.name };
-            } else return fail(new Error("Unexpected answer from Relay."));
-            settled = true;
-            clearTimeout(timer);
-            this.setStatus("online");
-            resolve();
-            return;
-          }
-          opened = frame;
-        } catch {
-          // Anything that doesn't open under the pinned key isn't our desktop.
-          fail(new Error(`Couldn't verify ${this.name}. Pair again.`));
-          socket.close();
+              false,
+              codec,
+            ),
+          );
+          return;
         }
-        if (!opened) return;
-        // A listener's or a patch's failure is ours, not the desktop's: the link stays.
-        try {
-          this.receive(opened);
-        } catch (error) {
-          console.warn(`Couldn't take in what ${this.name} sent:`, error);
+        const frame = openFrame(channel, data, codec) as ServerFrame;
+        if (state === "dialing") {
+          if (frame.t === "denied") return fail(new Denied(frame.reason));
+          if (frame.t !== "paired" && frame.t !== "ready")
+            return fail(new Error("Unexpected answer from Relay."));
+          clearTimeout(timer);
+          if (!on.claim({ socket, channel, host, frame })) {
+            state = "done";
+            return quit();
+          }
+          state = "won";
+          return;
         }
-      };
-    });
+        if (state !== "won") return;
+        this.keepAlive(socket);
+        opened = frame;
+      } catch {
+        // Anything that doesn't open under the pinned key isn't our desktop.
+        if (state === "dialing")
+          return fail(new Error(`Couldn't verify ${this.name}. Pair again.`));
+        socket.close();
+        return;
+      }
+      // A listener's or a patch's failure is ours, not the desktop's: the link stays.
+      try {
+        this.receive(opened);
+      } catch (error) {
+        console.warn(`Couldn't take in what ${this.name} sent:`, error);
+      }
+    };
+    return () => {
+      if (state !== "dialing") return;
+      state = "done";
+      quit();
+    };
   }
   private receive(frame: ServerFrame) {
     if (frame.t === "result") {
@@ -378,9 +603,12 @@ export class RemoteClient {
   }
   private drop(reason: string) {
     clearTimeout(this.watchdog);
+    clearInterval(this.betterTimer);
+    this.betterTimer = undefined;
     const socket = this.socket;
     this.socket = undefined;
     this.channel = undefined;
+    this.host = undefined;
     this.bridge = undefined;
     this.streaming.clear();
     this.chats = undefined;
@@ -399,6 +627,13 @@ export class RemoteClient {
 }
 
 class Denied extends Error {}
+
+interface Link {
+  socket: WebSocket;
+  channel: Channel;
+  host: string;
+  frame: Extract<ServerFrame, { t: "paired" | "ready" }>;
+}
 
 /** The call went out but no answer came back: the desktop may have done it all the same. */
 export class Unanswered extends Error {}

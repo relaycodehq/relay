@@ -14,13 +14,15 @@ import "./computers.css";
 function acceptHint(data?: PhoneRemoteState) {
   if (!data) return "Checking…";
   if (data.error) return data.error;
+  if (data.listening && data.hosts.length)
+    return `Other computers and phones ${data.lan ? "on this network or your tailnet" : "on your tailnet"} reach Relay at ${data.hosts.join(", ")}.`;
   if (data.listening)
-    return `Other computers and phones on your tailnet reach Relay at ${data.hosts[0]}.`;
+    return "Listening, but this computer isn't on a network right now.";
   if (data.enabled)
     return "Waiting for Tailscale on this computer; nothing reaches Relay until it's back.";
-  if (data.tailnet.status !== "connected")
-    return "Needs Tailscale on this computer first.";
-  return "Uses the same Tailscale connection as phone access.";
+  if (data.tailnet.status !== "connected" && !data.lan)
+    return "Needs Tailscale on this computer, or the local network under Phone.";
+  return "Uses the same connection as phone access.";
 }
 
 /**
@@ -63,7 +65,8 @@ export function TakeThreadsOver() {
             label="Accept threads from other computers"
             checked={switching ?? !!data?.enabled}
             disabled={
-              !data || (!data.enabled && data.tailnet.status !== "connected")
+              !data ||
+              (!data.enabled && !data.lan && data.tailnet.status !== "connected")
             }
             onChange={(enabled) => {
               setSwitching(enabled);

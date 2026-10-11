@@ -17,6 +17,11 @@ import {
   type RemoteEvent,
   type RemoteOverview,
 } from "../../../shared/remote";
+import {
+  defaultRoutes,
+  orderHosts,
+  type RouteKind,
+} from "../../../shared/remote-routes";
 import { newerVersion } from "../../../shared/phone-app";
 import {
   clearCredentials,
@@ -71,6 +76,11 @@ interface Remote {
   computers: PairedComputer[];
   /** The one it talks to. */
   active?: string;
+  /** Which way the link runs while online. */
+  route?: RemoteClient["route"];
+  /** The active computer's route order, first tried first. */
+  routes: readonly RouteKind[];
+  setRoutes(routes: RouteKind[]): void;
   switchTo(id: string): Promise<void>;
   /** Pairs another computer, or the same one again, and switches to it. */
   pair(link: PairingLink): Promise<void>;
@@ -113,6 +123,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const [client, setClient] = useState<RemoteClient>();
   const [status, setStatus] = useState<RemoteStatus>("offline");
   const [detail, setDetail] = useState<string>();
+  const [route, setRoute] = useState<RemoteClient["route"]>();
   const [name, setName] = useState("Relay");
   const [overview, setOverview] = useState<RemoteOverview>();
   const [saved, setSaved] = useState<RemoteCredentials[]>([]);
@@ -138,6 +149,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           if (!current()) return;
           setStatus(s);
           setDetail(why);
+          setRoute(next.route);
           if (s === "online") {
             if (active.current) reachedComputer(active.current);
             for (const waiter of onlineWaiters.current) waiter();
@@ -158,6 +170,14 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             ...list.filter((c) => c.key !== credentials.key),
             credentials,
           ]);
+        },
+        // New addresses or route order: kept in place, the list's order stays.
+        onCredentials: (credentials) => {
+          if (!current()) return;
+          void saveCredentials(credentials);
+          setSaved((list) =>
+            list.map((c) => (c.key === credentials.key ? credentials : c)),
+          );
         },
         onEvent: (event) => {
           if (!current()) return;
@@ -366,9 +386,13 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       computers: saved.map((c) => ({
         id: c.key,
         name: c.name,
-        address: `${c.hosts[0] ?? "?"}:${c.port}`,
+        address: `${orderHosts(c.hosts, c.routes)[0] ?? "?"}:${c.port}`,
       })),
       active: activeId,
+      route,
+      routes:
+        saved.find((c) => c.key === activeId)?.routes ?? defaultRoutes,
+      setRoutes: (routes) => client?.setRoutes(routes),
       switchTo,
       pair: (link) => {
         // An unreachable computer never answers; the client would retry forever.
@@ -430,6 +454,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       client,
       status,
       detail,
+      route,
       name,
       overview,
       refresh,

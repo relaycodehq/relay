@@ -5,8 +5,8 @@ import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
 import type { PhoneAppReport } from "./phone-app";
 /**
- * Relay's phone remote: a phone pairs with the desktop over the local network
- * (or a VPN such as Tailscale) and drives its threads. The desktop hosts the
+ * Relay's phone remote: a phone pairs with the desktop over Tailscale or, when
+ * the desktop allows it, the local network, and drives its threads. The desktop hosts the
  * bridge; the phone only ever talks to it. Pure types and helpers, so the
  * phone app can import this file without the desktop's dependencies.
  */
@@ -24,6 +24,7 @@ import type {
 import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
+import type { RouteKind } from "./remote-routes";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -35,7 +36,7 @@ export const tailscaleAndroid =
 
 /** What the desktop's QR code carries; the key pins the desktop the phone may talk to. */
 export interface PairingLink {
-  /** Addresses to try, best first: LAN, then VPN. */
+  /** Addresses to try: on the local network, then on Tailscale. */
   hosts: string[];
   port: number;
   /** The desktop's X25519 public key, base64url. */
@@ -79,7 +80,7 @@ export function parsePairingUrl(text: string): PairingLink | null {
   return { hosts, port, key, code, name };
 }
 
-const validHost = (host: string) =>
+export const validHost = (host: string) =>
   /^[A-Za-z0-9.-]{1,253}$/.test(host) || /^\[[0-9a-fA-F:]+\]$/.test(host);
 
 /** What a paired phone keeps to reconnect: the pinned desktop and its own token. */
@@ -90,6 +91,8 @@ export interface RemoteCredentials {
   name: string;
   deviceId: string;
   token: string;
+  /** Which way to try first; left out, the local network. */
+  routes?: RouteKind[];
 }
 
 /** A thread as the phone's lists show it. */
@@ -663,8 +666,10 @@ export type ServerFrame =
       token: string;
       name: string;
       bridge?: number;
+      /** Where the desktop listens now; desktops before local network access send none. */
+      hosts?: string[];
     }
-  | { t: "ready"; name: string; bridge?: number }
+  | { t: "ready"; name: string; bridge?: number; hosts?: string[] }
   | { t: "denied"; reason: string }
   | { t: "result"; id: number; ok: true; value: unknown }
   | { t: "result"; id: number; ok: false; error: string }
@@ -682,8 +687,8 @@ export interface HelloFrame {
 }
 
 /**
- * Tailscale on this computer. Phone access listens only on its tailnet
- * address, so a phone reaches Relay only from the same tailnet.
+ * Tailscale on this computer. Phone access listens on its tailnet address,
+ * and on the local network too when that's allowed.
  */
 export interface PhoneTailnet {
   /** connected: on a tailnet; stopped: installed but off or signed out; missing: not found. */
@@ -703,7 +708,9 @@ export interface PhoneRemoteState {
   error?: string;
   port: number;
   tailnet: PhoneTailnet;
-  /** Where phones reach this computer: its Tailscale addresses. */
+  /** Phones on the same local network may connect too. */
+  lan: boolean;
+  /** Where phones reach this computer: local addresses first, then Tailscale's. */
   hosts: string[];
   devices: {
     id: string;
@@ -727,6 +734,7 @@ export interface PhoneRemoteApi {
   phoneAppearance(appearance: PhoneAppearance): Promise<void>;
   phoneRemoteState(): Promise<PhoneRemoteState>;
   setPhoneRemote(enabled: boolean): Promise<PhoneRemoteState>;
+  setPhoneRemoteLan(lan: boolean): Promise<PhoneRemoteState>;
   /** A fresh QR link; the previous one stops working. */
   phonePairing(): Promise<PhonePairing>;
   revokePhone(deviceId: string): Promise<PhoneRemoteState>;

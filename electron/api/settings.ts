@@ -313,6 +313,9 @@ export function settingsHandlers(ctx: ApiContext) {
     setPhoneRemote: takes([z.boolean()], (enabled) =>
       requirePhoneRemote().setEnabled(enabled),
     ),
+    setPhoneRemoteLan: takes([z.boolean()], (lan) =>
+      requirePhoneRemote().setLan(lan),
+    ),
     phonePairing: () => requirePhoneRemote().pairing(),
     phoneAppearance: takes([phoneAppearanceSchema], (appearance) =>
       requirePhoneRemote().setAppearance(appearance),

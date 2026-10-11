@@ -20,6 +20,7 @@ import { SectionTitle, ToggleRow } from "../ui/Rows";
 import { phoneCanWatch, useNotifyPreference } from "../remote/watch";
 import { useThemePreference, type ThemePreference } from "../ui/ThemeProvider";
 import { type, useTheme } from "../ui/theme";
+import type { RouteKind } from "../../../shared/remote-routes";
 
 export default function Settings() {
   const remote = useRemote();
@@ -31,6 +32,19 @@ export default function Settings() {
   const offered = remote.overview?.phoneApp?.version;
   const update = useComputerUpdateAction();
   const source = remote.computers.length > 1 ? "your computers" : remote.name;
+  const first = remote.routes[0] ?? "local";
+  const ways: { value: RouteKind; label: string; hint: string }[] = [
+    {
+      value: "local",
+      label: "Local network first",
+      hint: "Straight to it on the same Wi-Fi; Tailscale when that doesn't answer.",
+    },
+    {
+      value: "tailscale",
+      label: "Tailscale first",
+      hint: "Over Tailscale; the local network only when Tailscale doesn't answer.",
+    },
+  ];
   const choices: { value: ThemePreference; label: string; hint: string }[] = [
     {
       value: "computer",
@@ -173,6 +187,35 @@ export default function Settings() {
           ])
         }
       />
+      {remote.active && (
+        <>
+          <SectionTitle>{`Reaching ${remote.name}`}</SectionTitle>
+          {ways.map((w) => (
+            <MenuRow
+              key={w.value}
+              label={w.label}
+              hint={
+                remote.route?.kind === w.value
+                  ? `Connected this way now, at ${remote.route.host}.`
+                  : w.hint
+              }
+              checked={first === w.value}
+              icon={
+                first === w.value ? (
+                  <Check size={16} color={t.accent} />
+                ) : (
+                  <View style={styles.iconSpace} />
+                )
+              }
+              onPress={() =>
+                remote.setRoutes(
+                  w.value === "local" ? ["local", "tailscale"] : ["tailscale", "local"],
+                )
+              }
+            />
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }

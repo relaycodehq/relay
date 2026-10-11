@@ -44,12 +44,13 @@ export class Computers {
   list(): PairedComputer[] {
     return this.saved.map((c) => {
       const entry = this.clients.get(c.id);
+      const address = entry?.client.route?.host ?? c.hosts[0];
       return {
         id: c.id,
         name: c.name,
         status: entry?.client.status ?? "offline",
         ...(entry?.detail ? { detail: entry.detail } : {}),
-        ...(c.hosts[0] ? { address: c.hosts[0] } : {}),
+        ...(address ? { address } : {}),
       };
     });
   }
@@ -95,7 +96,7 @@ export class Computers {
           client.close();
           reject(
             new Error(
-              `Couldn't reach ${link.name}. Both computers need to be on the same Tailscale network.`,
+              `Couldn't reach ${link.name}. Both computers need to be on the same network or Tailscale.`,
             ),
           );
         }, 30_000);
@@ -144,7 +145,9 @@ export class Computers {
         );
       await sleep(200);
     }
-    throw new Error(`Can't reach ${name}. Is it on, and on Tailscale?`);
+    throw new Error(
+      `Can't reach ${name}. Is it on, and on this network or Tailscale?`,
+    );
   }
   /** The handoff ids whose word to this computer didn't get through yet. */
   async setPending(
@@ -185,6 +188,16 @@ export class Computers {
           if (status === "online")
             for (const listener of this.online) listener(computer.id);
         },
+        // Where the other computer listens now, for the next connect.
+        onCredentials: ({ hosts, name }) =>
+          void this.store
+            .update((s) => {
+              const saved = s.computers?.find((c) => c.id === computer.id);
+              if (saved) Object.assign(saved, { hosts, name });
+            })
+            .catch((e) =>
+              console.warn(`Couldn't keep ${computer.name}'s addresses:`, e),
+            ),
       }),
     };
     this.clients.set(computer.id, entry);

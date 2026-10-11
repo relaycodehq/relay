@@ -16,7 +16,7 @@ export function ConnectionLine({ always }: { always?: boolean }) {
         ? `Connecting to ${name}…`
         : status === "denied"
           ? (detail ?? `${name} turned this phone away.`)
-          : // The desktop listens only on Tailscale, so that's the usual gap.
+          : // Off the computer's Wi-Fi, Tailscale is the way left, so that's the usual gap.
             `${detail ?? `Can't reach ${name}.`} Is Tailscale on? Retrying…`;
   return (
     <View style={styles.line} accessibilityLiveRegion="polite">

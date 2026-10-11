@@ -18,12 +18,15 @@ import {
 } from "../../shared/remote";
 import { SignInUnavailable, type RemoteDevices } from "./devices";
 import { LinkSender } from "./link-sender";
+import { lanPeer } from "./lan";
 import { tailnetPeer } from "./tailscale";
 
 export interface RemoteServerOptions {
   devices: RemoteDevices;
   port: number;
   name: () => string;
+  /** Where devices reach this computer now, told to each as it signs in. */
+  hosts?: () => string[];
   handle: (
     method: RemoteMethod,
     args: unknown[],
@@ -60,6 +63,7 @@ export const nodeCodec: Codec = {
 export class RemoteServer {
   private server?: WebSocketServer;
   private bound?: string;
+  private lan = false;
   private connections = new Set<Connection>();
   private timer?: NodeJS.Timeout;
   constructor(private options: RemoteServerOptions) {}
@@ -78,11 +82,12 @@ export class RemoteServer {
       [...this.connections].flatMap((c) => (c.deviceId ? [c.deviceId] : [])),
     );
   }
-  /** The address it listens on: this computer's Tailscale address. */
+  /** The address it listens on: Tailscale's, or every one with the local network allowed. */
   get host() {
     return this.server ? this.bound : undefined;
   }
-  async listen(host: string) {
+  /** With `lan`, devices on the local network may connect as well as the tailnet's. */
+  async listen(host: string, lan = false) {
     if (this.server) return;
     const key = await this.options.devices.key();
     const server = new WebSocketServer({
@@ -105,12 +110,17 @@ export class RemoteServer {
     });
     server.on("error", (e) => console.warn("Phone remote:", e));
     server.on("connection", (socket, req) => {
-      // Only the tailnet reaches this address, unless someone on the same
-      // network routes to it by hand; they get nothing either way.
-      if (!tailnetPeer(req.socket.remoteAddress)) return socket.terminate();
+      // Only the tailnet reaches its address, unless someone on the same
+      // network routes to it by hand; with the local network allowed, its
+      // private addresses come in too. Without the pinned key and a token
+      // they get nothing either way.
+      const from = req.socket.remoteAddress;
+      if (!tailnetPeer(from) && !(this.lan && lanPeer(from)))
+        return socket.terminate();
       this.accept(socket, key);
     });
     this.bound = host;
+    this.lan = lan;
     this.server = server;
     this.timer = setInterval(() => this.tick(), this.options.tickMs ?? 15_000);
   }
@@ -211,6 +221,7 @@ export class RemoteServer {
             token,
             name: this.options.name(),
             bridge: remoteBridgeVersion,
+            hosts: this.options.hosts?.() ?? [],
           });
         } else if (frame.t === "auth") {
           const device = await devices.verify(
@@ -224,6 +235,7 @@ export class RemoteServer {
             t: "ready",
             name: this.options.name(),
             bridge: remoteBridgeVersion,
+            hosts: this.options.hosts?.() ?? [],
           });
         } else throw new Error("Pair this phone first.");
         // `paired` and `ready` went as text, which every client reads.

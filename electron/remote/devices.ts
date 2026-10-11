@@ -59,6 +59,11 @@ export class RemoteDevices {
     });
     if (!enabled) this.pairing = undefined;
   }
+  async setLan(lan: boolean) {
+    await this.store.update((s) => {
+      s.phoneRemote = { ...s.phoneRemote, lan };
+    });
+  }
   /** Made once and kept: phones pin its public half. */
   async key(): Promise<KeyPair> {
     if (this.keyPair) return this.keyPair;

@@ -116,6 +116,7 @@ async function desktop(
     current: { status: "connected", addresses: ["127.0.0.1"] },
   },
   extra: Partial<Omit<RemoteHost, "name">> = {},
+  lan: () => string[] = () => [],
 ) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
   const store = new Store(join(dir, "state"));
@@ -128,6 +129,7 @@ async function desktop(
     { ...fake.host, ...extra },
     0,
     async () => tailnet.current,
+    lan,
   );
   if (tailnet.current.status === "connected") await remote.setEnabled(true);
   cleanup.push(async () => {
@@ -251,6 +253,144 @@ it("turns on only with Tailscale, and listens only while it's connected", async 
     device: "Pixel 7",
   });
   await phone1.until("online");
+});
+
+it("listens on the local network when allowed, Tailscale or not", async () => {
+  const tailnet = {
+    current: { status: "missing", addresses: [] } as PhoneTailnet,
+  };
+  const { remote } = await desktop(undefined, tailnet, {}, () => [
+    "127.0.0.1",
+  ]);
+  await expect(remote.setEnabled(true)).rejects.toThrow("local network");
+  await remote.setLan(true);
+  await remote.setEnabled(true);
+  expect(await remote.state()).toMatchObject({
+    lan: true,
+    listening: true,
+    hosts: ["127.0.0.1"],
+  });
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  expect(link.hosts).toEqual(["127.0.0.1"]);
+  const p = phone({ link, device: "Pixel 7" });
+  await p.until("online");
+  expect(p.credentials()!.hosts).toEqual(["127.0.0.1"]);
+
+  // Tailscale comes up: the local address stays first, Tailscale's follows.
+  tailnet.current = { status: "connected", addresses: ["100.100.1.2"] };
+  await remote.start();
+  expect((await remote.state()).hosts).toEqual(["127.0.0.1", "100.100.1.2"]);
+
+  // Without the local network and Tailscale gone, nothing listens.
+  tailnet.current = { status: "missing", addresses: [] };
+  await remote.setLan(false);
+  expect(await remote.state()).toMatchObject({ listening: false, hosts: [] });
+});
+
+/**
+ * Names stand in for routes: each maps to the desktop on 127.0.0.1 while
+ * `up`, and to a socket that never answers, like a LAN address on another
+ * network, while not.
+ */
+function routed(up: Set<string>) {
+  return function Routed(url: string) {
+    const target = new URL(url);
+    if (up.has(target.hostname)) {
+      target.hostname = "127.0.0.1";
+      return new WebSocket(target.toString());
+    }
+    return { send() {}, close() {}, binaryType: "arraybuffer" };
+  } as unknown as typeof WebSocket;
+}
+
+it("tries the next route when one doesn't answer, and keeps the desktop's addresses", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel 7" });
+  await first.until("online");
+  const saved = first.credentials()!;
+  first.client.close();
+
+  let learned: RemoteCredentials | undefined;
+  const p = phone(
+    { ...saved, hosts: ["192.168.9.9", "100.100.1.2"] },
+    {
+      WebSocket: routed(new Set(["100.100.1.2"])),
+      staggerMs: 50,
+      timeoutMs: 10_000,
+      onCredentials: (c) => (learned = c),
+    },
+  );
+  // Well before the dead route's timeout.
+  await p.until("online");
+  expect(p.client.route).toEqual({ host: "100.100.1.2", kind: "tailscale" });
+  // The desktop's address and the one that worked; the dead one is gone.
+  expect(learned?.hosts).toEqual(["127.0.0.1", "100.100.1.2"]);
+});
+
+it("pairs over whichever route answers, sending the one-time code only once", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  // A LAN address from another network ahead of the one that works.
+  const away = phone(
+    { link: { ...link, hosts: ["192.168.9.9", "100.100.1.2"] }, device: "Pixel" },
+    { WebSocket: routed(new Set(["100.100.1.2"])), staggerMs: 50, timeoutMs: 10_000 },
+  );
+  await away.until("online");
+  away.client.close();
+
+  // Both answer: one sends the code, the other steps aside instead of being refused.
+  const both = parsePairingUrl((await remote.pairing()).url)!;
+  const home = phone(
+    { link: { ...both, hosts: ["home.lan", "100.100.1.2"] }, device: "Pixel 2" },
+    {
+      WebSocket: routed(new Set(["home.lan", "100.100.1.2"])),
+      staggerMs: 0,
+      timeoutMs: 10_000,
+    },
+  );
+  await home.until("online");
+  expect(home.statuses.map((s) => s.status)).not.toContain("denied");
+  expect(remote.devices.list().map((d) => d.name)).toEqual(["Pixel", "Pixel 2"]);
+});
+
+it("moves to an earlier route once it answers, without going offline", async () => {
+  // Both routes, as a desktop with the local network on names them.
+  const { remote } = await desktop(
+    undefined,
+    { current: { status: "connected", addresses: ["100.100.1.2"] } },
+    {},
+    () => ["127.0.0.1"],
+  );
+  await remote.setLan(true);
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel 7" });
+  await first.until("online");
+  const saved = first.credentials()!;
+  first.client.close();
+
+  const up = new Set(["100.100.1.2"]);
+  const p = phone(
+    { ...saved, hosts: ["home.lan", "100.100.1.2"] },
+    { WebSocket: routed(up), staggerMs: 50, timeoutMs: 10_000 },
+  );
+  await p.until("online");
+  expect(p.client.route?.kind).toBe("tailscale");
+
+  // Home again: the local address answers, and coming back looks for it.
+  up.add("127.0.0.1");
+  p.client.wake();
+  await vi.waitFor(() => expect(p.client.route?.kind).toBe("local"));
+  await p.client.call("overview");
+
+  // Tailscale first, by choice: back the other way.
+  p.client.setRoutes(["tailscale", "local"]);
+  await vi.waitFor(() => expect(p.client.route?.kind).toBe("tailscale"));
+  await p.client.call("overview");
+  const after = p.statuses.slice(
+    p.statuses.findIndex((s) => s.status === "online"),
+  );
+  expect(after.every((s) => s.status === "online")).toBe(true);
 });
 
 it("won't pair with a desktop whose key differs from the QR code's", async () => {

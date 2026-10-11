@@ -24,8 +24,9 @@ import { type, useTheme } from "../ui/theme";
 
 /**
  * Pairs from the QR code in Relay's Settings → Phone, a pasted link, or a
- * relay-remote:// deep link. The desktop listens only on its Tailscale
- * address, so the phone needs Tailscale first; the steps say so up front.
+ * relay-remote:// deep link. The desktop listens on its Tailscale address,
+ * and on the local network when it allows that, so Tailscale comes first in
+ * the steps, unless the phone is on the same Wi-Fi.
  */
 export default function Pair() {
   const remote = useRemote();
@@ -74,12 +75,13 @@ export default function Pair() {
             : "Pair with your computer"}
       </Text>
       <Text style={[styles.hint, { color: t.muted }]}>
-        Relay reaches your computer only over Tailscale, a private network between your own
-        devices.
+        Relay reaches your computer over Tailscale, a private network between your own devices,
+        or directly on the same Wi-Fi when your computer allows the local network.
       </Text>
       <Step n={1} title="Tailscale on this phone">
         <Text style={[styles.hint, { color: t.muted }]}>
-          Install it and sign in with the account your computer uses, then leave it on.
+          Install it and sign in with the account your computer uses, then leave it on. Not
+          needed on the same Wi-Fi with the local network on.
         </Text>
         <Button
           label="Get Tailscale"
@@ -138,7 +140,9 @@ export default function Pair() {
       {error && (
         <Text style={[styles.hint, { color: t.danger }]}>
           {error}
-          {error.startsWith("That isn't") ? "" : " Check that Tailscale is on and signed in on this phone."}
+          {error.startsWith("That isn't")
+            ? ""
+            : " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here."}
         </Text>
       )}
     </ScrollView>

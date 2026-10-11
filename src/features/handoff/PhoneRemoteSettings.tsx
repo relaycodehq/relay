@@ -23,9 +23,10 @@ import {
 } from "../../ui/SettingsCard";
 
 /**
- * Phone access runs over Tailscale only, so Settings walks through it: this
- * computer on Tailscale, the switch, then the phone's Tailscale, the app and
- * the pairing code. Once a phone is paired the steps fold away.
+ * Phone access runs over Tailscale, and over the local network when that's
+ * allowed, so Settings walks through it: this computer on Tailscale, the
+ * switches, then the phone's Tailscale, the app and the pairing code. Once a
+ * phone is paired the steps fold away.
  */
 export function PhoneRemoteSettings() {
   const qc = useQueryClient();
@@ -71,13 +72,14 @@ export function PhoneRemoteSettings() {
   return (
     <>
       <SettingsCard className="phone-remote">
-        <TailscaleRow tailnet={tailnet} />
+        <TailscaleRow tailnet={tailnet} lan={!!data?.lan} />
         <SettingsRow label="Allow phone connections" hint={switchHint(data)}>
           <Switch
             label="Allow phone connections"
             checked={switching ?? !!data?.enabled}
             disabled={
-              !data || (!data.enabled && tailnet?.status !== "connected")
+              !data ||
+              (!data.enabled && !data.lan && tailnet?.status !== "connected")
             }
             onChange={(enabled) => {
               setSwitching(enabled);
@@ -88,13 +90,32 @@ export function PhoneRemoteSettings() {
             }}
           />
         </SettingsRow>
+        <SettingsRow label="Local network" hint={lanHint(data)}>
+          <Switch
+            label="Local network"
+            checked={!!data?.lan}
+            disabled={!data || busy}
+            onChange={(lan) =>
+              run(async () => {
+                setPairing(undefined);
+                await api.setPhoneRemoteLan(lan);
+              })
+            }
+          />
+        </SettingsRow>
         {steps && (
           <ol className="phone-setup" aria-label="Set up a phone">
             <Step
               n={1}
               done={!!phone}
-              title="Tailscale on your phone"
-              hint={phoneHint(tailnet)}
+              title={
+                data.lan ? "Tailscale on your phone, optional" : "Tailscale on your phone"
+              }
+              hint={
+                data.lan && !phone
+                  ? "Not needed on the same Wi-Fi. With it the phone reaches Relay from anywhere."
+                  : phoneHint(tailnet)
+              }
               action={
                 <button onClick={() => toggle("tailscale")}>
                   {code === "tailscale" ? "Hide code" : "Get Tailscale"}
@@ -109,8 +130,9 @@ export function PhoneRemoteSettings() {
                   </p>
                   <p className="setting-muted">
                     The phone and this computer then share a private network.
-                    Relay listens on nothing else, so the Wi-Fi around you can't
-                    reach it.
+                    {data.lan
+                      ? " The phone uses the local network when it's on the same one, Tailscale when it isn't."
+                      : " Relay listens on nothing else, so the Wi-Fi around you can't reach it."}
                   </p>
                 </CodePanel>
               )}
@@ -233,7 +255,13 @@ export function PhoneRemoteSettings() {
   );
 }
 
-function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
+function TailscaleRow({
+  tailnet,
+  lan,
+}: {
+  tailnet?: PhoneTailnet;
+  lan: boolean;
+}) {
   const connected = tailnet?.status === "connected";
   return (
     <SettingsRow
@@ -250,7 +278,9 @@ function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
             ? `On your tailnet${tailnet.name ? ` as ${tailnet.name}` : ""}, at ${tailnet.addresses[0]}.`
             : tailnet.status === "stopped"
               ? "Installed, but not connected. Open Tailscale and sign in; Relay notices on its own."
-              : "Phones reach Relay only over Tailscale, a private network between your own devices. Install it here and sign in; Relay notices on its own."
+              : lan
+                ? "Optional with the local network on: it lets phones reach Relay away from this network too. Install it here and sign in; Relay notices on its own."
+                : "Phones reach Relay over Tailscale, a private network between your own devices, or on the local network once that's on. Install it here and sign in; Relay notices on its own."
       }
     >
       {tailnet?.status === "missing" && (
@@ -268,14 +298,28 @@ function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
 function switchHint(data?: PhoneRemoteState) {
   if (!data) return "Checking…";
   if (data.error) return data.error;
+  if (data.listening && data.hosts.length)
+    return `${reach(data)} reach Relay, at ${data.hosts.join(", ")}, port ${data.port}.`;
   if (data.listening)
-    return `Only devices on your tailnet reach Relay, at ${data.hosts[0]}, port ${data.port}.`;
+    return "Listening, but this computer isn't on a network right now.";
   if (data.enabled)
     return "Waiting for Tailscale on this computer. Phones can't reach Relay until it's back.";
   // Optional: a main process from before Tailscale answers without it until Relay restarts.
-  if (data.tailnet?.status !== "connected")
-    return "Needs Tailscale on this computer first.";
+  if (data.tailnet?.status !== "connected" && !data.lan)
+    return "Needs Tailscale on this computer, or the local network below.";
   return "Off. Nothing listens for phones.";
+}
+
+function reach(data: PhoneRemoteState) {
+  const tailnet = data.tailnet?.status === "connected";
+  if (!data.lan) return "Only devices on your tailnet";
+  return tailnet ? "Phones on this network or your tailnet" : "Phones on this network";
+}
+
+function lanHint(data?: PhoneRemoteState) {
+  if (!data?.lan)
+    return "Let phones on the same Wi-Fi connect directly, without Tailscale.";
+  return "Phones on the same Wi-Fi connect directly, and move over by themselves when one answers. Still encrypted to this computer's key: others on the network can reach the port but get nothing.";
 }
 
 function phoneHint(tailnet?: PhoneTailnet) {

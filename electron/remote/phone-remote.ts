@@ -1,3 +1,4 @@
+import { networkInterfaces } from "node:os";
 import { z } from "zod";
 import type { Store } from "../app/store";
 import type { ProjectChatsEvent } from "../../shared/events";
@@ -13,10 +14,12 @@ import {
   type PhoneRemoteState,
   updateMethods,
 } from "../../shared/remote";
+import { maxHosts } from "../../shared/remote-routes";
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
 import { PhoneDictations } from "./phone-dictation";
 import { PhoneReadings } from "./phone-read-aloud";
+import { lanAddresses } from "./lan";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
@@ -98,9 +101,11 @@ export const phoneAppearanceSchema = z
   .strict();
 
 /**
- * Phone access: off until the user turns it on, and only reachable while on,
- * and then only over Tailscale: it listens on this computer's tailnet address
- * alone, so a phone has to be on the same tailnet.
+ * Phone access: off until the user turns it on, and only reachable while on.
+ * It listens on this computer's tailnet address alone, so a phone has to be
+ * on the same tailnet, unless the local network is allowed too: then it
+ * listens everywhere and lets in the tailnet and private addresses. Either
+ * way a device needs the pinned key and its token to get anything.
  */
 export class PhoneRemote {
   readonly devices: RemoteDevices;
@@ -111,6 +116,8 @@ export class PhoneRemote {
   private error?: string;
   private watch?: NodeJS.Timeout;
   private syncing = Promise.resolve();
+  /** Where devices reach this computer now: local addresses, then Tailscale's. */
+  private hosts: string[] = [];
   constructor(
     store: Store,
     seal: (value: string) => Promise<string | null>,
@@ -118,6 +125,7 @@ export class PhoneRemote {
     private host: Omit<RemoteHost, "name">,
     port = defaultRemotePort,
     private tailnet: TailnetProbe = tailnetProbe(),
+    private lan: () => string[] = () => lanAddresses(networkInterfaces()),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
     const name = computerName;
@@ -131,6 +139,7 @@ export class PhoneRemote {
       devices: this.devices,
       port,
       name,
+      hosts: () => this.hosts,
       handle: async (method, args, deviceId) => {
         const device = this.devices.list().find((d) => d.id === deviceId);
         const computer = device?.kind === "computer";
@@ -208,11 +217,12 @@ export class PhoneRemote {
     const online = this.server.online();
     return {
       enabled: !!this.devices.settings.enabled,
+      lan: !!this.devices.settings.lan,
       listening: this.server.listening,
       ...(this.error ? { error: this.error } : {}),
       port: this.server.port,
       tailnet,
-      hosts: this.server.host ? [this.server.host] : [],
+      hosts: this.server.listening ? this.hosts : [],
       devices: this.devices.list().map((d) => ({
         id: d.id,
         name: d.name,
@@ -226,8 +236,14 @@ export class PhoneRemote {
     };
   }
   async setEnabled(enabled: boolean) {
-    if (enabled && (await this.tailnet()).status !== "connected")
-      throw new Error("Connect this computer to Tailscale first.");
+    if (
+      enabled &&
+      !this.devices.settings.lan &&
+      (await this.tailnet()).status !== "connected"
+    )
+      throw new Error(
+        "Connect this computer to Tailscale first, or allow the local network.",
+      );
     await this.devices.setEnabled(enabled);
     if (enabled) await this.follow();
     else {
@@ -237,18 +253,24 @@ export class PhoneRemote {
     }
     return this.state();
   }
+  async setLan(lan: boolean) {
+    await this.devices.setLan(lan);
+    if (this.devices.settings.enabled) await this.follow();
+    return this.state();
+  }
   /** A paired phone or computer may call in, so this one shouldn't sleep on its own. */
   expectsCalls() {
     return this.server.listening && this.devices.list().length > 0;
   }
   async pairing(): Promise<PhonePairing> {
-    const host = this.server.host;
-    if (!host) throw new Error("Turn on phone access first.");
+    if (!this.server.listening) throw new Error("Turn on phone access first.");
+    if (!this.hosts.length)
+      throw new Error("This computer isn't on a network a phone can reach.");
     const key = await this.devices.key();
     const { code, expiresAt } = this.devices.newPairing();
     return {
       url: pairingUrl({
-        hosts: [host],
+        hosts: this.hosts,
         port: this.server.port,
         key: toBase64Url(key.public),
         code,
@@ -274,7 +296,7 @@ export class PhoneRemote {
     this.readings?.dispose();
     await this.server.close();
   }
-  /** Listens now, and keeps up as Tailscale goes off, comes back or moves. */
+  /** Listens now, and keeps up as Tailscale or the local network goes off, comes back or moves. */
   private async follow() {
     if (!this.watch) {
       this.watch = setInterval(() => void this.sync(), 10_000);
@@ -282,20 +304,27 @@ export class PhoneRemote {
     }
     await this.sync();
   }
-  /** Listens on this computer's Tailscale address while phone access is on, and nowhere else. */
+  /**
+   * Listens while phone access is on: on this computer's Tailscale address,
+   * or on every address when the local network is allowed too.
+   */
   private sync() {
     this.syncing = this.syncing.then(async () => {
-      const tailnet = this.devices.settings.enabled
-        ? await this.tailnet()
-        : undefined;
-      const host =
-        tailnet?.status === "connected" ? tailnet.addresses[0] : undefined;
+      const { enabled, lan } = this.devices.settings;
+      const tailnet = enabled ? await this.tailnet() : undefined;
+      const tail = tailnet?.status === "connected" ? tailnet.addresses : [];
+      const host = !enabled ? undefined : lan ? "0.0.0.0" : tail[0];
+      this.hosts = !host
+        ? []
+        : lan
+          ? [...this.lan(), ...tail].slice(0, maxHosts)
+          : [host];
       if (host === this.server.host) return;
       await this.server.close();
       this.error = undefined;
       if (!host) return;
       try {
-        await this.server.listen(host);
+        await this.server.listen(host, !!lan);
       } catch (e) {
         this.error = e instanceof Error ? e.message : String(e);
       }

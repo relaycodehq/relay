@@ -317,6 +317,7 @@ const methods = [
   "parseUrl",
   "phoneRemoteState",
   "setPhoneRemote",
+  "setPhoneRemoteLan",
   "phonePairing",
   "phoneAppearance",
   "revokePhone",
