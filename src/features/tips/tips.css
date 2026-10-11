@@ -18,6 +18,7 @@
 /* Faint until the pointer comes to it, so it never competes with the turn. */
 .tip-say {
   display: flex;
+  align-self: stretch;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -54,10 +55,12 @@
   font: inherit;
   color: var(--text);
 }
+/* The row's full height to click, without taking more room in it. */
 .tip-cta {
   border: 0;
   background: none;
-  padding: 0;
+  padding: 5px 4px;
+  margin: -5px -4px;
   font: inherit;
   color: var(--accent);
   white-space: nowrap;

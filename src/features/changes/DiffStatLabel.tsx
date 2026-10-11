@@ -7,10 +7,10 @@ export function DiffStatLabel({ stat }: { stat: DiffStat }) {
       role="group"
       aria-label={`${stat.additions} additions, ${stat.deletions} deletions`}
     >
-      <span aria-hidden className="diff-stat-add">
+      <span aria-hidden className="diff-stat-add" data-zero={!stat.additions}>
         +{compactCount(stat.additions)}
       </span>
-      <span aria-hidden className="diff-stat-del">
+      <span aria-hidden className="diff-stat-del" data-zero={!stat.deletions}>
         −{compactCount(stat.deletions)}
       </span>
     </span>

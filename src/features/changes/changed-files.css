@@ -108,6 +108,10 @@
 .diff-stat-del {
   color: light-dark(#c4323f, #f0707a);
 }
+/* Nothing added or removed reads as no change, not as a red or green one. */
+.diff-stat [data-zero="true"] {
+  color: var(--muted);
+}
 /* The turn's file list in the Changes pane. */
 .turn-file {
   align-items: center;
