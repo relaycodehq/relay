@@ -1,7 +1,9 @@
 import { Menu } from "@base-ui/react/menu";
+import { useEffect, useState } from "react";
 import {
   Check,
   ChevronDown,
+  Copy,
   Folder,
   FolderGit2,
   GitBranch,
@@ -14,7 +16,7 @@ import type {
   ChatWorktree,
   WorktreeStatus,
 } from "../../../shared/projects";
-import { agentWorktreeKey } from "../../../shared/projects";
+import { agentWorktreeKey, tildePath } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import type { ThreadWorktree } from "./useThreadWorktree";
@@ -397,6 +399,7 @@ export function WorktreeMenu({
                       : "no changes"}
               </small>
             </div>
+            <WorktreePath path={status.path} />
             <Menu.Item
               className="composer-select-item worktree-item"
               disabled={!files}
@@ -422,6 +425,36 @@ export function WorktreeMenu({
         </Menu.Positioner>
       </Menu.Portal>
     </Menu.Root>
+  );
+}
+
+/** Shown short, copied whole: the agent's own messages name the absolute path. */
+function WorktreePath({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <Menu.Item
+      className="composer-select-item worktree-item worktree-path"
+      closeOnClick={false}
+      title={`Copy ${path}`}
+      onClick={() =>
+        void api.writeClipboard(path).then(
+          () => setCopied(true),
+          () => {},
+        )
+      }
+    >
+      <span>{tildePath(path)}</span>
+      {copied ? (
+        <Check size={12} aria-label="Copied" />
+      ) : (
+        <Copy size={12} aria-hidden />
+      )}
+    </Menu.Item>
   );
 }
 

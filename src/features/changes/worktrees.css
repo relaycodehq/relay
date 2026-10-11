@@ -96,6 +96,25 @@
 .worktree-menu-heading > small {
   font-size: 11px;
 }
+.composer-select-item.worktree-path {
+  justify-content: space-between;
+  margin-top: -4px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.worktree-path > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.worktree-path > svg {
+  flex: none;
+  opacity: 0;
+}
+.worktree-path:is([data-highlighted], :hover) > svg,
+.worktree-path > svg[aria-label] {
+  opacity: 1;
+}
 /* The worktree has changes the checkout doesn't. */
 .worktree-dot {
   width: 6px;
