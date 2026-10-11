@@ -1,9 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { workspaceId } from "../../shared/workspaces";
-import { agentWorktreeKey, threadWorktree } from "../../shared/projects";
+import {
+  agentWorktreeKey,
+  goneFolder,
+  threadWorktree,
+} from "../../shared/projects";
 import { api } from "../lib/api";
 import { agentWorkingIn, worktreeThread } from "./thread-folder";
 import { useProjectChecks } from "../features/checks/useProjectChecks";
+import { directoryKey } from "../features/files/useFileTree";
 import type { ShellNavigation } from "./useShellNavigation";
 import { workingTreeKey } from "../lib/working-tree-key";
 
@@ -39,11 +44,28 @@ export function useThreadFolder({
     enabled: !!project && !inbox && !project.plain,
     refetchInterval: 3000,
   });
+  // A plain folder has no tree to poll; its root listing, shared with the
+  // Files tree, notices the folder going instead.
+  const root = useQuery({
+    queryKey: directoryKey(where, ""),
+    queryFn: () => api.projectDirectory(where, ""),
+    enabled: !!project && !inbox && !!project.plain,
+    refetchInterval: 5000,
+    retry: false,
+  });
+  /** The project folder's path once it was moved or deleted, so panes stand aside. */
+  const gone = project?.plain
+    ? root.isError
+      ? goneFolder(root.error)
+      : null
+    : tree.isError
+      ? goneFolder(tree.error)
+      : null;
   // Live checks for the working tree. A PR thread's review runs its own checks
   // (one session at a time), so the working-tree checks stand aside there.
   const checks = useProjectChecks(
     undefined,
-    project && tree.data && !inbox && !pull
+    project && tree.data && !gone && !inbox && !pull
       ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
@@ -57,7 +79,8 @@ export function useThreadFolder({
       text: "worktree",
       title: `${worktree.branch ?? "Detached HEAD"} · ${worktree.path}`,
     },
-    tree: tree.data,
+    tree: gone ? undefined : tree.data,
+    gone,
     checks,
   };
 }

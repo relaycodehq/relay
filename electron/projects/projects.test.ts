@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -15,7 +16,7 @@ import { Store } from "../app/store";
 import { Projects } from "./projects";
 import { Gitea } from "../pull-requests/gitea";
 import { fixtureServer } from "../../tests/fixtures/gitea";
-import { projectTitle } from "../../shared/projects";
+import { folderGoneMessage, projectTitle } from "../../shared/projects";
 
 it("titles a folder name by its words, leaving one with none as it is", () => {
   expect(projectTitle("relay-releases")).toBe("Relay Releases");
@@ -273,8 +274,37 @@ it("still names the folder of a project deleted outside Relay, so its processes 
     await mkdir(root);
     const project = await projects.add(root, null);
     await rm(root, { recursive: true });
-    await expect(projects.root(project.id)).rejects.toThrow("ENOENT");
+    await expect(projects.root(project.id)).rejects.toThrow(
+      folderGoneMessage(root),
+    );
     expect(await projects.taskFolder(project.id)).toBe(root);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("points a project whose folder moved at its new place, unless another project has it", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const before = join(dir, "before");
+    const after = join(dir, "after");
+    const other = join(dir, "other");
+    await mkdir(before);
+    await mkdir(other);
+    const project = await projects.add(before, null);
+    const taken = await projects.add(other, null);
+    await rename(before, after);
+    await expect(projects.relocate(project.id, other)).rejects.toThrow(
+      `${other} is already the project ${taken.name}.`,
+    );
+    expect(await projects.relocate(project.id, after)).toMatchObject({
+      id: project.id,
+      path: after,
+    });
+    expect((await projects.inspect(project.id)).root).toBe(after);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

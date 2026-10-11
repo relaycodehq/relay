@@ -11,6 +11,7 @@ import { keys } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { CommitFileList } from "./CommitFileList";
 import { ErrorBox, IconButton, Modal, Spinner } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./commit-sheet.css";
 import "./create-pull.css";
 
@@ -299,11 +300,17 @@ function CommitRoute({ tree, push }: { tree: WorkingTree; push: boolean }) {
       className="commit-sheet-route"
       title={target ? `${tree.branch} → ${target}` : tree.branch}
     >
-      <code>{tree.branch}</code>
+      <code>
+        <MiddleTruncate text={tree.branch} kind="branch" title={null} />
+      </code>
       {target && (
         <>
           <ArrowRight size={12} aria-label="then push to" />
-          {remote || <code>{target}</code>}
+          {remote || (
+            <code>
+              <MiddleTruncate text={target} kind="branch" title={null} />
+            </code>
+          )}
         </>
       )}
     </p>

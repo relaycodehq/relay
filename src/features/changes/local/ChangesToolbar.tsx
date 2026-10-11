@@ -7,6 +7,7 @@ import {
 import { gitBlockedReason } from "../working-changes";
 import { IconButton } from "../../../ui/ui";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
+import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 
 /**
  * The branch, how far it is from its upstream, and the list's actions: in
@@ -73,7 +74,10 @@ export function ChangesToolbar({
             <>
               <span className="pane-chip">
                 <GitBranch size={12} />
-                {tree ? checkoutLabel(tree) : "Local checkout"}
+                <MiddleTruncate
+                  text={tree ? checkoutLabel(tree) : "Local checkout"}
+                  kind="branch"
+                />
               </span>
               {tree?.upstream && (tree.ahead > 0 || tree.behind > 0) && (
                 <span className="pane-chip">

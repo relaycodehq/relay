@@ -6,6 +6,7 @@ import { changeKind } from "../../../shared/working-tree";
 import { byFolder, changeLabels } from "./working-changes";
 import { IconButton } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 /**
  * The Commit sheet's files, each with a box to leave it out. Grouped under
@@ -90,7 +91,7 @@ export function CommitFileList({
                     group.map((c) => c.path),
                     folder || "Repository root",
                   )}
-                  {folder || "/"}
+                  <MiddleTruncate text={folder || "/"} kind="path" />
                 </label>
                 {group.map((c) => (
                   <FileRow
@@ -158,7 +159,11 @@ function FileRow({
       <input type="checkbox" checked={!out} onChange={() => onToggle([path])} />
       <FileEntryIcon path={path} directory={false} />
       <span className={`commit-file-name ${kind}`}>
-        {path.slice(path.lastIndexOf("/") + 1)}
+        <MiddleTruncate
+          text={path.slice(path.lastIndexOf("/") + 1)}
+          kind="path"
+          title={null}
+        />
       </span>
       {withFolder && folder && (
         <span className="commit-file-folder">{folder}</span>

@@ -16,6 +16,7 @@ import type { ThreadView } from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
+import { FolderGoneEmpty } from "../features/projects/FolderGone";
 import {
   NO_SLOTS,
   PaneHeader,
@@ -55,7 +56,7 @@ import {
 export function ThreadChanges({
   project,
   pull,
-  folder: { where, detail },
+  folder: { where, detail, gone },
   view,
   opens,
   review,
@@ -148,6 +149,8 @@ export function ThreadChanges({
             )}
           </div>
         )
+      ) : gone ? (
+        <FolderGoneEmpty />
       ) : (
         <ProjectChanges
           key={where}
@@ -173,7 +176,7 @@ export function ThreadChanges({
 export function ThreadPanel({
   project,
   chatId,
-  folder: { where, detail, checks },
+  folder: { where, detail, checks, gone },
   view,
   opens,
   panel,
@@ -290,26 +293,35 @@ export function ThreadPanel({
       {!front && <SurfacePicker plain={project.plain} onPick={panel.show} />}
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
-          <ProjectFiles
-            key={where}
-            project={project}
-            where={where}
-            checks={checks}
-            onViewing={view.setViewing}
-            opens={opens.fileOpens}
-          />
+          {/* An unsaved edit stays on screen, to copy out before it goes. */}
+          {gone && !locked ? (
+            <FolderGoneEmpty />
+          ) : (
+            <ProjectFiles
+              key={where}
+              project={project}
+              where={where}
+              checks={checks}
+              onViewing={view.setViewing}
+              opens={opens.fileOpens}
+            />
+          )}
         </div>
       )}
       {panel.has("history") && !project.plain && (
         <div className="panel-body" hidden={front?.surface !== "history"}>
-          <ProjectHistory
-            key={where}
-            projectId={where}
-            slots={historySlots}
-            onOpenFile={(path) =>
-              opens.openInEditor({ path, directory: false })
-            }
-          />
+          {gone ? (
+            <FolderGoneEmpty />
+          ) : (
+            <ProjectHistory
+              key={where}
+              projectId={where}
+              slots={historySlots}
+              onOpenFile={(path) =>
+                opens.openInEditor({ path, directory: false })
+              }
+            />
+          )}
         </div>
       )}
       {panel.has("browser") && (

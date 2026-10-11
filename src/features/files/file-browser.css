@@ -316,6 +316,7 @@
   margin-right: 2px;
 }
 .markdown-split {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -354,6 +355,23 @@
 }
 .markdown-preview .markdown-image {
   max-width: 100%;
+}
+/* Over the preview's corner, so saying a link leads nowhere moves nothing. */
+.markdown-preview-notice {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  max-width: min(420px, calc(100% - 28px));
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px #0000001f;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  z-index: 31;
 }
 .markdown-preview-missing {
   color: var(--muted);

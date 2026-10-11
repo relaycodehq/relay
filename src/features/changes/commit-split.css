@@ -77,6 +77,9 @@
   width: 14px;
   height: 14px;
 }
+.split-commits ul .change-name {
+  max-width: 60%;
+}
 .split-commits ul .diff-stat {
   margin-left: auto;
   font-size: 10.5px;

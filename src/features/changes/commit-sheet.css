@@ -9,9 +9,8 @@
   white-space: nowrap;
 }
 .commit-sheet-route code {
+  display: flex;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--text);
 }
 
@@ -145,11 +144,15 @@
 .commit-file.excluded .commit-file-folder {
   opacity: 0.45;
 }
+/* Less the checkbox, icon and gaps before it, so the row never scrolls sideways. */
 .commit-file-name {
   flex: none;
-  max-width: 70%;
+  max-width: min(70%, calc(100% - 42px));
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+/* Under its folder there is no folder after it to leave room for. */
+.commit-file.nested .commit-file-name {
+  max-width: calc(100% - 42px);
 }
 .commit-file-name.modified {
   color: var(--accent);

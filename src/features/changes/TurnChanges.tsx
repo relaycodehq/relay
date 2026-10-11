@@ -47,7 +47,9 @@ export function TurnChanges({
     <section className="local-changes" aria-label="Turn changes">
       {slots.title &&
         createPortal(
-          <span className="pane-chip">{target.label}</span>,
+          <span className="pane-chip">
+            <MiddleTruncate text={target.label} kind="branch" />
+          </span>,
           slots.title,
         )}
       {slots.actions &&

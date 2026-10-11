@@ -185,7 +185,9 @@
   overflow: hidden;
   white-space: nowrap;
 }
+/* The folder gives way before the name loses its middle. */
 .worktree-move-name small {
+  flex: 0 100 auto;
   overflow: hidden;
   color: var(--muted);
   font-size: 11px;

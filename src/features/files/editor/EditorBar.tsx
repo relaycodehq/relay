@@ -4,7 +4,7 @@ import type { FileEditor } from "../useEditableDiff";
 import type { LocalFileSession } from "../useLocalFile";
 import { EditorPath } from "../EditorPath";
 import { IconButton } from "../../../ui/ui";
-import { EditHistory, ReloadButton } from "./controls";
+import { DiskState, EditHistory, ReloadButton } from "./controls";
 
 /** The inline editor's bar: its path and state, then its controls. */
 export function EditorBar({
@@ -40,9 +40,9 @@ export function EditorBar({
     <div className="editor-bar">
       {lead}
       <EditorPath path={path} title={source?.path ?? path}>
-        <span
+        <DiskState
+          file={file}
           className={`editor-bar-state ${dirty ? "dirty" : ""}`}
-          role="status"
         >
           {saving
             ? "Saving…"
@@ -51,7 +51,7 @@ export function EditorBar({
               : saved
                 ? "Saved"
                 : ""}
-        </span>
+        </DiskState>
       </EditorPath>
       {source && symbols}
       <span className="divider" />

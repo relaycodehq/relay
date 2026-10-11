@@ -7,6 +7,7 @@ import {
   Component,
   type ErrorInfo,
 } from "react";
+import { createPortal } from "react-dom";
 import { X, AlertCircle } from "lucide-react";
 import { useReturnFocus } from "../lib/focus-return";
 /**
@@ -65,7 +66,9 @@ export function Modal({
   useEffect(() => {
     ref.current?.showModal();
   }, []);
-  return (
+  // On the body, so a scoped reset like the sidebar's `.sb button` can't
+  // restyle a dialog opened from inside it.
+  return createPortal(
     <dialog
       ref={ref}
       aria-labelledby={headingId}
@@ -94,7 +97,8 @@ export function Modal({
         </IconButton>
       </div>
       {children}
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }
 export function ErrorBox({

@@ -118,6 +118,15 @@ export function projectHandlers(ctx: ApiContext) {
         );
       await projects.remove(id);
     }),
+    locateProject: takes([idSchema], async (id) => {
+      const result = await dialog.showOpenDialog(ctx.window.caller()!, {
+        title: `Locate the folder of ${projects.get(id).name}`,
+        properties: ["openDirectory"],
+      });
+      return result.canceled
+        ? null
+        : projects.relocate(id, result.filePaths[0]!);
+    }),
     saveProjectSettings: takes(
       [idSchema, projectSettingsSchema],
       async (id, settings) => {

@@ -22,6 +22,16 @@ export interface Project {
   /** When it was removed from Relay; hidden until its folder is added again, threads and all. */
   removed?: number;
 }
+const FOLDER_GONE = "This project’s folder is gone: ";
+/** What reading a project's folder says once the folder was moved or deleted. */
+export const folderGoneMessage = (path: string) => `${FOLDER_GONE}${path}`;
+/** The missing folder's path when `error` says the project's folder is gone. */
+export function goneFolder(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.startsWith(FOLDER_GONE)
+    ? message.slice(FOLDER_GONE.length)
+    : null;
+}
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>
   folder

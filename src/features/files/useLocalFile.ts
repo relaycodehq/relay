@@ -11,12 +11,17 @@ export type LocalProject = { id: string; head: string; plain?: boolean };
  * reading it, the edited text, saving it over the version it was read at, and
  * asking before closing or reloading drops unsaved edits. Holds navigation and
  * the window while edits are unsaved or saving.
+ *
+ * Looks at the disk again when the window gains focus or `stamp` changes (the
+ * working tree's revision): a clean buffer takes the new text quietly, an
+ * edited one is marked `changedOnDisk`.
  */
 export function useLocalFile(
   project: LocalProject | undefined,
   pull: Pull | undefined,
   path: string,
   onClose: () => void,
+  stamp?: string,
 ) {
   const [source, setSource] = useState<LocalFile>();
   const [error, setError] = useState<unknown>();
@@ -30,6 +35,9 @@ export function useLocalFile(
   );
   // The text as React state, for checks and blame; `text` has it without a render.
   const [buffer, setBuffer] = useState<string>();
+  const [changedOnDisk, setChangedOnDisk] = useState(false);
+  // The source came from a look at the disk, not from opening or Reload.
+  const [quiet, setQuiet] = useState(false);
   const revision = pull?.head.sha ?? source?.head ?? project!.head;
   useHoldNavigation(dirty || saving);
   const text = useRef("");
@@ -39,6 +47,20 @@ export function useLocalFile(
   const live = useRef(true);
   const loadGeneration = useRef(0);
   const isDirty = () => text.current !== baseline.current;
+  const read = () =>
+    project
+      ? api.projectFile(project.id, path)
+      : api.readLocalFile(pull!, revision, path);
+  const take = (file: LocalFile, fromDisk = false) => {
+    text.current = baseline.current = file.contents;
+    setBuffer(file.contents);
+    version.current = file.version;
+    setDirty(false);
+    setSaved(false);
+    setChangedOnDisk(false);
+    setQuiet(fromDisk);
+    setSource(file);
+  };
 
   const load = async (link = false) => {
     const generation = ++loadGeneration.current;
@@ -56,16 +78,9 @@ export function useLocalFile(
         return;
       }
       setNeedsFolder(false);
-      const file = project
-        ? await api.projectFile(project.id, path)
-        : await api.readLocalFile(pull!, revision, path);
+      const file = await read();
       if (!isCurrent()) return;
-      text.current = baseline.current = file.contents;
-      setBuffer(file.contents);
-      version.current = file.version;
-      setDirty(false);
-      setSaved(false);
-      setSource(file);
+      take(file);
     } catch (error) {
       if (isCurrent()) setError(error);
     } finally {
@@ -79,6 +94,39 @@ export function useLocalFile(
       live.current = false;
       loadGeneration.current++;
     };
+  }, []);
+
+  const checking = useRef(false);
+  const check = async () => {
+    if (!source || loading || savingRef.current || checking.current) return;
+    checking.current = true;
+    const generation = loadGeneration.current;
+    try {
+      const file = await read();
+      if (
+        !live.current ||
+        generation !== loadGeneration.current ||
+        savingRef.current
+      )
+        return;
+      if (file.version === version.current) setChangedOnDisk(false);
+      else if (isDirty()) setChangedOnDisk(true);
+      else take(file, true);
+    } catch {
+      // Gone or unreadable: saving says so, with the edits still here.
+    } finally {
+      checking.current = false;
+    }
+  };
+  const checkRef = useRef(check);
+  checkRef.current = check;
+  useEffect(() => {
+    if (stamp) void checkRef.current();
+  }, [stamp]);
+  useEffect(() => {
+    const focus = () => void checkRef.current();
+    window.addEventListener("focus", focus);
+    return () => window.removeEventListener("focus", focus);
   }, []);
 
   const save = async (close = false) => {
@@ -101,6 +149,7 @@ export function useLocalFile(
       version.current = result.version;
       baseline.current = contents;
       setDirty(isDirty());
+      setChangedOnDisk(false);
       setSaved(true);
       setConfirmation(null);
       if (close && !isDirty()) onClose();
@@ -131,6 +180,8 @@ export function useLocalFile(
     saving,
     saved,
     buffer,
+    changedOnDisk,
+    quiet,
     revision,
     confirmation,
     load,

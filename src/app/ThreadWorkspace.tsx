@@ -17,6 +17,7 @@ import { HandoffButton } from "../features/handoff/HandoffButton";
 import { ProjectChat } from "../features/thread/ProjectChat";
 import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
 import { ProjectChecksButton } from "../features/checks/ProjectChecks";
+import { FolderGone } from "../features/projects/FolderGone";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { RunningTasks } from "../features/terminal/RunningTasks";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
@@ -98,7 +99,7 @@ export function ThreadHeaderActions({
           opens.openInEditor({ path, line, directory: false })
         }
       />
-      {!project.plain && (
+      {!project.plain && !folder.gone && (
         <GitActions
           key={folder.where}
           project={project}
@@ -193,6 +194,7 @@ export function ThreadWorkspace({
   });
   return (
     <div className="workspace-column" hidden={hidden}>
+      {folder.gone && <FolderGone project={project} path={folder.gone} />}
       <div className="workspace-panes">
         <Pane
           id="chat"

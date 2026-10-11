@@ -110,7 +110,7 @@ export function ProjectFiles({
     enabled: !project.plain,
   });
   // Preserve an edited buffer (and its original revision) if Git moves externally.
-  const { locked } = useNavigationLock();
+  const { locked, blocked } = useNavigationLock();
   const editorCheckout = useRef(tree.data);
   if (!locked) editorCheckout.current = tree.data;
   const expansion = useExpanded(where);
@@ -301,6 +301,14 @@ export function ProjectFiles({
                 checks={checks}
                 path={file.path}
                 line={file.line}
+                stamp={tree.data?.revision}
+                onOpenLink={(target) => {
+                  if (blocked()) return;
+                  if (!target.directory)
+                    return select({ kind: "file", path: target.path });
+                  expansion.expand([...ancestors(target.path), target.path]);
+                  setSelection({ kind: "dir", path: target.path });
+                }}
                 inline
                 lead={listToggle}
                 actions={
