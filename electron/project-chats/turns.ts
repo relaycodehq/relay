@@ -367,6 +367,11 @@ export class ChatTurns {
             active,
           )
         : undefined;
+      // Stopped while the outgoing agent wrote its note: no note from Relay, no answer.
+      if (active.abort.signal.aborted) {
+        this.core.active.release(id, active);
+        return;
+      }
       if (switchedFrom && !(note?.status === "complete" && note.body.trim()))
         note = await this.relayHandoff(
           chat,
@@ -478,6 +483,8 @@ export class ChatTurns {
     const abort = new AbortController();
     const stop = () => abort.abort();
     active.abort.signal.addEventListener("abort", stop, { once: true });
+    // A Stop during the save above has already fired.
+    if (active.abort.signal.aborted) stop();
     const timer = setTimeout(stop, HANDOFF_TIMEOUT);
     try {
       await this.runner.run(
