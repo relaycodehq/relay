@@ -35,9 +35,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
+    // Two lines' room whatever it says, so "Connecting…" turning into a longer
+    // "Can't reach…" and back doesn't move everything under it. Reserved on the
+    // row rather than the text: iOS has no textAlignVertical, so a tall text box
+    // pins one line to its top and the centred dot hangs below it.
+    minHeight: 48,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  // Two lines' room whatever it says, so "Connecting…" turning into a longer
-  // "Can't reach…" and back doesn't move everything under it.
-  text: { fontSize: type.tiny, lineHeight: 16, minHeight: 32, flex: 1, textAlignVertical: "center" },
+  text: { fontSize: type.tiny, lineHeight: 16, flex: 1 },
 });
