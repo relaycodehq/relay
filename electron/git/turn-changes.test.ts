@@ -6,8 +6,10 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readlink,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -247,6 +249,27 @@ it("rolls a whole turn back and redoes it", async () => {
   expect(await read("a.ts")).toBe("one\nTWO\n");
   expect(await read("gone.ts")).toBeNull();
   expect(await read("src/deep/new.ts")).toBe("fresh\n");
+});
+
+it("rolls back and redoes a turn that added and retargeted symlinks", async () => {
+  await symlink("a.ts", join(root, "moved"));
+  git("add", ".");
+  git("commit", "-qm", "Link");
+  const id = randomUUID();
+  const before = (await startTurn(root, id))!;
+  await symlink("a.ts", join(root, "link"));
+  await rm(join(root, "moved"));
+  await symlink("gone.ts", join(root, "moved"));
+  await finishTurn(root, id, before);
+
+  const result = await revertTurn(root, id, ["link", "moved"]);
+  expect(result.conflicts).toEqual([]);
+  expect(existsSync(join(root, "link"))).toBe(false);
+  expect(await readlink(join(root, "moved"))).toBe("a.ts");
+  const redo = await redoRevert(root, id, result.undo!, ["link", "moved"]);
+  expect(redo.conflicts).toEqual([]);
+  expect(await readlink(join(root, "link"))).toBe("a.ts");
+  expect(await readlink(join(root, "moved"))).toBe("gone.ts");
 });
 
 it("rolls back one file and leaves the rest of the turn", async () => {
