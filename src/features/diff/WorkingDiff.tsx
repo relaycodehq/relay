@@ -8,7 +8,7 @@ import type {
 } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { clickedLine, selectedSpan } from "./diff-selection";
-import { Columns2, MessageSquare, X } from "lucide-react";
+import { Columns2, FolderOpen, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../../shared/types";
 import { DiffCodeView } from "./DiffCodeView";
 import { useFileDiff } from "./useFileDiff";
@@ -16,6 +16,7 @@ import { useTheme } from "../../lib/useTheme";
 import { useSyntaxThemes } from "../../lib/appearance";
 import { labelDiffGapControls } from "./diffGapControls";
 import { useTypography } from "../../lib/typography";
+import { revealLabel } from "../../lib/mod-key";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ImageDiff } from "./ImageDiff";
 import { useDiffFind } from "./find/useDiffFind";
@@ -82,6 +83,7 @@ export function WorkingDiff({
   onAsk,
   line,
   onLineShown,
+  onReveal,
 }: {
   pair: FilePair;
   sideLabels?: Record<Side, string>;
@@ -90,6 +92,8 @@ export function WorkingDiff({
   /** A line of the new side to scroll to once the diff renders. */
   line?: number;
   onLineShown?: () => void;
+  /** Shows the file in the system's file manager, offered for binary files. */
+  onReveal?: () => void;
 }) {
   const syntaxThemes = useSyntaxThemes();
   const { wrap } = useTypography();
@@ -161,6 +165,14 @@ export function WorkingDiff({
       return (
         <div className="empty small">
           Binary file. Review it in its native application.
+          {onReveal && (
+            <div>
+              <button onClick={onReveal}>
+                <FolderOpen size={14} />
+                {revealLabel}
+              </button>
+            </div>
+          )}
         </div>
       );
     if (error) return <ErrorBox error={error} />;

@@ -3,14 +3,14 @@
 // switch between dollars and fresh tokens drives every figure.
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChartColumn, ImageDown } from "lucide-react";
+import { ArrowLeft, ImageDown } from "lucide-react";
 import type {
   UsageMeasure,
   UsageRange,
   UsageSummary,
 } from "../../../shared/usage";
 import { api } from "../../lib/api";
-import { ErrorBox, Loading } from "../../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { columnsOf, dayLabel, hours, measured } from "./format";
 import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
 import { ShareDialog } from "./ShareDialog";
@@ -23,10 +23,12 @@ import {
 } from "./usage-charts";
 import "./usage.css";
 
-export function UsageTitle() {
+export function UsageTitle({ onBack }: { onBack: () => void }) {
   return (
     <div className="project-window-title">
-      <ChartColumn size={14} />
+      <IconButton label="Back" onClick={onBack}>
+        <ArrowLeft size={15} />
+      </IconButton>
       <strong>Usage</strong>
     </div>
   );

@@ -20,7 +20,7 @@ import { directoryKey } from "./useFileTree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { EditorPath } from "./EditorPath";
-import { revealLabel } from "./FileTree";
+import { revealLabel } from "../../lib/mod-key";
 import "./file-browser.css";
 
 /** The path across the top of a viewer, in the editor bar's style, with room for actions. */

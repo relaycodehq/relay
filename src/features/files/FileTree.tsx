@@ -33,13 +33,7 @@ import { ContextMenuItem } from "../../ui/ContextMenuItem";
 import { ErrorBox, IconButton, Modal } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./file-browser.css";
-import { mac } from "../../lib/mod-key";
-
-export const revealLabel = mac
-  ? "Show in Finder"
-  : navigator.platform.startsWith("Win")
-    ? "Show in Explorer"
-    : "Show in file manager";
+import { revealLabel } from "../../lib/mod-key";
 
 type Editing =
   | { mode: "rename"; path: string }

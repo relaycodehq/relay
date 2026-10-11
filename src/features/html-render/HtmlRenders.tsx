@@ -15,6 +15,7 @@ import {
   type HtmlRender,
   type RenderFromFrame,
   type RenderToFrame,
+  RENDER_SANDBOX,
 } from "../../../shared/html-render";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
@@ -432,7 +433,7 @@ const RenderCard = memo(function RenderCard({
                   title={
                     variants ? `${render.title}: ${label(index)}` : render.title
                   }
-                  sandbox="allow-scripts allow-forms"
+                  sandbox={RENDER_SANDBOX}
                   referrerPolicy="no-referrer"
                   style={{
                     colorScheme: theme.scheme,

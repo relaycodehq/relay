@@ -24,7 +24,7 @@ import { NoPullHost } from "../features/pulls/NoPullHost";
 import { ConnectHost } from "../features/pulls/ConnectHost";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
-import { useShellNavigation } from "./useShellNavigation";
+import { useShellNavigation, type Surface } from "./useShellNavigation";
 import { roomFor } from "../lib/workspace-panes";
 import { useSidebarVisibility } from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
@@ -82,6 +82,14 @@ export default function ProjectShell() {
   const nav = useShellNavigation(projects.data, lock, view);
   const { project, chat, draftId, panes, inbox, navigate } = nav;
   const usage = nav.surface === "usage";
+  // Leaving Usage goes back to the page it was opened from.
+  const usageFrom = useRef<Surface>("project");
+  function toggleUsage() {
+    if (lock.blocked()) return;
+    if (usage) return nav.setSurface(usageFrom.current);
+    usageFrom.current = nav.surface;
+    nav.setSurface("usage");
+  }
   // Pull requests or Usage instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
@@ -221,7 +229,7 @@ export default function ProjectShell() {
           ) : inbox ? (
             <PullsTitle where={pullsPage.where} onNav={pullsPage.go} />
           ) : usage ? (
-            <UsageTitle />
+            <UsageTitle onBack={toggleUsage} />
           ) : (
             <ProjectTitle project={project} chat={chat} onError={setError} />
           )}
@@ -281,9 +289,7 @@ export default function ProjectShell() {
               if (inbox) pullsPage.go({ to: "board" });
               else nav.setInbox(true);
             }}
-            onUsage={() => {
-              if (!lock.blocked()) nav.setSurface("usage");
-            }}
+            onUsage={toggleUsage}
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
