@@ -62,8 +62,9 @@ function unreadLabel(since: number) {
 
 /**
  * The line above the first message you haven't seen, in the unread dot's
- * colour so it doesn't read as another compaction. Once seen it fades but keeps its height,
- * so the thread pinned to the bottom doesn't move.
+ * colour so it doesn't read as another compaction. It sits in the gap between
+ * two messages without a height of its own, so showing it or fading it once
+ * seen never moves the thread.
  */
 export function UnreadDivider(props: UnreadProps) {
   const row = useRef<HTMLDivElement>(null);

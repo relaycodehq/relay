@@ -449,10 +449,14 @@
 .line-divider.resume-divider {
   margin: 8px 0;
 }
-/* Read, the unread divider fades and keeps its height until the thread is
-   opened again; under reduced motion the global rule drops the transition and
-   it goes at once. */
-.unread-divider {
+/* The unread divider takes no height: it's drawn over the gap between the two
+   messages, so that gap matches every other one and nothing moves when it
+   shows or, once read, fades. It lets clicks through to the hover row that
+   hangs under an answer; under reduced motion the global rule drops the fade. */
+.line-divider.unread-divider {
+  height: 0;
+  margin: 0;
+  pointer-events: none;
   transition: opacity 0.6s ease;
 }
 .unread-divider[data-read] {
