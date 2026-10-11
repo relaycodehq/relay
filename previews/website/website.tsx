@@ -27,6 +27,7 @@ import { startLanes } from "./hero-lanes";
 import { AgentWord } from "./agent-word";
 import { Reveal, reducedMotion, useActive } from "./motion";
 import { Faq, GitHubMark, SiteFooter, SiteHeader } from "./parts";
+import { CompareTable } from "./compare-table";
 import { installStubs } from "./stubs";
 import {
   faq,
@@ -349,6 +350,18 @@ function Site() {
               </Reveal>
             ))}
           </div>
+        </section>
+
+        <section className="block cmp-home" id="compare">
+          <Reveal>
+            <span className="eyebrow">How Relay compares</span>
+            <h2>Relay beside the other agent apps</h2>
+            <p className="lede">
+              Only where they differ.{" "}
+              <a href="compare/">Every row, and where the others are ahead</a>
+            </p>
+          </Reveal>
+          <CompareTable differencesFirst />
         </section>
 
         <ThemesSection />

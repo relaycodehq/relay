@@ -1,0 +1,435 @@
+/* Relay beside one other app, or all of them, on the home page and the compare
+   page; and the compare page's own sections. */
+
+.centered.cmp-head {
+  padding-top: 120px;
+}
+.cmp-head > p {
+  max-width: 560px;
+  font-size: 18px;
+}
+.cmp-head .hero-actions {
+  margin-top: 12px;
+}
+.block.cmp-only,
+.block.cmp-ahead {
+  padding-top: 130px;
+}
+.cmp-ahead {
+  padding-bottom: 110px;
+}
+
+.cmp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Marks: only "yes" takes the accent, so Relay's column reads at a glance. */
+.cmp [data-mark] svg,
+.cmp-legend svg {
+  flex: none;
+  margin-top: 2px;
+}
+[data-mark="yes"] svg {
+  color: var(--accent);
+}
+[data-mark="part"] svg {
+  color: var(--text);
+  opacity: 0.6;
+}
+[data-mark="no"] svg,
+[data-mark="unknown"] svg {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.wide.cmp-section {
+  max-width: 1100px;
+  padding-top: 120px;
+}
+.cmp-home .cmp-table {
+  margin-top: 40px;
+}
+.cmp-home .lede a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* Relay vs: which app the table sets beside Relay. It sticks under the nav, so
+   you can switch halfway down the table. */
+.cmp-switch {
+  position: sticky;
+  top: 54px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.cmp-switch-lead {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cmp-switch-tabs {
+  display: flex;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cmp-switch-tabs button {
+  position: relative;
+  flex: none;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.cmp-switch-tabs button:last-child {
+  margin-left: 10px;
+}
+.cmp-switch-tabs button:hover,
+.cmp-switch-tabs button[aria-pressed="true"] {
+  color: var(--text);
+}
+.cmp-switch-tabs button::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
+}
+.cmp-switch-tabs button[aria-pressed="true"]::after {
+  transform: scaleX(1);
+}
+.cmp-switch-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -6px;
+  border-radius: 8px;
+}
+.cmp-diff {
+  display: inline-flex;
+  flex-direction: row;
+  margin: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: normal;
+  cursor: pointer;
+}
+.cmp-diff:hover {
+  color: var(--text);
+}
+.cmp-diff input {
+  flex: none;
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.cmp-sub {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin: 16px 0 6px;
+}
+.site .cmp-about {
+  max-width: 680px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.cmp-about a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  color: var(--text);
+}
+.cmp-about a:hover {
+  color: var(--accent);
+}
+.cmp-legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 20px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cmp-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cmp-legend svg {
+  margin-top: 0;
+}
+
+/* Holds the hidden labels in the cells, which would otherwise widen the page. */
+.cmp-scroll {
+  position: relative;
+}
+.cmp {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.cmp {
+  --cmp-label: 210px;
+}
+.cmp thead th:first-child {
+  width: var(--cmp-label);
+}
+.cmp th,
+.cmp td {
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.cmp thead th {
+  position: sticky;
+  top: 102px;
+  z-index: 2;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  background: var(--surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cmp thead th button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cmp thead th button:hover {
+  color: var(--accent);
+}
+
+/* Relay beside one app: wider cells, larger text, and the new app's cells
+   fade in when you switch. */
+.cmp[data-pair] {
+  font-size: 14px;
+}
+.cmp[data-pair] thead th:first-child {
+  width: 34%;
+}
+.cmp[data-pair] :is(td, thead th:not(:first-child)) {
+  padding-right: 18px;
+  padding-left: 18px;
+}
+@keyframes cmp-in {
+  from {
+    opacity: 0;
+  }
+}
+.cmp[data-pair] td:not([data-relay]),
+.cmp[data-pair] thead th:last-child,
+.cmp-about,
+.cmp-verdict {
+  animation: cmp-in 0.25s ease-out;
+}
+.cmp tbody th {
+  font-weight: 500;
+  color: var(--text);
+}
+.cmp tbody th small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.cmp td {
+  color: var(--muted);
+}
+.cmp td > svg {
+  display: block;
+  margin-bottom: 4px;
+}
+.cmp td[data-mark="yes"] > span:not(.cmp-sr) {
+  color: var(--text);
+}
+.cmp [data-relay] {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.cmp thead th[data-relay] {
+  color: var(--accent);
+  border-top: 2px solid var(--accent);
+}
+.cmp tbody tr:not(.cmp-group):hover > * {
+  background: var(--sidebar);
+}
+.cmp tbody tr:not(.cmp-group):hover > [data-relay] {
+  background: color-mix(in srgb, var(--accent) 11%, var(--sidebar));
+}
+.cmp .cmp-group th {
+  padding-top: 34px;
+  padding-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cmp tbody:first-of-type .cmp-group th {
+  padding-top: 18px;
+}
+
+.cmp-hidden {
+  margin-top: 14px !important;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cmp-hidden button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.cmp-hidden button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cmp-verdict {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 28px 0 0;
+}
+.cmp-verdict > div {
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.cmp-verdict > div:last-child {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.cmp-verdict dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cmp-verdict dd {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.cmp-note {
+  max-width: 720px;
+  margin-top: 18px !important;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cmp-note a {
+  color: var(--accent);
+}
+
+/* Too narrow for every app: the full table scrolls sideways and keeps its row
+   names in view. The header can't stick to the page inside a scroller. */
+@media (max-width: 1100px) {
+  .cmp-table:not([data-pair]) .cmp-scroll {
+    overflow-x: auto;
+    margin: 0 -24px;
+    padding: 0 24px;
+  }
+  .cmp:not([data-pair]) {
+    min-width: 940px;
+  }
+  .cmp:not([data-pair]) thead th {
+    position: static;
+    top: auto;
+  }
+  /* A group's title spans the row, so the text inside it is what sticks. */
+  .cmp:not([data-pair]) .cmp-group th span {
+    position: sticky;
+    left: 0;
+  }
+  .cmp:not([data-pair]) th:not(.cmp-group th):first-child {
+    position: sticky;
+    left: -24px;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--line);
+  }
+  /* Relay stays beside the row names, so the other apps scroll past it. */
+  .cmp:not([data-pair]) :is(th, td)[data-relay] {
+    position: sticky;
+    left: calc(var(--cmp-label) - 24px);
+    z-index: 1;
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+@media (max-width: 1000px) {
+  .cmp-verdict {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cmp:not([data-pair]) {
+    --cmp-label: 150px;
+  }
+  .cmp-sub {
+    flex-direction: column;
+  }
+  .cmp-legend {
+    justify-content: flex-start;
+  }
+}
+/* A phone: the "Relay vs" label gives its room to the tabs, which run to the
+   screen's edges and scroll. */
+@media (max-width: 640px) {
+  .cmp-switch-lead {
+    display: none;
+  }
+  .cmp-switch {
+    margin: 0 -24px;
+  }
+  .cmp-switch-tabs {
+    flex: 1;
+    padding: 0 12px;
+  }
+  .cmp:not([data-pair]) {
+    --cmp-label: 120px;
+  }
+  .cmp[data-pair] {
+    font-size: 13px;
+  }
+  .cmp[data-pair] :is(td, th) {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+}

@@ -87,9 +87,11 @@ export function GitHubMark({ size = 16 }: { size?: number }) {
   );
 }
 
-const sections = [
+/** `page` is where the link goes from the other pages, instead of the section. */
+const sections: { id: string; label: string; page?: string }[] = [
   { id: "tour", label: "Product" },
   { id: "features", label: "Features" },
+  { id: "compare", label: "Compare", page: "compare/" },
   { id: "themes", label: "Themes" },
   { id: "open-source", label: "Open source" },
   { id: "faq", label: "FAQ" },
@@ -155,10 +157,10 @@ export function SiteHeader({ home }: { home: string }) {
         Relay
       </a>
       <nav id="site-nav" aria-label="Site" onClick={() => setOpen(false)}>
-        {sections.map(({ id, label }) => (
+        {sections.map(({ id, label, page }) => (
           <a
             key={id}
-            href={`${home}#${id}`}
+            href={page && home ? `${home}${page}` : `${home}#${id}`}
             data-current={current === id || undefined}
           >
             {label}
@@ -213,6 +215,7 @@ export function SiteFooter({ home }: { home: string }) {
         <h4>Product</h4>
         <a href={`${home}#features`}>Features</a>
         <a href={`${home}download/`}>Download</a>
+        <a href={`${home}compare/`}>How Relay compares</a>
         <a href={releaseNotes}>Release notes</a>
       </div>
       <div>

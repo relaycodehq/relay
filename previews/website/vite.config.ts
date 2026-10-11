@@ -30,6 +30,8 @@ const {
   platforms,
   REPO,
 } = await import("./content");
+const { CHECKED, groups, only, ahead, relay, rivals } =
+  await import("./compare-data");
 
 const escape = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -55,6 +57,8 @@ ${features.map((f) => `<h3>${escape(f.title)}</h3><p>${escape(f.text)}</p>`).joi
 ${openSource.map((o) => `<h3>${escape(o.title)}</h3><p>${escape(o.text)} <a href="${o.href}">${escape(o.link)}</a></p>`).join("\n")}
 <h2>Common questions</h2>
 ${faq.map((q) => `<h3>${escape(q.q)}</h3><p>${escape(q.a)}</p>`).join("\n")}
+<h2><a href="compare/">How Relay compares</a></h2>
+<p>Relay beside ${rivals.map((r) => escape(r.name)).join(", ")}, row by row.</p>
 <h2><a href="download/">Download Relay</a></h2>
 ${contact}`,
   download: `<h1>Download Relay</h1>
@@ -63,7 +67,39 @@ ${links(builds)}
 <h2>First start</h2>
 ${firstStart.map((f) => `<h3>${escape(f.system)}</h3><p>${escape(f.text)}</p>`).join("\n")}
 ${contact}`,
+  compare: `<h1>How Relay compares</h1>
+<p>Relay beside ${rivals.map((r) => escape(r.name)).join(", ")}. Read from each app's public docs on ${CHECKED}.</p>
+<h2>Only in Relay</h2>
+${only.map((o) => `<h3>${escape(o.title)}</h3><p>${escape(o.text)}</p>`).join("\n")}
+${groups
+  .map(
+    (g) =>
+      `<h2>${escape(g.title)}</h2>` +
+      g.rows
+        .map(
+          (row) =>
+            `<h3>${escape(row.label)}</h3><ul>${[relay, ...rivals]
+              .map((c) => {
+                const cell = row.cells[c.id];
+                return `<li>${escape(c.name)}: ${cell.mark}${cell.text ? `, ${escape(cell.text)}` : ""}</li>`;
+              })
+              .join("")}</ul>`,
+        )
+        .join("\n"),
+  )
+  .join("\n")}
+<h2>Where others are ahead</h2>
+${ahead.map((a) => `<h3>${escape(a.title)}</h3><p>${escape(a.text)}</p>`).join("\n")}
+${rivals.map((r) => `<h2>Relay or ${escape(r.name)}</h2><p>${escape(r.is)}</p><p>Pick ${escape(r.name)} if: ${escape(r.pickThem)}</p><p>Pick Relay if: ${escape(r.pickRelay)}</p>`).join("\n")}
+${contact}`,
 };
+
+const pageOf = (path: string) =>
+  path.includes("download")
+    ? "download"
+    : path.includes("compare")
+      ? "compare"
+      : "home";
 
 const staticCopy = (): Plugin => ({
   name: "static-copy",
@@ -71,7 +107,7 @@ const staticCopy = (): Plugin => ({
     html
       .replace(
         '<div id="root"></div>',
-        `<div id="root"><div class="static-copy">${copy[path.includes("download") ? "download" : "home"]}</div></div>`,
+        `<div id="root"><div class="static-copy">${copy[pageOf(path)]}</div></div>`,
       )
       .replaceAll("%RELAY_VERSION%", version),
 });
@@ -89,6 +125,7 @@ export default defineConfig({
       input: {
         main: `${import.meta.dirname}/index.html`,
         download: `${import.meta.dirname}/download/index.html`,
+        compare: `${import.meta.dirname}/compare/index.html`,
       },
     },
   },
