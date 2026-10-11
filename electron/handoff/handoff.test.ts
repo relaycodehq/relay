@@ -446,9 +446,16 @@ async function secondTrip(meanwhile: (there: string) => Promise<void>) {
   const second = mini.chats
     .list(mini.projectId)
     .find((c) => c.cameFrom && c.id !== first!.id)!;
-  const kickoff = [...(await mini.chats.get(second.id)).messages]
-    .reverse()
-    .find((m) => m.body.includes("Carry on with this work"))!.body;
+  // The kickoff goes out after the thread lands, and the history it carried
+  // already holds the first trip's, worded the same: wait for the new one.
+  const kickoff = await vi.waitFor(async () => {
+    const { messages, cameFrom } = await mini.chats.get(second.id);
+    const body = messages
+      .slice(cameFrom!.carried)
+      .find((m) => m.body.includes("Carry on with this work"))?.body;
+    expect(body).toBeDefined();
+    return body!;
+  });
   return { ...away, first: first!, second, kickoff };
 }
 
