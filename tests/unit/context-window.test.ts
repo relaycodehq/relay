@@ -66,6 +66,26 @@ describe("context window", () => {
     ).toBeUndefined();
   });
 
+  it("drops the old agent's usage once another takes over", () => {
+    const used = { usedTokens: 98_000, maxTokens: 258_000 };
+    const claude = answer({ provider: "claude", status: "streaming" });
+    const note = answer({ handoff: { from: "codex", to: "claude" } });
+    expect(latestContext([answer({ context: used }), note])).toBeUndefined();
+    expect(latestContext([answer({ context: used }), note, claude])).toBe(
+      undefined,
+    );
+    // A command goes to the new agent without a note.
+    expect(latestContext([answer({ context: used }), claude])).toBeUndefined();
+    const fresh = { usedTokens: 12_000, maxTokens: 1_000_000 };
+    expect(
+      latestContext([
+        answer({ context: used }),
+        note,
+        { ...claude, context: fresh },
+      ]),
+    ).toEqual({ usage: fresh, provider: "claude" });
+  });
+
   it("formats and grades usage like the provider meters", () => {
     expect(formatTokens(950)).toBe("950");
     expect(formatTokens(4_200)).toBe("4.2k");
