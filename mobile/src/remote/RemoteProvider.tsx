@@ -119,6 +119,9 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   // Set before anything of the next computer arrives, so nothing of it is
   // saved as the last one's.
   const active = useRef<string>(undefined);
+  /** Where the latest switch goes, set before its offline copy is read; `active` moves after. */
+  const wanted = useRef<string>(undefined);
+  const switches = useRef(0);
   const [activeId, setActiveId] = useState<string>();
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
@@ -187,8 +190,12 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       id: string,
       start: ConstructorParameters<typeof RemoteClient>[0]["start"],
     ) => {
+      wanted.current = id;
+      const mine = ++switches.current;
       // Last seen lists to read while it connects, or can't; never a wait.
       const cached = await loadOverview(id);
+      // Tapped another computer while this one's copy was read.
+      if (mine !== switches.current) return;
       // Retire in-flight model requests before changing the offline folder.
       newModelConnection();
       active.current = id;
@@ -213,7 +220,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           ]);
           setLoaded(true);
           const start = computers.find((c) => c.key === paired.active);
-          if (start && !active.current) await attach(start.key, start);
+          if (start && !wanted.current) await attach(start.key, start);
         },
         ready: () => setReady(true),
       }),
@@ -337,7 +344,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const switchTo = useCallback(
     async (id: string) => {
       const credentials = saved.find((c) => c.key === id);
-      if (credentials && id !== active.current) await attach(id, credentials);
+      if (credentials && id !== wanted.current) await attach(id, credentials);
     },
     [saved, attach],
   );
@@ -379,7 +386,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           const before = saved.find((c) => c.key === activeId);
           if (before) await attach(before.key, before);
           else {
-            active.current = undefined;
+            active.current = wanted.current = undefined;
+            switches.current++;
             setActiveId(undefined);
             setOverview(undefined);
             live.relayClient?.close();
@@ -398,7 +406,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           const next = rest[0];
           if (next) await attach(next.key, next);
           else {
-            active.current = undefined;
+            active.current = wanted.current = undefined;
+            switches.current++;
             setActiveId(undefined);
             client?.close();
             setClient(undefined);
