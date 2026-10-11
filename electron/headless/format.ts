@@ -10,6 +10,8 @@ export const green = paint("32");
 export const yellow = paint("33");
 export const red = paint("31");
 export const cyan = paint("36");
+/** Relay's purple, in 256-colour codes. */
+export const accent = paint("38;5;141");
 export const colorful = tty;
 
 export const ok = (text: string) => `${green("✓")} ${text}`;

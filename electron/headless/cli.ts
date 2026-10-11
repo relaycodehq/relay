@@ -9,7 +9,6 @@ import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { relayCommands } from "../app/open-folder";
 import { tailnetProbe } from "../remote/tailscale";
-import type { AgentVersion } from "../../shared/agent-updates";
 import { agentInfo, type AgentProvider } from "../../shared/agents";
 import { callControl, type DaemonStatus, type ThreadRow } from "./control";
 import {
@@ -43,6 +42,7 @@ import {
 import { headlessPaths, relayHome } from "./paths";
 import { settingsCommand } from "./settings";
 import { terminalQr } from "./qr";
+import { indent, row, Screen, section } from "./terminal-ui";
 import {
   installService,
   installedService,
@@ -501,76 +501,91 @@ async function status(home: string, flags: Flags) {
     return;
   }
   const { remote, threads } = status;
-  console.log(
-    `${green("●")} ${bold(`Relay ${status.version}`)} running for ${duration(Date.now() - status.startedAt)} ${dim(`(pid ${status.pid})`)}`,
+  const ui = new Screen();
+  const head = `● Relay ${status.version}`;
+  ui.print(
+    `\n ${green("●")} ${bold(`Relay ${status.version}`)}${" ".repeat(Math.max(2, 44 - head.length))}${dim(`running for ${duration(Date.now() - status.startedAt)} · pid ${status.pid}`)}`,
   );
-  const rows: string[][] = [];
-  rows.push(["Name", status.name]);
-  rows.push(["Data", status.home]);
-  rows.push([
-    "Reach",
+
+  ui.print(section("This computer"));
+  ui.print(row("ok", "Name", dim(status.name)));
+  ui.print(
     remote.listening
-      ? `${remote.hosts.join(", ")}:${remote.port} over Tailscale${remote.tailnet.name ? dim(` (${remote.tailnet.name})`) : ""}`
-      : yellow(`not reachable: ${reachProblem(status)}`),
-  ]);
-  rows.push([
-    "Paired",
-    remote.devices.length
-      ? remote.devices
-          .map(
-            (d) =>
-              `${d.name} ${dim(`(${d.kind ?? "phone"}, ${d.online ? green("online") : d.lastSeen ? `seen ${ago(d.lastSeen)}` : "never seen"})`)}`,
-          )
-          .join(", ")
-      : dim("nothing yet; run relay pair"),
-  ]);
-  rows.push(["Projects", String(status.projects)]);
-  rows.push([
-    "Threads",
-    [
-      threads.working ? cyan(`${threads.working} working`) : "",
-      threads.waiting ? yellow(`${threads.waiting} waiting on you`) : "",
-      `${threads.total} in all`,
-    ]
-      .filter(Boolean)
-      .join(", "),
-  ]);
-  rows.push(["Agents", agentsLine(status.agents)]);
+      ? row(
+          "ok",
+          "Reach",
+          dim(
+            `${remote.hosts.join(", ")}:${remote.port} over Tailscale${remote.tailnet.name ? ` (${remote.tailnet.name})` : ""}`,
+          ),
+        )
+      : row("warn", "Reach", `not reachable: ${reachProblem(status)}`),
+  );
+  ui.print(row("ok", "Data", dim(tilde(status.home))));
+  ui.print(
+    kind && serviceHomeMatches
+      ? row(
+          "ok",
+          "Service",
+          dim(`${kind}, ${kind === "windows" ? "starts when you sign in" : "starts with the computer"}`),
+        )
+      : row("off", "Service", "not set up; relay service install starts Relay with the computer"),
+  );
   const auto = await autoUpdateEnabled(home);
-  rows.push([
-    "Updates",
+  ui.print(
     status.update.status === "off"
-      ? dim("built from source; git pull updates it")
+      ? row("off", "Updates", "built from source; git pull updates it")
       : status.update.status === "available"
-        ? yellow(
+        ? row(
+            "warn",
+            "Updates",
             auto
               ? `Relay ${status.update.version} is out; it installs once no thread is working`
               : `Relay ${status.update.version} is out; relay update installs it`,
           )
         : auto
-          ? "installed by themselves"
-          : dim("off; relay update installs one"),
-  ]);
-  rows.push([
-    "Service",
-    kind && serviceHomeMatches
-      ? `${kind}, ${kind === "windows" ? "starts when you sign in" : "starts with the computer"}`
-      : dim("not set up; relay service install starts Relay with the computer"),
-  ]);
-  console.log(table(rows.map(([label, value]) => [dim(label!), value!])));
-}
+          ? row("ok", "Updates", dim("installed by themselves"))
+          : row("off", "Updates", "off; relay update installs one"),
+  );
 
-function agentsLine(agents: AgentVersion[]) {
-  if (!agents.length) return dim("still checking");
-  return agents
-    .filter((a) => a.path || a.provider !== "cursor")
-    .map((a) => {
-      const name = agentName(a.provider);
-      if (!a.path) return dim(`${name} not found`);
-      const signedOut = a.account && !a.account.signedIn;
-      return `${name}${a.current ? ` ${a.current}` : ""}${signedOut ? yellow(" (signed out)") : ""}`;
-    })
-    .join(", ");
+  ui.print(section("Paired"));
+  for (const d of remote.devices) ui.print(deviceRow(d));
+  if (!remote.devices.length)
+    ui.print(row("off", "Nothing yet", "relay pair shows a code for a phone or computer"));
+
+  ui.print(section("Work"));
+  ui.print(
+    row(
+      threads.waiting ? "warn" : "ok",
+      "Threads",
+      [
+        threads.working ? cyan(`${threads.working} working`) : "",
+        threads.waiting ? yellow(`${threads.waiting} waiting on you`) : "",
+        dim(`${threads.total} in all`),
+      ]
+        .filter(Boolean)
+        .join(dim(" · ")),
+    ),
+  );
+  ui.print(
+    row(
+      status.projects ? "ok" : "off",
+      "Projects",
+      status.projects ? dim(String(status.projects)) : "none yet; relay projects add <folder>",
+    ),
+  );
+
+  ui.print(section("Agents"));
+  if (!status.agents.length) ui.print(row("off", "Checking…"));
+  const agents = status.agents.filter((a) => a.provider !== "cursor");
+  for (const a of agents.filter((a) => a.path))
+    ui.print(
+      a.account && !a.account.signedIn
+        ? row("warn", agentName(a.provider), `signed out; sign in once with ${bold(signIn(a.provider))}`)
+        : row("ok", agentName(a.provider), dim(a.current ?? "")),
+    );
+  const missing = agents.filter((a) => !a.path).map((a) => agentName(a.provider));
+  if (missing.length) ui.print(row("off", "Not found", missing.join(", ")));
+  ui.print("");
 }
 
 async function logs(home: string, flags: Flags) {
@@ -605,7 +620,12 @@ async function logs(home: string, flags: Flags) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function pair(home: string, flags: Flags, waitForDevice = true) {
+async function pair(
+  home: string,
+  flags: Flags,
+  waitForDevice = true,
+  ui = new Screen(),
+) {
   const status = await ensureRunning(home, flags);
   const control = headlessPaths(home).control;
   let pairing;
@@ -614,7 +634,8 @@ async function pair(home: string, flags: Flags, waitForDevice = true) {
   } catch (e) {
     const fresh = await running(home);
     if (fresh && !fresh.remote.listening) {
-      printTailscaleHelp(fresh);
+      ui.print(section("Pair"));
+      printTailscaleHelp(fresh, ui);
       throw new Quiet();
     }
     throw e;
@@ -622,63 +643,71 @@ async function pair(home: string, flags: Flags, waitForDevice = true) {
   if (flags.json)
     return printJson({ url: pairing.url, expiresAt: pairing.expiresAt });
   const known = new Set(status.remote.devices.map((d) => d.id));
-  console.log(
-    `\nOn your phone, open the ${bold("Relay")} app and scan this code:\n`,
-  );
-  console.log(terminalQr(pairing.url, { color: colorful }));
-  console.log(
-    `\nTo hand threads over from another computer, open Relay there, go to\n${bold("Settings → Computers")} and paste this link:\n\n  ${cyan(pairing.url)}\n`,
-  );
   const until = new Date(pairing.expiresAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
-  if (!waitForDevice || !process.stdout.isTTY) {
-    console.log(dim(`The code works once, until ${until}.`));
+  ui.print(section("Pair"));
+  // All of it goes once a device is in, or the code runs out.
+  const code = ui.mark();
+  ui.print(indent(terminalQr(pairing.url, { color: colorful }), 3));
+  ui.print(
+    `\n   Scan it in the ${bold("Relay")} app on your phone, or paste the link in\n   ${bold("Settings → Computers")} on another computer:\n`,
+  );
+  ui.print(`   ${cyan(pairing.url)}\n`);
+  if (!waitForDevice || !ui.live) {
+    ui.print(dim(`   It works once, until ${until}.`));
     return;
   }
-  console.log(
-    dim(
-      `The code works once, until ${until}. Waiting for a phone or computer… (Ctrl-C to stop waiting)`,
-    ),
+  const spin = ui.spin(
+    `Waiting for a phone or computer ${dim(`· works once, until ${until} · Ctrl-C stops waiting`)}`,
   );
   for (;;) {
     await sleep(1000);
     if (Date.now() > pairing.expiresAt) {
-      console.log(warn("The code expired. Run relay pair for a new one."));
+      spin.stop();
+      ui.take(code);
+      ui.print(row("warn", "Expired", dim("the code ran out; relay pair makes a new one")));
       return;
     }
     const now = await running(home).catch(() => null);
     const added = now?.remote.devices.find((d) => !known.has(d.id));
     if (added) {
-      console.log(
-        ok(`Paired ${bold(added.name)} (${added.kind ?? "phone"}).`) +
-          (added.kind === "computer"
-            ? `\n  ${added.name} can now hand threads to this computer.`
-            : `\n  Its threads, approvals and questions now reach ${added.name}.`),
+      spin.stop();
+      ui.take(code);
+      ui.print(
+        row(
+          "ok",
+          added.name,
+          dim(
+            added.kind === "computer"
+              ? "computer · can hand threads here now"
+              : "phone · its threads, approvals and questions reach it now",
+          ),
+        ),
       );
       return;
     }
   }
 }
 
-function printTailscaleHelp(status: DaemonStatus) {
+function printTailscaleHelp(status: DaemonStatus, ui = new Screen()) {
   const { tailnet } = status.remote;
-  console.log(
-    `${warn("Phones and computers reach Relay over Tailscale, and this computer isn't on it yet.")}\n`,
+  const missing = tailnet.status === "missing";
+  ui.print(
+    row("warn", "Tailscale", "phones and computers reach Relay over it, and this computer isn't on it yet"),
   );
-  if (tailnet.status === "missing")
-    console.log(
-      `  1. Install Tailscale: ${process.platform === "linux" ? "curl -fsSL https://tailscale.com/install.sh | sh" : "https://tailscale.com/download"}`,
-    );
-  console.log(
-    `  ${tailnet.status === "missing" ? "2" : "1"}. Sign in to the same tailnet as your phone: ${bold("tailscale up")}`,
-  );
-  console.log(
-    `  ${tailnet.status === "missing" ? "3" : "2"}. Run ${bold("relay pair")} again; Relay notices Tailscale within ten seconds.`,
-  );
-  if (status.remote.error)
-    console.log(dim(`\n  Relay said: ${status.remote.error}`));
+  const steps = [
+    ...(missing
+      ? [
+          `Install Tailscale: ${process.platform === "linux" ? "curl -fsSL https://tailscale.com/install.sh | sh" : "https://tailscale.com/download"}`,
+        ]
+      : []),
+    `Sign in to the same tailnet as your phone: ${bold("tailscale up")}`,
+    `Run ${bold("relay pair")} again; Relay notices Tailscale within ten seconds.`,
+  ];
+  steps.forEach((step, i) => ui.print(`     ${dim(`${i + 1}.`)} ${step}`));
+  if (status.remote.error) ui.print(dim(`     Relay said: ${status.remote.error}`));
 }
 
 /** An error already explained on the terminal. */
@@ -982,151 +1011,168 @@ if ($path) { [Environment]::SetEnvironmentVariable('Path', (($path -split ';') |
 }
 
 async function setup(home: string, flags: Flags) {
-  const ask = process.stdin.isTTY && !flags.yes;
-  const prompt = ask
-    ? createInterface({ input: process.stdin, output: process.stdout })
-    : undefined;
-  const yesNo = async (question: string, fallback = true) => {
-    if (!prompt) return fallback;
-    const answer = (
-      await prompt.question(`${question} ${dim(fallback ? "[Y/n]" : "[y/N]")} `)
-    )
-      .trim()
-      .toLowerCase();
-    return answer ? answer.startsWith("y") : fallback;
-  };
-  try {
-    console.log(
-      bold(`Setting up Relay ${headlessVersion}`) + dim(` in ${home}\n`),
-    );
-    console.log(ok(`Node.js ${process.versions.node}`));
-    const git = gitVersion();
-    console.log(
-      git
-        ? ok(git)
-        : fail(
-            "Git isn't installed; threads in worktrees and handoffs need it.",
-          ),
-    );
-    const tailnet = await tailnetProbe()(true);
-    if (tailnet.status === "connected")
-      console.log(
-        ok(
-          `Tailscale is on${tailnet.name ? ` as ${tailnet.name}` : ""} (${tailnet.addresses.join(", ")})`,
-        ),
-      );
-    else
-      console.log(
-        warn(
+  const ui = new Screen(process.stdout, process.stdin, !flags.yes);
+  ui.print(
+    `\n${bold(` Relay ${headlessVersion}`)}${" ".repeat(Math.max(2, 46 - headlessVersion.length))}${dim(tilde(home))}`,
+  );
+
+  ui.print(section("This computer"));
+  ui.print(row("ok", "Node.js", dim(process.versions.node)));
+  const git = gitVersion();
+  ui.print(
+    git
+      ? row("ok", "Git", dim(git.replace(/^git version /, "")))
+      : row("fail", "Git", "not installed; threads in worktrees and handoffs need it"),
+  );
+  let spin = ui.spin("Looking for Tailscale…");
+  const tailnet = await tailnetProbe()(true);
+  spin.stop();
+  ui.print(
+    tailnet.status === "connected"
+      ? row(
+          "ok",
+          "Tailscale",
+          dim([tailnet.name, ...tailnet.addresses].filter(Boolean).join(" · ")),
+        )
+      : row(
+          "warn",
+          "Tailscale",
           tailnet.status === "missing"
-            ? "Tailscale isn't installed. Phones and computers reach Relay over it; install it, sign in with `tailscale up`, and Relay picks it up."
-            : "Tailscale is off. Run `tailscale up`; Relay picks it up within ten seconds.",
+            ? "not installed; phones and computers reach Relay over it. Install it and sign in with tailscale up"
+            : "off; run tailscale up and Relay picks it up within ten seconds",
         ),
-      );
-    await remember(home, flags);
+  );
+  await remember(home, flags);
 
-    // Started with the computer, unless asked not to.
-    const already = await running(home);
-    if (
-      flags.service &&
-      (await yesNo("Start Relay with this computer, in the background?"))
-    ) {
-      await stopForService(home);
-      const { kind, note } = await installService({
-        node: stableNode(),
-        script,
-        home,
-        path: process.env.PATH ?? "",
-      });
-      console.log(
-        ok(
-          `Relay runs in the background and starts with the computer (${kind}).`,
-        ),
-      );
-      if (note) console.log(warn(note));
-    } else if (!already) {
-      await startDetached(home, script);
-      console.log(
-        ok("Relay runs in the background until this computer restarts."),
-      );
-    }
-    // An installed release keeps itself current unless told not to.
-    if (installRoot(__dirname))
-      await saveConfig(home, {
-        autoUpdate: await yesNo(
-          "Install Relay's updates by themselves, once no thread is working?",
-          (await readConfig(home)).autoUpdate ?? true,
-        ),
-      });
-    const status = await ensureRunning(home, flags, true);
-
-    console.log(`\n${bold("Agents")}`);
-    const agents = status.agents.length
-      ? status.agents
-      : ((await running(home))?.agents ?? []);
-    for (const agent of agents) {
-      const name = agentName(agent.provider);
-      if (agent.provider === "cursor") continue;
-      if (!agent.path) console.log(dim(`  · ${name} isn't installed`));
-      else if (agent.account && !agent.account.signedIn)
-        console.log(
-          warn(
-            `${name} is installed but signed out; sign in once with ${bold(signIn(agent.provider))}.`,
-          ),
-        );
-      else console.log(ok(`${name} ${agent.current ?? ""}`.trim()));
-    }
-    if (!agents.some((a) => a.path && a.provider !== "cursor"))
-      console.log(
-        warn(
-          "No agent CLI found. Install Claude Code, Codex or OpenCode and sign in once, as the user Relay runs as.",
-        ),
-      );
-
-    console.log(`\n${bold("Projects")}`);
-    const control = headlessPaths(home).control;
-    for (const folder of flags.projects) {
-      const project = await callControl(control, "addProject", resolve(folder));
-      console.log(ok(`${project.name} ${dim(project.path)}`));
-    }
-    let list = await callControl(control, "projects");
-    const here = process.cwd();
-    if (
-      !flags.projects.length &&
-      !list.some((p) => p.path === here) &&
-      existsSync(join(here, ".git")) &&
-      (await yesNo(`Add ${bold(here)} as a project?`, false))
-    ) {
-      const project = await callControl(control, "addProject", here);
-      console.log(ok(`${project.name} ${dim(project.path)}`));
-      list = await callControl(control, "projects");
-    }
-    if (!list.length)
-      console.log(
-        dim(
-          "  None yet. Add the checkouts threads should work in with relay projects add <folder>;\n  a thread handed over from another computer needs its repository cloned here.",
-        ),
-      );
-    else if (!flags.projects.length)
-      for (const p of list) console.log(ok(`${p.name} ${dim(p.path)}`));
-
-    prompt?.close();
-    const fresh = (await running(home))!;
-    if (flags.pair && process.stdout.isTTY && !fresh.remote.devices.length) {
-      if (!fresh.remote.listening) {
-        console.log("");
-        printTailscaleHelp(fresh);
-      } else {
-        console.log(`\n${bold("Pair your phone")}`);
-        await pair(home, flags);
-      }
-    }
-    console.log(
-      `\n${bold("Done.")} ${bold("relay status")} shows how it's doing, ${bold("relay pair")} pairs another device,\nand ${bold("relay settings")} sets up dictation and read aloud for phones, Cursor and Gitea.`,
+  // Started with the computer, unless asked not to.
+  const already = await running(home);
+  if (
+    flags.service &&
+    (await ui.ask("Start Relay with this computer, in the background?", true))
+  ) {
+    spin = ui.spin("Setting up the background service…");
+    await stopForService(home);
+    const { kind, note } = await installService({
+      node: stableNode(),
+      script,
+      home,
+      path: process.env.PATH ?? "",
+    });
+    spin.stop();
+    ui.print(row("ok", "Background", dim(`starts with the computer (${kind})`)));
+    if (note) ui.print(row("warn", "", note));
+  } else if (!already) {
+    spin = ui.spin("Starting Relay…");
+    await startDetached(home, script);
+    spin.stop();
+    ui.print(row("ok", "Background", dim("runs until this computer restarts")));
+  } else
+    ui.print(
+      row("ok", "Background", dim("running; relay service install starts it with the computer")),
     );
-  } finally {
-    prompt?.close();
+  // An installed release keeps itself current unless told not to.
+  if (installRoot(__dirname)) {
+    const autoUpdate = await ui.ask(
+      "Install Relay's updates by themselves, once no thread is working?",
+      (await readConfig(home)).autoUpdate ?? true,
+    );
+    await saveConfig(home, { autoUpdate });
+    ui.print(
+      autoUpdate
+        ? row("ok", "Updates", dim("by themselves, once no thread is working"))
+        : row("off", "Updates", "off; relay update installs one"),
+    );
   }
+  let status = await running(home);
+  if (!status) {
+    spin = ui.spin("Starting Relay…");
+    status = await ensureRunning(home, flags, true);
+    spin.stop();
+  }
+
+  ui.print(section("Agents"));
+  const agents = (
+    status.agents.length
+      ? status.agents
+      : ((await running(home))?.agents ?? [])
+  ).filter((a) => a.provider !== "cursor");
+  for (const agent of agents) {
+    const name = agentName(agent.provider);
+    if (!agent.path) continue;
+    ui.print(
+      agent.account && !agent.account.signedIn
+        ? row("warn", name, `signed out; sign in once with ${bold(signIn(agent.provider))}`)
+        : row("ok", name, dim(agent.current ?? "")),
+    );
+  }
+  const missing = agents.filter((a) => !a.path).map((a) => agentName(a.provider));
+  if (missing.length) ui.print(row("off", "Not found", missing.join(", ")));
+  if (!agents.some((a) => a.path))
+    ui.print(
+      row(
+        "warn",
+        "No agent",
+        "install Claude Code, Codex or OpenCode and sign in once, as the user Relay runs as",
+      ),
+    );
+
+  ui.print(section("Projects"));
+  const control = headlessPaths(home).control;
+  for (const folder of flags.projects)
+    await callControl(control, "addProject", resolve(folder));
+  let list = await callControl(control, "projects");
+  const here = process.cwd();
+  if (
+    !flags.projects.length &&
+    !list.some((p) => p.path === here) &&
+    existsSync(join(here, ".git")) &&
+    (await ui.ask(`Add ${bold(tilde(here))} as a project?`, false))
+  ) {
+    await callControl(control, "addProject", here);
+    list = await callControl(control, "projects");
+  }
+  for (const p of list) ui.print(row("ok", p.name, dim(tilde(p.path))));
+  if (!list.length)
+    ui.print(
+      row(
+        "off",
+        "None yet",
+        "relay projects add <folder>; a thread handed over needs its repository cloned here",
+      ),
+    );
+
+  const fresh = (await running(home))!;
+  if (fresh.remote.devices.length) {
+    ui.print(section("Paired"));
+    for (const d of fresh.remote.devices) ui.print(deviceRow(d));
+  } else if (!fresh.remote.listening) {
+    ui.print(section("Pair"));
+    printTailscaleHelp(fresh, ui);
+  } else if (flags.pair && ui.live) await pair(home, flags, true, ui);
+  else {
+    ui.print(section("Pair"));
+    ui.print(row("off", "Not yet", "relay pair shows a code for a phone or computer"));
+  }
+  ui.print(
+    `\n ${green("Done.")} ${bold("relay status")} ${dim("shows how it's doing,")} ${bold("relay pair")} ${dim("adds a device")}\n       ${dim("and")} ${bold("relay settings")} ${dim("sets up dictation, read aloud, Cursor and Gitea.")}`,
+  );
+}
+
+/** A path under the home folder as ~/…, as people type it. */
+function tilde(path: string) {
+  const home = homedir();
+  return path === home || path.startsWith(home + sep)
+    ? `~${path.slice(home.length)}`
+    : path;
+}
+
+function deviceRow(d: DaemonStatus["remote"]["devices"][number]) {
+  const seen = d.online
+    ? green("online")
+    : d.lastSeen
+      ? `seen ${ago(d.lastSeen)}`
+      : "never seen";
+  return row(d.online ? "ok" : "off", d.name, dim(`${d.kind ?? "phone"} · `) + seen);
 }
 
 function signIn(provider: AgentProvider) {
