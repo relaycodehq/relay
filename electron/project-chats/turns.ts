@@ -384,7 +384,7 @@ export class ChatTurns {
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       await this.core.storage.save(chat);
-      this.core.emit({ chatId: id, message: answer });
+      this.core.emit({ chatId: id, message: structuredClone(answer) });
       const { prompt, caughtUp, briefed } = turnPrompt({
         chat,
         input,
@@ -771,7 +771,7 @@ export class ChatTurns {
       this.core.active.release(id, active);
       throw e;
     }
-    this.core.emit({ chatId: id, message });
+    this.core.emit({ chatId: id, message: structuredClone(message) });
     active.job = this.runner
       .run(chat, message, root, instructions ?? "", input, abort, {
         kind: "compact",

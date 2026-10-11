@@ -78,8 +78,8 @@ export class SideQuestions {
     );
     chat.messages.push(user, answer);
     await this.core.storage.save(chat);
-    this.core.emit({ chatId: chat.id, message: user });
-    this.core.emit({ chatId: chat.id, message: answer });
+    this.core.emit({ chatId: chat.id, message: structuredClone(user) });
+    this.core.emit({ chatId: chat.id, message: structuredClone(answer) });
     const abort = new AbortController();
     const job = (
       fromSession
