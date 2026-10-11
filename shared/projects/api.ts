@@ -150,7 +150,8 @@ export interface ProjectChatApi {
   ): Promise<ChatSummary>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
-  cancelProjectChat(id: string): Promise<void>;
+  /** `steers`: send a steer the agent hasn't read yet right after the stop. */
+  cancelProjectChat(id: string, options?: { steers?: boolean }): Promise<void>;
   respondProjectChat(
     id: string,
     requestId: string,

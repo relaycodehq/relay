@@ -1920,6 +1920,67 @@ it("carries a steer Claude never read before the stop, screenshot included, into
   expect(saved.messages.find((m) => m.id === steer.id)?.missed).toBeUndefined();
 });
 
+it("stopping to send an unread steer sends it right away, then the queue", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(chat.id, claude("@claude fixture long tool"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+      "Looking into it.",
+    ),
+  );
+  await chats.send(chat.id, {
+    ...claude("@claude I meant better matching"),
+    delivery: "steer",
+  });
+  await chats.send(chat.id, claude("@claude Then add a test"));
+  await chats.cancel(chat.id, { steers: true });
+  await vi.waitFor(
+    async () => {
+      const saved = await chats.get(chat.id);
+      expect(saved.queue ?? []).toHaveLength(0);
+      expect(saved.messages.at(-1)?.status).toBe("complete");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 10_000 },
+  );
+  const prompts = (await agentCalls())
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((c) => c.provider === "claude" && !c.args.includes("--print"))
+    .map((c) => JSON.parse(c.prompt))
+    .filter((m) => !m.priority)
+    .map((m) => m.message.content[0].text as string);
+  expect(prompts.at(-2)).toMatch(/^My request: I meant better matching\n/);
+  expect(prompts.at(-1)).toMatch(/^My request: Then add a test/);
+  expect((await chats.get(chat.id)).queuePaused).toBeFalsy();
+});
+
+it("stopping by keys with no steer waiting is a plain stop", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@claude fixture long tool"),
+    provider: "claude",
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+      "Looking into it.",
+    ),
+  );
+  await chats.cancel(chat.id, { steers: true });
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+      "cancelled",
+    );
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
+  expect((await chats.get(chat.id)).messages).toHaveLength(2);
+});
+
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
   const chat = await chats.create(projectId, { kind: "project" });

@@ -208,7 +208,13 @@ export function chatHandlers(ctx: ApiContext) {
       (id, messageId, itemId, dismissed) =>
         projectChats.setQuestionDismissed(id, messageId, itemId, dismissed),
     ),
-    cancelProjectChat: takes([idSchema], (id) => projectChats.cancel(id)),
+    cancelProjectChat: takes(
+      [
+        idSchema,
+        optional(z.object({ steers: z.boolean().optional() }).strict()),
+      ],
+      (id, options) => projectChats.cancel(id, options ?? {}),
+    ),
     resolveStoppedWork: takes(
       [idSchema, z.enum(["resume", "dismiss"])],
       (id, action) => projectChats.resolveStoppedWork(id, action),

@@ -139,8 +139,11 @@ export function ProjectComposer({
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
     dispatch?: () => void,
   ) => Promise<boolean>;
-  /** Left out while what runs can't be stopped, as a compaction. */
-  onStop?: () => void;
+  /**
+   * Left out while what runs can't be stopped, as a compaction. `steers`
+   * when stopped by its keys: a steer still waiting goes out right after.
+   */
+  onStop?: (steers: boolean) => void;
   /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   /** Values offered after a command `onCommand` runs, e.g. folders after /add-dir. */
@@ -154,7 +157,7 @@ export function ProjectComposer({
   onNextThread?: () => void;
 }) {
   const { running, busy, agent, planner } = conversation;
-  const stop = useStopKeys(running && !!onStop, () => onStop?.());
+  const stop = useStopKeys(running && !!onStop, () => onStop?.(true));
   const form = useRef<HTMLFormElement>(null);
   const composer = useComposerSettings({
     key: keys.settings,
@@ -495,7 +498,7 @@ export function ProjectComposer({
                   <StopButton
                     armed={stop.armed}
                     keys={stop.keys}
-                    onStop={onStop}
+                    onStop={() => onStop(false)}
                   />
                 )}
                 {(!running ||

@@ -132,6 +132,30 @@ export class ChatTurns {
   resume(id: string, settings?: ResumeSettings) {
     return this.core.control(id, () => this.resumeHeld(id, settings));
   }
+  /**
+   * Resumes a turn stopped to get a waiting steer read, if the agent did
+   * miss it. One it picked up just before the stop leaves the thread
+   * stopped, as any stop does.
+   */
+  resumeMissed(id: string) {
+    return this.core.control(id, async () => {
+      await this.core.active.finished(id);
+      const chat = await this.core.storage.load(id);
+      const last = chat.lastInput;
+      if (
+        this.core.active.has(id) ||
+        !last ||
+        !chat.messages.some(
+          (m) =>
+            m.missed &&
+            m.provider === sentAgent(last) &&
+            (m.parentId ?? null) === (last.parentId ?? null),
+        )
+      )
+        return;
+      await this.resumeHeld(id);
+    });
+  }
   /** Resume for a job that already holds the thread's control. */
   async resumeHeld(id: string, settings?: ResumeSettings) {
     if (this.core.closing()) throw new Error("Relay is closing.");

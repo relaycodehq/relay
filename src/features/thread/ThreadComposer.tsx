@@ -390,8 +390,9 @@ export function ThreadComposer({
       onStop={
         compacting
           ? undefined
-          : () => {
-              if (chat) void api.cancelProjectChat(chat.id).catch(setError);
+          : (steers) => {
+              if (chat)
+                void api.cancelProjectChat(chat.id, { steers }).catch(setError);
             }
       }
       onCommand={runCommand}

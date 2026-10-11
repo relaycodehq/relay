@@ -825,12 +825,28 @@ export class ProjectChats {
   ) {
     return this.questions.setDismissed(id, messageId, itemId, dismissed);
   }
-  async cancel(id: string) {
+  /**
+   * `steers`: stopped to get a waiting steer read now, so one the agent
+   * hasn't picked up goes out as the next turn and the queue carries on
+   * after it. With none waiting, it's a plain stop.
+   */
+  async cancel(id: string, { steers = false } = {}) {
     const chat = this.storage.cached(id);
+    const running = this.active.has(id);
+    const unread = steers && running && !!chat?.messages.some((m) => m.unread);
+    // A steer the agent can't take waits at the front of the queue.
+    const queued =
+      steers && running && chat?.queue?.[0]?.input.delivery === "steer";
     // Only a stopped turn holds the queue back; nothing queues behind a side answer.
-    if (chat && (this.active.has(id) || this.councils.busy(chat)))
+    if (chat && !unread && !queued && (running || this.councils.busy(chat)))
       chat.queuePaused = true;
+    const active = this.active.get(id);
+    if (active && (unread || queued)) active.keepsQueue = true;
     this.active.stop(id);
+    if (unread)
+      void this.turns
+        .resumeMissed(id)
+        .catch((e) => console.warn("Could not send the missed steer:", e));
     if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }

@@ -23,7 +23,7 @@ export function StopButton({
       className="composer-stop"
       data-armed={armed || undefined}
       aria-label={armed ? "Press Escape again to stop" : "Stop answer"}
-      title={`Stop answer and pause queued messages${keys && ` · ${keys}`}`}
+      title={`Stop answer and pause queued messages${keys && ` · ${keys} sends a steer the agent hasn't read instead`}`}
       onClick={onStop}
     >
       {armed ? (

@@ -32,6 +32,8 @@ export interface ActiveChat {
   finishing?: boolean;
   /** Stopped: the answer already shows it, while the agent winds down. */
   stopping?: boolean;
+  /** Stopped to send a steer it hadn't read: the queue goes on after that. */
+  keepsQueue?: boolean;
   end: () => void;
 }
 
