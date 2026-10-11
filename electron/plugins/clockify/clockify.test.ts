@@ -296,6 +296,12 @@ it("drops an entry dragged down to nothing and joins what then touches", async (
     }),
     expect.objectContaining({ id: "d", submittedId: "e1" }),
   ]);
+  // Each saying something of its own, they stay two entries.
+  expect(
+    tidy([block("b", 0, 30, "cA"), block("c", 30, 60, "cA")]).map(
+      (b) => b.description,
+    ),
+  ).toEqual(["b work", "c work"]);
 });
 
 it("pauses the day when turned off, so off time never counts", async () => {
