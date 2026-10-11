@@ -131,10 +131,17 @@ export function gitError(e: unknown) {
   const rejected = String(error.stdout || "").match(/^!\t.+$/gm) ?? [];
   const message = [
     ...rejected,
-    // Advice like "hint: git config set advice.diverging false" is for a terminal.
+    // Advice like "hint: git config set advice.diverging false" is for a
+    // terminal, and autocrlf's per-file warnings would bury a hook's output.
     String(error.stderr || "")
       .split("\n")
-      .filter((line) => !/^hint:/.test(line))
+      .filter(
+        (line) =>
+          !/^hint:/.test(line) &&
+          !/^warning: in the working copy of .*, (CRLF|LF) will be replaced by/.test(
+            line,
+          ),
+      )
       .join("\n")
       .trim() || error.message,
   ].join("\n");

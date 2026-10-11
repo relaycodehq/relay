@@ -84,6 +84,9 @@ export function CommitSheet({
       !selected.length
     )
       return;
+    // A draft still being written must not land over this commit's own error.
+    generation.current++;
+    setWriting(false);
     setBusy(true);
     setError(undefined);
     try {
