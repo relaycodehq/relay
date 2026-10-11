@@ -171,7 +171,7 @@ export function ThreadComposer({
   scope,
   thread: { root, messages, shown, running, mainRunning },
   councils: { reviewing },
-  background: { agentBatch, pending, stopped, leftBehind },
+  background: { agentBatch, earlierBatches, pending, stopped, leftBehind },
   session: {
     runCommand,
     context,
@@ -300,6 +300,7 @@ export function ThreadComposer({
           {agentBatch.length > 0 && (
             <SubagentsIndicator
               batch={agentBatch}
+              earlier={earlierBatches}
               projectRoot={worktree.folder}
               onOpen={onOpenAgent}
               onStop={async (id) => {

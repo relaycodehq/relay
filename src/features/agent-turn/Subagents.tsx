@@ -1,6 +1,7 @@
 // The subagents Claude has working, beside the Current checkout control: an
-// icon with how many are back, and a card previewing each. It shows only
-// while one runs; each opens its own run in a side thread.
+// icon with how many are back, and a card previewing each. The latest fan-out
+// stays, quiet once it's back, until the next starts; older ones fold away in
+// the card. Each opens its own run in a side thread.
 import { useState } from "react";
 import { useNow } from "../../lib/useNow";
 import { Popover } from "@base-ui/react/popover";
@@ -62,12 +63,15 @@ export function SubagentStatus({ run }: { run: SubagentRun }) {
 
 export function SubagentsIndicator({
   batch,
+  earlier,
   projectRoot,
   onOpen,
   onStop,
 }: {
-  /** Every agent since the first of the fan-out that's still going. */
+  /** The latest fan-out: every agent that overlapped another in it. */
   batch: SubagentRun[];
+  /** The fan-outs before it, newest first. */
+  earlier: SubagentRun[][];
   projectRoot: string;
   onOpen: (id: string) => void;
   onStop: (id: string) => Promise<void>;
@@ -81,11 +85,17 @@ export function SubagentsIndicator({
         openOnHover
         delay={150}
         closeDelay={250}
-        className="composer-branch-trigger subagents-chip"
+        className={`composer-branch-trigger subagents-chip${working ? "" : " back"}`}
         aria-label={`${plural(batch.length, "subagent")}: ${done} done, ${working} working`}
       >
         <Bot size={14} />
-        <span>{batch.length === 1 ? 1 : `${done}/${batch.length}`}</span>
+        <span>
+          {!working
+            ? `${done} done`
+            : batch.length === 1
+              ? 1
+              : `${done}/${batch.length}`}
+        </span>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
@@ -97,6 +107,7 @@ export function SubagentsIndicator({
           <Popover.Popup className="subagents-card" aria-label="Subagents">
             <Peek
               batch={batch}
+              earlier={earlier}
               projectRoot={projectRoot}
               onOpen={(id) => {
                 setOpen(false);
@@ -114,11 +125,13 @@ export function SubagentsIndicator({
 /** The agents on the left; the one you point at previews on the right. */
 function Peek({
   batch,
+  earlier,
   projectRoot,
   onOpen,
   onStop,
 }: {
   batch: SubagentRun[];
+  earlier: SubagentRun[][];
   projectRoot: string;
   onOpen: (id: string) => void;
   onStop: (id: string) => Promise<void>;
@@ -127,10 +140,31 @@ function Peek({
   const [focus, setFocus] = useState<string>();
   // Stays pressed until the agent's status says it stopped.
   const [stopping, setStopping] = useState<string>();
+  const [showEarlier, setShowEarlier] = useState(false);
   const working = batch.filter((r) => r.status === "running");
-  const run = batch.find((r) => r.id === focus) ?? working[0] ?? batch[0]!;
+  const run =
+    [...batch, ...earlier.flat()].find((r) => r.id === focus) ??
+    working[0] ??
+    batch[0]!;
   const root = projectRoot.replace(/\/+$/, "") + "/";
   const display = (text: string) => text.split(root).join("");
+  const row = (r: SubagentRun) => (
+    <button
+      key={r.id}
+      type="button"
+      className="subagents-item"
+      aria-current={r === run}
+      onMouseEnter={() => setFocus(r.id)}
+      onFocus={() => setFocus(r.id)}
+      onClick={() => onOpen(r.id)}
+    >
+      <SubagentStatus run={r} />
+      <span className="subagents-name">{r.description}</span>
+      <span className="subagents-time">
+        {took((r.ended ?? now) - r.started)}
+      </span>
+    </button>
+  );
   return (
     <div className="subagents-peek">
       <div className="subagents-list">
@@ -140,23 +174,30 @@ function Peek({
             {batch.length - working.length} of {batch.length} done
           </span>
         </div>
-        {batch.map((r) => (
+        {batch.map(row)}
+        {earlier.length > 0 && (
           <button
-            key={r.id}
             type="button"
-            className="subagents-item"
-            aria-current={r === run}
-            onMouseEnter={() => setFocus(r.id)}
-            onFocus={() => setFocus(r.id)}
-            onClick={() => onOpen(r.id)}
+            className="subagents-earlier"
+            aria-expanded={showEarlier}
+            onClick={() => setShowEarlier((v) => !v)}
           >
-            <SubagentStatus run={r} />
-            <span className="subagents-name">{r.description}</span>
-            <span className="subagents-time">
-              {took((r.ended ?? now) - r.started)}
-            </span>
+            <ChevronRight size={12} />
+            Earlier
           </button>
-        ))}
+        )}
+        {showEarlier &&
+          earlier.map((fanOut) => (
+            <div key={fanOut[0]!.id} className="subagents-fan-out">
+              <span className="subagents-fan-out-time">
+                {new Date(fanOut[0]!.started).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+              {fanOut.map(row)}
+            </div>
+          ))}
       </div>
       <div className="subagents-detail">
         <div className="subagents-title">

@@ -54,8 +54,20 @@ function subagentBatches(runs: SubagentRun[], now = Date.now()) {
 }
 
 /**
- * What the indicator counts: every agent that overlapped the ones still
- * running. It empties once they're all back, so the next fan-out starts at 0.
+ * The latest fan-out, back or not, and the ones before it, newest first. The
+ * latest stays until another starts, so what just ran is still a hover away.
+ */
+export function subagentFanOuts(runs: SubagentRun[], now = Date.now()) {
+  const batches = subagentBatches(runs, now);
+  return {
+    latest: batches.at(-1) ?? [],
+    earlier: batches.slice(0, -1).reverse(),
+  };
+}
+
+/**
+ * The phone's count: every agent that overlapped the ones still running. It
+ * empties once they're all back, so the next fan-out starts at 0.
  */
 export function runningBatch(runs: SubagentRun[], now = Date.now()) {
   const last = subagentBatches(runs, now).at(-1) ?? [];

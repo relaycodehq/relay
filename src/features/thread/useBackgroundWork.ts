@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ChatSummary } from "../../../shared/projects";
-import { outsideBatch, runningBatch } from "../../../shared/subagents";
+import { outsideBatch, subagentFanOuts } from "../../../shared/subagents";
 import { api } from "../../lib/api";
 
 export type BackgroundWork = ReturnType<typeof useBackgroundWork>;
@@ -33,10 +33,11 @@ export function useBackgroundWork(
     if (chat) void agents.refetch();
   }, [running, chat?.pending?.length]);
   const runs = agents.data ?? [];
-  const agentBatch = runningBatch(runs);
+  const { latest: agentBatch, earlier: earlierBatches } = subagentFanOuts(runs);
   return {
     agents: runs,
     agentBatch,
+    earlierBatches,
     pending,
     stopped,
     // The indicator shows the batch's agents, and stops them; the strip keeps the rest.

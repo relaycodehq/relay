@@ -10,6 +10,7 @@ import {
 import {
   modelName,
   runningBatch,
+  subagentFanOuts,
   type SubagentRun,
 } from "../../../shared/subagents";
 
@@ -252,6 +253,16 @@ it("counts every agent since the first of a fan-out, and resets after it", () =>
   expect(
     runningBatch([run("a", 0, 50), run("b", 70)], 100).map((r) => r.id),
   ).toEqual(["b"]);
+  // The desktop keeps the latest fan-out once it's back; older ones fold away.
+  const fanOuts = subagentFanOuts(
+    [run("a", 0, 50), run("b", 60, 70), run("c", 65, 80), run("d", 90, 95)],
+    100,
+  );
+  expect(fanOuts.latest.map((r) => r.id)).toEqual(["d"]);
+  expect(fanOuts.earlier.map((b) => b.map((r) => r.id))).toEqual([
+    ["b", "c"],
+    ["a"],
+  ]);
 });
 
 it("names models the way the picker does", () => {

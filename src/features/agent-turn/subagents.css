@@ -15,6 +15,10 @@
 .subagents-chip > svg {
   color: var(--accent);
 }
+/* Back: still there to look at, but nothing about it says it's working. */
+.subagents-chip.back > svg {
+  color: inherit;
+}
 .thread-context-controls .subagents-chip[data-popup-open] {
   background: var(--hover);
   color: var(--text);
@@ -109,6 +113,44 @@
 }
 .subagents-item[aria-current="true"] {
   background: var(--selected);
+}
+.subagents-earlier {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.subagents-earlier:hover {
+  color: var(--text);
+}
+.subagents-earlier > svg {
+  transition: transform 0.12s;
+}
+.subagents-earlier[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+.subagents-fan-out {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+}
+.subagents-fan-out-time {
+  padding: 6px 8px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .subagents-name {
   min-width: 0;
