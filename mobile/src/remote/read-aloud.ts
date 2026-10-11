@@ -6,7 +6,7 @@ import { requireOptionalNativeModule } from "expo";
 import type { RemoteClient } from "../../../shared/remote-client";
 import { hold, release } from "./watch";
 
-/** modules/relay-speaker; missing in Expo Go, on iOS, and in APKs from before read aloud. */
+/** modules/relay-speaker; missing in Expo Go and in APKs from before read aloud. */
 interface RelaySpeaker {
   start(sampleRate: number): Promise<void>;
   /** Resolves with how many seconds are queued and not yet heard. */

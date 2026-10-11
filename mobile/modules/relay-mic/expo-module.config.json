@@ -1,6 +1,9 @@
 {
-  "platforms": ["android"],
+  "platforms": ["android", "apple"],
   "android": {
     "modules": ["expo.modules.relaymic.RelayMicModule"]
+  },
+  "apple": {
+    "modules": ["RelayMicModule"]
   }
 }

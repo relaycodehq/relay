@@ -10,7 +10,17 @@
     "backgroundColor": "#1e1e21",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dev.relay.remote"
+      "bundleIdentifier": "dev.relay.remote",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Relay connects to the computer you paired it with on your network.",
+        "NSMicrophoneUsageDescription": "Relay sends what you say to your computer, which turns it into text.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
     },
     "android": {
       "package": "dev.relay.remote",
