@@ -142,6 +142,24 @@
 .agent-worktree-trigger > svg:first-child {
   color: var(--accent);
 }
+/* The thread's worktree was deleted: red, since nothing runs until one of
+   the actions beside it is picked. */
+.thread-context-controls .deleted-worktree,
+.thread-context-controls .deleted-worktree > svg {
+  color: var(--danger);
+}
+.thread-context-controls .deleted-worktree-action {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+.thread-context-controls .deleted-worktree-action:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.thread-context-controls .deleted-worktree-action.checkout {
+  color: var(--accent);
+}
 .agent-worktree-note {
   max-width: 300px;
   white-space: normal;

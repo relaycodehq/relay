@@ -8,12 +8,14 @@ import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
+  branchKept,
   cantCarryOn,
   copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
   newBranchProblem,
   reattachWorktree,
+  recreateWorktree,
   removeWorktree,
   suggestedBranch,
   uncommitted,
@@ -567,29 +569,35 @@ export class ThreadWorktrees {
     return worktree.path;
   }
 
+  /** A project-folder thread that is idle enough to change where it works. */
+  private async switchable(id: string) {
+    const chat = await this.core.storage.load(id);
+    assertHere(chat);
+    if (chat.worktree || chat.scope.kind !== "project" || chat.reviewer)
+      throw new Error(
+        "Only project-folder threads can select an agent worktree.",
+      );
+    await this.core.active.finished(id);
+    if (
+      this.core.active.has(id) ||
+      this.core.active.hasSide(id) ||
+      this.councils.busy(chat)
+    )
+      throw new Error(
+        "Wait for the answer to finish before changing workspace.",
+      );
+    if (this.core.sessions.pending(id).length || chat.heldWakeups?.length)
+      throw new Error(
+        "Stop this thread's background work and wake-ups before changing workspace.",
+      );
+    await this.refreshAgentWorktrees(chat, true);
+    return chat;
+  }
+
   /** Changes only the working folder. Files and branches stay where they are. */
   selectAgentWorktree(id: string, path: string | null) {
     return this.core.control(id, async () => {
-      const chat = await this.core.storage.load(id);
-      assertHere(chat);
-      if (chat.worktree || chat.scope.kind !== "project" || chat.reviewer)
-        throw new Error(
-          "Only project-folder threads can select an agent worktree.",
-        );
-      await this.core.active.finished(id);
-      if (
-        this.core.active.has(id) ||
-        this.core.active.hasSide(id) ||
-        this.councils.busy(chat)
-      )
-        throw new Error(
-          "Wait for the answer to finish before changing workspace.",
-        );
-      if (this.core.sessions.pending(id).length || chat.heldWakeups?.length)
-        throw new Error(
-          "Stop this thread's background work and wake-ups before changing workspace.",
-        );
-      await this.refreshAgentWorktrees(chat, true);
+      const chat = await this.switchable(id);
       const selected =
         path === null
           ? undefined
@@ -622,6 +630,42 @@ export class ThreadWorktrees {
         selected: true,
       };
       this.core.sessions.close(id);
+      await this.core.storage.save(chat);
+      return chatSummary(chat);
+    });
+  }
+
+  /** Whether the deleted worktree a thread still has selected can be made again: its branch is still there. */
+  async agentWorktreeRecreatable(id: string) {
+    const chat = await this.core.storage.load(id);
+    const gone = chat.activeAgentWorktree;
+    if (!gone?.branch || selectedAgentWorktree(chat)) return false;
+    return branchKept(await this.core.projects.root(chat.projectId), gone.branch);
+  }
+
+  /** Makes the deleted worktree a thread still has selected again, from its branch, and carries on there. */
+  recreateAgentWorktree(id: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.switchable(id);
+      const gone = chat.activeAgentWorktree;
+      if (!gone || selectedAgentWorktree(chat)) return chatSummary(chat);
+      if (!gone.branch)
+        throw new Error(
+          "Relay never saw this worktree's branch, so it can't make it again.",
+        );
+      const made = await recreateWorktree(
+        await this.core.projects.root(chat.projectId),
+        gone.path,
+        gone.branch,
+      );
+      chat.agentWorktrees = [
+        ...(chat.agentWorktrees ?? []).filter((w) => w.path !== made.path),
+        { ...made, at: Date.now() },
+      ];
+      chat.activeAgentWorktree = {
+        ...made,
+        ...(gone.followed ? { followed: true as const } : {}),
+      };
       await this.core.storage.save(chat);
       return chatSummary(chat);
     });

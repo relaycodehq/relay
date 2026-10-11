@@ -251,3 +251,26 @@ it("rejects unowned paths, running or background turns, and managed worktrees", 
     "Only project-folder threads",
   );
 });
+
+it("makes a deleted worktree again from its branch, and can't once the branch went too", async () => {
+  vi.mocked(core.active.has).mockReturnValue(false);
+  await worktrees.refreshAgentWorktrees(chat);
+  git("worktree", "remove", recovered);
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(await worktrees.agentWorktreeRecreatable("chat")).toBe(true);
+  await worktrees.recreateAgentWorktree("chat");
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(await worktrees.root(chat)).toBe(recovered);
+  expect(
+    execFileSync("git", ["-C", recovered, "branch", "--show-current"])
+      .toString()
+      .trim(),
+  ).toBe("feature");
+  git("worktree", "remove", recovered);
+  git("branch", "-D", "feature");
+  await worktrees.refreshAgentWorktrees(chat, true);
+  expect(await worktrees.agentWorktreeRecreatable("chat")).toBe(false);
+  await expect(worktrees.recreateAgentWorktree("chat")).rejects.toThrow(
+    "deleted too",
+  );
+});

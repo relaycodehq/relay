@@ -263,24 +263,30 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.locator(".composer-branch-trigger.workspace-trigger.static"),
     ).toHaveText("local-urls");
     gitIn(repo, "worktree", "remove", worktree);
-    await expect(page.locator(".agent-worktree-trigger")).toHaveText(
-      "Worktree unavailable",
-    );
+    const deleted = page.locator(".deleted-worktree");
+    await expect(deleted).toHaveText("Worktree deleted");
     await expect(page.getByRole("button", { name: /^main$/ })).toHaveCount(0);
     await page.getByLabel("Message project").fill("must not edit main");
     await expect(
       page.getByRole("button", { name: "Send message", exact: true }),
     ).toBeDisabled();
-    await page.locator(".agent-worktree-trigger").click();
-    await expect(
-      page.getByRole("menuitemradio", { name: /local-urls \(unavailable\)/ }),
-    ).toHaveAttribute("aria-checked", "true");
     await screenshot(page, {
-      path: "test-results/agent-worktree-unavailable.png",
+      path: "test-results/agent-worktree-deleted.png",
     });
-    await page
-      .getByRole("menuitemradio", { name: "Current checkout", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Recreate worktree" }).click();
+    await expect(
+      page.locator(".composer-branch-trigger.workspace-trigger.static"),
+    ).toHaveText("local-urls");
+    expect(gitIn(worktree, "branch", "--show-current").trim()).toBe(
+      "local-urls",
+    );
+    gitIn(repo, "worktree", "remove", worktree);
+    gitIn(repo, "branch", "-D", "local-urls");
+    await expect(deleted).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Recreate worktree" }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Continue in checkout" }).click();
     await expect(
       page.getByRole("button", { name: /Current checkout/ }),
     ).toBeVisible();

@@ -6,6 +6,7 @@ import {
   Copy,
   Folder,
   FolderGit2,
+  FolderX,
   GitBranch,
 } from "lucide-react";
 import type {
@@ -54,6 +55,8 @@ export function WorkspaceControl({
       <CheckoutControl
         worktrees={chat.agentWorktrees}
         active={chat.activeAgentWorktree}
+        recreatable={worktree.recreatable}
+        onRecreate={() => void worktree.recreate()}
         onSelect={(path) => void worktree.select(path)}
         selectionDisabled={busy || worktree.selectionDisabled}
         onReveal={(path) =>
@@ -175,12 +178,17 @@ const folderName = (path: string) => path.split(/[\\/]/).pop() || path;
 export function CheckoutControl({
   worktrees = [],
   active,
+  recreatable = false,
+  onRecreate,
   onSelect,
   selectionDisabled = false,
   onReveal,
 }: {
   worktrees?: AgentWorktree[];
   active?: ActiveAgentWorktree;
+  /** The deleted worktree's branch is still there to make it again from. */
+  recreatable?: boolean;
+  onRecreate?: () => void;
   onSelect?: (path: string | null) => void;
   selectionDisabled?: boolean;
   onReveal: (path: string) => void;
@@ -189,26 +197,30 @@ export function CheckoutControl({
   const selected =
     active &&
     worktrees.find((w) => agentWorktreeKey(w) === agentWorktreeKey(active));
-  const unavailable = !!active && !selected;
-  const Icon = active ? FolderGit2 : Folder;
   const disabled = selectionDisabled || !onSelect;
+  if (active && !selected)
+    return (
+      <DeletedWorktree
+        name={folderName(active.path)}
+        disabled={disabled}
+        onRecreate={recreatable ? onRecreate : undefined}
+        onCheckout={() => onSelect?.(null)}
+      />
+    );
+  const Icon = active ? FolderGit2 : Folder;
   return (
     <Menu.Root>
       <Menu.Trigger
         className="composer-branch-trigger workspace-trigger agent-worktree-trigger"
         title={
           active
-            ? `Active workspace: ${selected?.path ?? active.path}${unavailable ? " (unavailable)" : ""}`
+            ? `Active workspace: ${selected?.path ?? active.path}`
             : "Active workspace: current checkout. Select a worktree here to use it."
         }
       >
         <Icon size={13} />
         <span>
-          {unavailable
-            ? "Worktree unavailable"
-            : selected
-              ? folderName(selected.path)
-              : "Current checkout"}
+          {selected ? folderName(selected.path) : "Current checkout"}
         </span>
         <ChevronDown size={12} />
       </Menu.Trigger>
@@ -224,12 +236,11 @@ export function CheckoutControl({
             aria-label="Active workspace"
           >
             <div className="composer-menu-label agent-worktree-note">
-              {unavailable
-                ? "The selected worktree is unavailable. Choose a workspace to continue."
-                : "Choose where Git, files and future agent turns work. This choice stays until you change it."}
+              Choose where Git, files and future agent turns work. This
+              choice stays until you change it.
             </div>
             <Menu.RadioGroup
-              value={selected?.path ?? active?.path ?? "checkout"}
+              value={selected?.path ?? "checkout"}
               onValueChange={(value: string) =>
                 onSelect?.(value === "checkout" ? null : value)
               }
@@ -246,22 +257,6 @@ export function CheckoutControl({
                   <Check size={13} />
                 </Menu.RadioItemIndicator>
               </Menu.RadioItem>
-              {unavailable && (
-                <Menu.RadioItem
-                  value={active!.path}
-                  disabled
-                  className="composer-select-item worktree-item agent-worktree-item"
-                >
-                  <FolderGit2 size={14} />
-                  <span className="agent-worktree-label">
-                    <span>{folderName(active!.path)} (unavailable)</span>
-                    <small>{active!.path}</small>
-                  </span>
-                  <Menu.RadioItemIndicator className="agent-worktree-selected">
-                    <Check size={13} />
-                  </Menu.RadioItemIndicator>
-                </Menu.RadioItem>
-              )}
               {worktrees.map((w) => (
                 <Menu.RadioItem
                   key={w.path}
@@ -304,6 +299,57 @@ export function CheckoutControl({
         </Menu.Positioner>
       </Menu.Portal>
     </Menu.Root>
+  );
+}
+
+/**
+ * The worktree a thread worked in was deleted under it. Nothing runs until
+ * the user picks where it carries on, so the row says so in red and offers
+ * both ways right there.
+ */
+function DeletedWorktree({
+  name,
+  disabled,
+  onRecreate,
+  onCheckout,
+}: {
+  name: string;
+  disabled: boolean;
+  /** Absent once its branch went with it. */
+  onRecreate?: () => void;
+  onCheckout: () => void;
+}) {
+  return (
+    <>
+      <span
+        className="composer-branch-trigger workspace-trigger static deleted-worktree"
+        role="alert"
+        title={`This thread worked in ${name}, which was deleted. Pick where it carries on.`}
+      >
+        <FolderX size={13} />
+        <span>Worktree deleted</span>
+      </span>
+      {onRecreate && (
+        <button
+          type="button"
+          className="deleted-worktree-action"
+          disabled={disabled}
+          title={`Make ${name} again from its branch`}
+          onClick={onRecreate}
+        >
+          Recreate worktree
+        </button>
+      )}
+      <button
+        type="button"
+        className="deleted-worktree-action checkout"
+        disabled={disabled}
+        title="Work in the project folder from now on"
+        onClick={onCheckout}
+      >
+        Continue in checkout
+      </button>
+    </>
   );
 }
 

@@ -310,6 +310,12 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, z.string().min(1).max(4096).nullable()],
       (chatId, path) => projectChats.selectAgentWorktree(chatId, path),
     ),
+    agentWorktreeRecreatable: takes([idSchema], (chatId) =>
+      projectChats.agentWorktreeRecreatable(chatId),
+    ),
+    recreateAgentWorktree: takes([idSchema], (chatId) =>
+      projectChats.recreateAgentWorktree(chatId),
+    ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],
       async (id, config) => {

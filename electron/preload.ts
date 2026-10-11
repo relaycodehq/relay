@@ -134,6 +134,8 @@ const methods = [
   "revealProjectWorktree",
   "revealAgentWorktree",
   "selectAgentWorktree",
+  "agentWorktreeRecreatable",
+  "recreateAgentWorktree",
   "projectChat",
   "projectChatImage",
   "projectChatQueuedImages",

@@ -745,6 +745,12 @@ export class ProjectChats {
   selectAgentWorktree(id: string, path: string | null) {
     return this.worktrees.selectAgentWorktree(id, path);
   }
+  agentWorktreeRecreatable(id: string) {
+    return this.worktrees.agentWorktreeRecreatable(id);
+  }
+  recreateAgentWorktree(id: string) {
+    return this.worktrees.recreateAgentWorktree(id);
+  }
   worktreeRoot(projectId: string, id: string, expectedWorktree?: string) {
     return this.worktrees.rootFor(projectId, id, expectedWorktree);
   }

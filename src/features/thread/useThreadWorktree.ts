@@ -84,6 +84,12 @@ export function useThreadWorktree({
     queryFn: () => api.projectWorkingTree(where),
     enabled: !!agentWorktree && !unavailable,
   });
+  // Offered only while the deleted worktree's branch is still there to make it from.
+  const recreatable = useQuery({
+    queryKey: ["agent-worktree-recreatable", chat?.id, chat?.activeAgentWorktree?.path],
+    queryFn: () => api.agentWorktreeRecreatable(chat!.id),
+    enabled: !!chat && unavailable,
+  });
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<"remove">();
   useEffect(() => {
@@ -108,9 +114,17 @@ export function useThreadWorktree({
     }
   }
   async function select(path: string | null) {
+    await changeWorkspace(() => api.selectAgentWorktree(chat!.id, path));
+  }
+  async function recreate() {
+    await changeWorkspace(() => api.recreateAgentWorktree(chat!.id));
+    // Its answer was about the folder now back; a later deletion asks again.
+    qc.removeQueries({ queryKey: ["agent-worktree-recreatable", chat?.id] });
+  }
+  async function changeWorkspace(change: () => Promise<ChatSummary>) {
     if (!chat || lock.blocked() || running) return;
     await run(async () => {
-      const summary = await api.selectAgentWorktree(chat.id, path);
+      const summary = await change();
       qc.setQueriesData<ChatSummary[]>(
         { queryKey: ["project-chats", project.id] },
         (list) => list?.map((c) => (c.id === chat.id ? summary : c)),
@@ -146,7 +160,9 @@ export function useThreadWorktree({
         : agentWorktree?.branch),
     inWorktree: !!live || !!agentWorktree,
     unavailable,
+    recreatable: !!recreatable.data,
     select,
+    recreate,
     selectionDisabled: running || lock.locked,
     busy,
     /** The Remove dialog, while it is open. */

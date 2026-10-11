@@ -707,6 +707,32 @@ export async function reattachWorktree(
   };
 }
 
+/** Whether a deleted agent worktree's branch is still there to make it again from. */
+export const branchKept = (root: string, branch: string) =>
+  hasBranch(root, branch);
+
+/**
+ * Makes an agent's deleted worktree again in its old folder, on its branch,
+ * with the `.worktreeinclude` files and `node_modules` a thread's own gets.
+ * What it held uncommitted went with the folder.
+ */
+export async function recreateWorktree(
+  root: string,
+  path: string,
+  branch: string,
+) {
+  if (!(await hasBranch(root, branch)))
+    throw new Error(`Its branch ${branch} was deleted too.`);
+  if (await exists(path))
+    throw new Error(`Something else is in ${path} now.`);
+  await git(root, ["worktree", "prune"]).catch(() => {});
+  await git(root, ["worktree", "add", "-q", path, branch], 120000);
+  await bootstrap(root, root, path);
+  const file = await readFile(join(path, ".git"), "utf8").catch(() => "");
+  const gitdir = file.match(/^gitdir: (.+)$/m)?.[1];
+  return { path, branch, ...(gitdir ? { gitdir: basename(gitdir.trim()) } : {}) };
+}
+
 const checkoutHead = (root: string) =>
   git(root, ["rev-parse", "-q", "--verify", "HEAD^{commit}"]).then(
     (s) => s.trim(),

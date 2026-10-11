@@ -358,6 +358,10 @@ export interface ProjectWorktreeApi {
     chatId: string,
     path: string | null,
   ): Promise<ChatSummary>;
+  /** Whether the deleted worktree a thread has selected still has its branch to be made again from. */
+  agentWorktreeRecreatable(chatId: string): Promise<boolean>;
+  /** Makes that worktree again from its branch and keeps the thread in it. */
+  recreateAgentWorktree(chatId: string): Promise<ChatSummary>;
 }
 
 export interface ProjectFilesApi {

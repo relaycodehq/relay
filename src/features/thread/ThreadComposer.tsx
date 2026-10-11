@@ -140,6 +140,8 @@ function ThreadBranch({
         {picker}
       </>
     );
+  // The deleted worktree's row asks where to carry on; its branch name would be stale.
+  if (worktree.unavailable) return null;
   if (worktree.inWorktree)
     return (
       <span
