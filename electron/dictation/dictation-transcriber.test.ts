@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import {
   joinText,
   quietest,
@@ -142,4 +142,27 @@ it("fixes the capital letter where phrases meet", () => {
     ]),
   ).toBe("Fix the test. And ping me when it is green I think");
   expect(joinText([{ text: "" }, { text: "Hi." }, { text: "" }])).toBe("Hi.");
+});
+
+it("waits for as much new audio as a slow decode took before decoding again", async () => {
+  const { engine, decoded } = fakeEngine();
+  let clock = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => clock);
+  const decode = engine.decode;
+  engine.decode = (samples) => {
+    clock += 1000;
+    return decode(samples);
+  };
+  try {
+    const transcriber = new Transcriber(engine, () => {});
+    // 3 s of speech without a pause, as it streams in.
+    for (let i = 0; i < 30; i++) {
+      transcriber.push(chunk(0.1, 0.9));
+      await new Promise((resolve) => setTimeout(resolve));
+    }
+    // Every 0.3 s would be 10 decodes; a 1 s decode spaces them a second apart.
+    expect(decoded.length).toBeLessThanOrEqual(4);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

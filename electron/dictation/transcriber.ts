@@ -54,6 +54,8 @@ export class Transcriber {
   private readonly pause: number;
   private readonly maxPhrase: number;
   private readonly partialStep: number;
+  /** How long the last partial decode took, in samples. */
+  private lastPartial = 0;
 
   constructor(
     private engine: SpeechEngine,
@@ -158,7 +160,11 @@ export class Transcriber {
     if (unsettled.closed) return { phrase: unsettled, final: true };
     // Nothing new to hear once a decode has caught up past the last word.
     const caughtUp = unsettled.decoded >= unsettled.spoken + this.partialStep;
-    if (!caughtUp && unsettled.length - unsettled.decoded >= this.partialStep)
+    // Decoding again before as much audio came in as the last decode took
+    // keeps the engine busy nonstop, and it falls further behind: a long
+    // phrase takes longer to decode, and a busy computer longer still.
+    const step = Math.max(this.partialStep, this.lastPartial);
+    if (!caughtUp && unsettled.length - unsettled.decoded >= step)
       return { phrase: unsettled, final: false };
   }
 
@@ -173,10 +179,13 @@ export class Transcriber {
     const length = phrase.length,
       samples = pad(join(phrase.chunks, length), final);
     this.busy = true;
+    const started = performance.now();
     this.engine
       .decode(samples)
       .then(
         (text) => {
+          if (!final)
+            this.lastPartial = ((performance.now() - started) / 1000) * rate;
           // Skip a partial that a split made reach past the phrase's end.
           if (final || length <= phrase.length) {
             phrase.text = text.trim();
