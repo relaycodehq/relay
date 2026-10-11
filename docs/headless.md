@@ -1,6 +1,6 @@
 # Headless Relay
 
-`relay` is Relay without its window, for a computer you only ever reach from somewhere else: a Mac mini in a cupboard, a Linux box, a cloud server. Set it up once and it runs in the background, starts with the computer and keeps your agents working there. You start, follow and answer threads from the Relay phone app, and hand threads to it (and take them back) from Relay on your laptop.
+`relay` is Relay without its window, for a computer you only ever reach from somewhere else: a Mac mini in a cupboard, a Linux box, a cloud server. Set it up once and it runs in the background, starts automatically with your user service and keeps your agents working there. You start, follow and answer threads from the Relay phone app, and hand threads to it (and take them back) from Relay on your laptop. See [how it runs](#how-it-runs) for login and boot behavior on each platform.
 
 It is the desktop's own code, so threads, worktrees, approvals, questions, queues, Relay's tools for agents, usage and handoffs behave as they do on the desktop. The terminal is only for setting it up and checking on it; it is not a terminal UI for the work.
 
@@ -37,7 +37,9 @@ relay pair
 prints a QR code and a link, and waits until something pairs:
 
 - **Phone:** scan the code with the Relay app.
-- **Laptop:** in Relay on the laptop, open **Settings → Computers** and paste the link. The laptop can then hand threads to this computer from a thread's header, and bring them back from the strip that shows where the thread is. A thread only goes to a computer that has its repository cloned and added as a project (`relay projects add <folder>`).
+- **Laptop:** in Relay on the laptop, open **Settings → Computers** and paste the link. The laptop can then hand threads to this computer from a thread's header, and bring them back from the line that shows where the thread is. A thread only goes to a computer that has its repository cloned and added as a project (`relay projects add <folder>`) with a matching Git remote.
+
+On current Relay versions, the handed-off conversation stays live on the laptop: send, steer, stop, queue and answer approvals there while the headless computer runs the agent. Files and Changes on the laptop still show its local checkout. If the headless computer goes offline, messages wait for it; **Run here instead** continues on the laptop with the conversation already received, leaving code changes made since handoff on the headless computer. A normal **Bring back** transfers those changes too.
 
 A code works once, for ten minutes. `relay devices` lists what's paired; `relay devices remove <name>` disconnects one at once.
 
@@ -88,7 +90,7 @@ The speech engines come from npm, each checked against the SHA-512 Relay's lockf
 
 ## Security
 
-- **Tailscale only**, as on the desktop: the bridge listens on this computer's tailnet address alone and drops connections from anywhere else. Pairing, the device tokens and the Noise-style encryption are the desktop's; see [Phone app](phone.md#how-it-works).
+- **Tailscale by default.** The headless CLI's setup uses Tailscale; the bridge binds to the computer's tailnet address and accepts tailnet or loopback peers. It shares the desktop's pairing, device tokens and Noise-style encryption. The desktop also exposes an opt-in local-network setting; see [Phone app](phone.md#how-it-works).
 - **Secrets without a keychain.** A server has no Keychain or Secret Service to ask, so the bridge's private key, paired computers' tokens and plugin secrets are sealed with AES-256-GCM under `~/.relay/secret.key`, which only your user can read (0600, or your profile's own permissions on Windows), as SSH keeps its keys. Anyone who can read your home folder can read them; so can they your agents' own sign-ins.
 - **The `relay` command** talks to the running Relay through `~/.relay/relay.sock`, which only your user can open (a named pipe on Windows).
 

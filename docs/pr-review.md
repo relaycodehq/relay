@@ -1,10 +1,14 @@
 # Pull request review
 
-Relay reviews Gitea pull requests: an inbox across repositories, lazy diffs, comments, viewed progress, Codex-assisted grouping, blame and live project checks. Project threads embed the same tools in their **Review** pane; the cross-project **Pull request inbox** keeps the full workflow described here.
+Relay reviews GitHub and Gitea pull requests with lazy diffs, comments, viewed progress, agent-assisted grouping, blame and live project checks. The **Pull requests** page shows what needs you and groups PRs by project. A PR belonging to an added project opens in that project's thread and **Review** pane; other PRs open directly in the Pull requests page.
+
+## Connect to GitHub
+
+Sign in with the GitHub CLI (`gh auth login`) and add the repository as a project. Relay uses that CLI's account for GitHub PRs and CI. **Settings → Integrations → Source control** shows the detected hosts and lets you enable or disable them. The cross-project Pull requests page uses a connected Gitea account when present, otherwise your GitHub account; project threads use the host of their repository.
 
 ## Connect to Gitea
 
-1. Choose **Connect Gitea** in the project sidebar and enter your HTTPS Gitea base URL, including its subpath (for example `https://git.example.com/gitea`). Later sign-ins remember it.
+1. Enable Gitea under **Settings → Integrations → Source control**, choose **Connect…**, and enter your HTTPS Gitea base URL, including its subpath (for example `https://git.example.com/gitea`). Later sign-ins remember it.
 2. Use **Create a token in Gitea** to open your account's Applications settings. Create a personal access token with `read:user`, `write:repository`, and `write:issue`, including private repository access if needed.
 3. Enter the token directly in the app. PRs are discovered through your account; you do not need to paste individual links.
 
@@ -14,35 +18,34 @@ The window opens while the saved login unlocks. If Keychain needs permission, th
 
 ## Review workflow
 
-The cross-project Pull request inbox retains this workflow; individual projects embed the same review tools in their Pull requests view.
+Open **Pull requests** from the sidebar, or choose **Review a PR** when starting a project thread.
 
-The app reopens your last unfinished PR and selected file after a reload or full restart, with your inbox filter, search and open/closed selection. Closed or merged PRs, and PRs you have approved at the current head commit, are not reopened automatically. Older, stale or dismissed approvals do not prevent resuming a saved review; completed PRs can still be opened manually. This is saved separately for each Gitea account. Files beyond the first metadata page are located without loading other diffs; if a saved file no longer exists, the first available file opens. An explicitly opened PR URL takes priority.
+The app restores the Pull requests page's saved location, search and open/closed selection. A saved unfinished review can reopen its PR and selected file; closed, merged or approved-at-head PRs do not reopen automatically. Files beyond the first metadata page are located without loading other diffs; if a saved file no longer exists, the first available file opens. An explicitly opened PR URL takes priority.
 
-- **Needs my review**, **Assigned to me**, **Created by me**, and **All pull requests** search across repositories accessible to your account. Search and state filters run on Gitea.
-- Pull requests live below the workspace filters on the left. The middle pane shows the selected PR's changed files and loads metadata in pages; only the selected file's base and head contents are fetched. Drag the pane dividers to resize. Each pane has its own hide button; the two controls in the review header restore either pane, even with both hidden. Visibility and widths are remembered. Searching with Cmd/Ctrl F reopens PR navigation without changing file-pane visibility.
+- The **Needs you** section surfaces PRs awaiting your attention. Project cards open each repository's PRs, ordered around requests for your review, assignments and your own work. Search and open/closed filters query the connected Git host.
+- Opening a PR shows its changed files and loads metadata in pages; only the selected file's base and head contents are fetched. Resize panes with their dividers and use the pane controls to show or hide the file list. Cmd/Ctrl F focuses search on the Pull requests page.
 - Read split or unified diffs with automatic syntax highlighting and optional line wrapping. Skipped context is shown as a tinted separator labeled **N unchanged lines**. Its arrows reveal 20 lines from either edge; clicking the label reveals both edges. **Expand all** (or Shift-click / Shift-Enter) reveals the whole gap. Controls support Tab, Enter and Space. Expansion uses the selected file’s already-loaded contents and keeps real line numbers for comments and bookmarks.
 - Click a line number to add a comment or mark it for later. Drafts, line marks, review summaries, folder links, and viewed files persist locally. Viewed (or V) immediately marks the file and advances to the next unread file, skipping already reviewed files and loading additional file metadata pages as needed. It returns to earlier unread files at the end and stops once all files are reviewed. Revisiting a reviewed file shows it collapsed; expand it without losing its viewed state. Unmarking a file keeps you on it.
-- **Finish review** submits comments, approval, or requested changes to Gitea. Replies and resolve/reopen act on existing server comments. The Conversation tab contains PR discussion and review history.
+- **Finish review** submits comments, approval, or requested changes to the Git host. Replies and resolve/reopen act on existing server comments where supported. The Conversation tab contains PR discussion and review history.
 - Viewed marks and drafts are tied to the merge-base/head revision. New commits invalidate viewed status and block stale draft submission. Old drafts remain visible for editing/removal rather than silently attaching to a different line.
 - If you already have a pending review in Gitea, finish or discard that review there before submitting here. This avoids unexpectedly publishing comments drafted in another client.
-- **Open PR by URL** accepts regular Gitea PR links, including `/files`. Installed builds also register `relay://open?url=<URL-encoded Gitea PR URL>`.
+- **Open PR by URL** accepts GitHub and Gitea PR links, including `/files`. Installed builds also register `relay://open?url=<URL-encoded PR URL>`.
 
 | Shortcut         | Action                     |
 | ---------------- | -------------------------- |
 | Cmd/Ctrl ,       | Open Settings              |
 | Cmd/Ctrl F       | Search pull requests       |
 | Cmd/Ctrl K       | Open PR by URL             |
-| Cmd/Ctrl B       | Toggle file list           |
-| Cmd/Ctrl Shift B | Toggle pull requests       |
+| Cmd/Ctrl Alt B   | Toggle review file list    |
 | J / K            | Next / previous file       |
 | V                | Toggle current file viewed |
 | Escape           | Close dialog               |
 
-## Group repeated changes with Codex
+## Group repeated changes with an agent
 
-Click **Group changes** above the file list. This uses your installed, signed-in Codex CLI (Luna by default) and sends candidate code to Codex. Choose its model and Fast mode in Settings. No OpenRouter key or linked local folder is required. Normal review remains lazy; the broader scan runs only when requested and can be paused.
+Click **Group changes** above the file list. This sends candidate code to the signed-in Claude or Codex agent selected under **Settings → AI models → Used by Relay → Pull request steps**. Choose its model and supported reasoning/Fast settings there. No OpenRouter key or linked local folder is required. Normal review remains lazy; the broader scan runs only when requested and can be paused.
 
-Codex discovers concrete transformation rules directly from the changes. There is no framework/refactor allowlist and no requirement for identical edit text. Local similarity only orders files into small batches. Each packet contains every changed hunk, six lines of surrounding context, and bounded directly referenced changes (for example a changed base class). Earlier unmatched files are checked again when later batches discover new patterns. Only patterns confirmed in at least two files become visible groups.
+The agent discovers concrete transformation rules directly from the changes. There is no framework/refactor allowlist and no requirement for identical edit text. Local similarity only orders files into small batches. Each packet contains every changed hunk, six lines of surrounding context, and bounded directly referenced changes (for example a changed base class). Earlier unmatched files are checked again when later batches discover new patterns. Only patterns confirmed in at least two files become visible groups.
 
 Each grouped file must contain only its named transformation and necessary supporting edits. A file with an independent extra change stays in **Individual changes**. Intentional behavior changes can also repeat and be grouped; grouping is a model-assisted review suggestion, not a correctness or safety certification. For an individual file, expand **Why this file is individual** to see its reason. Binary files, incomplete evidence and changes beyond the analysis budget stay individual.
 Each completed batch is saved atomically. **Pause analysis** keeps the queue and all valid decisions. **Resume analysis** continues after a budget limit, request failure, app restart, or interruption; it reuses saved evidence instead of downloading and classifying successful files again. Incomplete decisions receive one bounded retry in a smaller request, then remain queued for a later resume. A failed model invocation pauses with its batch queued. Verified groups remain available while work is paused, and no failed decision can mark a file viewed.
@@ -86,7 +89,7 @@ Click a code row or select a line/range in either diff gutter, then choose **Ask
 
 Questions use a read-only sandbox and do not create Gitea comments or mark files viewed. A dirty or different local checkout is allowed: the prompt distinguishes it from the supplied PR snapshot. Old-side and renamed/deleted-file questions use their merge-base revision and original path. A changed PR revision, missing source or selection over 200 lines blocks the handoff rather than silently using different code. Link a local Git folder with the matching repository remote first.
 
-Open **Settings** from the gear in the review header, the account footer, or **Cmd/Ctrl ,**. **Grouping** and **Line questions** each have a model selector, custom model ID, **Reasoning effort** selector and independent **Fast mode** toggle. Save the settings explicitly; they persist across restarts. Questions may use the Codex-configured default model and reasoning effort. The effort selector shows supported levels for the built-in model presets; custom models depend on the installed CLI. Switching to a model that cannot use the selected effort requires choosing a supported level before saving. [Higher reasoning effort gives Codex more room to reason and can increase time and token usage](https://learn.chatgpt.com/docs/models#pick-a-reasoning-effort). Fast uses Codex's service tier; Standard explicitly overrides an inherited Fast preference. Model and tier availability depend on the signed-in account; [Codex Fast mode uses more credits](https://learn.chatgpt.com/docs/agent-configuration/speed). Existing grouping checkpoints retain their original model, reasoning effort and speed when resumed; new analyses use the latest settings.
+Open **Settings** from the sidebar's settings button or **Cmd/Ctrl ,**, then **AI models → Used by Relay → Review and commits**. **Pull request steps** and **Line questions** choose the agent, model and supported reasoning/Fast settings for these jobs. Changes save as you make them and persist across restarts. Model and effort availability depend on the installed agent and signed-in account. [Higher reasoning effort gives Codex more room to reason and can increase time and token usage](https://learn.chatgpt.com/docs/models#pick-a-reasoning-effort); [Codex Fast mode uses more credits](https://learn.chatgpt.com/docs/agent-configuration/speed). Existing grouping checkpoints retain their original agent, model, reasoning effort and speed when resumed; new analyses use the latest settings.
 
 ## Fix with Codex
 
@@ -98,7 +101,7 @@ Linux prefers `xdg-terminal-exec`, honoring Omarchy's selected terminal (Foot, G
 
 ## Performance and local data
 
-Diff parsing and syntax highlighting run in workers. The diff, inbox, and file list are virtualized; rendered rows follow the viewport. Selected-file contents are released from the query cache when inactive. Syntax worker caches are limited to one entry and two workers. Files over 5,000 lines initially use fast plain text, with explicit syntax opt-in. Each side has a 2 MiB fetch limit; binary/LFS files show a clear message. Diff calculations time out after 12 seconds instead of freezing the window.
+Diff parsing and syntax highlighting run in workers. Diff and changed-file rows are virtualized; rendered rows follow the viewport. Selected-file contents are released from the query cache when inactive. Syntax worker caches are limited to one entry and two workers. Files over 5,000 lines initially use fast plain text, with explicit syntax opt-in. Each side has a 2 MiB fetch limit; binary/LFS files show a clear message. Diff calculations time out after 12 seconds instead of freezing the window.
 
 Electron still has a substantial baseline footprint. In the measured 15,000-line test, only 40 code rows were mounted and the sum of process working sets was roughly 565–634 MiB across local runs (shared pages may be counted more than once). This is a measurement of one fixture, not a general memory guarantee.
 

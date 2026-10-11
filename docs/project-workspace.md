@@ -1,45 +1,89 @@
 # Project workspace
 
-The experimental app opens local Git projects without requiring an account or PR. **Add project folder** registers an existing Git root. Gitea sign-in automatically matches its remote and verifies repository identity. Existing linked folders, review state, settings and account data are retained.
+Add an existing project folder, clone a repository, or create a new project from Relay's project picker. A plain folder can be added without Git, or Relay can set Git up when you choose it; branches, Changes and worktrees need a repository. **Scratchpad** gives each new chat its own folder for work without an existing project.
 
-The default is a **thread-first chat**: Recent conversations and expandable projects on the left, a centred composer, and no open code panes. Each project contains its threads; search finds threads across projects. A new thread chooses **Repository** or **Review a PR** above the composer. Choosing a PR does not open its diff. The workspace has three peer panes, toggled from the header: **Chat**, **Changes** (the working tree, or **Review** for a PR thread) and **Files** (the inline editor). Drag a header toggle or a pane's title to reorder the panes, and drag the divider between two panes to resize them; order and sizes are remembered. Code panes start closed on launch and thread changes. Files always open inline in the Files pane, including **Edit locally** from a PR review and **Open in editor** from a local diff. A file chip in the chat never opens Files: it selects the file's row in **Changes** and scrolls its diff to the linked line, or selects the file in a PR thread's **Review**. A file without local changes says so and offers **Open in editor**. The editor shows the working file with change bars, and **Compare with HEAD** switches to a side-by-side view. An unsaved buffer keeps the Files pane open and blocks navigation that would discard it. Diffs fall back to a unified layout when their pane is narrow. The cross-project **Pull request inbox** keeps the existing review workflow.
+## Threads and panes
 
-The layout is a bounded message column, a centred empty-thread composer, compact provider controls, and an inset branch/context strip.
+**Activity** shows open threads across projects, including drafts, running work, answers to read and requests that need you. Cmd/Ctrl+1–9 jumps between its cards. Snooze a thread until later, settle it when finished, or open it in its own window. Projects can be arranged in virtual folders such as `Work/Frontend`; this changes the sidebar, not folders on disk.
 
-- **Changes** shows staged, unstaged and conflicted files and lazily loads selected diffs. Stage/unstage is explicit. Commit uses only staged content. Push shows the exact remote/branch and outgoing commits before executing a normal non-force push. Stale snapshots require refresh. No automatic checkout, reset, pull or push.
-- **Files** opens the syntax-highlighted editor inline, against local HEAD, with undo, search, live TypeScript/Angular checks, definitions and usages. Writes use content/version checks and atomic replacement; unsaved files block navigation that would discard the buffer. Save before quitting.
-- **Pull requests** embeds existing lazy diff review, comments, grouping, viewed progress, blame and diagnostics. Discussing selected lines carries exact PR-side/revision evidence; changed PR heads require refreshing.
+The conversation sits beside optional **Changes** or PR review and the panel's **Files**, **Terminal**, **History**, **Tasks**, **Browser** and **Device** surfaces. Resize or reorder panes to suit the work. Files open in Relay's editor; file references in an answer can open the relevant diff or file. Unsaved edits prompt before navigation or quitting would discard them.
 
-Each project has multiple local chats, optionally attached to a PR. Select **Codex**, **Claude**, or **Message only** for each message; plain typing invokes the selected agent, and explicit **@codex** / **@claude** mentions override that selection. New threads default to Codex. Provider, model, reasoning, Fast, permissions and Build/Plan choices are remembered per conversation and per project’s unsent draft. Fresh drafts use Full access and Build; existing Ask/Edit selections migrate to Supervised/Auto-accept edits without silently increasing access. Switching projects or restarting restores the saved selections. No agent runs until Send.
+An agent's commentary, commands, file operations and subagents stream into the thread. Finished work folds behind its elapsed-time row. Questions and approvals stay visible above the composer, including questions the agent asks while it continues working. Answers support copying, read aloud, pinning, replies and forks.
 
-The composer model button opens a picker with provider tabs, fuzzy search, favorites, model shortcuts (Cmd/Ctrl+1–9 while open), and a legacy section. Reasoning and Fast mode are adjacent controls; unsupported reasoning resets to the model default when switching models. Custom Codex IDs can be entered through model search and remain available locally. Provider switching does not send the draft. Claude uses its CLI default; no unsupported provider/model choices are advertised.
+Replies and `/btw` open side conversations without replacing the main thread. `/btw` is available with Claude, Codex and OpenCode. Forking starts a separate thread from a point in the conversation. Drafts are retained per thread and side conversation.
 
-Replies open a focused one-level side conversation in the same pane, with **Back to conversation** and reply counts in the main timeline. Replying to a reply uses the original root, rather than creating nested levels. Each Codex side conversation has its own resumable provider session. Drafts survive navigation and reload.
+While an agent works, send another message to queue it, or steer the running turn where the agent and message support it. Queue entries retain their agent settings and attachments; reorder them, send or steer now, remove them, or return them to the composer. Send later schedules a message. **Stop** preserves partial output and pauses queued work; **Resume answer** continues the saved conversation. A steer the agent never read is kept for its next turn.
 
-The active turn shows elapsed time, commentary, tool work and Thinking. After completion, that timeline folds behind **Worked for…**, leaving the terminal answer readable. Command/file activity is bounded (80 activity entries, 8,000 characters per command); raw patches and tool arguments are not retained. Tool traces and commentary stay local and are excluded from shared messages. **Open working changes** opens the current working-tree diff. Answers can link to files and lines in the linked clone; only paths inside that clone open in the editor. This is not an immutable per-turn patch history.
+Hosted agent sessions can keep running across a Relay restart. After reconnecting, Relay picks up their state. This does not keep work running through the computer shutting down or the agent process failing.
 
-Codex uses persistent local sessions with streaming. Requests resume the same session and send subsequent conversation updates rather than retransmitting the entire history. The renderer parses streamed Markdown incrementally, re-parsing only the unfinished tail; the subprocess transport speaks Codex's newline-delimited JSON-RPC directly.
+## Agents and permissions
 
-Only necessary recent conversation updates are sent, capped to twelve messages / 12,000 characters per message. Earlier private turns remain in the selected harness session where available. Codex and Claude keep separate saved cursors, including focused replies. Sending to the other agent on a branch that already has a session warns first (with a **Don’t show this again** option), then asks the outgoing agent for a handoff note in its own session before the new agent answers; the note is injected into that first prompt as reference data and the timeline shows a **Switched from … to …** divider that expands to the note. A failed or slow note (two minutes) leaves the divider and the switch proceeds with recent messages only. Permissions map onto each harness's native modes: **Supervised** asks before commands and changes; **Auto-accept edits** permits edits and asks for other actions; **Auto** enables the harness’s automatic reviewer; **Full access** permits commands and edits without prompts. Codex receives explicit approval, sandbox and reviewer settings on every turn. Claude uses its official Agent SDK’s permission modes and `canUseTool` callback. External apps/MCP remain disabled in this integration. Title generation and other one-off helper jobs retain their bounded read-only policy.
+**Settings → AI models → Agents** manages Claude, Codex, OpenCode, Cursor, Amp, Antigravity and agents installed from the ACP registry. Depending on the provider, Relay runs a CLI, SDK or ACP server. Models, reasoning options and commands depend on the installed agent and signed-in account. Claude and Codex support multiple saved accounts; hitting a usage limit does not silently switch accounts.
 
-Approvals appear above the composer with Decline/Approve and an additional menu for session approval or Cancel. Only decisions offered by the harness can be submitted. The native process stays alive between turns so session approvals actually persist; they end when that provider session closes (Stop, app exit, provider failure, or a Claude permission-mode change). Native session identifiers remain saved for resuming conversation context. Pending requests and question answers are transient and local: they never leave this computer. Stop cancels pending requests and pauses queued messages.
+The composer remembers the chosen agent, model, effort, permissions and Build/Plan mode. A leading `@claude`, `@codex` or another built-in agent's mention overrides the selected recipient; **Message only** saves a message without invoking an agent. Switching agents in an existing conversation can ask the outgoing agent for a handoff note so the next one has context; each provider retains its own session where supported.
 
-**Build/Plan** is separate from permissions. Codex uses native collaboration modes; Claude uses native Plan mode. Harness questions have numbered choices with keyboard shortcuts, one question at a time, and custom answers. A completed proposal has an **Implement plan** action which sends the implementation request in Build mode while preserving any unsent draft.
+Fresh threads default to **Full access** and **Build**. The permission picker describes what the selected agent can enforce:
 
-Answers are limited to 100,000 characters and ten minutes. Stop keeps partial text. Periodic local checkpoints preserve interrupted output. Chats retain their local history; no automatic deletion or truncation of saved messages occurs. Only recent messages are rendered initially, with an Earlier messages control.
+- **Supervised:** asks before commands and changes where the provider supports approvals.
+- **Auto-accept edits:** permits edits and asks for other actions where supported.
+- **Auto:** uses the provider's automatic reviewer; agents without one ask.
+- **Full access:** permits commands and edits without approval prompts.
 
-Not implemented: automatic cloning or branch synchronization, semantic autocomplete/rename/debugging, or arbitrary language servers. A committed local Git repository is required; initialize/commit a new empty repository in your terminal first.
+Provider differences matter: Cursor's SDK cannot stop to ask, so its restricted modes block actions instead; Amp's own permission rules determine which actions ask. A worktree is a separate checkout, not a security sandbox. **Plan** is separate from permissions, and **Implement plan** requests implementation in Build mode.
 
-While an answer is running, send another message to queue it for its own turn. Queued messages run in order, retain their model/mode/attachments, and can be removed or sent now. **Send now** (the arrow on a queued message) uses Codex's native active-turn steering for text with the same model, permissions and reply context. Claude, screenshots, skill invocations and selected PR lines use separate queued turns. An unavailable or rejected steer stays visible with its explanation and pauses the queue; it is never silently retried.
+Relay supplies its own tools to supported agents for previews, interactive answers, notes, worktrees and coordinating other Relay threads. Ordinary sessions can also use their configured agent tools and integrations; helper jobs and read-only reviewers have tighter policies. Tool availability varies by adapter.
 
-**Stop** interrupts the active provider, preserves partial output and pauses queued work. **Resume answer** continues the selected harness’s saved session. **Send now** on a paused message restarts pending work. The × action returns its text and attachments to the composer, preserving any existing draft. The local queue survives restarts and always reopens paused. Queue limits are 20 messages and 8 MiB of serialized content.
+## Notes and pinned answers
 
-## Composer commands and branch pull requests
+Select text in an answer, or use the pin beside a list, code block or table, to keep it in **Notes** beside the composer. Lists become checklists: tick off or reorder items, and quote one item or the unfinished work back into the draft. Kept snippets retain their text and a link to their source answer.
 
-Use `/openpr` (or **Create PR** beside Changes) to open the current branch’s pull request or prepare a new Gitea PR. The preview includes target branch, title, description, draft status and any required push. Creation only publishes committed changes after an explicit click; it never stages local edits or force-pushes.
+The pin under a whole answer keeps a short label and a pointer back to that message, rather than copying the answer into Notes. Use it to jump back or point a follow-up at the answer. If a rewind removes the message, its pin is marked unavailable and can be unpinned. Agents can keep notes when asked and tick off completed list items through Relay's tools.
 
-The composer also offers `/changes`, `/files` and `/new`. With Codex selected, enabled skills are discovered from the installed Codex app-server for the project. Type `$logical` anywhere in a message to find a matching skill, or use `/skill:name`; arrow keys and Enter/Tab select it. Selected skills are sent as native Codex skill inputs. Claude currently supports Relay’s local actions, but has no skill discovery in this menu.
+## Workspaces and Git
 
-## Virtual project folders
+Start a thread in the **Current checkout** or a **New worktree**. An existing thread can move into its own worktree, carrying selected uncommitted files with it. Relay also tracks worktrees created by agents and lets you select the workspace the thread uses. Git, Files, the terminal and future agent turns follow that selection. A deep review uses its review folder when one exists.
 
-Use the folder icon beside **Projects** (or right-click a project) to organize it under a virtual path such as `Work/Frontend`. Other projects assigned the same path share that folder. Clear the path to return a project to the top level. This never moves the checkout on disk. Folder and project expansion states are saved independently and survive app restarts.
+If a selected agent worktree disappears, the thread stops using it. **Recreate worktree** is available while its branch remains; **Continue in checkout** explicitly moves future work back to the project folder. Recreation restores the branch's committed files, not uncommitted edits lost with the folder.
+
+**Changes** shows staged, unstaged and conflicted files. Stage and commit selected changes, use **Commit & push**, or have an agent propose a split into logical commits. Turn diffs let you inspect, roll back and redo edits with conflict checks. **History** shows the commit graph and commit diffs. Worktree branches land through a normal merge, and conflicts remain for resolution.
+
+These operations do change Git state. Agents can also run Git within their permissions, and handing a thread to another computer commits uncommitted work for transfer. Optional cleanup removes eligible settled worktree folders while retaining their branches; it is configurable in Settings.
+
+## Files, previews and speech
+
+**Files** provides a file tree, file-name search, an inline editor, Markdown previews and comparison with HEAD. Clean buffers update when files change on disk; unsaved buffers are protected from silent overwrites. Supported TypeScript/JavaScript and Angular projects get diagnostics, definitions and usages from their language services. Install the project's dependencies first. This is not a full IDE; semantic rename and debugging are not implemented.
+
+Each thread has a terminal. **Tasks** lists background processes and offers stop and restart controls. **Browser** opens a live app preview with a separate session for each thread; see [browser previews](previews.md) for server discovery and named worktree links. **Device** downloads and embeds Expo Device Hub to interact with local Android emulators or iOS simulators; those need the Android SDK or Xcode respectively.
+
+Agents can show self-contained interactive pages, charts and choices inline, as well as images, code, math and diagrams. Scripted pages are checked for errors before display; they run in a restricted frame, separate from the app's own UI.
+
+Download speech models under **Settings → Dictation** and **Settings → Read aloud** to speak messages or listen to answers. Inference runs on the computer. A paired phone sends microphone audio to that computer and receives generated speech over the encrypted connection.
+
+## Composer commands
+
+Type `/` to see Relay commands alongside the selected agent's available commands. Codex skills can be picked with `$name` or `/skill:name`; other providers expose the commands their integration discovers.
+
+| Command | What it does |
+| --- | --- |
+| `/resume` | Search the project's Claude Code and Codex terminal sessions and continue one in Relay. From an existing thread it opens that session in another thread, or opens its existing Relay thread. |
+| `/goal <objective>` | Set a native Claude or Codex goal. Relay shows the state reported by the agent; completion is the agent's judgment. Codex additionally supports pause/resume and reports token budgets when provided. |
+| `/btw <question>` | Ask Claude, Codex or OpenCode a side question. |
+| `/compact [instructions]` | Summarize earlier context where supported; instructions depend on the provider. The timeline shows context reduction when counts are available. |
+| `/context` | Inspect the current context window. |
+| `/reload` | Restart a supported agent's session on the same conversation to load changed skills, plugins and instructions. |
+| `/provider`, `/model`, `/effort` | Choose who answers and with which settings. |
+| `/permissions`, `/plan`, `/fast` | Set permissions, toggle Plan, or toggle Codex Fast mode. |
+| `/add-dir <folder>` | Give the thread access to another folder. |
+| `/changes`, `/files` | Open the corresponding workspace surface. |
+| `/new`, `/clear` | Start a new thread with empty context. |
+| `/openpr` | Open the current branch's PR, or prepare one for a supported Git host. |
+
+## Reviews and other devices
+
+GitHub uses your `gh` sign-in; Gitea is configured under **Settings → Integrations**. The titlebar shows CI for the thread's branch, including an older verdict labelled as behind the current commit when the tip has no result. See [pull request review](pr-review.md) for the review workflow.
+
+**Deep review** accepts uncommitted changes, a branch, a commit or a PR. Configure several reviewing models and their prompts, then a lead examines the findings and fixes what holds up. Findings identify their reviewers, and setups can be saved for reuse.
+
+**Settings → Computers** pairs another Relay for thread handoff. Current versions keep the conversation live on the original computer while the other one runs the agent; Files and Changes still show the local checkout. Offline messages wait, or **Run here instead** continues locally with the conversation already received, leaving the remote computer's later code changes there. A normal **Bring back** transfers the work too. Both computers need the repository added with a matching Git remote; Relay does not clone it during handoff.
+
+The [phone app](phone.md) can follow and answer threads, approvals and questions, inspect changes and commit. The [headless Relay](headless.md) provides those services on a computer without a desktop window.
