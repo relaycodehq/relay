@@ -99,17 +99,14 @@ export function UsagePage({
     placeholderData: (previous) => previous,
   });
   const summary = query.data;
-  const counted =
-    summary?.since !== undefined &&
-    new Date(summary.since).setHours(0, 0, 0, 0) > summary.from;
+  const period = summary && periodLabel(summary);
   return (
     <div className="us-page">
       <header className="us-head">
         <div>
           <h1>Usage</h1>
           <p>
-            {summary &&
-              `${dayLabel(summary.days[0]?.day ?? summary.from)} – ${dayLabel(summary.to)}${counted ? `, counted since ${dayLabel(summary.since!)}` : ""}. `}
+            {period && `${period}. `}
             Only on this computer; nothing leaves it.
           </p>
         </div>
@@ -158,6 +155,21 @@ export function UsagePage({
         />
       )}
     </div>
+  );
+}
+
+/** "Oct 2 – Oct 11", one day once, and when counting began inside the range. */
+function periodLabel(summary: UsageSummary) {
+  const first = dayLabel(summary.days[0]?.day ?? summary.from);
+  const last = dayLabel(summary.to);
+  const since =
+    summary.since !== undefined &&
+    new Date(summary.since).setHours(0, 0, 0, 0) > summary.from
+      ? dayLabel(summary.since)
+      : undefined;
+  return (
+    (first === last ? first : `${first} – ${last}`) +
+    (since && since !== first ? `, counted since ${since}` : "")
   );
 }
 
@@ -222,6 +234,14 @@ function Rhythmic({
             )}
             .
           </>
+        ) : totals.answers > 0 ? (
+          m === "fresh" ? (
+            "These answers came without token counts, so there's nothing to chart."
+          ) : totals.tokens > 0 ? (
+            "These answers came without a price; Tokens shows what they used."
+          ) : (
+            "These answers came without a price or token counts, so there's nothing to chart."
+          )
         ) : (
           "A quiet stretch: nothing counted in these days."
         )}
@@ -242,21 +262,19 @@ function Rhythmic({
           />
         </div>
         <div>
-          <h3>
-            An average week
-            {counted < DAYS_FOR_A_WEEKDAY && (
-              <small>
-                {counted} {counted === 1 ? "day" : "days"} so far; names a day
-                after two weeks
-              </small>
-            )}
-          </h3>
+          <h3>An average week</h3>
           <WeekdayColumns
             weekdays={summary.weekdays}
             measure={m}
             busiest={line.weekday}
             height={170}
           />
+          {counted < DAYS_FOR_A_WEEKDAY && (
+            <p className="us-rhythm-note">
+              {counted} {counted === 1 ? "day" : "days"} so far; names a day
+              after two weeks
+            </p>
+          )}
         </div>
       </div>
 

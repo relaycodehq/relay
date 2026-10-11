@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
@@ -133,9 +134,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
   await page
     .getByRole("button", { name: "Mark 2 files viewed", exact: true })
     .click();
-  await expect(
-    page.getByRole("combobox", { name: "Current file" }),
-  ).toHaveValue("src/mixed.ts");
+  await currentFilePicker(page).expectValue("src/mixed.ts");
   await page.getByText("Why this file is individual", { exact: true }).click();
   await expect(page.locator(".triage-explanation")).toContainText(
     "Contains an unrelated behavior change.",
@@ -197,9 +196,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Current file" })
-    .selectOption("src/mixed.ts");
+  await currentFilePicker(page).selectOption("src/mixed.ts");
   await expect(page.locator("diffs-container")).toBeVisible();
   await screenshot(page, {
     path: join(screenshots, "12-groups-dark.png"),

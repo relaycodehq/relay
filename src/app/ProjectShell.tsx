@@ -310,6 +310,7 @@ export default function ProjectShell() {
               <Loading />
             ) : (
               <NoPullHost
+                error={pullsHost.error}
                 checking={pullsHost.checking}
                 onRecheck={pullsHost.recheck}
                 onConnectGitea={

@@ -1,4 +1,4 @@
-import { GitHub } from "./github";
+import { GitHub, GithubSignedOut } from "./github";
 import type { FetchRequest } from "./gitea";
 
 /** How long a `gh` login is trusted before Relay asks `gh` again. */
@@ -21,11 +21,17 @@ export class GithubLogin {
     }
     return this.client;
   }
-  /** Who Relay acts as on GitHub; null without a `gh` login. */
+  /**
+   * Who Relay acts as on GitHub; null without a `gh` login. Throws when `gh`
+   * is signed in but GitHub didn't answer, so that isn't shown as signed out.
+   */
   account() {
     return this.require().then(
       (c) => c.account,
-      () => null,
+      (error: unknown) => {
+        if (error instanceof GithubSignedOut) return null;
+        throw error;
+      },
     );
   }
 }

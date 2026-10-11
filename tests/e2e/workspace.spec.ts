@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import {
   openGiteaSettings,
   openSignIn,
@@ -78,9 +79,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     // A manual open remains possible, and an old approval does not hide new work.
     fixture.setHead("c".repeat(40));
     await open();
-    await expect(
-      page!.getByRole("combobox", { name: "Current file" }),
-    ).toHaveValue("src/hooks/useReview.ts");
+    await currentFilePicker(page!).expectValue("src/hooks/useReview.ts");
     await expect
       .poll(async () =>
         page!.evaluate(
@@ -96,9 +95,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     await expect(board()).toBeVisible();
     fixture.setPullState("open", true);
     await open();
-    await expect(
-      page!.getByRole("combobox", { name: "Current file" }),
-    ).toHaveValue("src/hooks/useReview.ts");
+    await currentFilePicker(page!).expectValue("src/hooks/useReview.ts");
     await expect
       .poll(async () =>
         page!.evaluate(
@@ -131,7 +128,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
     });
     page = await app.firstWindow();
   };
-  const current = () => page.getByRole("combobox", { name: "Current file" });
+  const current = () => currentFilePicker(page);
   const workspace = () =>
     page.evaluate(async () => (await window.relay.bootstrap()).workspace);
   const path = "src/components/file-63.tsx";
@@ -157,7 +154,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
       page!.getByRole("heading", { name: /^Results/ }),
     ).toBeVisible();
     await openPull(page!, /Make pull request reviews/);
-    await expect(current()).toHaveValue("src/hooks/useReview.ts");
+    await current().expectValue("src/hooks/useReview.ts");
     await page!
       .getByRole("button", { name: "Load more files", exact: true })
       .click();
@@ -172,7 +169,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
     });
     let start = fixture.requests.length;
     await page!.reload();
-    await expect(current()).toHaveValue(path);
+    await current().expectValue(path);
     await expect(page!.locator("diffs-container")).toBeVisible();
     let raw = fixture.requests
       .slice(start)
@@ -195,7 +192,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
     await app!.close();
     start = fixture.requests.length;
     await launch();
-    await expect(current()).toHaveValue(path);
+    await current().expectValue(path);
     await expect(page!.locator("diffs-container")).toBeVisible();
     raw = fixture.requests.slice(start).filter((r) => r.path.includes("/raw/"));
     expect(raw).toHaveLength(2);
@@ -251,7 +248,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
     });
     start = fixture.requests.length;
     await page!.reload();
-    await expect(current()).toHaveValue("src/hooks/useReview.ts");
+    await current().expectValue("src/hooks/useReview.ts");
     await expect(page!.locator("diffs-container")).toBeVisible();
     expect(
       fixture.requests
@@ -307,9 +304,7 @@ test("keeps remembered reviews separate for each account and restores them after
   try {
     await connect(first.serverUrl);
     await openPull(page, /Make pull request reviews/);
-    await page
-      .getByRole("combobox", { name: "Current file" })
-      .selectOption("src/lib/cache.ts");
+    await currentFilePicker(page).selectOption("src/lib/cache.ts");
     await expect
       .poll(async () =>
         page.evaluate(
@@ -327,9 +322,7 @@ test("keeps remembered reviews separate for each account and restores them after
     await disconnect();
     await connect(first.serverUrl);
     await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#7");
-    await expect(
-      page.getByRole("combobox", { name: "Current file" }),
-    ).toHaveValue("src/lib/cache.ts");
+    await currentFilePicker(page).expectValue("src/lib/cache.ts");
   } finally {
     await app.close();
     await first.close();

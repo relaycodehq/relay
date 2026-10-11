@@ -37,15 +37,31 @@ export interface Theme {
   swatches: string[];
 }
 
+const READABLE = "+aa";
+
+/**
+ * A Shiki theme with its token colours darkened to AA on the palette's code
+ * backgrounds; light themes' stock oranges and cyans sit near 2.5:1 there.
+ * readable-syntax.ts registers them.
+ */
+function readableSyntax(base: string): string {
+  return base + READABLE;
+}
+
+/** The stock Shiki theme a readable one is built from, or null. */
+export function readableSyntaxBase(syntax: string): string | null {
+  return syntax.endsWith(READABLE) ? syntax.slice(0, -READABLE.length) : null;
+}
+
 const relayLight: Palette = {
   kind: "light",
-  syntax: "pierre-light",
+  syntax: readableSyntax("pierre-light"),
   sidebar: "#ececee",
   surface: "#ffffff",
   toolbar: "#f9f9fa",
   inbox: "#f7f7f8",
   text: "#303237",
-  muted: "#898b93",
+  muted: "#676972",
   border: "#e2e3e6",
   hover: "#e5e5e9",
   selected: "#dedee8",
@@ -240,13 +256,13 @@ const themes: Theme[] = [
     description: "Soft pastel light theme.",
     light: {
       kind: "light",
-      syntax: "catppuccin-latte",
+      syntax: readableSyntax("catppuccin-latte"),
       sidebar: "#e6e9ef",
       surface: "#eff1f5",
       toolbar: "#eaedf2",
       inbox: "#e9ecf1",
       text: "#4c4f69",
-      muted: "#7c7f93",
+      muted: "#64677c",
       border: "#ccd0da",
       hover: "#dce0e8",
       selected: "#d3d7e3",
@@ -269,13 +285,13 @@ const themes: Theme[] = [
     description: "Warm paper tones with precise contrast.",
     light: {
       kind: "light",
-      syntax: "solarized-light",
+      syntax: readableSyntax("solarized-light"),
       sidebar: "#eee8d5",
       surface: "#fdf6e3",
       toolbar: "#f7f0dc",
       inbox: "#f5eedb",
       text: "#3c4c53",
-      muted: "#7f8e8f",
+      muted: "#556a71",
       border: "#e2dbc6",
       hover: "#e8e1cc",
       selected: "#e0d8c1",
@@ -519,6 +535,29 @@ export function luminance(color: string): number {
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio between two opaque colours, 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * `color` darkened (light themes) or lightened (dark ones) just enough to
+ * reach `min` against `background`, keeping its hue.
+ */
+export function withContrast(
+  color: string,
+  background: string,
+  min: number,
+): string {
+  const toward = luminance(background) > 0.4 ? "#000000" : "#ffffff";
+  for (let step = 0; step <= 50; step++) {
+    const next = mix(toward, color, step / 50);
+    if (contrastRatio(next, background) >= min) return next;
+  }
+  return toward;
 }
 
 function readableOn(color: string, dark: string, light: string): string {

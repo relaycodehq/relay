@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp } from "node:fs/promises";
@@ -19,7 +20,7 @@ test("a line comment closed without text leaves no draft behind", async () => {
   });
   try {
     const page = await app.firstWindow();
-    const current = page.getByRole("combobox", { name: "Current file" });
+    const current = currentFilePicker(page);
     const drafts = () =>
       page.evaluate(
         async () =>
@@ -43,7 +44,7 @@ test("a line comment closed without text leaves no draft behind", async () => {
       .click();
     await openInbox(page);
     await openPull(page, /Make pull request reviews/);
-    await expect(current).toHaveValue("src/hooks/useReview.ts");
+    await current.expectValue("src/hooks/useReview.ts");
     for (const typed of ["", "Not this one"]) {
       await page.locator('[data-column-number="20"]').last().click();
       await page.getByRole("button", { name: "Comment", exact: true }).click();

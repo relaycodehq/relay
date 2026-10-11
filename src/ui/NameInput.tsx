@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { projectNameSchema, threadTitleSchema } from "../../shared/projects";
 import { projectGroupNameSchema } from "../../shared/project-folders";
+import "./name-input.css";
 
 /** Inline name field for naming a group, or renaming a project or thread, in place. */
 export function NameInput({
@@ -34,6 +35,7 @@ export function NameInput({
   }, []);
   const parsed = schema.safeParse(value);
   const invalid = !!value.trim() && !parsed.success;
+  const errorId = useId();
   const finish = (commit: boolean) => {
     if (done.current) return;
     if (commit && parsed.success && parsed.data !== initial) {
@@ -45,7 +47,7 @@ export function NameInput({
     }
   };
   return (
-    <div className={className}>
+    <div className={`${className} name-input`}>
       <input
         autoFocus
         aria-label={label}
@@ -59,7 +61,7 @@ export function NameInput({
         }
         value={value}
         aria-invalid={invalid}
-        title={invalid ? parsed.error?.issues[0].message : undefined}
+        aria-describedby={invalid ? errorId : undefined}
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
@@ -77,6 +79,11 @@ export function NameInput({
           onCancel();
         }}
       />
+      {invalid && (
+        <p id={errorId} className="name-input-error" role="alert">
+          {parsed.error?.issues[0].message}
+        </p>
+      )}
     </div>
   );
 }

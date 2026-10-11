@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardPaste } from "lucide-react";
 import type { ComputersOverview } from "../../../shared/handoff";
@@ -8,8 +8,19 @@ import { ErrorBox } from "../../ui/ui";
 import { usePhoneRemote } from "./usePhoneRemote";
 
 /** Pairing from this side: Tailscale, the link on the other computer, then paste. */
-export function AddComputer({ onPaired }: { onPaired: (id: string) => void }) {
+export function AddComputer({
+  onPaired,
+  focusRequest = 0,
+}: {
+  onPaired: (id: string) => void;
+  /** Focuses the link field each time it grows. */
+  focusRequest?: number;
+}) {
   const qc = useQueryClient();
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusRequest) field.current?.focus();
+  }, [focusRequest]);
   const tailnet = usePhoneRemote().data?.tailnet;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,6 +97,7 @@ export function AddComputer({ onPaired }: { onPaired: (id: string) => void }) {
             </small>
             <div className="cm-paste">
               <input
+                ref={field}
                 aria-label="Pairing link"
                 placeholder="relay-remote://pair?…"
                 spellCheck={false}

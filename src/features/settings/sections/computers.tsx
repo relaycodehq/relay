@@ -38,7 +38,7 @@ export function computerEntries({
       section: "Take threads over",
       title: "On the computer that stays on",
       description:
-        "Turn this on on the Mac mini or server, then pair the other computer with the link it shows.",
+        "On the Mac mini or server, turn this on, then pair the other computer with the link it shows.",
       keywords:
         "computer handoff accept receive mac mini server pairing link tailscale",
       block: true,

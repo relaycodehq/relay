@@ -1,3 +1,4 @@
+import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
@@ -205,9 +206,7 @@ for (const cancel of [false, true]) {
           )
           .toBe(account.id);
         await openInbox(page);
-        await expect(
-          page.getByRole("combobox", { name: "Current file" }),
-        ).toHaveValue("src/hooks/useReview.ts");
+        await currentFilePicker(page).expectValue("src/hooks/useReview.ts");
         await expect(page.locator("diffs-container")).toBeVisible();
         expect(
           (await page.evaluate(() => window.relay.bootstrap())).account?.id,

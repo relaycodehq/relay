@@ -19,10 +19,10 @@ describe("the computers map layout", () => {
     expect(map.mid(2)).toBe(170 + addH / 2);
   });
 
-  it("stays as tall as one computer box when only Add a computer is left", () => {
+  it("stays as tall as one computer box when only Add a computer is left, with a flat wire to it", () => {
     const map = mapLayout([addH]);
     expect(map.height).toBe(nodeH + 44);
-    expect(map.mid(0)).toBe(22 + addH / 2);
+    expect(map.mid(0)).toBe(map.selfY);
   });
 
   it("runs each wire from this computer's edge to the box's", () => {

@@ -23,6 +23,7 @@ import {
 import {
   isBehind,
   isUpdating,
+  notLookedFor,
   type AgentInstaller,
   type AgentVersion,
 } from "../../../shared/agent-updates";
@@ -137,27 +138,32 @@ function AgentCard({
   const wantsSignIn = registryId
     ? agent.account?.signedIn === false
     : !agent.account?.signedIn;
-  const status = !agent.current
-    ? agent.error
-    : [
-        `Version ${agent.current}`,
-        agent.installer && installers[agent.installer],
-        behind
-          ? `${agent.latest} is available`
-          : agent.latest
-            ? "Up to date"
-            : "Couldn't look for a newer one",
-        agent.held &&
-          `${agent.held.version} ${untilText(agent.held.until)} (npm min-release-age)`,
-        agent.account &&
-          (agent.account.signedIn
-            ? `Signed in${agent.account.email ? ` as ${agent.account.email}` : ""}`
-            : "Not signed in"),
-      ]
-        .filter(Boolean)
-        .join(" · ");
-  const note =
-    run?.status === "updated" && run.installed
+  // Offering to link or set up an agent not looked for yet would be a false alarm.
+  const unknown = notLookedFor(agent);
+  const status = unknown
+    ? "Looking for it…"
+    : !agent.current
+      ? agent.error
+      : [
+          `Version ${agent.current}`,
+          agent.installer && installers[agent.installer],
+          behind
+            ? `${agent.latest} is available`
+            : agent.latest
+              ? "Up to date"
+              : "Couldn't look for a newer one",
+          agent.held &&
+            `${agent.held.version} ${untilText(agent.held.until)} (npm min-release-age)`,
+          agent.account &&
+            (agent.account.signedIn
+              ? `Signed in${agent.account.email ? ` as ${agent.account.email}` : ""}`
+              : "Not signed in"),
+        ]
+          .filter(Boolean)
+          .join(" · ");
+  const note = unknown
+    ? undefined
+    : run?.status === "updated" && run.installed
       ? "Installed. New threads use it."
       : run?.status === "updated"
         ? agent.provider === "opencode"
@@ -188,7 +194,7 @@ function AgentCard({
           <b>{cli}</b>
           <span title={agent.path}>{status}</span>
         </span>
-        <span className="agent-card-tools">
+        <span className="agent-card-tools" hidden={unknown}>
           {sdk && (
             <button
               className={wantsSignIn ? "primary" : ""}

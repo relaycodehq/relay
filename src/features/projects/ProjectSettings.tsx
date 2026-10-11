@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../../lib/api";
 import {
   projectNameSchema,
@@ -312,12 +312,19 @@ export function ProjectDevPortField({ project }: { project: Project }) {
   useEffect(() => setText(saved), [project.id, saved]);
   const value = Number(text);
   const valid = !text || (Number.isInteger(value) && value >= 1 && value <= 65535);
+  const errorId = useId();
   return (
     <>
+      {!valid && (
+        <span id={errorId} className="settings-field-error" role="alert">
+          Ports go from 1 to 65535
+        </span>
+      )}
       <input
         className="settings-dev-port"
         aria-label="Dev port"
         aria-invalid={!valid || undefined}
+        aria-describedby={valid ? undefined : errorId}
         inputMode="numeric"
         placeholder="3000"
         value={text}

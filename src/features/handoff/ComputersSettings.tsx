@@ -23,6 +23,8 @@ export function ComputersMap({
     refetchInterval: 3000,
   });
   const [picked, setPicked] = useState<string>();
+  // Bumped by the Add box, so it lands in the link field even when it shows.
+  const [addFocus, setAddFocus] = useState(0);
   const data = overview.data;
   const computers = data?.computers ?? [];
   const current =
@@ -35,7 +37,10 @@ export function ComputersMap({
           self={data.name}
           computers={computers}
           picked={current?.id ?? "add"}
-          onPick={setPicked}
+          onPick={(id) => {
+            setPicked(id);
+            if (id === "add") setAddFocus((n) => n + 1);
+          }}
         />
       )}
       {data && (
@@ -48,7 +53,7 @@ export function ComputersMap({
               onForgot={() => setPicked(undefined)}
             />
           ) : (
-            <AddComputer onPaired={setPicked} />
+            <AddComputer onPaired={setPicked} focusRequest={addFocus} />
           )}
         </div>
       )}

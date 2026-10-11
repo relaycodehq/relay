@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 // Imported themes register first so the saved choice can find them.
 import "./imported-themes";
+import "./readable-syntax";
 import {
   applyToDocument,
   loadAppearance,

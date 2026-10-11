@@ -15,6 +15,7 @@ import {
   useTrackableProjects,
 } from "./plugins";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
+import { SearchSelect } from "../../ui/SearchSelect";
 import { useSaveAISettings } from "../agents/useAISettings";
 import { ModelField } from "../agents/ModelField";
 import { useRunnableAgents } from "../agents/registry-agents";
@@ -214,22 +215,21 @@ export function ClockifySettings() {
           </SettingsRow>
           {connected && (
             <SettingsRow label="Workspace">
-              <select
-                className="plugin-select"
-                aria-label="Clockify workspace"
-                value={settings.workspaceId}
+              <SearchSelect
+                label="Clockify workspace"
+                value={settings.workspaceId || undefined}
+                unset="Choose…"
                 disabled={!workspaces.data}
-                onChange={(e) =>
-                  void save({ workspaceId: e.target.value, projects: {} })
+                onChange={(workspaceId) =>
+                  void save({ workspaceId, projects: {} })
                 }
-              >
-                {!settings.workspaceId && <option value="">Choose…</option>}
-                {workspaces.data?.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+                options={(workspaces.data ?? []).map((w) => ({
+                  value: w.id,
+                  label: w.name,
+                }))}
+                placeholder="Search workspaces…"
+                triggerClassName="search-select-field"
+              />
             </SettingsRow>
           )}
         </SettingsCard>
