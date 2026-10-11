@@ -416,12 +416,26 @@ export function ProjectChat({
             : `thread-bottom-composer${scrolledUp ? " collapsed" : ""}`
         }
         onMouseDownCapture={(e) => {
-          // The folded draft opens where writing left off, wherever it's clicked.
           if (!scrolledUp || e.currentTarget.matches(":focus-within")) return;
-          if (!(e.target as Element).closest?.(".composer-prompt")) return;
-          e.preventDefault();
-          e.stopPropagation();
-          composer.current?.focusEnd();
+          const target = e.target as Element;
+          const prompt = e.currentTarget.querySelector(".composer-prompt");
+          // The folded draft opens where writing left off, wherever it's clicked.
+          if (target.closest?.(".composer-prompt")) {
+            e.preventDefault();
+            e.stopPropagation();
+            composer.current?.focusEnd();
+            return;
+          }
+          // Opening the draft pushes what sits above it up, so a button there
+          // that took focus would slide out from under the press and miss.
+          if (
+            e.button === 0 &&
+            target.closest?.("button") &&
+            prompt &&
+            target.compareDocumentPosition(prompt) &
+              Node.DOCUMENT_POSITION_FOLLOWING
+          )
+            e.preventDefault();
         }}
       >
         {history.data?.requests?.slice(0, 1).map((request) => (
