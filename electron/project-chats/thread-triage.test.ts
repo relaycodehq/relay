@@ -453,6 +453,18 @@ it("rejects a stale phone Undo after another triage action", async () => {
   expect((await chats.get(chat.id)).snoozedUntil).toBe(until);
 });
 
+it("keeps a thread's snooze when a snooze to a past time is refused, through its next save", async () => {
+  const chat = await chats.create(projectId, scope);
+  const until = Date.now() + 3_600_000;
+  await chats.triage(chat.id, { kind: "snooze", until });
+  // A time picker left open can offer a time that has passed by the time it's picked.
+  await expect(
+    chats.triage(chat.id, { kind: "snooze", until: Date.now() - 1000 }),
+  ).rejects.toThrow("future wake time");
+  await chats.markSeen(chat.id, Date.now());
+  expect((await chats.get(chat.id)).snoozedUntil).toBe(until);
+});
+
 it("keeps a manual unread mark until the thread is opened again at the same update", async () => {
   const chat = await chats.create(projectId, scope);
   await chats.markSeen(chat.id, chat.updated);
