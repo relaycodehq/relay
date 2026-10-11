@@ -2,12 +2,12 @@
 // The audio goes over the encrypted link in 80 ms chunks, and each chunk's
 // answer carries the words heard so far, as the desktop's composer shows them.
 import { useSyncExternalStore } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { requireOptionalNativeModule } from "expo";
 import type { RemoteClient } from "../../../shared/remote-client";
 import type { PhoneDictationHeard } from "../../../shared/remote";
 
-/** modules/relay-mic; missing in Expo Go, on iOS, and in APKs from before dictation. */
+/** modules/relay-mic; missing in Expo Go and in APKs from before dictation. */
 interface RelayMic {
   getPermission(): Promise<{ granted: boolean }>;
   /** Opens Android's prompt, which sends the app to the background for a moment. */
@@ -120,7 +120,7 @@ export async function startDictation(
       (await mic.requestPermission()).granted;
     if (!allowed)
       throw new Error(
-        "Relay isn't allowed to use the microphone. Allow it in Android's settings for Relay.",
+        `Relay isn't allowed to use the microphone. Allow it in ${Platform.OS === "ios" ? "Settings" : "Android's settings"} for Relay.`,
       );
     ({ loading } = await call("dictate", { type: "start", id: current.id }));
     if (session !== current) return cancelRemote(current);
@@ -239,7 +239,7 @@ function describe(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Android takes the microphone away in the background; keep what was said.
+// The phone takes the microphone away in the background; keep what was said.
 // Not while starting: the permission prompt backgrounds the app too.
 AppState.addEventListener("change", (state) => {
   if (state === "background" && snapshot.phase === "listening")

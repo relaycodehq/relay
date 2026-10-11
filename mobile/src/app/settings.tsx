@@ -1,4 +1,4 @@
-import { Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Check, Monitor, Plus, RefreshCw } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
@@ -87,12 +87,15 @@ export default function Settings() {
         <View style={styles.text}>
           <Text style={[styles.name, { color: t.text }]}>Relay {runningVersion}</Text>
           <Text style={[styles.hint, { color: t.muted }]}>
-            {phoneAppStatus(app, offered)}.{" "}
-            {runningUpdate
-              ? `Came from ${source}; the app was installed as ${app.apk}.`
-              : checksLatestApp
-                ? `As installed; new code comes from ${source}, new apps from GitHub.`
-                : `As installed; new versions come from ${source}.`}
+            {Platform.OS === "ios"
+              ? "On iPhone, new versions come with a new build of the app."
+              : `${phoneAppStatus(app, offered)}. ${
+                  runningUpdate
+                    ? `Came from ${source}; the app was installed as ${app.apk}.`
+                    : checksLatestApp
+                      ? `As installed; new code comes from ${source}, new apps from GitHub.`
+                      : `As installed; new versions come from ${source}.`
+                }`}
           </Text>
         </View>
       </View>
