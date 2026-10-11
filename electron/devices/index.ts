@@ -61,7 +61,9 @@ export class Devices {
       (host && this.wanted.has(host) ? host : this.wanted.keys().next().value);
     if (!win) return void (host && this.view.place(host, null));
     const { status } = await this.hub.state();
-    if (status === "asleep") void this.hub.start().catch(() => {});
+    // Still coming up, it stays up: a tab that closed meanwhile asked it to sleep.
+    if (status === "asleep" || status === "installing" || status === "starting")
+      void this.hub.start().catch(() => {});
     const running = status === "running" ? await this.hub.start() : undefined;
     this.view.place(win, this.wanted.get(win) ?? null, running);
   }
