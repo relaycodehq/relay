@@ -387,7 +387,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                 }}
                                 data-model-key={key}
                                 value={key}
-                                index={index}
                                 className="model-picker-row"
                                 data-compact={subtitle(m) ? undefined : ""}
                                 aria-label={m.name}

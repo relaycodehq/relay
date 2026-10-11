@@ -269,11 +269,10 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                 </div>
                 <div className="headline-project-scroll">
                   <Combobox.List aria-label="Branches">
-                    {matches.map((b, index) => (
+                    {matches.map((b) => (
                       <Combobox.Item
                         key={b.ref}
                         value={b.ref}
-                        index={index}
                         disabled={pending || (b.worktree && !b.current)}
                         className="branch-picker-row"
                         data-current={b.current ? "" : undefined}
@@ -293,7 +292,6 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                     {create && (
                       <Combobox.Item
                         value="create"
-                        index={matches.length}
                         disabled={pending}
                         className="branch-picker-row"
                       >

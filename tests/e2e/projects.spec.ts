@@ -375,6 +375,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.getByRole("option", { name: "Ultra", exact: true }).click();
     await picker.click();
     await page.getByLabel("Search models", { exact: true }).fill("luna");
+    await expect(
+      page.getByRole("option", { name: "GPT-5.6-Luna", exact: true }),
+    ).toHaveAttribute("data-highlighted", "");
     await page.keyboard.press("Enter");
     await expect(picker).toContainText("GPT-5.6-Luna");
     await expect(

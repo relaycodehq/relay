@@ -128,11 +128,10 @@ export function FontPicker({
                 </div>
                 <div className="headline-project-scroll">
                   <Combobox.List aria-label={label}>
-                    {items.map((family, index) => (
+                    {items.map((family) => (
                       <Combobox.Item
                         key={family || "default"}
                         value={family}
-                        index={index}
                         className="branch-picker-row"
                         data-current={family === value ? "" : undefined}
                         style={{ fontFamily: fontStack(family, fallback) }}

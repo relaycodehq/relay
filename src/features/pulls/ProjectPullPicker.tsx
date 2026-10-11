@@ -204,11 +204,10 @@ export function ProjectPullPicker({
                   </div>
                 ) : matches.length ? (
                   <Combobox.List aria-label="Pull requests">
-                    {matches.map((pull, index) => (
+                    {matches.map((pull) => (
                       <Combobox.Item
                         key={pull.number}
                         value={String(pull.number)}
-                        index={index}
                         aria-label={`#${pull.number} ${pull.title} by ${pull.user.login}`}
                         className="project-pull-row"
                         onClick={() => {

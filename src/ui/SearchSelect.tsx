@@ -67,7 +67,6 @@ export function SearchSelect({
     <Combobox.Item
       key={option.value}
       value={option.value}
-      index={ordered.indexOf(option)}
       className="composer-select-item"
     >
       {option.icon}

@@ -185,11 +185,10 @@ export function ContinueSessionPicker({
                   </div>
                 ) : matches.length ? (
                   <Combobox.List aria-label="Terminal sessions">
-                    {matches.map((session, index) => (
+                    {matches.map((session) => (
                       <Combobox.Item
                         key={sessionKey(session)}
                         value={sessionKey(session)}
-                        index={index}
                         className="project-pull-row continue-session-row"
                         aria-busy={busy === sessionKey(session)}
                         disabled={!!busy}
