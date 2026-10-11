@@ -6,6 +6,7 @@ import { AppState, Platform } from "react-native";
 import { requireOptionalNativeModule } from "expo";
 import type { RemoteClient } from "../../../shared/remote-client";
 import type { PhoneDictationHeard } from "../../../shared/remote";
+import { stopReadAloud } from "./read-aloud";
 
 /** modules/relay-mic; missing in Expo Go and in APKs from before dictation. */
 interface RelayMic {
@@ -19,6 +20,8 @@ interface RelayMic {
     event: "onAudio",
     listener: (chunk: { pcm: string; power: number }) => void,
   ): { remove(): void };
+  /** iOS: a call, Siri or new headphones took the microphone away. */
+  addListener(event: "onEnd", listener: () => void): { remove(): void };
 }
 const mic = requireOptionalNativeModule<RelayMic>("RelayMic");
 export const phoneHasMic = !!mic;
@@ -112,6 +115,8 @@ export async function startDictation(
     shown: 0,
   };
   session = current;
+  // iOS has one audio session: recording would cut the reading off anyway.
+  stopReadAloud();
   set({ phase: "starting", owner, loading: true, error: undefined });
   let loading = true;
   try {
@@ -124,9 +129,18 @@ export async function startDictation(
       );
     ({ loading } = await call("dictate", { type: "start", id: current.id }));
     if (session !== current) return cancelRemote(current);
-    current.audio = mic.addListener("onAudio", (chunk) =>
+    const audio = mic.addListener("onAudio", (chunk) =>
       receive(current, chunk),
     );
+    const end = mic.addListener("onEnd", () => {
+      if (session === current) void stopDictation();
+    });
+    current.audio = {
+      remove() {
+        audio.remove();
+        end.remove();
+      },
+    };
     await mic.start();
   } catch (error) {
     if (session === current) {

@@ -5,9 +5,12 @@ import { useSyncExternalStore } from "react";
 import { requireOptionalNativeModule } from "expo";
 import type { RemoteClient } from "../../../shared/remote-client";
 import { hold, release } from "./watch";
+import { stopDictation } from "./dictation";
 
 /** modules/relay-speaker; missing in Expo Go and in APKs from before read aloud. */
 interface RelaySpeaker {
+  /** iOS only: opens the speaker early, so a locked phone keeps loading. */
+  prepare?(): Promise<void>;
   start(sampleRate: number): Promise<void>;
   /** Resolves with how many seconds are queued and not yet heard. */
   write(pcm: string): Promise<number>;
@@ -67,6 +70,8 @@ export async function startReadAloud(
 ) {
   if (!speaker) return;
   stopReadAloud();
+  // iOS has one audio session: playing takes the microphone away.
+  void stopDictation();
   clearTimeout(errorTimer);
   const current: Reading = { id: ++nextId, key, call };
   reading = current;
@@ -74,6 +79,11 @@ export async function startReadAloud(
   hold("read");
   set({ key, loading: true, error: undefined });
   try {
+    await speaker.prepare?.();
+    if (reading !== current) {
+      if (!reading) void speaker.stop().catch(() => {});
+      return;
+    }
     await call("readAloud", { type: "start", id: current.id, markdown });
     let started = false;
     while (reading === current) {
