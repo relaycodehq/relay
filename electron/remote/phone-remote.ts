@@ -243,15 +243,14 @@ export class PhoneRemote {
       ...(phoneApp ? { phoneApp: phoneApp.version } : {}),
     };
   }
+  /** Without Tailscale here, turning it on lets in the local network: the only way a phone could reach it. */
   async setEnabled(enabled: boolean) {
     if (
       enabled &&
       !this.devices.settings.lan &&
       (await this.tailnet()).status !== "connected"
     )
-      throw new Error(
-        "Connect this computer to Tailscale first, or allow the local network.",
-      );
+      await this.devices.setLan(true);
     await this.devices.setEnabled(enabled);
     if (enabled) await this.follow();
     else {

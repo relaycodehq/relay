@@ -218,19 +218,12 @@ it("pairs from the QR link, then reconnects with the saved token", async () => {
   ]);
 });
 
-it("turns on only with Tailscale, and listens only while it's connected", async () => {
+it("without the local network, listens on Tailscale only while it's connected", async () => {
   const tailnet = {
-    current: { status: "missing", addresses: [] } as PhoneTailnet,
+    current: { status: "connected", addresses: ["127.0.0.1"] } as PhoneTailnet,
   };
   const { remote } = await desktop(undefined, tailnet);
-  await expect(remote.setEnabled(true)).rejects.toThrow("Tailscale");
-  expect(await remote.state()).toMatchObject({
-    enabled: false,
-    listening: false,
-  });
-
-  tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
-  await remote.setEnabled(true);
+  expect((await remote.state()).lan).toBe(false);
   expect((await remote.state()).hosts).toEqual(["127.0.0.1"]);
   // The code names only the tailnet address.
   expect(parsePairingUrl((await remote.pairing()).url)!.hosts).toEqual([
@@ -262,8 +255,7 @@ it("listens on the local network when allowed, Tailscale or not", async () => {
   const { remote } = await desktop(undefined, tailnet, {}, () => [
     "127.0.0.1",
   ]);
-  await expect(remote.setEnabled(true)).rejects.toThrow("local network");
-  await remote.setLan(true);
+  // Without Tailscale, turning access on lets in the local network.
   await remote.setEnabled(true);
   expect(await remote.state()).toMatchObject({
     lan: true,

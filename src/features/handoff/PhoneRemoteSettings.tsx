@@ -77,10 +77,7 @@ export function PhoneRemoteSettings() {
           <Switch
             label="Allow phone connections"
             checked={switching ?? !!data?.enabled}
-            disabled={
-              !data ||
-              (!data.enabled && !data.lan && tailnet?.status !== "connected")
-            }
+            disabled={!data}
             onChange={(enabled) => {
               setSwitching(enabled);
               run(async () => {
@@ -306,7 +303,7 @@ function switchHint(data?: PhoneRemoteState) {
     return "Waiting for Tailscale on this computer. Phones can't reach Relay until it's back.";
   // Optional: a main process from before Tailscale answers without it until Relay restarts.
   if (data.tailnet?.status !== "connected" && !data.lan)
-    return "Needs Tailscale on this computer, or the local network below.";
+    return "Off. Turning it on lets in phones on this Wi-Fi; there's no Tailscale here.";
   return "Off. Nothing listens for phones.";
 }
 

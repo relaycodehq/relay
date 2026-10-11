@@ -21,7 +21,7 @@ function acceptHint(data?: PhoneRemoteState) {
   if (data.enabled)
     return "Waiting for Tailscale on this computer; nothing reaches Relay until it's back.";
   if (data.tailnet.status !== "connected" && !data.lan)
-    return "Needs Tailscale on this computer, or the local network under Phone.";
+    return "Off. Turning it on lets in computers on this network; there's no Tailscale here.";
   return "Uses the same connection as phone access.";
 }
 
@@ -64,10 +64,7 @@ export function TakeThreadsOver() {
           <Switch
             label="Accept threads from other computers"
             checked={switching ?? !!data?.enabled}
-            disabled={
-              !data ||
-              (!data.enabled && !data.lan && data.tailnet.status !== "connected")
-            }
+            disabled={!data}
             onChange={(enabled) => {
               setSwitching(enabled);
               run(async () => {

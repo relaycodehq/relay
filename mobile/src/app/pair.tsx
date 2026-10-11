@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -24,9 +24,8 @@ import { type, useTheme } from "../ui/theme";
 
 /**
  * Pairs from the QR code in Relay's Settings → Phone, a pasted link, or a
- * relay-remote:// deep link. The desktop listens on its Tailscale address,
- * and on the local network when it allows that, so Tailscale comes first in
- * the steps, unless the phone is on the same Wi-Fi.
+ * relay-remote:// deep link. On the same Wi-Fi the phone needs nothing else;
+ * Tailscale, for reaching the computer from elsewhere, comes last and optional.
  */
 export default function Pair() {
   const remote = useRemote();
@@ -75,29 +74,10 @@ export default function Pair() {
             : "Pair with your computer"}
       </Text>
       <Text style={[styles.hint, { color: t.muted }]}>
-        Relay reaches your computer over Tailscale, a private network between your own devices,
-        or directly on the same Wi-Fi when your computer allows the local network.
+        {linked
+          ? "On the same Wi-Fi as your computer, this phone connects to it directly."
+          : "On your computer, open Relay → Settings → Phone and choose Show pairing code, then scan it here. On the same Wi-Fi the phone connects to it directly."}
       </Text>
-      <Step n={1} title="Tailscale on this phone">
-        <Text style={[styles.hint, { color: t.muted }]}>
-          Install it and sign in with the account your computer uses, then leave it on. Not
-          needed on the same Wi-Fi with the local network on.
-        </Text>
-        <Button
-          label="Get Tailscale"
-          style={styles.grow0}
-          onPress={() =>
-            void Linking.openURL(Platform.OS === "android" ? tailscaleAndroid : tailscaleDownload)
-          }
-        />
-      </Step>
-      {!linked && (
-        <Step n={2} title="Scan the pairing code">
-          <Text style={[styles.hint, { color: t.muted }]}>
-            On your computer, open Relay → Settings → Phone and choose Show pairing code.
-          </Text>
-        </Step>
-      )}
       {busy ? (
         <View style={styles.busy}>
           <ActivityIndicator color={t.muted} />
@@ -145,41 +125,30 @@ export default function Pair() {
             : " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here."}
         </Text>
       )}
+      <View style={[styles.away, { borderColor: t.border }]}>
+        <Text style={[styles.stepTitle, { color: t.text }]}>Away from home too</Text>
+        <Text style={[styles.hint, { color: t.muted }]}>
+          Optional: with Tailscale on this phone and your computer, signed in to the same account,
+          Relay reaches it from anywhere.
+        </Text>
+        <Button
+          label="Get Tailscale"
+          style={styles.grow0}
+          onPress={() =>
+            void Linking.openURL(Platform.OS === "android" ? tailscaleAndroid : tailscaleDownload)
+          }
+        />
+      </View>
     </ScrollView>
-  );
-}
-
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
-  const t = useTheme();
-  return (
-    <View style={styles.step}>
-      <View style={[styles.mark, { borderColor: t.border }]}>
-        <Text style={[styles.markText, { color: t.muted }]}>{n}</Text>
-      </View>
-      <View style={styles.stepBody}>
-        <Text style={[styles.stepTitle, { color: t.text }]}>{title}</Text>
-        {children}
-      </View>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { padding: 20, gap: 14 },
-  step: { flexDirection: "row", gap: 12 },
-  mark: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  markText: { fontSize: type.tiny, fontWeight: "600" },
-  stepBody: { flex: 1, gap: 8 },
   stepTitle: { fontSize: type.body, fontWeight: "600", lineHeight: 24 },
   lead: { fontSize: 20, fontWeight: "600" },
   hint: { fontSize: type.small, lineHeight: 20 },
+  away: { gap: 8, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
   busy: { alignItems: "center", gap: 10, paddingVertical: 30 },
   camera: {
     aspectRatio: 1,
