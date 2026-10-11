@@ -179,13 +179,12 @@
 .settings-group + .settings-group {
   margin-top: 10px;
 }
+/* One heading look across Settings: sentence case, a step over a row's title. */
 .settings-group h5 {
-  margin: 18px 0 2px;
-  font-size: 11px;
+  margin: 22px 0 2px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text);
 }
 .setting {
   display: flex;
@@ -198,6 +197,11 @@
 }
 .setting:last-child {
   border-bottom: 0;
+}
+/* A bare row's control lines up with the controls inside a card's rows
+   (16px padding and the card's border). */
+.setting:not(.block, .card) {
+  padding-right: 17px;
 }
 .setting.block {
   flex-direction: column;
@@ -459,20 +463,24 @@
 }
 
 /* Code preview: a small split diff in the theme being edited. */
+/* The two sides stack once a side can't fit its longest line (about 50
+   characters with the gutter), so big type in a narrow window isn't cut off.
+   The 1px gap shows the border between them either way. */
 .theme-code {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 50ch), 1fr));
+  gap: 1px;
   margin-top: 14px;
-  padding: 8px 0;
   border: 1px solid var(--border);
   border-radius: 11px;
-  background: var(--code-background);
+  background: var(--border);
   color: var(--code-foreground);
   font: var(--code-font-size, 12px) / 1.75 var(--font-mono);
   overflow: hidden;
 }
-.theme-code-side + .theme-code-side {
-  border-left: 1px solid var(--border);
+.theme-code-side {
+  padding: 8px 0;
+  background: var(--code-background);
 }
 .theme-code-line {
   --bar: transparent;
@@ -583,10 +591,6 @@
   filter: drop-shadow(0 6px 14px #0004);
 }
 
-/* Existing controls inside the new layout. */
-.settings-segmented button {
-  text-transform: capitalize;
-}
 .settings-screen .settings-account {
   display: flex;
   align-items: center;
@@ -1029,6 +1033,21 @@
 .review-model:last-child {
   border-bottom: 0;
 }
+/* Fixed model and effort widths, so the controls line up from row to row
+   instead of zigzagging with each label's length. */
+.review-model .composer-model-trigger {
+  width: 150px;
+}
+.review-model .composer-model-trigger > span {
+  flex: 1;
+  text-align: left;
+}
+.review-model
+  .model-field
+  > .composer-control:not(.composer-model-trigger, .composer-fast) {
+  justify-content: space-between;
+  width: 118px;
+}
 .review-models-saved {
   margin: 0;
   padding: 8px 16px 9px;
@@ -1155,9 +1174,31 @@
   color: var(--muted);
 }
 .watch-how > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   width: fit-content;
   cursor: pointer;
   color: var(--text);
+  list-style: none;
+}
+.watch-how > summary::-webkit-details-marker {
+  display: none;
+}
+/* The chevron the rest of Settings uses, not the native triangle. */
+.watch-how > summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-top: -2px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.watch-how[open] > summary::after {
+  margin-top: 2px;
+  transform: rotate(225deg);
 }
 .watch-how ul {
   display: grid;

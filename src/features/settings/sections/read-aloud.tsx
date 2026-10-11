@@ -4,6 +4,7 @@ import {
   ReadAloudEngineSetting,
   ReadAloudSpeedSetting,
   ReadAloudVoiceSetting,
+  pickedEngine,
 } from "../../read-aloud/ReadAloudSettings";
 import { useReadAloudState } from "../../read-aloud/state";
 
@@ -23,6 +24,7 @@ export function useReadAloudEntries(): SettingEntry[] {
         keywords,
       },
     ];
+  const picked = pickedEngine(state);
   return [
     {
       id: "read-aloud-engine",
@@ -37,6 +39,9 @@ export function useReadAloudEntries(): SettingEntry[] {
       id: "read-aloud-voice",
       category: "read-aloud",
       title: "Voice",
+      ...(picked?.model.status !== "ready" && {
+        description: `Download ${picked?.name ?? "a voice engine"} under Downloads to hear its voices.`,
+      }),
       keywords: `${keywords} sample try`,
       render: () => <ReadAloudVoiceSetting state={state} />,
     },

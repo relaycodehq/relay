@@ -65,14 +65,10 @@
   padding: 12px 12px 10px 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
-/* Beats .settings-group h5, the uppercase group heading. */
+/* Beats .settings-group h5, the group heading. */
 .settings-group .changelog-notes h5 {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--text);
 }
 .changelog-notes header p {
   margin: 2px 0 0;
