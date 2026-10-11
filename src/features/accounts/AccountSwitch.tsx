@@ -110,11 +110,12 @@ function AccountMenu({
   return (
     <Menu.Root>
       <Menu.Trigger
-        className="composer-control"
+        className="composer-control composer-account"
         aria-label={`${agentName(provider)} account: ${label}`}
+        title={label}
       >
         <UserRound size={13} />
-        {label}
+        <span>{label}</span>
         <ChevronDown size={12} />
       </Menu.Trigger>
       <Menu.Portal>

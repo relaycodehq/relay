@@ -411,18 +411,6 @@
     width: 180px;
     min-width: 160px;
   }
-  .workspace-pane .composer-tools {
-    gap: 3px;
-  }
-  .workspace-pane .composer-tools .composer-divider {
-    display: none;
-  }
-  .workspace-pane .composer-tools .composer-fast,
-  .workspace-pane .composer-tools .composer-interaction,
-  .workspace-pane .composer-tools .composer-runtime {
-    font-size: 0;
-    gap: 2px;
-  }
   .working-commit small {
     display: none;
   }

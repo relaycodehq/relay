@@ -27,6 +27,33 @@
   gap: inherit;
   margin-left: auto;
 }
+/* Fit steps: useToolbarFit lists the steps it took in data-fit until the
+   row sits on one line. The full names stay in the menus and tooltips. */
+.composer-tools[data-fit~="1"] {
+  gap: 3px;
+}
+.composer-tools[data-fit~="1"]
+  .composer-control:not(.composer-model-trigger)
+  > .lucide-chevron-down {
+  display: none;
+}
+.composer-tools[data-fit~="1"] .composer-divider {
+  margin: 0 1px;
+}
+.composer-tools[data-fit~="2"] .composer-runtime > span,
+.composer-tools[data-fit~="3"]
+  :is(.composer-interaction, .composer-account, .composer-fast)
+  > span,
+.composer-tools[data-fit~="4"] .fit-long,
+.composer-tools[data-fit~="5"] .fit-rest,
+.composer-tools[data-fit~="6"]
+  .composer-model-trigger
+  > :is(span, .lucide-chevron-down) {
+  display: none;
+}
+.composer-tools[data-fit~="4"] .fit-short {
+  display: inline;
+}
 .thread-compose-wrap {
   width: 100%;
   max-width: var(--thread-width);

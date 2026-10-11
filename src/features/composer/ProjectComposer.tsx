@@ -45,6 +45,7 @@ import {
 } from "./ComposerPromptInput";
 import { SendButton, StopButton } from "./ComposerSendButtons";
 import { ComposerToolbar } from "./ComposerToolbar";
+import { useToolbarFit } from "./useToolbarFit";
 import { DictationButton } from "../dictation/DictationButton";
 import { SketchEditor } from "../images/ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
@@ -199,6 +200,8 @@ export function ProjectComposer({
   agentSettings.current = runs.resumeSettings;
   addFiles.current = draft.addFiles;
   const filePick = useRef<HTMLInputElement>(null);
+  const tools = useRef<HTMLDivElement>(null);
+  useToolbarFit(tools);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const to = draftRecipient(draft.text, composer.provider);
   // OpenRouter bills per token, so its spend shows instead of a usage ring.
@@ -405,7 +408,7 @@ export function ProjectComposer({
               event.preventDefault();
           }}
         />
-        <div className="composer-tools">
+        <div className="composer-tools" ref={tools}>
           <input
             ref={filePick}
             type="file"

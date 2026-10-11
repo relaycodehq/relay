@@ -24,3 +24,6 @@
   color: var(--muted);
   flex: none;
 }
+.fit-short {
+  display: none;
+}

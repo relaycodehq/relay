@@ -9,6 +9,8 @@ export interface ComposerSelectProps<T extends string> {
   options: {
     value: T;
     label: string;
+    /** What the trigger shows when the composer runs out of room. */
+    short?: string;
     description?: string;
     icon?: ReactNode;
   }[];
@@ -45,7 +47,14 @@ function ComposerSelectImpl<T extends string>({
         className={`composer-control ${className}`}
       >
         {icon}
-        <Select.Value />
+        <Select.Value>
+          {(current: T) => {
+            const option = options.find((o) => o.value === current);
+            return option ? (
+              <FitLabel label={option.label} short={option.short} />
+            ) : null;
+          }}
+        </Select.Value>
         <ChevronDown size={12} />
       </Select.Trigger>
       <Select.Portal container={container}>
@@ -92,6 +101,20 @@ function ComposerSelectImpl<T extends string>({
         </Select.Positioner>
       </Select.Portal>
     </Select.Root>
+  );
+}
+
+/**
+ * A trigger's label with the shorter one a narrow composer swaps in, see
+ * the fit steps in composer.css.
+ */
+export function FitLabel({ label, short }: { label: string; short?: string }) {
+  if (!short || short === label) return <>{label}</>;
+  return (
+    <>
+      <span className="fit-long">{label}</span>
+      <span className="fit-short">{short}</span>
+    </>
   );
 }
 

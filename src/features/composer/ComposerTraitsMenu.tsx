@@ -1,13 +1,14 @@
 import { Menu } from "@base-ui/react/menu";
 import { Check, ChevronDown } from "lucide-react";
 import { Fragment, memo } from "react";
+import { FitLabel } from "../../ui/ComposerSelect";
 
 export type TraitSection = {
   label: string;
   /** Keys that change this without opening the menu. */
   hint?: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; short?: string }[];
   onChange: (value: string) => void;
 };
 /**
@@ -21,14 +22,26 @@ export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({
   label: string;
   sections: TraitSection[];
 }) {
-  const summary = sections
-    .map((s) => s.options.find((o) => o.value === s.value)?.label)
-    .filter(Boolean)
-    .join(" · ");
+  const [first, ...rest] = sections.flatMap((s) => {
+    const picked = s.options.find((o) => o.value === s.value);
+    return picked ? [picked] : [];
+  });
   return (
     <Menu.Root>
       <Menu.Trigger aria-label={label} className="composer-control">
-        {summary}
+        <span>
+          {first && <FitLabel label={first.label} short={first.short} />}
+          {rest.length > 0 && (
+            <span className="fit-rest">
+              {rest.map((option) => (
+                <Fragment key={option.value}>
+                  {" · "}
+                  <FitLabel label={option.label} short={option.short} />
+                </Fragment>
+              ))}
+            </span>
+          )}
+        </span>
         <ChevronDown size={12} />
       </Menu.Trigger>
       <Menu.Portal>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   effortLabels,
+  effortShortLabels,
   findClaudeModel,
   withClaudeContextWindow,
   type ClaudeModel,
@@ -106,6 +107,9 @@ export function codexDefaultEffort(
 /** "Default (Medium)", or plain "Default" when its level isn't known. */
 export const defaultEffortLabel = (effort: ReasoningEffort) =>
   effort ? `Default (${effortLabels[effort]})` : "Default";
+/** The default's label in a narrow composer: just the effort it stands for. */
+export const defaultEffortShort = (effort: ReasoningEffort) =>
+  effort ? effortShortLabels[effort] : "Default";
 
 /** Codex's Default as every agent reports it: listed model, effort, per-model efforts. */
 export function codexAgentDefaults(

@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { Zap } from "lucide-react";
-import { defaultEffortLabel } from "../../../shared/agent-defaults";
+import {
+  defaultEffortLabel,
+  defaultEffortShort,
+} from "../../../shared/agent-defaults";
 import {
   type AgentModel,
   type AgentProvider,
@@ -8,6 +11,7 @@ import {
 } from "../../../shared/agents";
 import {
   effortLabels,
+  effortShortLabels,
   reasoningEffortSchema,
   reasoningEffortsFor,
   type ReasoningEffort,
@@ -37,10 +41,12 @@ export function ComposerEffortControl({
             {
               value: "" as ReasoningEffort,
               label: defaultEffortLabel(levels.codex),
+              short: defaultEffortShort(levels.codex),
             },
             ...reasoningEffortsFor(codex.model, codexModels).map((value) => ({
               value,
               label: effortLabels[value],
+              short: effortShortLabels[value],
             })),
           ]
         : [],
@@ -55,10 +61,15 @@ export function ComposerEffortControl({
               hint,
               value: claude.reasoningEffort,
               options: [
-                { value: "", label: defaultEffortLabel(levels.claude) },
+                {
+                  value: "",
+                  label: defaultEffortLabel(levels.claude),
+                  short: defaultEffortShort(levels.claude),
+                },
                 ...claudeEfforts.map((value) => ({
                   value,
                   label: effortLabels[value],
+                  short: effortShortLabels[value],
                 })),
               ],
               onChange: (value: string) =>
@@ -101,7 +112,7 @@ export function ComposerEffortControl({
       onClick={() => runs.setFast(to, !fast)}
     >
       <Zap size={14} />
-      Fast
+      <span>Fast</span>
     </button>
   );
   if (to === "codex" && codex)
@@ -135,6 +146,7 @@ export function ComposerEffortControl({
           ...pick.efforts.map((value) => ({
             value,
             label: effortLabels[value],
+            short: effortShortLabels[value],
           })),
         ]}
         onChange={(effort) => runs.setEffort(to, effort)}

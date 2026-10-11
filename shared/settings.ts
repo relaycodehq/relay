@@ -37,6 +37,18 @@ export const effortLabels: Record<ReasoningEffort, string> = {
   max: "Max",
   ultra: "Ultra",
 };
+/** What a narrow composer shows instead of `effortLabels`. */
+export const effortShortLabels: Record<ReasoningEffort, string> = {
+  "": "Default",
+  none: "None",
+  minimal: "Min",
+  low: "Low",
+  medium: "Med",
+  high: "High",
+  xhigh: "XHigh",
+  max: "Max",
+  ultra: "Ultra",
+};
 /** A Codex model, as the signed-in `codex app-server` lists it. */
 export type CodexModel = {
   id: string;
