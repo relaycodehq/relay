@@ -23,6 +23,7 @@ export type ThreadMenuAction =
   | { kind: "detach" }
   | { kind: "stop-driving" }
   | { kind: "move-worktree" }
+  | { kind: "snooze-pick" }
   | { kind: "project-settings" }
   | { kind: "own-window"; open: boolean }
   | { kind: "triage"; triage: ChatTriage };
@@ -69,6 +70,8 @@ export function useThreadActions({
   const [renaming, setRenaming] = useState<string>();
   /** The thread the Move into its own worktree dialog is for. */
   const [moving, setMoving] = useState<string>();
+  /** The thread whose snooze time is being picked. */
+  const [pickingSnooze, setPickingSnooze] = useState<ChatSummary>();
   /** Threads whose title is being generated again. */
   const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
     new Set(),
@@ -247,6 +250,8 @@ export function useThreadActions({
     rename,
     moving,
     setMoving,
+    pickingSnooze,
+    setPickingSnooze,
     regenerating,
     reloading,
     /** Does what the thread's right-click menu picked. */
@@ -272,6 +277,8 @@ export function useThreadActions({
           return void stopDriving(c);
         case "move-worktree":
           return setMoving(c.id);
+        case "snooze-pick":
+          return setPickingSnooze(c);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "own-window":

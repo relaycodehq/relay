@@ -26,6 +26,7 @@ import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
+import { SnoozePickDialog } from "./SnoozeMenu";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchField, SearchResults } from "./SidebarSearch";
 import { ActivityView } from "./SidebarActivity";
@@ -247,6 +248,17 @@ export function ProjectSidebar({
         )}
       </div>
       {viewError && <ErrorBox error={viewError} />}
+      {actions.pickingSnooze && (
+        <SnoozePickDialog
+          onSnooze={(until) =>
+            void actions.triage(actions.pickingSnooze!, {
+              kind: "snooze",
+              until,
+            })
+          }
+          onClose={() => actions.setPickingSnooze(undefined)}
+        />
+      )}
       {actions.moving && (
         <MoveToWorktreeDialog
           chatId={actions.moving}

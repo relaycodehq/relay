@@ -1,6 +1,7 @@
 import { Menu } from "@base-ui/react/menu";
 import {
   Archive,
+  CalendarClock,
   Check,
   ChevronRight,
   Clock,
@@ -197,6 +198,13 @@ export function ThreadMenu({
                 <small>{wakeLabel(preset.until, new Date(now))}</small>
               </Menu.Item>
             ))}
+            <Menu.Separator className="sb-menu-separator" />
+            <MenuAction
+              icon={<CalendarClock size={13} />}
+              onClick={() => onAction({ kind: "snooze-pick" })}
+            >
+              Pick a time…
+            </MenuAction>
           </MenuPopup>
         </Menu.SubmenuRoot>
       )}

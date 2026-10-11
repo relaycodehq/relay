@@ -1284,6 +1284,19 @@
   background: var(--hover);
   outline: none;
 }
+.modal.sb-snooze-dialog {
+  width: fit-content;
+  padding: 14px 14px 10px;
+}
+.sb-snooze-dialog .modal-heading {
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+.sb-snooze-dialog .modal-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
 
 /* Footer. */
 .sb-footer {

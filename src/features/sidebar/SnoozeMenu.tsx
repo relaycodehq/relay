@@ -3,6 +3,7 @@ import { CalendarClock, ChevronRight, Clock } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { PickTime } from "../../ui/PickTime";
+import { Modal } from "../../ui/ui";
 
 /** Up and down between the presets, like the menus around them. */
 function presetKeys(e: KeyboardEvent<HTMLElement>) {
@@ -112,5 +113,26 @@ export function SnoozeMenu({
         </Popover.Positioner>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** The right-click menu's "Pick a time…", which a menu can't hold. */
+export function SnoozePickDialog({
+  onSnooze,
+  onClose,
+}: {
+  onSnooze: (until: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Snooze until…" className="sb-snooze-dialog" onClose={onClose}>
+      <PickTime
+        action="Snooze"
+        onPick={(until) => {
+          onClose();
+          onSnooze(until);
+        }}
+      />
+    </Modal>
   );
 }
