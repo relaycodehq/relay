@@ -103,7 +103,9 @@ export function ProjectTitle({
       ) : (
         <FolderGit2 size={14} />
       )}
-      <span>{project?.name ?? "Workspace"}</span>
+      <span className="project-window-name">
+        {project?.name ?? "Workspace"}
+      </span>
       <span className="breadcrumb-slash">/</span>
       {chat ? (
         <ThreadTitle key={chat.id} chat={chat} onError={onError} />
