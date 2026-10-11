@@ -16,6 +16,11 @@ import "./accounts.css";
 
 type OnError = (error: unknown) => void;
 
+const usagePage: Record<AccountProvider, string> = {
+  claude: "https://claude.ai/settings/usage",
+  codex: "https://chatgpt.com/settings/usage?tab=overview",
+};
+
 /**
  * An agent's accounts as lines of its card in Settings → AI models → Agents:
  * the one new threads start on is picked by clicking its line.
@@ -191,6 +196,14 @@ function RowMenu({
               }
             >
               Sign in again
+            </Menu.Item>
+            <Menu.Item
+              className="composer-select-item"
+              onClick={() =>
+                api.openExternal(usagePage[provider]).catch(onError)
+              }
+            >
+              Open usage page
             </Menu.Item>
             {!account.system && (
               <>
