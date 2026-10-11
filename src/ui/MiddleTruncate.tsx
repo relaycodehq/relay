@@ -46,17 +46,24 @@ export function MiddleTruncate({
   useLayoutEffect(() => {
     const element = box.current;
     if (!element) return;
+    const full = element.firstElementChild as HTMLElement;
     const fit = () => {
       const style = getComputedStyle(element);
-      const measure = measureIn(style.font);
       // Layout width, untouched by a popup's opening scale.
       const width = parseFloat(style.width) || 0;
-      // Canvas and layout round a little differently: text the box was sized
-      // to counts as fitting, and shortened text keeps a pixel spare.
+      // The hidden full text sizes the box, so the layout itself says whether
+      // it fits. Canvas widths drift from layout for CJK and emoji (fallback
+      // fonts), so they are only trusted for proportions, scaled to the
+      // layout width of the whole text.
+      const natural = full.scrollWidth;
+      if (!width || natural <= full.clientWidth) {
+        setShown(text);
+        return;
+      }
+      const measure = measureIn(style.font);
+      const scale = natural / (measure(text) || natural);
       setShown(
-        !width || measure(text) <= width + 0.5
-          ? text
-          : fitMiddle(text, kind, width - 1, measure),
+        fitMiddle(text, kind, width - 1, (part) => measure(part) * scale),
       );
     };
     fit();

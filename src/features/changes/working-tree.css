@@ -131,11 +131,12 @@
   width: 14px;
   height: 14px;
 }
+/* The name keeps its own width, less the icon and gap beside it, and loses
+   its middle before the row overflows; the folder after it gives way first. */
 .change-name {
   flex: none;
-  max-width: 100%;
+  max-width: calc(100% - 20px);
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .change-name.modified {
   color: var(--accent);

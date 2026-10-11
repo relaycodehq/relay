@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { noteUsed } from "../../lib/used";
 import "./changed-files.css";
 import "./worktrees.css";
@@ -107,7 +108,11 @@ function MovePreview({ files }: { files: WorktreeMove["files"] }) {
               <li key={f.path} title={f.path}>
                 <FileEntryIcon path={f.path} directory={false} />
                 <span className="worktree-move-name">
-                  {f.path.slice(slash + 1)}
+                  <MiddleTruncate
+                    text={f.path.slice(slash + 1)}
+                    kind="path"
+                    title={null}
+                  />
                   {slash > 0 && <small>{f.path.slice(0, slash)}</small>}
                   {f.threads && (
                     <small className="worktree-move-also">

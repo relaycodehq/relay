@@ -106,9 +106,17 @@
 }
 .pane-title-slot .pane-chip {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+}
+/* A chip with a branch or path in it is the one that gives way. */
+.pane-title-slot .pane-chip:has(> .middle-truncate) {
+  flex-shrink: 1;
+}
+.pane-title-slot .pane-chip > svg {
+  flex: none;
 }
 .pane-title-slot .pane-subtitle {
   overflow: hidden;

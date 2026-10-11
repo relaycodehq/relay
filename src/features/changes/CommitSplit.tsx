@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { useAISettings } from "../agents/useAISettings";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./changed-files.css";
 import "./commit-split.css";
 import "./create-pull.css";
@@ -232,7 +233,11 @@ function ChangeRow({ change }: { change: SplitChange }) {
     >
       <FileEntryIcon path={change.path} directory={false} />
       <span className={`change-name ${kind[change.status]}`}>
-        {change.path.slice(slash + 1)}
+        <MiddleTruncate
+          text={change.path.slice(slash + 1)}
+          kind="path"
+          title={null}
+        />
       </span>
       <span className="change-dir">
         {change.part ?? (slash > 0 ? change.path.slice(0, slash) : "")}

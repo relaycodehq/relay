@@ -17,6 +17,7 @@ import {
   type SelectedChange,
 } from "../working-changes";
 import { FileEntryIcon } from "../../../ui/FileEntryIcon";
+import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { IgnoredChangeMenu, LocalChangeMenu } from "../LocalChangeMenu";
 
 interface Props {
@@ -176,7 +177,13 @@ function IgnoredRow({
             onClick={() => onPick(t.path, "ignored")}
           >
             <FileEntryIcon path={t.path} directory={false} />
-            <span className="change-name">{t.path.slice(slash + 1)}</span>
+            <span className="change-name">
+              <MiddleTruncate
+                text={t.path.slice(slash + 1)}
+                kind="path"
+                title={null}
+              />
+            </span>
             {slash > 0 && (
               <span className="change-dir">{t.path.slice(0, slash)}</span>
             )}
@@ -229,7 +236,11 @@ function ChangeRow({
           >
             <FileEntryIcon path={c.path} directory={false} />
             <span className={`change-name ${kind}`}>
-              {c.path.slice(slash + 1)}
+              <MiddleTruncate
+                text={c.path.slice(slash + 1)}
+                kind="path"
+                title={null}
+              />
             </span>
             {!nested && slash > 0 && (
               <span className="change-dir">{c.path.slice(0, slash)}</span>

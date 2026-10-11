@@ -3,6 +3,7 @@ import { ArrowUp, FolderTree, GitBranch, List, RefreshCw } from "lucide-react";
 import type { WorkingTree } from "../../../../shared/working-tree";
 import { IconButton } from "../../../ui/ui";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
+import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 
 /**
  * The branch, how far it is from its upstream, and the list's actions: in
@@ -67,7 +68,10 @@ export function ChangesToolbar({
             <>
               <span className="pane-chip">
                 <GitBranch size={12} />
-                {tree?.branch || "Local checkout"}
+                <MiddleTruncate
+                  text={tree?.branch || "Local checkout"}
+                  kind="branch"
+                />
               </span>
               {tree?.upstream && (tree.ahead > 0 || tree.behind > 0) && (
                 <span className="pane-chip">
