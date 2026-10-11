@@ -430,6 +430,16 @@ export async function performGitAction(
         `${checkoutChanged} Review the refreshed changes and try again.`,
       );
     if (action.kind === "stage" || action.kind === "unstage") {
+      // Resetting a conflicted path drops its conflict mark but keeps the markers in the file.
+      if (
+        action.kind === "unstage" &&
+        action.paths.some(
+          (p) => state.changes.find((c) => c.path === p)?.conflict,
+        )
+      )
+        throw new Error(
+          "This file has merge conflicts. Resolve them, then stage the result.",
+        );
       const allPaths = withPreviousPaths(
         state.changes,
         action.paths,

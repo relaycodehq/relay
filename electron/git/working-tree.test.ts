@@ -322,6 +322,26 @@ it("reads the index side of a file named like an index stage", async () => {
   const pair = await workingDiff(root, "1:notes.txt", "unstaged");
   expect([pair.old?.contents, pair.next?.contents]).toEqual(["old\n", "new\n"]);
 });
+it("refuses to unstage a conflicted file, which would drop its conflict mark", async () => {
+  git("switch", "-qc", "other");
+  await writeFile(join(root, "code.ts"), "theirs\n");
+  git("commit", "-qam", "Theirs");
+  git("switch", "-q", "review");
+  await writeFile(join(root, "code.ts"), "ours\n");
+  git("commit", "-qam", "Ours");
+  expect(() => git("merge", "other")).toThrow();
+  const tree = await workingTree(root);
+  await expect(
+    performGitAction(root, {
+      kind: "unstage",
+      revision: tree.revision,
+      paths: ["code.ts"],
+    }),
+  ).rejects.toThrow("merge conflicts");
+  expect((await workingTree(root)).changes[0]).toMatchObject({
+    conflict: true,
+  });
+});
 it("discards back to the index or to HEAD, keeping a copy of each file in the Trash", async () => {
   await writeFile(join(root, "code.ts"), "staged\n");
   git("add", "code.ts");

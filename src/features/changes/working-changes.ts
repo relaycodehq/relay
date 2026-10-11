@@ -43,12 +43,18 @@ export interface ChangeSection {
   kind: "stage" | "unstage";
 }
 
+/**
+ * In the staged list. A conflict only sits in the working one: nothing of it is
+ * staged yet, and staging it is how it gets resolved.
+ */
+const listedStaged = (c: WorkingChange) => isStaged(c) && !c.conflict;
+
 /** The staged list, then the working one; a partly staged file is in both. */
 export const changeSections = (changes: WorkingChange[]): ChangeSection[] => [
   {
     area: "staged",
     title: "Staged changes",
-    files: changes.filter(isStaged),
+    files: changes.filter(listedStaged),
     kind: "unstage",
   },
   {
@@ -82,7 +88,7 @@ export function settleSelection(
   if (!change) return null;
   if (selected.area === "unstaged" && !isUnstaged(change))
     return { ...selected, area: "staged" };
-  if (selected.area === "staged" && !isStaged(change))
+  if (selected.area === "staged" && !listedStaged(change))
     return { ...selected, area: "unstaged" };
   return selected;
 }
@@ -97,7 +103,7 @@ export function otherArea(
   area: ChangeArea,
 ): ChangeArea | null {
   if (area === "staged") return isUnstaged(change) ? "unstaged" : null;
-  return isStaged(change) ? "staged" : null;
+  return listedStaged(change) ? "staged" : null;
 }
 
 /** Why no commit can start here: a conflict, a Git operation, or no branch. */

@@ -26,14 +26,14 @@ const partly = change("src/a.ts", "M", "M"),
   untracked = change("c.md", "?", "?"),
   conflicted = change("src/d.ts", "U", "U", true);
 
-it("puts partly staged files in both lists and untracked ones in the working list", () => {
+it("puts partly staged files in both lists, untracked and conflicted ones in the working list", () => {
   const [index, working] = changeSections([
     partly,
     staged,
     untracked,
     conflicted,
   ]);
-  expect(index.files).toEqual([partly, staged, conflicted]);
+  expect(index.files).toEqual([partly, staged]);
   expect(working.files).toEqual([partly, untracked, conflicted]);
   expect([index.kind, working.kind]).toEqual(["unstage", "stage"]);
 });
