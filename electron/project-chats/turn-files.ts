@@ -140,17 +140,8 @@ export class TurnFiles {
         !(await worktreeExists(chat.worktree ?? worktree!))
       )
         throw new Error("This thread's worktree was removed.");
-      // An agent editing the same folder would race the rollback.
-      for (const id of this.core.active.ids()) {
-        const other = this.core.storage.cached(id);
-        if (
-          other?.projectId === chat.projectId &&
-          threadWorktree(other)?.path === worktree?.path
-        )
-          throw new Error(
-            "Wait for the running answer to finish before rolling back files.",
-          );
-      }
+      // A running agent may still edit these files; like an edit from the
+      // user's editor, the rollback merges and the agent sees it on next read.
       const message = chat.messages.find((m) => m.id === messageId);
       const files = (message?.changes ?? []).filter(
         (f) =>
