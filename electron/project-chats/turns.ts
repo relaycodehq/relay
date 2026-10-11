@@ -675,6 +675,7 @@ export class ChatTurns {
             interrupt(m);
             failed = true;
           }
+        if (failed && chat.queue?.length) chat.queuePaused = true;
         if (failed)
           await this.core.storage
             .save(chat)

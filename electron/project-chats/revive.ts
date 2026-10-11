@@ -38,7 +38,6 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  if (chat.queue?.length) chat.queuePaused = true;
   if (chat.agentWorktrees) {
     const own = ownAgentWorktrees(chat);
     if (own.length !== chat.agentWorktrees.length) {
@@ -99,5 +98,8 @@ export function reviveChat(
       interrupted = true;
     }
   }
+  // Nothing sends the queue on its own now, unless an answer it waits for carries on.
+  if (chat.queue?.length && !chat.messages.some((m) => m.status === "streaming"))
+    chat.queuePaused = true;
   return interrupted;
 }
