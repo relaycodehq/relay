@@ -233,9 +233,12 @@ export class ChatQueue {
         await this.steer(chat, messageId);
         return;
       }
-      if (action === "remove")
+      if (action === "remove") {
+        // Taking it back as it went out would leave it both sent and in the draft.
+        if (chat.messages.some((m) => m.id === messageId))
+          throw new Error("That message already went out.");
         chat.queue = chat.queue?.filter((q) => q.input.id !== messageId);
-      else {
+      } else {
         const moving = chat.queue?.find((q) => q.input.id === messageId);
         if (!moving) throw new Error("Queued message not found.");
         const rest = chat.queue!.filter((q) => q !== moving);

@@ -70,9 +70,10 @@ export function useQueuedMessages({
       const parent = conversationOf(input);
       const key = threadDraftKey(id, parent);
       const old = readDraft(key);
+      const oldImages = await loadDraftImages(key);
       const back = returnedDraft(
         old,
-        await loadDraftImages(key),
+        oldImages,
         input,
         !!parent,
         () => crypto.randomUUID(),
@@ -84,6 +85,15 @@ export function useQueuedMessages({
       // Persist the complete draft before removing the durable queue entry.
       await saveDraftImages(key, back.images);
       writeDraft(key, back.body);
+      try {
+        await api.projectChatQueueAction(chat.id, "remove", input.id);
+      } catch (e) {
+        // It went out meanwhile: the draft goes back to what it was.
+        writeDraft(key, old);
+        await saveDraftImages(key, oldImages);
+        void refetch();
+        throw e;
+      }
       // A reply goes back to its side conversation, which keeps its own settings.
       saveSentSettings(
         parent ? `${id}:${parent}` : id,
@@ -94,7 +104,6 @@ export function useQueuedMessages({
       if (input.selection) attachments.restoreSelection(input.selection);
       onOpen(parent);
       setRestored((n) => n + 1);
-      await api.projectChatQueueAction(chat.id, "remove", input.id);
       await refetch();
       void listChanged();
     });
