@@ -13,7 +13,7 @@ import {
 } from "../../shared/history";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
-import { workspaceIdSchema } from "../../shared/workspaces";
+import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
 import {
   catchUpBranch,
   deleteMergedBranch,
@@ -100,7 +100,13 @@ export function gitHandlers(ctx: ApiContext) {
     ),
     projectMergeBranch: takes(
       [workspaceIdSchema, mergeBranchSchema],
-      async (where, input) => mergeBranch(await placeRoot(where), input),
+      async (where, input) => {
+        const result = await mergeBranch(await placeRoot(where), input);
+        const { chatId } = parseWorkspaceId(where);
+        if (result.merged && chatId)
+          await projectChats.branchMerged(chatId, input.branch);
+        return result;
+      },
     ),
     projectCatchUp: takes(
       [workspaceIdSchema, branchNameSchema],

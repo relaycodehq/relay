@@ -267,12 +267,10 @@ export class ThreadWorktrees {
     const { worktree } = await this.of(id);
     const exists = await worktreeExists(worktree);
     const changes = exists ? await worktreeChanges(worktree) : null;
-    const merged =
-      changes && !changes.files.length && changes.commits > 0
-        ? ("merge" as const)
-        : worktree.landed?.by === "pr"
-          ? ("pr" as const)
-          : undefined;
+    // Only what Relay saw land counts: a branch that caught up with `from`
+    // looks the same in Git as one that was merged into it.
+    const by = worktree.landed?.by;
+    const merged = by === "pr" || by === "merge" ? by : undefined;
     return {
       ...(worktree.branch ? { branch: worktree.branch } : {}),
       ...(worktree.path ? { path: worktree.path } : {}),
@@ -722,6 +720,14 @@ export class ThreadWorktrees {
     }
     const { chat, worktree } = await this.of(id);
     worktree.pr = pr;
+    await this.core.storage.save(chat);
+  }
+
+  /** Relay's Merge landed `branch`, if it is still this thread's worktree branch. */
+  async branchMerged(id: string, branch: string) {
+    const { chat, worktree } = await this.of(id);
+    if (worktree.branch !== branch || worktree.landed) return;
+    worktree.landed = { at: Date.now(), by: "merge" };
     await this.core.storage.save(chat);
   }
 

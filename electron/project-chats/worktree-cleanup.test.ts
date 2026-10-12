@@ -350,6 +350,21 @@ describe("cleaning up a real thread's worktree", () => {
     },
   );
 
+  it("says merged only once Relay's Merge landed the branch, not when it caught up with main", async () => {
+    const { chats, repo, id, worktree } = await settledThread();
+    git(worktree.path!, "reset", "-q", "--hard", "main");
+    await writeFile(join(repo, "README.md"), "# App\nMore\n");
+    git(repo, "commit", "-qam", "Second");
+    git(worktree.path!, "rebase", "-q", "main");
+    expect(await chats.worktreeStatus(id)).toMatchObject({ files: [] });
+    expect((await chats.worktreeStatus(id)).landed).toBeUndefined();
+
+    await chats.branchMerged(id, "some/other-branch");
+    expect((await chats.worktreeStatus(id)).landed).toBeUndefined();
+    await chats.branchMerged(id, worktree.branch!);
+    expect((await chats.worktreeStatus(id)).landed).toEqual({ by: "merge" });
+  });
+
   it("leaves a worktree with files Git doesn't have yet", async () => {
     const { chats, id, worktree } = await settledThread();
     await writeFile(join(worktree.path!, "notes.md"), "half done\n");

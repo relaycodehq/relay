@@ -763,6 +763,9 @@ export class ProjectChats {
   pullMerged(id: string) {
     return this.worktrees.pullMerged(id);
   }
+  branchMerged(id: string, branch: string) {
+    return this.worktrees.branchMerged(id, branch);
+  }
   turnDiff(chatId: string, messageId: string, path: string) {
     return this.files.diff(chatId, messageId, path);
   }

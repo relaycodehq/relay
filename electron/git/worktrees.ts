@@ -588,26 +588,23 @@ async function forkPoint(worktree: ChatWorktree) {
 /** The worktree's tree now, and what it has that its branch's source doesn't, committed or not. */
 export async function worktreeChanges(
   worktree: ChatWorktree,
-): Promise<{ tree: string; files: TurnFileChange[]; commits: number }> {
+): Promise<{ tree: string; files: TurnFileChange[] }> {
   const [tree, from] = await Promise.all([
     snapshotTree(worktree.path!),
     forkPoint(worktree),
   ]);
-  const [diff, commits] = await Promise.all([
-    git(worktree.path!, [
-      "diff",
-      "--numstat",
-      "-z",
-      "--no-renames",
-      "--no-color",
-      "--no-ext-diff",
-      "--no-textconv",
-      from,
-      tree,
-    ]),
-    git(worktree.path!, ["rev-list", "--count", `${worktree.start}..HEAD`]),
+  const diff = await git(worktree.path!, [
+    "diff",
+    "--numstat",
+    "-z",
+    "--no-renames",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    from,
+    tree,
   ]);
-  return { tree, files: parseNumstat(diff), commits: Number(commits) };
+  return { tree, files: parseNumstat(diff) };
 }
 
 export const worktreeDiff = async (worktree: ChatWorktree, path: string) =>

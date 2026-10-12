@@ -88,7 +88,6 @@ it("counts what it committed and what it hasn't, until that lands in main", asyn
   git(worktree.path, "commit", "-qam", "Sting");
   await writeFile(join(worktree.path, "c.ts"), "sea\n");
   expect(await paths(worktree)).toEqual(["b.ts", "c.ts"]);
-  expect((await worktreeChanges(worktree)).commits).toBe(1);
 
   git(worktree.path, "add", "c.ts");
   git(worktree.path, "commit", "-qm", "Sea");

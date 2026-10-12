@@ -25,7 +25,7 @@ export interface ChatWorktree {
   start?: string;
   /** Older worktrees count their changes from here instead of from `from`. */
   base?: string;
-  /** Its PR was merged on the Git host. Older worktrees may hold other values. */
+  /** Its PR was merged on the Git host, or Relay's Merge landed its branch. Older worktrees may hold other values. */
   landed?: { at: number; by: string };
   pr?: { number: number; url: string };
   /** Removed; the next message makes a fresh one from the checkout. */
@@ -128,7 +128,7 @@ export interface WorktreeStatus {
   from?: string;
   /** What it has that `from` doesn't yet, committed or not. */
   files: TurnFileChange[];
-  /** Everything it committed is in `from` now, or its PR was merged. */
+  /** Relay's Merge landed its branch in `from`, or its PR was merged. */
   landed?: { by: "merge" | "pr" };
   pr?: ChatWorktree["pr"];
   removed: boolean;
