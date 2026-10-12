@@ -23,6 +23,7 @@ import { useForeground } from "./motion";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
 import { formatTokens } from "../../../shared/tokens";
+import { formatCost, type ThreadCost } from "../../../shared/thread-cost";
 
 const rank: Record<MeterPace, number> = { ok: 0, warn: 1, hot: 2, spent: 3 };
 const warn = "#e3a23a",
@@ -86,17 +87,20 @@ function usageLabel(usage: ProviderUsage | undefined) {
 
 /**
  * The composer's footer: the context window and the plan's limits as thin
- * bars along the bottom edge, opening the usage sheet on a tap.
+ * bars along the bottom edge, and what a thread billed per token cost so
+ * far, opening the usage sheet on a tap.
  */
 export function UsageBar({
   provider,
   usage,
   context,
+  cost,
   onPress,
 }: {
   provider: AgentProvider;
   usage?: ProviderUsage;
   context?: ContextUsage;
+  cost?: ThreadCost;
   onPress: () => void;
 }) {
   const t = useTheme();
@@ -104,11 +108,17 @@ export function UsageBar({
     ? Math.min(100, Math.round((context.usedTokens / context.maxTokens) * 100))
     : undefined;
   const list = reportsUsage(provider) ? meters(usage) : [];
-  if (used == null && !list.length) return null;
+  // Like the desktop, an agent with plan limits shows those instead.
+  const spent = reportsUsage(provider) ? undefined : cost;
+  if (used == null && !list.length && !spent) return null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={[used != null ? `Context ${used}% full` : "", usageLabel(usage) ?? ""]
+      accessibilityLabel={[
+        used != null ? `Context ${used}% full` : "",
+        usageLabel(usage) ?? "",
+        spent ? `This thread cost ${formatCost(spent.usd)}` : "",
+      ]
         .filter(Boolean)
         .join(", ")}
       hitSlop={6}
@@ -132,6 +142,16 @@ export function UsageBar({
           color={paceColor(m.pace, m.kind === "session" ? t.accent : t.muted)}
         />
       ))}
+      {spent && (
+        <View style={[styles.top, styles.barCost]}>
+          <Text numberOfLines={1} style={[styles.barLabel, { color: t.faint }]}>
+            This thread
+          </Text>
+          <Text numberOfLines={1} style={[styles.barLabel, styles.barValue, { color: t.muted }]}>
+            {formatCost(spent.usd)}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -171,6 +191,7 @@ export function UsageSheet({
   provider,
   usage,
   context,
+  cost,
   onClose,
   onCompact,
   onRefresh,
@@ -179,6 +200,7 @@ export function UsageSheet({
   provider: AgentProvider;
   usage?: ProviderUsage;
   context?: ContextUsage;
+  cost?: ThreadCost;
   onClose: () => void;
   onCompact?: () => Promise<void>;
   onRefresh: () => void;
@@ -237,6 +259,25 @@ export function UsageSheet({
                 }}
               />
             )}
+          </View>
+        )}
+        {cost && (
+          <View style={styles.meter}>
+            <View style={styles.top}>
+              <Text style={[styles.label, { color: t.text }]}>This thread</Text>
+              <Text style={[styles.value, { color: t.muted }]}>{formatCost(cost.usd)}</Text>
+            </View>
+            {cost.models.map((m) => (
+              <View key={m.name} style={styles.top}>
+                <Text numberOfLines={1} style={[styles.value, styles.costModel, { color: t.muted }]}>
+                  {m.name}
+                </Text>
+                <Text style={[styles.value, { color: t.muted }]}>{formatCost(m.usd)}</Text>
+              </View>
+            ))}
+            <Text style={[styles.hint, { color: t.muted }]}>
+              {cost.answers} {cost.answers === 1 ? "answer" : "answers"} · priced by the agent
+            </Text>
           </View>
         )}
         {!reportsUsage(provider) ? (
@@ -340,6 +381,8 @@ const styles = StyleSheet.create({
   compact: { flexGrow: 0, marginTop: 6 },
   bar: { flexDirection: "row", gap: 14, paddingHorizontal: 8, paddingTop: 2 },
   barMeter: { flex: 1, gap: 3 },
+  barCost: { gap: 8 },
+  costModel: { flexShrink: 1, marginRight: 12 },
   barLabel: { fontSize: 11 },
   barValue: { fontVariant: ["tabular-nums"] },
   barTrack: { height: 3, borderRadius: 1.5, overflow: "hidden" },

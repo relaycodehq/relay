@@ -64,6 +64,7 @@ import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
+import { threadCost } from "../../shared/thread-cost";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -597,6 +598,9 @@ export class ProjectChats {
       ),
       ...structuredClone(this.waitingIn(saved)),
     };
+  }
+  async cost(id: string) {
+    return threadCost((await this.storage.load(id)).messages);
   }
   image(chatId: string, imageId: string) {
     return this.files.image(chatId, imageId);

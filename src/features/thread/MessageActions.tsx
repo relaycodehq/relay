@@ -1,6 +1,7 @@
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../../shared/chat-activity";
 import { answerSpeed, type Streamed } from "../../../shared/usage";
+import { formatCost } from "../../../shared/thread-cost";
 import { useCopy } from "../../lib/useCopy";
 import { PinMessageButton } from "../../ui/KeepBlock";
 import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
@@ -9,13 +10,14 @@ const speedDetail = (s: Streamed) =>
   `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
   "of writing; thinking, waiting and tool runs don't count";
 
-/** The row under an agent's answer: copy, read aloud, fork, reply, how fast it wrote, when it was sent, and pin. */
+/** The row under an agent's answer: copy, read aloud, fork, reply, how fast it wrote, what it cost, when it was sent, and pin. */
 export function MessageActions({
   id,
   text,
   readingKey,
   sent,
   streamed,
+  cost,
   pending,
   onReply,
   onFork,
@@ -26,6 +28,8 @@ export function MessageActions({
   readingKey?: string;
   sent: number;
   streamed?: Streamed;
+  /** Dollars it cost, where its agent priced it. */
+  cost?: number;
   /** While the answer streams the row keeps its height but stays hidden. */
   pending: boolean;
   onReply: () => void;
@@ -59,6 +63,11 @@ export function MessageActions({
       {streamed && speed !== undefined && (
         <span className="message-speed" title={speedDetail(streamed)}>
           {speed} tok/s
+        </span>
+      )}
+      {!!cost && cost > 0 && (
+        <span className="message-speed" title="What this answer cost, as its agent priced it">
+          {formatCost(cost)}
         </span>
       )}
       <time

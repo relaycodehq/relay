@@ -53,6 +53,8 @@ import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "../quick-switch/QuickSwitchHud";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
+import { ThreadCostButton } from "./ThreadCost";
+import type { ThreadCost } from "../../../shared/thread-cost";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
 import { AccountControl, accountUsageFooter } from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
@@ -131,8 +133,8 @@ export function ProjectComposer({
   below?: ReactNode;
   /** The context window's meter, among the controls. */
   meter?: ReactNode;
-  /** Dollars this thread's answers cost, where their agent priced them. */
-  threadCost?: number;
+  /** What this thread's answers cost, where their agent priced them. */
+  threadCost?: ThreadCost;
   /** What goes with the message besides its text; `complete` when that alone is a message. */
   attachment?: { view: ReactNode; complete: boolean };
   placeholder?: string;
@@ -485,8 +487,10 @@ export function ProjectComposer({
               usage: reportsUsage(to) ? (
                 <UsageRing provider={to} account={accounts.of(to)} />
               ) : (
-                runsOnOpenRouter && (
-                  <OpenRouterCreditButton threadCost={threadCost} />
+                runsOnOpenRouter ? (
+                  <OpenRouterCreditButton threadCost={threadCost?.usd} />
+                ) : (
+                  threadCost && <ThreadCostButton cost={threadCost} />
                 )
               ),
               mic: (

@@ -41,6 +41,7 @@ import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { WorktreeBranchField } from "./WorktreeBranchField";
 import "../changes/branch-picker.css";
+import { threadCost } from "../../../shared/thread-cost";
 
 /** What goes out with the main conversation's next message besides its text. */
 function AttachedContext({
@@ -228,6 +229,7 @@ export function ThreadComposer({
 }) {
   const qc = useQueryClient();
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
+  const cost = useMemo(() => threadCost(shown), [shown]);
   const chatId = chat?.id;
   const counter = useMemo(
     () =>
@@ -387,7 +389,7 @@ export function ThreadComposer({
           />
         )
       }
-      threadCost={shown.reduce((sum, m) => sum + (m.cost ?? 0), 0)}
+      threadCost={cost}
       attachment={
         !root && (selection || workItem || codeRefs.length)
           ? {

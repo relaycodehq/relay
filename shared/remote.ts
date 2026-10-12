@@ -19,6 +19,7 @@ import type { DraftChange, DraftWrite, SharedDraft } from "./drafts";
  * phone app can import this file without the desktop's dependencies.
  */
 import type { AgentProvider } from "./agents";
+import type { ThreadCost } from "./thread-cost";
 import type {
   ChatMessage,
   ChatPending,
@@ -345,6 +346,8 @@ export interface RemoteChat extends Pick<
   root?: string;
   /** Older messages left on the desktop; a phone gets the latest `remoteHistory`. */
   earlier: number;
+  /** What all its answers cost, the earlier ones too, where their agent priced them. Older desktops leave it out. */
+  cost?: ThreadCost;
   queue: RemoteQueued[];
   /** Sent with Send later, by when they go out. */
   scheduled: (RemoteQueued & { at: number })[];

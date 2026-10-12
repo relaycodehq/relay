@@ -48,6 +48,7 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
+import type { ThreadCost } from "../../shared/thread-cost";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -55,6 +56,8 @@ export interface RemoteHost {
   projectPath(projectId: string): string;
   chats(projectId: string): ChatSummary[];
   chat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
+  /** What a thread's answers cost, where their agent priced them. */
+  cost?(id: string): Promise<ThreadCost | undefined>;
   /** The desktop's own dispatch, which validates every call's arguments. */
   dispatch(method: ApiMethod, args: unknown[]): Promise<unknown>;
   name(): string;
@@ -217,6 +220,7 @@ export class RemoteBridge {
       const sending = () => key !== undefined && this.sends.has(key);
       const inFlight = sendId !== undefined && sending();
       const patch = await this.host.chat(id, known);
+      const cost = await this.host.cost?.(id);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
       const sendPending = inFlight || (sendId !== undefined && sending());
@@ -242,6 +246,7 @@ export class RemoteBridge {
           .slice(-history)
           .map((m) => (typeof m === "string" ? m : forPhone(m))),
         earlier: Math.max(0, patch.messages.length - history),
+        ...(cost ? { cost } : {}),
         requests: patch.requests,
         queuePaused: patch.queuePaused,
         running: !!summary?.running,

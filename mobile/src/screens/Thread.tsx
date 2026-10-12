@@ -15,6 +15,7 @@ import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
+import { threadCost } from "../../../shared/thread-cost";
 import { remoteHistory, titleBridge, markedUnreadBridge, workspaceBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
 import { sentSettings, takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
@@ -914,6 +915,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
           running={running}
           disabled={remote.status !== "online"}
           context={latestContext(listed)?.usage}
+          cost={thread?.cost ?? threadCost(all)}
           placeholder={rootId ? "Reply" : undefined}
           draftKey={draftKey}
           onSend={send}

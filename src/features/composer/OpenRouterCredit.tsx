@@ -10,6 +10,7 @@ import {
   type OpenRouterCredit,
 } from "../../../shared/openrouter-credit";
 import { resetsIn } from "../../../shared/provider-usage";
+import { formatCost } from "../../../shared/thread-cost";
 import { api } from "../../lib/api";
 import "../agents/composer-model-picker.css";
 
@@ -120,7 +121,7 @@ export const OpenRouterCreditButton = memo(function OpenRouterCreditButton({
               <div className="credit-thread">
                 <span>This thread</span>
                 <span>
-                  {threadCost < 0.01 ? "<$0.01" : formatDollars(threadCost)}
+                  {formatCost(threadCost)}
                 </span>
               </div>
             )}

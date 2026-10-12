@@ -9,6 +9,7 @@ import { stoppedNote } from "../../../shared/agent-trace";
 import { sentLabel } from "../../../shared/chat-activity";
 import { compactedTokens, formatTokens } from "../../../shared/tokens";
 import { answerSpeed } from "../../../shared/usage";
+import { formatCost } from "../../../shared/thread-cost";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
 import { reloadNote } from "../../../shared/session-reload";
@@ -301,7 +302,7 @@ export const MessageView = memo(function MessageView({
 });
 
 /** A line across the thread with a note in the middle, for compactions and handoffs. */
-/** The desktop's MessageActions: when it was sent, how fast it wrote, copy, read aloud, fork, reply. */
+/** The desktop's MessageActions: when it was sent, how fast it wrote, what it cost, copy, read aloud, fork, reply. */
 function MessageActions({
   message,
   onReply,
@@ -314,12 +315,17 @@ function MessageActions({
   const t = useTheme();
   const [copied, setCopied] = useState(false);
   const speed = answerSpeed(message.streamed);
+  const written =
+    message.streamed && speed !== undefined
+      ? `${formatTokens(message.streamed.output)} out · ${speed} tok/s`
+      : undefined;
+  const cost = message.cost && message.cost > 0 ? formatCost(message.cost) : undefined;
   return (
     <View style={styles.actions}>
       <Text style={[styles.meta, { color: t.faint }]}>{sentLabel(message.ended ?? message.created, new Date())}</Text>
-      {message.streamed && speed !== undefined && (
+      {(written || cost) && (
         <Text style={[styles.meta, { color: t.faint }]}>
-          {formatTokens(message.streamed.output)} out · {speed} tok/s
+          {[written, cost].filter(Boolean).join(" · ")}
         </Text>
       )}
       <Pressable

@@ -932,6 +932,22 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.thread-cost-model {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.thread-cost-model + .thread-cost-model {
+  margin-top: -6px;
+}
+.thread-cost-model > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .credit-spent {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

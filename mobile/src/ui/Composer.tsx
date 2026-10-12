@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { randomUUID } from "expo-crypto";
 import { ArrowUp, ChevronDown, ClipboardPaste, ImagePlus, Laptop, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
+import type { ThreadCost } from "../../../shared/thread-cost";
 import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
 import { composeInto } from "../../../shared/html-render";
@@ -101,6 +102,8 @@ export const Composer = forwardRef<
     running: boolean;
     disabled?: boolean;
     context?: ContextUsage;
+    /** What the thread's answers cost, where their agent priced them. */
+    cost?: ThreadCost;
     /** Resolves `false` when the message wasn't sent, to keep the draft. */
     onSend: (message: Outgoing) => Promise<void | false>;
     onStop?: () => void;
@@ -125,6 +128,7 @@ export const Composer = forwardRef<
     running,
     disabled,
     context,
+    cost,
     onSend,
     onStop,
     onCommand,
@@ -681,7 +685,7 @@ export const Composer = forwardRef<
           </Pressable>
         </View>
       </View>
-      <UsageBar provider={provider} usage={usage} context={context} onPress={() => setSheet("usage")} />
+      <UsageBar provider={provider} usage={usage} context={context} cost={cost} onPress={() => setSheet("usage")} />
       <ModelSheet
         open={sheet === "model"}
         projectId={projectId}
@@ -737,6 +741,7 @@ export const Composer = forwardRef<
         provider={provider}
         usage={usage}
         context={context}
+        cost={cost}
         onRefresh={() => reloadUsage(true)}
         onClose={() => setSheet(undefined)}
         onCompact={
