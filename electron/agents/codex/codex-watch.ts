@@ -53,6 +53,8 @@ const TOOLS = new Set([
   "mcpToolCall",
   "dynamicToolCall",
   "collabAgentToolCall",
+  // How multi-agent v2 shows a spawn.
+  "subAgentActivity",
   "webSearch",
   "imageGeneration",
 ]);

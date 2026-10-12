@@ -10,6 +10,8 @@ const written = new Set([
   "mcpToolCall",
   "dynamicToolCall",
   "collabAgentToolCall",
+  // How multi-agent v2 shows a spawn.
+  "subAgentActivity",
   "webSearch",
   "imageView",
   "imageGeneration",

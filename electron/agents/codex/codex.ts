@@ -6,6 +6,7 @@ import {
 } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { CodexRequestSpeed } from "./codex-speed";
+import { CodexSubagents } from "./codex-subagents";
 import { acquireCodexConnection } from "./codex-connection";
 import {
   codexTokens,
@@ -119,6 +120,33 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   // When the spent window lifts, from Codex's latest word on the account's limits.
   let spentUntil: number | undefined;
   const fileChanges = new Map<string, unknown>();
+  const edited = (id: string, changes: unknown) => {
+    fileChanges.set(id, changes);
+    options.onEdit?.(codexEditedPaths(changes));
+  };
+  const subagents = new CodexSubagents({
+    onActivity: (activity) => options.onActivity?.(activity),
+    onFileChange: edited,
+    onUsage: (last, ran) => {
+      const model = ran || options.choice.model || connection.started?.model;
+      const tokens = codexTokens(last as Parameters<typeof codexTokens>[0]);
+      if (model && requested(tokens))
+        options.onUsage?.({
+          model,
+          tokens,
+          fast: options.choice.fast,
+          subagent: true,
+        });
+    },
+    read: (id) =>
+      wire
+        ? wire.request("thread/read", { threadId: id, includeTurns: false })
+        : Promise.reject(new Error("Codex isn't connected.")),
+    interrupt: (id, turn) =>
+      wire
+        ? wire.request("turn/interrupt", { threadId: id, turnId: turn })
+        : Promise.resolve(),
+  });
   const plans = new CodexPlanRows();
   let watcher: CodexTurnWatch | undefined;
   const stream = new CodexAnswerStream(options.onText, (id, text) =>
@@ -134,6 +162,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   void result.catch(() => {});
   const finish = (error?: Error) => {
     if (settled) return;
+    void subagents.stop();
     settled = true;
     error ? fail(error) : complete(plan || review || stream.answer || said);
   };
@@ -170,7 +199,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     }
     if (!n) return;
     const p = n.params;
-    if (p.threadId && threadId && p.threadId !== threadId) return;
+    // Another thread here is a subagent's; it shows under its agent row, never in the answer.
+    if (p.threadId && threadId && p.threadId !== threadId) {
+      subagents.notification(n, turnId);
+      return;
+    }
     speed.observe(n);
     if (n.method === "account/rateLimits/updated")
       spentUntil = codexSpentUntil(n.params.rateLimits) ?? spentUntil;
@@ -216,10 +249,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         stream.restart();
         options.onSteered?.(item.clientId);
       }
-      if (item.type === "fileChange" && item.id && item.changes) {
-        fileChanges.set(item.id, item.changes);
-        options.onEdit?.(codexEditedPaths(item.changes));
-      }
+      if (item.type === "fileChange" && item.id && item.changes)
+        edited(item.id, item.changes);
+      subagents.spawned(item);
       if (
         n.method === "item/completed" &&
         item.type === "exitedReviewMode" &&
@@ -322,6 +354,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   let interruptTimeout: ReturnType<typeof setTimeout> | undefined;
   const abort = () => {
     if (settled) return;
+    void subagents.stop();
     // Between a goal's turns there is nothing to interrupt.
     if (goals.waiting) {
       goals.dispose();
@@ -505,7 +538,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             features: {
               apps: false,
               plugins: false,
-              multi_agent: false,
+              // Relay's one-offs stay on their own; threads may hand work to subagents.
+              multi_agent: !!policy,
               send_message_to_user_async: !!options.onQuestions,
             },
             ...mcpOverrides,

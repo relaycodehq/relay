@@ -6,6 +6,8 @@ import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { agentError } from "../../../shared/agent-error";
+import type { AgentActivity } from "../../../shared/projects";
+import type { AgentOptions } from "../types";
 vi.mock("../../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../../platform/executables")>()),
   findExecutable: vi.fn(),
@@ -76,7 +78,10 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
 });
 `;
 
-async function ask(wire?: Parameters<typeof fakeCodex>[1]) {
+async function ask(
+  wire?: Parameters<typeof fakeCodex>[1],
+  more?: Partial<AgentOptions>,
+) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-codex-")));
   const log = join(root, "turn.json");
   const cli = await fakeCli(join(root, "codex"), fakeCodex(log, wire));
@@ -90,6 +95,7 @@ async function ask(wire?: Parameters<typeof fakeCodex>[1]) {
     interactionMode: "default",
     signal: new AbortController().signal,
     onText() {},
+    ...more,
   });
   return { answer, log };
 }
@@ -256,4 +262,82 @@ it("leaves a refused request that isn't about the login as Codex's own words", a
   const error = await answer.catch((e) => e);
   expect(error).not.toHaveProperty("kind");
   expect(error.message).toContain("Invalid request: no such model.");
+});
+
+it("folds a subagent's calls under its agent row and keeps its words out of the answer", async () => {
+  const on = (threadId: string, method: string, params: Wire) => ({
+    method,
+    params: { threadId, ...params },
+  });
+  const rows = new Map<string, AgentActivity>();
+  const edits: string[] = [];
+  const { answer } = await ask(
+    {
+      said: [
+        // As Codex does, the run's own turn starts before anything spawns.
+        on("thread", "turn/started", { turn: { id: "turn" } }),
+        on("thread", "item/completed", {
+          item: {
+            id: "call",
+            type: "subAgentActivity",
+            kind: "started",
+            agentThreadId: "child",
+            agentPath: "/root/check_alpha",
+          },
+        }),
+        on("child", "turn/started", { turn: { id: "ct", rootTurnId: "turn" } }),
+        on("child", "item/completed", {
+          item: {
+            id: "patch",
+            type: "fileChange",
+            changes: [{ path: "/repo/c.txt" }],
+            status: "completed",
+          },
+        }),
+        // The parent answers before its subagent's last word arrives.
+        on("thread", "item/completed", {
+          item: {
+            id: "a",
+            type: "agentMessage",
+            phase: "final_answer",
+            text: "Done.",
+          },
+        }),
+        on("child", "item/completed", {
+          item: {
+            id: "said",
+            type: "agentMessage",
+            phase: "final_answer",
+            text: "CHILD-SECRET",
+          },
+        }),
+        on("child", "turn/completed", {
+          turn: { id: "ct", status: "completed" },
+        }),
+        // Another run's subagent on the same server isn't this turn's.
+        on("other", "turn/started", { turn: { id: "ot", rootTurnId: "else" } }),
+        on("other", "item/completed", {
+          item: { id: "x", type: "commandExecution", command: "ls" },
+        }),
+      ],
+    },
+    {
+      onActivity: (a) => rows.set(a.id, a),
+      onEdit: (paths) => edits.push(...paths),
+    },
+  );
+  expect(await answer).toBe("Done.");
+  expect(rows.get("agent:child")).toEqual({
+    id: "agent:child",
+    kind: "agent",
+    label: "Check alpha",
+    status: "complete",
+    detail: "CHILD-SECRET",
+  });
+  expect(rows.get("patch")).toMatchObject({
+    kind: "file",
+    parentId: "agent:child",
+  });
+  expect(rows.has("x")).toBe(false);
+  expect(edits).toEqual(["/repo/c.txt"]);
 });

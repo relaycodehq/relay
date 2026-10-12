@@ -81,7 +81,10 @@ const notificationSchema = z.discriminatedUnion("method", [
     delta: z.string(),
     itemId: lenient(z.string()),
   }),
-  notification("turn/started", { turn: z.object({ id: z.string() }).loose() }),
+  // A subagent's turn names the turn it was started from as its root.
+  notification("turn/started", {
+    turn: z.object({ id: z.string(), rootTurnId: lenient(z.string()) }).loose(),
+  }),
   // Read with codexPlanActivity: a plan Relay can't read shows no row.
   notification("turn/plan/updated", {
     turnId: lenient(z.string()),
