@@ -98,7 +98,29 @@ export function timelineTurns(listed: ChatMessage[]) {
     note = "";
     did = [];
   };
+  // The "Continued on …" row a hand-over's prompt follows. That prompt is
+  // never drawn, so its turn starts at the row, which is.
+  let handoffRow: ChatMessage | undefined;
   for (const m of listed) {
+    if (m.handedOver && (handoffRow || turns.length)) {
+      if (handoffRow) {
+        settle();
+        const { agent } = textOf(m);
+        turns.push({
+          id: handoffRow.id,
+          ...(agent && { agent }),
+          prompt: `Continued on ${handoffRow.handoff!.computer}`,
+          answer: "",
+          answering: false,
+        });
+        turnOf.set(handoffRow.id, turns.length - 1);
+        handoffRow = undefined;
+      }
+      // Without a row to show it, it carries on the turn before.
+      turnOf.set(m.id, turns.length - 1);
+      continue;
+    }
+    handoffRow = m.handoff?.computer ? m : isRow(m) ? handoffRow : undefined;
     const opens =
       (m.role === "user" && !m.side) || (!turns.length && !isRow(m));
     if (opens) {

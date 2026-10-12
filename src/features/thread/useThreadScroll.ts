@@ -264,6 +264,8 @@ export function useThreadScroll({
       if (shown.length - index > visible) setVisible(shown.length - index);
       else if (scrollToPlace(view, returning.current))
         placed.current = view.scrollTop;
+      // Mounted but not drawn: there's nowhere to hold.
+      else returning.current = undefined;
       if (flash) flashWhenShown(scroll, id);
     },
     /** Opens the view at `to` on message `id`, lit, for a jump that has to

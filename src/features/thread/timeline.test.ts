@@ -102,6 +102,46 @@ it("labels resume turns without showing the generated prompt in the timeline", (
   expect(turnOf.get("answer")).toBe(0);
 });
 
+it("starts a hand-over's turn at the Continued on row, not the prompt nobody sees", () => {
+  const { turns, turnOf } = timelineTurns([
+    message("p1", "user", "Fix the flaky checkout spec"),
+    message("a1", "assistant", "Added a wait on the frame."),
+    message("note", "assistant", "# Handoff note", {
+      handoff: { from: "claude", to: "claude", computer: "macmini" },
+    }),
+    message(
+      "kickoff",
+      "user",
+      "@claude Carry on with this work, handed over from MacBook-Pro.",
+      { handedOver: true },
+    ),
+    message("a2", "assistant", "Ran it 20 times: no flakes."),
+    message("p2", "user", "nice"),
+  ]);
+  expect(turns.map((t) => [t.id, t.prompt, t.answer])).toEqual([
+    ["p1", "Fix the flaky checkout spec", "Added a wait on the frame."],
+    ["note", "Continued on macmini", "Ran it 20 times: no flakes."],
+    ["p2", "nice", ""],
+  ]);
+  expect(turns[1]!.agent).toBe("claude");
+  // The row is what's on screen for that turn, so reading it lights it.
+  expect(turnOf.get("note")).toBe(1);
+  expect(turnOf.get("kickoff")).toBe(1);
+  expect(turnOf.get("a2")).toBe(1);
+});
+
+it("folds a hand-over prompt with no row to show into the turn before", () => {
+  const { turns, turnOf } = timelineTurns([
+    message("p1", "user", "Fix it"),
+    message("a1", "assistant", "Done."),
+    message("kickoff", "user", "@claude Carry on.", { handedOver: true }),
+    message("a2", "assistant", "Carried on."),
+  ]);
+  expect(turns.map((t) => t.id)).toEqual(["p1"]);
+  expect(turnOf.get("kickoff")).toBe(0);
+  expect(turnOf.get("a2")).toBe(0);
+});
+
 it("says what an answer that wrote nothing did instead of no answer", () => {
   const call = (id: string, kind: "command" | "file", label: string) => ({
     kind: "activity" as const,
