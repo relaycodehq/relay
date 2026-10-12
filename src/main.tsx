@@ -4,7 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./ui/ui";
 import ProjectShell from "./app/ProjectShell";
 import ThreadWindowShell from "./app/ThreadWindowShell";
-import { drawsWindowControls, WindowControls } from "./app/WindowControls";
+import {
+  drawsWindowControls,
+  followWindowControlsOverlay,
+  WindowControls,
+} from "./app/WindowControls";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
@@ -38,6 +42,7 @@ function startApp() {
   initFocusRing();
   initContextMenuKey();
   initShortcuts();
+  followWindowControlsOverlay();
   const client = new QueryClient({
     defaultOptions: {
       queries: {

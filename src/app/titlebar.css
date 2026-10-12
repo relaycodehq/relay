@@ -40,7 +40,7 @@
 /* Clear of the window controls Windows and Linux draw over the top right. */
 .platform-linux .project-titlebar,
 .platform-win32 .project-titlebar {
-  padding-right: 150px;
+  padding-right: var(--caption-room);
 }
 .project-titlebar-brand {
   /* Narrowed with the sidebar while the panes need the room. */

@@ -33,7 +33,7 @@
 }
 .platform-linux .image-viewer-bar,
 .platform-win32 .image-viewer-bar {
-  padding: 8px 150px 8px 16px;
+  padding: 8px var(--caption-room) 8px 16px;
 }
 .image-viewer-title {
   flex: 1;

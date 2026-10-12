@@ -6,6 +6,23 @@ export const drawsWindowControls =
   typeof navigator !== "undefined" && navigator.platform.startsWith("Win");
 
 /**
+ * Marks the root while Electron's overlay (Linux) is showing, so the titlebars
+ * clear only the buttons the desktop asked for: stock GNOME shows just close.
+ */
+export function followWindowControlsOverlay() {
+  const overlay = (
+    navigator as {
+      windowControlsOverlay?: { visible: boolean } & EventTarget;
+    }
+  ).windowControlsOverlay;
+  if (!overlay) return;
+  const sync = () =>
+    document.documentElement.classList.toggle("wco", overlay.visible);
+  sync();
+  overlay.addEventListener("geometrychange", sync);
+}
+
+/**
  * Minimize, maximize and close, drawn by Relay so they sit centred in the
  * header; Electron's own overlay can only hug the top of the window. Glyphs
  * come from Windows' icon font, so they match every other app's.

@@ -259,9 +259,21 @@ small {
 .platform-win32 .traffic-space {
   width: 14px;
 }
+/* What the titlebars keep clear on the right for the window's buttons: three
+   on Windows, and on Linux whatever Electron's overlay measures, since GTK's
+   button layout decides how many it draws. */
+.platform-linux,
+.platform-win32 {
+  --caption-room: 150px;
+}
+:root.wco .platform-linux {
+  --caption-room: calc(
+    100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 14px
+  );
+}
 .platform-linux .review-titlebar,
 .platform-win32 .review-titlebar {
-  padding-right: 150px;
+  padding-right: var(--caption-room);
 }
 .brand-icon {
   display: inline-flex;
@@ -2080,7 +2092,7 @@ html {
 }
 .platform-linux .empty-titlebar,
 .platform-win32 .empty-titlebar {
-  padding-right: 150px;
+  padding-right: var(--caption-room);
 }
 
 .edit-file-button {

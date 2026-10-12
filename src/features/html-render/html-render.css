@@ -115,7 +115,7 @@
 }
 .platform-linux .html-render-bar,
 .platform-win32 .html-render-bar {
-  padding: 8px 150px 8px 16px;
+  padding: 8px var(--caption-room) 8px 16px;
 }
 .html-render-zoom-level {
   min-width: 48px;

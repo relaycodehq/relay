@@ -1,5 +1,5 @@
 /* Windows caption buttons, centred in the 52px .titlebar. The
-   titlebars keep 150px clear on the right for them. */
+   titlebars keep --caption-room clear on the right for them. */
 .window-controls {
   position: fixed;
   top: 0;
