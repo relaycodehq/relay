@@ -47,6 +47,7 @@ import {
   type MessageProvider,
   type PickerModel,
 } from "./model-picker-catalog";
+import { ModelReload, reloadsModels } from "./ModelReload";
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
 import { useCustomModels, useFavoriteModels } from "./useStoredModels";
@@ -487,6 +488,11 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   </div>
                 </Combobox.Root>
               </div>
+              {category !== "favorites" &&
+                category !== "message" &&
+                reloadsModels(category) && (
+                  <ModelReload key={category} provider={category} />
+                )}
               {reportsUsage(category) &&
                 (account?.footer(category, now) ?? (
                   <UsageMeters usage={usage[category]} now={now} />

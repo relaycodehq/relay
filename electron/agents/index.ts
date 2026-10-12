@@ -41,6 +41,7 @@ import {
   openCodeCommands,
   openCodeDefaults,
   openCodeModels,
+  refreshOpenCodeModels,
 } from "./opencode/catalog";
 import { acpRegistry, acpRuntime, registryRuntime } from "./acp";
 import type { AgentRuntime } from "./types";
@@ -98,6 +99,7 @@ const opencode: AgentRuntime = {
   closeSession: async (key) => closeOpenCodeSession(key),
   subagents: (key) => openCodeSubagentBooks.get(key),
   models: openCodeModels,
+  reloadModels: refreshOpenCodeModels,
   defaults: openCodeDefaults,
   commands: openCodeCommands,
   dispose: async () => disposeOpenCode(),

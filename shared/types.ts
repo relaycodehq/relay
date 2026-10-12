@@ -423,6 +423,15 @@ export interface Api
         ? ClaudeModel[]
         : import("./agents").AgentModel[]
   >;
+  /**
+   * Has the agent list its models afresh, restarting it where that takes
+   * a restart. Refuses while threads run on it, naming them, unless
+   * `stopRunning` says to stop them; they resume once it is back.
+   */
+  reloadAgentModels(
+    provider: import("./agents").AgentProvider,
+    stopRunning: boolean,
+  ): Promise<{ running: { id: string; title: string }[] }>;
   /** What an agent runs in this project where a thread leaves the model on Default. */
   agentDefaults(
     projectId: string,

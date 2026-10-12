@@ -265,6 +265,7 @@ const methods = [
   "setThreadAccount",
   "openRouterCredit",
   "agentModels",
+  "reloadAgentModels",
   "agentDefaults",
   "openExternal",
   "updateState",

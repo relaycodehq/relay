@@ -223,8 +223,8 @@ function lost(message: string) {
       });
 }
 
-export function disposeOpenCode() {
-  lost("Relay is closing.");
+export function disposeOpenCode(reason = "Relay is closing.") {
+  lost(reason);
   listeners.clear();
   stream = undefined;
   stopOpenCodeServer();

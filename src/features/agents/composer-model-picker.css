@@ -1134,3 +1134,51 @@
   opacity: 0.4;
   cursor: default;
 }
+
+.model-reload {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.model-reload > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-reload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.model-reload-button:first-child {
+  margin-left: -6px;
+}
+.model-reload-button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.model-reload-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.model-reload-warning {
+  flex: 1;
+  color: var(--text);
+}
+.model-reload-warning svg {
+  margin-right: 5px;
+  vertical-align: -2px;
+  color: var(--danger);
+}

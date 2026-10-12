@@ -1,7 +1,7 @@
 // A stand-in for `opencode serve`: the HTTP API and event stream Relay uses,
 // with one scripted turn. Requests are appended to RELAY_OPENCODE_CAPTURE.
 const http = require("node:http");
-const { appendFileSync } = require("node:fs");
+const { appendFileSync, existsSync, writeFileSync } = require("node:fs");
 
 const password = process.env.OPENCODE_SERVER_PASSWORD;
 const auth = "Basic " + Buffer.from(`opencode:${password}`).toString("base64");
@@ -12,6 +12,18 @@ const capture = (entry) => {
       JSON.stringify(entry) + "\n",
     );
 };
+/**
+ * `opencode models --refresh` fetches a list with one more model; like the
+ * real one, the server reads it only as it starts.
+ */
+const modelsCache = `${process.env.RELAY_OPENCODE_CAPTURE ?? ""}.models`;
+if (process.argv[2] === "models") {
+  if (process.argv.includes("--refresh") && process.env.RELAY_OPENCODE_CAPTURE)
+    writeFileSync(modelsCache, "refreshed");
+  console.log("Models cache refreshed");
+  process.exit(0);
+}
+const refreshed = existsSync(modelsCache);
 const clients = new Set();
 const sessions = new Map();
 const waiting = new Map();
@@ -406,6 +418,14 @@ const server = http.createServer(async (req, res) => {
               limit: { context: 200000 },
               variants: { high: {} },
             },
+            ...(refreshed && {
+              wonder: {
+                id: "wonder",
+                name: "Wonder",
+                capabilities: { toolcall: true },
+                limit: { context: 200000 },
+              },
+            }),
           },
         },
       ],

@@ -1,3 +1,4 @@
+import { findExecutable, runExecutable } from "../../platform/executables";
 import { memoOnce } from "../../util/memo";
 import type { AgentDefaults, AgentModel } from "../../../shared/agents";
 import type { ProviderCommand } from "../../../shared/commands";
@@ -6,7 +7,7 @@ import {
   reasoningEffortSchema,
   type ReasoningEffort,
 } from "../../../shared/settings";
-import { openCode } from "./client";
+import { disposeOpenCode, openCode } from "./client";
 import {
   commandListSchema,
   configSchema,
@@ -84,6 +85,28 @@ export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
     )
     .sort((a, b) => byName(a.group!, b.group!) || byName(a.name, b.name));
 });
+
+/**
+ * Fetches models.dev afresh, which OpenCode does itself only hourly. The
+ * server reads that list once, as it starts, so `restart` starts it again;
+ * whatever it was running loses its connection.
+ */
+export async function refreshOpenCodeModels(restart: () => Promise<void>) {
+  const done = await runExecutable(
+    await findExecutable("opencode"),
+    ["models", "--refresh"],
+    60_000,
+  );
+  if (done.code !== 0)
+    throw new Error(
+      done.timedOut
+        ? "OpenCode took too long to fetch its models."
+        : `OpenCode couldn't fetch its models: ${done.output.trim().split("\n").at(-1) ?? ""}`,
+    );
+  await restart();
+  disposeOpenCode("OpenCode restarted to load new models.");
+  openCodeModels.forget();
+}
 
 /** The model OpenCode's config gives sessions in `root` that name none. */
 export async function openCodeDefaults(root: string): Promise<AgentDefaults> {

@@ -218,6 +218,22 @@ export function projectHandlers(ctx: ApiContext) {
     agentModels: takes([agentProviderSchema], (provider) =>
       agentRuntime(provider).models(),
     ),
+    reloadAgentModels: takes(
+      [agentProviderSchema, z.boolean()],
+      async (provider, stopRunning) => {
+        const running = projectChats.runningOn(provider);
+        if (running.length && !stopRunning) return { running };
+        let stopped: string[] = [];
+        try {
+          await agentRuntime(provider).reloadModels?.(async () => {
+            stopped = await projectChats.stopRunningOn(provider);
+          });
+        } finally {
+          await projectChats.resumeStopped(stopped);
+        }
+        return { running: [] };
+      },
+    ),
     agentDefaults: takes(
       [idSchema, agentProviderSchema],
       async (id, provider) =>

@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
+import type { AgentProvider } from "../../shared/agents";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
 import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
 import type {
@@ -279,6 +280,40 @@ export class ProjectChats {
   }
   stopAgent(id: string, agentId: string) {
     return this.sessions.stopSubagent(id, agentId);
+  }
+  /** Threads whose running answer comes from `provider`. */
+  runningOn(provider: AgentProvider) {
+    return this.active.ids().flatMap((id) => {
+      const chat = this.storage.cached(id);
+      return chat?.messages.some(
+        (m) => m.status === "streaming" && m.provider === provider,
+      )
+        ? [{ id, title: chat.title }]
+        : [];
+    });
+  }
+  /**
+   * Stops those threads as Stop would, and waits until their agents let go.
+   * Returns their ids, for `resumeStopped` once the agent is back.
+   */
+  async stopRunningOn(provider: AgentProvider) {
+    const ids = this.runningOn(provider).map((c) => c.id);
+    await Promise.all(ids.map((id) => this.cancel(id)));
+    await Promise.all(ids.map((id) => this.active.finished(id)));
+    return ids;
+  }
+  /** Carries on answers Relay stopped itself, as Resume answer would, queue and all. */
+  async resumeStopped(ids: string[]) {
+    for (const id of ids) {
+      const chat = this.storage.cached(id);
+      if (chat?.queuePaused) {
+        delete chat.queuePaused;
+        await this.storage.save(chat);
+      }
+      await this.resume(id).catch((e) =>
+        console.warn("Could not resume the thread after a restart:", e),
+      );
+    }
   }
   /** Background commands and agents still running, across every thread. */
   runningTasks() {

@@ -181,6 +181,12 @@ export interface AgentRuntime {
   signOut?(): Promise<void>;
   /** The models the signed-in agent offers. */
   models(): Promise<AgentModel[]>;
+  /**
+   * Asks the agent for its models afresh, for one that keeps them until it
+   * restarts. `beforeRestart` stops the threads running on it first; they
+   * resume after.
+   */
+  reloadModels?(beforeRestart: () => Promise<void>): Promise<void>;
   /** What threads in `root` run where the model or effort is left on Default. */
   defaults(root: string): Promise<AgentDefaults | null>;
   /** Its own slash commands and skills in `root`, for the composer's menu. */
