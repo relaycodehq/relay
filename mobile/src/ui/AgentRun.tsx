@@ -506,22 +506,18 @@ function WordIn({ animate, children }: { animate: boolean; children: ReactNode }
 }
 
 // The frames of the desktop's .thinking-glyph (src/features/agent-turn/agent-trace.css).
-const glyphs: Partial<Record<ChatMessage["provider"], { frames: string[]; ms: number }>> = {
-  claude: { frames: [..."·✢✳✶✻✽✻✶✳✢"], ms: 150 },
-  codex: { frames: [..."⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"], ms: 80 },
-};
+const asterisk = { frames: [..."·✢✳✶✻✽✻✶✳✢"], ms: 150 };
+const braille = { frames: [..."⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"], ms: 80 };
 
-/** Claude's turning asterisk, or a terminal braille spinner for Codex. */
+/** Claude's turning asterisk, or a terminal braille spinner for every other agent. */
 function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
   const t = useTheme();
-  const glyph = glyphs[provider];
+  const glyph = provider === "claude" ? asterisk : braille;
   const reduced = useReducedMotion();
-  const tick = useTick(glyph?.ms ?? 1000, !!glyph && !reduced);
-  const frame = glyph
-    ? reduced
-      ? glyph.frames[provider === "claude" ? 2 : 0]!
-      : glyph.frames[tick % glyph.frames.length]!
-    : "";
+  const tick = useTick(glyph.ms, !reduced);
+  const frame = reduced
+    ? glyph.frames[provider === "claude" ? 2 : 0]!
+    : glyph.frames[tick % glyph.frames.length]!;
   return (
     <Text accessibilityElementsHidden style={[styles.glyph, { color: t.accent }]}>
       {frame}
