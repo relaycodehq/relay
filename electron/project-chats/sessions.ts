@@ -15,6 +15,8 @@ import {
   readClaudeContext,
 } from "../agents/claude/project";
 import type { Store } from "../app/store";
+import type { SubagentDetail } from "../../shared/subagents";
+import { SubagentArchive } from "./subagent-archive";
 
 /** An agent's session and the last message it heard, on the main conversation or a side one. */
 export function agentSession(
@@ -109,9 +111,17 @@ export class ProviderSessions {
   private used = new Map<string, number>();
   /** Sessions still in the turn a restart cut off; their answers stay streaming. */
   private resuming = new Set<string>();
-  /** Claude's background work and wake-ups show in its threads' summaries. */
+  /** What the threads' agents ran, kept past the sessions that followed them. */
+  private archive: SubagentArchive;
+  /**
+   * Claude's background work and wake-ups show in its threads' summaries;
+   * its background agents start and end with them, between turns too.
+   */
   private unhear = onClaudePending(() => {
-    for (const key of this.keys) this.changed(parseSessionKey(key).chatId);
+    for (const chatId of this.chats()) {
+      this.changed(chatId);
+      void this.keepSubagents(chatId);
+    }
   });
   private sweep = setInterval(() => this.closeIdle(), 60_000);
   constructor(
@@ -120,6 +130,7 @@ export class ProviderSessions {
     /** A turn or side question is running in the thread. */
     private busy: (chatId: string) => boolean = () => false,
   ) {
+    this.archive = new SubagentArchive(dir);
     this.sweep.unref?.();
   }
 
@@ -170,6 +181,9 @@ export class ProviderSessions {
       (key) => parseSessionKey(key).chatId === chatId,
     );
   }
+  private chats() {
+    return new Set([...this.keys].map((key) => parseSessionKey(key).chatId));
+  }
 
   /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
   close(chatId: string) {
@@ -197,6 +211,7 @@ export class ProviderSessions {
   }
 
   private end(key: string) {
+    void this.keepSubagents(parseSessionKey(key).chatId);
     this.keys.delete(key);
     this.used.delete(key);
     for (const runtime of everyAgentRuntime())
@@ -214,6 +229,7 @@ export class ProviderSessions {
     const main = this.key(chatId);
     const keys = this.of(chatId);
     const runtimes = everyAgentRuntime();
+    void this.keepSubagents(chatId);
     let changes: SessionReload | undefined;
     // First, so one still working refuses before anything else closed.
     if (keys.includes(main))
@@ -230,6 +246,7 @@ export class ProviderSessions {
 
   /** Relay is closing: every session ends and stops being heard. */
   async closeAll() {
+    await this.keepAllSubagents();
     await Promise.all(
       [...this.keys].flatMap((key) =>
         everyAgentRuntime().map((runtime) =>
@@ -273,18 +290,48 @@ export class ProviderSessions {
       }),
     );
   }
-  /** The subagents started in a thread, its side conversations' too. */
-  subagents(chatId: string) {
+  /** Every run the thread's live sessions know, whole. */
+  private liveRuns(chatId: string): SubagentDetail[] {
     return this.subagentSources(chatId).flatMap(({ provider, source }) =>
-      source.list().map((run) => ({ ...run, provider })),
+      source.list().flatMap((run) => {
+        const detail = source.detail(run.id);
+        return detail ? [{ ...detail, provider }] : [];
+      }),
     );
   }
-  subagentRun(chatId: string, agentId: string) {
+  /** Keeps what the thread's live sessions know of their subagents on disk. */
+  async keepSubagents(chatId: string) {
+    try {
+      // Read now: a closing session's runs are gone once it has closed.
+      const runs = this.liveRuns(chatId);
+      await this.archive.keep(chatId, runs);
+    } catch (error) {
+      console.warn("Could not keep a thread's subagents:", error);
+    }
+  }
+  /** Before Relay quits or restarts, which ends what follows them. */
+  async keepAllSubagents() {
+    await Promise.all([...this.chats()].map((id) => this.keepSubagents(id)));
+    await Promise.allSettled(this.archive.pending());
+  }
+  /** The subagents started in a thread, its side conversations' too, live or kept. */
+  async subagents(chatId: string) {
+    const live = this.subagentSources(chatId).flatMap(({ provider, source }) =>
+      source.list().map((run) => ({ ...run, provider })),
+    );
+    const ids = new Set(live.map((run) => run.id));
+    const kept = (await this.archive.read(chatId))
+      .filter((run) => !ids.has(run.id))
+      .map(({ trace: _, report: __, ...run }) => run);
+    return [...kept, ...live];
+  }
+  async subagentRun(chatId: string, agentId: string) {
     for (const { provider, source } of this.subagentSources(chatId)) {
       const run = source.detail(agentId);
       if (run) return { ...run, provider };
     }
-    return null;
+    const kept = await this.archive.read(chatId);
+    return kept.find((run) => run.id === agentId) ?? null;
   }
   /** What fills the window of Claude's live session on the thread, or on one side conversation. */
   contextReport(chatId: string, parentId?: string) {

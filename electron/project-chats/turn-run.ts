@@ -500,6 +500,8 @@ export class TurnRunner {
       answer.end();
       // The sidebar hears of the finished answer once the turn lets go of the thread.
       await this.core.storage.save(chat, { holdSummary: true });
+      // The agents the turn ran outlive the session that followed them.
+      void this.core.sessions.keepSubagents(chat.id);
       if (limit) this.host.limited(chat.id, ended.id, limit);
       if (
         ended.status === "complete" &&

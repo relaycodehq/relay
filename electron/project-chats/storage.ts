@@ -223,6 +223,10 @@ export class ChatStorage {
     }).catch((e) =>
       console.warn("Could not remove a dropped thread's images:", e),
     );
+    // Its kept subagents; see ./subagent-archive.
+    await rm(join(this.dir, "subagents", chat.id + ".json"), {
+      force: true,
+    }).catch(() => {});
     await this.store.update((s) => {
       s.chats = (s.chats ?? []).filter((c) => c.id !== chat.id);
     });

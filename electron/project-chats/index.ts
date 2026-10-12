@@ -937,6 +937,7 @@ export class ProjectChats {
     if (!this.disposing) await this.prepareToQuit({ detach, save });
     this.liveHandoff.dispose();
     this.sessions.stopListening();
+    await this.sessions.keepAllSubagents();
     if (detach) {
       for (const runtime of everyAgentRuntime()) runtime.detach?.();
       return;
