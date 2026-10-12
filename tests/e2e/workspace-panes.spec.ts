@@ -268,7 +268,7 @@ test("each thread keeps the panes it had open", async () => {
       );
     };
     const thread = (title: string) =>
-      sidebar.getByRole("button", { name: new RegExp(title) });
+      sidebar.getByRole("button", { name: new RegExp(title) }).first();
 
     const front = page
       .locator('[data-pane="panel"]')
@@ -285,9 +285,15 @@ test("each thread keeps the panes it had open", async () => {
     // A new thread starts with the chat alone, then opens Files beside it.
     await page.keyboard.press(`${mod}+N`);
     await expect.poll(order).toEqual(["chat"]);
+    // Its panel starts on the picker, without the first thread's History.
+    await toggle("Panel").click();
+    await expect(page.locator(".surface-picker")).toBeVisible();
+    await expect(front).toHaveCount(0);
+    await openSurface(page, "Files");
+    await expect.poll(order).toEqual(["chat", "panel"]);
     await send("hello again");
     await rename("Second thread");
-    await openSurface(page, "Files");
+    // Sent, it keeps the tabs it had as a draft.
     await expect.poll(order).toEqual(["chat", "panel"]);
     await expect(front).toHaveText("Files");
 
@@ -302,6 +308,28 @@ test("each thread keeps the panes it had open", async () => {
     await thread("Second thread").click();
     await expect.poll(order).toEqual(["chat", "panel"]);
     await expect(front).toHaveText("Files");
+
+    // A thread the panel never saw doesn't take over the last one's tabs.
+    await thread("First thread").click();
+    await expect(front).toHaveText("History");
+    await page.evaluate(async () => {
+      const project = localStorage.getItem("relay-project-id")!;
+      const chats = await window.relay.projectChats(project);
+      const second = chats.find((c) => c.title === "Second thread")!.id;
+      for (const key of ["relay-thread-panel", "relay-thread-panel-2"]) {
+        const saved = JSON.parse(localStorage.getItem(key) || "[]");
+        localStorage.setItem(
+          key,
+          JSON.stringify(saved.filter(([id]: [string]) => id !== second)),
+        );
+      }
+    });
+    await page.reload();
+    await expect(front).toHaveText("History");
+    await thread("Second thread").click();
+    await openSurface(page, "Files");
+    const panel = page.locator('[data-pane="panel"]');
+    await expect(panel.getByRole("tab")).toHaveText(["Files"]);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { legacyTabs } from "../../lib/workspace-panes";
+import { newThreadProject } from "../composer/drafts";
 import { newTerminalSlot } from "../terminal/terminal-dock";
 
 /** What the panel can show. Terminals stack as several tabs; the rest open once. */
@@ -22,8 +23,10 @@ interface PanelState {
   unseen?: string | null;
 }
 
-const STORAGE_KEY = "relay-thread-panel";
+const STORAGE_KEY = "relay-thread-panel-2";
 const REMEMBERED = 200;
+// The first store handed one thread's tabs to every thread seen after it.
+localStorage.removeItem("relay-thread-panel");
 
 function tabFor(surface: Surface): PanelTab {
   if (surface !== "terminal") return { key: surface, surface };
@@ -70,6 +73,14 @@ const byThread = (() => {
   }
 })();
 
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...byThread]));
+  } catch {
+    // Still remembered for this session.
+  }
+}
+
 function remember({ thread, tabs, front, unseen }: PanelState) {
   if (!thread) return;
   byThread.delete(thread);
@@ -78,11 +89,19 @@ function remember({ thread, tabs, front, unseen }: PanelState) {
     if (byThread.size <= REMEMBERED) break;
     byThread.delete(oldest);
   }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...byThread]));
-  } catch {
-    // Still remembered for this session.
-  }
+  save();
+}
+
+/**
+ * Whether a thread without tabs of its own takes over `from`'s: only a draft
+ * just sent with its panel open does. Switching threads shows the chat alone,
+ * so every other thread starts empty.
+ */
+function handover(from: string, shown: boolean) {
+  if (newThreadProject(from) === undefined || !shown) return;
+  // The next new thread may reuse the draft's id.
+  if (byThread.delete(from)) save();
+  return true;
 }
 
 /** The thread's own tabs; Files and History it had open as panes before the panel. */
@@ -125,7 +144,7 @@ export type PanelTabs = ReturnType<typeof usePanelTabs>;
 
 /**
  * Which surfaces the thread's panel has open as tabs, and which is in front.
- * A thread never seen keeps the tabs on screen, like a draft once sent.
+ * A sent draft keeps the tabs it had; any other thread has only its own.
  * `shown`: the panel is open, so the tab in front counts as seen.
  */
 export function usePanelTabs(thread: string, shown: boolean) {
@@ -136,7 +155,15 @@ export function usePanelTabs(thread: string, shown: boolean) {
   useLayoutEffect(
     () =>
       setState((s) =>
-        s.thread === thread ? s : { ...s, thread, ...recall(thread) },
+        s.thread === thread
+          ? s
+          : {
+              ...s,
+              thread,
+              unseen: null,
+              ...(recall(thread) ??
+                (handover(s.thread, shown) ? {} : { tabs: [], front: null })),
+            },
       ),
     [thread],
   );
