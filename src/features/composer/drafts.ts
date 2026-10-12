@@ -15,12 +15,14 @@ import {
   removeThreadDraft,
   threadDraftKey,
   threadStorage,
+  writeDraftBody,
   writeDraftText,
 } from "../../lib/thread-storage";
 import {
   DRAFT_PREFIX,
   RECORD_PREFIX,
   splitDraftKey,
+  type DraftBody,
 } from "../../lib/thread-draft";
 import {
   draftImageCount,
@@ -57,6 +59,28 @@ export function writeDraft(key: string, value: string) {
   const had = !!readDraft(key).trim();
   writeDraftText(key, value);
   changed(key, had, !!value.trim());
+}
+
+// Told the thread whose draft went out from somewhere other than its
+// composer, a phone's send through this computer, so a composer showing it
+// drops the screenshots and attachments it holds from storage that's moved on.
+const takenListeners = new Set<(thread: string) => void>();
+export function onDraftTaken(listener: (thread: string) => void) {
+  takenListeners.add(listener);
+  return () => void takenListeners.delete(listener);
+}
+export const draftTaken = (thread: string) =>
+  takenListeners.forEach((listener) => listener(thread));
+
+/** Puts what another screen left in a composer: its text, its pills and, for a new thread, where it works. */
+export function setDraftBody(
+  key: string,
+  body: DraftBody,
+  workspace?: ChatWorkspace | null,
+) {
+  const had = !!readDraft(key).trim();
+  writeDraftBody(key, body, workspace);
+  changed(key, had, !!readDraft(key).trim());
 }
 
 // When each thread last had a draft go out, so Activity can tell a sent

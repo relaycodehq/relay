@@ -310,6 +310,9 @@ export function Browser({
                   projects={overview.projects}
                   selected={selected}
                   onOpen={openChat}
+                  onOpenDraft={(d, project) =>
+                    open({ pathname: "/new", params: { project, draft: d.key } })
+                  }
                   onTriage={triage}
                   refreshControl={refresh}
                   bottom={styles.list.paddingBottom}

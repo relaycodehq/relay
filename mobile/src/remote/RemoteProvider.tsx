@@ -44,6 +44,8 @@ import { MissingProjects } from "./missing-projects";
 import { forgetIcons } from "./project-icons";
 import { forgetComputerSeen, reachedComputer } from "./computer-seen";
 import { runningVersion } from "./self-update";
+import { draftHeard, draftsDevice, draftsOffline, draftsOnline, forgetDrafts } from "./drafts";
+import { sendDraftsWith } from "./outbox";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
 
@@ -150,6 +152,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setStatus(s);
           setDetail(why);
           setRoute(next.route);
+          if (s !== "online" && active.current) draftsOffline(active.current);
           if (s === "online") {
             if (active.current) reachedComputer(active.current);
             for (const waiter of onlineWaiters.current) waiter();
@@ -159,12 +162,17 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             // Every (re)connect starts from a fresh overview.
             void next
               .call("overview")
-              .then((o) => current() && setOverview(o))
+              .then((o) => {
+                if (!current()) return;
+                setOverview(o);
+                if (active.current) void draftsOnline(active.current, next.call.bind(next), o);
+              })
               .catch(() => {});
           } else if (s === "denied") pairing.denied(next, why);
         },
         onPaired: (credentials) => {
           if (!current()) return;
+          draftsDevice(credentials.key, credentials.deviceId);
           void saveCredentials(credentials);
           setSaved((list) => [
             ...list.filter((c) => c.key !== credentials.key),
@@ -185,7 +193,9 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             setOverview((o) => o && { ...o, chats: event.chats });
           else if (event.kind === "appearance")
             setOverview((o) => o && { ...o, appearance: event.appearance });
-          else {
+          else if (event.kind === "draft") {
+            if (active.current) draftHeard(active.current, event.change);
+          } else if (event.kind === "message") {
             for (const listener of listeners.current.get(event.chatId) ?? [])
               listener(event);
             for (const listener of everyMessage.current) listener(event);
@@ -194,6 +204,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       });
       const previous = live.relayClient;
       live.relayClient = next;
+      // Drafts the computer holds part of go out through it, on this connection.
+      sendDraftsWith((key, chatId, send) => next.call("sendDraft", key, chatId, send));
       previous?.close();
       setName(next.name);
       setClient(next);
@@ -221,6 +233,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       active.current = id;
       setActiveId(id);
       setOfflineComputer(id);
+      if ("deviceId" in start) draftsDevice(id, start.deviceId);
       setOverview(cached);
       const next = connect(start);
       followUpdates(id, next.call.bind(next));
@@ -292,9 +305,10 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     // Switched away while it came.
     if (live.relayClient === client) {
       setOverview(fresh);
+      if (activeId) void draftsOnline(activeId, client.call.bind(client), fresh);
       return fresh;
     }
-  }, [client]);
+  }, [client, activeId]);
 
   // Thread lists come pushed, projects only with the overview: a thread in a
   // project the phone hasn't heard of (every new Scratchpad thread has a
@@ -441,6 +455,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           }
         }
         forgetOffline(id);
+        forgetDrafts(id);
         forgetComputerSeen(id);
         void forgetIcons(id);
         await clearCredentials(id);

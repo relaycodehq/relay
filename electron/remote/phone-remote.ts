@@ -3,9 +3,11 @@ import { z } from "zod";
 import type { Store } from "../app/store";
 import type { ProjectChatsEvent } from "../../shared/events";
 import { toBase64Url } from "../../shared/remote-crypto";
+import type { DraftChange } from "../../shared/drafts";
 import {
   computerMethods,
   defaultRemotePort,
+  draftsBridge,
   maxDictationChunk,
   maxReadAloudText,
   pairingUrl,
@@ -169,7 +171,7 @@ export class PhoneRemote {
             throw new Error("Read aloud isn't available on this computer.");
           return this.readings.handle(deviceId, readAloudSchema.parse(args[0]));
         }
-        return this.bridge.handle(method, args);
+        return this.bridge.handle(method, args, deviceId);
       },
       // Thread states are watched for phones; computers ask for theirs.
       onPresence: () =>
@@ -206,6 +208,14 @@ export class PhoneRemote {
         { kind: "appearance", appearance },
         (id) => !this.isComputer(id),
       );
+  }
+  /** Tells the phones that know drafts; older ones would take the event for a message. */
+  draftChanged(change: DraftChange) {
+    if (!this.server.listening) return;
+    this.server.broadcast(
+      { kind: "draft", change },
+      (id, bridge) => !this.isComputer(id) && bridge >= draftsBridge,
+    );
   }
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
     if (!this.server.listening) return;

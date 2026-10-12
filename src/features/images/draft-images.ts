@@ -129,6 +129,15 @@ export function onDraftImagesChanged(listener: (key: string) => void) {
   return () => changes()?.removeEventListener("message", heard);
 }
 
+const savedListeners = new Set<(key: string, images: DraftImage[]) => void>();
+/** Told each draft this window saved screenshots for, with what it holds now. */
+export function onDraftImagesSaved(
+  listener: (key: string, images: DraftImage[]) => void,
+) {
+  savedListeners.add(listener);
+  return () => void savedListeners.delete(listener);
+}
+
 /** Keeps a draft's screenshots; none clears its entry. */
 export const saveDraftImages = (
   key: string,
@@ -142,6 +151,7 @@ export const saveDraftImages = (
     written.add(key);
     setCount(key, loose(images));
     changes()?.postMessage(key);
+    savedListeners.forEach((listener) => listener(key, images));
   });
 
 /** The most a screenshot may weigh once stored. */

@@ -5,6 +5,7 @@ import {
 } from "../../../shared/code-references";
 import type { LineQuestion } from "../../../shared/questions";
 import { threadStorage } from "../../lib/thread-storage";
+import { onDraftTaken } from "../composer/drafts";
 
 export type ComposerAttachments = ReturnType<typeof useComposerAttachments>;
 
@@ -25,6 +26,17 @@ export function useComposerAttachments(id: string) {
   useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
   useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);
   useEffect(() => threadStorage(id).codeRefs.save(codeRefs), [id, codeRefs]);
+  // A phone sent the draft through this computer, attachments and all.
+  useEffect(
+    () =>
+      onDraftTaken((thread) => {
+        if (thread !== id) return;
+        setSelection(threadStorage(id).selection.load());
+        setWorkItem(threadStorage(id).workItem.load());
+        setCodeRefs(threadStorage(id).codeRefs.load());
+      }),
+    [id],
+  );
   return {
     selection,
     setSelection,

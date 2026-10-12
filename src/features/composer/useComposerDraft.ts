@@ -22,7 +22,8 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "../images/draft-images";
-import { readDraft, useDraft, writeDraft } from "./drafts";
+import { onDraftTaken, readDraft, useDraft, writeDraft } from "./drafts";
+import { splitDraftKey } from "../../lib/thread-draft";
 import {
   attachedImages,
   dataUrlBytes,
@@ -109,16 +110,23 @@ export function useComposerDraft(
   }, [key]);
   useEffect(() => {
     let live = true;
-    // Another window showing this thread sent, drew on or dropped its screenshots.
-    const off = onDraftImagesChanged((changed) => {
-      if (changed !== key) return;
+    const reload = () => {
       const loaded = loadDraftImages(key);
       imageQueue.current = loaded;
       void loaded.then((saved) => live && setImages(saved)).catch(() => {});
+    };
+    // Another window showing this thread sent, drew on or dropped its screenshots.
+    const off = onDraftImagesChanged((changed) => {
+      if (changed === key) reload();
+    });
+    // A phone sent it through this computer, screenshots and all.
+    const offTaken = onDraftTaken((thread) => {
+      if (splitDraftKey(key)?.thread === thread) reload();
     });
     return () => {
       live = false;
       off();
+      offTaken();
     };
   }, [key]);
   // Screenshots pasted while others are still being prepared wait their turn,

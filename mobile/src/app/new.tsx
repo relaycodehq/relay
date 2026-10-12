@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { chatSettled } from "../../../shared/chat-activity";
@@ -14,6 +14,15 @@ import {
 } from "../../../shared/remote-compose";
 import { loadNewThread, saveNewThread } from "../remote/offline";
 import { deliver } from "../remote/outbox";
+import {
+  editDraft,
+  moveDraft,
+  newThreadDraftKey,
+  pickNewThreadDraft,
+  scratchDraftKey,
+  useDraftWorkspace,
+} from "../remote/drafts";
+import { newDraftProject } from "../../../shared/drafts";
 import { availableWhere, madeHere, projectsByUse, startingWhere, type Made, type Where } from "../remote/new-thread";
 import {
   sameModel,
@@ -40,7 +49,7 @@ export default function NewThread() {
 }
 
 function NewThreadComposer() {
-  const asked = useLocalSearchParams<{ project?: string; scratch?: string }>();
+  const asked = useLocalSearchParams<{ project?: string; scratch?: string; draft?: string }>();
   const remote = useRemote();
   const { desktop, status, overview, active } = remote;
   const composer = useRef<ComposerHandle>(null);
@@ -90,12 +99,35 @@ function NewThreadComposer() {
   }, [picked, status, askScratch]);
   const projectId = picked === "scratch" ? scratch.id : picked;
 
+  // Each project's new thread keeps a draft of its own, shared with the computer;
+  // one picked from the list, maybe started there, opens as it is.
+  const keyFor = useCallback(
+    (where: Where | undefined) => {
+      if (!active || !where) return undefined;
+      if (where === "scratch") return scratchDraftKey;
+      if (asked.draft && newDraftProject(asked.draft) === where) {
+        pickNewThreadDraft(active, where, asked.draft);
+        return asked.draft;
+      }
+      return newThreadDraftKey(active, where);
+    },
+    [active, asked.draft],
+  );
+  const draftKey = useMemo(() => keyFor(picked), [keyFor, picked]);
+  const pick = (next: Where) => {
+    const to = keyFor(next);
+    // What's written follows the new thread to the project picked for it.
+    if (active && draftKey && to && to !== draftKey) moveDraft(active, draftKey, to);
+    setPicked(next);
+  };
+  const draftWorkspace = useDraftWorkspace(active, draftKey);
+
   // Each project starts where its settings say; a pick here holds for it.
   const [workspaces, setWorkspaces] = useState<Record<string, ChatWorkspace>>(
     {},
   );
   const workspace =
-    (picked && workspaces[picked]) || chosen?.workspace || "checkout";
+    (picked && workspaces[picked]) || draftWorkspace || chosen?.workspace || "checkout";
 
   // The composer is there at once, on what the computer said last time; its
   // answer replaces that unless a pick here came first.
@@ -156,10 +188,24 @@ function NewThreadComposer() {
 
   // A thread made for a scheduled message that then failed to go, used again on the next try.
   const made = useRef<{ key: string; chat: Made }>(undefined);
-  const start = async ({ id: messageId, body, settings: using, images, sendAt }: Outgoing) => {
+  const start = async ({ id: messageId, body, settings: using, images, sendAt, held }: Outgoing) => {
     if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
     if (!picked)
       throw new Error("Wait for your computer to list its projects.");
+    // Started on the computer with a screenshot or a branch of its own: the computer starts it.
+    if (held && draftKey) {
+      const message = composeSend(using, body, {
+        id: messageId,
+        ...(sendAt ? { sendAt } : {}),
+        images: images.map(({ name, mimeType, dataUrl }) => ({ name, mimeType, dataUrl })),
+      });
+      const { chatId } = await remote.call("sendDraft", draftKey, null, message);
+      void remote.refresh().catch(() => {});
+      if (!focused.current) return;
+      Keyboard.dismiss();
+      router.replace(`/chat/${chatId}`);
+      return;
+    }
     const where = picked === "scratch" ? await askScratch() : picked;
     const space = !chosen || chosen.plain ? undefined : workspace;
     const key = `${where}:${space ?? ""}`;
@@ -249,7 +295,7 @@ function NewThreadComposer() {
             picked === "scratch" ? "Ask anything" : "What should we work on?"
           }
           onSend={start}
-          draftKey="new-thread"
+          draftKey={draftKey}
           remembered={models}
         />
       )}
@@ -258,9 +304,10 @@ function NewThreadComposer() {
         projects={projects}
         picked={picked}
         workspace={workspace}
-        onPick={setPicked}
+        onPick={pick}
         onWorkspace={(next) => {
           if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
+          if (active && draftKey && picked !== "scratch") editDraft(active, draftKey, { workspace: next });
         }}
         onClose={closeSheet}
         onDismiss={restoreFocus}

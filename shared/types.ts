@@ -649,6 +649,27 @@ export interface Api
   onOpenThread(
     callback: (thread: import("./thread-windows").ThreadWindow) => void,
   ): () => void;
+  /** Every draft this computer shares with its phones; see shared/drafts. */
+  sharedDrafts(): Promise<import("./drafts").SharedDraft[]>;
+  /** This window's edits; each draft as it stands after, null once gone. */
+  writeSharedDrafts(
+    writes: import("./drafts").DraftWrite[],
+  ): Promise<(import("./drafts").SharedDraft | null)[]>;
+  /** Swaps in the version a clash kept, or with `drop` lets it go. */
+  sharedDraftOther(
+    key: string,
+    drop: boolean,
+  ): Promise<import("./drafts").SharedDraft | null>;
+  onSharedDraft(
+    callback: (change: import("./drafts").DraftChange) => void,
+  ): () => void;
+  /** Phones' sends waiting on this page's part of their draft. */
+  waitingDraftSends(): Promise<import("./drafts").HeldSend[]>;
+  onDraftSend(callback: (send: import("./drafts").HeldSend) => void): () => void;
+  finishDraftSend(
+    id: string,
+    result: import("./drafts").HeldSendResult,
+  ): Promise<void>;
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */

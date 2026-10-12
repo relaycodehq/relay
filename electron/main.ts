@@ -66,6 +66,8 @@ import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { questionContext } from "./pull-requests/questions";
 import { PhoneAppFiles } from "./remote/phone-app";
 import { PhoneRemote } from "./remote/phone-remote";
+import { DraftStore, Drafts } from "./drafts";
+import { DraftPages } from "./drafts/pages";
 import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
@@ -128,6 +130,8 @@ let previews: ThreadPreviews | undefined;
 let devices: Devices | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
+/** Unsent drafts, shared with phones; unset until Relay has started. */
+let drafts: { store: DraftStore; service: Drafts } | undefined;
 /** Thread sounds while the window is closed; headless Relay wires none. */
 let menubarSounds: MenubarSounds | undefined;
 /** Handing threads to other computers running Relay. */
@@ -146,12 +150,16 @@ const window = new AppWindow({
   pageGone: (win) => {
     previews?.hideAll(win);
     devices?.hideAll(win);
+    // A phone's send it was finishing goes to the page that comes next.
+    if (win === window.win) drafts?.service.redeliver();
   },
   rendererGone: (details) => {
     projectChecks.stop();
     if (window.win) void offerWindowReport(window.win, details);
   },
 });
+/** A phone's send of a draft goes to a page; with the window closed, a hidden one. */
+const draftPages = new DraftPages(window);
 const menubar = new Menubar(
   () => window.open(),
   () => projectChats?.working() ?? 0,
@@ -168,7 +176,7 @@ const quit = new Quit({
   prepare: async () => {
     await Promise.all([flushWorkingFiles(), flushGitOperations()]);
     await projectChats?.prepareToQuit({ detach: quit.detaching });
-    await store!.flush();
+    await Promise.all([store!.flush(), drafts?.store.flush()]);
   },
   cancelled: () => projectChats?.resumeAfterCancelledQuit(),
   stopping: () => triage?.cancel(),
@@ -188,6 +196,7 @@ const quit = new Quit({
   },
   release: () => {
     menubar.destroy();
+    draftPages.close();
     menubarSounds?.dispose();
     keepAwake.dispose();
     threadTerminals.closeAll();
@@ -451,6 +460,18 @@ app
       },
     );
     chats.setPreviewLinks(serverLinks);
+    const draftStore = new DraftStore(
+      join(app.getPath("userData"), "drafts.json"),
+    );
+    await draftStore.load();
+    const sharedDrafts = new Drafts(draftStore, {
+      changed: (change) => {
+        window.send("relay:shared-draft", change);
+        phoneRemote?.draftChanged(change);
+      },
+      deliver: (request) => draftPages.deliver(request),
+    });
+    drafts = { store: draftStore, service: sharedDrafts };
     const api = apiContext({
       store: loaded,
       projects,
@@ -486,6 +507,7 @@ app
       }),
       previews,
       devices,
+      drafts: sharedDrafts,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
@@ -542,6 +564,7 @@ app
         shrinkImage,
         renderPage: (chatId, renderId, page) =>
           chats.renderPage(chatId, renderId, page),
+        drafts: sharedDrafts,
         dictation: {
           status: () => dictation.current.status,
           open: () => dictation.open(),

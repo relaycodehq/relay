@@ -10,6 +10,7 @@ import { combine } from "./combine";
 import { computerHandlers } from "./computers";
 import type { ApiContext, Handlers } from "./context";
 import { desktopHandlers } from "./desktop";
+import { draftHandlers } from "./drafts";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { projectHandlers } from "./projects";
@@ -48,6 +49,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     soundHandlers(ctx),
     pluginHandlers(ctx),
     desktopHandlers(ctx),
+    draftHandlers(ctx),
     computerHandlers(ctx),
     usageHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.

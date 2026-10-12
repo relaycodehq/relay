@@ -32,4 +32,6 @@ export interface RelayEvents {
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
   "relay:device-hub": DeviceHubState;
+  "relay:shared-draft": import("./drafts").DraftChange;
+  "relay:draft-send": import("./drafts").HeldSend;
 }

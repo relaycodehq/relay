@@ -12,6 +12,8 @@ export interface Outgoing {
   error?: string;
   /** No answer came back, so the desktop may have it all the same. */
   unsure?: boolean;
+  /** The draft it came from, which the desktop holds part of: it goes out through the desktop's composer. */
+  draft?: string;
 }
 
 let clock = 0;

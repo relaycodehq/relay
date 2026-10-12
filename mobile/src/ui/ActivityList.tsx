@@ -21,6 +21,7 @@ import {
 } from "lucide-react-native";
 import {
   chatActivitySections,
+  draftsFirst,
   elapsedLabel,
   shortAge,
   snoozePresets,
@@ -36,6 +37,9 @@ import {
 } from "../../../shared/started-families";
 import { agentsSince } from "../../../shared/waiting";
 import { useRemote } from "../remote/RemoteProvider";
+import { threadDraft, useDrafts, type ListedDraft } from "../remote/drafts";
+import { newDraftProject } from "../../../shared/drafts";
+import { DraftLine, draftTint } from "./DraftLine";
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { useUnread } from "../remote/seen";
 import { foldFamily, useFamilyFolds } from "../remote/family-folds";
@@ -48,6 +52,9 @@ import { mix, type, useTheme, waitingColor, type Palette } from "./theme";
 
 const shelfPage = 5;
 
+/** Activity has no memory of drafts gone; a thread falls back to its place once it has none. */
+const noRaise = new Map<string, never>();
+
 /** Resolves the thread as the desktop left it, or nothing when it refused (and said why). */
 type Triage = (
   chat: RemoteChatSummary,
@@ -59,6 +66,7 @@ export function ActivityList({
   projects,
   selected,
   onOpen,
+  onOpenDraft,
   onTriage,
   refreshControl,
   bottom,
@@ -67,6 +75,8 @@ export function ActivityList({
   projects: RemoteProject[];
   selected?: string;
   onOpen: (chat: RemoteChatSummary) => void;
+  /** A new thread's draft, to carry on writing. */
+  onOpenDraft: (draft: ListedDraft, projectId: string) => void;
   onTriage: Triage;
   refreshControl: ReactElement<RefreshControlProps>;
   /** Room under the list, e.g. for the New thread button. */
@@ -74,14 +84,27 @@ export function ActivityList({
 }) {
   const t = useTheme();
   const unread = useUnread(selected);
-  const { overview } = useRemote();
+  const { overview, active } = useRemote();
+  const drafts = useDrafts(active);
   // Ages and "Sends at" labels move with the clock.
   const now = useNow(30_000);
   const byId = useMemo(
     () => new Map(projects.map((p) => [p.id, p])),
     [projects],
   );
-  const sections = chatActivitySections(chats, now);
+  // Threads holding unsent text come first, as on the desktop; new threads' drafts above them.
+  const drafted = useMemo(
+    () => new Set([...drafts.keys()].filter((k) => !k.startsWith("new:")).map((k) => k.split(":")[0]!)),
+    [drafts],
+  );
+  const fresh = useMemo(
+    () =>
+      [...drafts.values()]
+        .filter((d) => byId.has(newDraftProject(d.key) ?? ""))
+        .sort((a, b) => b.at - a.at),
+    [drafts, byId],
+  );
+  const sections = draftsFirst(chatActivitySections(chats, now), chats, drafted, noRaise);
   const families = startedFamilies(sections.active, sections.settled);
   const [acting, setActing] = useState<RemoteChatSummary>();
   const [shelves, setShelves] = useState({ snoozed: 0, settled: 0 });
@@ -91,8 +114,9 @@ export function ActivityList({
   const [undo, setUndo] = useState<Undo>();
   const closeUndo = useCallback(() => setUndo(undefined), []);
 
-  /** The same guards as the hold menu: nothing settles while working or asking. */
+  /** The same guards as the hold menu: nothing settles while working or asking, nor with a draft that'd keep it here. */
   const swipes = (c: RemoteChatSummary) => {
+    if (drafted.has(c.id)) return {};
     const swiped = async (action: ChatTriage, done: string) => {
       const after = await onTriage(c, action);
       if (after)
@@ -233,6 +257,35 @@ export function ActivityList({
             {families.top.length ? `${families.top.length} open` : "All settled"}
           </Text>
         </View>
+        {fresh.map((d) => {
+          const projectId = newDraftProject(d.key)!;
+          const p = byId.get(projectId)!;
+          return (
+            <Pressable
+              key={d.key}
+              accessibilityRole="button"
+              accessibilityLabel={`New thread in ${p.name}`}
+              onPress={() => onOpenDraft(d, projectId)}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: pressed ? t.hover : draftTint(t) },
+              ]}
+            >
+              <View style={styles.top}>
+                <ProjectBadge project={p} />
+                <Text numberOfLines={1} style={[styles.project, { color: t.muted }]}>
+                  {p.name}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={[styles.title, { color: t.muted }]}>
+                New thread
+              </Text>
+              <View style={styles.meta}>
+                <DraftLine draft={d} t={t} />
+              </View>
+            </Pressable>
+          );
+        })}
         {families.top.map((c) => {
           const started = families.started.get(c.id) ?? [];
           const children = (
@@ -242,6 +295,7 @@ export function ActivityList({
                   <Card
                     chat={s}
                     project={project(s)}
+                    draft={threadDraft(drafts, s.id)}
                     unread={unread(s)}
                     selected={s.id === selected}
                     now={now}
@@ -277,6 +331,7 @@ export function ActivityList({
                 <Card
                   chat={c}
                   project={project(c)}
+                  draft={threadDraft(drafts, c.id)}
                   unread={unread(c)}
                   selected={c.id === selected}
                   now={now}
@@ -298,7 +353,7 @@ export function ActivityList({
             </Fragment>
           );
         })}
-        {!sections.active.length && (
+        {!sections.active.length && !fresh.length && (
           <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: t.accentSoft }]}>
               <Check size={18} color={t.accent} />
@@ -364,6 +419,7 @@ export function ActivityList({
 function Card({
   chat,
   project,
+  draft,
   unread,
   selected,
   now,
@@ -375,6 +431,8 @@ function Card({
 }: {
   chat: RemoteChatSummary;
   project: Pick<RemoteProject, "id" | "name">;
+  /** Unsent text in it, which keeps it bright and tinted. */
+  draft?: ListedDraft;
   unread: boolean;
   selected: boolean;
   now: number;
@@ -389,7 +447,7 @@ function Card({
   // A question in a started thread is the lead's to bring up while they're folded together.
   const asking = !!family?.started.some((s) => s.waiting);
   // Only the open thread, unread news and questions stay bright.
-  const bright = selected || unread || chat.waiting || asking;
+  const bright = selected || unread || chat.waiting || asking || !!draft;
   const state = (
     <CardState
       chat={asking ? { ...chat, waiting: true } : chat}
@@ -408,6 +466,7 @@ function Card({
         onLongPress={onLongPress}
         style={({ pressed }) => [
           styles.compactCard,
+          draft && { backgroundColor: draftTint(t) },
           selected && { backgroundColor: mix(t.text, t.background, 0.09) },
           pressed && { backgroundColor: t.hover },
           !bright && !pressed && styles.dim,
@@ -428,6 +487,7 @@ function Card({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.card,
+        draft && { backgroundColor: draftTint(t) },
         selected && { backgroundColor: mix(t.text, t.background, 0.09) },
         pressed && { backgroundColor: t.hover },
         !bright && !pressed && styles.dim,
@@ -443,9 +503,11 @@ function Card({
       <Text numberOfLines={1} style={[styles.title, { color: t.text }]}>
         {chat.title}
       </Text>
-      {(family || chat.branch || chat.provider || chat.scope === "pr") && (
+      {(family || draft || chat.branch || chat.provider || chat.scope === "pr") && (
         <View style={styles.meta}>
-          {family ? (
+          {draft && !family ? (
+            <DraftLine draft={draft} t={t} />
+          ) : family ? (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: family.open }}

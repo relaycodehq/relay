@@ -31,6 +31,7 @@ import {
   serializeThreadDraft,
   splitDraftKey,
   withBody,
+  type DraftBody,
   type ThreadDraft,
 } from "./thread-draft";
 
@@ -55,6 +56,15 @@ const unwritten = new Map<string, { draft: ThreadDraft; legacy: string[] }>();
 // The last record read per thread, so a keystroke or a render doesn't parse
 // what hasn't changed.
 const parsed = new Map<string, { raw: string; draft: ThreadDraft }>();
+// Told each thread whose record this window wrote or removed.
+const recordListeners = new Set<(thread: string) => void>();
+/** Hears every thread record this window writes or removes, not other windows'. */
+export function onThreadRecord(listener: (thread: string) => void) {
+  recordListeners.add(listener);
+  return () => void recordListeners.delete(listener);
+}
+const recorded = (thread: string) =>
+  recordListeners.forEach((listener) => listener(thread));
 
 function readRecord(thread: string): ThreadDraft {
   const raw = localStorage.getItem(RECORD_PREFIX + thread);
@@ -80,11 +90,15 @@ function readRecord(thread: string): ThreadDraft {
  */
 function commit(thread: string, draft: ThreadDraft, legacy: string[]): void {
   const key = RECORD_PREFIX + thread;
+  let wrote = false;
   try {
-    if (isThreadDraftEmpty(draft)) localStorage.removeItem(key);
-    else {
+    if (isThreadDraftEmpty(draft)) {
+      wrote = localStorage.getItem(key) !== null;
+      localStorage.removeItem(key);
+    } else {
       const raw = serializeThreadDraft(draft);
-      if (localStorage.getItem(key) !== raw) localStorage.setItem(key, raw);
+      wrote = localStorage.getItem(key) !== raw;
+      if (wrote) localStorage.setItem(key, raw);
     }
     parsed.delete(thread);
   } catch {
@@ -93,6 +107,7 @@ function commit(thread: string, draft: ThreadDraft, legacy: string[]): void {
   }
   unwritten.delete(thread);
   for (const old of legacy) localStorage.removeItem(old);
+  if (wrote) recorded(thread);
 }
 
 /**
@@ -152,6 +167,7 @@ export function removeThreadDraft(thread: string): string[] {
   unwritten.delete(thread);
   parsed.delete(thread);
   localStorage.removeItem(RECORD_PREFIX + thread);
+  recorded(thread);
   return had;
 }
 
@@ -163,6 +179,38 @@ export function readDraftText(key: string): string {
 export function writeDraftText(key: string, text: string) {
   const at = splitDraftKey(key);
   if (at) updateThreadDraft(at.thread, (d) => withBody(d, at.reply, { text }));
+}
+
+/**
+ * A composer's text and pills as another screen left them; for a new
+ * thread's main composer, also where it will work (null for its project's
+ * default).
+ */
+export function writeDraftBody(
+  key: string,
+  body: DraftBody,
+  workspace?: ChatWorkspace | null,
+) {
+  const at = splitDraftKey(key);
+  if (!at) return;
+  updateThreadDraft(at.thread, (d) => {
+    const next = withBody(d, at.reply, body);
+    return workspace === undefined
+      ? next
+      : { ...next, workspace: workspace ?? undefined };
+  });
+}
+
+/** Every thread with a draft record in this window's storage. */
+export function threadRecordIds(): string[] {
+  migrateDrafts();
+  const ids = new Set(unwritten.keys());
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(RECORD_PREFIX) && key.length > RECORD_PREFIX.length)
+      ids.add(key.slice(RECORD_PREFIX.length));
+  }
+  return [...ids];
 }
 
 /** Moves one composer's text and pills to another's, in one write each way. */

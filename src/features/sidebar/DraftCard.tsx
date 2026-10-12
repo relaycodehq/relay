@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, SquarePen } from "lucide-react";
+import { ArrowUp, Smartphone, SquarePen } from "lucide-react";
 import {
   loadDraftScope,
   useDraft,
@@ -18,6 +18,7 @@ import {
 import { useAISettings } from "../agents/useAISettings";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { agentName } from "../../../shared/agents";
+import { useSharedDraft } from "../composer/draft-sync";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
@@ -77,13 +78,21 @@ export function DraftCard({
   );
 }
 
-/** The unsent text, where a card shows its branch. */
+/** The unsent text, where a card shows its branch; a phone's mark when it was started there. */
 export function DraftLine({ draftKey }: { draftKey: string }) {
   const text = useDraft(draftKey).replace(/\s+/g, " ").trim();
   const images = useDraftImageCount(draftKey);
+  const phone = useSharedDraft(draftKey)?.origin.startsWith("phone:");
   return (
-    <span className="sb-card-draft">
-      <SquarePen size={11} aria-label="Draft" />
+    <span
+      className="sb-card-draft"
+      title={phone ? "Started on your phone" : undefined}
+    >
+      {phone ? (
+        <Smartphone size={11} aria-label="Draft started on your phone" />
+      ) : (
+        <SquarePen size={11} aria-label="Draft" />
+      )}
       <span>
         {text || (images === 1 ? "Screenshot" : `${images} screenshots`)}
       </span>

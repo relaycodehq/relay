@@ -38,6 +38,14 @@ import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
+import {
+  draftKeySchema,
+  draftWriteSchema,
+  type DraftDevice,
+  type DraftWrite,
+  type SharedDraft,
+} from "../../shared/drafts";
+import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
 
@@ -66,6 +74,18 @@ export interface RemoteHost {
   dictation?: SpeechService;
   /** The voice phones hear answers in. */
   readAloud?: VoiceService;
+  /** Drafts shared with phones; see ../drafts. */
+  drafts?: {
+    list(): SharedDraft[];
+    write(write: DraftWrite, by: DraftDevice): SharedDraft | null;
+    other(key: string, drop: boolean): SharedDraft | null;
+    holds(key: string): boolean;
+    sendHeld(
+      key: string,
+      chatId: string | undefined,
+      send: ProjectChatSend,
+    ): Promise<{ chatId: string }>;
+  };
   /** Takes threads other computers hand over; see ../handoff/receiver. */
   handoffs?: {
     handle(
@@ -158,7 +178,7 @@ export class RemoteBridge {
   /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
   private api: Omit<
     RemoteApi,
-    "reportApp" | "dictate" | "readAloud" | ComputerMethod
+    "reportApp" | "dictate" | "readAloud" | "saveDraft" | ComputerMethod
   > = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
@@ -180,6 +200,7 @@ export class RemoteBridge {
         ...(this.host.appearance?.()
           ? { appearance: this.host.appearance() }
           : {}),
+        ...(this.host.drafts ? { drafts: this.host.drafts.list() } : {}),
         projects: projects.map((p) => ({
           id: p.id,
           name: p.name,
@@ -309,32 +330,39 @@ export class RemoteBridge {
       return signature === known ? null : { signature, run };
     },
     desktop: async (method, args) => {
-      const send =
-        method === "sendProjectChat"
-          ? {
-              chatId: idSchema.parse(args[0]),
-              id: projectChatSendSchema.parse(args[1]).id,
-            }
-          : undefined;
-      const key = send && sendKey(send.chatId, send.id);
-      if (key && this.acceptedSends.has(key)) return;
-      // A reconnect may retry before worktree creation finishes: both await the same send.
-      let job = key ? this.sends.get(key) : undefined;
-      if (!job) {
-        job = this.host.dispatch(method, args);
-        if (key) this.sends.set(key, job);
+      if (method === "sendProjectChat")
+        return this.tracked(
+          idSchema.parse(args[0]),
+          projectChatSendSchema.parse(args[1]).id,
+          () => this.host.dispatch(method, args),
+        );
+      let value = await this.host.dispatch(method, args);
+      if (method === "projectChatAgent" && value)
+        value = forPhoneRun(value as SubagentDetail);
+      // Stops and triage move thread states; phones hear before the call returns.
+      this.refresh();
+      return value;
+    },
+    draftOther: async (key, drop) => this.requireDrafts().other(key, drop),
+    sendDraft: async (key, chatId, send) => {
+      const drafts = this.requireDrafts();
+      // Nothing of the desktop's left in it: it goes as any send does.
+      if (!drafts.holds(key)) {
+        if (!chatId)
+          throw new Error(
+            "This draft changed on the computer. Check it and send it again.",
+          );
+        await this.api.desktop("sendProjectChat", [chatId, send]);
+        return { chatId };
       }
-      try {
-        let value = await job;
-        if (key) this.acceptedSends.add(key);
-        if (method === "projectChatAgent" && value)
-          value = forPhoneRun(value as SubagentDetail);
-        // Sends, stops and triage move thread states; phones hear before the call returns.
+      if (!chatId) {
+        const made = await drafts.sendHeld(key, undefined, send);
         this.refresh();
-        return value;
-      } finally {
-        if (key && this.sends.get(key) === job) this.sends.delete(key);
+        return made;
       }
+      return this.tracked(chatId, send.id, () =>
+        drafts.sendHeld(key, chatId, send),
+      ).then(() => ({ chatId }));
     },
     phoneAppFile: async (path, offset) => {
       if (!this.host.phoneApp)
@@ -361,9 +389,55 @@ export class RemoteBridge {
       return changed;
     },
   };
-  async handle(method: RemoteMethod, args: unknown[]): Promise<unknown> {
+  /**
+   * A send, once per id: a reconnect may retry before worktree creation
+   * finishes, and both await the same one; once it's in, a retry is a no-op
+   * that still counts as a receipt.
+   */
+  private async tracked<T>(chatId: string, id: string, run: () => Promise<T>) {
+    const key = sendKey(chatId, id);
+    if (this.acceptedSends.has(key)) return;
+    let job = this.sends.get(key);
+    if (!job) {
+      job = run();
+      this.sends.set(key, job);
+    }
+    try {
+      const value = await job;
+      this.acceptedSends.add(key);
+      // Sends move thread states; phones hear before the call returns.
+      this.refresh();
+      return value as T;
+    } finally {
+      if (this.sends.get(key) === job) this.sends.delete(key);
+    }
+  }
+  private requireDrafts() {
+    if (!this.host.drafts) throw new Error("This computer keeps no drafts.");
+    return this.host.drafts;
+  }
+  /** `deviceId` is the phone asking, which a draft it writes names. */
+  async handle(
+    method: RemoteMethod,
+    args: unknown[],
+    deviceId?: string,
+  ): Promise<unknown> {
     const a = this.api;
     switch (method) {
+      case "saveDraft":
+        if (!deviceId) throw new Error("Only a phone can do that.");
+        return this.requireDrafts().write(
+          draftWriteSchema.parse(args[0]),
+          `phone:${deviceId}`,
+        );
+      case "draftOther":
+        return a.draftOther(draftKeySchema.parse(args[0]), z.boolean().parse(args[1]));
+      case "sendDraft":
+        return a.sendDraft(
+          draftKeySchema.parse(args[0]),
+          args[1] == null ? null : idSchema.parse(args[1]),
+          projectChatSendSchema.parse(args[2]),
+        );
       case "overview":
         return a.overview();
       case "chat":

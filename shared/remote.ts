@@ -11,6 +11,7 @@ import type {
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
 import type { PhoneAppReport } from "./phone-app";
+import type { DraftChange, DraftWrite, SharedDraft } from "./drafts";
 /**
  * Relay's phone remote: a phone pairs with the desktop over Tailscale or, when
  * the desktop allows it, the local network, and drives its threads. The desktop hosts the
@@ -164,7 +165,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 18;
+export const remoteBridgeVersion = 19;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -194,6 +195,13 @@ export const markedUnreadBridge = 15;
 export const workspaceBridge = 16;
 /** From here phones may fetch the pages an answer showed with show_html (`renderPage`). */
 export const renderBridge = 17;
+/**
+ * From here a desktop shares its drafts with phones (shared/drafts): in the
+ * overview, as `draft` events, and through `saveDraft`, `draftOther` and
+ * `sendDraft`. Older phones never hear the events, which they'd take for a
+ * thread's message.
+ */
+export const draftsBridge = 19;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -276,6 +284,8 @@ export interface RemoteOverview {
   dictation?: DictationModelState["status"];
   /** Whether the desktop has a voice ready to read answers to phones; missing before version 12. */
   readAloud?: boolean;
+  /** Every unsent draft, the desktop's and the phones'; missing before `draftsBridge`. */
+  drafts?: SharedDraft[];
   projects: RemoteProject[];
   /** Unarchived threads with messages, newest first. */
   chats: RemoteChatSummary[];
@@ -515,6 +525,20 @@ export interface RemoteApi {
   image(source: RemoteImageSource, max: number): Promise<string>;
   /** One page of a thread's render, as the agent wrote it; missing before `renderBridge`. */
   renderPage(chatId: string, renderId: string, page: number): Promise<string>;
+  /** The phone's edit of a draft; the draft as it stands after, null once gone. From `draftsBridge`. */
+  saveDraft(write: DraftWrite): Promise<SharedDraft | null>;
+  /** Swaps in the version a clash kept, or with `drop` lets it go. From `draftsBridge`. */
+  draftOther(key: string, drop: boolean): Promise<SharedDraft | null>;
+  /**
+   * Sends a draft the desktop holds part of (a screenshot, a code reference)
+   * from the desktop's composer, with the phone's message; `chatId` is null
+   * for a new thread. The thread it went to. From `draftsBridge`.
+   */
+  sendDraft(
+    key: string,
+    chatId: string | null,
+    send: ProjectChatSend,
+  ): Promise<{ chatId: string }>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
@@ -577,6 +601,9 @@ export const remoteMethods = [
   "activityDetail",
   "image",
   "renderPage",
+  "saveDraft",
+  "draftOther",
+  "sendDraft",
   "computerProjects",
   "handoffUpload",
   "receiveHandoff",
@@ -618,6 +645,8 @@ export const updateMethods = [
  * of Git; a dead link still fails them within a minute, as its ticks stop.
  */
 export const slowRemoteMethods: readonly RemoteMethod[] = [
+  // Through the desktop's page, which may have to open first, then a send's own.
+  "sendDraft",
   "receiveHandoff",
   "handBack",
   "handoffUpload",
@@ -653,6 +682,8 @@ export type RemoteEvent =
   /** Thread states moved: something started, finished or asked a question. */
   | { kind: "chats"; chats: RemoteChatSummary[] }
   | { kind: "appearance"; appearance: PhoneAppearance }
+  /** A draft changed; only to phones from `draftsBridge`. */
+  | { kind: "draft"; change: DraftChange }
   /** To the computer a live handoff came from: what runs and waits in its thread now. */
   | { kind: "handoff"; id: string; live: HandoffLive };
 

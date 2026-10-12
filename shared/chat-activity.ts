@@ -375,3 +375,51 @@ export function shortAge(then: number, now: number): string {
   if (days < 7) return `${days}d`;
   return `${Math.floor(days / 7)}w`;
 }
+
+/** A thread that held a draft in Activity, for `draftsFirst` to place. */
+export interface DraftRaise {
+  /** When it last had one. */
+  at: number;
+  /** That one went out rather than being cleared away. */
+  sent: boolean;
+}
+
+/**
+ * Activity with the threads holding unsent text first, newest first as
+ * `all` lists them, settled ones included: the draft waits on you. Snoozed
+ * threads stay on their shelf, even when their draft is edited or sent.
+ * One whose draft is gone keeps its place by when it last had one, until
+ * newer activity passes it. Off a shelf, it stays only if the draft went out
+ * and it hasn't been settled or snoozed since; a cleared one goes back.
+ */
+export function draftsFirst<
+  C extends Pick<ChatSummary, "id" | "updated" | "settledAt" | "snoozedAt">,
+>(
+  sections: Record<ChatActivitySection, C[]>,
+  all: C[],
+  drafted: ReadonlySet<string>,
+  raised: ReadonlyMap<string, DraftRaise>,
+): Record<ChatActivitySection, C[]> {
+  if (!drafted.size && !raised.size) return sections;
+  const active = new Set(sections.active);
+  const snoozed = new Set(sections.snoozed);
+  const awake = all.filter((c) => !snoozed.has(c));
+  const sentOff = (c: C) => {
+    const raise = raised.get(c.id);
+    return (
+      !!raise?.sent &&
+      (c.settledAt ?? 0) < raise.at &&
+      (c.snoozedAt ?? 0) < raise.at
+    );
+  };
+  const stays = (c: C) => !drafted.has(c.id) && (active.has(c) || sentOff(c));
+  const key = (c: C) => Math.max(c.updated, raised.get(c.id)?.at ?? 0);
+  return {
+    active: [
+      ...awake.filter((c) => drafted.has(c.id)),
+      ...awake.filter(stays).sort((a, b) => key(b) - key(a)),
+    ],
+    snoozed: sections.snoozed,
+    settled: sections.settled.filter((c) => !drafted.has(c.id) && !sentOff(c)),
+  };
+}

@@ -33,6 +33,7 @@ import type { AgentAccounts } from "../agents/accounts";
 import type { ProjectAdding } from "../project-add";
 import type { Devices } from "../devices";
 import type { ThreadPreviews } from "../preview";
+import type { Drafts } from "../drafts";
 
 export interface Services {
   store: Store;
@@ -61,6 +62,8 @@ export interface Services {
   agentUpdates: AgentUpdates;
   agentAccounts: AgentAccounts;
   projectAdding: ProjectAdding;
+  /** Unsent drafts, shared with phones. */
+  drafts: Drafts;
   /** Desktop browser views; absent when Relay runs headless. */
   previews?: ThreadPreviews;
   /** Simulators and emulators in the panel; absent when Relay runs headless. */

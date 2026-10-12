@@ -25,6 +25,7 @@ import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
 import { draftRecipient } from "../../../shared/recipient";
 import { AgentMissingNotice } from "./AgentMissingNotice";
+import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
@@ -296,6 +297,7 @@ export function ProjectComposer({
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
       <AgentMissingNotice provider={to} />
+      <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}
         open={quick.hud.open && quick.presets.length > 0}

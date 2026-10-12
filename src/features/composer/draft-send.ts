@@ -38,6 +38,7 @@ import {
   type ActivityDraft,
 } from "./drafts";
 import { attachedImages, numberImages } from "../../../shared/image-refs";
+import { unsent } from "../../../shared/drafts";
 import { startsWithCommand } from "../../../shared/commands";
 import { flattenSketch } from "../images/sketch";
 import { aiSettingsQuery } from "../agents/useAISettings";
@@ -157,8 +158,4 @@ export async function sendDraft(
   return target;
 }
 
-/** The draft once `sent` went: what was typed after it stays, a rewrite stays whole. */
-export function unsent(draft: string, sent: string) {
-  const now = draft.trim();
-  return now.startsWith(sent) ? now.slice(sent.length).trim() : draft;
-}
+export { unsent };

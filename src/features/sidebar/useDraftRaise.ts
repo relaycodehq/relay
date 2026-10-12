@@ -1,13 +1,8 @@
 import { useRef } from "react";
+import type { DraftRaise } from "../../../shared/chat-activity";
 import { draftSentAt } from "../composer/drafts";
 
-/** A thread that held a draft in Activity, for `draftsFirst` to place. */
-export interface DraftRaise {
-  /** When it last had one. */
-  at: number;
-  /** That one went out rather than being cleared away. */
-  sent: boolean;
-}
+export type { DraftRaise } from "../../../shared/chat-activity";
 
 /** Activity's threads that held a draft, kept for this window only. */
 export function useDraftRaise(

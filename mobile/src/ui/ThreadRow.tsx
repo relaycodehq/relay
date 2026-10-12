@@ -11,6 +11,9 @@ import type { RemoteChatSummary } from "../../../shared/remote";
 import { agentsSince } from "../../../shared/waiting";
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { ProviderIcon } from "./ProviderIcon";
+import { useRemote } from "../remote/RemoteProvider";
+import { threadDraft, useDrafts } from "../remote/drafts";
+import { DraftLine, draftTint } from "./DraftLine";
 import { type, useTheme } from "./theme";
 
 export function ago(at: number) {
@@ -47,6 +50,7 @@ export function ThreadRow({
   onLongPress?: () => void;
 }) {
   const t = useTheme();
+  const draft = threadDraft(useDrafts(useRemote().active), chat.id);
   const agents = chat.running ? undefined : agentsSince(chat.pending);
   const working = chat.running || !!agents;
   // A native /goal keeps the agent going across turns until it's met.
@@ -67,6 +71,7 @@ export function ThreadRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
+        draft && { backgroundColor: draftTint(t) },
         selected && { backgroundColor: t.selected },
         pressed && { backgroundColor: t.hover },
       ]}
@@ -84,17 +89,27 @@ export function ThreadRow({
         <Text numberOfLines={1} style={[styles.title, { color: t.text }]}>
           {chat.title}
         </Text>
-        <Text numberOfLines={1} style={[styles.meta, { color: t.muted }]}>
-          <Text style={chat.waiting ? { color: t.accent } : undefined}>
-            {state}
+        {draft ? (
+          <View style={styles.drafted}>
+            <Text numberOfLines={1} style={[styles.meta, styles.state, { color: t.muted }]}>
+              <Text style={chat.waiting ? { color: t.accent } : undefined}>{state}</Text>
+              {project ? ` · ${project}` : ""} ·{" "}
+            </Text>
+            <DraftLine draft={draft} t={t} />
+          </View>
+        ) : (
+          <Text numberOfLines={1} style={[styles.meta, { color: t.muted }]}>
+            <Text style={chat.waiting ? { color: t.accent } : undefined}>
+              {state}
+            </Text>
+            {project ? ` · ${project}` : ""}
+            {goal
+              ? ` · ${goal.objective}`
+              : chat.branch
+                ? ` · ${chat.branch}`
+                : ""}
           </Text>
-          {project ? ` · ${project}` : ""}
-          {goal
-            ? ` · ${goal.objective}`
-            : chat.branch
-              ? ` · ${chat.branch}`
-              : ""}
-        </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -112,4 +127,6 @@ const styles = StyleSheet.create({
   text: { flex: 1, gap: 3 },
   title: { fontSize: type.body, fontWeight: "500" },
   meta: { fontSize: type.tiny },
+  drafted: { flexDirection: "row", alignItems: "center" },
+  state: { flexShrink: 0, maxWidth: "60%" },
 });

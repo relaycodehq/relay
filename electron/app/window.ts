@@ -55,6 +55,8 @@ export class AppWindow {
   private closingToQuit = false;
   /** A thread to open once the main window's page asks, as it loads. */
   private pendingThread?: ThreadWindow;
+  /** Hidden pages of Relay's own that may call the API, as a phone's draft send opens. */
+  private helpers = new Set<BrowserWindow>();
 
   constructor(
     private hooks: {
@@ -170,9 +172,17 @@ export class AppWindow {
     else app.setBadgeCount(count);
   }
 
+  /** Lets a hidden page of Relay's own call the API, until it closes. */
+  trustHelper(win: BrowserWindow) {
+    this.helpers.add(win);
+    win.on("closed", () => this.helpers.delete(win));
+  }
+
   /** Only Relay's own page, in a Relay window's main frame, may call the API. */
   trusts(event: IpcMainInvokeEvent) {
-    const win = this.all().find((w) => w.webContents === event.sender);
+    const win = [...this.all(), ...this.helpers].find(
+      (w) => w.webContents === event.sender,
+    );
     return (
       !!win &&
       event.senderFrame === win.webContents.mainFrame &&

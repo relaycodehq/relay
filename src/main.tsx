@@ -19,9 +19,13 @@ import { playPushedSounds } from "./features/sounds/pushed-sounds";
 import { startRegistryAgents } from "./features/agents/registry-agents";
 import { followThreadWindows } from "./features/thread-windows/thread-windows";
 import { threadWindowOf } from "../shared/thread-windows";
-// The menubar's hidden sound player loads this page too, for its sounds alone.
-if (window.relay && new URLSearchParams(location.search).has("sounds"))
-  playPushedSounds();
+import { startDraftSync } from "./features/composer/draft-sync";
+import { followHeldSends } from "./features/composer/held-sends";
+const search = new URLSearchParams(location.search);
+// The menubar's hidden sound player loads this page too, for its sounds
+// alone, and so does the hidden one that sends a phone's draft.
+if (window.relay && search.has("sounds")) playPushedSounds();
+else if (window.relay && search.has("drafts")) followHeldSends();
 else startApp();
 
 function startApp() {
@@ -50,6 +54,9 @@ function startApp() {
     followThreadWindows();
     // The main window plays every thread's sounds, its own windows' too.
     if (!thread) followSounds(client);
+    // Each window shares what's typed in it; the main one takes what came from elsewhere.
+    startDraftSync({ takes: !thread });
+    if (!thread) followHeldSends();
     // Threads on a registry agent need its name before anything lists them.
     startRegistryAgents();
   }

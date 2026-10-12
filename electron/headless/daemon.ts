@@ -70,6 +70,7 @@ import { questionContext } from "../pull-requests/questions";
 import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
 import { PhoneAppFiles } from "../remote/phone-app";
 import { PhoneRemote } from "../remote/phone-remote";
+import { DraftStore, Drafts } from "../drafts";
 import { applyLinkedTools } from "../source-control";
 import {
   agentProjects,
@@ -127,6 +128,12 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const store = new Store(home);
   await store.load();
   let phoneRemote: PhoneRemote | undefined;
+  // Only phones write drafts here: with no page, nothing holds a part of one.
+  const draftStore = new DraftStore(join(home, "drafts.json"));
+  await draftStore.load();
+  const drafts = new Drafts(draftStore, {
+    changed: (change) => phoneRemote?.draftChanged(change),
+  });
   let handoffs: { computers: Computers; sender: Handoffs } | undefined;
   let agentHosts: AgentHosts | undefined;
   // The host runs from a plain file beside this one.
@@ -311,6 +318,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       appData: home,
       send: () => {},
     }),
+    drafts,
   });
   const dispatch: Dispatch = createDispatch(api);
   const summaries = new ChatSummaryFeed(api.listChats, (event) =>
@@ -382,6 +390,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       shrinkImage: (dataUrl) => compressImage(dataUrl),
       renderPage: (chatId, renderId, page) =>
         chats.renderPage(chatId, renderId, page),
+      drafts,
       dictation: speech.forPhones.dictation,
       readAloud: speech.forPhones.readAloud,
       handoffs: receiver,
@@ -442,6 +451,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         await chats.dispose({ detach });
         await Promise.all([
           store.flush(),
+          draftStore.flush(),
           flushWorkingFiles(),
           flushGitOperations(),
         ]);

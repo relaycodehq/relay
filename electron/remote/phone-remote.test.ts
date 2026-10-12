@@ -1050,3 +1050,25 @@ it("carries manual unread marks in overview and live summaries, and clears them"
     ).toBe(true),
   );
 });
+
+it("tells only phones that know drafts when one changes; older ones would take it for a message", async () => {
+  const { remote, summary } = await desktop();
+  const pair = async (device: string) => {
+    const link = parsePairingUrl((await remote.pairing()).url)!;
+    const p = phone({ link, device });
+    await p.until("online");
+    return { link, credentials: p.credentials()!, p };
+  };
+  const old = await pair("Old phone");
+  old.p.client.close();
+  const current = await pair("Pixel");
+  await current.p.client.call("overview");
+  const older = await olderPhone(old.link.port, old.link.key, old.credentials);
+
+  remote.draftChanged({ key: chatId, draft: null });
+  await current.p.untilEvents((events) => events.some((e) => e.kind === "draft"));
+  // What comes after the draft reaches the older phone, so the draft had its chance to.
+  remote.chatsEvent({ projectId: summary.projectId, chats: [] });
+  await older.untilEvents((events) => events.some((e) => e.kind === "chats"));
+  expect(older.events().some((e) => e.kind === "draft")).toBe(false);
+});

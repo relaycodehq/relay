@@ -18,11 +18,11 @@ type Desktop = RemoteClient["desktop"];
 const shelf = () => new Directory(Paths.document, "relay-outbox");
 const shelved = (id: string) => new File(shelf(), `${id}.json`);
 
-function keep({ computer, chatId, send, created }: Outgoing) {
+function keep({ computer, chatId, send, created, draft }: Outgoing) {
   try {
     const file = shelved(send.id);
     file.parentDirectory.create({ idempotent: true, intermediates: true });
-    file.write(JSON.stringify({ computer, chatId, send, created }));
+    file.write(JSON.stringify({ computer, chatId, send, created, ...(draft ? { draft } : {}) }));
   } catch {
     // A full disk costs the copy; the send itself still goes.
   }
@@ -56,6 +56,7 @@ function kept(): Outgoing[] {
               chatId: o.chatId,
               send: send.data,
               created: Number(o.created) || Date.now(),
+              ...(typeof o.draft === "string" ? { draft: o.draft } : {}),
               error: "Relay closed before it went out",
               unsure: true,
             },
@@ -84,9 +85,20 @@ const inFlight = new Map<string, Promise<void>>();
 /** Being asked about to take back for an edit; not sent again meanwhile. */
 const takingBack = new Set<string>();
 
+type ThroughComputer = (key: string, chatId: string, send: ProjectChatSend) => Promise<unknown>;
+let throughComputer: ThroughComputer | undefined;
+/** How a send from a draft the desktop holds part of goes, on the live connection. */
+export function sendDraftsWith(send: ThroughComputer) {
+  throughComputer = send;
+}
+
 function run(desktop: Desktop, item: Outgoing) {
   const { id } = item.send;
-  const sending = desktop("sendProjectChat", item.chatId, item.send).then(
+  const going = item.draft
+    ? (throughComputer?.(item.draft, item.chatId, item.send) ??
+      Promise.reject(new Error("Not connected to your computer.")))
+    : desktop("sendProjectChat", item.chatId, item.send);
+  const sending = going.then(
     () => {
       unkeep(id);
       update(id, { sent: stamp(), error: undefined, unsure: undefined });
@@ -110,8 +122,10 @@ export function deliver(
   computer: string,
   chatId: string,
   send: ProjectChatSend,
+  /** A draft the desktop holds part of, which goes out through its composer. */
+  draft?: string,
 ) {
-  const item = { computer, chatId, send, created: Date.now() };
+  const item = { computer, chatId, send, created: Date.now(), ...(draft ? { draft } : {}) };
   keep(item);
   set([...items, item]);
   run(desktop, item);

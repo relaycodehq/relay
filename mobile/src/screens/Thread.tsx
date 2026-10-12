@@ -420,6 +420,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     images,
     delivery,
     sendAt,
+    held,
   }: Outgoing) => {
     // `/btw` asks beside the conversation, as in the desktop's composer.
     const side = !rootId && /^\/btw\s/i.test(body);
@@ -441,7 +442,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
       },
     );
     toBottom();
-    return deliver(remote.desktop, computer, id, message);
+    return deliver(remote.desktop, computer, id, message, held ? draftKey : undefined);
   };
 
   const threadItems: MenuItem[] = where

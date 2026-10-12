@@ -333,3 +333,36 @@
   padding: 3px 9px;
   font-size: 12px;
 }
+/* Edited here and on a phone at once; the other version is a click away. */
+.draft-other-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: 0 18px -1px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--toolbar);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.draft-other-notice > svg {
+  flex: none;
+}
+.draft-other-notice > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-other-notice button {
+  flex: none;
+  padding: 3px 9px;
+  font-size: 12px;
+}
+.draft-other-notice button.icon {
+  padding: 3px 5px;
+}

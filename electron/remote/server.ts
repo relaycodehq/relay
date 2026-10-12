@@ -46,6 +46,8 @@ interface Connection {
   authenticating?: boolean;
   /** Binary frames and patches, once both ends speak `compactBridge`. */
   link?: LinkSender;
+  /** The bridge the device said it speaks; 0 for ones from before it said. */
+  bridge?: number;
 }
 
 /** Unauthenticated sockets get this long to finish the handshake. */
@@ -167,10 +169,17 @@ export class RemoteServer {
     if (server)
       await new Promise<void>((resolve) => server.close(() => resolve()));
   }
-  /** To every device online, or those `to` picks. */
-  broadcast(event: RemoteEvent, to?: (deviceId: string) => boolean) {
+  /** To every device online, or those `to` picks by id and the bridge they speak. */
+  broadcast(
+    event: RemoteEvent,
+    to?: (deviceId: string, bridge: number) => boolean,
+  ) {
     for (const c of this.connections)
-      if (c.deviceId && this.stillPaired(c) && (!to || to(c.deviceId)))
+      if (
+        c.deviceId &&
+        this.stillPaired(c) &&
+        (!to || to(c.deviceId, c.bridge ?? 0))
+      )
         if (c.link) c.link.event(event);
         else this.send(c, { t: "event", event });
   }
@@ -272,8 +281,9 @@ export class RemoteServer {
             hosts: this.options.hosts?.() ?? [],
           });
         } else throw new Error("Pair this phone first.");
+        c.bridge = Number(frame.bridge) || 0;
         // `paired` and `ready` went as text, which every client reads.
-        if (Number(frame.bridge) >= compactBridge)
+        if (c.bridge >= compactBridge)
           c.link = new LinkSender((f) => this.send(c, f));
         this.options.onPresence?.();
       } catch (e) {

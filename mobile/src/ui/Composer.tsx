@@ -10,10 +10,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useDraft } from "../remote/drafts";
+import { draftWent, holdDraft, releaseDraft, useDraft, useSharedDraft } from "../remote/drafts";
+import { hasExtras } from "../../../shared/drafts";
+import { draftsBridge } from "../../../shared/remote";
 import * as Haptics from "expo-haptics";
 import { randomUUID } from "expo-crypto";
-import { ArrowUp, ChevronDown, ClipboardPaste, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
+import { ArrowUp, ChevronDown, ClipboardPaste, ImagePlus, Laptop, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { numberImages } from "../../../shared/image-refs";
 import { appendQuote } from "../../../shared/composer-quotes";
@@ -52,9 +54,11 @@ import { ModelSheet } from "./ModelSheet";
 import { ProviderIcon } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
 import { UsageBar, UsageSheet, useUsage } from "./Usage";
+import { DraftNotes } from "./DraftNotes";
 import { mono, type, useTheme } from "./theme";
 
-export type Outgoing = ComposeAttempt<Attachment>;
+/** `held`: the computer holds part of its draft, so it goes out through the computer's composer. */
+export type Outgoing = ComposeAttempt<Attachment> & { held?: true };
 
 /** Dictated words going into `base` in place of `from`–`to`; they sit at `start`–`end`, the last `tentative` characters still unsure. */
 interface Live {
@@ -147,7 +151,11 @@ export const Composer = forwardRef<
     input.current?.focus();
     input.current?.setSelection(end, end);
   }, [text]);
-  useDraft(draftKey, text, setText);
+  const { active: computer } = useRemote();
+  useDraft(computer, draftKey, text, setText);
+  const shared = useSharedDraft(computer, draftKey);
+  // Screenshots the computer's composer has in this draft; they go with it from there.
+  const computerShots = shared?.extras?.screenshots ?? [];
   const [images, setImages] = useState<Attachment[]>([]);
   const held = useRef(images);
   held.current = images;
@@ -382,7 +390,7 @@ export const Composer = forwardRef<
     edit(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
   };
 
-  const empty = !text.trim() && !images.length;
+  const empty = !text.trim() && !images.length && !computerShots.length;
   const steering = running && !empty;
   /** `written` is the draft when it hasn't reached `text` yet. */
   const send = async (delivery?: "queue" | "steer", sendAt?: number, written = text) => {
@@ -392,7 +400,8 @@ export const Composer = forwardRef<
       if (await stopDictation()) await send(delivery, sendAt, dictated.current);
       return;
     }
-    if ((!written.trim() && !images.length) || busy) return;
+    if ((!written.trim() && !images.length && !computerShots.length) || busy) return;
+    const held = (overview?.bridge ?? 1) >= draftsBridge && hasExtras(shared?.extras);
     const draft = written.trim();
     if (startsWithCommand(draft)) {
       const command = relayCommand(draft);
@@ -422,18 +431,28 @@ export const Composer = forwardRef<
     setError(undefined);
     // Cleared as it goes, so leaving mid-send doesn't keep it as a draft;
     // it comes back if sending fails.
+    const keyed = computer && draftKey ? { computer, key: draftKey } : undefined;
+    if (keyed) holdDraft(keyed.computer, keyed.key);
     setText("");
     try {
       // Screenshots taken back with their tokens go out in token order, the tokens renumbered to match.
-      const numbered = numberImages(attempt.body, attempt.images);
+      // The computer numbers a draft it holds screenshots of, which its tokens name.
+      const numbered = held ? { text: attempt.body, images: attempt.images } : numberImages(attempt.body, attempt.images);
       const sent = await onSend({
         ...attempt,
         body: numbered.text,
         images: numbered.images,
+        ...(held ? { held: true as const } : {}),
       });
-      if (sent === false) setText((typed) => typed || draft);
-      else setImages([]);
+      if (sent === false) {
+        if (keyed) releaseDraft(keyed.computer, keyed.key);
+        setText((typed) => typed || draft);
+      } else {
+        setImages([]);
+        if (keyed) draftWent(keyed.computer, keyed.key, draft, held);
+      }
     } catch (e) {
+      if (keyed) releaseDraft(keyed.computer, keyed.key);
       setFailedSend(attempt);
       setText((typed) => typed || draft);
       setError(e instanceof Error ? e.message : String(e));
@@ -476,6 +495,7 @@ export const Composer = forwardRef<
           onPick={pick}
         />
       )}
+      {computer && draftKey && <DraftNotes computer={computer} draftKey={draftKey} shared={shared} />}
       {!!(error ?? dictationError) && (
         <Pressable
           onPress={() => {
@@ -491,7 +511,7 @@ export const Composer = forwardRef<
         </Pressable>
       )}
       <View style={[styles.box, { borderColor: t.border, backgroundColor: t.raised }]}>
-        {(images.length > 0 || clipboard.offered) && (
+        {(images.length > 0 || clipboard.offered || computerShots.length > 0) && (
           <ScrollView
             horizontal
             keyboardShouldPersistTaps="always"
@@ -510,6 +530,18 @@ export const Composer = forwardRef<
                 >
                   <X size={12} color={t.text} />
                 </Pressable>
+              </View>
+            ))}
+            {computerShots.map((n, i) => (
+              <View
+                key={`computer-${n}-${i}`}
+                accessibilityLabel={n ? `Screenshot ${n}, on your computer` : "Screenshot on your computer"}
+                style={[styles.thumb, styles.pasteThumb, { borderColor: t.border }]}
+              >
+                <Laptop size={16} color={t.muted} />
+                <Text numberOfLines={2} style={[styles.computerLabel, { color: t.muted }]}>
+                  On computer
+                </Text>
               </View>
             ))}
             {clipboard.offered && (
@@ -770,6 +802,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pasteLabel: { fontSize: type.tiny },
+  computerLabel: { fontSize: 10, lineHeight: 12, textAlign: "center" },
   unthumb: {
     position: "absolute",
     top: -6,
