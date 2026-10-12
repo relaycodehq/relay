@@ -1061,8 +1061,11 @@
 .sb-card.compact .sb-card-state {
   margin-left: auto;
 }
+/* No height of its own: the 24px button hangs over the 15px line instead
+   of growing it, which pushed every card below down on hover. */
 .sb-card.compact .sb-card-actions {
-  margin: -4px 0 -4px auto;
+  height: 0;
+  margin: 0 0 0 auto;
 }
 /* One still working has nothing to trade it for. */
 .sb-card.compact:not(:has(.sb-card-actions)):hover .sb-card-state,
