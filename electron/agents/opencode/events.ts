@@ -29,23 +29,6 @@ const failureSchema = z
 export const readFailure = (value: unknown) =>
   failureSchema.safeParse(value).data;
 
-const messageInfoSchema = z
-  .object({
-    id: z.string(),
-    role: z.string(),
-    providerID: text,
-    modelID: text,
-    time: lenient(z.object({ created: count, completed: count }).loose()),
-    // Whether it is one is up to `readFailure`: a message that failed must not pass as one that didn't.
-    error: z.unknown().optional(),
-  })
-  .loose();
-
-const partBaseSchema = z
-  .object({ id: z.string(), messageID: z.string(), type: z.string() })
-  .loose();
-export type OpenCodePartBase = z.infer<typeof partBaseSchema>;
-
 const tokensSchema = lenient(
   z
     .object({
@@ -57,6 +40,25 @@ const tokensSchema = lenient(
     })
     .loose(),
 );
+
+const messageInfoSchema = z
+  .object({
+    id: z.string(),
+    role: z.string(),
+    providerID: text,
+    modelID: text,
+    time: lenient(z.object({ created: count, completed: count }).loose()),
+    /** An assistant message's request, which is one step. */
+    tokens: tokensSchema,
+    // Whether it is one is up to `readFailure`: a message that failed must not pass as one that didn't.
+    error: z.unknown().optional(),
+  })
+  .loose();
+
+const partBaseSchema = z
+  .object({ id: z.string(), messageID: z.string(), type: z.string() })
+  .loose();
+export type OpenCodePartBase = z.infer<typeof partBaseSchema>;
 
 /** A `tool` part of an OpenCode message, as `message.part.updated` carries it. */
 const toolPartSchema = partBaseSchema.extend({
@@ -130,6 +132,8 @@ const permissionRequest = {
   sessionID: text,
   permission: z.string(),
   patterns: lenient(z.array(z.string())),
+  /** What saying yes for good would cover. */
+  always: lenient(z.array(z.string())),
   metadata: record,
 };
 /** A question from OpenCode's `question` tool; see its `QuestionRequest`. */

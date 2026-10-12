@@ -97,6 +97,84 @@ async function turn(sessionID, text) {
     };
     return;
   }
+  // A `task` call: its subagent works in a session of its own, which the
+  // event stream names by that session's id.
+  if (text.includes("fixture task")) {
+    const child = { id: id("ses"), directory: session.directory, messages: [] };
+    sessions.set(child.id, child);
+    const metadata = { sessionId: child.id, parentSessionId: sessionID };
+    const input = { description: "Look around", prompt: "Look around." };
+    const task = {
+      id: id("prt"),
+      messageID: first.id,
+      sessionID,
+      type: "tool",
+      tool: "task",
+      callID: "call_task",
+      state: { status: "running", input, metadata },
+    };
+    firstParts.push(task);
+    emit("message.part.updated", { sessionID, part: task });
+    await tick();
+    const info = {
+      id: id("msg"),
+      sessionID: child.id,
+      role: "assistant",
+      providerID: "zen",
+      modelID: "pickle",
+      time: { created: Date.now() },
+    };
+    const childParts = [
+      {
+        id: id("prt"),
+        messageID: info.id,
+        sessionID: child.id,
+        type: "tool",
+        tool: "read",
+        callID: "call_child_read",
+        state: {
+          status: "completed",
+          input: { filePath: "/w/a.ts" },
+          output: "00001| hello",
+        },
+      },
+      {
+        id: id("prt"),
+        messageID: info.id,
+        sessionID: child.id,
+        type: "text",
+        text: "The subagent's own notes.",
+      },
+      {
+        id: id("prt"),
+        messageID: info.id,
+        sessionID: child.id,
+        type: "step-finish",
+        cost: 0.004,
+        tokens: {
+          total: 120,
+          input: 100,
+          output: 20,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+      },
+    ];
+    child.messages.push({ info, parts: childParts });
+    emit("message.updated", { sessionID: child.id, info });
+    for (const part of childParts) {
+      emit("message.part.updated", { sessionID: child.id, part });
+      await tick();
+    }
+    emit("session.idle", { sessionID: child.id });
+    task.state = {
+      status: "completed",
+      input,
+      metadata,
+      output: `<task id="${child.id}" state="completed"><task_result>Found a.ts.</task_result></task>`,
+    };
+    emit("message.part.updated", { sessionID, part: task });
+  }
   const note = {
     id: id("prt"),
     messageID: first.id,
@@ -343,6 +421,7 @@ const server = http.createServer(async (req, res) => {
   if (path === "/permission" && req.method === "GET")
     return send(200, [...asked.values()]);
   if (path === "/question" && req.method === "GET") return send(200, []);
+  if (path === "/mcp") return send(200, req.method === "GET" ? {} : true);
   if (path === "/session" && req.method === "POST") {
     const session = { id: id("ses"), directory, messages: [] };
     sessions.set(session.id, session);

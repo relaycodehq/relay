@@ -9,6 +9,7 @@ import { realpathSync } from "node:fs";
 import type { LinkedFolder } from "../../../shared/projects";
 import type { PermissionRequest, QuestionRequest } from "./events";
 import { readsOnly } from "../../agent-host/read-only-bash";
+import { relayToolRules } from "./mcp";
 
 type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRule = {
@@ -44,6 +45,9 @@ const reading = [
  * A tool denied outright drops out of the request, and OpenCode Zen's free
  * models refuse a request without `bash`. So what a run may not do is left
  * to ask, and the run rejects what it can't put to the user.
+ *
+ * Every session keeps off other threads' Relay tools, full access too: a
+ * call to one would act as that thread.
  */
 export function permissionRules(
   mode: RuntimeMode | undefined,
@@ -52,12 +56,17 @@ export function permissionRules(
     title?: boolean;
     cwd?: string;
     links?: readonly LinkedFolder[];
+    /** The thread's own Relay tools server; see ./mcp. */
+    relayServer?: string;
   },
 ): PermissionRule[] {
   const rules = modeRules(mode, options);
-  return options.title || (mode === "full-access" && !options.readOnly)
-    ? rules
-    : [...rules, ...linkRules(options.links ?? [], options)];
+  return [
+    ...(options.title || (mode === "full-access" && !options.readOnly)
+      ? rules
+      : [...rules, ...linkRules(options.links ?? [], options)]),
+    ...relayToolRules(options.relayServer),
+  ];
 }
 
 /**
@@ -140,16 +149,71 @@ export function readOnlyReply(request: PermissionRequest): "once" | "reject" {
   return commands.length && commands.every(readsOnly) ? "once" : "reject";
 }
 
+/** OpenCode's own glob: `*` spans anything, slashes too; `?` one character. */
+const wildcard = (glob: string, value: string) =>
+  new RegExp(
+    `^${glob
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("*", ".*")
+      .replaceAll("?", ".")}$`,
+    "s",
+  ).test(value);
+
 /**
- * Asks the user about one permission and answers OpenCode with `once` or
- * `reject`. Accepting for the whole session isn't offered: OpenCode keeps an
- * `always` grant for the project directory, where other threads work too.
+ * What a thread said Always to, as the patterns OpenCode offers for it. Kept
+ * in Relay and answered `once`: OpenCode's own `always` holds for every
+ * session in the directory, where other threads work too.
+ */
+export class PermissionGrants {
+  private granted: { permission: string; pattern: string }[] = [];
+
+  covers(request: PermissionRequest) {
+    const patterns = request.patterns ?? [];
+    return (
+      patterns.length > 0 &&
+      patterns.every((target) =>
+        this.granted.some(
+          (g) =>
+            g.permission === request.permission && wildcard(g.pattern, target),
+        ),
+      )
+    );
+  }
+
+  grant(request: PermissionRequest) {
+    for (const pattern of request.always ?? [])
+      this.granted.push({ permission: request.permission, pattern });
+  }
+}
+
+const grants = new Map<string, PermissionGrants>();
+/** The grants of the thread whose session is kept under `key`. */
+export const threadGrants = (key: string) => {
+  let held = grants.get(key);
+  if (!held) grants.set(key, (held = new PermissionGrants()));
+  return held;
+};
+export const forgetThreadGrants = (key: string) => grants.delete(key);
+
+/** How to answer OpenCode; `stop` ends the turn, as Claude's interrupt does. */
+export type PermissionAnswer = {
+  reply: "once" | "reject";
+  /** With a reject, only the call fails and the agent carries on; without, OpenCode ends the turn. */
+  message?: string;
+  stop?: boolean;
+};
+
+/**
+ * Asks the user about one permission: Once, Always (for this thread, when
+ * OpenCode says what a yes would cover), Decline (the call fails, the agent
+ * carries on) or Cancel (the turn ends).
  */
 export async function askPermission(
   request: PermissionRequest,
   ask: AskAgentRequest,
   signal: AbortSignal,
-): Promise<"once" | "reject"> {
+  thread?: PermissionGrants,
+): Promise<PermissionAnswer> {
   const metadata = request.metadata ?? {};
   const text = (key: string) =>
     typeof metadata[key] === "string" ? (metadata[key] as string) : "";
@@ -168,14 +232,27 @@ export async function askPermission(
               request.permission === "websearch"
             ? ["Allow this web request?", text("url") || patterns]
             : [`Allow ${request.permission}?`, patterns];
-  const decisions: AgentDecision[] = ["accept", "decline", "cancel"];
+  const canRemember = !!thread && !!request.always?.length;
+  const decisions: AgentDecision[] = canRemember
+    ? ["accept", "acceptForSession", "decline", "cancel"]
+    : ["accept", "decline", "cancel"];
   const response = await ask(
     { kind: "approval", title, detail, decisions },
     signal,
   );
   if (response.kind !== "approval")
     throw new Error("Invalid approval response.");
-  return response.decision === "accept" ? "once" : "reject";
+  switch (response.decision) {
+    case "acceptForSession":
+      if (canRemember) thread!.grant(request);
+      return { reply: "once" };
+    case "accept":
+      return { reply: "once" };
+    case "decline":
+      return { reply: "reject", message: "Denied by the user." };
+    default:
+      return { reply: "reject", stop: true };
+  }
 }
 
 /** Asks the user; OpenCode takes the chosen labels, question by question. */

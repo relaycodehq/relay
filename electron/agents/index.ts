@@ -22,7 +22,7 @@ import {
 } from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { presentSkill } from "./skill-presentation";
-import { runOpenCode } from "./opencode/run";
+import { closeOpenCodeSession, runOpenCode } from "./opencode/run";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
 import { reattachOpenCodeServer } from "./opencode/server";
 import { runCursor } from "./cursor/run";
@@ -82,11 +82,12 @@ const claude: AgentRuntime = {
 
 /**
  * OpenCode works in one `opencode serve` Relay starts on first use. Its
- * sessions live in OpenCode's own storage, so there is nothing to close.
+ * sessions live in OpenCode's own storage; closing one only lets go of what
+ * Relay keeps for the thread (its Always grants, its watcher).
  */
 const opencode: AgentRuntime = {
   run: runOpenCode,
-  closeSession: async () => {},
+  closeSession: async (key) => closeOpenCodeSession(key),
   models: openCodeModels,
   defaults: openCodeDefaults,
   commands: openCodeCommands,

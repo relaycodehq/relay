@@ -200,7 +200,7 @@ const relayToolLabels: Record<string, string> = {
 };
 
 /** An MCP call's label and which server's tool it was. */
-function mcpCall(server: string, tool: string) {
+export function mcpCall(server: string, tool: string) {
   const label =
     (server === "relay" && relayToolLabels[tool]) || `${server}: ${tool}`;
   return {

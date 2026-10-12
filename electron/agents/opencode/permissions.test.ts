@@ -5,6 +5,8 @@ import {
   type PermissionRule,
 } from "./permissions";
 import type { PermissionRequest } from "./events";
+import { connectRelayTools } from "./mcp";
+import { runtimeModes } from "../../../shared/agent-modes";
 import { tmpdir } from "node:os";
 import { realpathSync } from "node:fs";
 
@@ -98,5 +100,41 @@ describe("linked folders under OpenCode", () => {
     expect(permissionRules(undefined, { title: true, links })).toEqual(
       permissionRules(undefined, { title: true }),
     );
+  });
+});
+
+describe("Relay's tools under OpenCode", () => {
+  // Every thread's server is listed in every session of the folder.
+  it("lets a thread call only its own server's tools, unasked, in every mode", () => {
+    for (const mode of [...runtimeModes.map((m) => m.value), undefined]) {
+      const rules = permissionRules(mode, { relayServer: "relay-aaaaaaaa" });
+      expect(decide(rules, "relay-aaaaaaaa_start_threads", "*")).toBe("allow");
+      expect(decide(rules, "relay-bbbbbbbb_start_threads", "*")).toBe("deny");
+    }
+    const reviewer = permissionRules("full-access", { readOnly: true });
+    expect(decide(reviewer, "relay-aaaaaaaa_send_to_thread", "*")).toBe("deny");
+  });
+
+  it("names a tool by its server, Relay's own as relay", async () => {
+    const posted: unknown[] = [];
+    const named = await connectRelayTools(
+      async (method, path, body) => {
+        if (method === "POST") posted.push(body);
+        return method === "GET" && path === "/mcp"
+          ? { "my.docs": { status: "connected" } }
+          : true;
+      },
+      { url: "http://127.0.0.1:9/mcp", token: "chat.sig" },
+    );
+    expect(posted).toHaveLength(1);
+    expect(named("relay-0123abcd_start_threads")).toEqual({
+      server: "relay",
+      tool: "start_threads",
+    });
+    expect(named("my_docs_search")).toEqual({
+      server: "my.docs",
+      tool: "search",
+    });
+    expect(named("bash")).toBeUndefined();
   });
 });

@@ -9,7 +9,8 @@ import { permissionRules } from "./permissions";
 import { openCodeCommands, openCodeDefaults, openCodeModels } from "./catalog";
 import { readOpenRouterCredit } from "../openrouter-credit";
 import { runtimeModes } from "../../../shared/agent-modes";
-import type { AgentOptions } from "../types";
+import type { AgentOptions, UsageReport } from "../types";
+import type { AgentActivity } from "../../../shared/projects";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 vi.mock("../../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../../platform/executables")>()),
@@ -211,15 +212,121 @@ describe("what OpenCode sends", () => {
   });
 });
 
-it("rejects the ask when the user declines", async () => {
+it("fails only the call when the user declines, and the agent carries on", async () => {
   const { run } = turn("Write notes.md", {
     onRequest: async () => ({ kind: "approval", decision: "decline" }),
   });
   expect(await run).toBe("Skipped the edit.");
   const calls = await captured();
+  // A reject without a message would end OpenCode's whole turn.
+  expect(calls.find((c) => c.path.startsWith("/permission/")).body).toEqual({
+    reply: "reject",
+    message: "Denied by the user.",
+  });
+});
+
+it("stops the turn when the user cancels an ask", async () => {
+  const { run } = turn("Write notes.md", {
+    onRequest: async () => ({ kind: "approval", decision: "cancel" }),
+  });
+  await expect(run).rejects.toThrow("Cancelled by you.");
+  const calls = await captured();
   expect(calls.find((c) => c.path.startsWith("/permission/")).body).toEqual({
     reply: "reject",
   });
+  expect(calls.some((c) => c.path.endsWith("/abort"))).toBe(true);
+});
+
+it("keeps Always to its own thread, answering OpenCode once each time", async () => {
+  const asked: string[][] = [];
+  const answering =
+    (decision: "accept" | "acceptForSession") =>
+    async (request: { decisions?: string[] }) => {
+      asked.push(request.decisions ?? []);
+      return { kind: "approval" as const, decision };
+    };
+  const first = turn("Write notes.md", {
+    onRequest: answering("acceptForSession"),
+  });
+  await first.run;
+  expect(asked[0]).toContain("acceptForSession");
+  // The same thread's next ask is answered without asking.
+  await turn("Write notes.md", {
+    onRequest: answering("accept"),
+    session: { key: "k", id: first.seen.session, onId: async () => {} },
+  }).run;
+  expect(asked).toHaveLength(1);
+  // Another thread in the same folder still asks.
+  await turn("Write notes.md", {
+    onRequest: answering("accept"),
+    session: { key: "other", onId: async () => {} },
+  }).run;
+  expect(asked).toHaveLength(2);
+  const replies = (await captured())
+    .filter((c) => c.path.startsWith("/permission/"))
+    .map((c) => c.body.reply);
+  // OpenCode's own `always` would hold for every session in the folder.
+  expect(replies).toEqual(["once", "once", "once"]);
+});
+
+it("folds a subagent's calls under its task, counting its requests but not its text", async () => {
+  const rows: AgentActivity[] = [];
+  const usage: UsageReport[] = [];
+  const { seen, run } = turn("fixture task, then Write notes.md", {
+    onActivity: (a) => rows.push(a),
+    onUsage: (u) => usage.push(u),
+  });
+  const answer = await run;
+  expect(answer).toBe("Wrote notes.md.");
+  expect(seen.texts.join("\n")).not.toContain("subagent's own notes");
+  const child = rows.filter((a) => a.parentId === "call_task");
+  expect(child.at(-1)).toMatchObject({
+    id: "call_child_read",
+    kind: "read",
+    label: "/w/a.ts",
+    status: "complete",
+    detail: "00001| hello",
+  });
+  const task = rows.filter((a) => a.id === "call_task");
+  expect(task[0]).toMatchObject({ kind: "agent", label: "Look around" });
+  expect(task.some((a) => a.progress === "Reading /w/a.ts · 1 tool")).toBe(
+    true,
+  );
+  expect(task.at(-1)).toMatchObject({ status: "complete" });
+  expect(task.at(-1)?.progress).toBeUndefined();
+  expect(usage.filter((u) => u.subagent)).toEqual([
+    expect.objectContaining({
+      model: "zen/pickle",
+      tokens: { input: 100, cacheWrite: 0, cacheRead: 0, output: 20 },
+    }),
+  ]);
+  // The subagent's step counts toward the turn's cost too.
+  expect(seen.cost).toBeCloseTo(0.041);
+});
+
+it("gives a thread its own Relay tools, and keeps it off other threads'", async () => {
+  const relayTools = { url: "http://127.0.0.1:9/mcp", token: "chat-1.sig" };
+  await turn("Write notes.md", { relayTools }).run;
+  const calls = await captured();
+  const added = calls.find((c) => c.path === "/mcp" && c.method === "POST");
+  expect(added.body).toMatchObject({
+    name: expect.stringMatching(/^relay-[0-9a-f]{8}$/),
+    config: {
+      type: "remote",
+      url: relayTools.url,
+      headers: { Authorization: "Bearer chat-1.sig" },
+      oauth: false,
+    },
+  });
+  const created = calls.find(
+    (c) => c.path === "/session" && c.method === "POST",
+  );
+  expect(created.body.permission.slice(-2)).toEqual([
+    { permission: "relay-*", pattern: "*", action: "deny" },
+    { permission: `${added.body.name}_*`, pattern: "*", action: "allow" },
+  ]);
+  const prompt = calls.find((c) => c.path.endsWith("/prompt_async"));
+  expect(prompt.body.system).toContain("show_html");
 });
 
 it("resumes its session, and a fork starts after the answer it was cut at", async () => {
