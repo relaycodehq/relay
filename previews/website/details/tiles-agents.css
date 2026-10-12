@@ -1,0 +1,509 @@
+/* Agents tiles. */
+.a-tick {
+  display: inline;
+  margin: -2px 3px 0 0;
+  color: var(--accent);
+}
+
+/* limit */
+.a-limit {
+  gap: 0;
+}
+.a-thread {
+  flex: 1;
+  padding: 10px 12px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 0;
+  overflow: hidden;
+}
+.a-thread .dt-say + .dt-say {
+  margin-top: 4px;
+}
+.a-clockline {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.a-clockline b {
+  font-weight: 550;
+}
+.a-strip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  margin: 0 4px -1px;
+  padding: 4px 4px 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--accent) 12%, var(--toolbar));
+  font-size: 11px;
+  z-index: 1;
+}
+.a-strip > svg {
+  color: var(--accent);
+}
+.a-strip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.a-strip-text b {
+  font-weight: 550;
+}
+.a-strip-text .dt-cycle {
+  display: grid;
+  margin-left: 0;
+}
+.a-strip-text b {
+  display: block;
+}
+.a-strip-text .dt-cycle > span {
+  font-size: 10.5px;
+}
+.a-strip-btn {
+  flex: none;
+  padding: 3px 4px;
+  font-size: 10.5px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.a-limit .dt-composer {
+  position: relative;
+  border-radius: 11px;
+}
+
+/* switch agent */
+.a-dialog {
+  position: absolute;
+  inset: 14px 6px auto;
+  padding: 14px 15px 12px;
+  z-index: 2;
+}
+.a-dialog h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.a-dialog p {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.a-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.a-actions .dt-btn:first-child {
+  border: 1px solid var(--border);
+}
+.a-handoff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 18px;
+}
+.a-divide .dt-cycle > span {
+  justify-self: center;
+}
+.a-link {
+  margin-left: 4px;
+  color: var(--accent);
+  font-style: normal;
+}
+.a-handoff-composer {
+  margin-top: auto;
+}
+.a-note {
+  margin: 0 8px;
+  padding: 7px 11px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.45s, transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.a-note[data-open] {
+  opacity: 1;
+  transform: none;
+}
+.a-codex b {
+  margin-right: 5px;
+  color: var(--accent);
+}
+
+/* fan out */
+.a-fan {
+  padding-top: 18px;
+}
+.a-fan .dt-card {
+  background: color-mix(in srgb, var(--surface) 70%, var(--sidebar));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.a-fan .dt-card[data-hover] {
+  background: color-mix(in srgb, var(--surface) 70%, var(--sidebar));
+}
+.a-family {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.a-started {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0 17px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+.a-started .dt-card.compact {
+  padding: 6px 9px;
+  gap: 1px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.a-started .dt-card-top {
+  min-height: 18px;
+}
+.a-started .dt-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+/* steer */
+.a-steer {
+  gap: 10px;
+}
+.a-trace {
+  display: grid;
+  gap: 7px;
+  padding: 12px 13px;
+}
+.a-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.a-step svg {
+  color: var(--accent);
+}
+.a-step[data-live] {
+  color: var(--text);
+}
+.a-step[data-live] .dt-spin {
+  color: var(--accent);
+}
+.a-reply {
+  margin-top: 1px;
+  padding-left: 19px;
+  color: var(--muted);
+}
+.a-bubble {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.a-steer-composer {
+  position: absolute;
+  inset: auto 0 14px;
+  height: 36px;
+}
+.a-typed {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+.a-typed > span {
+  display: block;
+  white-space: nowrap;
+}
+.a-queued {
+  position: absolute;
+  inset: auto 0 58px;
+}
+.a-queued header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.a-qrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  background: var(--background);
+  font-size: 12px;
+}
+.a-qtext {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.a-qbtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: background-color 0.25s, color 0.25s;
+}
+.a-qbtn[data-hot] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.a-qhint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+/* ask with a page */
+.a-ask {
+  justify-content: center;
+}
+.a-stack {
+  align-items: center;
+}
+.a-know-composer,
+.a-limit .dt-composer {
+  margin-top: auto;
+}
+.a-req {
+  padding: 12px 14px 10px;
+}
+.a-req header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.a-req header svg {
+  color: var(--accent);
+}
+.a-req strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.a-page {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+.a-opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: background-color 0.25s, border-color 0.25s;
+}
+.a-opt[data-on] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.a-opt i {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  transition: border 0.25s;
+}
+.a-opt[data-on] i {
+  border: 4px solid var(--accent);
+}
+.a-opt b {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 550;
+}
+.a-opt small {
+  display: block;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.a-req footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 9px;
+}
+.a-answered {
+  padding: 0 4px;
+}
+.a-answered .dt-divider {
+  white-space: nowrap;
+}
+
+/* you should know */
+.a-know {
+  gap: 12px;
+}
+.a-watch {
+  padding: 10px 12px 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--toolbar);
+  font-size: 12px;
+}
+.a-watch header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+.a-watch header b {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.a-watch header span {
+  flex: 1;
+  font-size: 11px;
+}
+.a-watch p {
+  margin: 0;
+  line-height: 1.5;
+}
+.a-watch-actions {
+  display: flex;
+  gap: 2px;
+  margin: 7px 0 0 -7px;
+}
+.a-watch-actions > span {
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.a-watch-actions > span:first-child {
+  color: var(--text);
+}
+.a-watch-actions .dt-btn {
+  padding: 3px 8px;
+}
+
+/* /btw */
+.a-btw {
+  gap: 12px;
+}
+.a-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.a-main .dt-spin {
+  color: var(--accent);
+}
+.a-side {
+  padding: 10px 14px 6px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 13px;
+}
+.a-side p {
+  margin: 0;
+  font-size: 12.5px;
+}
+.a-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px -8px 0;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.a-sidebar strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.a-sidebar .dt-cycle {
+  flex: 1;
+}
+.a-face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--toolbar);
+  font-size: 10px;
+  font-weight: 700;
+}
+.a-view {
+  color: var(--accent);
+}
+.a-btw-composer {
+  position: absolute;
+  inset: auto 0 14px;
+  height: 36px;
+}
+.a-btw-composer .dt-swap {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* The status line runs under the button too, so the resume time stays whole. */
+.a-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 7px;
+  row-gap: 0;
+}
+.a-strip > svg {
+  grid-row: 1 / 3;
+}
+.a-strip-text {
+  display: contents;
+}
+.a-strip-text b {
+  grid-column: 2;
+  grid-row: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.a-strip-text .dt-cycle {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  white-space: nowrap;
+}
+.a-strip-btn {
+  grid-column: 3;
+  grid-row: 1;
+}

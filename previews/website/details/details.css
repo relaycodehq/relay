@@ -1,0 +1,588 @@
+/* "It's the small things": the section, its carousel and the parts every demo
+   tile is drawn from. Colours are the app's own tokens; the tile drawings live
+   in tiles-*.css. */
+@import "./tiles-agents.css";
+@import "./tiles-threads.css";
+@import "./tiles-code.css";
+@import "./tiles-phone.css";
+
+.dt {
+  --tile-w: 332px;
+  --amber: #d99a2b;
+  padding-top: 130px;
+  padding-bottom: 120px;
+}
+.dt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px 40px;
+  margin-bottom: 36px;
+}
+.dt-head .lede {
+  max-width: 480px;
+  margin-top: 14px;
+}
+.dt-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.dt-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.dt-filter button {
+  position: relative;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.dt-filter button:hover {
+  color: var(--text);
+}
+.dt-filter button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 550;
+}
+.dt-filter button:focus-visible,
+.dt-arrows button:focus-visible,
+.dt-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dt-arrows {
+  display: flex;
+  gap: 8px;
+}
+.dt-arrows button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s, transform 0.15s;
+}
+.dt-arrows button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.dt-arrows button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.dt-arrows button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The row bleeds past the page's padding so tiles slide under its edges. */
+.dt .dt-track {
+  display: flex;
+  gap: 16px;
+  margin: 0 -24px;
+  padding: 4px 24px 8px;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 24px;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+.dt-track::-webkit-scrollbar {
+  display: none;
+}
+.dt-track[data-drag] {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.dt-tile {
+  flex: none;
+  width: var(--tile-w);
+  scroll-snap-align: start;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.dt-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  box-shadow: 0 14px 40px -24px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.dt-words {
+  padding: 16px 20px 20px;
+}
+.site .dt-words h3 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.site .dt-words p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dt-progress {
+  height: 2px;
+  margin-top: 18px;
+  border-radius: 1px;
+  background: var(--border);
+  overflow: hidden;
+}
+.dt-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 70%, var(--muted));
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.dt-quiet {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.site .dt-quiet h3 {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+}
+.dt .dt-quiet ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px 40px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dt-quiet li {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .dt {
+    --tile-w: calc(100vw - 56px);
+    padding-top: 90px;
+    padding-bottom: 80px;
+  }
+  .dt-filter button {
+    padding: 6px 8px;
+    font-size: 13.5px;
+  }
+  .dt-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .dt-arrows {
+    display: none;
+  }
+}
+
+/* ---- The stage every tile draws on ---- */
+.dt-stage {
+  position: relative;
+  height: 236px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(110% 80% at 50% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%),
+    color-mix(in srgb, var(--accent) 4%, var(--inbox));
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.4s ease;
+}
+.dt-stage[data-end] {
+  opacity: 0;
+}
+.dt-stage[data-reset] {
+  opacity: 0;
+  transition: none;
+}
+.dt-stage[data-reset] * {
+  transition: none !important;
+}
+.dt-canvas {
+  position: relative;
+  width: 290px;
+  height: 100%;
+  margin: 0 auto;
+}
+.dt-stage svg {
+  flex: none;
+}
+
+/* ---- Shared drawing parts ---- */
+.dt-ui {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px #0000000a, 0 10px 28px -14px #0006;
+}
+.dt-muted {
+  color: var(--muted);
+}
+.dt-kbd {
+  display: inline-block;
+  min-width: 17px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font: 10.5px/1.35 var(--font-mono);
+  text-align: center;
+}
+.dt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  transition: background-color 0.2s, color 0.2s, opacity 0.2s, transform 0.15s;
+}
+.dt-btn[data-hot] {
+  background: var(--hover);
+  color: var(--text);
+}
+.dt-btn.primary {
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+  font-weight: 600;
+}
+.dt-btn.ghost {
+  border: 1px solid var(--border);
+}
+.dt-btn[data-off] {
+  opacity: 0.4;
+}
+.dt-btn[data-press] {
+  transform: scale(0.94);
+}
+
+/* Reveal and hide by step. */
+.dt-in {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.dt-in[data-on] {
+  opacity: 1;
+  transform: none;
+}
+.dt-out {
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.dt-out[data-on] {
+  opacity: 0;
+}
+.dt-swap {
+  display: grid;
+}
+.dt-swap > * {
+  grid-area: 1 / 1;
+  transition: opacity 0.3s ease;
+}
+.dt-swap > :first-child {
+  opacity: 1;
+}
+.dt-swap > :last-child {
+  opacity: 0;
+}
+.dt-swap[data-on] > :first-child {
+  opacity: 0;
+}
+.dt-swap[data-on] > :last-child {
+  opacity: 1;
+}
+
+.dt-type {
+  display: inline-block;
+  clip-path: inset(-2px 100% -2px 0);
+}
+.dt-type[data-go] {
+  clip-path: inset(-2px -2px -2px 0);
+  transition: clip-path var(--ms) steps(var(--n)) var(--delay);
+}
+
+.dt-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  opacity: 0;
+  filter: drop-shadow(0 2px 3px #0005);
+  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.25, 1), opacity 0.3s;
+}
+.dt-cursor[data-show] {
+  opacity: 1;
+}
+.dt-cursor svg {
+  display: block;
+  transform-origin: 2px 2px;
+  transition: transform 0.12s;
+}
+.dt-cursor[data-press] svg {
+  transform: scale(0.82);
+}
+.dt-finger {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  z-index: 20;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffffff55;
+  box-shadow: 0 0 0 1.5px #ffffffaa, 0 2px 8px #0006;
+  opacity: 0;
+  transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.25, 1), opacity 0.25s;
+}
+.dt-finger[data-show] {
+  opacity: 1;
+}
+.dt-finger[data-press] {
+  scale: 0.8;
+}
+
+.dt-spin {
+  width: 11px;
+  height: 11px;
+  border: 1.6px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: dt-spin 0.9s linear infinite;
+}
+@keyframes dt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.dt-stage:not([data-playing]) :is(.dt-spin, [class*="dt-loop"]),
+:root[data-inactive] .dt-stage :is(.dt-spin, [class*="dt-loop"]) {
+  animation-play-state: paused;
+}
+
+/* The sidebar card the thread tiles share (the app's .sb-card). */
+.dt-card {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: background-color 0.25s, opacity 0.35s, transform 0.45s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.dt-card[data-hover] {
+  background: color-mix(in srgb, var(--hover) 70%, transparent);
+}
+.dt-card-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 22px;
+}
+.dt-badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: hsl(var(--hue, 250) 45% 48%);
+  color: hsl(var(--hue, 250) 55% 96%);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.dt-card-project {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dt-card-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-card-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.dt-card-state[data-kind="working"],
+.dt-card-state[data-kind="unread"] {
+  color: var(--accent);
+}
+.dt-card-state[data-kind="waiting"] {
+  color: var(--amber);
+}
+.dt-card-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 15px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.dt-menu {
+  min-width: 150px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px -16px #0009;
+  font-size: 12px;
+}
+.dt-menu-heading {
+  padding: 5px 9px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.dt-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+.dt-menu-item[data-hot] {
+  background: var(--hover);
+}
+.dt-menu-item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dt-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+.dt-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.dt-divider::before,
+.dt-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+/* A line of the agent's answer. */
+.dt-say {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.dt-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 6px 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.dt-send {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+  transition: transform 0.15s, background-color 0.2s;
+}
+.dt-send[data-press] {
+  transform: scale(0.88);
+}
+.dt-cycle {
+  display: inline-grid;
+  vertical-align: top;
+}
+.dt-cycle > span {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 0.3s ease, transform 0.35s ease;
+  white-space: nowrap;
+}
+.dt-cycle > span[data-on] {
+  opacity: 1;
+  transform: none;
+}
+/* Every tile's root fills the canvas. */
+.dt-canvas > div {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 0 14px;
+}
+.dt-canvas code {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--hover);
+  font: 11px var(--font-mono);
+}
+
+/* Placeholder text in a composer: clips with an ellipsis rather than overflowing. */
+.dt-ph {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-composer > .dt-ph {
+  flex: 1;
+}

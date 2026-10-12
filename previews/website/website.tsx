@@ -21,8 +21,8 @@ import {
   PhoneSync,
   QuickSwitchDemo,
   UsageDemo,
-  WorktreeGraph,
 } from "./sections";
+import { Details } from "./details/details";
 import { startLanes } from "./hero-lanes";
 import { AgentWord } from "./agent-word";
 import { Reveal, reducedMotion, useActive } from "./motion";
@@ -31,7 +31,6 @@ import { CompareTable } from "./compare-table";
 import { installStubs } from "./stubs";
 import {
   faq,
-  features,
   openSource,
   platforms,
   promises,
@@ -194,12 +193,6 @@ const rows = [
     demo: <QuickSwitchDemo />,
   },
   {
-    eyebrow: "Worktrees",
-    title: "Give a thread its own branch",
-    text: "A thread can work in its own Git worktree. The thread has its own branch and its own folder. You merge the branch when the work is ready.",
-    demo: <WorktreeGraph />,
-  },
-  {
     eyebrow: "Usage",
     title: "See how much usage is left",
     text: "Relay shows the percent that remains for Claude and Codex. One bar is for the 5-hour session. One bar is for the week. The mark on the weekly bar shows an even pace.",
@@ -301,6 +294,8 @@ function Site() {
           </Reveal>
         </section>
 
+        <Details />
+
         <section className="rows">
           {rows.map((row) => (
             <div className="row" key={row.title}>
@@ -314,23 +309,6 @@ function Site() {
               </Reveal>
             </div>
           ))}
-        </section>
-
-        <section className="block" id="features">
-          <Reveal>
-            <span className="eyebrow">Features</span>
-            <h2>The full list</h2>
-          </Reveal>
-          <div className="grid">
-            {features.map((feature, index) => (
-              <Reveal key={feature.title} delay={(index % 3) * 70}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <h3>{feature.title}</h3>
-                <p>{feature.text}</p>
-                <code>{feature.detail}</code>
-              </Reveal>
-            ))}
-          </div>
         </section>
 
         <section className="block">
