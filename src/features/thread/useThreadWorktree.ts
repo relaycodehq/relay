@@ -65,7 +65,8 @@ export function useThreadWorktree({
     queryKey: ["worktree", chat?.id],
     queryFn: () => api.projectWorktree(chat!.id),
     enabled: !!chat?.worktree,
-    refetchInterval: 5000,
+    // Naming takes a second or two, and the agent starts right after.
+    refetchInterval: (q) => (q.state.data?.naming ? 400 : 5000),
   });
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
@@ -159,6 +160,8 @@ export function useThreadWorktree({
         ? (agentTree.data.branch ?? undefined)
         : agentWorktree?.branch),
     inWorktree: !!live || !!agentWorktree,
+    /** Its worktree waits on the thread's title for a name. */
+    naming: !!live?.naming,
     unavailable,
     recreatable: !!recreatable.data,
     select,

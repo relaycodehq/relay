@@ -21,7 +21,7 @@ import { agentWorktreeKey, tildePath } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import type { ThreadWorktree } from "./useThreadWorktree";
-import { Modal } from "../../ui/ui";
+import { Modal, Spinner } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
 
@@ -373,6 +373,17 @@ export function WorktreeMenu({
   onReveal: () => void;
   onRemove: () => void;
 }) {
+  if (status?.naming)
+    return (
+      <span
+        className="composer-branch-trigger workspace-trigger static"
+        title="Naming the worktree after the thread's title; the agent starts once it has"
+      >
+        <FolderGit2 size={13} />
+        <span>Worktree</span>
+        <Spinner size={11} steady />
+      </span>
+    );
   if (!status?.path || status.removed)
     return (
       <span

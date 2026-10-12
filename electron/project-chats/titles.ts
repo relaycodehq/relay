@@ -26,6 +26,24 @@ export class ThreadTitles {
   private asked = new Set<string>();
   constructor(private core: ChatCore) {}
 
+  /** Once `id`'s first title is written or given up on, waiting at most `ms`. */
+  async settled(id: string, ms: number, signal: AbortSignal) {
+    const job = this.jobs.get(id)?.job;
+    if (!job) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stop = () => {};
+    await Promise.race([
+      job.catch(() => {}),
+      new Promise<void>((done) => {
+        timer = setTimeout(done, ms);
+        stop = done;
+        signal.addEventListener("abort", stop, { once: true });
+      }),
+    ]);
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");

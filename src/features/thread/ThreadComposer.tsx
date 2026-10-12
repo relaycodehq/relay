@@ -103,7 +103,6 @@ function ThreadBranch({
   worktree,
   checkout,
   newWorktree,
-  draftKey,
   disabled,
   onStartThread,
 }: {
@@ -112,7 +111,6 @@ function ThreadBranch({
   checkout: ProjectCheckout;
   /** An unsent thread that will work in a worktree of its own. */
   newWorktree: boolean;
-  draftKey: string;
   disabled: boolean;
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
@@ -131,7 +129,6 @@ function ThreadBranch({
       <>
         <WorktreeBranchField
           projectId={project.id}
-          draftKey={draftKey}
           value={worktree.newBranch}
           onChange={worktree.setNewBranch}
           disabled={disabled}
@@ -142,6 +139,8 @@ function ThreadBranch({
     );
   // The deleted worktree's row asks where to carry on; its branch name would be stale.
   if (worktree.unavailable) return null;
+  // Its name comes with the thread's title, a moment after sending.
+  if (worktree.naming) return null;
   if (worktree.inWorktree)
     return (
       <span
@@ -337,7 +336,6 @@ export function ThreadComposer({
               scope.kind === "project" &&
               worktree.workspace === "worktree"
             }
-            draftKey={threadDraftKey(id)}
             disabled={waiting || held}
             onStartThread={onStartThread}
           />

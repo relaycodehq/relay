@@ -340,12 +340,8 @@ export interface ProjectCouncilApi {
 /** A thread's own worktree, and the ones its agent made. */
 export interface ProjectWorktreeApi {
   projectWorktree(chatId: string): Promise<WorktreeStatus>;
-  /** The branch a new thread's worktree would get for `prompt`, or whether `branch` can be made. */
-  worktreeBranch(
-    projectId: string,
-    prompt: string,
-    branch?: string,
-  ): Promise<WorktreeBranch>;
+  /** Whether `branch` can be made for a new thread's worktree. */
+  worktreeBranch(projectId: string, branch: string): Promise<WorktreeBranch>;
   /** One file as the worktree has it, against where its branch forks. */
   projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
   removeProjectWorktree(chatId: string): Promise<void>;

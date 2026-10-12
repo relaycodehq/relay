@@ -17,7 +17,7 @@ import {
   reattachWorktree,
   recreateWorktree,
   removeWorktree,
-  suggestedBranch,
+  retitleWorktree,
   uncommitted,
   worktreeChanges,
   worktreeDiff,
@@ -52,6 +52,8 @@ export interface WorktreeRequest {
 export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
   private refreshed = new Map<string, { at: number; pending: Promise<void> }>();
+  /** Threads whose first message just made their worktree; nothing runs in it until it's named. */
+  readonly unnamed = new Set<string>();
   constructor(
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */
@@ -118,6 +120,7 @@ export class ThreadWorktrees {
       return selected.path;
     }
     if (await worktreeExists(worktree)) return worktree.path!;
+    const first = !worktree.path;
     chat.worktree =
       (await reattachWorktree(root, worktree)) ??
       (await createWorktree(
@@ -126,6 +129,8 @@ export class ThreadWorktrees {
         promptTitle(prompt ?? chat.title),
         worktree,
       ));
+    // Only a branch Relay picked waits for the title; the user's keeps its name.
+    if (first && !chat.worktree.named) this.unnamed.add(chat.id);
     await this.core.storage.save(chat);
     return chat.worktree.path!;
   }
@@ -170,22 +175,34 @@ export class ThreadWorktrees {
     );
   }
 
-  /**
-   * The branch a new thread's worktree would get: Relay's pick for `prompt`,
-   * or `branch` with why it can't be made, if it can't.
-   */
-  async branch(
-    projectId: string,
-    prompt: string,
-    branch?: string,
-  ): Promise<WorktreeBranch> {
+  /** Why `branch` can't be made for a new thread's worktree, if it can't. */
+  async branch(projectId: string, branch: string): Promise<WorktreeBranch> {
     const root = await this.core.projects.root(projectId);
-    if (!branch)
-      return {
-        branch: await suggestedBranch(root, this.folder, promptTitle(prompt)),
-      };
     const problem = await newBranchProblem(root, branch);
     return problem ? { branch, problem } : { branch };
+  }
+
+  /**
+   * Moves the worktree the first message made to a folder and branch named
+   * after the thread's title, before its setup or agent runs there. Resolves
+   * to where the agent works.
+   */
+  async named(chat: ProjectChat) {
+    const worktree = chat.worktree;
+    if (!this.unnamed.delete(chat.id) || !worktree?.path) return worktree?.path;
+    const root = await this.core.projects.root(chat.projectId);
+    const moved = await retitleWorktree(root, worktree, chat.title).catch(
+      (error: unknown) => {
+        // A worktree with submodules, say, can't move; the message's name stays.
+        console.warn("Could not name the worktree after the title:", error);
+        return undefined;
+      },
+    );
+    if (!moved) return worktree.path;
+    if (chat.branch === worktree.branch) chat.branch = moved.branch;
+    Object.assign(worktree, moved);
+    await this.core.storage.save(chat);
+    return moved.path;
   }
 
   /**
@@ -273,6 +290,9 @@ export class ThreadWorktrees {
     const merged = by === "pr" || by === "merge" ? by : undefined;
     return {
       ...(worktree.branch ? { branch: worktree.branch } : {}),
+      ...(this.unnamed.has(id) && this.core.active.has(id)
+        ? { naming: true as const }
+        : {}),
       ...(worktree.path ? { path: worktree.path } : {}),
       ...(worktree.from ? { from: worktree.from } : {}),
       files: changes?.files ?? [],

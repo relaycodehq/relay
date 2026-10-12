@@ -713,8 +713,8 @@ export class ProjectChats {
   passedOn(id: string) {
     return this.worktrees.passedOn(id);
   }
-  worktreeBranch(projectId: string, prompt: string, branch?: string) {
-    return this.worktrees.branch(projectId, prompt, branch);
+  worktreeBranch(projectId: string, branch: string) {
+    return this.worktrees.branch(projectId, branch);
   }
   rerunWorktreeSetup(id: string, messageId: string) {
     return this.worktrees.setup.rerun(id, messageId);

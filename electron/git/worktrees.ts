@@ -83,10 +83,35 @@ async function freeFolder(dir: string, name: string) {
   }
 }
 
-/** The branch Relay names a new worktree after `name`, as `createWorktree` would. */
-export async function suggestedBranch(root: string, dir: string, name: string) {
-  const folder = join(dir, slug(basename(root)));
-  return `relay/${await freeName(root, folder, slug(name))}`;
+/**
+ * Moves a worktree the first message just made, before anything runs in it,
+ * from the folder and `relay/…` branch named after the message to ones named
+ * after the thread's `title`. Resolves to where it went; undefined when it
+ * stays, already named after it or on a branch the user named.
+ */
+export async function retitleWorktree(
+  root: string,
+  worktree: ChatWorktree,
+  title: string,
+) {
+  const { path, branch } = worktree;
+  if (!path || worktree.named || branch !== `relay/${basename(path)}`) return;
+  const name = slug(title);
+  for (let n = 1; ; n++) {
+    const leaf = n === 1 ? name : `${name}-${n}`;
+    if (leaf === basename(path)) return;
+    const to = join(dirname(path), leaf);
+    if ((await hasBranch(root, `relay/${leaf}`)) || (await exists(to)))
+      continue;
+    await git(root, ["worktree", "move", path, to]);
+    try {
+      await git(root, ["branch", "-m", branch, `relay/${leaf}`]);
+    } catch (error) {
+      await git(root, ["worktree", "move", to, path]).catch(() => {});
+      throw error;
+    }
+    return { path: to, branch: `relay/${leaf}` };
+  }
 }
 
 /**

@@ -44,6 +44,8 @@ const capture = process.env.RELAY_AGENT_CAPTURE;
 // How long a Codex turn streams before it completes. A test that must act on a
 // running turn either sends "wait for cancellation" or raises this.
 const turnMs = Number(process.env.RELAY_AGENT_TURN_MS) || 300;
+// A title that takes its time, like a real model's.
+const titleMs = Number(process.env.RELAY_FIXTURE_TITLE_MS) || 0;
 function record(data) {
   if (capture)
     fs.appendFileSync(
@@ -737,27 +739,29 @@ if (args.includes("--permission-prompt-tool")) {
         titling.startsWith("Generate a short title") ||
         titling.startsWith("This coding-agent thread already has the title")
       ) {
-        send({
-          method: "item/completed",
-          params: {
-            threadId: "fixture-thread",
-            item: {
-              id: "fixture-title",
-              type: "agentMessage",
-              phase: "final_answer",
-              text: titling.startsWith("This coding-agent thread")
-                ? '{"title":"Cache guard rework"}'
-                : '{"title":"Cache guard behavior"}',
+        setTimeout(() => {
+          send({
+            method: "item/completed",
+            params: {
+              threadId: "fixture-thread",
+              item: {
+                id: "fixture-title",
+                type: "agentMessage",
+                phase: "final_answer",
+                text: titling.startsWith("This coding-agent thread")
+                  ? '{"title":"Cache guard rework"}'
+                  : '{"title":"Cache guard behavior"}',
+              },
             },
-          },
-        });
-        send({
-          method: "turn/completed",
-          params: {
-            threadId: "fixture-thread",
-            turn: { id: "fixture-turn", status: "completed" },
-          },
-        });
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { id: "fixture-turn", status: "completed" },
+            },
+          });
+        }, titleMs);
         return;
       }
       // Answers that link project files, for the chat's file links.

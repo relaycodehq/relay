@@ -123,6 +123,8 @@ export function threadWorktree(chat: ThreadWorkspace | undefined) {
 }
 export interface WorktreeStatus {
   branch?: string;
+  /** Its `relay/…` branch waits for the thread's title to be named after it. */
+  naming?: true;
   path?: string;
   /** The branch it merges into. */
   from?: string;

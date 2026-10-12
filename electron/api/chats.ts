@@ -83,10 +83,8 @@ export function chatHandlers(ctx: ApiContext) {
         return result;
       },
     ),
-    worktreeBranch: takes(
-      [idSchema, z.string(), optional(branchSchema)],
-      (projectId, prompt, branch) =>
-        projectChats.worktreeBranch(projectId, prompt, branch),
+    worktreeBranch: takes([idSchema, branchSchema], (projectId, branch) =>
+      projectChats.worktreeBranch(projectId, branch),
     ),
     projectChat: takes(
       [idSchema, optional(knownMessagesSchema)],

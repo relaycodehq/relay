@@ -39,6 +39,8 @@ import type { ThreadWorktrees } from "./worktrees";
 
 /** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
 const HANDOFF_TIMEOUT = 120000;
+/** How long a new worktree's first turn waits for the title it's named after. */
+const TITLE_WAIT_MS = 8000;
 /** Asked of the agent whose session ends here, in that session, so it can draw on everything it did. */
 const handoffPrompt = (to: AgentProvider, computer?: string) =>
   `${
@@ -357,12 +359,19 @@ export class ChatTurns {
   ) {
     const id = chat.id;
     try {
+      // A new worktree takes the thread's title as its name before anything
+      // runs in it; a title slower than this keeps the message's.
+      if (this.worktrees.unnamed.has(id)) {
+        await this.titles.settled(id, TITLE_WAIT_MS, active.abort.signal);
+        root = (await this.worktrees.named(chat)) ?? root;
+      }
       // A new worktree is set up before anything runs in it.
-      await this.worktrees.setup.prepare(
-        chat,
-        asked.provider,
-        active.abort.signal,
-      );
+      if (!active.abort.signal.aborted)
+        await this.worktrees.setup.prepare(
+          chat,
+          asked.provider,
+          active.abort.signal,
+        );
       if (active.abort.signal.aborted) {
         this.core.active.release(id, active);
         return;

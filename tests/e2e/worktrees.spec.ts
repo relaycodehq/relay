@@ -59,6 +59,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       RELAY_TEST_DATA: data,
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
+      RELAY_FIXTURE_TITLE_MS: "1500",
     },
   });
   let server: number | undefined;
@@ -92,7 +93,12 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
+    // The agent waits while the worktree takes the title's name.
+    const naming = page.getByTitle(/^Naming the worktree/);
+    await expect(naming).toBeVisible();
+    await screenshot(page, { path: "test-results/worktree-naming.png" });
     await expect(page.getByText("needed no change")).toBeVisible();
+    await expect(naming).toBeHidden();
 
     // The agent worked in the worktree, on its own branch from the last commit.
     const folder = join(data, "worktrees", "project");
@@ -102,14 +108,15 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       execFileSync("git", ["-C", worktree, ...args], {
         encoding: "utf8",
       }).trim();
-    expect(leaf).toBe("fixture-edit-files");
+    // Named after the thread's title, not the message, before the agent ran.
+    expect(leaf).toBe("cache-guard-behavior");
     expect(await readFile(join(worktree, "src/guard.ts"), "utf8")).toBe(
       "export const guard = true;\n",
     );
     expect(existsSync(join(worktree, "notes.txt"))).toBe(false);
     expect(await readFile(join(repo, "README.md"), "utf8")).toBe("# Cache\n");
     expect(existsSync(join(repo, "src/guard.ts"))).toBe(false);
-    await expect(page.getByText("relay/fixture-edit-files")).toBeVisible();
+    await expect(page.getByText("relay/cache-guard-behavior")).toBeVisible();
 
     // The header follows the thread: Changes and Files show the worktree.
     await page.getByRole("button", { name: /^Changes\b/ }).click();
@@ -176,7 +183,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await commitIn("Add the cache guard");
     expect(inWorktree("log", "-1", "--format=%s")).toBe("Add the cache guard");
     expect(inWorktree("branch", "--show-current")).toBe(
-      "relay/fixture-edit-files",
+      "relay/cache-guard-behavior",
     );
     expect(git("rev-list", "--count", "HEAD")).toBe("1");
 
@@ -232,7 +239,9 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     expect(git("log", "-1", "--format=%s")).toBe("Mine too");
     await screenshot(page, { path: "test-results/worktree-conflict.png" });
     await sheet
-      .getByRole("button", { name: "Merge main into relay/fixture-edit-files" })
+      .getByRole("button", {
+        name: "Merge main into relay/cache-guard-behavior",
+      })
       .click();
     await expect(sheet).toContainText("with conflicts marked");
     const marked = await readFile(join(worktree, "README.md"), "utf8");
@@ -255,9 +264,11 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       .getByRole("dialog", { name: "Remove the worktree?" })
       .getByRole("button", { name: "Remove worktree" })
       .click();
-    await expect(page.getByText("Worktree removed")).toBeVisible();
+    await expect(
+      page.getByText("Worktree removed", { exact: true }),
+    ).toBeVisible();
     expect(existsSync(worktree)).toBe(false);
-    expect(git("branch", "--list", "relay/fixture-edit-files")).toBe("");
+    expect(git("branch", "--list", "relay/cache-guard-behavior")).toBe("");
     // It was the only process, so the list goes away.
     await expect(running).toBeHidden();
   } finally {

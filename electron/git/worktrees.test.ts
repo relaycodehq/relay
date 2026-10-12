@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   adoptWorktree,
   cantCarryOn,
@@ -22,7 +22,7 @@ import {
   newBranchProblem,
   reattachWorktree,
   removeWorktree,
-  suggestedBranch,
+  retitleWorktree,
   worktreeChanges,
   worktreeHoldsWork,
   type MadeWorktree,
@@ -486,16 +486,26 @@ it("makes do with relay/… when a named branch can't be made by now, saying why
   expect(await newBranchProblem(root, "team/b")).toBeUndefined();
 });
 
-it("suggests the branch createWorktree would pick", async () => {
-  expect(await suggestedBranch(root, dir, "Split the store")).toBe(
-    "relay/split-the-store",
-  );
+it("moves a new worktree to the title's folder and branch", async () => {
   const first = await made();
-  expect(await suggestedBranch(root, dir, "Split the store")).toBe(
-    "relay/split-the-store-2",
+  const second = await made();
+  expect(await retitleWorktree(root, first, "Split the store")).toBeUndefined();
+  const moved = await retitleWorktree(root, first, "Wait for the title");
+  expect(moved).toEqual({
+    path: join(dirname(first.path), "wait-for-the-title"),
+    branch: "relay/wait-for-the-title",
+  });
+  expect(existsSync(first.path)).toBe(false);
+  expect(git(moved!.path, "branch", "--show-current")).toBe(
+    "relay/wait-for-the-title",
   );
-  expect((await made()).branch).toBe("relay/split-the-store-2");
-  expect(first.named).toBeUndefined();
+  expect(await retitleWorktree(root, second, "Wait for the title")).toEqual({
+    path: join(dirname(second.path), "wait-for-the-title-2"),
+    branch: "relay/wait-for-the-title-2",
+  });
+  // A branch the user named keeps its name and folder.
+  const named = { ...(await made()), named: "relay/split-the-store" };
+  expect(await retitleWorktree(root, named, "Other")).toBeUndefined();
 });
 
 it("checks out a kept user-named branch again, and remakes a removed one on its name", async () => {
