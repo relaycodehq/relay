@@ -76,6 +76,35 @@ test("⌘⇧N opens a Scratchpad chat in a folder of its own, outside Projects",
       sidebar.locator(".sb-scratchpad .sb-thread:not(.sb-ghost)"),
     ).toHaveCount(2);
     await expect(sidebar.locator(".sb-project")).toHaveCount(0);
+
+    // Each chat is its own project, so opening another loads that project's
+    // list; meanwhile the chat must not read as a new one in the sidebar.
+    await page.getByLabel("Message project").fill("hello again");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(
+      page.getByText("The cache guard prevents duplicate requests."),
+    ).toBeVisible();
+    await page.reload();
+    const chats = sidebar.locator(".sb-scratchpad .sb-thread:not(.sb-ghost)");
+    await expect(chats).toHaveCount(2);
+    await page.evaluate(() => {
+      const w = window as unknown as { draftSeen: boolean };
+      w.draftSeen = false;
+      const draft = ".sb-scratchpad .sb-thread[disabled]";
+      new MutationObserver(() => {
+        if (document.querySelector(draft)) w.draftSeen = true;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await chats.nth(1).click();
+    await expect(chats.nth(1)).toHaveClass(/selected/);
+    await expect(page.getByText("hello", { exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { draftSeen: boolean }).draftSeen,
+      ),
+    ).toBe(false);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

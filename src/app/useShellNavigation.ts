@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ChatScope,
   ChatSummary,
@@ -7,6 +7,7 @@ import type {
   Project,
 } from "../../shared/projects";
 import { api } from "../lib/api";
+import { SCRATCH_CHATS } from "../lib/chat-events";
 import {
   clearDraftScope,
   currentNewThread,
@@ -77,10 +78,23 @@ export function useShellNavigation(
   const draftId = project ? currentNewThread(project.id) : "";
   const panes = useWorkspacePanes(chatId ?? draftId);
   const [restoredProject, setRestoredProject] = useState<string>();
+  const qc = useQueryClient();
   const chats = useQuery({
     queryKey: ["project-chats", project?.id],
     queryFn: () => api.projectChats(project!.id),
     enabled: !!project,
+    // Every Scratchpad chat is its own project, so opening one switches
+    // projects; until its list loads, the sidebar's Scratchpad list already
+    // has it, and without it the thread reads as a new chat for a moment.
+    // An empty stand-in would read as loaded, and a thread window takes a
+    // loaded list without its thread as the thread being gone.
+    placeholderData: () => {
+      if (!project?.scratch) return undefined;
+      const own = qc
+        .getQueryData<ChatSummary[]>(SCRATCH_CHATS)
+        ?.filter((c) => c.projectId === project.id);
+      return own?.length ? own : undefined;
+    },
   });
   const chat = chats.data?.find((c) => c.id === chatId);
   // A PR thread reviews its PR; any other thread shows the working tree.
