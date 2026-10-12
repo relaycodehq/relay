@@ -241,6 +241,8 @@ export interface ChatHandover {
   kickoff?: string;
   /** It carries on here without what `computer` changed in the code. */
   left?: true;
+  /** Its note already went on with the thread to another computer; a retry doesn't pass it again. */
+  passedOn?: true;
 }
 
 /** A send that waits for the computer a live thread is on; `error` when it turned it down. */

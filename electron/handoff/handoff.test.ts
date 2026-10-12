@@ -956,6 +956,40 @@ it("runs a live handoff's folder calls on the other computer's worktree, and won
   );
 });
 
+it("hands a thread straight back out with the note that came back, not one from an agent that never saw that work", async () => {
+  const { laptop, mini, sender, thread, computerId } = await liveThread();
+  await sender.bringBack(thread.id);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+  );
+  const back = (await laptop.chats.get(thread.id)).messages;
+  const returned = back.at(-1)!;
+  expect(returned.handoff?.computer).toBeTruthy();
+  const turns = (await prompts()).length;
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+    }),
+  );
+  const out = await laptop.chats.get(thread.id);
+  const passed = out.messages[back.length]!;
+  expect(passed.id).not.toBe(returned.id);
+  expect(passed).toMatchObject({
+    body: returned.body,
+    handoff: { computer: out.sentTo!.computer },
+  });
+  // The only new turn is the one that carries on there.
+  const [again] = mini.chats
+    .list(mini.projectId)
+    .filter((c) => c.cameFrom?.id === out.sentTo!.id);
+  await finished(mini.chats, again!.id);
+  expect((await prompts()).length).toBe(turns + 1);
+  expect((await mini.chats.get(again!.id)).messages.at(-1)?.status).toBe(
+    "complete",
+  );
+});
+
 it("shows what runs and waits on the other computer, and answers and stops it from here", async () => {
   const { laptop, mini, sender, thread, there } = await liveThread();
   await sender.forward("sendProjectChat", [

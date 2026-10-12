@@ -280,9 +280,28 @@ export class ComputerHandoff {
             !m.worktreeCommand &&
             m.status !== "failed",
         );
+      const lastNote = latest?.handoff?.computer ? latest : undefined;
+      // Briefing the next turn here on what came back is still owed.
+      const cameBack =
+        chat.handover && !chat.handover.left && !chat.handover.passedOn;
+      if (lastNote && cameBack) {
+        // Back from another computer with nothing said since: its note still
+        // says where things stand. The agent here never saw that work, so
+        // the note goes on as it is instead of one written here.
+        const passed: ChatMessage = {
+          ...structuredClone(lastNote),
+          id: randomUUID(),
+          created: Date.now(),
+          version: 1,
+          handoff: { ...lastNote.handoff!, computer },
+        };
+        chat.messages.push(passed);
+        chat.handover = { ...chat.handover!, passedOn: true };
+        this.core.emit({ chatId: id, message: structuredClone(passed) });
+      }
       // A retry finds the note already written, with nothing after it.
-      if (
-        !latest?.handoff?.computer &&
+      else if (
+        !lastNote &&
         outgoing?.provider &&
         agentSession(chat, outgoing.provider).thread
       ) {
