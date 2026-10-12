@@ -4,7 +4,7 @@ import type {
   ComputerInfo,
   HandBack,
   HandoffChat,
-  HandoffChatMethod,
+  HandoffMethod,
   HandoffLive,
   HandoffRemoteStatus,
 } from "./handoff";
@@ -165,7 +165,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 19;
+export const remoteBridgeVersion = 20;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -228,6 +228,12 @@ export const handoffBridge = 11;
  * so the thread carries on from there as if it were still there.
  */
 export const liveHandoffBridge = 18;
+/**
+ * From here a live handoff's changes, files, history and Git actions run on
+ * the computer the thread is on (`handoffFolderMethods`), not on the copy
+ * it left behind.
+ */
+export const folderHandoffBridge = 20;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -571,10 +577,13 @@ export interface RemoteApi {
   updateNow(): Promise<UpdateState>;
   /** A live handoff's thread as written here; missing before `liveHandoffBridge`. */
   handoffChat(id: string, known?: KnownMessages): Promise<HandoffChat>;
-  /** Runs one of `handoffChatMethods` on the thread, its id in place of the first argument. */
+  /**
+   * Runs one of `handoffMethods` on the thread, its id, or for a folder
+   * call its workspace id, in place of the first argument.
+   */
   handoffCall(
     id: string,
-    method: HandoffChatMethod,
+    method: HandoffMethod,
     args: unknown[],
   ): Promise<unknown>;
 }

@@ -2,7 +2,8 @@ import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
-  handoffChatMethods,
+  handoffFolderMethods,
+  handoffMethods,
   handoffChunk,
   handoffMessagesSchema,
   maxHandoffBundle,
@@ -26,6 +27,7 @@ import {
 import type { ApiMethod } from "../../shared/types";
 import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/validation";
+import { workspaceId } from "../../shared/workspaces";
 import { branchNameProblem } from "../../shared/branch-names";
 import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
@@ -39,6 +41,7 @@ import {
 } from "../git/bundles";
 import { LiveFeed, type FeedLink } from "./live-feed";
 
+const folderMethods = new Set<string>(handoffFolderMethods);
 const partSchema = z.enum(["thread", "bundle"]);
 const base64 = z
   .string()
@@ -221,11 +224,15 @@ export class HandoffReceiver {
       }
       case "handoffCall": {
         const chat = this.mine(idSchema.parse(args[0]), device.id);
-        const method = z.enum(handoffChatMethods).parse(args[1]);
+        const method = z.enum(handoffMethods).parse(args[1]);
         const rest = z.array(z.unknown()).max(9).parse(args[2]).slice(1);
         if (!this.host.dispatch) throw new Error("This Relay can't do that.");
+        // A folder call names the thread's worktree as this computer has it.
+        const first = folderMethods.has(method)
+          ? workspaceId(chat.projectId, chat.id)
+          : chat.id;
         return this.host.dispatch(method, [
-          chat.id,
+          first,
           ...(await this.host.chats.handoffArgs(chat.id, rest)),
         ]);
       }

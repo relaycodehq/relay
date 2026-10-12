@@ -75,6 +75,22 @@ describe("terminalBlocked", () => {
       terminalBlocked(thread({ ...made, removedAt: 1 }), project, "checkout"),
     ).toMatch(/was removed/);
   });
+  it("stays shut while the thread is on another computer, its files there", () => {
+    const away: ChatSummary = {
+      ...thread(made),
+      sentTo: {
+        id: "h1",
+        computerId: "c",
+        computer: "macmini",
+        at: 1,
+        state: "away",
+        live: true,
+      },
+    };
+    expect(terminalBlocked(away, project, "checkout")).toMatch(
+      /files are on macmini/,
+    );
+  });
   it("leaves an unsent PR or review thread in the checkout whatever the picker says", () => {
     const pr = {
       kind: "pr",

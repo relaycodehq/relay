@@ -45,6 +45,8 @@ export function terminalBlocked(
   draftWorkspace: ChatWorkspace,
 ) {
   if (agentWorktreeUnavailable(chat)) return WORKTREE_DELETED;
+  if (chat?.sentTo)
+    return `This thread's files are on ${chat.sentTo.computer}. Its terminal opens here once it's back`;
   return chat?.worktree
     ? chat.worktree.removedAt
       ? "This thread's worktree was removed. Its next message makes a new one"

@@ -7,6 +7,9 @@ import {
   handoffBlocked,
   handoffChatMethods,
   handoffChunk,
+  handoffFolderMethods,
+  handoffHereOnlyMethods,
+  handoffWorktreeMethods,
   liveAway,
   handoffMessageSchema,
   handoffMessagesSchema,
@@ -17,7 +20,8 @@ import {
   type HandoffRemoteStatus,
   type HandoffTarget,
   type HandoffThread,
-  type HandoffChatMethod,
+  type HandoffHereOnlyMethod,
+  type HandoffMethod,
   type HandoffView,
   type HeldSend,
 } from "../../shared/handoff";
@@ -27,6 +31,7 @@ import {
   type ChatSummary,
 } from "../../shared/projects";
 import {
+  folderHandoffBridge,
   handoffBridge,
   liveHandoffBridge,
   type HandoffPart,
@@ -34,6 +39,7 @@ import {
 } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
+import { parseWorkspaceId } from "../../shared/workspaces";
 import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
 import { portableMessages } from "../project-chats/handoff";
@@ -49,6 +55,15 @@ import {
 } from "../git/bundles";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const chatMethods = new Set<string>(handoffChatMethods);
+/** Calls that run there only once the other computer speaks `folderHandoffBridge`. */
+const folderMethods = new Set<string>([
+  ...handoffFolderMethods,
+  ...handoffWorktreeMethods,
+]);
+const hereOnlyMethods = new Set<string>(handoffHereOnlyMethods);
+const hereOnly = (method: string): method is HandoffHereOnlyMethod =>
+  hereOnlyMethods.has(method);
 /** A handoff as main.log names it: its id's start, never the thread's title. */
 const named = (id: string, computer: string) =>
   `${id.slice(0, 8)} with ${computer}`;
@@ -94,23 +109,53 @@ export class Handoffs {
     });
     computers.onEvent((id, event) => this.event(id, event));
   }
-  /** Whether the call is for a thread live on another computer, so runs there. */
-  forwards(method: string, args: unknown[]): method is HandoffChatMethod {
-    if (!(handoffChatMethods as readonly string[]).includes(method))
+  /** The thread live on another computer a call is about, by its id or its own worktree's workspace id. */
+  private liveAwayIn(first: unknown) {
+    if (typeof first !== "string") return undefined;
+    const { chatId, worktree } = first.includes("/")
+      ? parseWorkspaceId(first)
+      : { chatId: first, worktree: undefined };
+    // An agent's own worktree beside the thread's isn't what went across.
+    if (!chatId || worktree) return undefined;
+    const chat = this.store.get().chats?.find((c) => c.id === chatId);
+    return chat && liveAway(chat) ? chat : undefined;
+  }
+  /** Whether the call is for a thread live on another computer, so runs there or not at all. */
+  forwards(
+    method: string,
+    args: unknown[],
+  ): method is HandoffMethod | HandoffHereOnlyMethod {
+    if (
+      !chatMethods.has(method) &&
+      !folderMethods.has(method) &&
+      !hereOnly(method)
+    )
       return false;
-    const chat =
-      typeof args[0] === "string"
-        ? this.store.get().chats?.find((c) => c.id === args[0])
-        : undefined;
-    return !!chat && liveAway(chat);
+    return !!this.liveAwayIn(args[0]);
   }
   /**
    * Runs the call on the computer the thread is live on. A send waits here
-   * while that computer is away, and behind any send already waiting.
+   * while that computer is away, and behind any send already waiting. A call
+   * on its folder runs `here` instead when that computer is too old to take
+   * it, on the copy the thread left behind.
    */
-  async forward(method: HandoffChatMethod, args: unknown[]) {
-    const chatId = args[0] as string;
-    const sentTo = this.summary(chatId).sentTo!;
+  async forward(
+    method: HandoffMethod | HandoffHereOnlyMethod,
+    args: unknown[],
+    here?: () => unknown,
+  ) {
+    const chat = this.liveAwayIn(args[0]);
+    if (!chat) throw new Error("This thread isn't live on another computer.");
+    const chatId = chat.id;
+    const sentTo = chat.sentTo!;
+    if (hereOnly(method))
+      throw new Error(
+        `This thread's files are on ${sentTo.computer}; the copy here is as it left.`,
+      );
+    if (folderMethods.has(method) && !sentTo.folder) {
+      if (here) return here();
+      throw new Error(`${sentTo.computer} runs an older Relay.`);
+    }
     const online = () => this.computers.status(sentTo.computerId) === "online";
     const send =
       method === "sendProjectChat"
@@ -666,7 +711,13 @@ export class Handoffs {
       await this.chats.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
-        ...(live ? { live: true, kept: chat.messages.length } : {}),
+        ...(live
+          ? {
+              live: true,
+              kept: chat.messages.length,
+              ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
+            }
+          : {}),
       });
       await rm(folder, { recursive: true, force: true });
       console.info(

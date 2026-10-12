@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { workspaceId } from "../../shared/workspaces";
+import { liveAway } from "../../shared/handoff";
 import {
   agentWorktreeKey,
   agentWorktreeUnavailable,
@@ -30,6 +31,9 @@ export function useThreadFolder({
   const worktree = threadWorktree(inWorktree);
   // Its agent worktree was deleted: Git there only fails until the composer's row picks where it goes on.
   const deleted = agentWorktreeUnavailable(chat);
+  // Live on another computer, the panes show its worktree there.
+  const away =
+    chat?.sentTo?.folder && liveAway(chat) ? chat.sentTo.computer : undefined;
   const where = project
     ? workspaceId(
         project.id,
@@ -68,7 +72,8 @@ export function useThreadFolder({
   // (one session at a time), so the working-tree checks stand aside there.
   const checks = useProjectChecks(
     undefined,
-    project && tree.data && !gone && !deleted && !inbox && !pull
+    // Away, there's nothing here to check: its files are on that computer.
+    project && tree.data && !gone && !deleted && !inbox && !pull && !away
       ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
@@ -78,8 +83,12 @@ export function useThreadFolder({
     /** Workspace id: the checkout, or the thread's worktree. */
     where,
     /** For pane headers: which worktree they show. */
-    detail:
-      worktree && !deleted
+    detail: away
+      ? {
+          text: `on ${away}`,
+          title: `${worktree?.branch ?? "Detached HEAD"} · in its worktree on ${away}`,
+        }
+      : worktree && !deleted
         ? {
             text: "worktree",
             title: `${worktree.branch ?? "Detached HEAD"} · ${worktree.path}`,

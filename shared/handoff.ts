@@ -59,6 +59,11 @@ export interface ChatSentTo {
   live?: true;
   /** Live: the messages it left with; every one after mirrors the other computer's. */
   kept?: number;
+  /**
+   * Live, and its folder's calls run there too (`folderHandoffBridge`): its
+   * changes, files, history and Git actions are what's on that computer.
+   */
+  folder?: true;
 }
 
 /**
@@ -122,6 +127,72 @@ export const handoffChatMethods = [
   "closeWatchNote",
 ] as const satisfies readonly ApiMethod[];
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];
+
+/**
+ * Calls on the folder a live handoff's thread works in, its workspace id
+ * first: its changes, files, history and Git actions. They run on the
+ * computer the thread is on from `folderHandoffBridge`, against the worktree
+ * there; with an older one they stay here.
+ */
+export const handoffFolderMethods = [
+  "projectWorkingTree",
+  "projectWorkingDiff",
+  "projectIgnoredDiff",
+  "projectDismissIgnored",
+  "projectGitAction",
+  "projectCommitMessage",
+  "projectPlanCommitSplit",
+  "projectApplyCommitSplit",
+  "projectBranchPulls",
+  "projectMergePlan",
+  "projectMergeBranch",
+  "projectDeleteBranch",
+  "projectCatchUp",
+  "projectPreparePull",
+  "projectCreatePull",
+  "projectHistory",
+  "projectCommit",
+  "projectCommitDiff",
+  "projectFiles",
+  "projectFileInfo",
+  "projectDirectory",
+  "projectThumbnail",
+  "projectImage",
+  "projectFile",
+  "saveProjectFile",
+  "createProjectEntry",
+  "renameProjectEntry",
+  "trashProjectEntry",
+  "localBlame",
+  "inspectLocalSymbol",
+] as const satisfies readonly ApiMethod[];
+/** Calls on a live handoff's worktree, the thread's id first, that run there from `folderHandoffBridge` too. */
+export const handoffWorktreeMethods = [
+  "projectWorktree",
+  "projectWorktreeDiff",
+] as const satisfies readonly ApiMethod[];
+/**
+ * Calls that open or point at a thread's files on this computer's disk. For a
+ * live handoff's thread they'd open the copy it left behind, so they're
+ * refused; its folder argument or id comes first, as above.
+ */
+export const handoffHereOnlyMethods = [
+  "projectAbsolutePath",
+  "revealProjectPath",
+  "openProjectPath",
+  "revealProjectWorktree",
+] as const satisfies readonly ApiMethod[];
+export type HandoffHereOnlyMethod = (typeof handoffHereOnlyMethods)[number];
+export type HandoffMethod =
+  | HandoffChatMethod
+  | (typeof handoffFolderMethods)[number]
+  | (typeof handoffWorktreeMethods)[number];
+/** Every call a live handoff runs on the other computer. */
+export const handoffMethods = [
+  ...handoffChatMethods,
+  ...handoffFolderMethods,
+  ...handoffWorktreeMethods,
+] as const satisfies readonly HandoffMethod[];
 
 /** A handoff the user took back without the other computer's say; it can't return anymore. */
 export interface ChatAbandonedHandoff {

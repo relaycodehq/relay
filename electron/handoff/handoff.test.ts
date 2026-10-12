@@ -25,6 +25,7 @@ import { Handoffs, outdated } from "./sender";
 import { awaitsReturn } from "../project-chats/handoff";
 import { handoffBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
+import { workspaceId } from "../../shared/workspaces";
 import type { UpdateState } from "../../shared/updates";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
@@ -152,6 +153,7 @@ async function pairedComputers() {
           if (method === "respondProjectChat")
             return mini.chats.respond(id, rest[0] as string, rest[1] as never);
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
+          if (method === "projectWorkingTree") return { ran: method, on: id };
           throw new Error(`Not in this test: ${method}`);
         },
       }),
@@ -861,6 +863,34 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
   const back = (await laptop.chats.get(thread.id)).messages;
   expect(new Set(back.map((m) => m.id)).size).toBe(back.length);
   expect(back.filter((m) => m.body.includes("One more thing"))).toHaveLength(1);
+});
+
+it("runs a live handoff's folder calls on the other computer's worktree, and won't open the copy left here", async () => {
+  const { laptop, mini, sender, thread, there } = await liveThread();
+  const { sentTo } = await laptop.chats.get(thread.id);
+  expect(sentTo).toMatchObject({ folder: true });
+  const where = workspaceId(laptop.projectId, thread.id);
+  const here = () => "here";
+  expect(sender.forwards("projectWorkingTree", [where])).toBe(true);
+  expect(await sender.forward("projectWorkingTree", [where], here)).toEqual({
+    ran: "projectWorkingTree",
+    on: workspaceId(mini.projectId, there),
+  });
+  // An agent's own worktree beside the thread's never went across.
+  expect(
+    sender.forwards("projectWorkingTree", [
+      workspaceId(laptop.projectId, thread.id, "/elsewhere"),
+    ]),
+  ).toBe(false);
+  expect(sender.forwards("projectWorkingTree", [laptop.projectId])).toBe(false);
+  await expect(
+    sender.forward("revealProjectPath", [where, ""]),
+  ).rejects.toThrow(`This thread's files are on ${sentTo!.computer};`);
+  // Handed to a Relay too old for folder calls, they read the copy here.
+  await laptop.chats.updateSentTo(thread.id, sentTo!.id, { folder: undefined });
+  expect(await sender.forward("projectWorkingTree", [where], here)).toBe(
+    "here",
+  );
 });
 
 it("shows what runs and waits on the other computer, and answers and stops it from here", async () => {
