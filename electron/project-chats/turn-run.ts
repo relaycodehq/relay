@@ -359,7 +359,9 @@ export class TurnRunner {
           : null,
         rules.records && !rules.resumesSnapshot
           ? keepIgnored(root).catch((e) => {
-              console.warn("Could not keep the ignored files:", e);
+              // A folder outside Git has no ignored files to keep, every turn.
+              if (!/not a git repository/.test(String(e)))
+                console.warn("Could not keep the ignored files:", e);
               return null;
             })
           : null,
