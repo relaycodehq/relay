@@ -1,4 +1,8 @@
 import type { AgentActivity } from "../../../shared/projects";
+import { mcpCall } from "../activity";
+
+/** Where the SDK serves custom tools from; Relay's tools are the only ones it hands Cursor (relay-tools.ts). */
+const CUSTOM_TOOLS_SERVER = "custom-user-tools";
 
 /** A tool call as the worker forwards it: the SDK's, cut down (see `slim` in worker.ts). */
 export interface CursorCall {
@@ -83,13 +87,15 @@ export function cursorActivity(
       return make("search", text(call, "query"));
     case "task":
       return make("agent", text(call, "description"));
-    case "mcp":
-      return make(
-        "tool",
-        [text(call, "providerIdentifier"), text(call, "toolName")]
-          .filter(Boolean)
-          .join(" "),
-      );
+    case "mcp": {
+      const server = text(call, "providerIdentifier");
+      const tool = text(call, "toolName");
+      if (!tool || !server) return make("tool", tool || server);
+      return {
+        ...make("tool", tool),
+        ...mcpCall(server === CUSTOM_TOOLS_SERVER ? "relay" : server, tool),
+      };
+    }
     case "updateTodos":
       return make("tool", "Updated the plan");
     case "readLints":

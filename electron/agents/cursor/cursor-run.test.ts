@@ -26,6 +26,12 @@ import { configureCursor } from "./sdk";
 import { runtimeModesFor } from "../../../shared/agent-modes";
 import type { AgentOptions } from "../types";
 import type { AgentActivity } from "../../../shared/projects";
+import {
+  relayToken,
+  serveRelayTools,
+  toolText,
+  verifyRelayToken,
+} from "../../relay-mcp";
 
 let dir: string;
 let log: string;
@@ -333,6 +339,65 @@ describe("a Cursor turn", () => {
     await expect(
       runCursor(turn("x", { job: { kind: "compact" } }).options),
     ).rejects.toThrow(/on its own/);
+  });
+});
+
+describe("Relay's own tools", () => {
+  const secret = "b".repeat(64);
+  const calls: { chatId: string; name: string }[] = [];
+  let url: string;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    const serving = serveRelayTools(0, {
+      verify: (token) => verifyRelayToken(secret, token),
+      call: async (chatId, name) => {
+        calls.push({ chatId, name });
+        return toolText("No started threads.");
+      },
+    });
+    await serving.ready;
+    close = serving.close;
+    const { port } = serving.server.address() as { port: number };
+    url = `http://127.0.0.1:${port}/mcp`;
+  });
+  afterAll(() => close());
+  beforeEach(() => void (calls.length = 0));
+
+  const relayTools = () => ({ url, token: relayToken(secret, "chat-1") });
+
+  it("reach Cursor as its own tools, called as the thread without asking even in Supervised, and read like the other agents'", async () => {
+    const { seen, options } = turn("[[relay]]", {
+      relayTools: relayTools(),
+      runtimeMode: "approval-required",
+    });
+    expect(await runCursor(options)).toBe("No started threads.");
+    expect(calls).toEqual([{ chatId: "chat-1", name: "list_threads" }]);
+    const [sent] = await asked();
+    expect(sent.sendOptions.customTools).toEqual(
+      expect.arrayContaining(["start_threads", "list_threads", "show_html"]),
+    );
+    expect(seen.activity.at(-1)).toMatchObject({
+      kind: "tool",
+      label: "Checked on started threads",
+      status: "complete",
+      mcp: { server: "relay", tool: "list_threads" },
+    });
+  });
+
+  it("aren't given to a read-only reviewer or a helper job", async () => {
+    await runCursor(
+      turn("[[relay]]", { relayTools: relayTools(), readOnly: true }).options,
+    );
+    await runCursor(
+      turn("[[relay]]", {
+        relayTools: relayTools(),
+        job: { kind: "helper", instructions: "Answer briefly." },
+      }).options,
+    );
+    expect((await asked()).map((sent) => sent.sendOptions.customTools)).toEqual(
+      [undefined, undefined],
+    );
+    expect(calls).toEqual([]);
   });
 });
 

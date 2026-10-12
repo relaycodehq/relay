@@ -288,6 +288,14 @@ export async function runCursor(options: AgentOptions): Promise<string> {
               ambient: false,
             }
           : { ...cursorPolicy(options), ambient: true }),
+        ...(!helper && !options.readOnly && options.relayTools
+          ? {
+              relayTools: {
+                url: options.relayTools.url,
+                token: options.relayTools.token,
+              },
+            }
+          : {}),
       };
       if (params.sandbox && cannotSandbox && mayGoUnsandboxed)
         params = unsandboxed(params);

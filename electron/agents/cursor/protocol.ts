@@ -39,6 +39,8 @@ export interface CursorRun {
   systemPrompt?: string;
   /** Loads the project's and the user's own Cursor rules, MCP servers and hooks; false for helper jobs. */
   ambient: boolean;
+  /** Relay's own MCP tools, reached as this thread; see electron/relay-mcp. */
+  relayTools?: { url: string; token: string };
 }
 
 export interface CursorRunResult {

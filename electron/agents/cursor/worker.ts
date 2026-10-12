@@ -15,6 +15,7 @@ import type {
   CursorRunResult,
   CursorUpdate,
 } from "./protocol";
+import { relayCustomTools } from "./relay-tools";
 
 type Sdk = typeof import("@cursor/sdk");
 
@@ -155,7 +156,9 @@ function slim(call: any) {
   if (!call || typeof call !== "object") return call;
   const args: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(call.args ?? {}))
-    args[name] = name === "plan" ? value : clip(value);
+    // An MCP call's own arguments, like a whole page to show, Relay never reads.
+    if (!(call.type === "mcp" && name === "args"))
+      args[name] = name === "plan" ? value : clip(value);
   const result = call.result;
   return {
     type: call.type,
@@ -243,8 +246,24 @@ function runFailure(error: unknown) {
 }
 
 async function start(params: CursorRun): Promise<CursorRunResult> {
+  // Relay's tools stop with the turn, like a wait it was cancelled in.
+  const toolCalls = new AbortController();
+  try {
+    return await startWith(params, toolCalls.signal);
+  } finally {
+    toolCalls.abort();
+  }
+}
+
+async function startWith(
+  params: CursorRun,
+  toolCalls: AbortSignal,
+): Promise<CursorRunResult> {
   const model = await modelSelection(params);
   const agent = await agentFor(params, model);
+  const customTools = params.relayTools
+    ? await relayCustomTools(params.relayTools, toolCalls)
+    : {};
   const message = params.images.length
     ? {
         text: params.prompt,
@@ -258,6 +277,7 @@ async function start(params: CursorRun): Promise<CursorRunResult> {
     .send(message as string, {
       ...(model ? { model } : {}),
       mode: params.mode,
+      ...(Object.keys(customTools).length ? { local: { customTools } } : {}),
       onDelta: ({ update }) => forward(params.run, update),
     })
     .catch((error) => {

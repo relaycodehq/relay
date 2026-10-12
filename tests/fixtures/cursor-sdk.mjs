@@ -71,11 +71,16 @@ class FakeAgent {
   }
   async send(message, sendOptions) {
     const prompt = typeof message === "string" ? message : message.text;
+    const customTools = sendOptions.local?.customTools;
     log({
       pid: process.pid,
       agent: this.agentId,
       options: this.options,
-      sendOptions: { model: sendOptions.model, mode: sendOptions.mode },
+      sendOptions: {
+        model: sendOptions.model,
+        mode: sendOptions.mode,
+        ...(customTools ? { customTools: Object.keys(customTools) } : {}),
+      },
       images: typeof message === "string" ? 0 : message.images.length,
       prompt,
     });
@@ -153,6 +158,29 @@ class FakeAgent {
           toolCall: { type: "createPlan", args: { plan: "1. Do it" } },
         });
         return { status: "finished", result: "1. Do it" };
+      }
+      // Calls a custom tool the way the SDK does: through its MCP server for them.
+      if (/\[\[relay\]\]/.test(prompt)) {
+        const tool = customTools?.list_threads;
+        if (!tool) return { status: "finished", result: "No Relay tools." };
+        const toolCall = {
+          type: "mcp",
+          args: {
+            providerIdentifier: "custom-user-tools",
+            toolName: "list_threads",
+            args: {},
+          },
+        };
+        say({ type: "tool-call-started", callId: "m1", toolCall });
+        const result = await tool.execute({}, { toolCallId: "m1" });
+        say({
+          type: "tool-call-completed",
+          callId: "m1",
+          toolCall: { ...toolCall, result: { status: "success" } },
+        });
+        const text = result.content.map((c) => c.text).join("");
+        say({ type: "text-delta", text });
+        return { status: "finished", result: text };
       }
       if (/\[\[tools\]\]/.test(prompt)) {
         say({ type: "text-delta", text: "Let me look. " });
