@@ -90,6 +90,7 @@ export function AgentRequestCard({
       {deferred && (
         <p className="agent-question-timing">Answer whenever you're ready.</p>
       )}
+      {request.note && <p className="agent-request-note">{request.note}</p>}
       {request.detail &&
         (request.kind === "page" ? (
           <p className="agent-request-note">{request.detail}</p>

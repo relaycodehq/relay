@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  askPermission,
   permissionRules,
   readOnlyReply,
   type PermissionRule,
@@ -136,5 +137,29 @@ describe("Relay's tools under OpenCode", () => {
       tool: "search",
     });
     expect(named("bash")).toBeUndefined();
+  });
+});
+
+it("warns that a subagent won't ask, since OpenCode hands it no asks", async () => {
+  const asked: unknown[] = [];
+  await askPermission(
+    {
+      id: "p",
+      sessionID: "s",
+      permission: "task",
+      patterns: ["general"],
+      always: ["*"],
+      metadata: { description: "Find phone code", subagent_type: "general" },
+    },
+    async (request) => {
+      asked.push(request);
+      return { kind: "approval", decision: "accept" };
+    },
+    new AbortController().signal,
+  );
+  expect(asked[0]).toMatchObject({
+    title: "Start a subagent?",
+    detail: "Find phone code",
+    note: expect.stringMatching(/won't ask/),
   });
 });

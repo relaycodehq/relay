@@ -108,6 +108,8 @@ export interface AgentRequest {
   kind: "approval" | "question" | "page";
   title: string;
   detail?: string;
+  /** What to know before answering, said under the title. */
+  note?: string;
   decisions?: AgentDecision[];
   questions?: AgentQuestion[];
   /** The page an agent asks with (ask_html), saved like show_html's; see shared/html-render. */

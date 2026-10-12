@@ -67,6 +67,9 @@ export function RequestCard({
           {more} more waiting after this
         </Text>
       )}
+      {!!request.note && (
+        <Text style={[styles.hint, { color: t.muted }]}>{request.note}</Text>
+      )}
       {!!request.detail && (
         <ScrollView
           style={[styles.detail, { backgroundColor: t.code, borderColor: t.border }]}

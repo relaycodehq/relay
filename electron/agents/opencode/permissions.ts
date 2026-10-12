@@ -228,16 +228,27 @@ export async function askPermission(
           ]
         : request.permission === "external_directory"
           ? ["Allow access outside the project?", patterns]
-          : request.permission === "webfetch" ||
-              request.permission === "websearch"
-            ? ["Allow this web request?", text("url") || patterns]
-            : [`Allow ${request.permission}?`, patterns];
+          : request.permission === "task"
+            ? ["Start a subagent?", text("description") || patterns]
+            : request.permission === "webfetch" ||
+                request.permission === "websearch"
+              ? ["Allow this web request?", text("url") || patterns]
+              : [`Allow ${request.permission}?`, patterns];
   const canRemember = !!thread && !!request.always?.length;
   const decisions: AgentDecision[] = canRemember
     ? ["accept", "acceptForSession", "decline", "cancel"]
     : ["accept", "decline", "cancel"];
   const response = await ask(
-    { kind: "approval", title, detail, decisions },
+    {
+      kind: "approval",
+      title,
+      detail,
+      decisions,
+      // OpenCode hands a subagent only the thread's deny rules, never its asks.
+      ...(request.permission === "task" && {
+        note: "It won't ask before running commands or changing files.",
+      }),
+    },
     signal,
   );
   if (response.kind !== "approval")
