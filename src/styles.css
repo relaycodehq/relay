@@ -1515,6 +1515,7 @@ body.resizing-table-column {
     .spinner,
     .spinner-arc,
     .spin,
+    .sb-version-spin,
     .running-tasks-list li.restart .running-task-buttons button:first-child svg,
     .context-meter-trigger[data-compacting] > svg,
     .cache-tongue,

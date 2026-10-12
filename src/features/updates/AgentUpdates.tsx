@@ -45,7 +45,7 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
         title={`Updating ${updating.map((a) => agentInfo(a.provider).cli).join(" and ")}`}
       >
         <Spinner size={12} />
-        Updating…
+        <span>Updating…</span>
       </button>
     );
   if (failed.length)
@@ -62,7 +62,7 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
         onClick={onDetails}
       >
         <AlertCircle size={13} />
-        Update failed
+        <span>Update failed</span>
       </button>
     );
   if (behind.length)
@@ -86,14 +86,14 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
         }
       >
         <ArrowDownToLine size={13} />
-        Update {names(behind)}
+        <span>Update {names(behind)}</span>
       </button>
     );
   if (justUpdated)
     return (
       <span className="sb-agent-update done" role="status">
         <Check size={13} />
-        Updated
+        <span>Updated</span>
       </span>
     );
   return null;

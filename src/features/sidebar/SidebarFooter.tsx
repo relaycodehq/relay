@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ChartColumn, Settings2 } from "lucide-react";
 import { AgentUpdateButton } from "../updates/AgentUpdates";
 import { DevRestartButton } from "../updates/DevRestartButton";
@@ -5,11 +6,8 @@ import { DevCheckoutLabel } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
 import type { SettingsCategory } from "../settings/Settings";
 import { IconButton } from "../../ui/ui";
-import {
-  CheckUpdatesButton,
-  RunningVersion,
-  UpdateButton,
-} from "../updates/UpdateButton";
+import { RunningVersion, UpdateButton } from "../updates/UpdateButton";
+import { useFooterFit } from "./useFooterFit";
 
 /** The version, the time tracker, updates, Usage and Settings, under the sidebar. */
 export function SidebarFooter({
@@ -30,13 +28,14 @@ export function SidebarFooter({
   /** Opens Settings, at `category` when given. */
   onSettings: (category?: SettingsCategory) => void;
 }) {
+  const row = useRef<HTMLDivElement>(null);
+  useFooterFit(row);
   return (
-    <div className="sb-footer">
+    <div className="sb-footer" ref={row}>
       <RunningVersion onAbout={() => onSettings("about")} />
       <DevCheckoutLabel />
       <DevRestartButton />
       <UpdateButton />
-      <CheckUpdatesButton />
       <AgentUpdateButton onDetails={() => onSettings("agents")} />
       <ClockifyTimer
         projectId={projectId}

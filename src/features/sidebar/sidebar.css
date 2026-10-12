@@ -1352,21 +1352,82 @@
   padding: 8px 10px 10px;
   border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
+/* Fit steps: useFooterFit lists the steps it took in data-fit until the row
+   fits. The tooltips keep the full words. */
+.sb-footer[data-fit~="1"] .sb-version,
+.sb-footer[data-fit~="2"] .sb-agent-update > span,
+.sb-footer[data-fit~="3"] .sb-update .fit-word {
+  display: none;
+}
+.sb-footer[data-fit~="2"] .sb-agent-update {
+  padding: 0 6px;
+}
 /* Pushes the rest of the footer right, even before the version is known. */
 .sb .sb-version {
   flex: none;
+  gap: 4px;
   margin-right: auto;
   height: 24px;
   padding: 0 6px;
   border-radius: 6px;
   font-size: 11.5px;
+  white-space: nowrap;
   color: var(--muted);
   background: none;
   font-variant-numeric: tabular-nums;
+  transition:
+    color 0.16s,
+    background-color 0.16s;
 }
 .sb .sb-version:hover {
   color: var(--text);
   background: var(--hover);
+}
+.sb .sb-version[aria-busy] {
+  cursor: default;
+}
+/* The check's icons share the cell after the number. The ↻ rolls out of the
+   number on hover and turns while checking; ✓ or ! takes over after. */
+.sb-version-icon {
+  display: grid;
+  width: 12px;
+  height: 12px;
+}
+.sb-version-icon > * {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transition:
+    opacity 0.16s ease-out,
+    transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.sb-version-turn {
+  display: inline-flex;
+  transform: translateX(-6px) rotate(-180deg) scale(0.6);
+}
+.sb-version:is(:hover, :focus-visible):not([data-shows]) .sb-version-turn,
+.sb-version[data-shows="checking"] .sb-version-turn {
+  opacity: 1;
+  transform: none;
+}
+/* Gone at once when the answer comes, so the spin's end doesn't snap. */
+.sb-version[data-shows="done"] .sb-version-turn,
+.sb-version[data-shows="failed"] .sb-version-turn {
+  transition: none;
+}
+.sb-version-spin {
+  display: inline-flex;
+}
+.sb-version[data-shows="checking"] .sb-version-spin {
+  animation: spin 0.9s linear infinite;
+}
+.sb-version-done,
+.sb-version-failed {
+  transform: scale(0.4);
+}
+.sb-version[data-shows="done"] .sb-version-done,
+.sb-version[data-shows="failed"] .sb-version-failed {
+  opacity: 1;
+  transform: none;
 }
 /* Plain text like the agent update beside it; the background only answers hover. */
 .sb .sb-update {

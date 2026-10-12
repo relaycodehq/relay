@@ -11,34 +11,14 @@ import { api } from "../../lib/api";
 import { checkForUpdates, useUpdates } from "./updates";
 import { useRecent } from "./useRecent";
 import { releasesPage } from "../../../shared/updates";
-import { IconButton, Spinner } from "../../ui/ui";
+import { Spinner } from "../../ui/ui";
 
 /**
- * The version this Relay runs, at the footer's start; opens About. A
- * development build never updates, so its footer identifies it as dev.
+ * The version this Relay runs, at the footer's start. While no update is under
+ * way a click looks for a newer release, which a ↻ rolling out of the number
+ * on hover says; otherwise, and in a development build, it opens About.
  */
 export function RunningVersion({ onAbout }: { onAbout: () => void }) {
-  const state = useUpdates().state;
-  const dev = state?.status === "off";
-  return (
-    <button
-      className="sb-version"
-      title={
-        state &&
-        (dev ? "Development build · About" : `Relay ${state.current} · About`)
-      }
-      onClick={onAbout}
-    >
-      {state && (dev ? "dev" : `v${state.current}`)}
-    </button>
-  );
-}
-
-/**
- * Sidebar footer icon that looks for a newer release. It steps aside once
- * there is one: the update button beside it takes over from there.
- */
-export function CheckUpdatesButton() {
   const { state, checking, failure } = useUpdates();
   const [askedAt, setAskedAt] = useState<number>();
   const answered = useRecent(
@@ -46,35 +26,59 @@ export function CheckUpdatesButton() {
     // The check itself takes at least 1.4s of the window.
     3400,
   );
-  if (!state || (state.status !== "idle" && state.status !== "checking"))
-    return null;
+  if (!state) return <button type="button" className="sb-version" />;
+  const dev = state.status === "off";
+  const checks = state.status === "idle" || state.status === "checking";
   const busy = checking || state.status === "checking";
-  const label = busy
-    ? "Checking for updates…"
-    : failure
-      ? `${failure} Click to try again.`
-      : answered
-        ? `Relay ${state.current} is up to date`
-        : "Check for updates";
+  const shows = !checks
+    ? undefined
+    : busy
+      ? "checking"
+      : failure
+        ? "failed"
+        : answered
+          ? "done"
+          : undefined;
+  const title = dev
+    ? "Development build · About"
+    : !checks
+      ? `Relay ${state.current} · About`
+      : busy
+        ? "Checking for updates…"
+        : failure
+          ? `${failure} Click to try again.`
+          : answered
+            ? `Relay ${state.current} is up to date`
+            : `Relay ${state.current} · Check for updates`;
   return (
-    <IconButton
-      label={label}
-      disabled={busy}
+    <button
+      type="button"
+      className="sb-version"
+      data-shows={shows}
+      aria-busy={busy || undefined}
+      title={title}
       onClick={() => {
+        if (!checks) return onAbout();
+        if (busy) return;
         setAskedAt(Date.now());
         void checkForUpdates();
       }}
     >
-      {busy ? (
-        <Spinner size={14} />
-      ) : failure ? (
-        <AlertCircle size={15} />
-      ) : answered ? (
-        <Check size={15} />
-      ) : (
-        <RefreshCw size={15} />
+      {dev ? "dev" : `v${state.current}`}
+      {checks && (
+        // Every icon stays mounted in one cell, so states cross-fade and
+        // hovering never changes the button's width.
+        <span className="sb-version-icon" aria-hidden="true">
+          <span className="sb-version-turn">
+            <span className="sb-version-spin">
+              <RefreshCw size={12} />
+            </span>
+          </span>
+          <Check size={12} className="sb-version-done" />
+          <AlertCircle size={12} className="sb-version-failed" />
+        </span>
       )}
-    </IconButton>
+    </button>
   );
 }
 
@@ -92,7 +96,8 @@ export function UpdateButton() {
           onClick={() => void api.openExternal(releasesPage)}
         >
           <ArrowDownToLine size={13} />
-          Download {state.version}
+          <span className="fit-word">Download</span>
+          {state.version}
         </button>
       ) : (
         <button
@@ -102,7 +107,8 @@ export function UpdateButton() {
           onClick={() => void api.downloadUpdate()}
         >
           <ArrowDownToLine size={13} />
-          Update {state.version}
+          <span className="fit-word">Update</span>
+          {state.version}
         </button>
       );
     case "downloading":
