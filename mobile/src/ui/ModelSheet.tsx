@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
-import { agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
+import { agentInfo, agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
 import { listedModel, onWindow } from "../../../shared/model-fit";
 import { withComposerChange } from "../../../shared/remote-compose";
 import type { RemoteSettings } from "../../../shared/remote";
@@ -179,10 +179,10 @@ export function ModelSheet({
           ))}
         </>
       )}
-      {provider === "codex" && (
+      {agentInfo(provider).fast && (
         <ToggleRow
           label="Fast"
-          hint="Codex's faster service tier; uses more of your limit."
+          hint={`${agentName(provider)}'s faster service tier; uses more of your limit.`}
           value={settings.choice.fast}
           onChange={(fast) => onChange({ ...settings, choice: { ...settings.choice, fast } })}
         />

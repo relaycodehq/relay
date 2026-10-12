@@ -15,7 +15,7 @@ import {
   type ProviderUsage,
   type UsageMeter,
 } from "../../../shared/provider-usage";
-import { agentName, type AgentProvider } from "../../../shared/agents";
+import { agentName, reportsUsage, type AgentProvider } from "../../../shared/agents";
 import type { ContextUsage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "./Button";
@@ -30,10 +30,6 @@ const warn = "#e3a23a",
 const paceColor = (pace: MeterPace, fallback: string) =>
   pace === "warn" ? warn : pace === "hot" || pace === "spent" ? hot : fallback;
 
-/** Only Claude and Codex report plan limits. */
-const hasUsage = (provider: AgentProvider) =>
-  provider === "claude" || provider === "codex";
-
 /** The last usage each computer reported per agent, so a thread opens with its meters drawn. */
 const lastUsage = new Map<string, ProviderUsage>();
 
@@ -47,8 +43,8 @@ export function useUsage(provider: AgentProvider) {
   // the provider's usage service.
   const load = useCallback(
     (force = false) => {
-      if (!hasUsage(provider) || status !== "online" || !foreground) return;
-      void desktop("providerUsage", provider as "claude" | "codex", force)
+      if (!reportsUsage(provider) || status !== "online" || !foreground) return;
+      void desktop("providerUsage", provider, force)
         .then((value) => {
           lastUsage.set(key, value);
           setUsage({ key, value });
@@ -107,7 +103,7 @@ export function UsageBar({
   const used = context?.maxTokens
     ? Math.min(100, Math.round((context.usedTokens / context.maxTokens) * 100))
     : undefined;
-  const list = hasUsage(provider) ? meters(usage) : [];
+  const list = reportsUsage(provider) ? meters(usage) : [];
   if (used == null && !list.length) return null;
   return (
     <Pressable
@@ -243,7 +239,7 @@ export function UsageSheet({
             )}
           </View>
         )}
-        {!hasUsage(provider) ? (
+        {!reportsUsage(provider) ? (
           <Text style={[styles.hint, { color: t.muted }]}>
             {agentName(provider)} doesn't report plan limits.
           </Text>
@@ -281,7 +277,7 @@ export function UsageSheet({
             </View>
           ))
         )}
-        {hasUsage(provider) && (
+        {reportsUsage(provider) && (
           <Pressable
             accessibilityRole="button"
             onPress={() => onRefresh()}
