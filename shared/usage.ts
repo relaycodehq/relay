@@ -56,6 +56,13 @@ export function streamedIfReal(output: number, ms: number) {
 
 export const tokensPerSecond = (s: Streamed) => (s.output * 1000) / s.ms;
 
+/** Fewer tokens than this stream too briefly for an answer's speed to mean much. */
+const TIMED_ANSWER = 50;
+
+/** An answer's speed worth showing, or nothing. */
+export const answerSpeed = (s: Streamed | undefined) =>
+  s && s.output >= TIMED_ANSWER ? Math.round(tokensPerSecond(s)) : undefined;
+
 export const addStreamed = (a: Streamed | undefined, b: Streamed): Streamed =>
   a ? { output: a.output + b.output, ms: a.ms + b.ms } : { ...b };
 

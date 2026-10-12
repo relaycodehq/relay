@@ -1,12 +1,9 @@
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../../shared/chat-activity";
-import { tokensPerSecond, type Streamed } from "../../../shared/usage";
+import { answerSpeed, type Streamed } from "../../../shared/usage";
 import { useCopy } from "../../lib/useCopy";
 import { PinMessageButton } from "../../ui/KeepBlock";
 import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
-
-/** Fewer tokens than this stream too briefly for a speed to mean much. */
-const TIMED_OUTPUT = 50;
 
 const speedDetail = (s: Streamed) =>
   `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
@@ -34,6 +31,7 @@ export function MessageActions({
   onReply: () => void;
   onFork?: () => void;
 }) {
+  const speed = answerSpeed(streamed);
   return (
     <footer className="message-actions" inert={pending}>
       {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
@@ -58,9 +56,9 @@ export function MessageActions({
       >
         <Reply size={15} />
       </button>
-      {streamed && streamed.output >= TIMED_OUTPUT && (
+      {streamed && speed !== undefined && (
         <span className="message-speed" title={speedDetail(streamed)}>
-          {Math.round(tokensPerSecond(streamed))} tok/s
+          {speed} tok/s
         </span>
       )}
       <time

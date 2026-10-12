@@ -7,7 +7,8 @@ import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
 import { agentError } from "../../../shared/agent-error";
 import { stoppedNote } from "../../../shared/agent-trace";
 import { sentLabel } from "../../../shared/chat-activity";
-import { compactedTokens } from "../../../shared/tokens";
+import { compactedTokens, formatTokens } from "../../../shared/tokens";
+import { answerSpeed } from "../../../shared/usage";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
 import { reloadNote } from "../../../shared/session-reload";
@@ -300,7 +301,7 @@ export const MessageView = memo(function MessageView({
 });
 
 /** A line across the thread with a note in the middle, for compactions and handoffs. */
-/** The desktop's MessageActions: when it was sent, copy, read aloud, fork, reply. */
+/** The desktop's MessageActions: when it was sent, how fast it wrote, copy, read aloud, fork, reply. */
 function MessageActions({
   message,
   onReply,
@@ -312,9 +313,15 @@ function MessageActions({
 }) {
   const t = useTheme();
   const [copied, setCopied] = useState(false);
+  const speed = answerSpeed(message.streamed);
   return (
     <View style={styles.actions}>
       <Text style={[styles.meta, { color: t.faint }]}>{sentLabel(message.ended ?? message.created, new Date())}</Text>
+      {message.streamed && speed !== undefined && (
+        <Text style={[styles.meta, { color: t.faint }]}>
+          {formatTokens(message.streamed.output)} out · {speed} tok/s
+        </Text>
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={copied ? "Copied" : "Copy answer"}
