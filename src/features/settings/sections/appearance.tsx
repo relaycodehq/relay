@@ -140,7 +140,7 @@ export function useAppearanceEntries(): SettingEntry[] {
       title: "Composer toolbar",
       description: "Drag to reorder. Drop below the bar to hide.",
       keywords:
-        "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode attach dictation microphone",
+        "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode plan attach dictation microphone",
       block: true,
       accessory: () => <ComposerToolbarReset />,
       render: () => <ComposerToolbarSettings />,

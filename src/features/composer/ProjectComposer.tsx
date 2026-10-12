@@ -461,7 +461,8 @@ export function ProjectComposer({
                   onRuntimeMode={composer.setRuntimeMode}
                 />
               ),
-              mode: to !== "message" && (
+              // Build is the norm and says nothing; /plan turns Plan on.
+              mode: to !== "message" && composer.interactionMode === "plan" && (
                 <InteractionModeMenu
                   interactionMode={composer.interactionMode}
                   onInteractionMode={composer.setInteractionMode}

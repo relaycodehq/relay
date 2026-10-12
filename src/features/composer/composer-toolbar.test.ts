@@ -46,7 +46,7 @@ describe("parseToolbar", () => {
   it("drops junk and puts back controls a saved layout lacks", () => {
     const layout = parseToolbar({
       slots: ["mic", "model", "bogus", "model", "gap", "usage"],
-      hidden: ["attach", "model", "gap", 3],
+      hidden: ["attach", "model", "mode", "gap", 3],
     });
     expect(layout.slots).toHaveLength(defaultToolbar.slots.length);
     expect(new Set(layout.slots)).toEqual(new Set(defaultToolbar.slots));
@@ -57,7 +57,7 @@ describe("parseToolbar", () => {
       "account",
       "effort",
     ]);
-    // The model can't be hidden, and the gap isn't a control. The account
+    // The model and mode can't be hidden, and the gap isn't a control. The account
     // control is new to this layout, and starts hidden as the default has it.
     expect(layout.hidden).toEqual(["attach", "account"]);
   });

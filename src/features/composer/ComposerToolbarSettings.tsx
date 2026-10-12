@@ -68,12 +68,18 @@ export function ComposerToolbarSettings() {
         role="button"
         aria-label={gap ? "Gap: everything after it sits on the right" : name}
         aria-keyshortcuts={
-          gap ? "ArrowLeft ArrowRight" : "ArrowLeft ArrowRight Delete"
+          gap || !canHide(slot)
+            ? "ArrowLeft ArrowRight"
+            : "ArrowLeft ArrowRight Delete"
         }
         title={
           gap
             ? "Drag to choose what sits on the right"
-            : `${name} · drag to move, or below to hide`
+            : slot === "mode"
+              ? `${name} · shows only while planning (/plan) · drag to move`
+              : canHide(slot)
+                ? `${name} · drag to move, or below to hide`
+                : `${name} · drag to move`
         }
         data-dragging={dragging === slot || undefined}
         onDragStart={start(slot)}

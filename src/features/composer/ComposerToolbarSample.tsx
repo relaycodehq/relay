@@ -117,8 +117,9 @@ export function useSampleControls(sample?: SampleModel): ToolbarControls {
         onRuntimeMode={noop}
       />
     ),
-    mode: (
-      <InteractionModeMenu interactionMode="default" onInteractionMode={noop} />
+    // The composer shows it only while planning; Settings shows it to place it.
+    mode: !sample && (
+      <InteractionModeMenu interactionMode="plan" onInteractionMode={noop} />
     ),
     account: (
       <button type="button" className="composer-control">

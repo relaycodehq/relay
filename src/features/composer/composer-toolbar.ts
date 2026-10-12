@@ -45,13 +45,15 @@ export const toolbarNames: Record<ToolbarItem, string> = {
   effort: "Effort",
   context: "Context meter",
   access: "Access",
-  mode: "Mode",
+  mode: "Plan mode",
   attach: "Attach",
   usage: "Usage limits",
   mic: "Dictation",
 };
 
-export const canHide = (item: ToolbarItem) => item !== "model";
+// Mode shows only while planning, so hiding it would hide that it's on.
+export const canHide = (item: ToolbarItem) =>
+  item !== "model" && item !== "mode";
 
 /** Labelled controls get a divider between them; bare icon buttons don't. */
 const divided = new Set<ToolbarSlot>([
