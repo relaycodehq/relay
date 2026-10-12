@@ -1,6 +1,10 @@
 import { AlertCircle, ArrowDownToLine, Check } from "lucide-react";
 import { useRecent } from "./useRecent";
-import { updateAgent, useAgentVersions } from "./agent-updates";
+import {
+  updateAgent,
+  useAgentUpdateNotices,
+  useAgentVersions,
+} from "./agent-updates";
 import {
   isBehind,
   isUpdating,
@@ -14,15 +18,17 @@ const names = (list: AgentVersion[]) =>
   list.length === 1 ? agentInfo(list[0].provider).name : "agents";
 
 /**
- * Sidebar footer control, hidden until an agent CLI has a newer release. It
- * updates the ones Relay can update itself; the rest, and failures, open
- * Settings, which says more.
+ * Sidebar footer control, hidden until an agent CLI has a newer release, or
+ * for good when its notices are off. It updates the ones Relay can update
+ * itself; the rest, and failures, open Settings, which says more.
  */
 export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
   const list = useAgentVersions()?.agents ?? [];
+  const notices = useAgentUpdateNotices();
   const updating = list.filter(isUpdating);
   const failed = list.filter((a) => a.update?.status === "failed");
-  const behind = list.filter(isBehind);
+  // Amp ships every few hours, so a newer release would always be showing.
+  const behind = notices ? list.filter(isBehind) : [];
   const updatable = behind.filter((a) => a.command);
   const updatedAt = Math.max(
     0,

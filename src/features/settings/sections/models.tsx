@@ -10,7 +10,12 @@ import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
 import { useRecent } from "../../updates/useRecent";
-import { updateAgent, useAgentVersions } from "../../updates/agent-updates";
+import {
+  setAgentUpdateNotices,
+  updateAgent,
+  useAgentUpdateNotices,
+  useAgentVersions,
+} from "../../updates/agent-updates";
 import { AccountRows } from "../../accounts/AccountRows";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { ModelField } from "../../agents/ModelField";
@@ -20,7 +25,11 @@ import {
   type MissingAgent,
 } from "../../agents/AcpRegistrySettings";
 import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
-import { SettingsCard, SettingsSelect } from "../../../ui/SettingsCard";
+import {
+  SettingsCard,
+  SettingsSelect,
+  Switch,
+} from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import { WatchThreadsSetting } from "../WatchThreadsSetting";
 import { RenderModeSetting } from "../RenderModeSetting";
@@ -58,6 +67,7 @@ export function useModelEntries(
   setError: (error: unknown) => void,
 ): SettingEntry[] {
   const ai = useSaveAISettings(setError);
+  const updateNotices = useAgentUpdateNotices();
   return [
     {
       id: "default-agent",
@@ -86,6 +96,22 @@ export function useModelEntries(
               />
             )
           }
+        />
+      ),
+    },
+    {
+      id: "agent-update-notices",
+      category: "agents",
+      title: "Update notices",
+      description:
+        "The Update button under the sidebar when an agent has a newer release. Amp ships one every few hours, so you may want it off; the cards above still say so.",
+      keywords:
+        "agent update notice notification nag reminder footer sidebar newer release version amp codex claude opencode",
+      render: () => (
+        <Switch
+          label="Offer agent updates under the sidebar"
+          checked={updateNotices}
+          onChange={setAgentUpdateNotices}
         />
       ),
     },

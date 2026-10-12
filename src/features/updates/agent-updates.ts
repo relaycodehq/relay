@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { api } from "../../lib/api";
+import { localSwitch } from "../../lib/local-switch";
 import type { AgentVersions } from "../../../shared/agent-updates";
 import type { AgentProvider } from "../../../shared/agents";
 
@@ -80,3 +81,8 @@ export async function signInAgent(provider: AgentProvider) {
 export async function signOutAgent(provider: AgentProvider) {
   change(await api.signOutAgent(provider));
 }
+
+/** Whether the sidebar footer offers newer agent releases; Settings always does. */
+const notices = localSwitch("relay-agent-update-notices");
+export const useAgentUpdateNotices = notices.use;
+export const setAgentUpdateNotices = notices.set;
