@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { git } from "../git/git";
+import type { AgentProvider } from "../../shared/agents";
+import { noteWorkspaceMove } from "../../shared/workspace-moves";
 import {
+  agentWorktreeKey,
   selectedAgentWorktree,
   type ActiveAgentWorktree,
   type AgentActivity,
@@ -126,8 +129,33 @@ export function activeAfter(
   };
 }
 
+/** Sets where the thread works, noting it in the thread when that changed without the user. */
+export function followAgentWorkspace(
+  chat: ProjectChat,
+  active: ActiveAgentWorktree | undefined,
+  by?: AgentProvider,
+) {
+  const before = chat.activeAgentWorktree;
+  if (active) chat.activeAgentWorktree = active;
+  else delete chat.activeAgentWorktree;
+  // A repair, like Git's name for a folder learned later, is no move.
+  const same =
+    before && active
+      ? before.path === active.path ||
+        agentWorktreeKey(before) === agentWorktreeKey(active)
+      : before === active;
+  if (same) return;
+  noteWorkspaceMove(chat, {
+    how: "switched",
+    ...(active ? { to: active.path } : {}),
+    ...(active?.branch ? { branch: active.branch } : {}),
+    unasked: true,
+    ...(by ? { by } : {}),
+  });
+}
+
 /** Applies one turn's worktree changes to its thread. */
-export function turnWorkspace(chat: ProjectChat) {
+export function turnWorkspace(chat: ProjectChat, by?: AgentProvider) {
   return (worktrees: AgentWorktree[]) => {
     const first = firstAgentWorktree(chat, worktrees);
     const active = first
@@ -140,8 +168,7 @@ export function turnWorkspace(chat: ProjectChat) {
       : activeAfter(chat, worktrees);
     if (worktrees.length) chat.agentWorktrees = worktrees;
     else delete chat.agentWorktrees;
-    if (active) chat.activeAgentWorktree = active;
-    else delete chat.activeAgentWorktree;
+    followAgentWorkspace(chat, active, by);
   };
 }
 

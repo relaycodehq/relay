@@ -178,7 +178,7 @@ export class TurnRunner {
     const edited = new Set<string>(),
       commands = new Map<string, string>();
     let commits: Awaited<ReturnType<typeof commitWatch>> | undefined;
-    const workspace = turnWorkspace(chat);
+    const workspace = turnWorkspace(chat, provider);
     const watchWorktrees = watchAgentWorktrees(
       await this.core.projects.root(chat.projectId),
       () => threadWorktreePaths(this.core.store.get().chats),

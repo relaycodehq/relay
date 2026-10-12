@@ -29,7 +29,11 @@ import { HeldSends, RanHereDivider } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
-import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
+import {
+  WorkspaceMoveDivider,
+  WorktreeLanded,
+  WorktreeRenamed,
+} from "./WorktreeControls";
 import { TerminalOrigin } from "../continue-session/TerminalOrigin";
 import { agentError } from "../../../shared/agent-error";
 
@@ -256,6 +260,16 @@ export function ThreadMessages({
                 : {})}
             />
           ),
+          ...(!root
+            ? (chat?.workspaceMoves ?? [])
+                .filter((move) => move.after === m.id)
+                .map((move) => (
+                  <WorkspaceMoveDivider
+                    key={`workspace-move-${move.at}`}
+                    move={move}
+                  />
+                ))
+            : []),
           m.id === renamedAfter && (
             <WorktreeRenamed
               key="worktree-renamed"

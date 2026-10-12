@@ -88,7 +88,8 @@
   cursor: default;
 }
 .worktree-menu {
-  min-width: 250px;
+  width: 380px;
+  max-width: calc(100vw - 24px);
 }
 .worktree-menu-heading {
   display: flex;
@@ -96,9 +97,12 @@
   gap: 16px;
 }
 .worktree-menu-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
 }
 .worktree-menu-heading > small {
+  flex: none;
   font-size: 11px;
 }
 .composer-select-item.worktree-path {
@@ -120,7 +124,7 @@
 .worktree-path > svg[aria-label] {
   opacity: 1;
 }
-/* The worktree has changes the checkout doesn't. */
+/* Where the thread works changed without the user, unseen since. */
 .worktree-dot {
   width: 6px;
   height: 6px;

@@ -15,12 +15,22 @@ import type {
   ChatSummary,
   ChatWorkspace,
   ChatWorktree,
+  WorkspaceMove,
   WorktreeStatus,
 } from "../../../shared/projects";
 import { agentWorktreeKey, tildePath } from "../../../shared/projects";
+import {
+  unseenWorkspaceMove,
+  workspaceMoveLine,
+} from "../../../shared/workspace-moves";
+import {
+  markWorkspaceMoveSeen,
+  useWorkspaceMoveSeen,
+} from "./workspace-move-seen";
 import { api } from "../../lib/api";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import type { ThreadWorktree } from "./useThreadWorktree";
+import { LineDivider } from "../../ui/LineDivider";
 import { Modal, Spinner } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
@@ -42,6 +52,7 @@ export function WorkspaceControl({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   onError: (error: unknown) => void;
 }) {
+  const seenAt = useWorkspaceMoveSeen(chat?.id ?? "");
   if (!chat)
     return (
       <WorkspacePicker
@@ -50,9 +61,13 @@ export function WorkspaceControl({
         disabled={busy}
       />
     );
+  const moved = unseenWorkspaceMove(chat, seenAt);
+  const onSeen = moved && (() => markWorkspaceMoveSeen(chat.id, moved.at));
   if (!chat.worktree)
     return (
       <CheckoutControl
+        moved={moved}
+        onSeen={onSeen}
         worktrees={chat.agentWorktrees}
         active={chat.activeAgentWorktree}
         recreatable={worktree.recreatable}
@@ -68,6 +83,8 @@ export function WorkspaceControl({
   return (
     <WorktreeMenu
       status={status}
+      moved={moved}
+      onSeen={onSeen}
       running={running}
       busy={worktree.busy}
       onShowChanges={() => {
@@ -183,6 +200,8 @@ export function CheckoutControl({
   onSelect,
   selectionDisabled = false,
   onReveal,
+  moved,
+  onSeen,
 }: {
   worktrees?: AgentWorktree[];
   active?: ActiveAgentWorktree;
@@ -192,6 +211,9 @@ export function CheckoutControl({
   onSelect?: (path: string | null) => void;
   selectionDisabled?: boolean;
   onReveal: (path: string) => void;
+  /** Where it works changed without the user, and they haven't opened this since. */
+  moved?: WorkspaceMove;
+  onSeen?: () => void;
 }) {
   if (!worktrees.length && !active) return null;
   const selected =
@@ -209,7 +231,7 @@ export function CheckoutControl({
     );
   const Icon = active ? FolderGit2 : Folder;
   return (
-    <Menu.Root>
+    <Menu.Root onOpenChange={(open) => !open && onSeen?.()}>
       <Menu.Trigger
         className="composer-branch-trigger workspace-trigger agent-worktree-trigger"
         title={
@@ -222,6 +244,7 @@ export function CheckoutControl({
         <span>
           {selected ? folderName(selected.path) : "Current checkout"}
         </span>
+        {moved && <MovedDot />}
         <ChevronDown size={12} />
       </Menu.Trigger>
       <Menu.Portal>
@@ -235,6 +258,7 @@ export function CheckoutControl({
             className="composer-select-popup worktree-menu agent-worktree-menu"
             aria-label="Active workspace"
           >
+            {moved && <MovedNote move={moved} />}
             <div className="composer-menu-label agent-worktree-note">
               Choose where Git, files and future agent turns work. This
               choice stays until you change it.
@@ -359,6 +383,8 @@ function DeletedWorktree({
  */
 export function WorktreeMenu({
   status,
+  moved,
+  onSeen,
   running,
   busy,
   onShowChanges,
@@ -366,6 +392,9 @@ export function WorktreeMenu({
   onRemove,
 }: {
   status?: WorktreeStatus;
+  /** It moved or was made again without the user, and they haven't opened this since. */
+  moved?: WorkspaceMove;
+  onSeen?: () => void;
   running: boolean;
   busy: boolean;
   /** Everything the branch has that `from` doesn't, committed or not. */
@@ -409,25 +438,22 @@ export function WorktreeMenu({
   const files = status.files.length;
   const idle = !running && !busy;
   return (
-    <Menu.Root>
+    <Menu.Root onOpenChange={(open) => !open && onSeen?.()}>
       <Menu.Trigger
         className="composer-branch-trigger workspace-trigger"
         title={status.path}
       >
         <FolderGit2 size={13} />
         <span>Worktree</span>
-        {status.landed && !files ? (
-          <Check
-            size={12}
-            className="worktree-landed-mark"
-            aria-label="Merged"
-          />
+        {moved ? (
+          <MovedDot />
         ) : (
-          files > 0 &&
-          !running && (
-            <i
-              className="worktree-dot"
-              aria-label={`${files} ${files === 1 ? "file" : "files"} not in ${status.from ?? "the project folder's branch"}`}
+          status.landed &&
+          !files && (
+            <Check
+              size={12}
+              className="worktree-landed-mark"
+              aria-label="Merged"
             />
           )
         )}
@@ -457,6 +483,7 @@ export function WorktreeMenu({
               </small>
             </div>
             <WorktreePath path={status.path} />
+            {moved && <MovedNote move={moved} />}
             <Menu.Item
               className="composer-select-item worktree-item"
               disabled={!files}
@@ -482,6 +509,18 @@ export function WorktreeMenu({
         </Menu.Positioner>
       </Menu.Portal>
     </Menu.Root>
+  );
+}
+
+const MovedDot = () => (
+  <i className="worktree-dot" aria-label="Changed since you last looked" />
+);
+
+function MovedNote({ move }: { move: WorkspaceMove }) {
+  return (
+    <div className="composer-menu-label worktree-moved-note">
+      {workspaceMoveLine(move)}
+    </div>
   );
 }
 
@@ -512,6 +551,15 @@ function WorktreePath({ path }: { path: string }) {
         <Copy size={12} aria-hidden />
       )}
     </Menu.Item>
+  );
+}
+
+/** Where the thread's folder changed, under the message before it. */
+export function WorkspaceMoveDivider({ move }: { move: WorkspaceMove }) {
+  return (
+    <LineDivider role="separator">
+      <span title={move.to}>{workspaceMoveLine(move)}</span>
+    </LineDivider>
   );
 }
 

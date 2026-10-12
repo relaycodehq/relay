@@ -112,6 +112,10 @@ it("takes the thread, its answer's edits and its next session into the worktree"
   const folder = moved.worktree?.path;
   expect(folder).toBe(join(root, "worktrees", "repo", "acp-agents"));
   expect(moved.worktree?.branch).toBe("relay/acp-agents");
+  // The user didn't ask: the composer gets a dot, the thread a line.
+  expect(moved.workspaceMoves).toEqual([
+    expect.objectContaining({ how: "moved", to: folder, unasked: true }),
+  ]);
   expect(git("worktree", "list")).toContain(folder);
   // The copy went along and the project folder kept its own.
   expect(await readFile(join(folder!, "wip.txt"), "utf8")).toBe(

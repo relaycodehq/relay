@@ -37,10 +37,12 @@ import {
 } from "../../shared/projects";
 import {
   activeAfter,
+  followAgentWorkspace,
   recoverAgentWorktrees,
   threadWorktreePaths,
 } from "./agent-worktrees";
 import { sentAgent } from "../../shared/recipient";
+import { noteWorkspaceMove } from "../../shared/workspace-moves";
 
 /** What an agent asks for when it moves its thread into a worktree. */
 export interface WorktreeRequest {
@@ -94,8 +96,7 @@ export class ThreadWorktrees {
         return;
       if (worktrees.length) chat.agentWorktrees = worktrees;
       else delete chat.agentWorktrees;
-      if (active) chat.activeAgentWorktree = active;
-      else delete chat.activeAgentWorktree;
+      followAgentWorkspace(chat, active);
       await this.core.storage.save(chat);
     })().catch((error) => {
       this.refreshed.delete(chat.id);
@@ -121,8 +122,9 @@ export class ThreadWorktrees {
     }
     if (await worktreeExists(worktree)) return worktree.path!;
     const first = !worktree.path;
+    const reattached = await reattachWorktree(root, worktree);
     chat.worktree =
-      (await reattachWorktree(root, worktree)) ??
+      reattached ??
       (await createWorktree(
         root,
         this.folder,
@@ -131,6 +133,14 @@ export class ThreadWorktrees {
       ));
     // Only a branch Relay picked waits for the title; the user's keeps its name.
     if (first && !chat.worktree.named) this.unnamed.add(chat.id);
+    if (!first)
+      noteWorkspaceMove(chat, {
+        how: "recreated",
+        to: chat.worktree.path!,
+        ...(chat.worktree.branch ? { branch: chat.worktree.branch } : {}),
+        ...(reattached ? {} : { fresh: true as const }),
+        unasked: true,
+      });
     await this.core.storage.save(chat);
     return chat.worktree.path!;
   }
@@ -458,6 +468,11 @@ export class ThreadWorktrees {
         to: chat.worktree.path!,
         owed: Object.keys(chat.scopeHeard ?? {}),
       };
+      noteWorkspaceMove(chat, {
+        how: "moved",
+        to: chat.worktree.path!,
+        ...(chat.worktree.branch ? { branch: chat.worktree.branch } : {}),
+      });
       // Live sessions started in the project folder; resumed, they start in the worktree.
       this.core.sessions.close(id);
       await this.core.storage.save(chat);
@@ -522,6 +537,13 @@ export class ThreadWorktrees {
       const owed = Object.keys(chat.scopeHeard ?? {}).filter(
         (key) => key !== asker,
       );
+      noteWorkspaceMove(chat, {
+        how: "moved",
+        to: made.path,
+        ...(made.branch ? { branch: made.branch } : {}),
+        unasked: true,
+        ...(caller ? { by: sentAgent(caller) } : {}),
+      });
       if (owed.length)
         chat.movedIn = {
           from: root,
@@ -647,6 +669,11 @@ export class ThreadWorktrees {
         owed: Object.keys(chat.scopeHeard ?? {}),
         selected: true,
       };
+      noteWorkspaceMove(chat, {
+        how: "switched",
+        ...(selected ? { to: selected.path } : {}),
+        ...(selected?.branch ? { branch: selected.branch } : {}),
+      });
       this.core.sessions.close(id);
       await this.core.storage.save(chat);
       return chatSummary(chat);
@@ -684,6 +711,11 @@ export class ThreadWorktrees {
         ...made,
         ...(gone.followed ? { followed: true as const } : {}),
       };
+      noteWorkspaceMove(chat, {
+        how: "recreated",
+        to: made.path,
+        branch: gone.branch,
+      });
       await this.core.storage.save(chat);
       return chatSummary(chat);
     });

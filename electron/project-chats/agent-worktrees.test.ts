@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   activeAfter,
   addsWorktree,
+  followAgentWorkspace,
   ownAgentWorktrees,
   watchAgentWorktrees,
   recoverAgentWorktrees,
@@ -283,6 +284,25 @@ it("moves the thread into the first worktree its agent makes, not later ones", a
   await run(`git worktree add -b later ${later}`);
   expect(thread.agentWorktrees).toHaveLength(2);
   expect(thread.activeAgentWorktree?.path).toBe(made);
+  // Once in the thread, however often the watcher looks again.
+  expect(thread.workspaceMoves).toEqual([
+    expect.objectContaining({ how: "switched", to: made, unasked: true }),
+  ]);
+});
+
+it("notes Relay leaving a followed worktree, but not learning its Git name", () => {
+  const path = "/tmp/wt";
+  const chat = {
+    messages: [],
+    activeAgentWorktree: { path, followed: true },
+  } as unknown as ProjectChat;
+  followAgentWorkspace(chat, { path, gitdir: "wt", followed: true });
+  expect(chat.workspaceMoves).toBeUndefined();
+  followAgentWorkspace(chat, undefined);
+  expect(chat.workspaceMoves).toEqual([
+    expect.objectContaining({ how: "switched", unasked: true }),
+  ]);
+  expect(chat.workspaceMoves![0]!.to).toBeUndefined();
 });
 
 it("leaves the project folder alone once the user went back to it", async () => {

@@ -1,3 +1,4 @@
+import type { AgentProvider } from "../agents";
 import type { ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
@@ -66,6 +67,26 @@ export type ActiveAgentWorktree = Pick<
   /** Relay moved the thread in after its agent made it; once that worktree is gone the thread goes back to the project folder. */
   followed?: true;
 };
+/**
+ * The folder a thread works in changed after it started: it moved into a
+ * worktree of its own, its removed worktree was made again, or it switched
+ * between the project folder and a worktree its agent made.
+ */
+export interface WorkspaceMove {
+  at: number;
+  /** The main conversation's last message before it; its line shows under that one. */
+  after?: string;
+  how: "moved" | "recreated" | "switched";
+  /** The folder it works in from here on; unset for the project folder. */
+  to?: string;
+  branch?: string;
+  /** Recreated from the project folder on a new branch; the old one couldn't be checked out again. */
+  fresh?: true;
+  /** The agent did it, or Relay did on its own; only these get the unseen dot. */
+  unasked?: true;
+  /** The agent that did it, when one did. */
+  by?: AgentProvider;
+}
 /** Where a deep review reads and fixes the reviewed code when the project's checkout doesn't have it. */
 export type ReviewFolder = Pick<ReviewCheckout, "path" | "branch">;
 type ThreadWorkspace = {
