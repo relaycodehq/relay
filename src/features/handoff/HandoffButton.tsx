@@ -3,26 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu } from "@base-ui/react/menu";
 import { FolderGit2, MonitorUp, Settings2 } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import type { HandoffTarget, PairedComputer } from "../../../shared/handoff";
+import {
+  handoffBlocked,
+  worktreeFirst,
+  type HandoffTarget,
+  type PairedComputer,
+} from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { DeviceIcon } from "./DeviceIcon";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import "./handoff.css";
-
-const worktreeFirst =
-  "Only a thread in its own worktree can move to another computer.";
-
-/** Why this thread can't move to another computer, if it can't. */
-function handoffBlocked(chat: ChatSummary) {
-  if (chat.scope.kind === "review")
-    return "A deep review stays on this computer.";
-  if (chat.cameFrom?.abandonedAt)
-    return `${chat.cameFrom.computer} took this thread back; it can't move on from here.`;
-  if (chat.cameFrom)
-    return `This thread came from ${chat.cameFrom.computer}; bring it back there.`;
-  if (!chat.worktree) return worktreeFirst;
-  if (chat.empty) return "Send a first message, then hand it off.";
-}
 
 /**
  * The thread header's hand-off button. With no computer paired it opens

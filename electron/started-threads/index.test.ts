@@ -1161,3 +1161,136 @@ test("notes: a started thread keeps them only in its own", async () => {
     resultText(await call(threads, child.id, "add_note", { text: "x" })),
   ).toBe("Kept as n1.");
 });
+
+test("handing off always asks; the thread then says where it runs, and sends and stops go there", async () => {
+  const { lead, sent, asked, chats, api } = fakeChats();
+  lead.lastInput!.runtimeMode = "full-access";
+  const forwarded: { method: string; args: unknown[] }[] = [];
+  const held: { input: ProjectChatSend }[] = [];
+  let online = true;
+  api.handoffOutbox = async () => held;
+  const handoffs = {
+    forwards: (_method: string, args: unknown[]) =>
+      chats.get(args[0] as string)?.sentTo?.live === true,
+    forward: async (method: string, args: unknown[]) => {
+      if (!online && method === "sendProjectChat")
+        held.push({ input: args[1] as ProjectChatSend });
+      else forwarded.push({ method, args });
+    },
+    targets: async () => [
+      { id: "pi", name: "Pi", online: false, problem: "Offline" },
+      {
+        id: "mini",
+        name: "macmini",
+        online: true,
+        project: { id: "q", name: "relay" },
+      },
+    ],
+    handOff: async (id: string, computerId: string) => {
+      chats.get(id)!.sentTo = {
+        id: "h1",
+        computerId,
+        computer: "macmini",
+        at: 1,
+        state: "away",
+        live: true,
+        kept: 2,
+      };
+    },
+    bringBack: async (id: string) => {
+      delete chats.get(id)!.sentTo;
+    },
+    finished: async () => undefined,
+  };
+  const threads = new StartedThreads(api, { handoffs });
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "Run the slow suite" }],
+    }),
+  );
+  chats.get(child.id)!.title = "Slow suite";
+  chats.get(child.id)!.worktree = { path: "/here/slow-suite" } as any;
+  asked.length = 0;
+
+  const moved = await call(threads, lead.id, "hand_off_thread", {
+    id: child.id,
+  });
+  expect(resultText(moved)).toContain("It runs on macmini now.");
+  expect(asked).toEqual([
+    {
+      id: lead.id,
+      request: expect.objectContaining({
+        title: "Hand “Slow suite” off to macmini?",
+        decisions: ["accept", "decline", "cancel"],
+      }),
+    },
+  ]);
+  const [listed] = parse(await call(threads, lead.id, "list_threads", {}));
+  expect(listed).toMatchObject({ on: "macmini" });
+  expect(listed.folder).toBeUndefined();
+
+  const before = sent.length;
+  const reply = await call(threads, lead.id, "send_to_thread", {
+    id: child.id,
+    message: "Only the e2e part",
+  });
+  expect(resultText(reply)).toBe("Sent; it runs on macmini.");
+  await call(threads, lead.id, "stop_thread", { id: child.id });
+  expect(forwarded.map((f) => f.method)).toEqual([
+    "sendProjectChat",
+    "cancelProjectChat",
+  ]);
+  expect(forwarded[0]!.args[1]).toMatchObject({ body: "Only the e2e part" });
+  online = false;
+  const waiting = await call(threads, lead.id, "send_to_thread", {
+    id: child.id,
+    message: "And the phone",
+  });
+  expect(resultText(waiting)).toBe(
+    "macmini is offline; it goes out once it's back.",
+  );
+  expect(sent).toHaveLength(before);
+
+  await call(threads, lead.id, "hand_off_thread", { id: child.id, to: "here" });
+  expect(asked.at(-1)!.request).toMatchObject({
+    title: "Bring “Slow suite” back from macmini?",
+  });
+  expect(chats.get(child.id)!.sentTo).toBeUndefined();
+});
+
+test("a handoff names the computers when it can't pick one", async () => {
+  const { lead, asked, chats, api } = fakeChats();
+  const handoffs = {
+    forwards: () => false,
+    forward: async () => undefined,
+    targets: async () => [
+      { id: "pi", name: "Pi", online: true, problem: "Not cloned on Pi" },
+    ],
+    handOff: async () => undefined,
+    bringBack: async () => undefined,
+    finished: async () => undefined,
+  };
+  const threads = new StartedThreads(api, { handoffs });
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  asked.length = 0;
+  chats.get(child.id)!.worktree = undefined;
+  expect(
+    resultText(
+      await call(threads, lead.id, "hand_off_thread", { id: child.id }),
+    ),
+  ).toBe("Only a thread in its own worktree can move to another computer.");
+  chats.get(child.id)!.worktree = { path: "/here/a" } as any;
+  expect(
+    resultText(
+      await call(threads, lead.id, "hand_off_thread", {
+        id: child.id,
+        to: "pi",
+      }),
+    ),
+  ).toBe("Pi can't take it.\n- Pi: Not cloned on Pi");
+  expect(asked).toEqual([]);
+});

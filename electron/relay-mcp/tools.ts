@@ -165,6 +165,20 @@ export const relayToolSchemas = {
     })
     .strict(),
   stop_thread: z.object({ id: threadId }).strict(),
+  hand_off_thread: z
+    .object({
+      id: threadId,
+      to: z
+        .string()
+        .trim()
+        .min(1)
+        .max(120)
+        .optional()
+        .describe(
+          'The paired computer\'s name, or "here" to bring the thread back. Left out: the one computer that can take it.',
+        ),
+    })
+    .strict(),
   settle_thread: z.object({ id: threadId }).strict(),
   settle_this_thread: z.object({}).strict(),
   usage_limits: z.object({}).strict(),
@@ -339,15 +353,17 @@ const DRIVE_NOTE =
 const descriptions: Record<RelayToolName, string> = {
   start_threads: `Start new Relay threads in this project, or with \`project\` in another one, each working on its own task while you go on. Each is an ordinary thread the user sees under yours and can talk to directly; with \`detached\` it stands on its own instead. Up to ${STARTED_LIMIT} of yours can work at once. Returns their ids; then use wait_for_threads, read_thread and send_to_thread.\n\n${DRIVE_NOTE}`,
   list_threads:
-    "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer. A working thread may have async questions in asks; those do not block its turn.",
+    "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer, and `on` the computer it runs on when that's another one. A working thread may have async questions in asks; those do not block its turn.",
   find_threads:
-    "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, and which thread started it. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
+    "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, which thread started it, and `on` the computer it runs on when that's another one. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread:
     "Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
   send_to_thread: `Send a message to a thread, as its user would. It answers in its own turn.\n\n${DRIVE_NOTE}`,
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
   stop_thread: `Stop the answer a thread is working on.\n\n${DRIVE_NOTE}`,
+  hand_off_thread:
+    "Move a thread to another computer the user paired with this Relay, like a Mac mini at home, or bring it back with `to` \"here\". Its agent stops and writes a handoff note, its worktree is committed, and it carries on there; the thread stays in the user's list here, marked with where it runs, and send_to_thread, stop_thread, read_thread and wait_for_threads reach it there. Only a thread in its own worktree can move. The user confirms every move. Returns once it has arrived, or why it couldn't, with the computers that could take it.",
   settle_thread: `Settle a thread once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user. For your own thread, settle_this_thread.\n\n${DRIVE_NOTE}`,
   settle_this_thread:
     "Settle this thread once this answer ends, the way the user settles one: it leaves their Activity and they can bring it back. Only when the user asked you to, or when your work here is finished and needs nothing more from them. It settles once the answer ends cleanly with nothing queued, and after the user has read it; a thread another thread started settles without, as its lead reads it. An open question, a failure, a stop or the user's next message keeps it in Activity.",

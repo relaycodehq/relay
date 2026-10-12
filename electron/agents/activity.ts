@@ -189,6 +189,7 @@ const relayToolLabels: Record<string, string> = {
   send_to_thread: "Messaged a started thread",
   wait_for_threads: "Waited for started threads",
   stop_thread: "Stopped a started thread",
+  hand_off_thread: "Moved a thread to another computer",
   settle_thread: "Settled a started thread",
   settle_this_thread: "Settles this thread when done",
   usage_limits: "Checked usage limits",

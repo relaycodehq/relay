@@ -411,6 +411,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       chats,
       agentHosts,
       agentProjects(projects, () => login.client, home),
+      { handoffs: handoffs.sender },
     );
   chats.armWakeups();
   void chats

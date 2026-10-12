@@ -604,11 +604,14 @@ app
         chats,
         agentHosts,
         agentProjects(projects, () => login.client, app.getPath("userData")),
-        previews,
-        (html, options, signal) =>
-          appRenderTheme(window.win).then((theme) =>
-            lookAtPage(html, { ...options, theme }, signal),
-          ),
+        {
+          previews,
+          look: (html, options, signal) =>
+            appRenderTheme(window.win).then((theme) =>
+              lookAtPage(html, { ...options, theme }, signal),
+            ),
+          handoffs: handoffs.sender,
+        },
       );
     chats.armWakeups();
     void chats

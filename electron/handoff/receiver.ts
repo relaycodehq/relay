@@ -149,9 +149,24 @@ export class HandoffReceiver {
         const id = idSchema.parse(args[0]);
         let job = this.receiving.get(id);
         if (!job) {
-          job = this.receive(id, device).finally(() =>
-            this.receiving.delete(id),
-          );
+          const started = Date.now();
+          job = this.receive(id, device)
+            .then(
+              (receipt) => {
+                console.info(
+                  `Handoff ${id.slice(0, 8)} from ${device.name}: arrived in ${((Date.now() - started) / 1000).toFixed(1)}s.`,
+                );
+                return receipt;
+              },
+              (e: unknown) => {
+                console.warn(
+                  `Handoff ${id.slice(0, 8)} from ${device.name} didn't arrive:`,
+                  e instanceof Error ? e.message : e,
+                );
+                throw e;
+              },
+            )
+            .finally(() => this.receiving.delete(id));
           this.receiving.set(id, job);
         }
         return job;
@@ -162,7 +177,17 @@ export class HandoffReceiver {
         const id = idSchema.parse(args[0]);
         this.handingBack.add(id);
         try {
-          return await this.handBack(id, device.id);
+          const back = await this.handBack(id, device.id);
+          console.info(
+            `Handoff ${id.slice(0, 8)} from ${device.name}: handed back.`,
+          );
+          return back;
+        } catch (e) {
+          console.warn(
+            `Handoff ${id.slice(0, 8)} from ${device.name} couldn't go back:`,
+            e instanceof Error ? e.message : e,
+          );
+          throw e;
         } finally {
           this.handingBack.delete(id);
         }
@@ -370,8 +395,12 @@ export class HandoffReceiver {
     // An arrival under way finishes first, so it's the one that's released.
     await this.receiving.get(id)?.catch(() => undefined);
     const chat = this.host.chats.handedOver(id);
-    if (chat?.cameFrom?.deviceId === deviceId)
+    if (chat?.cameFrom?.deviceId === deviceId) {
       await this.host.chats.handoffAbandoned(chat.id);
+      console.info(
+        `Handoff ${id.slice(0, 8)} from ${chat.cameFrom.computer}: taken back without this computer.`,
+      );
+    }
     await rm(join(this.host.dir, id), { recursive: true, force: true });
   }
   private mine(id: string, deviceId: string) {

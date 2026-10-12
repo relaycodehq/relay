@@ -25,6 +25,11 @@ import {
   type ProjectChatSend,
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
+import {
+  handoffBlocked,
+  type HandoffChatMethod,
+  type HandoffTarget,
+} from "../../shared/handoff";
 import { noteForAgent } from "../../shared/thread-notes";
 import type { ModelChoice } from "../../shared/settings";
 import type { HtmlRender } from "../../shared/html-render";
@@ -87,7 +92,20 @@ type Chats = Pick<
   | "askWithPage"
   | "enterWorktree"
   | "notes"
+  | "handoffOutbox"
 >;
+
+/** Moving threads to the user's other computers, as the thread header does. */
+export interface ThreadHandoffs {
+  /** Whether the call is for a thread live on another computer, so runs there. */
+  forwards(method: string, args: unknown[]): boolean;
+  forward(method: HandoffChatMethod, args: unknown[]): Promise<unknown>;
+  targets(chatId: string): Promise<HandoffTarget[]>;
+  handOff(chatId: string, computerId: string): Promise<void>;
+  bringBack(chatId: string): Promise<void>;
+  /** Once the handoff or bringing back under way is over, however it went. */
+  finished(chatId: string): Promise<void>;
+}
 
 const defaultChoice: ModelChoice = {
   model: "",
@@ -120,6 +138,27 @@ export function startedStatus(
     cancelled: "stopped",
     failed: "failed",
   }[last.status] as StartedStatus;
+}
+
+/** Where a thread is when that's another computer, as the tools say it. */
+function away({ sentTo }: Pick<ChatSummary, "sentTo">) {
+  if (!sentTo) return {};
+  return {
+    on: sentTo.computer,
+    ...(sentTo.state === "away"
+      ? sentTo.live
+        ? {}
+        : {
+            note: `Bring it back with hand_off_thread to "here" before messaging it.`,
+          }
+      : {
+          handoff:
+            sentTo.state === "sending"
+              ? `on its way to ${sentTo.computer}`
+              : `coming back from ${sentTo.computer}`,
+        }),
+    ...(sentTo.error ? { handoffError: sentTo.error } : {}),
+  };
 }
 
 /** The start of what the user is asked about. */
@@ -182,6 +221,7 @@ export class StartedThreads {
   private projects: AgentProjects | undefined;
   private previews: ThreadPreviews | undefined;
   private look: RenderTools["look"];
+  private handoffs: ThreadHandoffs | undefined;
   constructor(
     private chats: Chats,
     options: {
@@ -190,12 +230,14 @@ export class StartedThreads {
       previews?: ThreadPreviews;
       /** Loads pages unseen for show_html and preview_html; absent without windows. */
       look?: RenderTools["look"];
+      handoffs?: ThreadHandoffs;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
     this.projects = options.projects;
     this.previews = options.previews;
     this.look = options.look;
+    this.handoffs = options.handoffs;
   }
 
   /** Answers one tool call made by the agent in `chatId`. */
@@ -242,6 +284,8 @@ export class StartedThreads {
         return this.wait(lead, input, signal);
       case "stop_thread":
         return this.stop(lead, input.id, signal);
+      case "hand_off_thread":
+        return this.handOff(lead, input, signal);
       case "settle_thread":
         if (input.id === lead.id) return this.settleSelf(lead);
         return this.settle(lead, input.id, signal);
@@ -528,8 +572,117 @@ export class StartedThreads {
       !(await this.drive(lead, `Stop “${chat.title}”${where}?`, "", signal))
     )
       return this.refused("stop it");
+    if (this.handoffs?.forwards("cancelProjectChat", [id])) {
+      await this.handoffs.forward("cancelProjectChat", [id]);
+      return toolText(`Stopped on ${chat.sentTo!.computer}.`);
+    }
     await this.chats.cancel(id);
     return toolText("Stopped.");
+  }
+
+  /**
+   * Hands a thread to another computer, or brings it back with `to` "here",
+   * as the thread header does. The user always confirms: the agent there
+   * runs on what's there, and the thread's agent here stops for its note.
+   */
+  private async handOff(
+    lead: ProjectChat,
+    { id, to }: RelayToolArgs<"hand_off_thread">,
+    signal: AbortSignal,
+  ) {
+    const handoffs = this.handoffs;
+    if (!handoffs)
+      return toolText(
+        "This Relay can't hand threads to other computers.",
+        true,
+      );
+    const { summary, chat, where } = await this.target(lead, id);
+    if (to?.toLowerCase() === "here")
+      return this.bringBack(lead, handoffs, summary, chat, where, signal);
+    if (summary.sentTo)
+      return toolText(`It's on ${summary.sentTo.computer} already.`, true);
+    const blocked = handoffBlocked(summary);
+    if (blocked) return toolText(blocked, true);
+    const targets = await handoffs.targets(id);
+    if (!targets.length)
+      return toolText(
+        "No other computer is paired with this Relay. The user pairs one in Settings → Computers.",
+        true,
+      );
+    const picked = to
+      ? targets.filter((t) => t.name.toLowerCase() === to.toLowerCase())
+      : targets.filter((t) => t.project);
+    const target = picked.length === 1 ? picked[0]! : undefined;
+    if (!target?.project) {
+      const listed = targets
+        .map(
+          (t) =>
+            `- ${t.name}: ${t.project ? `can take it, into ${t.project.name}` : t.problem}`,
+        )
+        .join("\n");
+      return toolText(
+        `${
+          target
+            ? `${target.name} can't take it.`
+            : to
+              ? `No paired computer is named "${to}".`
+              : picked.length
+                ? "Several computers can take it; name one in `to`."
+                : "No paired computer can take it now."
+        }\n${listed}`,
+        true,
+      );
+    }
+    const approved = await this.approve(
+      lead,
+      `Hand “${chat.title}”${where} off to ${target.name}?`,
+      `Its agent stops and writes a handoff note, everything in its worktree is committed, and it carries on in ${target.project.name} on ${target.name}. Ignored files such as .env stay here.`,
+      signal,
+      true,
+    );
+    if (!approved) return this.refused("hand it off");
+    await handoffs.handOff(id, target.id);
+    await handoffs.finished(id);
+    const sentTo = (await this.thread(id)).summary.sentTo;
+    if (!sentTo || sentTo.error)
+      return toolText(
+        `It didn't go to ${target.name}${sentTo?.error ? `: ${sentTo.error}` : "."}`,
+        true,
+      );
+    return toolText(
+      sentTo.live
+        ? `It runs on ${target.name} now. send_to_thread, stop_thread, read_thread and wait_for_threads reach it there.`
+        : `It's on ${target.name} now. That Relay is too old to follow from here, so it can't be messaged until it's brought back.`,
+    );
+  }
+
+  private async bringBack(
+    lead: ProjectChat,
+    handoffs: ThreadHandoffs,
+    summary: ChatSummary,
+    chat: ProjectChat,
+    where: string,
+    signal: AbortSignal,
+  ) {
+    const { sentTo } = summary;
+    if (!sentTo) return toolText("It's here already.", true);
+    const approved = await this.approve(
+      lead,
+      `Bring “${chat.title}”${where} back from ${sentTo.computer}?`,
+      `Its work on ${sentTo.computer} stops, the agent there writes a handoff note and commits, and the thread carries on here.`,
+      signal,
+      true,
+    );
+    if (!approved) return this.refused("bring it back");
+    await handoffs.bringBack(chat.id);
+    await handoffs.finished(chat.id);
+    const after = (await this.thread(chat.id)).summary.sentTo;
+    if (after)
+      return toolText(
+        `It didn't come back from ${sentTo.computer}${after.error ? `: ${after.error}` : "."}`,
+        true,
+      );
+    return toolText("It's back here.");
   }
 
   private async settle(lead: ProjectChat, id: string, signal: AbortSignal) {
@@ -790,7 +943,11 @@ export class StartedThreads {
             : {}),
           ...(asks.length ? { asks } : {}),
           ...(summary.branch ? { branch: summary.branch } : {}),
-          ...(chat.worktree?.path ? { folder: chat.worktree.path } : {}),
+          // Away, the folder here lacks what's done there.
+          ...(chat.worktree?.path && !summary.sentTo
+            ? { folder: chat.worktree.path }
+            : {}),
+          ...away(summary),
           ...(last?.body ? { latest: tail(last.body, 600) } : {}),
           ...(last?.error ? { error: last.error } : {}),
         };
@@ -839,6 +996,7 @@ export class StartedThreads {
           : {}),
         ...(c.branch ? { branch: c.branch } : {}),
         ...(c.startedBy ? { startedBy: c.startedBy.chatId } : {}),
+        ...away(c),
       })),
     );
   }
@@ -875,6 +1033,7 @@ export class StartedThreads {
     // The notes come first: what the user keeps at hand there.
     const notes = after ? [] : (chat.notes ?? []).map(noteForAgent);
     return json({
+      ...away(chat),
       ...(notes.length ? { notes } : {}),
       messages,
       next,
@@ -986,7 +1145,7 @@ export class StartedThreads {
     if (!approved) return this.refused("send this");
     const { from } = this.leadSide(lead);
     const agent = sentAgent(previous);
-    await this.chats.send(id, {
+    const send: ProjectChatSend = {
       id: randomUUID(),
       body: message,
       choice: previous.choice,
@@ -999,7 +1158,20 @@ export class StartedThreads {
       interactionMode: previous.interactionMode,
       ...(steer ? { delivery: "steer" as const } : {}),
       fromThread: from,
-    });
+    };
+    if (this.handoffs?.forwards("sendProjectChat", [id, send])) {
+      const computer = chat.sentTo!.computer;
+      await this.handoffs.forward("sendProjectChat", [id, send]);
+      const held = (await this.chats.handoffOutbox(id)).some(
+        (h) => h.input.id === send.id,
+      );
+      return toolText(
+        held
+          ? `${computer} is offline; it goes out once it's back.`
+          : `Sent; it runs on ${computer}.`,
+      );
+    }
+    await this.chats.send(id, send);
     return toolText(
       steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
     );

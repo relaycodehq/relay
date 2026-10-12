@@ -14,7 +14,7 @@ import {
   verifyRelayToken,
   type RelayMcpConfig,
 } from "../relay-mcp";
-import { StartedThreads, type AgentProjects } from ".";
+import { StartedThreads, type AgentProjects, type ThreadHandoffs } from ".";
 
 /** Finds or makes the tools' port and secret before any agent session starts. */
 export async function prepareRelayTools(dir: string) {
@@ -56,10 +56,13 @@ export async function answerRelayTools(
   chats: ProjectChats,
   hosts: AgentHosts | undefined,
   projects: AgentProjects,
-  previews?: ThreadPreviews,
-  look?: RenderTools["look"],
+  options: {
+    previews?: ThreadPreviews;
+    look?: RenderTools["look"];
+    handoffs?: ThreadHandoffs;
+  } = {},
 ) {
-  const started = new StartedThreads(chats, { projects, previews, look });
+  const started = new StartedThreads(chats, { projects, ...options });
   if (hosts) {
     hosts.tools = started.handle;
     // The host serves them; this makes sure one of this version runs.

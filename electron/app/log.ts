@@ -5,10 +5,10 @@ import { format } from "node:util";
 const limit = 1 << 20;
 
 /**
- * Copies the main process's warnings, errors and crashes to `main.log` in
- * `dir`. A packaged app's console goes nowhere on any platform, so without
- * this what Relay reports about itself is gone. Past 1 MB the file moves to
- * `main.old.log` and starts over.
+ * Copies the main process's notices (`console.info`), warnings, errors and
+ * crashes to `main.log` in `dir`. A packaged app's console goes nowhere on
+ * any platform, so without this what Relay reports about itself is gone.
+ * Past 1 MB the file moves to `main.old.log` and starts over.
  */
 export function startLog(dir: string, version: string) {
   const file = join(dir, "main.log");
@@ -32,7 +32,7 @@ export function startLog(dir: string, version: string) {
       // A log that can't be written has nowhere to say so.
     }
   };
-  for (const level of ["warn", "error"] as const) {
+  for (const level of ["info", "warn", "error"] as const) {
     const original = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
       original(...args);

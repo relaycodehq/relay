@@ -19,6 +19,21 @@ import type {
   ProjectChatSend,
 } from "./projects";
 
+export const worktreeFirst =
+  "Only a thread in its own worktree can move to another computer.";
+
+/** Why this thread can't move to another computer, if it can't. */
+export function handoffBlocked(chat: ChatSummary) {
+  if (chat.scope.kind === "review")
+    return "A deep review stays on this computer.";
+  if (chat.cameFrom?.abandonedAt)
+    return `${chat.cameFrom.computer} took this thread back; it can't move on from here.`;
+  if (chat.cameFrom)
+    return `This thread came from ${chat.cameFrom.computer}; bring it back there.`;
+  if (!chat.worktree) return worktreeFirst;
+  if (chat.empty) return "Send a first message, then hand it off.";
+}
+
 /** On the computer that handed the thread off: where it is now. */
 export interface ChatSentTo {
   /** The handoff's id; the other computer knows the thread by it. */

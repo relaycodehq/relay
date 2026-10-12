@@ -4,6 +4,7 @@ import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+  handoffBlocked,
   handoffChatMethods,
   handoffChunk,
   liveAway,
@@ -48,6 +49,11 @@ import {
 } from "../git/bundles";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** A handoff as main.log names it: its id's start, never the thread's title. */
+const named = (id: string, computer: string) =>
+  `${id.slice(0, 8)} with ${computer}`;
+const seconds = (since: number) =>
+  `${((Date.now() - since) / 1000).toFixed(1)}s`;
 /** What a Relay from before bridge 10 answers a call it doesn't know. */
 const unknownCall = "Phones can't do that.";
 /** A call a Relay doesn't know: from before bridge 10, or before the call was added. */
@@ -174,6 +180,9 @@ export class Handoffs {
       );
     const held = await this.chats.runHandoffHere(chatId, sentTo.id);
     if (!held) return;
+    console.info(
+      `Handoff ${named(sentTo.id, sentTo.computer)}: runs here while it's offline.`,
+    );
     this.statuses.delete(sentTo.id);
     await this.saveAbandoned(sentTo.computerId, sentTo.id);
     void this.notifyAbandoned(sentTo.computerId);
@@ -445,6 +454,11 @@ export class Handoffs {
   async handOff(chatId: string, computerId: string) {
     if (this.jobs.has(chatId))
       throw new Error("This thread is already on its way.");
+    const chat = this.summary(chatId);
+    if (chat.sentTo)
+      throw new Error(`This thread is on ${chat.sentTo.computer} already.`);
+    const blocked = handoffBlocked(chat);
+    if (blocked) throw new Error(blocked);
     const computer = this.computers.get(computerId);
     const id = randomUUID();
     await this.chats.markHandoff(chatId, {
@@ -454,6 +468,10 @@ export class Handoffs {
       at: Date.now(),
     });
     this.run(chatId, () => this.send(chatId, id, computerId));
+  }
+  /** Once the handoff or bringing back under way for the thread is over, however it went. */
+  async finished(chatId: string) {
+    await this.jobs.get(chatId);
   }
   /** Sends a handoff that failed on its way again, with the same id. */
   async retry(chatId: string) {
@@ -528,6 +546,9 @@ export class Handoffs {
         `It's being brought back from ${sentTo.computer} right now. If that fails, you can take it back without ${sentTo.computer}.`,
       );
     if (!(await this.chats.abandonHandoff(chatId, sentTo.id))) return;
+    console.info(
+      `Handoff ${named(sentTo.id, sentTo.computer)}: taken back without it.`,
+    );
     this.statuses.delete(sentTo.id);
     await this.saveAbandoned(sentTo.computerId, sentTo.id);
     void this.notifyAbandoned(sentTo.computerId);
@@ -577,6 +598,7 @@ export class Handoffs {
   /** Stop, note and commit here, then the thread and its code across. */
   private async send(chatId: string, id: string, computerId: string) {
     const folder = join(this.dir, id);
+    const started = Date.now();
     try {
       if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
@@ -647,9 +669,23 @@ export class Handoffs {
         ...(live ? { live: true, kept: chat.messages.length } : {}),
       });
       await rm(folder, { recursive: true, force: true });
+      console.info(
+        `Handoff ${named(id, name)}: sent in ${seconds(started)}${thread.git.bundle ? "" : ", no bundle needed"}${live ? ", live" : ""}.`,
+      );
       if (live) void this.follow(computerId, chatId);
     } catch (e) {
+      console.warn(
+        `Handoff ${named(id, this.nameOf(computerId))} didn't go out:`,
+        message(e),
+      );
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
+    }
+  }
+  private nameOf(computerId: string) {
+    try {
+      return this.computers.get(computerId).name;
+    } catch {
+      return "a computer no longer paired";
     }
   }
   /** The other side stops, notes and commits; its work comes back into this worktree. */
@@ -661,6 +697,7 @@ export class Handoffs {
   ) {
     const folder = join(this.dir, id);
     const ref = `refs/relay/handoffs/${id}`;
+    const started = Date.now();
     try {
       const path = this.summary(chatId).worktree?.path;
       if (!path)
@@ -691,6 +728,9 @@ export class Handoffs {
           },
         );
         if (conflicts.length) {
+          console.warn(
+            `Handoff ${named(id, computer)}: came back clashing in ${conflicts.length} file(s), kept at ${ref}.`,
+          );
           await this.chats.updateSentTo(chatId, id, {
             error: `Its work and what was committed here meanwhile both change ${conflicts.join(", ")}. It's kept at ${ref}.`,
             conflicts,
@@ -700,10 +740,17 @@ export class Handoffs {
         await git(path, ["update-ref", "-d", ref]).catch(() => {});
       }
       await this.chats.returned(chatId, id, messages);
+      console.info(
+        `Handoff ${named(id, this.nameOf(computerId))}: back in ${seconds(started)}${park ? ", parked" : ""}.`,
+      );
       this.statuses.delete(id);
       await rm(folder, { recursive: true, force: true });
       await this.acknowledge(computerId, id);
     } catch (e) {
+      console.warn(
+        `Handoff ${named(id, this.nameOf(computerId))} didn't come back:`,
+        message(e),
+      );
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
     }
   }
