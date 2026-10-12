@@ -242,11 +242,10 @@ export function useAgentRuns(
     },
     /** Whether `to` has an effort to pick, or for Claude a context window. */
     offersEffort: (to: AgentProvider) =>
-      !!codex &&
-      (to === "codex" ||
-        (to === "claude" &&
-          (claudeEfforts.length > 0 || !!claudeRuns?.longContext)) ||
-        (isPickAgent(to) && pickOf(to).efforts.length > 0)),
+      (to === "codex" && !!codex) ||
+      (to === "claude" &&
+        (claudeEfforts.length > 0 || !!claudeRuns?.longContext)) ||
+      (isPickAgent(to) && pickOf(to).efforts.length > 0),
     setEffort,
     /** Stable, for Codex's effort menu. */
     setCodexEffort,
