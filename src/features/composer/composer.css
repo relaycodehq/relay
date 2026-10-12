@@ -127,8 +127,11 @@
   }
 }
 @container (max-width: 420px) {
-  /* A deleted worktree's words are the warning, so they stay. */
-  .thread-context-controls .workspace-trigger:not(.deleted-worktree) > span {
+  /* A deleted worktree's words are the warning, so they stay; a branch
+     name shortens itself instead. */
+  .thread-context-controls
+    .workspace-trigger:not(.deleted-worktree, .worktree-branch)
+    > span {
     display: none;
   }
 }

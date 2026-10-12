@@ -145,7 +145,7 @@ function ThreadBranch({
   if (worktree.inWorktree)
     return (
       <span
-        className="composer-branch-trigger workspace-trigger static"
+        className="composer-branch-trigger workspace-trigger static worktree-branch"
         title="This thread's worktree branch"
       >
         <GitBranch size={13} />

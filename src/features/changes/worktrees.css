@@ -5,6 +5,11 @@
 .thread-context-controls .workspace-trigger ~ .composer-branch-trigger {
   margin-left: 0;
 }
+/* A worktree thread's branch borrows the static look but, like the picker
+   it stands in for, gives way so a long name shortens instead of running off. */
+.thread-context-controls .worktree-branch {
+  flex: 0 1 auto;
+}
 /* A new worktree's branch, typed in place of the branch picker's name. */
 .worktree-branch-field {
   position: relative;
