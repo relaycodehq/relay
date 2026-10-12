@@ -79,6 +79,11 @@
 .thread-terminal .xterm .xterm-viewport {
   background-color: var(--surface) !important;
 }
+/* The app's textarea min-height would hang xterm's hidden input below the
+   last row, and Chrome scrolls the whole window up to show its caret. */
+.thread-terminal .xterm .xterm-helper-textarea {
+  min-height: 0;
+}
 .thread-terminal .xterm .composition-view {
   background: var(--accent-soft);
   color: var(--text);
