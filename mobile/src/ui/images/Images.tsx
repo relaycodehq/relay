@@ -57,7 +57,7 @@ export function messageImages(chatId: string, message: ChatMessage, root?: strin
   };
 }
 
-/** The row under a message: pasted images, and the ones its agent read but didn't show. */
+/** A message's image row: pasted images, and the ones its agent read but didn't show. */
 export function MessageImages({
   images,
   onOpen,

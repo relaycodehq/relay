@@ -163,6 +163,10 @@ export const MessageView = memo(function MessageView({
       </>
     );
   const user = m.role === "user";
+  // Your images sit above what you wrote, as on the desktop; the agent's come after its answer.
+  const strip = (
+    <MessageImages images={traceOpen ? images.pasted : images.strip} onOpen={openImage} />
+  );
   return (
     <Pressable
       style={styles.turn}
@@ -207,6 +211,7 @@ export const MessageView = memo(function MessageView({
       {!!m.renders?.length && (
         <RenderCards chatId={chatId} renders={m.renders} onCompose={onCompose} />
       )}
+      {user && strip}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (
@@ -232,7 +237,7 @@ export const MessageView = memo(function MessageView({
           image={m.status === "streaming" ? hideImage : showImage}
         />
       ) : null}
-      <MessageImages images={traceOpen ? images.pasted : images.strip} onOpen={openImage} />
+      {!user && strip}
       {viewing && (
         <Lightbox
           images={viewing.images}
