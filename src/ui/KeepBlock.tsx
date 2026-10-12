@@ -8,6 +8,7 @@ export interface Keeper {
   /** Keeps `markdown`, from the message holding `at`. */
   keep: (markdown: string, at: Element) => void;
   kept: (markdown: string) => boolean;
+  unkeep: (markdown: string) => void;
   /** Pins message `id` whole, or unpins it. */
   togglePin: (id: string) => void;
   pinned: (id: string) => boolean;
@@ -26,15 +27,17 @@ export function KeepBlockButton({
   const keeper = useContext(KeepBlock);
   if (!keeper || !source.trim()) return null;
   const kept = keeper.kept(source);
+  const label = kept ? "Remove from notes" : "Keep in notes";
   return (
     <button
       type="button"
       className={className}
       aria-pressed={kept}
-      title={kept ? "Kept in notes" : "Keep in notes"}
-      aria-label={kept ? "Kept in notes" : "Keep in notes"}
+      title={label}
+      aria-label={label}
       onClick={(e) => {
-        if (!kept) keeper.keep(source, e.currentTarget);
+        if (kept) keeper.unkeep(source);
+        else keeper.keep(source, e.currentTarget);
       }}
     >
       <Pin size={13} />

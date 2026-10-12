@@ -98,7 +98,7 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
     await pin.click();
     await expect(chip).toHaveText("1");
     await expect(
-      answer.getByRole("button", { name: "Kept in notes" }),
+      answer.getByRole("button", { name: "Remove from notes" }),
     ).toBeVisible();
 
     await chip.hover();

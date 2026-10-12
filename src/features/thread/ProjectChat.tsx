@@ -304,6 +304,7 @@ export function ProjectChat({
                 at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
               ),
             kept: notes.kept,
+            unkeep: notes.unkeep,
             togglePin: notes.togglePin,
             pinned: notes.pinned,
           }

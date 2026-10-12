@@ -30,7 +30,17 @@ export interface ThreadNotesHandle {
   arrange: (note: string, order: number[]) => void;
   remove: (note: string) => void;
   kept: (text: string) => boolean;
+  /** Drops the note `text` was kept as. */
+  unkeep: (text: string) => void;
 }
+
+// A list kept with the line leading into it still counts.
+const keptAs = (notes: ThreadNote[], text: string) => {
+  const block = text.trim();
+  return notes.find(
+    (n) => !n.ref && (n.text === block || n.text.endsWith(`\n\n${block}`)),
+  );
+};
 
 /**
  * The thread's notes, fetched again whenever its listed summary says they
@@ -140,12 +150,13 @@ export function useThreadNotes(
           (list) => removeNote(list, note),
           () => api.removeThreadNote(id, note),
         ),
-      // A list kept with the line leading into it still counts.
-      kept: (text) => {
-        const block = text.trim();
-        return notes.some(
-          (n) =>
-            !n.ref && (n.text === block || n.text.endsWith(`\n\n${block}`)),
+      kept: (text) => !!keptAs(notes, text),
+      unkeep: (text) => {
+        const note = keptAs(notes, text);
+        if (!id || !note) return;
+        change(
+          (list) => removeNote(list, note.id),
+          () => api.removeThreadNote(id, note.id),
         );
       },
     }),
