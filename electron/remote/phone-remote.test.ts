@@ -660,6 +660,27 @@ it("only answers the allowlisted calls, and only after pairing", async () => {
   });
 });
 
+it("lets a phone in past sockets someone holds open without a handshake", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  // More than the server takes at once, all sitting idle.
+  const idle: WebSocket[] = [];
+  cleanup.push(async () => idle.forEach((s) => s.close()));
+  for (let i = 0; i < 30; i++) {
+    const socket = new WebSocket(`ws://127.0.0.1:${link.port}/`);
+    idle.push(socket);
+    await new Promise((settle) => {
+      socket.onopen = settle;
+      socket.onclose = settle;
+    });
+  }
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  await p.client.call("overview");
+  // It got in by pushing out the oldest, not by waiting for them all to time out.
+  expect(idle.some((s) => s.readyState === WebSocket.OPEN)).toBe(true);
+});
+
 it("lets a phone see the desktop's version and update it, but not take threads", async () => {
   const asked: string[] = [];
   const { remote } = await desktop(undefined, undefined, {

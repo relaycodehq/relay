@@ -39,6 +39,7 @@ export interface RemoteServerOptions {
 
 interface Connection {
   socket: WebSocket;
+  from: string;
   channel?: Channel;
   deviceId?: string;
   alive: boolean;
@@ -49,7 +50,40 @@ interface Connection {
 
 /** Unauthenticated sockets get this long to finish the handshake. */
 const handshakeMs = 10_000;
-const maxConnections = 24;
+export const maxConnections = 24;
+/** A phone has one in the handshake, two while a dead one times out. */
+export const handshakesPerAddress = 4;
+
+interface Place {
+  from: string;
+  deviceId?: string;
+  authenticating?: boolean;
+  socket: { terminate(): void };
+}
+
+/**
+ * Makes room for a socket from `from`; false when there's none. Sockets still
+ * in the handshake give way to newer ones, oldest first: a phone gets through
+ * in milliseconds, so idle ones someone else holds open can't lock it out.
+ * Signed-in sockets, and those signing in under the pinned key, stay.
+ */
+export function makeRoom<T extends Place>(connections: Set<T>, from: string) {
+  const waiting = [...connections].filter(
+    (c) => !c.deviceId && !c.authenticating,
+  );
+  const fromHere = waiting.filter((c) => c.from === from);
+  const evict =
+    fromHere.length >= handshakesPerAddress
+      ? fromHere[0]
+      : connections.size >= maxConnections
+        ? waiting[0]
+        : undefined;
+  if (evict) {
+    connections.delete(evict);
+    evict.socket.terminate();
+  }
+  return connections.size < maxConnections;
+}
 
 export const nodeCodec: Codec = {
   deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
@@ -117,7 +151,7 @@ export class RemoteServer {
       const from = req.socket.remoteAddress;
       if (!tailnetPeer(from) && !(this.lan && lanPeer(from)))
         return socket.terminate();
-      this.accept(socket, key);
+      this.accept(socket, key, from!);
     });
     this.bound = host;
     this.lan = lan;
@@ -158,9 +192,9 @@ export class RemoteServer {
         c.socket.close();
       }
   }
-  private accept(socket: WebSocket, key: KeyPair) {
-    if (this.connections.size >= maxConnections) return socket.terminate();
-    const c: Connection = { socket, alive: true };
+  private accept(socket: WebSocket, key: KeyPair, from: string) {
+    if (!makeRoom(this.connections, from)) return socket.terminate();
+    const c: Connection = { socket, from, alive: true };
     this.connections.add(c);
     const unauthenticated = setTimeout(() => {
       if (!c.deviceId) socket.terminate();
