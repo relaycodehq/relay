@@ -1,6 +1,6 @@
 // The phone's copy of the desktop's AgentTurn (src/features/agent-turn/AgentTurn.tsx):
 // same structure, wording and states, from the same shared/agent-trace logic.
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -187,12 +187,14 @@ export function AgentRun({
                 </View>
               ) : live && index === parts.length - 1 ? (
                 <OpenBatch key={part.id} activity={part.activity} />
-              ) : part.activity.length === 1 ? (
-                <ToolRow
-                  key={part.id}
-                  activity={part.activity[0]!}
-                  label={display(part.activity[0]!.label)}
-                />
+              ) : part.activity.length === 1 ||
+                parts.every((p) => p === part || p.kind === "commentary") ? (
+                // The only run's summary is already the turn's heading.
+                <Fragment key={part.id}>
+                  {part.activity.map((a) => (
+                    <ToolRow key={a.id} activity={a} label={display(a.label)} />
+                  ))}
+                </Fragment>
               ) : (
                 <ActivityGroup key={part.id} activity={part.activity} />
               ),

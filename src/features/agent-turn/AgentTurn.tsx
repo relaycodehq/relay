@@ -2,6 +2,7 @@
 // touched.
 import {
   createContext,
+  Fragment,
   useContext,
   useEffect,
   useRef,
@@ -429,13 +430,19 @@ export function AgentTurn({
                     display={display}
                     onChanges={onChanges}
                   />
-                ) : part.activity.length === 1 ? (
-                  <ToolRow
-                    key={part.id}
-                    activity={part.activity[0]!}
-                    label={display(part.activity[0]!.label)}
-                    onChanges={onChanges}
-                  />
+                ) : part.activity.length === 1 ||
+                  parts.every((p) => p === part || p.kind === "commentary") ? (
+                  // The only run's summary is already the turn's heading.
+                  <Fragment key={part.id}>
+                    {part.activity.map((a) => (
+                      <ToolRow
+                        key={a.id}
+                        activity={a}
+                        label={display(a.label)}
+                        onChanges={onChanges}
+                      />
+                    ))}
+                  </Fragment>
                 ) : (
                   <ActivityGroup
                     key={part.id}

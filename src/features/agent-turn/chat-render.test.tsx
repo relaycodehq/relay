@@ -215,3 +215,43 @@ it("marks a finished turn that only thought out loud with the brain", () => {
   expect(html).toContain("lucide-brain");
   expect(html).not.toContain("lucide-wrench");
 });
+
+it("doesn't repeat a lone run's summary under the turn heading", () => {
+  const agent = (id: string, label: string) => ({
+    kind: "activity" as const,
+    id,
+    activity: {
+      id,
+      kind: "agent" as const,
+      label,
+      status: "complete" as const,
+    },
+  });
+  const message: ChatMessage = {
+    id: "answer",
+    role: "assistant",
+    provider: "claude",
+    status: "complete",
+    body: "Done.",
+    created: Date.now() - 22000,
+    ended: Date.now(),
+    version: 1,
+    trace: [
+      { kind: "commentary", id: "intro", text: "Two audits." },
+      agent("a", "Audit runtime"),
+      agent("b", "Audit UI"),
+    ],
+  };
+  const html = renderToStaticMarkup(
+    <AgentTurn
+      message={message}
+      projectRoot="/Users/test/workspace"
+      onOpenFile={() => {}}
+      onChanges={() => {}}
+      open
+    />,
+  );
+  expect(html.match(/Ran 2 agents/g)).toHaveLength(1);
+  expect(html).toContain("Audit runtime");
+  expect(html).toContain("Audit UI");
+});
