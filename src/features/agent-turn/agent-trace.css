@@ -189,13 +189,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .live-shine {
-    color: var(--muted);
-    background: none;
-  }
-}
-
 /* A running subagent's status after its name: dimmed, and first to give way. */
 .agent-step-heading > .agent-step-progress,
 .agent-batch-row > .agent-step-progress {

@@ -77,7 +77,9 @@
   layer measures as cheap as paused and steps would read as lag (the agent
   trace's `.live-shine`).
 - **Reduced motion is global.** `src/styles.css` stops every animation and
-  transition under `prefers-reduced-motion`. Add a local block only to fix the
+  transition under `prefers-reduced-motion`, except the loops that show
+  something is working (spinners, the live shimmer, the thinking glyph): a
+  new one of those goes on that list too. Add a local block only to fix the
   end state a stopped animation leaves wrong (a half-drawn stroke, a sheen still
   showing) or to beat another stylesheet's `!important`.
 
