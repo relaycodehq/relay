@@ -215,7 +215,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       "# Cache\nEdited by the agent.\n",
     );
     expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("mine\n");
-    await expect(page.locator(".worktree-landed")).toHaveText(
+    await expect(page.locator(".message-note-landed")).toHaveText(
       "Merged into main",
     );
 

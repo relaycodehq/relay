@@ -7,7 +7,6 @@ import { clock } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import { Message } from "./ProjectMessage";
-import { LineDivider } from "../../ui/LineDivider";
 
 const noop = () => {};
 
@@ -122,18 +121,5 @@ export function HeldSends({
 }
 
 /** Where a live thread carried on here without its computer. */
-export function RanHereDivider({
-  computer,
-  since,
-}: {
-  computer: string;
-  since: number;
-}) {
-  return (
-    <LineDivider role="separator">
-      <span>
-        Back here · {computer}'s code changes since {clock(since)} stay there
-      </span>
-    </LineDivider>
-  );
-}
+export const ranHereNote = (computer: string, since: number) =>
+  `Back here · ${computer}'s code changes since ${clock(since)} stay there`;

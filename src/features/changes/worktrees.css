@@ -133,18 +133,13 @@
   background: var(--accent);
 }
 .worktree-landed-mark,
-.worktree-landed:not(.worktree-renamed) > svg {
+.message-note-landed > svg {
   flex: none;
   color: light-dark(#1a7f45, #4cc38a);
 }
-.worktree-landed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 14px 0 0;
-  color: var(--muted);
-  font-size: 11px;
+.message-note-landed > svg {
+  margin-right: 5px;
+  vertical-align: -2px;
 }
 /* The agent made a worktree itself: its edits aren't in the checkout. */
 .thread-context-controls .agent-worktree-trigger,

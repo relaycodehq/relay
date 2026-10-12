@@ -25,17 +25,18 @@ import {
 import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
-import { HeldSends, RanHereDivider } from "./HeldSends";
+import { HeldSends, ranHereNote } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
-import {
-  WorkspaceMoveDivider,
-  WorktreeLanded,
-  WorktreeRenamed,
-} from "./WorktreeControls";
-import { TerminalOrigin } from "../continue-session/TerminalOrigin";
+import { landedNote, renamedNote } from "./WorktreeControls";
+import { MessageNotes, type MessageNote } from "./MessageNotes";
+import { terminalOriginNote } from "../continue-session/TerminalOrigin";
 import { agentError } from "../../../shared/agent-error";
+import {
+  shownWorkspaceMoves,
+  workspaceMoveLine,
+} from "../../../shared/workspace-moves";
 
 const isAnswer = (m: ChatMessage) =>
   m.role === "assistant" &&
@@ -135,18 +136,57 @@ export function ThreadMessages({
     [arrival, root, listed],
   );
   const onScreen = listed.slice(-visible);
+  const moves = shownWorkspaceMoves(chat?.workspaceMoves);
+  const landed = worktree.status && landedNote(worktree.status);
+  /** What happened under `m`, said on one line. */
+  const notesUnder = (m: ChatMessage): MessageNote[] =>
+    root || !chat
+      ? []
+      : [
+          ...(m.id === chat.fromTerminal?.through
+            ? [
+                {
+                  key: "terminal-origin",
+                  ...terminalOriginNote(chat.fromTerminal),
+                },
+              ]
+            : []),
+          ...(m.id === renamedAfter && chat.worktree
+            ? [renamedNote(chat.worktree)]
+            : []),
+          ...moves
+            .filter((move) => move.after === m.id)
+            .map((move) => ({
+              key: `workspace-move-${move.at}`,
+              text: workspaceMoveLine(move),
+              title: move.to,
+            })),
+          ...(chat.abandonedHandoffs ?? [])
+            .filter((a) => a.ranHere?.after === m.id)
+            .map((a) => ({
+              key: `ran-here-${a.id}`,
+              text: ranHereNote(a.computer, a.ranHere!.since),
+            })),
+          ...(m.id === listed.at(-1)?.id ? [landed] : []),
+        ].filter((note): note is MessageNote => !!note);
   // A row that draws its own line carries the unread mark instead of a second
   // line stacking against it: the one where the unseen part starts, or the one
   // right above it when that also happened while you were away.
   const unreadAt = onScreen.findIndex((m) => m.id === unread?.id);
   const above = onScreen[unreadAt - 1];
+  // The notes line under the message above sits right against it too.
+  const lines = (m: ChatMessage | false | undefined) =>
+    !!m && !m.side && drawsLine(m);
   const markOn =
     unreadAt < 0
       ? undefined
-      : [
-          onScreen[unreadAt]!,
-          above && arrival && awayDuring(above, arrival.away) && above,
-        ].find((m) => m && !m.side && drawsLine(m))?.id;
+      : lines(onScreen[unreadAt])
+        ? onScreen[unreadAt]!.id
+        : above && notesUnder(above).length
+          ? `notes-${above.id}`
+          : lines(above && arrival && awayDuring(above, arrival.away) && above)
+            ? above!.id
+            : undefined;
   const unreadProps = unread && {
     chatId: arrival!.chatId,
     since: unread.since,
@@ -260,40 +300,16 @@ export function ThreadMessages({
                 : {})}
             />
           ),
-          ...(!root
-            ? (chat?.workspaceMoves ?? [])
-                .filter((move) => move.after === m.id)
-                .map((move) => (
-                  <WorkspaceMoveDivider
-                    key={`workspace-move-${move.at}`}
-                    move={move}
-                  />
-                ))
-            : []),
-          m.id === renamedAfter && (
-            <WorktreeRenamed
-              key="worktree-renamed"
-              worktree={chat!.worktree!}
-            />
-          ),
-          !root && m.id === chat?.fromTerminal?.through && (
-            <TerminalOrigin key="terminal-origin" from={chat.fromTerminal} />
-          ),
-          ...(!root
-            ? (chat?.abandonedHandoffs ?? [])
-                .filter((a) => a.ranHere?.after === m.id)
-                .map((a) => (
-                  <RanHereDivider
-                    key={`ran-here-${a.id}`}
-                    computer={a.computer}
-                    since={a.ranHere!.since}
-                  />
-                ))
-            : []),
+          <MessageNotes
+            key={`notes-${m.id}`}
+            notes={notesUnder(m)}
+            unread={
+              markOn === `notes-${m.id}` ? (
+                <UnreadMark {...unreadProps!} />
+              ) : undefined
+            }
+          />,
         ])}
-        {!root && worktree.status && (
-          <WorktreeLanded status={worktree.status} />
-        )}
         {!running &&
           resumable(listed, history.data?.lastInput, root?.id ?? null) && (
             <button

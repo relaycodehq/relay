@@ -35,11 +35,32 @@ export function workspaceMoveLine(move: WorkspaceMove) {
     : `Switched to ${where}`;
 }
 
+/**
+ * One line per spot in the thread: moves under the same message read as
+ * where the thread ended up, and none when that's where it already was,
+ * like a worktree the agent made and removed for a scratch build.
+ */
+export function shownWorkspaceMoves(moves: WorkspaceMove[] = []) {
+  const shown: WorkspaceMove[] = [];
+  let before: string | undefined;
+  for (let i = 0; i < moves.length;) {
+    let end = i;
+    while (moves[end + 1]?.after === moves[i].after) end++;
+    const group = moves.slice(i, end + 1);
+    const last = group[group.length - 1];
+    if (last.to !== before || group.some((m) => m.how !== "switched"))
+      shown.push(last);
+    before = last.to;
+    i = end + 1;
+  }
+  return shown;
+}
+
 /** The latest move the user didn't make, if they haven't looked since. */
 export function unseenWorkspaceMove(
   chat: Pick<ChatSummary, "workspaceMoves">,
   seenAt: number,
 ) {
-  const last = chat.workspaceMoves?.at(-1);
+  const last = shownWorkspaceMoves(chat.workspaceMoves).at(-1);
   return last?.unasked && last.at > seenAt ? last : undefined;
 }

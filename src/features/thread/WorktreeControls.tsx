@@ -7,7 +7,6 @@ import {
   Folder,
   FolderGit2,
   FolderX,
-  GitBranch,
 } from "lucide-react";
 import type {
   AgentWorktree,
@@ -30,7 +29,7 @@ import {
 import { api } from "../../lib/api";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import type { ThreadWorktree } from "./useThreadWorktree";
-import { LineDivider } from "../../ui/LineDivider";
+import type { MessageNote } from "./MessageNotes";
 import { Modal, Spinner } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
@@ -554,40 +553,29 @@ function WorktreePath({ path }: { path: string }) {
   );
 }
 
-/** Where the thread's folder changed, under the message before it. */
-export function WorkspaceMoveDivider({ move }: { move: WorkspaceMove }) {
-  return (
-    <LineDivider role="separator">
-      <span title={move.to}>{workspaceMoveLine(move)}</span>
-    </LineDivider>
-  );
-}
-
-/** The quiet line under the thread once its worktree's branch landed. */
-export function WorktreeLanded({ status }: { status: WorktreeStatus }) {
+/** The note once the worktree's branch landed, with nothing left to merge. */
+export function landedNote(status: WorktreeStatus): MessageNote | undefined {
   const landed = status.landed;
-  if (!landed || status.files.length) return null;
-  return (
-    <p className="worktree-landed">
-      <Check size={12} />
-      {landed.by === "pr"
-        ? `Merged through PR #${status.pr?.number}`
-        : `Merged into ${status.from ?? "its source branch"}`}
-      {status.removed ? " · worktree removed" : ""}
-    </p>
-  );
+  if (!landed || status.files.length) return undefined;
+  const how =
+    landed.by === "pr"
+      ? `Merged through PR #${status.pr?.number}`
+      : `Merged into ${status.from ?? "its source branch"}`;
+  return {
+    key: "worktree-landed",
+    text: `${how}${status.removed ? " · worktree removed" : ""}`,
+    landed: true,
+  };
 }
 
-/** The quiet line under a thread's first message when the branch named for it was taken by the time it sent. */
-export function WorktreeRenamed({ worktree }: { worktree: ChatWorktree }) {
+/** The note when the branch named for the thread was taken by the time it sent. */
+export function renamedNote(worktree: ChatWorktree): MessageNote | undefined {
   const { wanted, branch } = worktree;
-  if (!wanted || !branch) return null;
-  return (
-    <p className="worktree-landed worktree-renamed">
-      <GitBranch size={12} />
-      Its worktree is on {branch}, not {wanted.branch}: {wanted.problem}
-    </p>
-  );
+  if (!wanted || !branch) return undefined;
+  return {
+    key: "worktree-renamed",
+    text: `Its worktree is on ${branch}, not ${wanted.branch}: ${wanted.problem}`,
+  };
 }
 
 function RemoveWorktreeDialog({
