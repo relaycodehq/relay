@@ -732,6 +732,7 @@ export class Handoffs {
               live: true,
               // A start's first message comes back from there as its own.
               kept: start ? 0 : chat.messages.length,
+              ...(start ? { start: true as const } : {}),
               ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
             }
           : {}),

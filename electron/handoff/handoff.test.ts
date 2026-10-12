@@ -865,8 +865,10 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
   expect(back.filter((m) => m.body.includes("One more thing"))).toHaveLength(1);
 });
 
-it("starts a new thread on the other computer with its first message, answered only there", async () => {
-  const { laptop, mini, sender, computerId } = await pairedComputers();
+/** A new thread started on the mini, its first answer written there and mirrored here. */
+async function startedThread() {
+  const paired = await pairedComputers();
+  const { laptop, mini, sender, computerId } = paired;
   const thread = await laptop.chats.create(
     laptop.projectId,
     { kind: "project" },
@@ -883,22 +885,46 @@ it("starts a new thread on the other computer with its first message, answered o
       state: "away",
       live: true,
       kept: 0,
+      start: true,
     }),
   );
-  const [there] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
-  await finished(mini.chats, there!.id);
-  // Its own words as the first turn, not a note to carry on from.
-  const prompt = (await prompts()).at(-1)!;
-  expect(prompt).toContain("Add a changelog");
-  expect(prompt).not.toContain("handed over");
-  const minis = await mini.chats.get(there!.id);
-  expect(minis.messages[0]).toMatchObject({ id: first.id, role: "user" });
-  expect(minis.messages[0]!.handedOver).toBeUndefined();
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+  const there = await mini.chats.get(arrived!.id);
   // Here the first message is the one that came back, never twice.
   await vi.waitFor(async () =>
     expect(
       (await laptop.chats.get(thread.id)).messages.map((m) => m.id),
-    ).toEqual(minis.messages.map((m) => m.id)),
+    ).toEqual(there.messages.map((m) => m.id)),
+  );
+  return { ...paired, thread, first, there };
+}
+
+it("starts a new thread on the other computer with its first message, answered only there", async () => {
+  const { first, there } = await startedThread();
+  // Its own words as the first turn, not a note to carry on from.
+  const prompt = (await prompts()).at(-1)!;
+  expect(prompt).toContain("Add a changelog");
+  expect(prompt).not.toContain("handed over");
+  expect(there.messages[0]).toMatchObject({ id: first.id, role: "user" });
+  expect(there.messages[0]!.handedOver).toBeUndefined();
+  expect(there.messages.at(-1)).toMatchObject({ role: "assistant" });
+});
+
+it("keeps a started thread's first message when it's taken back without the other computer", async () => {
+  const { laptop, mini, sender, thread, first, there } = await startedThread();
+  const answered = (await laptop.chats.get(thread.id)).messages;
+  expect(answered.length).toBeGreaterThan(1);
+  await sender.abandon(thread.id);
+  const back = await laptop.chats.get(thread.id);
+  expect(back.sentTo).toBeUndefined();
+  // What the mini answered goes with it; what was sent from here stays.
+  expect(back.messages).toEqual([
+    expect.objectContaining({ id: first.id, role: "user", body: first.body }),
+  ]);
+  expect(back.abandonedHandoffs).toHaveLength(1);
+  await vi.waitFor(async () =>
+    expect((await mini.chats.get(there.id)).cameFrom?.abandonedAt).toBeTruthy(),
   );
 });
 

@@ -60,6 +60,12 @@ export interface ChatSentTo {
   /** Live: the messages it left with; every one after mirrors the other computer's. */
   kept?: number;
   /**
+   * Started there (`HandoffThread.start`): its first message, sent here and
+   * answered only there, comes back as that computer's, so `kept` is 0.
+   * Taken back without it, the thread keeps that message.
+   */
+  start?: true;
+  /**
    * Live, and its folder's calls run there too (`folderHandoffBridge`): its
    * changes, files, history and Git actions are what's on that computer.
    */

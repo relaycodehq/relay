@@ -200,9 +200,13 @@ export class ComputerHandoff {
         ...(chat.abandonedHandoffs ?? []),
         { id: sentTo.id, computer: sentTo.computer, at: Date.now() },
       ];
-      // What mirrored the other computer goes with it.
+      // What mirrored the other computer goes with it, but not the first
+      // message a thread started there was started with.
       if (sentTo.kept !== undefined) {
-        chat.messages = chat.messages.slice(0, sentTo.kept);
+        chat.messages = chat.messages.slice(
+          0,
+          sentTo.start ? Math.max(sentTo.kept, 1) : sentTo.kept,
+        );
         this.core.away?.delete(id);
       }
       delete chat.sentTo;
