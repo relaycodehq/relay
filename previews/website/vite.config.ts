@@ -23,7 +23,6 @@ Object.assign(globalThis, { __RELAY_VERSION__: version });
 const {
   EMAIL,
   faq,
-  features,
   firstStart,
   openSource,
   otherBuilds,
@@ -32,6 +31,7 @@ const {
 } = await import("./content");
 const { CHECKED, groups, only, ahead, relay, rivals } =
   await import("./compare-data");
+const { words, quiet } = await import("./details/words");
 
 const escape = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -49,8 +49,11 @@ const contact = `<p>Source code: <a href="${REPO}">${REPO}</a>. Contact: <a href
 const copy: Record<string, string> = {
   home: `<h1>Relay: one workspace for your coding agents</h1>
 <p>Relay runs your coding agents on your computer. You see each step. You review each edit. Relay is free and open source under the MIT license.</p>
-<h2>Features</h2>
-${features.map((f) => `<h3>${escape(f.title)}</h3><p>${escape(f.text)}</p>`).join("\n")}
+<h2>It's the small things</h2>
+<p>Little details that save a click, a tab or a bad moment.</p>
+${words.map((w) => `<h3>${escape(w.title)}</h3><p>${escape(w.text)}</p>`).join("\n")}
+<h3>And some you never see</h3>
+<ul>${quiet.map((q) => `<li>${escape(q)}</li>`).join("")}</ul>
 <h2>Themes</h2>
 <p>Relay has built-in themes and takes any VS Code theme from Open VSX, with your own fonts, sizes and accent.</p>
 <h2>Open source</h2>

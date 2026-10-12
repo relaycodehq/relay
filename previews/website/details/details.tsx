@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import "./details.css";
 import { Stage, type Category } from "./kit";
 import { tiles } from "./tiles";
+import { quiet } from "./words";
 
 const filters: { id: Category | "all"; label: string }[] = [
   { id: "all", label: "All" },
@@ -15,15 +16,6 @@ const filters: { id: Category | "all"; label: string }[] = [
   { id: "phone", label: "Phone" },
 ];
 
-const quiet = [
-  "Plugged in, your Mac stays awake. On battery, only while an agent works.",
-  "On a server, Relay updates itself once no thread is working.",
-  "Send later and limit resumes go out on time after your Mac sleeps.",
-  "A settled thread finishes quietly.",
-  "New worktrees link your node_modules and copy the ignored files your .worktreeinclude names, like .env.",
-  "A second Claude account keeps your skills and CLAUDE.md.",
-  "/resume brings a terminal session into a thread.",
-];
 
 export function Details() {
   const [filter, setFilter] = useState<Category | "all">("all");
