@@ -76,6 +76,7 @@ import {
   agentProjects,
   answerRelayTools,
   prepareRelayTools,
+  threadAgents,
 } from "../started-threads/serve";
 import { projectTasks } from "../terminal/tasks";
 import { TriageService } from "../triage/service";
@@ -411,7 +412,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       chats,
       agentHosts,
       agentProjects(projects, () => login.client, home),
-      { handoffs: handoffs.sender },
+      { handoffs: handoffs.sender, agents: threadAgents(agentUpdates) },
     );
   chats.armWakeups();
   void chats

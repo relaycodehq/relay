@@ -402,6 +402,110 @@ test("starting threads asks the user first, unless the lead has full access", as
   expect(sent).toHaveLength(1);
 });
 
+const agents = {
+  cantRun: (agent: string) =>
+    agent === "amp" ? "Amp isn't installed on this computer." : undefined,
+  models: async (agent: string) =>
+    agent === "codex"
+      ? [
+          { id: "gpt-6-astra", name: "GPT-6 Astra", description: "", efforts: ["low", "high"] },
+          { id: "gpt-6-sol", name: "GPT-6 Sol", description: "", efforts: [] },
+        ]
+      : [],
+} as any;
+
+test("an agent or model that can't run here is refused before the user is asked", async () => {
+  const { lead, sent, asked, api } = fakeChats();
+  const threads = new StartedThreads(api, { agents });
+  const start = async (thread: object) => {
+    const result = await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "Draw an icon", ...thread }],
+    });
+    expect(result).toMatchObject({ isError: true });
+    return resultText(result);
+  };
+  expect(await start({ agent: "acp:astra" })).toContain(
+    "acp:astra isn't installed here. Agents that can run here: codex (Codex), claude (Claude)",
+  );
+  expect(await start({ agent: "amp" })).toContain(
+    "Amp isn't installed on this computer.",
+  );
+  expect(await start({ agent: "codex", model: "astra" })).toBe(
+    "Codex has no model astra. Did you mean gpt-6-astra? Its models: gpt-6-astra, gpt-6-sol.",
+  );
+  expect(asked).toEqual([]);
+  expect(sent).toEqual([]);
+
+  lead.lastInput!.runtimeMode = "full-access";
+  await call(threads, lead.id, "start_threads", {
+    threads: [{ prompt: "Draw an icon", agent: "codex", model: "gpt-6-astra" }],
+  });
+  expect(sent).toHaveLength(1);
+});
+
+test("list_agents gives the agents that can run here with their models", async () => {
+  const { lead, api } = fakeChats();
+  const threads = new StartedThreads(api, { agents });
+  const listed = parse(await call(threads, lead.id, "list_agents", {}));
+  expect(listed.agents.map((a: any) => a.agent)).not.toContain("amp");
+  expect(listed.agents.find((a: any) => a.agent === "codex")).toEqual({
+    agent: "codex",
+    name: "Codex",
+    models: [
+      { id: "gpt-6-astra", name: "GPT-6 Astra", efforts: ["low", "high"] },
+      { id: "gpt-6-sol", name: "GPT-6 Sol" },
+    ],
+  });
+  expect(listed.agents.find((a: any) => a.agent === "claude").you).toBe(true);
+  expect(listed.unavailable).toEqual([
+    { agent: "amp", why: "Amp isn't installed on this computer." },
+  ]);
+});
+
+test("a thread that fails as it starts is reported failed and settled once its run ends", async () => {
+  const { lead, chats, api } = fakeChats();
+  const send = api.send;
+  const error =
+    "The 'astra' model is not supported when using Codex with a ChatGPT account.";
+  let settledWhileRunning = false;
+  const triage = api.triage;
+  api.triage = async (id: string, t: { kind: string }) => {
+    if (chats.get(id)!.running) {
+      settledWhileRunning = true;
+      throw new Error("Wait for the running answer and its requests before settling.");
+    }
+    return triage(id, t);
+  };
+  api.send = async (id: string, input: ProjectChatSend) => {
+    await send(id, input);
+    const chat = chats.get(id)!;
+    setTimeout(() => {
+      chat.running = true;
+      chat.messages.push({
+        id: "a",
+        role: "assistant",
+        body: "",
+        status: "failed",
+        error,
+        created: 4,
+        provider: "codex",
+        version: 1,
+      });
+    }, 50);
+    setTimeout(() => (chat.running = false), 600);
+  };
+  lead.lastInput!.runtimeMode = "full-access";
+  const threads = new StartedThreads(api, { failureWatchMs: 5000 });
+  const [thread] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "Draw an icon", agent: "codex" }],
+    }),
+  );
+  expect(thread).toMatchObject({ agent: "codex", failed: error, settled: true });
+  expect(chats.get(thread.id)!.settledAt).toBeDefined();
+  expect(settledWhileRunning).toBe(false);
+});
+
 test("reading and waiting never ask", async () => {
   const { lead, asked, api } = fakeChats();
   const threads = new StartedThreads(api);

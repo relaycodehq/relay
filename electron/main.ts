@@ -56,6 +56,7 @@ import {
   agentProjects,
   answerRelayTools,
   prepareRelayTools,
+  threadAgents,
 } from "./started-threads/serve";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
@@ -611,6 +612,7 @@ app
               lookAtPage(html, { ...options, theme }, signal),
             ),
           handoffs: handoffs.sender,
+          agents: threadAgents(agentUpdates),
         },
       );
     chats.armWakeups();

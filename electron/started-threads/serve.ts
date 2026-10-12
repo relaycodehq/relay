@@ -14,7 +14,16 @@ import {
   verifyRelayToken,
   type RelayMcpConfig,
 } from "../relay-mcp";
-import { StartedThreads, type AgentProjects, type ThreadHandoffs } from ".";
+import {
+  EARLY_FAILURE_MS,
+  StartedThreads,
+  type AgentProjects,
+  type ThreadHandoffs,
+} from ".";
+import type { ThreadAgents } from "./thread-agents";
+import { agentRuntime } from "../agents";
+import type { AgentUpdates } from "../agents/agent-updates";
+import { cantRun } from "../../shared/agent-updates";
 
 /** Finds or makes the tools' port and secret before any agent session starts. */
 export async function prepareRelayTools(dir: string) {
@@ -50,6 +59,15 @@ export function agentProjects(
   };
 }
 
+/** The agents as Settings → Agents finds them, and the models their runtimes list. */
+export const threadAgents = (updates: AgentUpdates): ThreadAgents => ({
+  cantRun: (agent) => {
+    const found = updates.current.agents.find((a) => a.provider === agent);
+    return found && cantRun(found);
+  },
+  models: (agent) => agentRuntime(agent).models(),
+});
+
 /** Answers the tools' calls from now on; resolves to how to stop serving them here. */
 export async function answerRelayTools(
   config: RelayMcpConfig,
@@ -60,9 +78,14 @@ export async function answerRelayTools(
     previews?: ThreadPreviews;
     look?: RenderTools["look"];
     handoffs?: ThreadHandoffs;
+    agents?: ThreadAgents;
   } = {},
 ) {
-  const started = new StartedThreads(chats, { projects, ...options });
+  const started = new StartedThreads(chats, {
+    projects,
+    failureWatchMs: EARLY_FAILURE_MS,
+    ...options,
+  });
   if (hosts) {
     hosts.tools = started.handle;
     // The host serves them; this makes sure one of this version runs.

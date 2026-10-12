@@ -16,9 +16,11 @@ import {
 } from "../../shared/agents";
 import { hasAccounts, pinnedAccount } from "../../shared/agent-accounts";
 import { fitModel } from "../../shared/model-fit";
+import { AgentChoices, type ThreadAgents } from "./thread-agents";
 import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
 import {
   projectChatSendSchema,
+  type ChatMessage,
   type ChatSummary,
   type Project,
   type ProjectChat,
@@ -74,6 +76,15 @@ const ANSWER_TAIL = 4000;
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 const POLL_MS = 1000;
+/** How long start_threads watches new threads for one that fails as it starts, as Relay serves it. */
+export const EARLY_FAILURE_MS = 10_000;
+const EARLY_POLL_MS = 250;
+const FAILED_AT_ONCE =
+  "It failed as it started; nothing is working on it. Fix the cause, often the agent or model, and start it again, or tell the user.";
+const FAILED_SETTLED =
+  "It failed as it started, so Relay settled it: it's out of the user's Activity and they can bring it back. Fix the cause, often the agent or model, and start a new thread, or tell the user.";
+const hasWork = (m: ChatMessage) =>
+  !!m.body.trim() || !!m.trace?.length || !!m.activity?.length;
 
 type Chats = Pick<
   ProjectChats,
@@ -222,6 +233,8 @@ export class StartedThreads {
   private previews: ThreadPreviews | undefined;
   private look: RenderTools["look"];
   private handoffs: ThreadHandoffs | undefined;
+  private agentChoices: AgentChoices;
+  private failureWatchMs: number;
   constructor(
     private chats: Chats,
     options: {
@@ -231,6 +244,10 @@ export class StartedThreads {
       /** Loads pages unseen for show_html and preview_html; absent without windows. */
       look?: RenderTools["look"];
       handoffs?: ThreadHandoffs;
+      /** Which agents can run here and their models; absent, every runnable one, models unchecked. */
+      agents?: ThreadAgents;
+      /** How long start_threads watches its threads for one failing at once; absent, it doesn't. */
+      failureWatchMs?: number;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -238,6 +255,8 @@ export class StartedThreads {
     this.previews = options.previews;
     this.look = options.look;
     this.handoffs = options.handoffs;
+    this.agentChoices = new AgentChoices(options.agents);
+    this.failureWatchMs = options.failureWatchMs ?? 0;
   }
 
   /** Answers one tool call made by the agent in `chatId`. */
@@ -293,6 +312,10 @@ export class StartedThreads {
         return this.settleSelf(lead);
       case "usage_limits":
         return json(await this.usage(lead));
+      case "list_agents":
+        return json(
+          await this.agentChoices.list(this.leadSide(lead).agent, input.agent),
+        );
       case "list_notes":
         return this.listNotes(lead, input);
       case "add_note":
@@ -747,13 +770,15 @@ export class StartedThreads {
         "`uncommitted` only works in your own project; leave it out for another one.",
         true,
       );
+    const { last, agent: caller, from } = this.leadSide(lead);
+    const refused = await this.agentChoices.refusal(threads, caller);
+    if (refused) return toolText(refused, true);
     const working = this.children(lead).filter((c) => c.running).length;
     if (!detached && working + threads.length > STARTED_LIMIT)
       return toolText(
         `${working} of your threads are working; at most ${STARTED_LIMIT} may at once. Wait for some to finish first.`,
         true,
       );
-    const { last, agent: caller, from } = this.leadSide(lead);
     const count = `${threads.length} thread${threads.length === 1 ? "" : "s"}`;
     const listed = threads
       .map(
@@ -778,7 +803,7 @@ export class StartedThreads {
         "The user didn't start these threads. Ask them what they want instead.",
         true,
       );
-    const started: unknown[] = [];
+    const started: { id?: string; [key: string]: unknown }[] = [];
     for (const spec of threads) {
       const agent: AgentProvider = spec.agent ?? caller;
       const same = agent === caller;
@@ -856,7 +881,58 @@ export class StartedThreads {
         });
       }
     }
-    return json(started);
+    const failed = await this.failedAtOnce(
+      started.flatMap((t) => (t.id ? [t.id] : [])),
+      signal,
+    );
+    return json(
+      started.map((t) => {
+        const dead = t.id ? failed.get(t.id) : undefined;
+        if (!dead) return t;
+        return {
+          ...t,
+          failed: dead.error,
+          ...(dead.settled ? { settled: true } : {}),
+          note: dead.settled ? FAILED_SETTLED : FAILED_AT_ONCE,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Watches new threads until each shows work or fails, so one that fails
+   * as it starts, like on a model its account lacks, is reported failed and
+   * settled once its run lets go, rather than left dead in Activity.
+   */
+  private async failedAtOnce(ids: string[], signal: AbortSignal) {
+    const failed = new Map<string, { error: string; settled: boolean }>();
+    const until = Date.now() + this.failureWatchMs;
+    let open = ids;
+    while (open.length && !signal.aborted && Date.now() < until) {
+      await sleep(Math.min(EARLY_POLL_MS, until - Date.now()), signal);
+      const still: string[] = [];
+      for (const id of open) {
+        // Gone already, as the user may delete it: nothing to report.
+        const found = await this.thread(id).catch(() => undefined);
+        if (!found) continue;
+        const { summary, chat } = found;
+        const last = answers(chat).at(-1);
+        if (last?.status === "failed") {
+          // Settling waits for its run to let go of it.
+          const settled =
+            startedStatus(summary, chat) === "failed" &&
+            (await this.chats.triage(id, { kind: "settle" }).then(
+              () => true,
+              () => false,
+            ));
+          failed.set(id, { error: last.error ?? "It failed.", settled });
+          if (!settled) still.push(id);
+        } else if (!last || (last.status === "streaming" && !hasWork(last)))
+          still.push(id);
+      }
+      open = still;
+    }
+    return failed;
   }
 
   /** Each agent's limits on the accounts the calling thread uses. */
