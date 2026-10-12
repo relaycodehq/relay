@@ -54,6 +54,8 @@ export function useThreadWorktree({
     saveDraftWorkspace(id, workspace, project);
     onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
+  // A paired computer the new thread starts on instead, in a worktree there.
+  const [startOn, setStartOn] = useState<{ id: string; name: string }>();
   // The new worktree's branch as typed; empty leaves it to Relay.
   const [newBranch, setNewBranch] = useState(() =>
     chat ? "" : threadStorage(id).branch.load(),
@@ -147,6 +149,8 @@ export function useThreadWorktree({
   return {
     workspace,
     setWorkspace,
+    startOn: chat ? undefined : startOn,
+    setStartOn,
     newBranch,
     setNewBranch,
     status,

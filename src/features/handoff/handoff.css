@@ -144,3 +144,9 @@
   color: var(--text);
   text-decoration: underline;
 }
+/* A new thread starting on another computer: what stays behind here. */
+.start-on-note {
+  margin: -2px 6px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}

@@ -282,6 +282,12 @@ export interface HandoffThread {
   settings: HandoffSettings;
   messages: ChatMessage[];
   git: HandoffGit;
+  /**
+   * Nothing answered it here yet: its first message runs there as the
+   * thread's first turn, in its own words, instead of being handed over
+   * with a note. From `startHandoffBridge`.
+   */
+  start?: true;
 }
 
 interface HandoffGit {
@@ -425,6 +431,17 @@ export interface ComputersApi {
   pairComputer(link: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;
   handoffTargets(chatId: string): Promise<HandoffTarget[]>;
+  /** The paired computers a new thread in the project can start on, or why each can't. */
+  startTargets(projectId: string): Promise<HandoffTarget[]>;
+  /**
+   * Starts a new thread on another computer: its first message is kept
+   * here unanswered and the thread goes there, where it's answered.
+   */
+  startProjectChatOn(
+    chatId: string,
+    input: ProjectChatSend,
+    computerId: string,
+  ): Promise<void>;
   /** Starts the handoff; the thread's `sentTo` follows it from there. */
   handOffThread(chatId: string, computerId: string): Promise<void>;
   /** Sends a handoff that failed on its way again. */

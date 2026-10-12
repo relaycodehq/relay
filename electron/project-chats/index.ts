@@ -605,6 +605,28 @@ export class ProjectChats {
   send(id: string, input: ProjectChatSend, fromRelay = false) {
     return this.control(id, () => this.sendHeld(id, input, fromRelay));
   }
+  /**
+   * A new thread's first message, kept with its worktree made but not
+   * answered here: another computer starts the thread with it.
+   */
+  firstMessageOnly(id: string, input: ProjectChatSend) {
+    return this.control(id, async () => {
+      const chat = await this.storage.load(id);
+      if (
+        chat.messages.length ||
+        !chat.worktree ||
+        chat.scope.kind !== "project"
+      )
+        throw new Error(
+          "Only a new thread in a worktree starts on another computer.",
+        );
+      if (!agentAsked(input))
+        throw new Error("Pick the agent that starts it there.");
+      await this.turns.sendNow(id, input, false, false);
+      // Named after the message: the title's rename waits for a turn here.
+      this.worktrees.unnamed.delete(id);
+    });
+  }
   /** Your own message, from the composer or a phone: it unsettles a thread settled while it ran. */
   async sendYours(id: string, input: ProjectChatSend) {
     await this.triaging.sent(id);

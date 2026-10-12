@@ -328,6 +328,8 @@ export class ComputerHandoff {
     /** Why the branch couldn't keep its name here, when it couldn't. */
     renamed?: string,
   ) {
+    if (thread.start)
+      return this.adoptStart(projectId, thread, cameFrom, worktree);
     const { messages, was } = relabeled(thread.messages, true);
     const note = [...messages]
       .reverse()
@@ -372,6 +374,51 @@ export class ComputerHandoff {
         provider,
       })
       .catch((e) => console.warn("A handed-over thread couldn't start:", e));
+    return chatSummary(chat);
+  }
+  /**
+   * A thread nothing answered yet where it was made: its first message, by
+   * its own id, starts it here as any thread's first turn. Nothing is
+   * carried, so the computer it came from mirrors that message too.
+   */
+  private async adoptStart(
+    projectId: string,
+    thread: HandoffThread,
+    cameFrom: Omit<ChatCameFrom, "carried">,
+    worktree: ChatWorktree,
+  ) {
+    const first = thread.messages.find((m) => m.role === "user" && !m.parentId);
+    if (!first) throw new Error("The thread came without its first message.");
+    const chat: ProjectChat = {
+      id: randomUUID(),
+      projectId,
+      scope: thread.scope,
+      title: thread.title,
+      renamed: true,
+      created: Date.now(),
+      updated: Date.now(),
+      ...(worktree.branch ? { branch: worktree.branch } : {}),
+      worktree,
+      messages: [],
+      cameFrom: { ...cameFrom, carried: 0 },
+      carriedIds: {},
+    };
+    await this.core.storage.add(chat);
+    const { provider, ...settings } = thread.settings;
+    void this.host
+      .send(chat.id, {
+        ...settings,
+        id: first.id,
+        body: first.body,
+        to: provider,
+        provider,
+      })
+      .catch((e) =>
+        console.warn(
+          "A thread started from another computer couldn't start:",
+          e,
+        ),
+      );
     return chatSummary(chat);
   }
   /** What a thread that came here wrote since, for its trip back. */

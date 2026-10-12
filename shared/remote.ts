@@ -234,6 +234,8 @@ export const liveHandoffBridge = 18;
  * it left behind.
  */
 export const folderHandoffBridge = 20;
+/** From here a new thread can start on the computer it's handed to, its first message unanswered here (`HandoffThread.start`). */
+export const startHandoffBridge = 20;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),

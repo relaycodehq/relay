@@ -865,6 +865,43 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
   expect(back.filter((m) => m.body.includes("One more thing"))).toHaveLength(1);
 });
 
+it("starts a new thread on the other computer with its first message, answered only there", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  const first = input("@codex Add a changelog");
+  await laptop.chats.firstMessageOnly(thread.id, first);
+  const kept = await laptop.chats.get(thread.id);
+  expect(kept.messages.map((m) => m.id)).toEqual([first.id]);
+  expect(kept.worktree?.path).toBeTruthy();
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+      live: true,
+      kept: 0,
+    }),
+  );
+  const [there] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, there!.id);
+  // Its own words as the first turn, not a note to carry on from.
+  const prompt = (await prompts()).at(-1)!;
+  expect(prompt).toContain("Add a changelog");
+  expect(prompt).not.toContain("handed over");
+  const minis = await mini.chats.get(there!.id);
+  expect(minis.messages[0]).toMatchObject({ id: first.id, role: "user" });
+  expect(minis.messages[0]!.handedOver).toBeUndefined();
+  // Here the first message is the one that came back, never twice.
+  await vi.waitFor(async () =>
+    expect(
+      (await laptop.chats.get(thread.id)).messages.map((m) => m.id),
+    ).toEqual(minis.messages.map((m) => m.id)),
+  );
+});
+
 it("runs a live handoff's folder calls on the other computer's worktree, and won't open the copy left here", async () => {
   const { laptop, mini, sender, thread, there } = await liveThread();
   const { sentTo } = await laptop.chats.get(thread.id);

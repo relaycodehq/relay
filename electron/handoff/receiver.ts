@@ -76,6 +76,7 @@ const threadSchema = z
         start: shaSchema.optional(),
       })
       .strict(),
+    start: z.literal(true).optional(),
   })
   .strict();
 

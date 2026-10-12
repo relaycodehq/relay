@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/validation";
+import { projectChatSendSchema } from "../../shared/projects";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Settings → Computers, and handing threads to them. */
@@ -21,6 +22,21 @@ export function computerHandlers(ctx: ApiContext) {
     ),
     handOffThread: takes([idSchema, idSchema], (chatId, computerId) =>
       handoffs().sender.handOff(chatId, computerId),
+    ),
+    startTargets: takes([idSchema], (projectId) =>
+      handoffs().sender.startTargets(projectId),
+    ),
+    startProjectChatOn: takes(
+      [idSchema, projectChatSendSchema, idSchema],
+      async (chatId, input, computerId) => {
+        if (input.images?.length)
+          throw new Error(
+            "Screenshots don't go along to another computer yet. Send it without them, or start it here.",
+          );
+        const { sender } = handoffs();
+        await ctx.projectChats.firstMessageOnly(chatId, input);
+        await sender.handOff(chatId, computerId);
+      },
     ),
     retryHandoff: takes([idSchema], (chatId) =>
       handoffs().sender.retry(chatId),

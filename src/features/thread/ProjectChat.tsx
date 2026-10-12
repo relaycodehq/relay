@@ -325,8 +325,14 @@ export function ProjectChat({
       api.createProjectChat(
         project.id,
         scope,
-        scope.kind === "project" ? workspace : undefined,
-        scope.kind === "project" && workspace === "worktree"
+        // Starting on another computer, it has a worktree to go there in.
+        scope.kind === "project"
+          ? worktree.startOn
+            ? "worktree"
+            : workspace
+          : undefined,
+        scope.kind === "project" &&
+          (workspace === "worktree" || !!worktree.startOn)
           ? worktree.newBranch.trim() || undefined
           : undefined,
         links.draftLinks,
@@ -337,6 +343,7 @@ export function ProjectChat({
     },
   );
   const { send, resume } = useThreadSend({
+    startOn: worktree.startOn,
     handle,
     newThread,
     root,

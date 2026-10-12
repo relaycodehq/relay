@@ -198,7 +198,13 @@ export class ChatTurns {
       true,
     );
   }
-  async sendNow(id: string, input: ProjectChatSend, resumed = false) {
+  /** `answer` false keeps the message without a turn, for another computer to answer. */
+  async sendNow(
+    id: string,
+    input: ProjectChatSend,
+    resumed = false,
+    answer = true,
+  ) {
     const active = this.core.active.claim(id, input);
     try {
       const chat = await this.core.storage.load(id);
@@ -309,13 +315,14 @@ export class ChatTurns {
       ));
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
+      if (!answer) chat.lastInput = { ...input, images: undefined };
       this.core.storage.keep(chat);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: user });
       for (const message of superseded)
         this.core.emit({ chatId: id, message: structuredClone(message) });
       if (chat.messages.length === 1) this.titles.generate(chat, input.choice);
-      if (!asked) {
+      if (!asked || !answer) {
         this.core.active.release(id, active);
         return;
       }

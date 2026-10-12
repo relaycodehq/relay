@@ -35,6 +35,7 @@ import { IconButton } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
+import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { WorktreeBranchField } from "./WorktreeBranchField";
@@ -317,7 +318,13 @@ export function ThreadComposer({
               }}
             />
           )}
-          {scope.kind !== "project" || project.plain ? undefined : (
+          {scope.kind !== "project" || project.plain ? undefined : !chat ? (
+            <NewWorkspacePicker
+              project={project}
+              worktree={worktree}
+              disabled={busy}
+            />
+          ) : (
             <WorkspaceControl
               chat={chat}
               worktree={worktree}
@@ -334,7 +341,7 @@ export function ThreadComposer({
             newWorktree={
               !chat &&
               scope.kind === "project" &&
-              worktree.workspace === "worktree"
+              (worktree.workspace === "worktree" || !!worktree.startOn)
             }
             disabled={waiting || held}
             onStartThread={onStartThread}
@@ -343,7 +350,7 @@ export function ThreadComposer({
         </>
       }
       notice={({ sendGoal }) =>
-        chat && (
+        chat ? (
           <ThreadNotice
             chat={chat}
             stopped={stopped}
@@ -351,6 +358,8 @@ export function ThreadComposer({
             onError={setError}
             onGoal={sendGoal}
           />
+        ) : (
+          <StartOnNote project={project} worktree={worktree} />
         )
       }
       meter={

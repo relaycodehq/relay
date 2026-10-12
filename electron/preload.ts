@@ -330,6 +330,8 @@ const methods = [
   "forgetComputer",
   "handoffTargets",
   "handOffThread",
+  "startTargets",
+  "startProjectChatOn",
   "retryHandoff",
   "handoffView",
   "handoffViews",

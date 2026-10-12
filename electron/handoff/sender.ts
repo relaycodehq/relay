@@ -33,6 +33,7 @@ import {
 import {
   folderHandoffBridge,
   handoffBridge,
+  startHandoffBridge,
   liveHandoffBridge,
   type HandoffPart,
   type RemoteEvent,
@@ -313,10 +314,19 @@ export class Handoffs {
     return chat;
   }
   /** The paired computers, and whether each has this thread's repository. */
-  async targets(chatId: string): Promise<HandoffTarget[]> {
-    const chat = this.summary(chatId);
+  targets(chatId: string): Promise<HandoffTarget[]> {
+    return this.targetsIn(this.summary(chatId).projectId, handoffBridge);
+  }
+  /** The paired computers a new thread in the project can start on. */
+  startTargets(projectId: string): Promise<HandoffTarget[]> {
+    return this.targetsIn(projectId, startHandoffBridge);
+  }
+  private async targetsIn(
+    projectId: string,
+    bridge: number,
+  ): Promise<HandoffTarget[]> {
     const repositories = await this.projects
-      .root(chat.projectId)
+      .root(projectId)
       .then(repositoryNames)
       .catch((): string[] => []);
     return Promise.all(
@@ -332,7 +342,8 @@ export class Handoffs {
           return { ...base, online: true, problem: "No Git remote to match" };
         try {
           const client = await this.computers.connected(c.id);
-          if (outdated(await this.info(c.id, client)))
+          const info = await this.info(c.id, client);
+          if (outdated(info) || (info?.bridge ?? 0) < bridge)
             return { ...base, online: true, problem: "Needs a Relay update" };
           const projects = await client.call("computerProjects");
           const match = projects.find((p) =>
@@ -653,16 +664,20 @@ export class Handoffs {
       const input = chat.lastInput;
       if (!input)
         throw new Error("Send a message before handing the thread off.");
-      const repositories = await repositoryNames(root);
-      if (!repositories.length)
-        throw new Error(
-          `This project has no Git remote, so ${name} can't find its copy.`,
-        );
       const client = await this.computers.connected(computerId);
       const info = await this.info(computerId, client, true);
       if (outdated(info))
         throw new Error(
           `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
+        );
+      // Nothing answered it here: its first message starts it there.
+      const start =
+        !chat.messages.some((m) => m.role === "assistant") &&
+        info!.bridge >= startHandoffBridge;
+      const repositories = await repositoryNames(root);
+      if (!repositories.length)
+        throw new Error(
+          `This project has no Git remote, so ${name} can't find its copy.`,
         );
       const thread: HandoffThread = {
         from: computerName(),
@@ -686,6 +701,7 @@ export class Handoffs {
           ...(worktree.from ? { from: worktree.from } : {}),
           ...(worktree.start ? { start: worktree.start } : {}),
         },
+        ...(start ? { start: true as const } : {}),
       };
       await mkdir(folder, { recursive: true, mode: 0o700 });
       const bundle = join(folder, "bundle");
@@ -714,7 +730,8 @@ export class Handoffs {
         ...(live
           ? {
               live: true,
-              kept: chat.messages.length,
+              // A start's first message comes back from there as its own.
+              kept: start ? 0 : chat.messages.length,
               ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
             }
           : {}),

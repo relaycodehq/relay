@@ -23,6 +23,7 @@ import type { HeldWrite } from "./write-gate";
  */
 export function useThreadSend({
   handle: { chat, id, reserve, setError, refetch, listChanged },
+  startOn,
   newThread,
   root,
   attachments,
@@ -32,6 +33,8 @@ export function useThreadSend({
   onOpen,
 }: {
   handle: ThreadHandle;
+  /** A computer the new thread starts on, its first message answered there. */
+  startOn?: { id: string };
   /** The thread the first message makes. */
   newThread: NewThread;
   /** The side conversation's first message, while one is open. */
@@ -58,14 +61,17 @@ export function useThreadSend({
       if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
       if (chat) markDraftSent(chat.id);
       dispatch?.();
-      async function post(target: ChatSummary) {
-        await api.sendProjectChat(target.id, {
+      async function post(target: ChatSummary, elsewhere?: { id: string }) {
+        const input = {
           // A side conversation leaves the thread's attachments waiting.
           ...withAttachments(value, root ? { codeRefs: [] } : attachments),
           id: crypto.randomUUID(),
           ...(root ? { parentId: root.id } : {}),
           ...(viewing ? { viewing } : {}),
-        });
+        };
+        if (elsewhere)
+          await api.startProjectChatOn(target.id, input, elsewhere.id);
+        else await api.sendProjectChat(target.id, input);
         if (!root) attachments.clear();
         onSent();
       }
@@ -75,7 +81,7 @@ export function useThreadSend({
           await refetch();
         } else
           await newThread(async (thread) => {
-            await post(thread);
+            await post(thread, startOn);
             clearDraftWorkspace(id);
             startThreadSettings(id, thread.id, recipient(value));
           });
