@@ -8,7 +8,6 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../handoff/HandoffStrip";
-import { LiveAwayLine } from "../handoff/LiveAwayLine";
 import { liveAway } from "../../../shared/handoff";
 import type { ThreadGoal } from "../../../shared/goal";
 import { GoalStrip } from "./GoalStrip";
@@ -46,7 +45,6 @@ export function ThreadNotice(props: {
   );
   return (
     <>
-      {live && <LiveAwayLine chat={chat} onError={rest.onError} />}
       {goal}
       <PressingStrip chat={chat} {...rest} />
     </>

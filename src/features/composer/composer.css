@@ -59,6 +59,12 @@
   max-width: var(--thread-width);
   margin: 0 auto;
 }
+/* Under the composer, in the dock's bottom padding: it takes no height, so
+   the composer stays put whether a thread shows a line there or not. */
+.composer-below {
+  height: 0;
+  overflow: visible;
+}
 .thread-context-controls {
   display: flex;
   align-items: center;

@@ -100,6 +100,7 @@ export function ProjectComposer({
   conversation,
   context,
   notice,
+  below,
   meter,
   threadCost,
   attachment,
@@ -126,6 +127,8 @@ export function ProjectComposer({
   context?: ReactNode;
   /** Sits on top of the input, attached to it; given what it may send through the composer. */
   notice?: ReactNode | ((composer: ComposerNoticeActions) => ReactNode);
+  /** A quiet line under the composer, in the room its dock keeps there anyway. */
+  below?: ReactNode;
   /** The context window's meter, among the controls. */
   meter?: ReactNode;
   /** Dollars this thread's answers cost, where their agent priced them. */
@@ -521,6 +524,7 @@ export function ProjectComposer({
           />
         </div>
       </form>
+      {below && <div className="composer-below">{below}</div>}
       {draft.images
         .filter((image) => image.id === draft.sketching)
         .map((image) => (
