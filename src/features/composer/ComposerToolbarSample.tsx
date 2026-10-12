@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { ChevronDown, Mic, Paperclip, UserRound, Zap } from "lucide-react";
-import { reportsUsage, type AgentProvider } from "../../../shared/agents";
+import {
+  agentInfo,
+  reportsUsage,
+  type AgentProvider,
+} from "../../../shared/agents";
+import { isPickAgent } from "../agents/composer-models";
 import { useAISettings } from "../agents/useAISettings";
 import { useCatalogs } from "../agents/useCatalogs";
 import { ComposerModelPicker } from "../agents/ComposerModelPicker";
@@ -36,10 +41,19 @@ export function useSampleControls(sample?: SampleModel): ToolbarControls {
   const models = sample
     ? [{ id: sample.name, name: sample.name, description: "", efforts: [] }]
     : listed;
-  const effort = sample?.effort ?? (agent === "claude" ? "High" : "Medium");
+  // As the real composer decides (useAgentRuns' offersEffort): Claude and Codex
+  // always have one; any other agent only for a model that lists efforts.
+  const offersEffort =
+    !!sample || !isPickAgent(agent) || (models?.[0]?.efforts.length ?? 0) > 0;
+  const effort =
+    sample?.effort ??
+    (agent === "claude" ? "High" : agent === "codex" ? "Medium" : "Default");
   const contextWindow = sample?.window ?? 1_000_000;
-  // The cache fire burns from when the controls first showed.
+  // The cache fire burns from when the controls first showed; only Claude's
+  // sessions report a prompt cache.
   const [cachedAt] = useState(Date.now);
+  const cache =
+    agent === "claude" ? { at: cachedAt, ttlMs: 60 * 60_000 } : undefined;
   return {
     model: (
       <ComposerModelPicker
@@ -49,47 +63,46 @@ export function useSampleControls(sample?: SampleModel): ToolbarControls {
         onSelect={noop}
       />
     ),
-    effort:
-      agent === "claude" ? (
-        <ComposerTraitsMenu
-          label="Reasoning effort and context window"
-          sections={[
-            {
-              label: "Reasoning",
-              value: effort,
-              options: one(effort),
-              onChange: noop,
-            },
-            {
-              label: "Context",
-              value: windowLabel(contextWindow),
-              options: one(windowLabel(contextWindow)),
-              onChange: noop,
-            },
-          ]}
+    effort: !offersEffort ? null : agent === "claude" ? (
+      <ComposerTraitsMenu
+        label="Reasoning effort and context window"
+        sections={[
+          {
+            label: "Reasoning",
+            value: effort,
+            options: one(effort),
+            onChange: noop,
+          },
+          {
+            label: "Context",
+            value: windowLabel(contextWindow),
+            options: one(windowLabel(contextWindow)),
+            onChange: noop,
+          },
+        ]}
+      />
+    ) : (
+      <>
+        <ComposerSelect
+          label="Reasoning effort"
+          value={effort}
+          options={one(effort)}
+          onChange={noop}
         />
-      ) : (
-        <>
-          <ComposerSelect
-            label="Reasoning effort"
-            value={effort}
-            options={one(effort)}
-            onChange={noop}
-          />
-          {agent === "codex" && (
-            <button type="button" className="composer-control composer-fast">
-              <Zap size={14} />
-              Fast
-            </button>
-          )}
-        </>
-      ),
+        {agentInfo(agent).fast && (
+          <button type="button" className="composer-control composer-fast">
+            <Zap size={14} />
+            Fast
+          </button>
+        )}
+      </>
+    ),
     context: (
       <ContextWindowMeter
         usage={{
           usedTokens: Math.round(contextWindow * 0.184),
           maxTokens: contextWindow,
-          cache: { at: cachedAt, ttlMs: 60 * 60_000 },
+          ...(cache ? { cache } : {}),
         }}
         provider={agent}
         compacting={false}
