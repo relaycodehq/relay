@@ -227,7 +227,9 @@ export class ChatTurns {
       if (skillMatches.length && asked && agentInfo(asked.provider).skills) {
         const available = await codexSkills(root);
         for (const match of skillMatches) {
-          const skill = available.find((s) => s.name === match[2]);
+          // As shared/skill-mentions reads them, so a pilled skill is one sent.
+          const name = match[2].replace(/[.:-]+$/, "");
+          const skill = available.find((s) => s.name === name);
           if (!skill && match[1] === "/skill:")
             throw new Error(
               `This ${agentName(asked.provider)} skill is no longer available. Refresh the command menu.`,
@@ -458,7 +460,7 @@ export class ChatTurns {
       chat.messages.push(answer);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: structuredClone(answer) });
-      const { prompt, caughtUp, briefed, carried } = turnPrompt({
+      const { prompt, request, caughtUp, briefed, carried } = turnPrompt({
         chat,
         input,
         provider: asked.provider,
@@ -477,6 +479,7 @@ export class ChatTurns {
       this.reply(chat, active, answer, root, prompt, input, {
         kind: "reply",
         skills,
+        request,
         caughtUp,
         briefed,
         carried,

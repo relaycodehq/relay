@@ -198,6 +198,7 @@ export class ChatQueue {
           path: this.core.storage.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
+        asked.question,
       );
     } catch {
       chat.messages.splice(chat.messages.indexOf(message), 1);

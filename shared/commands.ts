@@ -106,6 +106,8 @@ export interface ProviderCommand {
   name: string;
   description: string;
   argumentHint?: string;
+  /** A skill of an agent whose commands go out alone: mentioned anywhere with `$name`. */
+  skill?: true;
 }
 export interface CommandOption {
   value: string;

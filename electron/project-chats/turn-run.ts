@@ -269,6 +269,9 @@ export class TurnRunner {
         ...(links.length ? { links } : {}),
         ...(Object.keys(env).length ? { env } : {}),
         prompt,
+        ...(turn.kind === "reply" && turn.request
+          ? { request: turn.request }
+          : {}),
         context: async () => {
           const note = await projectTasks.note(
             root,

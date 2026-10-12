@@ -152,11 +152,12 @@ export function useComposerCommands({
             ? (providerCommands.data ?? [])
             : []
           )
-            .filter(() => prefix === "/" || !commandsAlone)
+            // Mid-message, such an agent only takes its skills: `$name`.
+            .filter((c) => prefix === "/" || !commandsAlone || c.skill)
             // Relay runs its own command of the same name, e.g. /add-dir.
             .filter((c) => !relayCommands.some((r) => r.name === c.name))
             .map((c) =>
-              commandsAlone
+              commandsAlone && prefix === "/"
                 ? {
                     kind: "command" as const,
                     name: c.name,
@@ -205,8 +206,9 @@ export function useComposerCommands({
         .includes(query),
     )
     .slice(0, 60);
-  // Mid-sentence, a slash that matches nothing is just text, e.g. a path.
-  const visible = open && (!inline || items.length > 0);
+  // Mid-sentence, a slash that matches nothing is just text, e.g. a path;
+  // so is a `$` that names no skill, e.g. `$5` or `$HOME`.
+  const visible = open && ((!inline && prefix === "/") || items.length > 0);
   const [bounds, setBounds] = useState({
     left: 0,
     top: 0,

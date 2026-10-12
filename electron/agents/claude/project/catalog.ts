@@ -105,10 +105,15 @@ const probeClaude = memoByKey<ClaudeProbe>((root) =>
       extraArgs: chromeArgs,
     },
     async (stream) => {
-      const [commands, defaults] = await withTimeout(
+      const [commands, defaults, skills] = await withTimeout(
         Promise.all([
           stream.supportedCommands(),
           readSettings(stream).catch(() => undefined),
+          // Commands don't say which are skills; this lists only those.
+          stream
+            .reloadSkills()
+            .then((r) => new Set(r.skills.map((s) => s.name)))
+            .catch(() => new Set<string>()),
         ]),
         20000,
         "Claude did not list commands.",
@@ -130,6 +135,7 @@ const probeClaude = memoByKey<ClaudeProbe>((root) =>
           ...(c.argumentHint
             ? { argumentHint: c.argumentHint.slice(0, 80) }
             : {}),
+          ...(skills.has(c.name) ? { skill: true as const } : {}),
         }));
       return { commands: listed, defaults };
     },

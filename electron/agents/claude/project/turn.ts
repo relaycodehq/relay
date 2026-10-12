@@ -8,6 +8,9 @@ import {
 } from "./config";
 import { ClaudeTurnReader } from "./reader";
 import { claudeImages } from "./sdk";
+import { listClaudeCommands } from "./catalog";
+import { planSkillDispatch } from "./skill-dispatch";
+import { mayMentionSkill } from "../../../../shared/skill-mentions";
 import { guardSteer } from "../../turn-kit";
 import {
   closeSession,
@@ -95,7 +98,12 @@ export async function runClaudeProject(
     if (adopting) session.hosted?.mark("start", turn.from);
     session.plan = "";
     session.busy = true;
-    const images = await claudeImages(options.images);
+    const [images, dispatch] = await Promise.all([
+      claudeImages(options.images),
+      compacting
+        ? undefined
+        : skillDispatch(options.prompt, options.cwd, options.request),
+    ]);
     options.signal.throwIfAborted();
     if (compacting && !session.threadId && !options.session?.id)
       throw new Error("There is no Claude session to compact yet.");
@@ -115,23 +123,21 @@ export async function runClaudeProject(
           role: "user",
           content: compacting
             ? `/compact ${options.prompt}`.trim()
-            : [
-                // A screenshot sent alone has no text; the API refuses an empty block.
-                ...(options.prompt
-                  ? [{ type: "text" as const, text: options.prompt }]
-                  : []),
-                ...images,
-              ],
+            : userContent(options.prompt, images, dispatch),
         },
       });
     }
     if (!compacting)
       options.onControl?.({
-        steer: (text, id, steerImages) =>
+        steer: (text, id, steerImages, request) =>
           guardSteer(
             () => reader.steerable && !options.signal.aborted,
-            () => claudeImages(steerImages),
-            (attached) => {
+            () =>
+              Promise.all([
+                claudeImages(steerImages),
+                skillDispatch(text, options.cwd, request),
+              ]),
+            ([attached, dispatch]) => {
               const uuid = randomUUID();
               reader.track(uuid, id);
               // "now" cuts Claude off mid-reply or mid-tool, running tools
@@ -143,12 +149,10 @@ export async function runClaudeProject(
                 parent_tool_use_id: null,
                 message: {
                   role: "user",
-                  content: attached.length
-                    ? [
-                        ...(text ? [{ type: "text" as const, text }] : []),
-                        ...attached,
-                      ]
-                    : text,
+                  content:
+                    attached.length || dispatch
+                      ? userContent(text, attached, dispatch)
+                      : text,
                 },
                 priority: "now",
               });
@@ -212,4 +216,32 @@ async function startsFollowUp(frames: ClaudeFrames) {
   if (!(await frames.wait(2000))) return false;
   const first = frames.peek();
   return first?.type === "system" && first.subtype === "init";
+}
+function userContent(
+  text: string,
+  images: Awaited<ReturnType<typeof claudeImages>>,
+  dispatch: ReturnType<typeof planSkillDispatch>,
+) {
+  if (!dispatch)
+    return [
+      // A screenshot sent alone has no text; the API refuses an empty block.
+      ...(text ? [{ type: "text" as const, text }] : []),
+      ...images,
+    ];
+  return [
+    ...(dispatch.lead ? [{ type: "text" as const, text: dispatch.lead }] : []),
+    // A command block followed by an image doesn't expand.
+    ...images,
+    { type: "text" as const, text: dispatch.command },
+  ];
+}
+/** A `$skill` in the prompt, laid out so Claude runs it; undefined sends the prompt as it is. */
+async function skillDispatch(prompt: string, cwd: string, request?: string) {
+  if (!mayMentionSkill(request ?? prompt)) return undefined;
+  const commands = await listClaudeCommands(cwd).catch(() => []);
+  return planSkillDispatch(
+    prompt,
+    new Set(commands.filter((c) => c.skill).map((c) => c.name)),
+    request,
+  );
 }

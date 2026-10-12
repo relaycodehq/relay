@@ -75,6 +75,8 @@ export interface AgentOptions {
       text: string,
       id?: string,
       images?: AgentOptions["images"],
+      /** The user's own words within `text`, as `request` is within `prompt`. */
+      request?: string,
     ) => Promise<void>;
     /** Pauses or clears the goal the running turn pursues, without stopping the turn. */
     goal?: (command: "pause" | "clear") => Promise<void>;
@@ -87,6 +89,8 @@ export interface AgentOptions {
   /** Added to the agent process's environment, e.g. a worktree's RELAY_PORT_OFFSET; read when its process starts. */
   env?: Record<string, string>;
   prompt: string;
+  /** The user's own words within `prompt`, apart from what Relay adds around them. */
+  request?: string;
   choice: ModelChoice;
   /** The Claude Code or Codex account to run on; left out, the one in use. */
   account?: string;

@@ -185,6 +185,7 @@ export function turnPrompt({
     : `${request ? `My request: ${request}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
   return {
     prompt,
+    request,
     carried: missed.flatMap((m) => m.images ?? []),
     // What a command couldn't carry, the session hears next turn.
     caughtUp: !command || !updates.length,
