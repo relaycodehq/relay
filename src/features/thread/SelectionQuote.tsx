@@ -40,6 +40,7 @@ export function SelectionQuote({
   const keys = useShortcutLabel("quote");
   useEffect(() => {
     let dragging = false;
+    let settling: ReturnType<typeof setTimeout> | undefined;
     const clear = () => setOffer((current) => (current ? null : current));
     const message = (node: Node) =>
       (node instanceof Element ? node : node.parentElement)?.closest(
@@ -80,11 +81,16 @@ export function SelectionQuote({
       )
         return;
       dragging = true;
+      clearTimeout(settling);
       clear();
     };
     const onPointerUp = () => {
       dragging = false;
-      measure();
+      // A press inside the selection only clears it after the release, as it
+      // might have been a drag of the text; measured now, the old selection
+      // would bring the buttons back for a frame.
+      clearTimeout(settling);
+      settling = setTimeout(measure);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") clear();
@@ -96,6 +102,7 @@ export function SelectionQuote({
     window.addEventListener("scroll", onSelectionChange, true);
     window.addEventListener("resize", onSelectionChange);
     return () => {
+      clearTimeout(settling);
       document.removeEventListener("selectionchange", onSelectionChange);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("pointerup", onPointerUp);
