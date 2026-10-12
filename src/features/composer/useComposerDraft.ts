@@ -24,6 +24,8 @@ import {
 } from "../images/draft-images";
 import { onDraftTaken, readDraft, useDraft, writeDraft } from "./drafts";
 import { splitDraftKey } from "../../lib/thread-draft";
+import { draftChips } from "../../lib/thread-storage";
+import { pickedSkills } from "../../../shared/skill-mentions";
 import {
   attachedImages,
   dataUrlBytes,
@@ -311,6 +313,8 @@ export function useComposerDraft(
       event.stopPropagation();
       addFiles(files, { left: event.clientX, top: event.clientY });
     },
+    /** The skills picked as pills that `text` still mentions. */
+    skills: (text: string) => pickedSkills(text, draftChips(key).skills.load()),
     /**
      * Empties the composer as the message goes out; a message that is turned
      * down comes back, ahead of anything typed since.

@@ -12,6 +12,7 @@ import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { PastedTextPill } from "../composer/PastedTextCard";
 import { RichText } from "../../ui/RichText";
+import { skillMentions, type SentSkill } from "../../../shared/skill-mentions";
 import "../composer/prompt/prompt-input.css";
 
 export interface SentImage {
@@ -22,8 +23,27 @@ export interface SentImage {
 // A token becomes inline code the pill replaces; one already in a code span is
 // pilled as it stands (as the composer does), one in a fence stays text.
 const codeOrToken = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[Image #\d+\]/g;
-const tokenAsCode = (text: string) =>
-  text.replace(codeOrToken, (m, code?: string) => code ?? `\`${m}\``);
+// Marks a skill's code span apart from a `$name` the user wrote as code.
+const skillMark = "\uE000";
+const tokenAsCode = (text: string, skills: ReadonlySet<string>) => {
+  let out = "",
+    last = 0;
+  const prose = (chunk: string) => {
+    let at = 0;
+    for (const m of skillMentions(chunk, skills)) {
+      out += chunk.slice(at, m.start) + `\`${skillMark}${m.name}\``;
+      at = m.end;
+    }
+    out += chunk.slice(at);
+  };
+  for (const m of text.matchAll(codeOrToken)) {
+    prose(text.slice(last, m.index));
+    out += m[1] ?? `\`${m[0]}\``;
+    last = m.index! + m[0].length;
+  }
+  prose(text.slice(last));
+  return out;
+};
 const sentToken = /^\[Image #(\d+)\]$/;
 
 /** The screenshot numbers a sent message's text shows as pills. */
@@ -40,27 +60,44 @@ export function pilledImages(text: string) {
 /** A sent message's text, with each paste and screenshot shown as a pill where it went. */
 export function UserText({
   text,
+  skills = [],
   images = [],
   onOpenImage,
 }: {
   text: string;
+  /** The skills picked as pills when it was sent. */
+  skills?: SentSkill[];
   /** In the order sent, which is the order the tokens number them. */
   images?: SentImage[];
   onOpenImage: (key: string) => void;
 }) {
+  const labels = useMemo(
+    () => new Map(skills.map((s) => [s.name, s.label])),
+    [skills],
+  );
   const parts = useMemo(() => {
+    const names = new Set(labels.keys());
     const parts: (string | PastedText)[] = [];
     let last = 0;
     for (const m of text.matchAll(pasteBlock)) {
-      parts.push(tokenAsCode(text.slice(last, m.index)));
+      parts.push(tokenAsCode(text.slice(last, m.index), names));
       parts.push({ n: Number(m[1]), text: m[3] });
       last = m.index! + m[0].length;
     }
-    parts.push(tokenAsCode(text.slice(last)));
+    parts.push(tokenAsCode(text.slice(last), names));
     return parts;
-  }, [text]);
+  }, [text, labels]);
   const inlineCode = useCallback(
     (value: string) => {
+      if (value.startsWith(skillMark)) {
+        const name = value.slice(1);
+        return (
+          <span className="composer-skill-chip" title={`$${name}`}>
+            <span className="composer-skill-icon" aria-hidden="true" />
+            <span>{labels.get(name) ?? name}</span>
+          </span>
+        );
+      }
       const n = sentToken.exec(value)?.[1];
       if (!n) return undefined;
       const sent = images[Number(n) - 1];
@@ -76,7 +113,7 @@ export function UserText({
         </span>
       );
     },
-    [images, onOpenImage],
+    [images, onOpenImage, labels],
   );
   return (
     <>

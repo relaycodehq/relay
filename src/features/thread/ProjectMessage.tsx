@@ -433,7 +433,12 @@ export const Message = memo(function Message({
       )}
       {text?.trim() ? (
         m.role === "user" ? (
-          <UserText text={text} images={sentImages} onOpenImage={setViewing} />
+          <UserText
+            text={text}
+            skills={m.skills}
+            images={sentImages}
+            onOpenImage={setViewing}
+          />
         ) : contextReport ? (
           <ContextReportCard report={contextReport} raw={answer} />
         ) : (

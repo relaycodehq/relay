@@ -41,6 +41,8 @@ import { attachedImages, numberImages } from "../../../shared/image-refs";
 import { unsent } from "../../../shared/drafts";
 import { startsWithCommand } from "../../../shared/commands";
 import { flattenSketch } from "../images/sketch";
+import { draftChips } from "../../lib/thread-storage";
+import { pickedSkills } from "../../../shared/skill-mentions";
 import { aiSettingsQuery } from "../agents/useAISettings";
 import { agentModelsQuery } from "../agents/useAgentPicks";
 import { codexModels } from "../agents/useCodexModels";
@@ -110,6 +112,7 @@ export async function sendDraft(
     outgoing.text,
     {
       ...(chat?.running ? { running: { steer: false } } : {}),
+      skills: pickedSkills(outgoing.text, draftChips(key).skills.load()),
       images: images.map(({ name, mimeType, dataUrl }) => ({
         name,
         mimeType,

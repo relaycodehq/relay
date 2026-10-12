@@ -27,6 +27,7 @@ import {
 } from "../../shared/handoff";
 import {
   projectChatSendSchema,
+  type ProjectChatSend,
   type ChatMessage,
   type ChatSummary,
 } from "../../shared/projects";
@@ -35,6 +36,7 @@ import {
   handoffBridge,
   startHandoffBridge,
   liveHandoffBridge,
+  skillsBridge,
   type HandoffPart,
   type RemoteEvent,
 } from "../../shared/remote";
@@ -166,7 +168,14 @@ export class Handoffs {
     if (online() && !waiting)
       try {
         const client = await this.computers.connected(sentTo.computerId);
-        return await client.call("handoffCall", sentTo.id, method, args);
+        return await client.call(
+          "handoffCall",
+          sentTo.id,
+          method,
+          send
+            ? [args[0], await this.sendFor(sentTo.computerId, client, send)]
+            : args,
+        );
       } catch (e) {
         // Turned down there, rather than lost on the way.
         if (!send || online()) throw e;
@@ -196,7 +205,7 @@ export class Handoffs {
           const client = await this.computers.connected(sentTo.computerId);
           await client.call("handoffCall", sentTo.id, "sendProjectChat", [
             chatId,
-            next.input,
+            await this.sendFor(sentTo.computerId, client, next.input),
           ]);
           await this.chats.settleHandoffSend(chatId, next.input.id);
         } catch (e) {
@@ -497,6 +506,18 @@ export class Handoffs {
     return update;
   }
   /** The computer's version and update, asked at most every few seconds. */
+  /** A send as a computer this old takes it: one before `skillsBridge` refuses its pills' skills. */
+  private async sendFor(
+    computerId: string,
+    client: RemoteClient,
+    send: ProjectChatSend,
+  ) {
+    if (!send.skills) return send;
+    const info = await this.info(computerId, client).catch(() => null);
+    if ((info?.bridge ?? 0) >= skillsBridge) return send;
+    const { skills: _, ...older } = send;
+    return older;
+  }
   private async info(computerId: string, client: RemoteClient, fresh = false) {
     const cached = this.infos.get(computerId);
     if (!fresh && cached && Date.now() - cached.at < 3000) return cached.info;

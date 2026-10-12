@@ -3,6 +3,7 @@ import { fastFor, windowFor } from "./model-fit";
 import type { ProjectChatSend } from "./projects";
 import { draftRecipient, type Recipient } from "./recipient";
 import type { ModelChoice } from "./settings";
+import type { SentSkill } from "./skill-mentions";
 
 /** A message as a composer hands it on, before it gets its id. */
 export type ComposedSend = Omit<ProjectChatSend, "id">;
@@ -25,6 +26,7 @@ export interface SendOptions {
   side?: boolean;
   parentId?: string;
   images?: NonNullable<ProjectChatSend["images"]>;
+  skills?: SentSkill[];
 }
 
 /** A message as every composer sends it, desktop and phone alike. */
@@ -62,6 +64,7 @@ export function buildSend(
     ...(options.side ? { side: true } : {}),
     ...(options.parentId ? { parentId: options.parentId } : {}),
     ...(options.images?.length ? { images: options.images } : {}),
+    ...(options.skills?.length ? { skills: options.skills } : {}),
   };
 }
 

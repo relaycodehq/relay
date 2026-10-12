@@ -165,7 +165,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 20;
+export const remoteBridgeVersion = 21;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -236,6 +236,8 @@ export const liveHandoffBridge = 18;
 export const folderHandoffBridge = 20;
 /** From here a new thread can start on the computer it's handed to, its first message unanswered here (`HandoffThread.start`). */
 export const startHandoffBridge = 20;
+/** From here a send may carry the skills its pills picked (`skills`); older computers refuse the field. */
+export const skillsBridge = 21;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),

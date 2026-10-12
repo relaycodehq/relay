@@ -61,6 +61,21 @@ export const projectChatSendSchema = z
       })
       .strict()
       .optional(),
+    /** Skills picked as pills in the composer, shown as pills again once sent. */
+    skills: z
+      .array(
+        z
+          .object({
+            name: z
+              .string()
+              .regex(/^[A-Za-z_][A-Za-z0-9_.:-]*$/)
+              .max(200),
+            label: z.string().trim().min(1).max(200),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
     /** Deep review findings this message asks the lead to fix. */
     fixes: z
       .array(z.string().regex(/^F\d{1,3}$/))
@@ -81,10 +96,11 @@ export const resumeSettingsSchema = projectChatSendSchema
   .strict();
 export type ResumeSettings = z.infer<typeof resumeSettingsSchema>;
 
-/** Who a message says it's from, when another thread's agent sent it, and what page it answers. */
+/** Who a message says it's from, when another thread's agent sent it, what page it answers, and its skill pills. */
 export const sentBy = (
-  input: Pick<ProjectChatSend, "fromThread" | "pageAnswer">,
+  input: Pick<ProjectChatSend, "fromThread" | "pageAnswer" | "skills">,
 ) => ({
+  ...(input.skills?.length ? { skills: input.skills } : {}),
   ...(input.fromThread
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),

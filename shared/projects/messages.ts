@@ -2,6 +2,7 @@ import type { AgentProvider } from "../agents";
 import { imageRead } from "../agent-trace";
 import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
+import type { SentSkill } from "../skill-mentions";
 import type { AgentQuestion } from "../agent-modes";
 import type { HtmlRender } from "../html-render";
 import type { Streamed } from "../usage";
@@ -120,6 +121,8 @@ export interface ChatMessage {
    */
   side?: boolean;
   images?: ChatImage[];
+  /** Skills picked as pills in the composer; their `$name` mentions show as pills. */
+  skills?: SentSkill[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
   /** Finished calls a long turn's full trace let go of, by kind; failed ones under `failed`. */

@@ -118,6 +118,7 @@ export function useComposerSend({
         buildSend(runs.sendSettings(to)!, body, {
           ...(running ? { running: { steer } } : {}),
           sendAt,
+          skills: draft.skills(body),
           images: flattened.map(({ name, mimeType, dataUrl }) => ({
             name,
             mimeType,
