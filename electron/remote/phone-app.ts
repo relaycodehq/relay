@@ -1,11 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { phoneAppChunk, type PhoneAppRelease } from "../../shared/remote";
 
 const releaseSchema = z
   .object({
-    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    version: z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/),
     runtime: z.string().min(1).max(200),
     bundle: z.string(),
     files: z
@@ -35,13 +35,22 @@ const releaseSchema = z
  */
 export class PhoneAppFiles {
   private manifest?: Promise<PhoneAppRelease | undefined>;
+  private written?: number;
   private cache = new Map<string, Promise<Buffer>>();
   constructor(private dir: string) {}
 
-  release(): Promise<PhoneAppRelease | undefined> {
-    return (this.manifest ??= readFile(join(this.dir, "manifest.json"), "utf8")
-      .then((text) => releaseSchema.parse(JSON.parse(text)))
-      .catch(() => undefined));
+  async release(): Promise<PhoneAppRelease | undefined> {
+    const path = join(this.dir, "manifest.json");
+    // A dev checkout re-exports (npm run phone:push) while Relay runs.
+    const written = await stat(path).then((s) => s.mtimeMs, () => undefined);
+    if (written !== this.written) {
+      this.written = written;
+      this.cache.clear();
+      this.manifest = readFile(path, "utf8")
+        .then((text) => releaseSchema.parse(JSON.parse(text)))
+        .catch(() => undefined);
+    }
+    return this.manifest;
   }
 
   async chunk(path: string, offset: number): Promise<string> {

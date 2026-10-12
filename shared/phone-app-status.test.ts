@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { phoneAppStatus, type PhoneAppReport } from "./phone-app";
+import { newerVersion, phoneAppStatus, type PhoneAppReport } from "./phone-app";
 
 const app: PhoneAppReport = {
   version: "0.1.1",
@@ -27,4 +27,11 @@ it("says why a phone isn't on the desktop's version", () => {
       "0.2.0",
     ),
   ).toMatch(/needs a new APK/);
+});
+
+it("puts a dev push after its release and before the next one", () => {
+  expect(newerVersion("0.11.2.1760300000", "0.11.2")).toBe(true);
+  expect(newerVersion("0.11.2.1760300001", "0.11.2.1760300000")).toBe(true);
+  expect(newerVersion("0.11.3", "0.11.2.1760300000")).toBe(true);
+  expect(newerVersion("0.11.2", "0.11.2.1760300000")).toBe(false);
 });

@@ -75,7 +75,8 @@ class RelayBundleStore(private val context: Context) {
 
   /** Checks every file against the desktop's manifest, then makes it the next launch's code. */
   fun commit(version: String, files: List<Pair<String, String>>) {
-    require(Regex("^\\d+\\.\\d+\\.\\d+$").matches(version)) { "Not a version: $version" }
+    // x.y.z, or x.y.z.n from npm run phone:push in a dev checkout.
+    require(Regex("^\\d+\\.\\d+\\.\\d+(\\.\\d+)?$").matches(version)) { "Not a version: $version" }
     for ((path, sha256) in files) {
       val file = safe(staging, path)
       require(file.exists()) { "$path didn't arrive" }

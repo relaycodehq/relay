@@ -14,10 +14,11 @@ export interface PhoneAppReport {
   failed?: string;
 }
 
-/** a > b, for x.y.z versions. */
+/** a > b, for x.y.z versions and the x.y.z.n of a phone build pushed from a dev checkout. */
 export const newerVersion = (a: string, b: string) => {
   const [x, y] = [a, b].map((v) => v.split(".").map(Number));
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  for (let i = 0; i < 4; i++)
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
   return false;
 };
 

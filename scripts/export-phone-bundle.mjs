@@ -3,6 +3,14 @@
 // paired phones so they update from it. See electron/remote/phone-app.ts.
 //
 //   node scripts/export-phone-bundle.mjs [version]
+//   node scripts/export-phone-bundle.mjs --dev [--runtime <hash>]
+//
+// --dev stamps x.y.z.<seconds>, so a running dev Relay pushes it to its phone
+// and the next real release still counts as newer. --runtime stands in for the
+// local fingerprint, which can drift from the release machine's on the same
+// native code; pass the installed APK's own (`relayRuntime` in its
+// assets/app.config) only when no native code changed since that APK. It is
+// refused once anything native changed since the last release tag.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -19,18 +27,38 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { lastReleaseTag, nativeChangesSince } from "./phone-native-changes.mjs";
 import { resolveVersion, syncVersion } from "./sync-version.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mobile = join(repo, "mobile");
 const out = join(repo, "dist-phone");
-const version =
-  process.argv[2] === undefined
+const args = process.argv.slice(2);
+const dev = args.includes("--dev");
+const runtimeArg = args.indexOf("--runtime");
+const given = runtimeArg >= 0 ? args[runtimeArg + 1] : undefined;
+if (runtimeArg >= 0 && !/^[0-9a-f]{40}$/.test(given ?? ""))
+  throw new Error("--runtime takes the 40-character fingerprint.");
+if (given) {
+  const tag = lastReleaseTag(repo);
+  const changed = nativeChangesSince(tag, repo);
+  if (changed.length) {
+    console.error(
+      `--runtime refused: the phone's native side changed since ${tag}, so an ` +
+        `APK from then may not run this bundle. Build a new APK instead.\n  ` +
+        changed.join("\n  "),
+    );
+    process.exit(1);
+  }
+}
+const version = dev
+  ? `${resolveVersion()}.${Math.floor(Date.now() / 1000)}`
+  : args[0] === undefined
     ? syncVersion()
-    : resolveVersion({ version: process.argv[2] });
+    : resolveVersion({ version: args[0] });
 
 const { phoneRuntime } = await import(join(mobile, "scripts", "runtime.mjs"));
-const runtime = await phoneRuntime();
+const runtime = given ?? (await phoneRuntime());
 
 const work = mkdtempSync(join(tmpdir(), "relay-phone-bundle-"));
 const js = join(work, "index.android.js");

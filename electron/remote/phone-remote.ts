@@ -26,7 +26,7 @@ import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
 
-const version = z.string().regex(/^\d+\.\d+\.\d+$/);
+const version = z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/);
 const appReportSchema = z
   .object({
     version,
