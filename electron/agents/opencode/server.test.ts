@@ -26,13 +26,18 @@ afterEach(() => {
 });
 
 /** A server the agent host kept running, as a Relay restart finds it. */
-function kept(meta: Record<string, unknown>, turns: string[] = []) {
+function kept(
+  meta: Record<string, unknown>,
+  turns: string[] = [],
+  draining = false,
+) {
   const process = { read: vi.fn(), close: vi.fn(), mark: vi.fn() };
   const found = {
     info: {
       meta: { provider: "opencode", password: "pw", url, ...meta },
       turns: Object.fromEntries(turns.map((t) => [t, {}])),
     },
+    draining,
     close: vi.fn(),
     attachProcess: () => process,
   };
@@ -62,5 +67,16 @@ describe("a kept OpenCode server without the worktree variables plugin", () => {
     const process = kept({ worktreeEnv: true });
     await reattachOpenCodeServer(() => true);
     expect(process.close).not.toHaveBeenCalled();
+  });
+});
+
+describe("a kept OpenCode server in an older agent host", () => {
+  // Left running, it would keep that host from ever draining.
+  it("stops once the turns it was running are done", async () => {
+    const process = kept({ worktreeEnv: true }, ["a"], true);
+    await reattachOpenCodeServer(() => true);
+    expect(process.close).not.toHaveBeenCalled();
+    markOpenCodeTurn("a", "end");
+    expect(process.close).toHaveBeenCalled();
   });
 });

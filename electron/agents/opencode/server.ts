@@ -259,7 +259,7 @@ export function detachOpenCodeServer() {
 
 /** Turns running on the hosted server, so an outdated one stops once they're done. */
 const turns = new Set<string>();
-/** The hosted server predates the worktree variables plugin. */
+/** The hosted server predates the worktree variables plugin, or runs in an older host. */
 let outdated = false;
 
 /** Marks a thread's turn on the hosted server, so a restart knows it was running. */
@@ -270,11 +270,9 @@ export function markOpenCodeTurn(key: string, mark: "start" | "end") {
   if (outdated && !turns.size) retire();
 }
 
-/** The next turn starts a server that has the plugin. */
+/** The next turn starts a server in this Relay's own host, with the plugin. */
 function retire() {
-  console.info(
-    "Restarting OpenCode's server to give worktree threads their variables.",
-  );
+  console.info("Restarting OpenCode's server kept from an older Relay.");
   outdated = false;
   stopOpenCodeServer();
 }
@@ -309,9 +307,10 @@ export async function reattachOpenCodeServer(
         back.push({ key, open: true });
         turns.add(key);
       } else markOpenCodeTurn(key, "end");
-    // Kept from a Relay before the plugin: its threads' commands would get no
-    // RELAY_PORT_OFFSET until it restarts, so it does once nothing runs on it.
-    outdated = !meta.worktreeEnv;
+    // Kept from a Relay before the plugin, its threads' commands would get no
+    // RELAY_PORT_OFFSET; kept by an older host, that host could never drain.
+    // Either way it restarts once nothing runs on it.
+    outdated = !meta.worktreeEnv || found.draining;
     if (outdated && !turns.size) retire();
   }
   return back;

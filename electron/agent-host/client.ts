@@ -144,6 +144,7 @@ export class AgentHosts {
         for (const info of connection.sessions)
           found.push({
             info,
+            draining: connection.draining,
             attach: (h) => connection.attach(info, h),
             attachProcess: () => connection.attachProcess(info),
             close: () => connection.send({ t: "close", session: info.id }),
@@ -240,6 +241,8 @@ export class AgentHosts {
 
 export interface FoundSession {
   info: SessionInfo;
+  /** Its host is older than this Relay and exits once its sessions end. */
+  draining: boolean;
   attach: (handlers: HostedHandlers) => HostedQuery;
   attachProcess: () => HostedProcess;
   /** Nobody takes it back: end it. */
