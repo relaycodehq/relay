@@ -86,8 +86,10 @@ export const RenderFrame = memo(function RenderFrame({
           setBuiltInZoomControls={false}
           setDisplayZoomControls={false}
           // The page is as tall as it says; only one past the cap scrolls itself.
+          // On Android nested scrolling makes every touch forbid the thread from
+          // taking the drag, so a page that doesn't scroll must not ask for it.
           scrollEnabled={height >= RENDER_MAX_HEIGHT}
-          nestedScrollEnabled
+          nestedScrollEnabled={height >= RENDER_MAX_HEIGHT}
           bounces={false}
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
