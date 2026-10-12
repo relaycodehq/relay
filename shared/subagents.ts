@@ -1,8 +1,15 @@
-// Subagents Claude started in a thread, as the composer's indicator, its card
-// and an agent's side thread show them. The main process follows them from
-// the SDK's task events while the session lives; none of this is saved.
-import type { AgentActivity, AgentTrace, ChatPending } from "./projects";
+// Subagents a thread's agent started, as the composer's indicator, its card
+// and an agent's side thread show them. The main process follows them while
+// the session lives (Claude's from the SDK's task events, the others' from
+// their runs); none of this is saved.
+import type {
+  AgentActivity,
+  AgentProvider,
+  AgentTrace,
+  ChatPending,
+} from "./projects";
 import { liveLabel } from "./activity-labels";
+import { agentName } from "./agents";
 
 export type SubagentStatus = "running" | "completed" | "failed" | "stopped";
 
@@ -15,7 +22,7 @@ export interface SubagentRun {
   /** Its agent type, e.g. "Explore" or "general-purpose". */
   type?: string;
   model?: string;
-  /** The prompt Claude wrote for it. */
+  /** The prompt its lead agent wrote for it. */
   brief?: string;
   status: SubagentStatus;
   started: number;
@@ -30,13 +37,15 @@ export interface SubagentRun {
   outcome?: string;
   /** The agent that started this one, when an agent did. */
   parentId?: string;
+  /** The thread's agent that runs it; Claude when left out, as from older desktops. */
+  provider?: AgentProvider;
 }
 
 /** An agent's whole run, for its side thread. */
 export interface SubagentDetail extends SubagentRun {
   /** Its text and calls, in order; the report isn't repeated here. */
   trace: AgentTrace[];
-  /** What it handed back to Claude. */
+  /** What it handed back to its lead agent. */
   report?: string;
 }
 
@@ -112,10 +121,14 @@ export function took(ms: number) {
 
 /** "Explore agent", or just "Agent" for the default kind. */
 export function agentKind(run: SubagentRun) {
-  return run.type && run.type !== "general-purpose"
-    ? `${run.type} agent`
+  return run.type && run.type !== "general-purpose" && run.type !== "general"
+    ? `${run.type.charAt(0).toUpperCase()}${run.type.slice(1)} agent`
     : "Agent";
 }
+
+/** The thread's agent that started it and reads what it reports. */
+export const leadName = (run: SubagentRun) =>
+  agentName(run.provider ?? "claude");
 
 /** What it's on now, from its ~30s summary, or how it ended. */
 export function subagentNow(

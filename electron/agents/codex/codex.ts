@@ -6,7 +6,7 @@ import {
 } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { CodexRequestSpeed } from "./codex-speed";
-import { CodexSubagents } from "./codex-subagents";
+import { CodexSubagents, codexSubagentBooks } from "./codex-subagents";
 import { acquireCodexConnection } from "./codex-connection";
 import {
   codexTokens,
@@ -125,6 +125,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     options.onEdit?.(codexEditedPaths(changes));
   };
   const subagents = new CodexSubagents({
+    book: sessionKey ? codexSubagentBooks.open(sessionKey) : undefined,
     onActivity: (activity) => options.onActivity?.(activity),
     onFileChange: edited,
     onUsage: (last, ran) => {

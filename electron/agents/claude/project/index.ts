@@ -8,6 +8,7 @@ export {
   claudeAgentRun,
   claudeAgents,
   claudePending,
+  claudeSubagents,
   readClaudeContext,
   stopClaudeAgent,
   stopClaudeTask,

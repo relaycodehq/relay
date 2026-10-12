@@ -9,6 +9,7 @@ import type { RemoteChatSummary } from "../../../shared/remote";
 import { slotLine } from "../../../shared/started-threads";
 import {
   agentKind,
+  leadName,
   modelName,
   subagentNow,
   took,
@@ -52,7 +53,7 @@ export function confirmStop(run: SubagentRun) {
   return new Promise<boolean>((answer) =>
     Alert.alert(
       "Stop this agent?",
-      `“${run.description}” stops where it is. Claude hears it was stopped and carries on; the rest keep working.`,
+      `“${run.description}” stops where it is. ${leadName(run)} hears it was stopped and carries on; the rest keep working.`,
       [
         { text: "Keep it", style: "cancel", onPress: () => answer(false) },
         { text: "Stop agent", style: "destructive", onPress: () => answer(true) },
@@ -292,7 +293,7 @@ export function SubagentsSheet({
       ))}
       {shown.length > 0 && (
         <Text style={[styles.foot, { color: t.muted }]}>
-          Stopping one leaves Claude&apos;s turn and the other agents running.
+          Stopping one leaves {leadName(shown[0]!)}&apos;s turn and the other agents running.
         </Text>
       )}
       {both && <Section label="Started threads" />}

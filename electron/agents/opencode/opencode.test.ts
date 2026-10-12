@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { findExecutable } from "../../platform/executables";
 import { runOpenCode } from "./run";
+import { openCodeSubagentBooks } from "./subagents";
 import { disposeOpenCode } from "./client";
 import { permissionRules } from "./permissions";
 import { openCodeCommands, openCodeDefaults, openCodeModels } from "./catalog";
@@ -302,6 +303,20 @@ it("folds a subagent's calls under its task, counting its requests but not its t
   ]);
   // The subagent's step counts toward the turn's cost too.
   expect(seen.cost).toBeCloseTo(0.041);
+  // The composer's indicator and side thread read it as they read Claude's.
+  const agent = openCodeSubagentBooks.get("k")?.detail("call_task");
+  expect(agent).toMatchObject({
+    description: "Look around",
+    brief: "Look around.",
+    status: "completed",
+    calls: 1,
+    report: "Found a.ts.",
+    trace: [
+      { kind: "activity", id: "call_child_read" },
+      { kind: "commentary", text: "The subagent's own notes." },
+    ],
+  });
+  expect(agent?.trace[0]).not.toHaveProperty("activity.parentId");
 });
 
 it("gives a thread its own Relay tools, and keeps it off other threads'", async () => {

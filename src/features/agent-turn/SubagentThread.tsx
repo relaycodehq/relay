@@ -1,5 +1,5 @@
 // An agent's run as a side thread over the conversation, read-only: the brief
-// Claude gave it, its text and calls drawn as a turn, and what it reported.
+// the thread's agent gave it, its text and calls drawn as a turn, and what it reported.
 // The conversation stays laid out underneath, so it keeps its place.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import { plural } from "../../../shared/activity-labels";
 import {
   agentKind,
   batchOf,
+  leadName,
   modelName,
   type SubagentDetail,
   type SubagentRun,
@@ -138,7 +139,8 @@ export function SubagentThread({
       </Follow>
       <div className="subagent-foot">
         <span>
-          Read-only. Agents take instructions from Claude, not from you.
+          Read-only. Agents take instructions from{" "}
+          {run ? leadName(run) : "the thread's agent"}, not from you.
         </span>
         {error && <span role="alert">{error}</span>}
         {run?.status === "running" && (
@@ -171,7 +173,7 @@ function Run({
   const message: ChatMessage = {
     id: `agent:${run.id}`,
     role: "assistant",
-    provider: "claude",
+    provider: run.provider ?? "claude",
     status: live
       ? "streaming"
       : run.status === "stopped"
@@ -202,8 +204,11 @@ function Run({
         </p>
       </header>
       {run.brief && (
-        <section className="subagent-brief" aria-label="Claude's brief">
-          <header>Claude's brief</header>
+        <section
+          className="subagent-brief"
+          aria-label={`${leadName(run)}'s brief`}
+        >
+          <header>{leadName(run)}'s brief</header>
           <p className={whole ? undefined : "clamped"}>{run.brief}</p>
           {!whole && run.brief.length > 220 && (
             <button
@@ -232,7 +237,7 @@ function Run({
         />
         {!live && run.report && (
           <>
-            <p className="subagent-label">Reported to Claude</p>
+            <p className="subagent-label">Reported to {leadName(run)}</p>
             <RichText
               text={run.report}
               projectRoot={projectRoot}
@@ -242,7 +247,7 @@ function Run({
         )}
         {run.status === "stopped" && (
           <p className="subagent-note">
-            Stopped. Claude hears it was and carries on without it.
+            Stopped. {leadName(run)} hears it was and carries on without it.
           </p>
         )}
       </article>

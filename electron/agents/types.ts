@@ -19,6 +19,7 @@ import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
 import type { Streamed, UsageJob, UsageTokens } from "../../shared/usage";
 import type { RenderMode } from "../../shared/html-render";
+import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 
 /** What one request of a run used, as the agent reported it. */
 export type UsageReport = {
@@ -145,6 +146,14 @@ export interface AgentOptions {
   };
 }
 
+/** The subagents a live session started, running or back. */
+export interface SubagentSource {
+  list(): SubagentRun[];
+  detail(id: string): SubagentDetail | undefined;
+  /** Stops one; the agent that started it hears so and carries on. */
+  stop(id: string): Promise<void>;
+}
+
 /** What Relay needs from an agent; see `electron/agents/index.ts` for the registry. */
 export interface AgentRuntime {
   /** Runs a turn and resolves with its final answer. */
@@ -157,6 +166,8 @@ export interface AgentRuntime {
    * session and the next turn resumes it.
    */
   reloadSession?(key: string): Promise<SessionReload | undefined>;
+  /** The subagents of the session under `key`, for an agent that starts them. */
+  subagents?(key: string): SubagentSource | undefined;
   /**
    * Signs the agent in from Relay, for one with no login command; resolves
    * once the user is through.

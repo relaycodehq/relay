@@ -1,5 +1,5 @@
 // The desktop's SubagentThread (src/features/agent-turn/SubagentThread.tsx) as
-// a screen: the brief Claude gave an agent, its text and calls drawn as a
+// a screen: the brief the thread's agent gave one, its text and calls drawn as a
 // turn, and what it reported. Read-only, with Stop while it works.
 import { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -7,7 +7,12 @@ import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ChatMessage } from "../../../shared/projects";
 import { plural } from "../../../shared/activity-labels";
-import { agentKind, modelName, type SubagentDetail } from "../../../shared/subagents";
+import {
+  agentKind,
+  leadName,
+  modelName,
+  type SubagentDetail,
+} from "../../../shared/subagents";
 import { useSubagentRun } from "../remote/subagents";
 import { AgentRun } from "../ui/AgentRun";
 import { Markdown } from "../ui/Markdown";
@@ -87,7 +92,8 @@ export function SubagentRun({
         ]}
       >
         <Text style={[styles.footText, { color: t.muted }]}>
-          Read-only. Agents take instructions from Claude, not from you.
+          Read-only. Agents take instructions from {run ? leadName(run) : "the thread's agent"}, not
+          from you.
         </Text>
         {run?.status === "running" && (
           <Action
@@ -110,7 +116,7 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
     () => ({
       id: `agent:${run.id}`,
       role: "assistant",
-      provider: "claude",
+      provider: run.provider ?? "claude",
       status: live
         ? "streaming"
         : run.status === "stopped"
@@ -144,7 +150,7 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
       </Text>
       {!!run.brief && (
         <View style={[styles.brief, { borderColor: t.border, backgroundColor: t.raised }]}>
-          <Text style={[styles.label, { color: t.muted }]}>Claude&apos;s brief</Text>
+          <Text style={[styles.label, { color: t.muted }]}>{leadName(run)}&apos;s brief</Text>
           <Text
             selectable
             numberOfLines={whole ? undefined : 5}
@@ -168,14 +174,14 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
       {!live && !!run.report && (
         <>
           <Text style={[styles.label, styles.reported, { color: t.muted }]}>
-            Reported to Claude
+            Reported to {leadName(run)}
           </Text>
           <Markdown text={run.report} />
         </>
       )}
       {run.status === "stopped" && (
         <Text style={[styles.stopped, { color: t.muted }]}>
-          Stopped. Claude hears it was and carries on without it.
+          Stopped. {leadName(run)} hears it was and carries on without it.
         </Text>
       )}
     </>

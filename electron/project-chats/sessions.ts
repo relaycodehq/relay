@@ -8,14 +8,11 @@ import type {
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import { codexQuestionChoice } from "../../shared/settings";
-import { everyAgentRuntime } from "../agents";
+import { agentRuntimes, everyAgentRuntime } from "../agents";
 import {
-  claudeAgentRun,
-  claudeAgents,
   claudePending,
   onClaudePending,
   readClaudeContext,
-  stopClaudeAgent,
 } from "../agents/claude/project";
 import type { Store } from "../app/store";
 
@@ -266,14 +263,26 @@ export class ProviderSessions {
     });
   }
 
-  /** The subagents Claude started in a thread, its side conversations' too. */
+  /** Each live session of the thread whose agent started subagents, with that agent. */
+  private subagentSources(chatId: string) {
+    const keys = this.of(chatId);
+    return agentRuntimes().flatMap(([provider, runtime]) =>
+      keys.flatMap((key) => {
+        const source = runtime.subagents?.(key);
+        return source ? [{ provider, source }] : [];
+      }),
+    );
+  }
+  /** The subagents started in a thread, its side conversations' too. */
   subagents(chatId: string) {
-    return this.of(chatId).flatMap((key) => claudeAgents(key));
+    return this.subagentSources(chatId).flatMap(({ provider, source }) =>
+      source.list().map((run) => ({ ...run, provider })),
+    );
   }
   subagentRun(chatId: string, agentId: string) {
-    for (const key of this.of(chatId)) {
-      const run = claudeAgentRun(key, agentId);
-      if (run) return run;
+    for (const { provider, source } of this.subagentSources(chatId)) {
+      const run = source.detail(agentId);
+      if (run) return { ...run, provider };
     }
     return null;
   }
@@ -283,8 +292,10 @@ export class ProviderSessions {
     return this.keys.has(key) ? readClaudeContext(key) : Promise.resolve(null);
   }
   async stopSubagent(chatId: string, agentId: string) {
-    const key = this.of(chatId).find((k) => claudeAgentRun(k, agentId));
-    if (!key) throw new Error("That agent has already finished.");
-    await stopClaudeAgent(key, agentId);
+    const found = this.subagentSources(chatId).find(({ source }) =>
+      source.detail(agentId),
+    );
+    if (!found) throw new Error("That agent has already finished.");
+    await found.source.stop(agentId);
   }
 }

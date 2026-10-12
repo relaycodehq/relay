@@ -20,7 +20,11 @@ import {
 } from "./permissions";
 import { renderPrompt } from "../../../shared/html-render";
 import { connectRelayTools, relayServerName, relayToolRules } from "./mcp";
-import { OpenCodeSubagents, type StepFinish } from "./subagents";
+import {
+  OpenCodeSubagents,
+  openCodeSubagentBooks,
+  type StepFinish,
+} from "./subagents";
 import { OpenCodeRequestSpeed } from "./speed";
 import { forgetOpenCodeWatch, openCodeTurnWatcher } from "./watch";
 import type { McpTool } from "./activity";
@@ -337,6 +341,11 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     );
   };
   const subagents = new OpenCodeSubagents({
+    book:
+      options.session?.key && !oneOff
+        ? openCodeSubagentBooks.open(options.session.key)
+        : undefined,
+    abort: (child) => call("POST", `/session/${child}/abort`),
     onActivity: options.onActivity,
     onEdit: options.onEdit,
     mcpTool,
@@ -789,6 +798,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
 
 /** Lets go of what Relay keeps for a thread's session between turns. */
 export function closeOpenCodeSession(key: string) {
+  openCodeSubagentBooks.drop(key);
   forgetThreadGrants(key);
   forgetOpenCodeWatch(key);
 }

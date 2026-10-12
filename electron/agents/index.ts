@@ -6,6 +6,7 @@ import {
 } from "../../shared/agents";
 import { claudeArgs } from "../../shared/settings";
 import { runCodex } from "./codex/codex";
+import { codexSubagentBooks } from "./codex/codex-subagents";
 import {
   closeCodexConnection,
   reattachCodexSessions,
@@ -14,6 +15,7 @@ import { runClaude } from "./claude/claude";
 import {
   askClaudeSide,
   claudeDefaults,
+  claudeSubagents,
   closeClaudeSession,
   listClaudeCommands,
   listClaudeModels,
@@ -23,6 +25,7 @@ import {
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { presentSkill } from "./skill-presentation";
 import { closeOpenCodeSession, runOpenCode } from "./opencode/run";
+import { openCodeSubagentBooks } from "./opencode/subagents";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
 import { reattachOpenCodeServer } from "./opencode/server";
 import { runCursor } from "./cursor/run";
@@ -49,7 +52,11 @@ import {
 
 const codex: AgentRuntime = {
   run: runCodex,
-  closeSession: (key) => closeCodexConnection(key).catch(() => {}),
+  closeSession: (key) => {
+    codexSubagentBooks.drop(key);
+    return closeCodexConnection(key).catch(() => {});
+  },
+  subagents: (key) => codexSubagentBooks.get(key),
   models: codexModels,
   defaults: async (root) => {
     const [defaults, models] = await Promise.all([
@@ -66,6 +73,7 @@ const claude: AgentRuntime = {
   run: (options) => runClaude({ ...options, ...claudeArgs(options.choice) }),
   closeSession: async (key) => closeClaudeSession(key),
   reloadSession: reloadClaudeSession,
+  subagents: claudeSubagents,
   models: listClaudeModels,
   defaults: async (root) => {
     const [defaults, models] = await Promise.all([
@@ -88,6 +96,7 @@ const claude: AgentRuntime = {
 const opencode: AgentRuntime = {
   run: runOpenCode,
   closeSession: async (key) => closeOpenCodeSession(key),
+  subagents: (key) => openCodeSubagentBooks.get(key),
   models: openCodeModels,
   defaults: openCodeDefaults,
   commands: openCodeCommands,

@@ -14,6 +14,10 @@ import {
   type ToolPart,
 } from "./events";
 import { OpenCodeRequestSpeed } from "./speed";
+import { SubagentBooks, type SubagentBook } from "../subagent-book";
+
+/** Each OpenCode session's subagents, for the composer's indicator and side thread. */
+export const openCodeSubagentBooks = new SubagentBooks();
 
 export type StepFinish = Extract<OpenCodePart, { type: "step-finish" }>;
 
@@ -27,6 +31,10 @@ export type SubagentHooks = Pick<AgentOptions, "onActivity" | "onEdit"> & {
   /** The subagent asks the user, as the turn's own agent would. */
   permission(request: PermissionRequest): void;
   question(request: QuestionRequest): void;
+  /** Stops one subagent's session; its task call fails and the turn goes on. */
+  abort: (sessionID: string) => Promise<unknown>;
+  /** The session's book, which keeps them past the turn. */
+  book?: SubagentBook;
 };
 
 type Child = {
@@ -39,8 +47,27 @@ type Child = {
   texts: Map<string, string>;
   calls: Set<string>;
   doing?: string;
+  /** Its latest text, what a background one hands back. */
+  said?: string;
   unsubscribe?: () => void;
   done: boolean;
+};
+
+/** What a task call returned, without the wrapper OpenCode puts round it. */
+const taskResult = (output: unknown) =>
+  typeof output === "string"
+    ? (/<task_(?:result|error)>\n?([\s\S]*?)\n?<\/task_(?:result|error)>/.exec(
+        output,
+      )?.[1] ?? output)
+    : undefined;
+
+const modelOf = (model: unknown) => {
+  const m = model as { providerID?: unknown; modelID?: unknown } | undefined;
+  return typeof m?.modelID === "string"
+    ? typeof m.providerID === "string"
+      ? `${m.providerID}/${m.modelID}`
+      : m.modelID
+    : undefined;
 };
 
 const doing: Partial<Record<AgentActivity["kind"], string>> = {
@@ -60,6 +87,8 @@ const doing: Partial<Record<AgentActivity["kind"], string>> = {
  */
 export class OpenCodeSubagents {
   private children = new Map<string, Child>();
+  /** Subagents the user stopped, whose task calls fail for it. */
+  private stopped = new Set<string>();
   /** Each task call's latest row, so the subagent's progress can move it. */
   private rows = new Map<string, AgentActivity>();
   private speed = new OpenCodeRequestSpeed();
@@ -68,8 +97,14 @@ export class OpenCodeSubagents {
   constructor(private hooks: SubagentHooks) {}
 
   /** The turn's task call moved on: returns its row, saying what the subagent is doing. */
-  task(part: ToolPart, row: AgentActivity): AgentActivity {
+  task(part: ToolPart, called: AgentActivity): AgentActivity {
     const id = part.state.metadata?.sessionId;
+    const row: AgentActivity =
+      typeof id === "string" &&
+      this.stopped.has(id) &&
+      called.status === "failed"
+        ? { ...called, status: "stopped" }
+        : called;
     let child = typeof id === "string" ? this.children.get(id) : undefined;
     if (typeof id === "string" && !child && !this.closed) {
       child = {
@@ -82,13 +117,35 @@ export class OpenCodeSubagents {
       };
       this.children.set(id, child);
       void this.follow(child);
+      const input = part.state.input ?? {};
+      const text = (key: string) =>
+        typeof input[key] === "string" ? (input[key] as string) : undefined;
+      this.hooks.book?.start(row.id, {
+        description: text("description") || row.label,
+        type: text("subagent_type"),
+        brief: text("prompt"),
+        model: modelOf(part.state.metadata?.model),
+        stop: () => {
+          this.stopped.add(id);
+          return this.hooks.abort(id);
+        },
+      });
     }
     // A background task's call returns at once; its session works on, and is
     // followed until it goes idle or the turn ends.
-    if (child && row.status !== "running" && !part.state.metadata?.background)
+    const background = !!part.state.metadata?.background;
+    if (child && row.status !== "running" && !background) {
       this.end(child);
+      this.hooks.book?.end(
+        row.id,
+        row.status === "complete" ? "completed" : row.status,
+        taskResult(part.state.output) ?? part.state.error ?? undefined,
+      );
+    }
     const shown =
       child && row.status === "running" ? this.withProgress(row, child) : row;
+    if (child && row.status === "running")
+      this.hooks.book?.progress(row.id, shown.progress);
     this.rows.set(row.id, shown);
     return shown;
   }
@@ -101,7 +158,10 @@ export class OpenCodeSubagents {
   /** The turn is over: nothing more is heard from its subagents. */
   close() {
     this.closed = true;
-    for (const child of this.children.values()) this.end(child);
+    for (const child of this.children.values()) {
+      this.end(child);
+      this.hooks.book?.end(child.callID.slice(0, 180), "stopped");
+    }
   }
 
   private async follow(child: Child) {
@@ -165,6 +225,14 @@ export class OpenCodeSubagents {
           if (part?.type === "text") {
             child.texts.set(part.id, part.messageID);
             if (live) this.speed.text(part.messageID, part.id);
+            if (part.text && !part.synthetic && !part.ignored) {
+              child.said = part.text;
+              this.hooks.book?.say(
+                child.callID.slice(0, 180),
+                part.id,
+                part.text,
+              );
+            }
           } else if (part?.type === "tool") {
             if (live)
               this.speed.tool(part.messageID, part.id, part.state.status);
@@ -188,17 +256,23 @@ export class OpenCodeSubagents {
           if (live) this.hooks.question(event.properties);
           return;
         case "session.idle":
-          if (this.finished(child)) this.end(child);
+          if (this.finished(child)) this.settle(child);
           return;
         case "session.status":
           if (event.properties.status.type === "idle" && this.finished(child))
-            this.end(child);
+            this.settle(child);
           return;
       }
     } catch (error) {
       // A subagent's odd event costs its row, not the turn.
       console.warn("OpenCode subagent event skipped:", error);
     }
+  }
+
+  /** A background one went idle with its task call long back: it is done. */
+  private settle(child: Child) {
+    this.end(child);
+    this.hooks.book?.end(child.callID.slice(0, 180), "completed", child.said);
   }
 
   /** Its task call is over, so an idle session won't be prompted again. */
@@ -219,6 +293,7 @@ export class OpenCodeSubagents {
         .filter(Boolean)
         .join(" ");
     this.hooks.onActivity?.(activity);
+    this.hooks.book?.call(activity.parentId, activity);
     const paths = editedPaths(part);
     if (paths.length) this.hooks.onEdit?.(paths);
     const row = this.rows.get(activity.parentId);
@@ -227,6 +302,7 @@ export class OpenCodeSubagents {
       if (moved.progress !== row.progress) {
         this.rows.set(row.id, moved);
         this.hooks.onActivity?.(moved);
+        this.hooks.book?.progress(row.id, moved.progress);
       }
     }
   }

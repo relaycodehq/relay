@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const closed: string[] = [];
 const pending = new Map<string, unknown[]>();
 vi.mock("../agents", () => ({
+  agentRuntimes: () => [],
   everyAgentRuntime: () => [
     { closeSession: async (key: string) => void closed.push(key) },
   ],
@@ -10,10 +11,7 @@ vi.mock("../agents", () => ({
 vi.mock("../agents/claude/project", () => ({
   claudePending: (key: string) => pending.get(key) ?? [],
   onClaudePending: () => () => {},
-  claudeAgentRun: () => undefined,
-  claudeAgents: () => [],
   readClaudeContext: async () => null,
-  stopClaudeAgent: async () => {},
 }));
 
 const { IDLE_CLOSE, ProviderSessions } = await import("./sessions");

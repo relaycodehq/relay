@@ -4,7 +4,11 @@
 // (multi-agent v2), a `collabAgentToolCall` (older servers) or not at all (v1).
 import type { AgentActivity } from "../../../shared/projects";
 import { CodexPlanRows, codexActivity } from "../activity";
+import { SubagentBooks, type SubagentBook } from "../subagent-book";
 import type { CodexNotification } from "./codex-schemas";
+
+/** Each Codex session's subagents, for the composer's indicator and side thread. */
+export const codexSubagentBooks = new SubagentBooks();
 
 export type CodexSubagentHooks = {
   onActivity?: (activity: AgentActivity) => void;
@@ -15,6 +19,8 @@ export type CodexSubagentHooks = {
   /** Codex's record of a thread, which says what the subagent was asked. */
   read: (threadId: string) => Promise<unknown>;
   interrupt: (threadId: string, turnId: string) => Promise<unknown>;
+  /** The session's book, which keeps them past the turn. */
+  book?: SubagentBook;
 };
 
 /** What names a subagent, gathered from wherever Codex says it. */
@@ -65,6 +71,11 @@ const finished: Record<string, AgentActivity["status"]> = {
   interrupted: "stopped",
   failed: "failed",
 };
+const ended = {
+  complete: "completed",
+  stopped: "stopped",
+  failed: "failed",
+} as const;
 
 /** A run's subagents: each is one agent row its own calls fold under. */
 export class CodexSubagents {
@@ -149,17 +160,25 @@ export class CodexSubagents {
         // What it says along the way is its status; the rest is its answer.
         if (item.phase === "commentary") agent.said = firstLine(item.text);
         else agent.answer = item.text;
+        if (typeof item.id === "string")
+          this.hooks.book?.say(agent.row.id, item.id, item.text);
       }
       const activity = codexActivity(n.method, item);
       if (activity) {
         if (n.method === "item/started") agent.calls.add(activity.id);
-        this.hooks.onActivity?.({ ...activity, parentId: agent.row.id });
+        const call = { ...activity, parentId: agent.row.id };
+        this.hooks.onActivity?.(call);
+        this.hooks.book?.call(agent.row.id, call);
       }
       this.progress(agent);
     }
     if (n.method === "turn/plan/updated") {
       const row = this.plans.update(thread, n.params);
-      if (row) this.hooks.onActivity?.({ ...row, parentId: agent.row.id });
+      if (row) {
+        const call = { ...row, parentId: agent.row.id };
+        this.hooks.onActivity?.(call);
+        this.hooks.book?.call(agent.row.id, call);
+      }
     }
     if (n.method === "thread/tokenUsage/updated") {
       const last = (n.params.tokenUsage as { last?: unknown } | null)?.last;
@@ -230,6 +249,7 @@ export class CodexSubagents {
     this.names.set(thread, known as Naming);
     const agent = this.agents.get(thread);
     if (agent && !this.closed) this.relabel(agent);
+    if (agent) this.record(agent);
   }
 
   /** The row reads as its task, under the agent that started it when that is one. */
@@ -269,6 +289,29 @@ export class CodexSubagents {
     const row: AgentActivity = { ...agent.row, ...patch };
     if (row.progress === undefined) delete row.progress;
     agent.row = row;
+    this.record(agent);
     if (!this.closed) this.hooks.onActivity?.(row);
+  }
+
+  /** Keeps the session's book in step with the agent's row. */
+  private record({ row, thread, answer, turn }: Agent) {
+    const book = this.hooks.book;
+    if (!book) return;
+    const naming = this.names.get(thread) ?? {};
+    book.start(row.id, {
+      description: row.label || "Subagent",
+      parentId: row.parentId,
+      model: naming.model,
+      brief: naming.prompt,
+      stop: async () => {
+        if (!turn)
+          throw new Error(
+            "That agent isn't ready to stop yet. Try again shortly.",
+          );
+        await this.hooks.interrupt(thread, turn);
+      },
+    });
+    if (row.status === "running") book.progress(row.id, row.progress);
+    else book.end(row.id, ended[row.status], answer);
   }
 }
