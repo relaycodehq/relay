@@ -129,7 +129,10 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   ]);
   const defaultName = (m: PickerModel) =>
     m.provider !== "message" && !m.id ? defaultNames?.[m.provider] : undefined;
-  const catalog = pickerCatalog(offered, catalogs, customs);
+  // A picker limited to some agents doesn't offer message-only, even to a search.
+  const catalog = pickerCatalog(offered, catalogs, customs).filter(
+    (m) => !providers || m.provider !== "message",
+  );
   const current =
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
@@ -138,6 +141,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     ? `Default (${currentDefault})`
     : current.name;
   const grouped = isGrouped(category);
+  const searching = !!query.trim();
   const { rows, groups, legacyCount, firstLegacy } = pickerRows(catalog, {
     category,
     query,
@@ -170,7 +174,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
       ? `Custom ${agentName(m.provider)} model`
       : defaultName(m)
         ? `Runs ${defaultName(m)}`
-        : grouped
+        : isGrouped(m.provider)
           ? [group ? undefined : m.group, m.description]
               .filter(Boolean)
               .join(" · ")
@@ -182,8 +186,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         ?.group ?? "",
     );
   function changeQuery(next: string) {
-    // A search looks everywhere; a provider can narrow it after.
-    if (next.trim() && !query.trim()) setGroup("");
+    // A search looks through every agent, so the rail steps aside.
+    if (next.trim() && !searching) setGroup("");
     setQuery(next);
   }
   function changeCategory(next: Category) {
@@ -245,6 +249,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
           <Popover.Popup
             className="model-picker-popup"
             data-wide={grouped ? "" : undefined}
+            data-searching={searching ? "" : undefined}
             aria-label={label ? `${label} model` : "Choose model and provider"}
             initialFocus={search}
             onKeyDown={(e) => {
@@ -261,6 +266,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                 className="model-picker-rail"
                 orientation="vertical"
                 aria-label="Model providers"
+                inert={searching}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight") {
                     e.preventDefault();
@@ -336,7 +342,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                     />
                   </div>
                   <div className="model-picker-columns">
-                    {grouped && (
+                    {grouped && !searching && (
                       <nav
                         className="model-picker-groups"
                         aria-label={`${providerName(category as AgentProvider)} providers`}
@@ -352,7 +358,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                             key={g.name}
                             type="button"
                             aria-pressed={group === g.name}
-                            disabled={!!query.trim() && !g.count}
                             onClick={() => {
                               setGroup(g.name);
                               search.current?.focus();
@@ -449,7 +454,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                           );
                         })}
                       </Combobox.List>
-                      {category !== "favorites" &&
+                      {!searching &&
+                        category !== "favorites" &&
                         category !== "message" &&
                         (catalogs[category]?.error ? (
                           <p className="model-picker-note" role="alert">
@@ -473,14 +479,15 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                           )
                         ))}
                       {rows.length === 0 &&
-                        !catalogs[category as AgentProvider]?.error && (
+                        (searching ||
+                          !catalogs[category as AgentProvider]?.error) && (
                           <p className="model-picker-empty">
                             {category === "favorites" && !query
                               ? "Star models to keep them here."
                               : "No matching models."}
                           </p>
                         )}
-                      {!query.trim() &&
+                      {!searching &&
                         !legacy &&
                         legacyCount > 0 &&
                         legacyToggle}

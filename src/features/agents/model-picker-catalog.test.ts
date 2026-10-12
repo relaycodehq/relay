@@ -204,4 +204,18 @@ describe("the picker's rows", () => {
       "opencode:opmi",
     ]);
   });
+
+  it("searches every agent from any tab, the tab's own first among equals", () => {
+    expect(ids(rowsOf({ category: "codex", query: "gpt" }).rows)).toEqual([
+      "codex:gpt-a",
+      "codex:gpt-old",
+      "opencode:openai/gpt",
+    ]);
+    expect(
+      ids(rowsOf({ category: "favorites", query: "gpt" }).rows),
+    ).toContain("opencode:openai/gpt");
+    expect(
+      ids(rowsOf({ category: "opencode", group: "Anthropic", query: "gpt" }).rows),
+    ).toContain("codex:gpt-a");
+  });
 });

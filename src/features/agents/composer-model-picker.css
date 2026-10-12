@@ -70,6 +70,19 @@
   gap: 4px;
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--sidebar) 55%, var(--surface));
+  overflow: hidden;
+  transition:
+    width 180ms ease,
+    padding 180ms ease,
+    opacity 120ms ease,
+    border-color 180ms ease;
+}
+/* A search covers every agent, so the rail slides away while it runs. */
+.model-picker-popup[data-searching] .model-picker-rail {
+  width: 0;
+  padding-inline: 0;
+  opacity: 0;
+  border-right-color: transparent;
 }
 .model-picker-rail .model-provider-tab {
   position: relative;

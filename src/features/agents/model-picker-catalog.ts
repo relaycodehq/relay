@@ -81,9 +81,10 @@ export function pickerCatalog(
 }
 
 /**
- * The rows one tab of the picker lists for a search, best first; the
- * sections of a grouped agent with how many rows match in each; and where
- * the legacy models start.
+ * The rows one tab of the picker lists, or for a search the rows of every
+ * agent, best first and the tab's own first among equals; the sections of a
+ * grouped agent with how many rows match in each; and where the legacy
+ * models start.
  */
 export function pickerRows(
   catalog: PickerModel[],
@@ -106,16 +107,18 @@ export function pickerRows(
   },
 ) {
   const grouped = isGrouped(category);
+  const searching = !!query.trim();
   const legacyCount = catalog.filter(
     (m) => m.provider === category && m.legacy,
   ).length;
   const matching = catalog
     .filter((m) => allowDefault || m.provider === "message" || m.id)
     .filter((m) => {
+      if (searching) return true;
       if (category === "favorites") return favorites.includes(modelKey(m));
       return (
         m.provider === category &&
-        (!m.legacy || legacy || query.trim() || favorites.includes(modelKey(m)))
+        (!m.legacy || legacy || favorites.includes(modelKey(m)))
       );
     })
     .map((m, index) => ({
@@ -138,7 +141,8 @@ export function pickerRows(
     .filter(
       (r) =>
         r.score !== null &&
-        (!grouped || r.score < fuzzyBase * searchWords(query)),
+        (!isGrouped(r.model.provider) ||
+          r.score < fuzzyBase * searchWords(query)),
     );
   const groups = grouped
     ? [
@@ -149,21 +153,27 @@ export function pickerRows(
         ),
       ].map((name) => ({
         name,
-        count: matching.filter((r) => r.model.group === name).length,
+        count: matching.filter(
+          (r) => r.model.provider === category && r.model.group === name,
+        ).length,
       }))
     : [];
   const rows = matching
-    .filter((r) => !grouped || !group || r.model.group === group)
+    .filter(
+      (r) => searching || !grouped || !group || r.model.group === group,
+    )
     .sort(
       (a, b) =>
         Number(b.favorite) - Number(a.favorite) ||
-        (query.trim()
-          ? a.score! - b.score!
+        (searching
+          ? a.score! - b.score! ||
+            Number(b.model.provider === category) -
+              Number(a.model.provider === category)
           : Number(!!a.model.legacy) - Number(!!b.model.legacy)) ||
         a.index - b.index,
     )
     .map((r) => r.model);
-  const firstLegacy = query.trim()
+  const firstLegacy = searching
     ? -1
     : rows.findIndex((m) => m.legacy && !favorites.includes(modelKey(m)));
   const customId = query.trim();
