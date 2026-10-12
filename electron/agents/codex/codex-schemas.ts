@@ -82,6 +82,11 @@ const notificationSchema = z.discriminatedUnion("method", [
     itemId: lenient(z.string()),
   }),
   notification("turn/started", { turn: z.object({ id: z.string() }).loose() }),
+  // Read with codexPlanActivity: a plan Relay can't read shows no row.
+  notification("turn/plan/updated", {
+    turnId: lenient(z.string()),
+    plan: z.unknown().optional(),
+  }),
   notification("turn/completed", {
     turn: z
       .object({ status: z.string(), error: z.unknown().optional() })

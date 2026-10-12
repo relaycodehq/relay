@@ -16,7 +16,7 @@ import { findExecutable } from "../../platform/executables";
 import { runAccount } from "../accounts";
 import { codexModelArgs } from "../../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
-import { codexActivity, codexEditedPaths } from "../activity";
+import { CodexPlanRows, codexActivity, codexEditedPaths } from "../activity";
 import { WAIT_LIMIT_SECONDS } from "../../relay-mcp/tools";
 import { CodexAnswerStream } from "./answer-stream";
 import { CodexGoalHold, codexGoal, codexGoals, goalReply } from "./codex-goal";
@@ -119,6 +119,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   // When the spent window lifts, from Codex's latest word on the account's limits.
   let spentUntil: number | undefined;
   const fileChanges = new Map<string, unknown>();
+  const plans = new CodexPlanRows();
   let watcher: CodexTurnWatch | undefined;
   const stream = new CodexAnswerStream(options.onText, (id, text) =>
     options.onCommentary?.(id, text),
@@ -185,10 +186,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       )?.last;
       const model = options.choice.model || connection.started?.model;
       const streamed = last && speed.finish(last);
-      if (last && model)
+      const tokens = last && codexTokens(last);
+      if (tokens && model && requested(tokens))
         options.onUsage?.({
           model,
-          tokens: codexTokens(last),
+          tokens,
           fast: options.choice.fast,
           ...(streamed && { streamed }),
         });
@@ -235,8 +237,17 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         options.onPlan?.(plan);
       }
       const activity = codexActivity(n.method, item);
-      if (activity) options.onActivity?.(activity);
+      // A /compact shows as its own line in the thread, not inside a turn.
+      if (
+        activity &&
+        !(job.kind === "compact" && item.type === "contextCompaction")
+      )
+        options.onActivity?.(activity);
       if (n.method === "item/completed" && item.id) watcher?.item(item);
+    }
+    if (n.method === "turn/plan/updated") {
+      const row = plans.update(threadId, n.params);
+      if (row) options.onActivity?.(row);
     }
     if (n.method === "item/plan/delta") {
       plan += n.params.delta;
@@ -710,6 +721,13 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     else connection.mark("end");
   }
 }
+
+/**
+ * A report that carried tokens. At a compaction boundary Codex reports the
+ * window's new size with every count at zero: that was no request.
+ */
+const requested = (t: ReturnType<typeof codexTokens>) =>
+  t.input + t.cacheRead + t.cacheWrite + t.output > 0;
 
 /** Codex reports the newest request's size as `last`; that is what fills the window. */
 export function codexContextUsage(value: unknown): ContextUsage | undefined {

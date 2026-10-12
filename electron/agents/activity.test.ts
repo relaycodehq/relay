@@ -1,5 +1,10 @@
 import { it, expect } from "vitest";
-import { claudeActivity, claudeEditedPaths, codexActivity } from "./activity";
+import {
+  CodexPlanRows,
+  claudeActivity,
+  claudeEditedPaths,
+  codexActivity,
+} from "./activity";
 it("caps a failed command's output and keeps its arguments out", () => {
   const activity = codexActivity("item/completed", {
     id: "a",
@@ -114,4 +119,100 @@ it("names an image Codex viewed as a read of its path", () => {
     kind: "read",
     label: "/tmp/shot.png",
   });
+});
+it("keeps what an MCP or dynamic tool answered as text, and why one failed", () => {
+  expect(
+    codexActivity("item/completed", {
+      id: "m",
+      type: "mcpToolCall",
+      server: "relay",
+      tool: "usage_limits",
+      status: "completed",
+      arguments: { secret: "hidden" },
+      result: {
+        content: [
+          { type: "text", text: "x".repeat(9000) },
+          { type: "image", data: "iVBORw0KGgo" },
+        ],
+      },
+    }),
+  ).toMatchObject({
+    label: "Checked usage limits",
+    status: "complete",
+    detail: "x".repeat(8000),
+  });
+  expect(
+    codexActivity("item/completed", {
+      id: "m",
+      type: "mcpToolCall",
+      server: "docs",
+      tool: "search",
+      status: "failed",
+      error: { message: "Server went away." },
+    }),
+  ).toMatchObject({ status: "failed", detail: "Server went away." });
+  expect(
+    codexActivity("item/completed", {
+      id: "d",
+      type: "dynamicToolCall",
+      tool: "lookup",
+      contentItems: [
+        { type: "inputText", text: "found it" },
+        { type: "inputImage", imageUrl: "data:image/png;base64,AAA" },
+      ],
+      success: true,
+    }),
+  ).toMatchObject({ label: "lookup", detail: "found it" });
+});
+it("shows a web search by its query, and a compaction Codex ran on its own", () => {
+  expect(
+    codexActivity("item/completed", {
+      id: "w",
+      type: "webSearch",
+      query: "",
+      action: { type: "search", query: null, queries: ["vitest mocks"] },
+      results: [{ title: "Mocking", url: "https://vitest.dev/guide/mocking" }],
+    }),
+  ).toEqual({
+    id: "w",
+    kind: "web",
+    label: "vitest mocks",
+    status: "complete",
+    detail: "Mocking · https://vitest.dev/guide/mocking",
+  });
+  expect(
+    codexActivity("item/started", { id: "c", type: "contextCompaction" }),
+  ).toEqual({
+    id: "c",
+    kind: "tool",
+    label: "Compacting context",
+    status: "running",
+  });
+  expect(
+    codexActivity("item/completed", { id: "c", type: "contextCompaction" })
+      ?.label,
+  ).toBe("Context compacted");
+});
+it("shows a plan update once, not again when Codex repeats it", () => {
+  const plans = new CodexPlanRows();
+  const plan = {
+    plan: [
+      { step: "Read the code", status: "completed" },
+      { step: "Fix it", status: "inProgress" },
+    ],
+  };
+  const first = plans.update("thread", plan);
+  expect(first).toEqual({
+    id: "plan:thread:1",
+    kind: "tool",
+    label: "Updated the plan",
+    status: "complete",
+    detail: "✓ Read the code\n→ Fix it",
+  });
+  expect(plans.update("thread", plan)).toBeUndefined();
+  expect(
+    plans.update("thread", {
+      plan: [{ step: "Read the code", status: "completed" }],
+    })?.id,
+  ).toBe("plan:thread:2");
 });

@@ -68,14 +68,116 @@ export function codexActivity(
   if (
     (item.type === "mcpToolCall" || item.type === "dynamicToolCall") &&
     typeof item.tool === "string"
-  )
+  ) {
+    const output = toolOutput(item);
     return {
       ...base,
       kind: "tool",
       ...(typeof item.server === "string"
         ? mcpCall(item.server, item.tool)
         : { label: item.tool.slice(0, 500) }),
+      ...(output ? { detail: output.slice(-8000) } : {}),
     };
+  }
+  if (item.type === "webSearch") {
+    const action = (item.action ?? {}) as Record<string, unknown>;
+    const label = [
+      item.query,
+      action.query,
+      Array.isArray(action.queries) ? action.queries[0] : undefined,
+      action.url,
+    ].find((v): v is string => typeof v === "string" && !!v.trim());
+    const found = Array.isArray(item.results)
+      ? item.results.flatMap((r) => {
+          const hit = (r ?? {}) as Record<string, unknown>;
+          const line = [hit.title, hit.url]
+            .filter((v) => typeof v === "string" && v)
+            .join(" · ");
+          return line ? [line] : [];
+        })
+      : [];
+    return {
+      ...base,
+      kind: "web",
+      label: (label ?? "Searched the web").slice(0, 500),
+      ...(found.length ? { detail: found.join("\n").slice(0, 8000) } : {}),
+    };
+  }
+  // Codex compacting on its own mid-turn; its summary is encrypted, so there is no text to keep.
+  if (item.type === "contextCompaction")
+    return {
+      ...base,
+      kind: "tool",
+      label: status === "running" ? "Compacting context" : "Context compacted",
+    };
+}
+
+/** What an MCP or dynamic tool call answered, its text only, or why it failed. */
+function toolOutput(item: Record<string, unknown>) {
+  const error = item.error as { message?: unknown } | null | undefined;
+  if (typeof error?.message === "string" && error.message) return error.message;
+  const result = item.result as { content?: unknown } | null | undefined;
+  const parts = Array.isArray(result?.content)
+    ? result.content
+    : Array.isArray(item.contentItems)
+      ? item.contentItems
+      : [];
+  return parts
+    .flatMap((part) =>
+      part &&
+      (part.type === "text" || part.type === "inputText") &&
+      typeof part.text === "string"
+        ? [part.text]
+        : [],
+    )
+    .join("\n");
+}
+
+const planMarks: Record<string, string> = {
+  completed: "✓",
+  inProgress: "→",
+  pending: "○",
+};
+
+/**
+ * A Codex `turn/plan/updated` as Claude's TodoWrite reads: one "Updated the
+ * plan" row, its steps in `detail`. `key` tells updates apart; undefined when
+ * the plan holds no steps.
+ */
+export function codexPlanActivity(
+  key: string,
+  value: unknown,
+): AgentActivity | undefined {
+  const plan = (value as { plan?: unknown } | null)?.plan;
+  if (!Array.isArray(plan)) return;
+  const steps = plan.flatMap((s) =>
+    s && typeof s.step === "string" && s.step.trim()
+      ? [`${planMarks[s.status] ?? "○"} ${s.step.trim()}`]
+      : [],
+  );
+  if (!steps.length) return;
+  return {
+    id: key.slice(0, 180),
+    kind: "tool",
+    label: "Updated the plan",
+    status: "complete",
+    detail: steps.join("\n").slice(0, 8000),
+  };
+}
+
+/** A plan update shows once, as a row of its own, unless it changed nothing. */
+export class CodexPlanRows {
+  private last = new Map<string, string>();
+  private count = 0;
+
+  /** The row for `scope`'s update, or undefined when it repeats the last one. */
+  update(scope: string, params: unknown) {
+    const row = codexPlanActivity(`plan:${scope}:${this.count + 1}`, params);
+    if (!row || this.last.get(scope) === row.detail) return;
+    this.count++;
+    this.last.set(scope, row.detail!);
+    return row;
+  }
 }
 
 /** What Relay's own tools read as in a turn. */
