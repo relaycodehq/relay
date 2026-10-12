@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import type {
   ChatSummary,
   Project,
@@ -1396,5 +1396,48 @@ test("a handoff names the computers when it can't pick one", async () => {
       }),
     ),
   ).toBe("Pi can't take it.\n- Pi: Not cloned on Pi");
+  expect(asked).toEqual([]);
+});
+
+test("restarting Relay always asks, and restarts only once the answer is out", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    const { lead, api, asked, answer } = fakeChats();
+    lead.lastInput!.runtimeMode = "full-access";
+    let restarts = 0;
+    const threads = new StartedThreads(api, { restart: () => restarts++ });
+    answer.decision = "decline";
+    expect(
+      await call(threads, lead.id, "restart_relay", { reason: "No." }),
+    ).toMatchObject({ isError: true });
+    answer.decision = "accept";
+    const result = await call(threads, lead.id, "restart_relay", {
+      reason: "Main process changed:\nthe bridge reads a new field.",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(asked.map((a) => a.request)).toEqual([
+      expect.objectContaining({ title: "Restart Relay?" }),
+      {
+        kind: "approval",
+        title: "Restart Relay?",
+        detail:
+          "Main process changed: the bridge reads a new field.\n\nThreads keep working; their live view comes back with Relay in a few seconds.",
+        decisions: ["accept", "decline", "cancel"],
+      },
+    ]);
+    expect(restarts).toBe(0);
+    vi.runAllTimers();
+    expect(restarts).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a Relay not run under npm run dev refuses to restart, without asking", async () => {
+  const { lead, api, asked } = fakeChats();
+  const threads = new StartedThreads(api);
+  expect(
+    await call(threads, lead.id, "restart_relay", { reason: "Changed." }),
+  ).toMatchObject({ isError: true });
   expect(asked).toEqual([]);
 });

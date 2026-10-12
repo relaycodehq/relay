@@ -210,6 +210,22 @@ test("pages=off leaves out the page tools and refuses their calls", async () => 
   expect(calls).toEqual([]);
 });
 
+test("dev=on adds restart_relay, and never for a started thread", async () => {
+  const url = await serve(async () => toolText("ok"));
+  const names = async (path: string) =>
+    (
+      await (
+        await post(path, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+      ).json()
+    ).result.tools.map((t: { name: string }) => t.name);
+  expect(await names(url)).not.toContain("restart_relay");
+  expect(await names(`${url}?dev=on`)).toContain("restart_relay");
+  expect(await names(`${url}?pages=off&dev=on`)).toContain("restart_relay");
+  expect(
+    await names(`${url.replace(/\/mcp$/, STARTED_PATH)}?dev=on`),
+  ).not.toContain("restart_relay");
+});
+
 test("a failing call comes back as a tool error, not a dead request", async () => {
   const url = await serve(async () => {
     throw new Error("That isn't a thread you started.");

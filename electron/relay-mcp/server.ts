@@ -4,11 +4,13 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 import {
+  DEV_PARAM,
   PAGES_PARAM,
   relayToolList,
   startedToolList,
   STARTED_PATH,
   toolText,
+  withoutDev,
   withoutPages,
   type ToolResult,
 } from "./tools";
@@ -19,9 +21,14 @@ const toolsAt: Record<string, ToolList> = {
   "/mcp": relayToolList,
   [STARTED_PATH]: startedToolList,
 };
-const pagelessAt: Record<string, ToolList> = Object.fromEntries(
-  Object.entries(toolsAt).map(([path, list]) => [path, withoutPages(list)]),
-);
+const toolsFor = (url: URL) => {
+  let tools: ToolList | undefined = toolsAt[url.pathname];
+  if (tools && url.searchParams.get(PAGES_PARAM) === "off")
+    tools = withoutPages(tools);
+  if (tools && url.searchParams.get(DEV_PARAM) !== "on")
+    tools = withoutDev(tools);
+  return tools;
+};
 /**
  * The biggest call the tools allow is show_html at its page cap. A page's
  * chars take up to three bytes each in UTF-8, or two once JSON escapes them,
@@ -161,9 +168,7 @@ export function serveRelayTools(port: number, handlers: McpHandlers) {
       res.end(body === undefined ? undefined : JSON.stringify(body));
     };
     const url = new URL(req.url ?? "/", "http://relay");
-    const tools = (
-      url.searchParams.get(PAGES_PARAM) === "off" ? pagelessAt : toolsAt
-    )[url.pathname];
+    const tools = toolsFor(url);
     if (!tools) return send(404);
     if (req.method !== "POST") return send(405, undefined, { allow: "POST" });
     const token = /^Bearer\s+(\S+)$/i.exec(

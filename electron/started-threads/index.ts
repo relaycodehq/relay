@@ -227,12 +227,16 @@ export interface AgentProjects {
   rules(): Promise<Omit<FolderRules, "projects">>;
 }
 
+/** How long restart_relay waits for its answer to leave before Relay quits. */
+const RESTART_DELAY_MS = 1000;
+
 export class StartedThreads {
   private readUsage: ReadUsage;
   private projects: AgentProjects | undefined;
   private previews: ThreadPreviews | undefined;
   private look: RenderTools["look"];
   private handoffs: ThreadHandoffs | undefined;
+  private restart: (() => void) | undefined;
   private agentChoices: AgentChoices;
   private failureWatchMs: number;
   constructor(
@@ -248,6 +252,8 @@ export class StartedThreads {
       agents?: ThreadAgents;
       /** How long start_threads watches its threads for one failing at once; absent, it doesn't. */
       failureWatchMs?: number;
+      /** Restarts Relay as its footer's Restart does; only under npm run dev. */
+      restart?: () => void;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -255,6 +261,7 @@ export class StartedThreads {
     this.previews = options.previews;
     this.look = options.look;
     this.handoffs = options.handoffs;
+    this.restart = options.restart;
     this.agentChoices = new AgentChoices(options.agents);
     this.failureWatchMs = options.failureWatchMs ?? 0;
   }
@@ -328,6 +335,8 @@ export class StartedThreads {
         return json(await this.listProjects(lead));
       case "add_project":
         return this.addProject(lead, input, signal);
+      case "restart_relay":
+        return this.restartRelay(lead, input, signal);
       case "open_preview":
       case "screenshot":
       case "console_errors":
@@ -470,6 +479,37 @@ export class StartedThreads {
       git: !p.plain,
       ...(p.id === lead.projectId ? { current: true } : {}),
     }));
+  }
+
+  private async restartRelay(
+    lead: ProjectChat,
+    { reason }: RelayToolArgs<"restart_relay">,
+    signal: AbortSignal,
+  ) {
+    const restart = this.restart;
+    if (!restart)
+      return toolText(
+        "This Relay doesn't run under npm run dev, so it can't restart itself.",
+        true,
+      );
+    const approved = await this.approve(
+      lead,
+      "Restart Relay?",
+      // One line: the agent's text can't forge more of the card.
+      `${reason.replace(/\s+/g, " ")}\n\nThreads keep working; their live view comes back with Relay in a few seconds.`,
+      signal,
+      true,
+    );
+    if (!approved)
+      return toolText(
+        "The user didn't restart Relay. Carry on without it, or ask them.",
+        true,
+      );
+    // Lets this answer reach the agent before Relay goes.
+    setTimeout(restart, RESTART_DELAY_MS);
+    return toolText(
+      "Relay is restarting. Its tools answer again in a few seconds; a call before then may fail.",
+    );
   }
 
   private async addProject(

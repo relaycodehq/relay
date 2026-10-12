@@ -79,6 +79,7 @@ export async function answerRelayTools(
     look?: RenderTools["look"];
     handoffs?: ThreadHandoffs;
     agents?: ThreadAgents;
+    restart?: () => void;
   } = {},
 ) {
   const started = new StartedThreads(chats, {

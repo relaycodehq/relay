@@ -613,6 +613,9 @@ app
             ),
           handoffs: handoffs.sender,
           agents: threadAgents(agentUpdates),
+          ...(process.env.RELAY_DEV_STALE
+            ? { restart: () => devBuild.restart() }
+            : {}),
         },
       );
     chats.armWakeups();

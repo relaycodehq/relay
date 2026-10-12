@@ -8,7 +8,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { z } from "zod";
 import type { RenderMode } from "../../shared/html-render";
-import { PAGES_PARAM, STARTED_PATH } from "./tools";
+import { DEV_PARAM, PAGES_PARAM, STARTED_PATH } from "./tools";
 
 export { serveRelayTools, type McpHandlers } from "./server";
 export {
@@ -131,9 +131,13 @@ export function relayToolsFor(
   started = false,
   renders: RenderMode = "auto",
 ) {
+  const query = new URLSearchParams();
+  if (renders === "off") query.set(PAGES_PARAM, "off");
+  // scripts/dev.mjs sets it; electron/app/dev-build.ts restarts through it.
+  if (process.env.RELAY_DEV_STALE) query.set(DEV_PARAM, "on");
   return current
     ? {
-        url: `http://127.0.0.1:${current.port}${started ? STARTED_PATH : "/mcp"}${renders === "off" ? `?${PAGES_PARAM}=off` : ""}`,
+        url: `http://127.0.0.1:${current.port}${started ? STARTED_PATH : "/mcp"}${query.size ? `?${query}` : ""}`,
         token: relayToken(current.secret, chatId),
         renders,
       }
