@@ -52,9 +52,9 @@ function HowWatchWorks() {
         </li>
         <li>
           Claude runs it as Claude Code&apos;s <code>/btw</code> on the live
-          session; Codex as a throwaway fork of the thread, like{" "}
-          <code>/side</code>. Same model, same context, no tools, and nothing is
-          written to the thread&apos;s transcript.
+          session; Codex and OpenCode as a throwaway fork of the thread, like
+          Codex&apos;s <code>/side</code>. Same model, same context, no tools,
+          and nothing is written to the thread&apos;s transcript.
         </li>
         <li>
           It reuses the thread&apos;s prompt cache, so a check is mostly cache

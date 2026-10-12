@@ -57,8 +57,10 @@ const feature = (
   also: (f: TipFacts) => boolean = () => true,
 ): Tip => ({ id, ask, relevant: (f) => !f.used.has(id) && also(f) });
 
-/** Agents that "Flag what I'd miss" and /goal work with. */
-const WATCHABLE = new Set(["claude", "codex"]);
+/** Agents that "Flag what I'd miss" works with. */
+const WATCHABLE = new Set(["claude", "codex", "opencode"]);
+/** Agents with a native /goal. */
+const GOALS = new Set(["claude", "codex"]);
 
 export const tips: Tip[] = [
   {
@@ -71,7 +73,7 @@ export const tips: Tip[] = [
   keys("stop", "{stop} stops the agent mid-turn"),
   keys("send-new-thread", "{send-new-thread} sends, then opens a new thread"),
   feature("goal", "/goal keeps the agent going until the goal is met", (f) =>
-    WATCHABLE.has(f.provider ?? ""),
+    GOALS.has(f.provider ?? ""),
   ),
   feature("mention", "Type @ in your message to attach a file"),
   feature("resume", "/resume picks up a Claude Code or Codex terminal session"),

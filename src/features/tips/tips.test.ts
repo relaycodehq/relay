@@ -164,8 +164,11 @@ describe("the tips", () => {
 
   it("only offer what this agent can do", () => {
     const opencode = shown({ ...fresh, provider: "opencode" });
-    expect(opencode).not.toContain("watch");
+    expect(opencode).toContain("watch");
     expect(opencode).not.toContain("goal");
+    const cursor = shown({ ...fresh, provider: "cursor" });
+    expect(cursor).not.toContain("watch");
+    expect(cursor).not.toContain("goal");
   });
 });
 

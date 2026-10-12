@@ -51,7 +51,7 @@ export type AgentJob =
   /** A one-off helper job (a thread title, a commit message): no tools, no session, these instructions in place of the chat's own. */
   | { kind: "helper"; instructions: string };
 
-/** A thread turn's side check; see shared/watch. Claude reads it, the others ignore it. */
+/** A thread turn's side check; see shared/watch. Claude, Codex and OpenCode read it, the others ignore it. */
 export type AgentWatch = {
   scope: Exclude<WatchScope, "off">;
   /** Notes the person said they know, in any thread: skipped only when a note says the same. */
