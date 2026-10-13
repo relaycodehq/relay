@@ -20,7 +20,7 @@ const codexAgent = (model: string): ReviewAgent => ({
   provider: "codex",
   choice: { model, reasoningEffort: "high", fast: false },
 });
-/** The first two are the default pair; Add reviewer takes the next one. */
+/** The first two are the default pair; Add reviewer takes the next one, then repeats the last. */
 const lineup = [
   claudeAgent("high"),
   codexAgent("gpt-5.6-sol"),
@@ -81,8 +81,10 @@ export function withOpus(setup: Setup, opus: string): Setup {
 
 /** The reviewer Add reviewer appends. */
 export function nextReviewer(reviewers: ReviewAgent[]): ReviewAgent {
-  const next = lineup[reviewers.length]!;
-  return { ...next, prompt: lastPrompt(next.provider) };
+  const next = lineup[reviewers.length];
+  if (next) return { ...next, prompt: lastPrompt(next.provider) };
+  // Past the lineup, another of the last one: more runs of a model find more.
+  return { ...reviewers.at(-1)! };
 }
 
 /** Reviewer `i` on another model; prompts belong to an agent, so another starts where you left it. */

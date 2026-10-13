@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import {
   firstSetup,
+  nextReviewer,
   reviewBranches,
   reviewTarget,
   swapReviewer,
@@ -90,6 +91,20 @@ describe("setup", () => {
     expect(setup.lead.choice.model).toBe("opus");
   });
 
+  it("adds the lineup's reviewers in turn, then more of the last one", () => {
+    const one: ReviewAgent = {
+      provider: "codex",
+      choice: { model: "gpt-5.6-sol", reasoningEffort: "high", fast: false },
+    };
+    expect(nextReviewer([one]).choice.model).toBe("gpt-5.6-sol");
+    const four = Array.from({ length: 4 }, (_, i) => ({
+      ...one,
+      choice: { ...one.choice, model: `m${i}` },
+      prompt: `prompt ${i}`,
+    }));
+    expect(nextReviewer(four)).toEqual(four[3]);
+    expect(nextReviewer([...four, four[3]!])).toEqual(four[3]);
+  });
   it("keeps a reviewer's prompt only while it stays on the same agent", () => {
     const reviewers: ReviewAgent[] = [{ ...codex, prompt: "$hunt" }, codex];
     expect(

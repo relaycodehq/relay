@@ -3,6 +3,7 @@ import { RotateCcw } from "lucide-react";
 import { unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
 import { threadReports } from "../../../shared/findings";
+import { leadStoppedLast } from "../deep-review/lead-halted";
 import { api } from "../../lib/api";
 import type {
   ChatMessage,
@@ -79,6 +80,7 @@ export function ThreadMessages({
     replyCounts,
     sideThreads,
     leadAnswered,
+    messages,
   },
   view: {
     scroll,
@@ -96,6 +98,7 @@ export function ThreadMessages({
     fixFindings,
     setFindingStatus,
     resumeReview,
+    stopReview,
   },
   actions: {
     signIn,
@@ -267,10 +270,12 @@ export function ThreadMessages({
                 state={review}
                 kept={reports[0]?.findings.length}
                 hasLead={leadAnswered}
+                leadHalted={leadStoppedLast(messages, review.leadStopped)}
                 busy={busy}
                 projectRoot={projectPath}
                 onOpenFile={openFile}
                 onResume={resumeReview}
+                onStop={stopReview}
               />
             </Fragment>
           ) : (

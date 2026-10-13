@@ -1,5 +1,5 @@
-// What a deep review's council shares in the thread: the
-// toggle that folds their panes, and the bar to resume one that halted.
+// What a deep review's council shares in the thread: the toggle that folds
+// their panes, and the bar under them to stop it or resume one that halted.
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import type { AgentProvider } from "../../../../shared/agents";
@@ -40,11 +40,14 @@ export function CouncilHalted({
   action,
   busy,
   onResume,
+  other,
 }: {
   text: string;
   action: string;
   busy: boolean;
   onResume: () => void;
+  /** A second way on, like handing over without the missing reports. */
+  other?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="deep-review-stopped" role="status">
@@ -57,6 +60,48 @@ export function CouncilHalted({
       >
         <RotateCcw size={13} />
         {action}
+      </button>
+      {other && (
+        <button
+          type="button"
+          className="text-button"
+          disabled={busy}
+          onClick={other.onClick}
+        >
+          {other.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Under the panes while the reviewers work, where Resume shows once stopped. */
+export function CouncilRunning({
+  busy,
+  onStop,
+}: {
+  busy: boolean;
+  onStop: () => void;
+}) {
+  return (
+    <div className="deep-review-stopped" role="status">
+      <span>Reviewers at work.</span>
+      <button
+        type="button"
+        className="resume-answer"
+        disabled={busy}
+        onClick={onStop}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <rect x="2" y="2" width="8" height="8" rx="1.5" />
+        </svg>
+        Stop review
       </button>
     </div>
   );

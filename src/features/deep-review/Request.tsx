@@ -12,15 +12,21 @@ import { ProviderIcon } from "../agents/ComposerModelPicker";
 function AgentChip({
   agent,
   name,
+  times = 1,
 }: {
   agent: ReviewAgent | LeadAgent;
   name: string;
+  /** Reviewers on the same model and effort show once, counted. */
+  times?: number;
 }) {
   return (
     <span className="deep-review-agent">
       <ProviderIcon provider={agent.provider} />
       {name}
-      <span className="muted">{traitsName(agent)}</span>
+      <span className="muted">
+        {traitsName(agent)}
+        {times > 1 && ` ×${times}`}
+      </span>
     </span>
   );
 }
@@ -35,6 +41,13 @@ export function DeepReviewRequest({
 }) {
   const name = useAgentName();
   const { scope } = state;
+  const lineup = new Map<string, { agent: ReviewAgent; times: number }>();
+  for (const r of state.reviewers) {
+    const key = `${r.provider}\n${name(r)}\n${traitsName(r)}`;
+    const seen = lineup.get(key);
+    if (seen) seen.times++;
+    else lineup.set(key, { agent: r, times: 1 });
+  }
   return (
     <article
       className="project-message user"
@@ -60,8 +73,13 @@ export function DeepReviewRequest({
             ) : null}
           </div>
           <div className="deep-review-request-agents">
-            {state.reviewers.map((r) => (
-              <AgentChip key={r.chatId} agent={r} name={name(r)} />
+            {[...lineup].map(([key, { agent, times }]) => (
+              <AgentChip
+                key={key}
+                agent={agent}
+                name={name(agent)}
+                times={times}
+              />
             ))}
             <span className="deep-review-arrow" aria-label="then">
               →
@@ -70,7 +88,9 @@ export function DeepReviewRequest({
           </div>
           {state.focus && <p>{state.focus}</p>}
           {scope.checkout && (
-            <p className="muted">Reviewed and fixed in {scope.checkout.path}.</p>
+            <p className="muted">
+              Reviewed and fixed in {scope.checkout.path}.
+            </p>
           )}
         </div>
       </div>

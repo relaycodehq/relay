@@ -221,8 +221,10 @@ export class DeepReviews {
     if (answer?.role === "assistant" && state.status === "leading") {
       if (answer.status === "complete") {
         state.status = "done";
+        delete state.leadStopped;
       } else {
         state.status = answer.status === "cancelled" ? "stopped" : "failed";
+        state.leadStopped = answer.id;
       }
       await this.host.touch(chat, answer.id);
     }

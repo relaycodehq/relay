@@ -117,5 +117,9 @@ export function useCouncils({
     fixFindings,
     setFindingStatus,
     resumeReview: () => resume((chatId) => api.resumeDeepReview(chatId)),
+    // The thread's Stop: it stops the reviewers along with anything else running.
+    stopReview: () => {
+      if (chat) void api.cancelProjectChat(chat.id).catch(setError);
+    },
   };
 }

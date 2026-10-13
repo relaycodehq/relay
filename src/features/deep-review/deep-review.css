@@ -88,6 +88,9 @@
 .deep-review-reviewers {
   display: grid;
   gap: 6px;
+  /* A long lineup scrolls; the pickers' menus open outside it. */
+  max-height: 252px;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -445,8 +448,15 @@
   gap: 10px;
 }
 /* One reviewer fills the row; with three, the last one does. */
-.deep-review-grid > :last-child:nth-child(odd) {
+.deep-review-grid:not([data-many]) > :last-child:nth-child(odd) {
   grid-column: 1 / -1;
+}
+/* Past four, three to a row and shorter, so thirty still fit a few screens. */
+.deep-review-grid[data-many] {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.deep-review-grid[data-many] .deep-review-pane-thread {
+  height: 220px;
 }
 .deep-review-pane {
   display: flex;
@@ -478,10 +488,26 @@
   flex: none;
   color: var(--muted);
 }
+.deep-review-pane-time,
 .deep-review-pane-tokens {
   flex: none;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+.deep-review-pane-status .text-button {
+  gap: 3px;
+  padding: 0;
+  font-size: 11.5px;
+}
+.deep-review-pane-stop {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  color: var(--muted);
+}
+.deep-review-pane-stop:hover {
+  color: var(--text);
 }
 .deep-review-pane-status.done {
   color: light-dark(#1a7f45, #4cc38a);
@@ -489,7 +515,7 @@
 .deep-review-pane-thread {
   height: 340px;
   overflow: auto;
-  overscroll-behavior: contain;
+  /* Past a pane's end the wheel moves the thread; most of the screen is panes. */
   padding: 0 18px;
 }
 .deep-review-pane-thread .project-message {

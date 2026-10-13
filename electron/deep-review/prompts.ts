@@ -15,6 +15,8 @@ import { memberLabel } from "./council";
 import { hasCouncilReport } from "../../shared/council";
 
 const MAX_REPORT = 20000;
+/** What all reports together may take; past eight reviewers each gets a share. */
+const REPORTS_BUDGET = 8 * MAX_REPORT;
 
 /** The branch a branch review covers; reviews saved before it was a choice took the checked-out one. */
 const reviewedBranch = (scope: ReviewScope) =>
@@ -271,7 +273,9 @@ export function leadPrompt(
         status: hasCouncilReport(r.answer)
           ? "finished"
           : "didn't finish; use what it has, if anything",
-        report: (r.answer?.body ?? "").slice(-MAX_REPORT),
+        report: (r.answer?.body ?? "").slice(
+          -Math.min(MAX_REPORT, Math.floor(REPORTS_BUDGET / count)),
+        ),
       })),
     )}`,
   ].join("\n\n");

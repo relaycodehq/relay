@@ -61,6 +61,13 @@ export function reviveChat(
     }
   }
   if (review?.status === "reviewing" || review?.status === "leading") {
+    // The lead's answer the app closed on is where resuming the lead goes on.
+    const lead =
+      review.status === "leading" &&
+      [...chat.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && !m.parentId);
+    if (lead) review.leadStopped = lead.id;
     review.status = review.status === "reviewing" ? "stopped" : "failed";
     interrupted = true;
   }

@@ -76,7 +76,8 @@ export function reviewerPrompt(
   return { kind: "custom", text };
 }
 
-export const MAX_REVIEWERS = 4;
+/** A review starts with a pair; Add reviewer goes on up to this many. */
+export const MAX_REVIEWERS = 30;
 export const deepReviewStartSchema = z
   .object({
     target: reviewTargetSchema,
@@ -144,6 +145,11 @@ export interface DeepReviewState {
   focus?: string;
   runtimeMode: RuntimeMode;
   status: "reviewing" | "leading" | "done" | "stopped" | "failed";
+  /**
+   * The answer the lead's first turn ended on when it stopped or failed,
+   * the latest one after a resume; resuming the lead goes on from there.
+   */
+  leadStopped?: string;
 }
 /** A reviewer thread's place in its review. */
 export interface ReviewerTask {
