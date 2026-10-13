@@ -5,7 +5,13 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import { remoteHistory, type RemoteChatSummary } from "../../../shared/remote";
-import { applyPatch, knownOf, mainMessages, type Thread } from "./chat-state";
+import {
+  applyMessage,
+  applyPatch,
+  knownOf,
+  mainMessages,
+  type Thread,
+} from "./chat-state";
 import { loadThread, saveThread } from "./offline";
 import { useRemote } from "./RemoteProvider";
 
@@ -29,7 +35,11 @@ function set(key: string, peek: Peek) {
 
 /** An agent's own answer, not a note Relay writes into the thread. */
 const isAnswer = (m: ChatMessage) =>
-  m.role === "assistant" && !m.compaction && !m.handoff && !m.reload && !m.worktreeCommand;
+  m.role === "assistant" &&
+  !m.compaction &&
+  !m.handoff &&
+  !m.reload &&
+  !m.worktreeCommand;
 
 function peekOf(thread: Thread): Peek {
   const request = thread.requests?.[0];
@@ -37,6 +47,18 @@ function peekOf(thread: Thread): Peek {
     answer: [...mainMessages(thread.messages)].reverse().find(isAnswer),
     request: request && (request.questions?.[0]?.question ?? request.title),
   };
+}
+
+function newerAnswer(
+  held: ChatMessage | undefined,
+  incoming: ChatMessage | undefined,
+): held is ChatMessage {
+  return (
+    !!held &&
+    (!incoming ||
+      held.created > incoming.created ||
+      (held.id === incoming.id && held.version > incoming.version))
+  );
 }
 
 /** Each started thread's peek, kept current while the rows that show them are up. */
@@ -53,15 +75,16 @@ export function useStartedPeeks(started: RemoteChatSummary[]) {
           if (message.parentId || !isAnswer(message)) return;
           const key = `${computer}:${id}`;
           const held = peeks.get(key);
-          if (held?.answer && held.answer.created > message.created) return;
-          if (held?.answer?.id === message.id && held.answer.version > message.version) return;
+          if (newerAnswer(held?.answer, message)) return;
           set(key, { ...held, answer: message });
         }),
       );
     return () => off.forEach((f) => f());
   }, [ids, computer, onMessage]);
   // Starting, stopping and asking change what the rows say: fetch what changed then.
-  const states = started.map((c) => `${c.id}=${!!c.running}:${!!c.waiting}`).join(" ");
+  const states = started
+    .map((c) => `${c.id}=${!!c.running}:${!!c.waiting}`)
+    .join(" ");
   useEffect(() => {
     let live = true;
     // A thread can answer again while the link is down and still read idle,
@@ -73,22 +96,36 @@ export function useStartedPeeks(started: RemoteChatSummary[]) {
       if (fetchedAt.get(key) === state) continue;
       void (async () => {
         const saved = await loadThread(id).catch(() => undefined);
-        if (saved && !peeks.has(key) && live) set(key, peekOf(saved));
+        if (!live) return;
+        if (saved && !peeks.has(key)) set(key, peekOf(saved));
         if (status !== "online" || fetchedAt.get(key) === state) return;
-        fetchedAt.set(key, state);
         try {
+          const before = peeks.get(key)?.answer;
           const patch = await call("chat", id, knownOf(saved), remoteHistory);
+          if (!live) return;
           let thread: Thread;
           try {
             thread = applyPatch(saved, patch);
           } catch {
-            thread = applyPatch(undefined, await call("chat", id, undefined, remoteHistory));
+            thread = applyPatch(
+              undefined,
+              await call("chat", id, undefined, remoteHistory),
+            );
+          }
+          if (!live) return;
+          const peek = peekOf(thread);
+          const held = peeks.get(key)?.answer;
+          // Message events can finish an answer while this fetch still carries
+          // its streaming version. Keep that answer in the offline copy too.
+          if (held !== before && newerAnswer(held, peek.answer)) {
+            thread = applyMessage(thread, held);
+            peek.answer = held;
           }
           saveThread(id, thread);
-          set(key, peekOf(thread));
+          set(key, peek);
+          fetchedAt.set(key, state);
         } catch {
           // Lost the link or the thread: the next change or visit asks again.
-          fetchedAt.delete(key);
         }
       })();
     }
