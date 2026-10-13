@@ -46,6 +46,9 @@ export function pluginHandlers(ctx: ApiContext) {
       [z.enum(["start", "pause", "resume", "stop"])],
       (action) => clockify.timer(action),
     ),
+    clockifySetStart: takes([z.number().int().nonnegative()], (at) =>
+      clockify.setStart(at),
+    ),
     clockifyTouch: takes(
       [z.string().min(1).max(200), z.string().min(1).max(200).optional()],
       (projectId, chatId) => clockify.touch(projectId, chatId),

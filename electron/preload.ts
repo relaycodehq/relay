@@ -245,6 +245,7 @@ const methods = [
   "clockifyWorkspaces",
   "clockifyProjects",
   "clockifyTimer",
+  "clockifySetStart",
   "clockifyTouch",
   "saveClockifyReview",
   "describeClockifyReview",

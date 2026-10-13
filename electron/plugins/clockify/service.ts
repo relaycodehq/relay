@@ -28,6 +28,7 @@ const MIN_BLOCK = 5 * MIN;
 /** The same thread touched again within this adds nothing. */
 const TOUCH_EVERY = MIN;
 const MAX_TOUCHES = 5_000;
+const DAY_LENGTH = 24 * 60 * MIN;
 
 export interface ClockifyDeps {
   store: Store;
@@ -182,6 +183,26 @@ export class ClockifyPlugin {
     if (review?.blocks.some((b) => b.clockifyProjectId && !b.submittedId))
       throw new Error("Send or discard the day you're reviewing first.");
     await this.wrapUp();
+    return this.status();
+  }
+
+  /** Moves the day's start, for someone who began working before they hit Start. */
+  async setStart(at: number) {
+    this.requireEnabled();
+    const day = this.store.get().clockify?.day;
+    if (!day) throw new Error("The timer isn't running.");
+    const firstPause = day.pauses[0]?.start;
+    if (at > (firstPause ?? this.now()))
+      throw new Error(
+        firstPause === undefined
+          ? "The day can't start in the future."
+          : "The day can't start after its first pause.",
+      );
+    if (at < this.now() - DAY_LENGTH)
+      throw new Error("The day can't start more than a day earlier.");
+    await this.store.update((s) => {
+      s.clockify!.day!.start = at;
+    });
     return this.status();
   }
 

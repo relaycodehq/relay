@@ -326,3 +326,19 @@ it("pauses the day when turned off, so off time never counts", async () => {
   const worked = review!.blocks.reduce((s, b) => s + b.end - b.start, 0);
   expect(worked / MIN).toBe(40);
 });
+
+it("moves a late start back, but never past now or the first pause", async () => {
+  const { plugin, at } = await setup([]);
+  at(30);
+  await plugin.timer("start");
+  at(60);
+  await expect(plugin.setStart(DAY + 61 * MIN)).rejects.toThrow("future");
+  expect((await plugin.setStart(DAY)).day!.start).toBe(DAY);
+  await plugin.timer("pause");
+  at(70);
+  await expect(plugin.setStart(DAY + 65 * MIN)).rejects.toThrow("first pause");
+  await plugin.timer("resume");
+  at(90);
+  const { review } = await plugin.timer("stop");
+  expect(review!.start).toBe(DAY);
+});

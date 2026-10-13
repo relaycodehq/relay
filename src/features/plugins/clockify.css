@@ -86,6 +86,61 @@
 .clockify-now[data-paused] .clockify-clock {
   color: var(--muted);
 }
+.clockify-now-text small:has(.clockify-since) {
+  display: flex;
+  gap: 4px;
+}
+.clockify-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clockify-since {
+  flex: none;
+}
+/* The day's start: drag or scroll it, double-click to type it. */
+.clockify-panel .clockify-now .clockify-start {
+  font: inherit;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  border-radius: 0;
+  background: none;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.clockify-now:hover .clockify-start {
+  border-bottom-color: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+.clockify-panel .clockify-now .clockify-start:hover {
+  color: var(--text);
+}
+.clockify-panel .clockify-now[data-moving] .clockify-start,
+.clockify-panel .clockify-now input.clockify-start {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.clockify-panel .clockify-now input.clockify-start {
+  width: auto;
+  height: auto;
+  outline: none;
+  cursor: text;
+  user-select: text;
+}
+.clockify-panel .clockify-now input.clockify-start[aria-invalid] {
+  color: var(--danger);
+  border-bottom-color: var(--danger);
+}
+.clockify-now[data-moving] .clockify-clock {
+  color: var(--accent);
+}
 .clockify-panel .clockify-action,
 .clockify-panel .clockify-pending {
   display: flex;

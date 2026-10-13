@@ -29,6 +29,7 @@ import {
 import { useNow } from "../../lib/useNow";
 import { IconButton } from "../../ui/ui";
 import { ClockifyReview } from "./ClockifyReview";
+import { ClockifyStart } from "./ClockifyStart";
 import { clock, elapsed } from "./clockify-format";
 import "../agents/composer-model-picker.css";
 import "./clockify.css";
@@ -99,6 +100,10 @@ export function ClockifyTimer({
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  /** The start being dragged or typed, or saving. */
+  const [movedStart, setMovedStart] = useState<number>();
   const day = status.data?.day ?? null;
   const pause = day?.pauses.find((p) => p.end === undefined);
   useTouches(on && !!day && !pause, projectId, chatId);
@@ -124,6 +129,19 @@ export function ClockifyTimer({
     }
   }
 
+  async function moveStart(at: number) {
+    if (at === day?.start) return setMovedStart(undefined);
+    setMovedStart(at);
+    setError(undefined);
+    try {
+      qc.setQueryData(clockifyKey, await api.clockifySetStart(at));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMovedStart(undefined);
+    }
+  }
+
   // The badge is all that shows without hovering, so it states what the
   // timer is doing and stays muted: nothing here is asking to be clicked.
   const [Badge, label] = error
@@ -143,24 +161,44 @@ export function ClockifyTimer({
   let content;
   if (day) {
     const mappedName = projects.data?.find((p) => p.id === mapped)?.name;
-    const since = `since ${clock(day.start)}`;
+    const start = movedStart ?? day.start;
+    const firstPause = day.pauses[0]?.start;
+    // What comes before the start gives way first, so the time always shows.
+    const since = (where?: string) => (
+      <>
+        {where && <span className="clockify-where">{where} ·</span>}
+        <span className="clockify-since">
+          since{" "}
+          <ClockifyStart
+            start={start}
+            latest={() => firstPause ?? Date.now()}
+            onPreview={setMovedStart}
+            onSet={(at) => void moveStart(at)}
+            onEditing={setEditing}
+          />
+        </span>
+      </>
+    );
     const [title, detail] = pause
       ? ["Paused", `at ${clock(pause.start)}`]
       : !projectId
-        ? ["Tracking", since]
+        ? ["Tracking", since()]
         : mapped
           ? [
               mappedName ?? projectName ?? "Tracking",
-              mappedName && projectName && mappedName !== projectName
-                ? `${projectName} · ${since}`
-                : since,
+              since(
+                mappedName && projectName && mappedName !== projectName
+                  ? projectName
+                  : undefined,
+              ),
             ]
-          : [projectName ?? "This project", "Not tracked"];
+          : [projectName ?? "This project", since("Untracked")];
     content = (
       <div
         className="clockify-now"
         data-paused={pause ? true : undefined}
         data-untracked={!pause && projectId && !mapped ? true : undefined}
+        data-moving={movedStart !== undefined || undefined}
         style={{ ["--c" as string]: color ?? "var(--muted)" }}
       >
         <i className="clockify-dot" aria-hidden />
@@ -168,7 +206,7 @@ export function ClockifyTimer({
           <b>{title}</b>
           <small>{detail}</small>
         </span>
-        <DayClock day={day} paused={!!pause} />
+        <DayClock day={{ ...day, start }} paused={!!pause} />
         {pause ? (
           <IconButton
             label="Resume the timer"
@@ -226,7 +264,13 @@ export function ClockifyTimer({
 
   return (
     <>
-      <Popover.Root>
+      <Popover.Root
+        open={open}
+        onOpenChange={(next) => {
+          // Dragging or typing the start keeps it open past the pointer.
+          if (next || !editing) setOpen(next);
+        }}
+      >
         <Popover.Trigger
           openOnHover
           delay={150}

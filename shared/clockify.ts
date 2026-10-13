@@ -121,6 +121,8 @@ export interface ClockifyApi {
   clockifyWorkspaces(): Promise<ClockifyWorkspace[]>;
   clockifyProjects(): Promise<ClockifyProject[]>;
   clockifyTimer(action: ClockifyTimerAction): Promise<ClockifyStatus>;
+  /** Moves the running day's start, for a timer started late. */
+  clockifySetStart(at: number): Promise<ClockifyStatus>;
   /** The person is on this project; the timer's evidence of where the day went. */
   clockifyTouch(projectId: string, chatId?: string): Promise<void>;
   saveClockifyReview(blocks: ClockifyBlockEdit[]): Promise<ClockifyStatus>;
