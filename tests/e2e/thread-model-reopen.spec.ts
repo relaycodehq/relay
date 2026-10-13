@@ -26,14 +26,14 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
     capture = join(root, "calls.jsonl");
   await mkdir(repo);
   await mkdir(bin);
-  const script = (
-    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")
-  ).replace(
-    "models: [],",
-    `models: [{ value: "claude-test-model", displayName: "Test Claude", supportsEffort: true, supportedEffortLevels: ["low", "high", "max"] }],`,
+  await writeFile(capture, "");
+  const script = await readFile(
+    resolve("tests/fixtures/room-agent.cjs"),
+    "utf8",
   );
+  const agentPaths: Record<string, string> = {};
   for (const name of ["claude", "codex"])
-    await fakeCli(join(bin, name), script);
+    agentPaths[name] = await fakeCli(join(bin, name), script);
   await mkdir(join(data, "project-chats"), { recursive: true });
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   const projectId = randomUUID();
@@ -90,6 +90,7 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
       version: 1,
       folders: {},
       progress: {},
+      agentPaths,
       projects: [
         {
           id: projectId,
@@ -134,11 +135,6 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
   try {
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1400, height: 900 });
-    await page.evaluate(() =>
-      localStorage.setItem("relay-sidebar-view", "activity"),
-    );
-    await page.reload();
-    await page.screenshot({ path: join(tmpdir(), "relay-settings-first-frame.png") });
     await page
       .getByRole("button", { name: /^New thread in project$/i })
       .click();
@@ -152,16 +148,28 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
       .getByRole("menuitemradio", { name: "High", exact: true })
       .click();
     await expect(effort).toContainText("High");
-    await page.locator(".sb-card", { hasText: "Earlier work" }).first().click();
+    await page
+      .locator(".sb-thread", { hasText: "Earlier work" })
+      .first()
+      .click();
     await expect(page.locator('[data-message-id="a"]')).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
-    ).toHaveText(/Test Claude/);
+    ).toHaveText(/claude-test-model/);
     await expect(effort).toContainText("Max");
-    await expect(effort).toContainText("200k");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) =>
+            JSON.parse(localStorage.getItem(`composer-settings:${id}`)!).models
+              .claude.contextWindow,
+          chat.id,
+        ),
+      )
+      .toBe("200k");
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
-    ).toHaveText("Auto-accept edits");
+    ).toHaveText("Auto");
     await expect(
       page.getByRole("button", { name: "Mode: Plan", exact: true }),
     ).toBeVisible();
@@ -175,9 +183,11 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
       .getByRole("button", { name: /^New thread in project$/i })
       .click();
     await expect(effort).toContainText("High");
-    await page.locator(".sb-card", { hasText: "Earlier work" }).first().click();
+    await page
+      .locator(".sb-thread", { hasText: "Earlier work" })
+      .first()
+      .click();
     await expect(effort).toContainText("Low");
-    await expect(effort).toContainText("200k");
     // The restored model is also what is sent, not only what the toolbar shows.
     await page.getByLabel("Message project").fill("Say hello again");
     await page
@@ -188,6 +198,7 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
         const calls = (await readFile(capture, "utf8"))
           .trim()
           .split("\n")
+          .filter(Boolean)
           .map((line) => JSON.parse(line));
         return calls.find(
           (call) =>

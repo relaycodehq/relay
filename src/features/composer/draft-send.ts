@@ -149,7 +149,7 @@ export async function sendDraft(
     id: messageId,
   });
   // A background send has no mounted composer to acknowledge its own input.
-  if (recipient !== "message" && value.delivery !== "queue")
+  if (recipient !== "message" && !value.delivery)
     saveComposerSettings(id, {
       ...loadComposerSettings(id),
       sent: messageId,

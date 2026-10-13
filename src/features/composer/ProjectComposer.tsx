@@ -276,15 +276,10 @@ export function ProjectComposer({
       const accepted = await onSend(
         account ? { ...value, account } : value,
         (id) => {
-          // /btw has its own composer; queued and scheduled messages have not
-          // replaced this conversation's latest send yet.
-          if (
-            value.to !== "message" &&
-            !value.side &&
-            !value.sendAt &&
-            value.delivery !== "queue"
-          ) {
-            composer.noteSent(id);
+          // /btw has its own composer. A steer can also end up queued, so
+          // anything pending is acknowledged when its message appears.
+          if (value.to !== "message" && !value.side) {
+            composer.noteSent(id, !!value.sendAt || !!value.delivery);
             noted = true;
           }
           dispatch?.();

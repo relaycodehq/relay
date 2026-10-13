@@ -67,6 +67,7 @@ export function useComposerSettings({
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
   const [sent, setSent] = useState(saved.sent);
+  const sentHere = useRef(new Set<string>());
   const settings: ComposerSettings = {
     provider: picked,
     models,
@@ -74,12 +75,21 @@ export function useComposerSettings({
     interactionMode,
     ...(sent ? { sent } : {}),
   };
+  // A failed send can acknowledge its old baseline after the user has
+  // already changed the next message's settings.
+  const currentSettings = useRef(settings);
+  currentSettings.current = settings;
   useEffect(() => {
     saveComposerSettings(key, settings);
   }, [key, picked, models, runtimeMode, interactionMode, sent]);
   // A message sent elsewhere while this composer is open moves it too.
   useEffect(() => {
-    const next = withSent(settings, lastSent);
+    // A local queue or schedule may go out after the user picked settings
+    // for another message. Acknowledge it without overwriting those picks.
+    const next =
+      lastSent && sentHere.current.delete(lastSent.id)
+        ? { ...settings, sent: lastSent.id }
+        : withSent(settings, lastSent);
     if (next === settings) return;
     setProvider(next.provider);
     setModels(next.models);
@@ -104,9 +114,11 @@ export function useComposerSettings({
     save: (changes: Partial<ComposerSettings>) =>
       saveComposerSettings(key, { ...settings, ...changes }),
     /** A message going out from here: these settings already know of it. */
-    noteSent(id: string | undefined) {
+    noteSent(id: string | undefined, pending = false) {
+      if (id) sentHere.current.add(id);
+      if (pending) return;
       setSent(id);
-      saveComposerSettings(key, { ...settings, sent: id });
+      saveComposerSettings(key, { ...currentSettings.current, sent: id });
     },
   };
 }

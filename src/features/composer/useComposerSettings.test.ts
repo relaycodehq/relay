@@ -10,6 +10,7 @@ import {
   cacheNewThreadModels,
   loadComposerSettings,
   saveComposerSettings,
+  withSent,
 } from "../agents/composer-settings";
 import { useComposerSettings } from "./useComposerSettings";
 
@@ -117,4 +118,42 @@ it("corrects previously saved leaked defaults once, then acknowledges that basel
   );
   expect(current().models.claude?.choice).toEqual(launch.choice);
   expect(current().sent).toBe(launch.id);
+});
+
+it("rolling back a failed send acknowledges the old baseline without losing newer picks", () => {
+  const current = mount(() =>
+    useComposerSettings({ key: "thread", lastSent: launch }),
+  );
+  const beforeRequest = current();
+  beforeRequest.noteSent("failed");
+  rerender();
+  current().setModels((models) => ({
+    ...models,
+    claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
+  }));
+  rerender();
+  // The callback belongs to the render that dispatched the failed request.
+  beforeRequest.noteSent(launch.id);
+  expect(
+    loadComposerSettings("thread").models.claude?.choice.reasoningEffort,
+  ).toBe("low");
+});
+
+it("keeps a pending queue or steer's baseline on reopen, and preserves picks when it goes out", () => {
+  let lastSent = launch;
+  const current = mount(() => useComposerSettings({ key: "thread", lastSent }));
+  current().noteSent("queued", true);
+  current().setModels((models) => ({
+    ...models,
+    claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
+  }));
+  rerender();
+  expect(loadComposerSettings("thread").sent).toBe(launch.id);
+  const saved = loadComposerSettings("thread");
+  expect(withSent(saved, launch)).toBe(saved);
+  lastSent = { ...launch, id: "queued" };
+  rerender();
+  rerender();
+  expect(current().models.claude?.choice.reasoningEffort).toBe("low");
+  expect(current().sent).toBe("queued");
 });
