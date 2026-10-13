@@ -121,10 +121,17 @@ export function projectFor(projects: Project[], server: string, repo: Repo) {
   );
 }
 
-export function boardPull(item: ListedPull, relation: Relation): BoardPull {
+export function boardPull(
+  item: ListedPull,
+  relation: Relation,
+  server?: string,
+): BoardPull {
   const merged = item.merged ?? item.pull_request?.merged ?? false;
   return {
-    ref: itemRef(item),
+    ref: {
+      ...itemRef(item),
+      ...(server && !item.repository.server ? { server } : {}),
+    },
     repo: item.repository.full_name,
     title: item.title,
     author: item.user.login,
@@ -171,7 +178,7 @@ export function buildBoard(input: BoardInput): Board {
   const byKey = new Map<string, BoardPull>();
   const add = (item: ListedPull) => {
     const key = pullKey(itemRef(item));
-    const next = boardPull(item, relation(item));
+    const next = boardPull(item, relation(item), input.server);
     const known = byKey.get(key);
     // A project's list knows branches and sizes; keep what either one said.
     byKey.set(key, known ? { ...known, ...defined(next) } : next);

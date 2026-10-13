@@ -12,7 +12,14 @@ export function useReviewComments(
   onCommentPaths: (paths: string[]) => void,
 ) {
   const reviews = useInfiniteQuery({
-    queryKey: ["reviews", pull.owner, pull.name, pull.number, pull.head.sha],
+    queryKey: [
+      "reviews",
+      pull.server,
+      pull.owner,
+      pull.name,
+      pull.number,
+      pull.head.sha,
+    ],
     queryFn: ({ pageParam }) => api.reviews(pull, pageParam),
     initialPageParam: 1,
     getNextPageParam: (p) => p.nextPage ?? undefined,
@@ -26,6 +33,7 @@ export function useReviewComments(
   const comments = useQuery({
     queryKey: [
       "reviewComments",
+      pull.server,
       pull.owner,
       pull.name,
       pull.number,

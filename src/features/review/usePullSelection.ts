@@ -41,6 +41,7 @@ export function usePullSelection(
   const select = (r: PullRef) => {
     setRestoring(false);
     if (
+      r.server === selected?.server &&
       r.owner === selected?.owner &&
       r.name === selected.name &&
       r.number === selected.number

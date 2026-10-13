@@ -34,6 +34,7 @@ export function useViewedCarryOver(
     queries: heads.map((from) => ({
       queryKey: [
         "changed-between",
+        ref?.server,
         ref?.owner,
         ref?.name,
         ref?.number,

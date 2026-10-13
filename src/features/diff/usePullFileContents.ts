@@ -7,6 +7,7 @@ export const usePullFileContents = (pull: Pull, file: ChangedFile) =>
   useQuery({
     queryKey: [
       "contents",
+      pull.server,
       pull.owner,
       pull.name,
       pull.number,

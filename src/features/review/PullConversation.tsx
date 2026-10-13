@@ -28,7 +28,7 @@ export function PullConversation({
   const [body, setBody] = useState(""),
     [busy, setBusy] = useState(false);
   const discussion = useInfiniteQuery({
-    queryKey: ["discussion", pull.owner, pull.name, pull.number],
+    queryKey: ["discussion", pull.server, pull.owner, pull.name, pull.number],
     queryFn: ({ pageParam }) => api.discussion(pull, pageParam),
     initialPageParam: 1,
     getNextPageParam: (p) => p.nextPage ?? undefined,

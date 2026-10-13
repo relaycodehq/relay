@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { notedPaths, type ChangeGroup } from "../../../shared/triage";
-import { revisionOf } from "../../../shared/types";
+import { revisionOf, type Account } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { setGroupViewed } from "./review-progress";
 import { useProjectChecks } from "../checks/useProjectChecks";
@@ -18,18 +19,32 @@ import { useViewedCarryOver } from "./useViewedCarryOver";
  */
 export function usePullReview(
   selection: PullSelection,
-  userId: number,
+  account: Account,
   onError: (e: unknown) => void,
 ) {
-  const { selected, restoring, file, navigation } = selection;
+  const { restoring, file, navigation } = selection;
+  // Older saves and Gitea responses omit the server. Resolve it once so
+  // every query, including the board's local progress, uses the same host.
+  const selected = useMemo(
+    () =>
+      selection.selected && {
+        ...selection.selected,
+        server: selection.selected.server ?? account.server,
+      },
+    [selection.selected, account.server],
+  );
+  const resolved = { ...selection, selected };
   const qc = useQueryClient();
   const pull = useQuery({
     queryKey: ["pull", selected],
-    queryFn: () => api.pull(selected!),
+    queryFn: async () => ({
+      ...(await api.pull(selected!)),
+      server: selected!.server,
+    }),
     enabled: !!selected,
   });
   const checks = useProjectChecks(pull.data);
-  const resume = useResumeReview(selection, pull.data, userId);
+  const resume = useResumeReview(resolved, pull.data, account.user.id);
   const progress = useReviewProgress(selected, onError);
   const changedSinceViewed = useViewedCarryOver(selected, pull.data, progress);
   const revision = pull.data ? revisionOf(pull.data) : "";
@@ -40,7 +55,7 @@ export function usePullReview(
     restoring,
     progress.progress,
   );
-  const files = useReviewFiles(selection, pull.data, triage, onError);
+  const files = useReviewFiles(resolved, pull.data, triage, onError);
   /** Marks a group viewed or not, then with `viewed` moves past the open file if it's in it. */
   const reviewGroup = async (group: ChangeGroup, viewed: boolean) => {
     if (!selected || !pull.data || !progress.initial.isSuccess)

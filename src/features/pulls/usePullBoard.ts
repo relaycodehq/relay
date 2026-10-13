@@ -32,7 +32,14 @@ export function usePullBoard(
   const searches = useQueries({
     queries: (["review_requested", "assigned", "created"] as const).map(
       (filter) => ({
-        queryKey: [PULL_BOARD, "search", account.id, filter, state],
+        queryKey: [
+          PULL_BOARD,
+          "search",
+          account.server,
+          account.id,
+          filter,
+          state,
+        ],
         queryFn: () => api.search(filter, "", state, 1, account.server),
       }),
     ),
@@ -101,7 +108,7 @@ export function usePullBoard(
 function useVerdicts(pulls: BoardPull[]) {
   const results = useQueries({
     queries: pulls.map((p) => ({
-      queryKey: [PULL_BOARD, "verdict", pullKey(p.ref)],
+      queryKey: [PULL_BOARD, "verdict", p.ref.server, pullKey(p.ref)],
       queryFn: async () => verdictOf((await api.reviews(p.ref, 1)).items),
     })),
   });
@@ -117,7 +124,13 @@ function useStarted(pulls: BoardPull[]) {
   const results = useQueries({
     queries: pulls.map((p) => ({
       // Shared with the review's own progress, which keeps it current.
-      queryKey: ["progress", p.ref.owner, p.ref.name, p.ref.number],
+      queryKey: [
+        "progress",
+        p.ref.server,
+        p.ref.owner,
+        p.ref.name,
+        p.ref.number,
+      ],
       queryFn: () => api.progress(p.ref),
       staleTime: Infinity,
     })),
@@ -141,7 +154,7 @@ export function usePullSearch(
   account: Account,
 ) {
   return useQuery({
-    queryKey: [PULL_BOARD, "find", account.id, query, state],
+    queryKey: [PULL_BOARD, "find", account.server, account.id, query, state],
     queryFn: () => api.search("all", query, state, 1, account.server),
     enabled: !!query,
   });

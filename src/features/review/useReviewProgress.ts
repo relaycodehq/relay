@@ -10,7 +10,7 @@ export function useReviewProgress(
   onError: (error: unknown) => void,
 ) {
   const qc = useQueryClient();
-  const key = ["progress", pull?.owner, pull?.name, pull?.number];
+  const key = ["progress", pull?.server, pull?.owner, pull?.name, pull?.number];
   const identity = JSON.stringify(key);
   const initial = useQuery({
     queryKey: key,

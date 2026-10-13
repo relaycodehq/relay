@@ -49,7 +49,7 @@ export function PullReviewPane({
   const selection = usePullSelection(ref, initialFile, false);
   const [filesHidden, setFilesHidden] = useStoredFlag("relay-files-hidden"),
     [error, setError] = useState<unknown>();
-  const review = usePullReview(selection, account.user.id, setError);
+  const review = usePullReview(selection, account, setError);
   useFileReveals(
     reveals,
     review.files,

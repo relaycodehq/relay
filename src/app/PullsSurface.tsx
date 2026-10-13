@@ -96,7 +96,7 @@ export function PullsSurface({
     },
     setError,
   );
-  const review = usePullReview(selection, account.user.id, setError);
+  const review = usePullReview(selection, account, setError);
   const { pull } = review;
   /** A PR in one of your projects opens on its thread; any other one here. */
   const open = (r: PullRef) => {
