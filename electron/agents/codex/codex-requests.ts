@@ -1,4 +1,7 @@
 import type { z } from "zod";
+import { randomUUID } from "node:crypto";
+import type { AgentActivity } from "../../../shared/projects";
+import { questionAnswers } from "../../../shared/asked-questions";
 import type {
   AskAgentRequest,
   AgentDecision,
@@ -25,6 +28,7 @@ export async function codexRequest(
   method: string,
   raw: unknown,
   ask: AskAgentRequest,
+  onActivity?: (activity: AgentActivity) => void,
 ) {
   if (method === "item/tool/requestUserInput") {
     const params = parseCodexRequest(method, userInputRequestSchema, raw);
@@ -40,21 +44,38 @@ export async function codexRequest(
     }));
     if (!questions.length || questions.length > 10)
       throw new Error("Invalid provider questions.");
-    const response = await ask({
-      kind: "question",
-      title: "Codex needs your input",
-      questions,
-    });
-    if (response.kind !== "question")
-      throw new Error("Invalid question response.");
-    return {
-      answers: Object.fromEntries(
-        Object.entries(response.answers).map(([id, answers]) => [
-          id,
-          { answers },
-        ]),
-      ),
+    const activity: AgentActivity = {
+      id: `question:${randomUUID()}`,
+      kind: "tool",
+      label: "request_user_input",
+      status: "running",
     };
+    onActivity?.(activity);
+    try {
+      const response = await ask({
+        kind: "question",
+        title: "Codex needs your input",
+        questions,
+      });
+      if (response.kind !== "question")
+        throw new Error("Invalid question response.");
+      onActivity?.({
+        ...activity,
+        status: "complete",
+        questionAnswers: questionAnswers(questions, response.answers),
+      });
+      return {
+        answers: Object.fromEntries(
+          Object.entries(response.answers).map(([id, answers]) => [
+            id,
+            { answers },
+          ]),
+        ),
+      };
+    } catch (error) {
+      onActivity?.({ ...activity, status: "failed" });
+      throw error;
+    }
   }
   if (method in approvalRequestSchemas) {
     const params = parseCodexRequest(

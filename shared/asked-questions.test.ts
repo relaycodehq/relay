@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { askedQuestions } from "./asked-questions";
+import {
+  askedQuestions,
+  isQuestionCall,
+  questionAnswers,
+} from "./asked-questions";
+import { doneLabel, liveLabel, summarizeActivity } from "./activity-labels";
+import { groupTrace } from "./agent-trace";
 import type { AgentActivity } from "./projects";
 
 const call = (detail: string, status: AgentActivity["status"] = "complete") =>
@@ -56,4 +62,73 @@ it("has nothing to read from a declined or unfinished card", () => {
   ).toBeUndefined();
   expect(askedQuestions(call("", "running"))).toBeUndefined();
   expect(askedQuestions(call("Something else entirely"))).toBeUndefined();
+});
+
+it("keeps structured Codex answers whole and gives them the same labels as Claude", () => {
+  const questions = questionAnswers(
+    [
+      { id: "pages", question: 'Which "new" pages?' },
+      { id: "note", question: "Any notes?" },
+    ],
+    { pages: ["Home", "Blog"], note: ['Keep the "old" title.\nFor now.'] },
+  );
+  const activity: AgentActivity = {
+    id: "input",
+    kind: "tool",
+    label: "request_user_input",
+    status: "complete",
+    questionAnswers: questions,
+  };
+  expect(askedQuestions(activity)).toEqual([
+    { question: 'Which "new" pages?', answer: "Home, Blog" },
+    { question: "Any notes?", answer: 'Keep the "old" title.\nFor now.' },
+  ]);
+  expect(doneLabel(activity)).toBe("Asked you 2 questions");
+  expect(summarizeActivity([activity])).toBe("Asked you 2 questions");
+  expect(liveLabel({ ...activity, status: "running" })).toBe(
+    "Waiting for your answer",
+  );
+  expect(askedQuestions({ ...activity, status: "running" })).toBeUndefined();
+  expect(askedQuestions({ ...activity, status: "failed" })).toBeUndefined();
+});
+
+it("masks secret answers and names unanswered questions without leaking their values", () => {
+  expect(
+    questionAnswers(
+      [
+        { id: "token", question: "Your token?", isSecret: true },
+        { id: "missing", question: "Your name?" },
+      ],
+      { token: ["fixture-secret"] },
+    ),
+  ).toEqual([
+    { question: "Your token?", answer: "Hidden answer" },
+    { question: "Your name?", answer: "No answer provided" },
+  ]);
+});
+
+it("keeps Codex and Claude question calls separate from surrounding tool batches", () => {
+  const activities: AgentActivity[] = [
+    { id: "before", kind: "command", label: "ls", status: "complete" },
+    { ...call(""), id: "claude" },
+    {
+      id: "codex",
+      kind: "tool",
+      label: "request_user_input",
+      status: "complete",
+    },
+    { id: "after", kind: "read", label: "notes.md", status: "complete" },
+  ];
+  expect(
+    groupTrace(
+      activities.map((activity) => ({
+        kind: "activity",
+        id: activity.id,
+        activity,
+      })),
+    ).map((part) => part.id),
+  ).toEqual(["before", "claude", "codex", "after"]);
+  expect(
+    isQuestionCall({ ...activities[2], label: "request_user_input_async" }),
+  ).toBe(false);
 });

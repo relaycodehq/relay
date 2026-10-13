@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("async Codex questions allow explicit choices and free text during and after a turn", async ({}, testInfo) => {
+test("async Codex questions allow explicit choices and free text during and after a turn", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-async-questions-")),
   );
@@ -63,7 +63,11 @@ test("async Codex questions allow explicit choices and free text during and afte
       name: "Send message",
       exact: true,
     });
-    const card = page.getByRole("region", { name: "Codex has a question" });
+    const card = page.getByRole("region", {
+      name: "Codex has questions",
+      exact: true,
+    });
+    const answered = page.locator(".async-question-cards .answered-questions");
     await composer.fill("fixture async question live");
     await send.click();
     await expect(card).toBeVisible();
@@ -104,7 +108,7 @@ test("async Codex questions allow explicit choices and free text during and afte
       false,
     );
     await page.screenshot({
-      path: testInfo.outputPath("async-question-dismissed-live.png"),
+      path: join(root, "async-question-dismissed-live.png"),
     });
     await page.getByRole("button", { name: "Reopen", exact: true }).click();
     await expect(card).toBeVisible();
@@ -115,7 +119,7 @@ test("async Codex questions allow explicit choices and free text during and afte
       }),
     ).toHaveAttribute("aria-pressed", "true");
     await page.screenshot({
-      path: testInfo.outputPath("async-question-live.png"),
+      path: join(root, "async-question-live.png"),
     });
     await card.getByRole("button", { name: "Next", exact: true }).click();
     await card.getByLabel("Which account should own it?").fill("fixture-owner");
@@ -130,15 +134,21 @@ test("async Codex questions allow explicit choices and free text during and afte
       .click();
     await expect(card).toHaveCount(0);
     await expect(
-      page.getByText("Answered questions", { exact: true }),
+      answered.locator("summary").filter({ hasText: "Asked you 2 questions" }),
     ).toHaveCount(1);
+    await answered.locator("summary").click();
+    await expect(answered).toContainText("Which visibility should I use?");
+    await expect(answered.locator(".answered-question-answer")).toHaveText([
+      "Private while preparing",
+      "fixture-owner",
+    ]);
     const awaiting = page.getByRole("status").filter({
       hasText: "Sent · awaiting Codex",
     });
     await expect(awaiting).toBeVisible();
     await expect(awaiting.locator(".spinner")).toHaveCount(0);
     await page.screenshot({
-      path: testInfo.outputPath("async-question-awaiting.png"),
+      path: join(root, "async-question-awaiting.png"),
     });
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
@@ -181,7 +191,7 @@ test("async Codex questions allow explicit choices and free text during and afte
       .click();
     await expect(card).toHaveCount(0);
     await expect(
-      page.getByText("Answered questions", { exact: true }),
+      answered.locator("summary").filter({ hasText: "Asked you 2 questions" }),
     ).toHaveCount(2);
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
@@ -204,9 +214,26 @@ test("async Codex questions allow explicit choices and free text during and afte
         ),
       ),
     ).toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath("async-question-answered.png"),
-    });
+    for (const theme of ["dark", "light"]) {
+      await page.evaluate((theme) => {
+        const appearance = JSON.parse(
+          localStorage.getItem("relay-appearance") ?? "{}",
+        );
+        localStorage.setItem(
+          "relay-appearance",
+          JSON.stringify({ ...appearance, mode: theme }),
+        );
+      }, theme);
+      await page.reload();
+      await expect(answered).toHaveCount(2);
+      await answered.last().locator("summary").click();
+      await expect(
+        answered.last().locator(".answered-question-answer"),
+      ).toHaveText(["Internal preview", "another-owner"]);
+      await page.screenshot({
+        path: join(tmpdir(), `relay-async-answered-${theme}.png`),
+      });
+    }
   } finally {
     await app.close();
   }

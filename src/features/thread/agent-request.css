@@ -213,6 +213,9 @@
 .async-question-cards {
   margin-top: 16px;
 }
+.async-question-cards > .answered-questions {
+  margin: 12px 0;
+}
 .async-question-answered {
   margin: 12px 0;
   color: var(--muted);

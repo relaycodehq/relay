@@ -407,6 +407,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
                 : {}),
             },
             options.onRequest!,
+            (activity) => {
+              if (!settled) options.onActivity?.(activity);
+            },
           )
       : undefined;
   try {

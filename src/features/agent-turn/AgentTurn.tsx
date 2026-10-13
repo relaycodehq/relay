@@ -15,7 +15,6 @@ import {
   Brain,
   ChevronRight,
   Clock3,
-  CornerDownRight,
   FilePen,
   FileText,
   Globe,
@@ -49,8 +48,8 @@ import { isStartThreads, startedIds } from "../../../shared/started-threads";
 import {
   askedQuestions,
   isQuestionCall,
-  type AskedQuestion,
 } from "../../../shared/asked-questions";
+import { AnsweredQuestions } from "./AnsweredQuestions";
 import { StartedChip } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
@@ -203,7 +202,7 @@ function ToolRow({
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
   const read = useImageRead(a);
-  if (asked) return <QuestionsRow activity={a} asked={asked} />;
+  if (asked) return <AnsweredQuestions questions={asked} />;
   const heading = (
     <>
       {a.status === "running" ? (
@@ -256,39 +255,6 @@ function ToolRow({
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
       )}
-    </Fold>
-  );
-}
-
-/** What you were asked and answered, one question per row under the call. */
-function QuestionsRow({
-  activity: a,
-  asked,
-}: {
-  activity: AgentActivity;
-  asked: AskedQuestion[];
-}) {
-  return (
-    <Fold
-      className={`agent-step ${a.status}`}
-      summary={
-        <summary className="agent-step-heading">
-          <MessageCircleQuestion size={14} />
-          <span>{doneLabel(a)}</span>
-        </summary>
-      }
-    >
-      <div className="agent-questions">
-        {asked.map((q, i) => (
-          <div className="agent-question" key={i}>
-            <div>{q.question}</div>
-            <div className="agent-question-answer">
-              <CornerDownRight size={12} aria-hidden />
-              <span>{q.answer}</span>
-            </div>
-          </div>
-        ))}
-      </div>
     </Fold>
   );
 }

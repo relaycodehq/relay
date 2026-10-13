@@ -6,7 +6,9 @@ import {
   type ChatMessage,
 } from "../../../shared/projects";
 import type { AgentRequest } from "../../../shared/agent-modes";
+import { questionAnswers } from "../../../shared/asked-questions";
 import { api } from "../../lib/api";
+import { AnsweredQuestions } from "../agent-turn/AnsweredQuestions";
 import { AgentRequestCard } from "./AgentRequestCard";
 
 /** Saved questions stay usable even after the turn's live trace folds away. */
@@ -22,31 +24,26 @@ export function AsyncQuestionCards({
     <div className="async-question-cards">
       {message.questions.map((group) =>
         group.answers && group.page ? (
-          <details className="async-question-answered" key={group.id}>
-            <summary>
-              {group.answers[PAGE_QUESTION_ID]
+          <AnsweredQuestions
+            key={group.id}
+            label={
+              group.answers[PAGE_QUESTION_ID]
                 ? `Answered "${group.page.title}"`
-                : `Skipped "${group.page.title}"`}
-            </summary>
-            {group.answers[PAGE_QUESTION_ID] && (
-              <pre>{group.answers[PAGE_QUESTION_ID].join("\n")}</pre>
-            )}
-          </details>
+                : `Skipped "${group.page.title}"`
+            }
+            questions={[
+              {
+                question: group.questions[0]?.question ?? group.page.title,
+                answer:
+                  group.answers[PAGE_QUESTION_ID]?.join("\n") ?? "Skipped",
+              },
+            ]}
+          />
         ) : group.answers ? (
-          <details className="async-question-answered" key={group.id}>
-            <summary>
-              Answered {group.questions.length === 1 ? "question" : "questions"}
-            </summary>
-            {group.questions.map((q) => (
-              <p key={q.id}>
-                <strong>{q.question}</strong>
-                <br />
-                {q.isSecret
-                  ? "Hidden answer"
-                  : group.answers![q.id]?.join(", ")}
-              </p>
-            ))}
-          </details>
+          <AnsweredQuestions
+            key={group.id}
+            questions={questionAnswers(group.questions, group.answers)}
+          />
         ) : (
           <AsyncQuestionCard
             key={group.id}

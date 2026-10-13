@@ -63,6 +63,9 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
       name: "Codex needs your input",
     });
     await expect(questions).toBeVisible();
+    await page.screenshot({
+      path: join(tmpdir(), "relay-codex-question-prompt.png"),
+    });
 
     await openSurface(page, "Files");
     await openInFileTree(page, "notes.md");
@@ -87,6 +90,44 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
     await questions.locator("legend").click();
     await page.keyboard.press("1");
     await expect(questions).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
+    const openAnswered = async () => {
+      await page
+        .locator(".agent-activity > summary")
+        .filter({ hasText: "Asked you 1 question" })
+        .click();
+      const answered = page.locator(".agent-trace .answered-questions");
+      await expect(answered).toHaveCount(1);
+      await expect(answered.locator("summary")).toHaveText(
+        "Asked you 1 question",
+      );
+      await answered.locator("summary").click();
+      await expect(answered).toContainText(
+        "Which approach should the plan use?",
+      );
+      await expect(answered.locator(".answered-question-answer")).toHaveText(
+        "Small change",
+      );
+    };
+    await openAnswered();
+    for (const theme of ["dark", "light"]) {
+      await page.evaluate((theme) => {
+        const appearance = JSON.parse(
+          localStorage.getItem("relay-appearance") ?? "{}",
+        );
+        localStorage.setItem(
+          "relay-appearance",
+          JSON.stringify({ ...appearance, mode: theme }),
+        );
+      }, theme);
+      await page.reload();
+      await openAnswered();
+      await page.screenshot({
+        path: join(tmpdir(), `relay-codex-answered-${theme}.png`),
+      });
+    }
   } finally {
     await app.close();
   }

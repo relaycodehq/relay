@@ -4,6 +4,7 @@ import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
 import type { SentSkill } from "../skill-mentions";
 import type { AgentQuestion } from "../agent-modes";
+import type { AskedQuestion } from "../asked-questions";
 import type { HtmlRender } from "../html-render";
 import type { Streamed } from "../usage";
 import type { ResumeSettings } from "./send";
@@ -185,6 +186,8 @@ export interface AgentActivity {
   /** `stopped`: still running when the turn was stopped. */
   status: "running" | "complete" | "failed" | "stopped";
   detail?: string;
+  /** A native question call's readable answers, with secret answers masked. */
+  questionAnswers?: AskedQuestion[];
   /** Phones only: how many characters the desktop left out of `detail`; `activityDetail` has them all. */
   detailCut?: number;
   /** The agent call this one ran inside, when a subagent made it. */

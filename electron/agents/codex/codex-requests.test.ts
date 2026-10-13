@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import { codexRequest } from "./codex-requests";
+import type { AgentActivity } from "../../../shared/projects";
+import { askedQuestions } from "../../../shared/asked-questions";
 
 const never = async () => {
   throw new Error("The user should not have been asked.");
@@ -72,6 +74,58 @@ it("asks a question with the optional fields missing, null or new", async () => 
   expect(answer).toEqual({
     answers: { a: { answers: ["x"] }, b: { answers: ["Fast"] } },
   });
+});
+
+it("records one native question row from waiting to answered, masking secrets only in the trace", async () => {
+  const rows: AgentActivity[] = [];
+  const answer = await codexRequest(
+    "item/tool/requestUserInput",
+    {
+      questions: [
+        { id: "a", question: 'Which "new" pages?' },
+        { id: "token", question: "Token?", isSecret: true },
+      ],
+    },
+    async () => {
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe("running");
+      return {
+        kind: "question",
+        answers: { a: ["Home", "Blog"], token: ["fixture-secret"] },
+      };
+    },
+    (row) => rows.push(row),
+  );
+  expect(rows).toHaveLength(2);
+  expect(rows[1].id).toBe(rows[0].id);
+  expect(askedQuestions(rows[1])).toEqual([
+    { question: 'Which "new" pages?', answer: "Home, Blog" },
+    { question: "Token?", answer: "Hidden answer" },
+  ]);
+  expect(JSON.stringify(rows)).not.toContain("fixture-secret");
+  expect(answer).toEqual({
+    answers: {
+      a: { answers: ["Home", "Blog"] },
+      token: { answers: ["fixture-secret"] },
+    },
+  });
+});
+
+it("settles a question row when the request fails without inventing answers", async () => {
+  const rows: AgentActivity[] = [];
+  await expect(
+    codexRequest(
+      "item/tool/requestUserInput",
+      { questions: [{ id: "a", question: "Which?" }] },
+      async () => {
+        throw new Error("Cancelled by you.");
+      },
+      (row) => rows.push(row),
+    ),
+  ).rejects.toThrow("Cancelled by you.");
+  expect(rows.map((row) => row.status)).toEqual(["running", "failed"]);
+  expect(rows[1].id).toBe(rows[0].id);
+  expect(askedQuestions(rows[1])).toBeUndefined();
 });
 
 it("fails a permissions request that names no permissions instead of granting undefined", async () => {
