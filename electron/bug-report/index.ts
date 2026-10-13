@@ -5,6 +5,7 @@ import {
   app,
   crashReporter,
   dialog,
+  powerMonitor,
   shell,
   type BrowserWindow,
   type RenderProcessGoneDetails,
@@ -28,6 +29,13 @@ export function watchForCrashes() {
     app.getPath("crashDumps"),
   );
   app.on("will-quit", run.quit);
+  // Being told to stop isn't quitting unexpectedly, even when the system
+  // kills Relay before its quit finishes. A hung Relay can't answer these.
+  void app.whenReady().then(() => {
+    powerMonitor.on("shutdown", run.quit);
+    for (const signal of ["SIGTERM", "SIGINT"] as const)
+      process.on(signal, run.quit);
+  });
   // Test runs and development restarts end however they like.
   const ask =
     !process.env.RELAY_TEST_DATA &&

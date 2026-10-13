@@ -112,7 +112,7 @@ app.setAppLogsPath(join(app.getPath("userData"), "logs"));
 // Specs run in the background on a real machine: silent unless one listens for sound.
 if (process.env.RELAY_TEST_DATA && process.env.RELAY_TEST_SOUND !== "1")
   app.commandLine.appendSwitch("mute-audio");
-startLog(app.getPath("logs"), app.getVersion());
+startLog(app.getPath("logs"));
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
@@ -286,8 +286,14 @@ const projectChecks = new ProjectChecks(
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init));
 let lastRun: LastRun | null = null;
-if (!app.requestSingleInstanceLock()) app.quit();
-else lastRun = watchForCrashes();
+if (!app.requestSingleInstanceLock()) {
+  // Opening Relay again only brings the running copy forward.
+  console.info("Relay was opened again while already running");
+  app.quit();
+} else {
+  console.info(`Relay ${app.getVersion()} started`);
+  lastRun = watchForCrashes();
+}
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();

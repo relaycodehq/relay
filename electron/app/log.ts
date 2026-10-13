@@ -10,7 +10,7 @@ const limit = 1 << 20;
  * any platform, so without this what Relay reports about itself is gone.
  * Past 1 MB the file moves to `main.old.log` and starts over.
  */
-export function startLog(dir: string, version: string) {
+export function startLog(dir: string) {
   const file = join(dir, "main.log");
   let size = 0;
   try {
@@ -44,6 +44,5 @@ export function startLog(dir: string, version: string) {
   process.on("unhandledRejection", (reason) =>
     console.error("Unhandled rejection:", reason),
   );
-  write("info", [`Relay ${version} started`]);
   return file;
 }

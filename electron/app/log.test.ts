@@ -23,10 +23,9 @@ afterEach(() => {
 it("keeps warnings with their stack and starts over past 1 MB", () => {
   dir = mkdtempSync(join(tmpdir(), "relay-log-"));
   Object.assign(console, { warn: () => {}, error: () => {} });
-  const file = startLog(join(dir, "logs"), "1.2.3");
+  const file = startLog(join(dir, "logs"));
   console.warn("Could not clean up worktrees:", new Error("busy"));
   const text = readFileSync(file, "utf8");
-  expect(text).toMatch(/info Relay 1\.2\.3 started/);
   expect(text).toMatch(
     /warn Could not clean up worktrees: Error: busy\n\s+at /,
   );

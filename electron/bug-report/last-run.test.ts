@@ -41,3 +41,14 @@ it("tells a crash that left a dump from an older dump", () => {
   utimesSync(dump, 7, 7);
   expect(trackRun(dir, "1.0.0", dumps, 8000).last?.dump).toBe(true);
 });
+
+it("leaves out a run the computer restarted under, unless it left a dump", () => {
+  dir = mkdtempSync(join(tmpdir(), "relay-run-"));
+  const dumps = join(dir, "Crashpad");
+  trackRun(dir, "1.0.0", dumps, 1000, 0);
+  expect(trackRun(dir, "1.0.0", dumps, 9000, 5000).last).toBeNull();
+  mkdirSync(dumps, { recursive: true });
+  writeFileSync(join(dumps, "a.dmp"), "");
+  utimesSync(join(dumps, "a.dmp"), 10, 10);
+  expect(trackRun(dir, "1.0.0", dumps, 20000, 15000).last?.dump).toBe(true);
+});

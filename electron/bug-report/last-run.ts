@@ -5,6 +5,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { uptime } from "node:os";
 import { join } from "node:path";
 
 /** A run that ended without quitting: a crash, a force quit or a hang. */
@@ -19,25 +20,31 @@ export interface LastRun {
 
 /**
  * Leaves a marker for as long as Relay runs; a quit removes it, so finding
- * one at launch means the last run never got to quit.
+ * one at launch means the last run never got to quit. A run the computer
+ * restarted under doesn't count unless it left a dump: shutting down kills
+ * Relay without a quit on Linux, where the compositor goes first.
  */
 export function trackRun(
   dir: string,
   version: string,
   dumps: string,
   now = Date.now(),
+  bootedAt = now - uptime() * 1000,
 ) {
   const file = join(dir, "running.json");
   let last: LastRun | null = null;
   try {
     const marker = JSON.parse(readFileSync(file, "utf8"));
-    if (typeof marker.startedAt === "number")
-      last = {
-        version: String(marker.version),
-        startedAt: marker.startedAt,
-        crashes: (Number(marker.crashes) || 0) + 1,
-        dump: dumpSince(dumps, marker.startedAt),
-      };
+    if (typeof marker.startedAt === "number") {
+      const dump = dumpSince(dumps, marker.startedAt);
+      if (dump || marker.startedAt >= bootedAt)
+        last = {
+          version: String(marker.version),
+          startedAt: marker.startedAt,
+          crashes: (Number(marker.crashes) || 0) + 1,
+          dump,
+        };
+    }
   } catch {
     // No marker: the last run quit, or there wasn't one.
   }
