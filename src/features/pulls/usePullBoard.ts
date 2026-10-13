@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
-import type { Account, Progress } from "../../../shared/types";
+import type { Account, Progress, Review } from "../../../shared/types";
 import { api } from "../../lib/api";
 import {
   buildBoard,
@@ -109,7 +109,15 @@ function useVerdicts(pulls: BoardPull[]) {
   const results = useQueries({
     queries: pulls.map((p) => ({
       queryKey: [PULL_BOARD, "verdict", p.ref.server, pullKey(p.ref)],
-      queryFn: async () => verdictOf((await api.reviews(p.ref, 1)).items),
+      queryFn: async () => {
+        const reviews: Review[] = [];
+        for (let page: number | null = 1; page !== null;) {
+          const result = await api.reviews(p.ref, page);
+          reviews.push(...result.items);
+          page = result.nextPage;
+        }
+        return verdictOf(reviews);
+      },
     })),
   });
   const verdicts = new Map<string, Verdict | null>();

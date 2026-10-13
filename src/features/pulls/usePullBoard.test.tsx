@@ -3,7 +3,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { emptyProgress, type Account, type Issue } from "../../../shared/types";
+import {
+  emptyProgress,
+  type Account,
+  type Issue,
+  type Review,
+} from "../../../shared/types";
 import { api } from "../../lib/api";
 import { useReviewProgress } from "../review/useReviewProgress";
 import { usePullBoard } from "./usePullBoard";
@@ -45,6 +50,58 @@ const tick = async () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+
+it("uses the latest reviewer verdict even when it occurs on a later page", async () => {
+  vi.mocked(api.search).mockImplementation(async (filter) => ({
+    items: filter === "created" ? [issue("me")] : [],
+    nextPage: null,
+  }));
+  const approval = {
+    id: 1,
+    user: { id: 2, login: "reviewer" },
+    state: "APPROVED",
+    submitted_at: "2026-10-01T00:00:00Z",
+  } as Review;
+  const changes = {
+    ...approval,
+    id: 51,
+    state: "REQUEST_CHANGES",
+    submitted_at: "2026-10-02T00:00:00Z",
+  } as Review;
+  vi.mocked(api.reviews).mockImplementation(async (_ref, page) => ({
+    items: page === 1 ? [approval] : [changes],
+    nextPage: page === 1 ? 2 : null,
+  }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const root = createRoot(document.createElement("div"));
+  let current!: ReturnType<typeof usePullBoard>;
+  function Probe() {
+    current = usePullBoard(account, [], "open");
+    return null;
+  }
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    );
+    await vi.waitFor(async () => {
+      await tick();
+      expect(current.verdicts.get("team/repo#7")).toBe("changes");
+    });
+    expect(vi.mocked(api.reviews).mock.calls.map(([, page]) => page)).toEqual([
+      1, 2,
+    ]);
+    expect(current.board.pulls[0].ref.server).toBe(account.server);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
 
 it("shares canonical progress with the review when Gitea search omits the server", async () => {
   vi.mocked(api.search).mockImplementation(async (filter) => ({
