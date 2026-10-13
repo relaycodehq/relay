@@ -8,6 +8,11 @@ import {
   type Project,
   type ProjectSettings,
 } from "../../../shared/projects";
+import {
+  CHECKS_MEMORY_MB,
+  checksMemoryChoices,
+  memoryLabel,
+} from "../../../shared/checks";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
@@ -294,6 +299,35 @@ export function ProjectCommitSettleSwitch({ project }: { project: Project }) {
         onChange={(on) => commit.change(on || undefined)}
       />
       {!!commit.error && <ErrorBox error={commit.error} />}
+    </>
+  );
+}
+
+export function ProjectChecksMemorySelect({ project }: { project: Project }) {
+  const memory = useProjectSetting(project, "checksMemoryMb");
+  const value = memory.value ?? CHECKS_MEMORY_MB;
+  const choices = checksMemoryChoices.includes(value)
+    ? checksMemoryChoices
+    : [...checksMemoryChoices, value].sort((a, b) => a - b);
+  return (
+    <>
+      <div className="composer-tools model-field">
+        <ComposerSelect
+          label="Live checks memory limit"
+          value={String(value)}
+          options={choices.map((mb) => ({
+            value: String(mb),
+            label:
+              mb === CHECKS_MEMORY_MB
+                ? `${memoryLabel(mb)} (default)`
+                : memoryLabel(mb),
+          }))}
+          onChange={(next) =>
+            memory.change(+next === CHECKS_MEMORY_MB ? undefined : +next)
+          }
+        />
+      </div>
+      {!!memory.error && <ErrorBox error={memory.error} />}
     </>
   );
 }

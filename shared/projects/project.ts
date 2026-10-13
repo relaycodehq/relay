@@ -68,6 +68,8 @@ export const projectSettingsSchema = z
     devCommand: worktreeCommand.optional(),
     /** Where its dev server listens in the checkout; a worktree adds its RELAY_PORT_OFFSET. */
     devPort: z.number().int().min(1).max(65535).optional(),
+    /** Heap limit of its live checks' compiler, in MB; see shared/checks. */
+    checksMemoryMb: z.number().int().min(256).max(16384).optional(),
     /** Sounds for its threads; see shared/sounds. */
     sounds: projectSoundsSchema.optional(),
   })

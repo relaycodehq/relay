@@ -339,6 +339,14 @@ function loadTypeScript(fallbackReason) {
 }
 async function startProjectService(fallbackReason) {
   ts = loadTypeScript(fallbackReason);
+  // The heap is what --max-old-space-size limits, so it is what the limit is shown against.
+  const memory = () =>
+    send({
+      type: "memory",
+      used: Math.round(process.memoryUsage().heapUsed / 1048576),
+    });
+  memory();
+  setInterval(memory, 3000).unref();
   let angularPlugin;
   if (target.provider === "angular") {
     ng = await import(pathToFileURL(req.resolve("@angular/compiler-cli")).href);

@@ -10,6 +10,7 @@ import {
   ProjectWorktreeCleanupSelect,
   ProjectDevPortField,
   ProjectWorktreeCommandField,
+  ProjectChecksMemorySelect,
 } from "../../projects/ProjectSettings";
 import { ProjectSoundSelect } from "../../sounds/SoundSettings";
 import {
@@ -77,6 +78,17 @@ export function projectEntries(project: Project | undefined): SettingEntry[] {
         "Where the dev server listens in the checkout. A thread in a worktree adds its RELAY_PORT_OFFSET, so each one gets its own.",
       keywords: "preview browser dev server port localhost offset",
       render: () => <ProjectDevPortField project={project} />,
+    } satisfies SettingEntry,
+    {
+      id: "project-checks-memory",
+      category: "project",
+      section: "Live checks",
+      title: "Memory limit",
+      description:
+        "How much the type checker behind live checks may use. Large Angular apps can need more; running checks restart with the new limit.",
+      keywords:
+        "live checks diagnostics typescript angular type checker memory ram heap limit out of memory",
+      render: () => <ProjectChecksMemorySelect project={project} />,
     } satisfies SettingEntry,
     ...(project.plain
       ? []

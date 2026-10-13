@@ -17,6 +17,11 @@ export interface ProjectCheckInfo {
   targets: CheckTarget[];
   note?: string;
 }
+/** The checker's heap limit in MB, unless its project sets one. */
+export const CHECKS_MEMORY_MB = 768;
+export const checksMemoryChoices = [512, 768, 1024, 1536, 2048, 4096];
+export const memoryLabel = (mb: number) =>
+  mb >= 1024 ? `${+(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
 export interface ProjectDiagnostic {
   path?: string;
   line?: number;
@@ -66,6 +71,13 @@ export interface ProjectCheckState extends DiagnosticCounts {
   message?: string;
   /** Which compiler produced the results, and why when it is Relay's fallback. */
   engine?: string;
+  /**
+   * The checker's heap limit and how much of it is in use, in MB. TypeScript
+   * 7's native server has no limit to fill, so it reports no use.
+   */
+  memory: { limit: number; used?: number };
+  /** The project whose settings hold the limit; absent for a PR folder no project holds. */
+  projectId?: string;
 }
 export interface SymbolLocation {
   path: string;

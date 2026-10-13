@@ -22,10 +22,12 @@ import {
   textSchema,
 } from "../../shared/validation";
 import type { PullRef } from "../../shared/types";
-import type {
-  ProjectCheckState,
-  SymbolQuery,
-  SymbolResult,
+import {
+  CHECKS_MEMORY_MB,
+  memoryLabel,
+  type ProjectCheckState,
+  type SymbolQuery,
+  type SymbolResult,
 } from "../../shared/checks";
 const resultSchema = z.object({
   seq: z.number().int().nonnegative(),
@@ -104,7 +106,14 @@ type Session = {
     }
   >;
   timer?: ReturnType<typeof setTimeout>;
+  /** Starts this session again with another heap limit. */
+  relimit: (memoryMb: number) => Promise<unknown>;
 };
+/** Who holds the checker's heap limit, and the limit it has. */
+export interface CheckLimits {
+  projectId?: string;
+  memoryMb: number;
+}
 export class ProjectChecks {
   private session?: Session;
   private generation = 0;
@@ -135,6 +144,20 @@ export class ProjectChecks {
     s.state.diagnostics = [];
     s.process.stdin.end();
     terminate(s.process, { graceMs: 1500 });
+  }
+  /** Restarts the running checks of `projectId` with its new heap limit. */
+  relimit(projectId: string, memoryMb: number) {
+    const s = this.session;
+    if (
+      !s ||
+      s.state.projectId !== projectId ||
+      s.state.memory.limit === memoryMb ||
+      s.state.status === "stopped"
+    )
+      return;
+    void s.relimit(memoryMb).catch((e) => {
+      console.warn("Live checks did not restart with the new memory limit", e);
+    });
   }
   /** Hold rechecks (the language service stays warm) until resumed. */
   pause(key: string, paused: boolean) {
@@ -207,7 +230,8 @@ export class ProjectChecks {
     ref: PullRef | null,
     head: string,
     targetId: string,
-  ) {
+    limits: CheckLimits = { memoryMb: CHECKS_MEMORY_MB },
+  ): Promise<ProjectCheckState> {
     this.stop();
     this.pendingKey = key;
     const generation = this.generation;
@@ -256,7 +280,7 @@ export class ProjectChecks {
     const child = spawn(
       node,
       [
-        "--max-old-space-size=768",
+        `--max-old-space-size=${limits.memoryMb}`,
         worker,
         local.path,
         JSON.stringify(target),
@@ -276,6 +300,11 @@ export class ProjectChecks {
       lastValidated: Date.now(),
       paused,
       requests: new Map(),
+      relimit: (memoryMb) =>
+        this.start(key, root, server, ref, head, targetId, {
+          ...limits,
+          memoryMb,
+        }),
       state: {
         id: randomUUID(),
         head,
@@ -287,6 +316,8 @@ export class ProjectChecks {
         errors: 0,
         warnings: 0,
         suggestions: 0,
+        memory: { limit: limits.memoryMb },
+        projectId: limits.projectId,
       },
     };
     this.session = s;
@@ -329,6 +360,11 @@ export class ProjectChecks {
           continue;
         try {
           const value = JSON.parse(line);
+          if (value.type === "memory") {
+            if (Number.isInteger(value.used) && value.used >= 0)
+              s.state.memory = { limit: limits.memoryMb, used: value.used };
+            continue;
+          }
           if (value.type === "symbol") {
             const request = s.requests.get(value.requestId);
             if (request) {
@@ -392,7 +428,7 @@ export class ProjectChecks {
       if (this.session === s && !["stopped", "failed"].includes(s.state.status))
         fail(
           /heap|allocation failed/i.test(stderr)
-            ? "The project compiler reached its 768 MiB heap limit. Use your IDE for this project."
+            ? `The project compiler ran out of its ${memoryLabel(limits.memoryMb)} memory limit. ${limits.projectId ? "Raise it in the project’s settings" : "Add the folder as a project to raise it"}, or use your IDE for this project.`
             : `The project compiler exited (${code ?? "signal"}). Check the installed dependencies and Node.js version.`,
         );
     });

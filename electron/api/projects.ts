@@ -4,6 +4,7 @@ import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
+import { CHECKS_MEMORY_MB } from "../../shared/checks";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import { projectFolderSchema } from "../../shared/project-folders";
 import {
@@ -139,6 +140,10 @@ export function projectHandlers(ctx: ApiContext) {
           );
         const saved = await projects.saveSettings(id, settings);
         projectChats.summariesChanged(id);
+        ctx.projectChecks.relimit(
+          id,
+          settings.checksMemoryMb ?? CHECKS_MEMORY_MB,
+        );
         return saved;
       },
     ),

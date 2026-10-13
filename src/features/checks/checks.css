@@ -20,3 +20,11 @@
 .checks-count.warning {
   color: var(--ci-run);
 }
+.checks-memory {
+  font-variant-numeric: tabular-nums;
+}
+.checks-memory .text-button {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+}

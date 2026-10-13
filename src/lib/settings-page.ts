@@ -27,15 +27,26 @@ export type SettingsCategory =
 
 const OPEN_SETTINGS = "relay:open-settings";
 
-/** Opens Settings at `category` from a feature the shell hands no way there. */
-export function openSettings(category: SettingsCategory) {
-  window.dispatchEvent(new CustomEvent(OPEN_SETTINGS, { detail: category }));
+/**
+ * Opens Settings at `category` from a feature the shell hands no way there;
+ * `projectId` picks the project a "project" category shows.
+ */
+export function openSettings(category: SettingsCategory, projectId?: string) {
+  window.dispatchEvent(
+    new CustomEvent(OPEN_SETTINGS, { detail: { category, projectId } }),
+  );
 }
 
 /** The shell's side of `openSettings`; returns the unsubscribe. */
-export function onOpenSettings(show: (category: SettingsCategory) => void) {
-  const listener = (event: Event) =>
-    show((event as CustomEvent<SettingsCategory>).detail);
+export function onOpenSettings(
+  show: (category: SettingsCategory, projectId?: string) => void,
+) {
+  const listener = (event: Event) => {
+    const { category, projectId } = (
+      event as CustomEvent<{ category: SettingsCategory; projectId?: string }>
+    ).detail;
+    show(category, projectId);
+  };
   window.addEventListener(OPEN_SETTINGS, listener);
   return () => window.removeEventListener(OPEN_SETTINGS, listener);
 }

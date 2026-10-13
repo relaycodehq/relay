@@ -563,4 +563,33 @@ describe("project language support", () => {
       code: "TS2322",
     });
   });
+  it("reports heap use against the project's limit and restarts when the limit changes", async () => {
+    const { root, head } = await languageProject(server);
+    roots.push(root);
+    const service = new ProjectChecks(resolve("electron/checks/worker.mjs"));
+    services.push(service);
+    await service.start(
+      "pr",
+      root,
+      server,
+      ref,
+      head,
+      "typescript:tsconfig.json",
+      { projectId: "p1", memoryMb: 512 },
+    );
+    const first = await ready(service, head, (s) => !!s.memory.used);
+    expect(first.memory.limit).toBe(512);
+    expect(first.memory.used).toBeLessThan(512);
+    service.relimit("other", 1024);
+    service.relimit("p1", 512);
+    expect((await service.state("pr", head))?.id).toBe(first.id);
+    service.relimit("p1", 1024);
+    const second = await ready(
+      service,
+      head,
+      (s) => s.memory.limit === 1024 && !!s.memory.used,
+    );
+    expect(second.id).not.toBe(first.id);
+    expect(second.projectId).toBe("p1");
+  });
 });

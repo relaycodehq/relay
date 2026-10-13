@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { symbolQuerySchema } from "../../shared/checks";
+import { CHECKS_MEMORY_MB, symbolQuerySchema } from "../../shared/checks";
 import {
   blameQuerySchema,
   filePathSchema,
@@ -10,6 +10,7 @@ import {
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { detectProject } from "../checks/detect";
+import type { CheckLimits } from "../checks/service";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const targetSchema = z.string().max(4096);
@@ -24,8 +25,21 @@ export function checkHandlers(ctx: ApiContext) {
     linkedFolder,
     requireFolder,
     requireServer,
+    place,
+    store,
   } = ctx;
   const local = (where: string) => "project:" + where;
+  const limits = (projectId?: string): CheckLimits => ({
+    projectId,
+    memoryMb:
+      (projectId &&
+        store.get().projects?.find((p) => p.id === projectId)?.settings
+          ?.checksMemoryMb) ||
+      CHECKS_MEMORY_MB,
+  });
+  /** A PR's linked folder takes the limit of the project at that folder. */
+  const folderProject = (dir: string) =>
+    store.get().projects?.find((p) => !p.removed && p.path === dir)?.id;
   return {
     localCheckInfo: takes([workspaceIdSchema], async (where) =>
       detectProject(await placeRoot(where)),
@@ -35,15 +49,18 @@ export function checkHandlers(ctx: ApiContext) {
     ),
     startLocalChecks: takes(
       [workspaceIdSchema, shaSchema, targetSchema],
-      async (where, head, target) =>
-        projectChecks.start(
+      async (where, head, target) => {
+        const { root, projectId } = await place(where);
+        return projectChecks.start(
           local(where),
-          await placeRoot(where),
+          root,
           null,
           null,
           head,
           target,
-        ),
+          limits(projectId),
+        );
+      },
     ),
     stopLocalChecks: takes([workspaceIdSchema], (where) => {
       projectChecks.stop(local(where));
@@ -87,15 +104,18 @@ export function checkHandlers(ctx: ApiContext) {
     }),
     startProjectChecks: takes(
       [refSchema, shaSchema, targetSchema],
-      (r, head, target) =>
-        projectChecks.start(
+      (r, head, target) => {
+        const dir = requireFolder(r);
+        return projectChecks.start(
           prKey(r),
-          requireFolder(r),
+          dir,
           requireServer(r),
           r,
           head,
           target,
-        ),
+          limits(folderProject(dir)),
+        );
+      },
     ),
     updateCheckBuffer: takes(
       [refSchema, shaSchema, filePathSchema, textSchema.nullable()],
