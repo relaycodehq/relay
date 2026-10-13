@@ -9,6 +9,7 @@ import { Check, ChevronRight, MessagesSquare } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { agentName } from "../../../shared/agents";
 import { chatSettled } from "../../../shared/chat-activity";
+import { byStanding } from "../../../shared/started-families";
 import { chatKey, fetchChat } from "../../lib/chat-events";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import "./subagents.css";
@@ -25,9 +26,6 @@ export const StartedThreadsContext = createContext<
   StartedThreadsView | undefined
 >(undefined);
 export const useStartedThreads = () => useContext(StartedThreadsContext);
-
-/** Asking first, then working, then done. */
-const standing = (c: ChatSummary) => (c.waiting ? 0 : c.running ? 1 : 2);
 
 /** Still while it works, like a subagent: the turn's own row is what moves. */
 function StartedStatus({ chat }: { chat: ChatSummary }) {
@@ -110,7 +108,7 @@ export function StartedChip({
         (!ids || ids.includes(c.id)) &&
         !chatSettled(c),
     )
-    .sort((a, b) => standing(a) - standing(b) || a.created - b.created);
+    .sort(byStanding);
   if (!view || !started.length || (live && !started.some((c) => c.running)))
     return null;
   const done = started.filter((c) => !c.running).length;

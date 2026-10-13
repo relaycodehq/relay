@@ -21,6 +21,7 @@ import {
 import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
 import {
+  bySubagentStanding,
   modelName,
   subagentNow,
   took,
@@ -174,7 +175,7 @@ function Peek({
             {batch.length - working.length} of {batch.length} done
           </span>
         </div>
-        {batch.map(row)}
+        {[...batch].sort(bySubagentStanding).map(row)}
         {earlier.length > 0 && (
           <button
             type="button"
@@ -195,7 +196,7 @@ function Peek({
                   minute: "2-digit",
                 })}
               </span>
-              {fanOut.map(row)}
+              {[...fanOut].sort(bySubagentStanding).map(row)}
             </div>
           ))}
       </div>

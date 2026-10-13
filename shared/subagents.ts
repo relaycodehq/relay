@@ -49,6 +49,11 @@ export interface SubagentDetail extends SubagentRun {
   report?: string;
 }
 
+/** Working agents first, each group in the order they started. */
+export const bySubagentStanding = (a: SubagentRun, b: SubagentRun) =>
+  Number(b.status === "running") - Number(a.status === "running") ||
+  a.started - b.started;
+
 /** Runs that overlapped in time, oldest first: one fan-out each. */
 function subagentBatches(runs: SubagentRun[], now = Date.now()) {
   const batches: SubagentRun[][] = [];

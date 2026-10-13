@@ -11,11 +11,17 @@ export interface FamilyMember extends ThreadInputState {
   pending?: readonly unknown[];
 }
 
+/** Needs the user first, then working, then done; each oldest first. */
+const startedRank = (c: FamilyMember) => (c.waiting ? 0 : c.running ? 1 : 2);
+
+export const byStanding = <C extends FamilyMember>(a: C, b: C) =>
+  startedRank(a) - startedRank(b) || a.created - b.created;
+
 /**
  * Activity's cards: threads another thread's agent started sit under their
- * lead, in the order they were started. A settled lead whose threads still
- * show comes back as a header above them, where the first of them would be;
- * `cards` is `top` without those headers.
+ * lead, asking first, then working, then done. A settled lead whose threads
+ * still show comes back as a header above them, where the first of them would
+ * be; `cards` is `top` without those headers.
  */
 export function startedFamilies<C extends FamilyMember>(
   active: C[],
@@ -29,8 +35,7 @@ export function startedFamilies<C extends FamilyMember>(
     if (lead && (listed.has(lead) || resting.has(lead)))
       started.set(lead, [...(started.get(lead) ?? []), c]);
   }
-  for (const children of started.values())
-    children.sort((a, b) => a.created - b.created);
+  for (const children of started.values()) children.sort(byStanding);
   const top: C[] = [];
   const headers = new Set<string>();
   for (const c of active) {

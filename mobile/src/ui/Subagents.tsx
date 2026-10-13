@@ -9,6 +9,7 @@ import type { RemoteChatSummary } from "../../../shared/remote";
 import { slotLine } from "../../../shared/started-threads";
 import {
   agentKind,
+  bySubagentStanding,
   leadName,
   modelName,
   subagentNow,
@@ -239,7 +240,9 @@ export function SubagentsSheet({
   // New agents of the same fan-out join while it's open.
   const fresh = batch.filter((r) => !ids.includes(r.id)).map((r) => r.id);
   if (open && fresh.length) setIds([...ids, ...fresh]);
-  const shown = ids.flatMap((id) => runs.find((r) => r.id === id) ?? []);
+  const shown = ids
+    .flatMap((id) => runs.find((r) => r.id === id) ?? [])
+    .sort(bySubagentStanding);
   const back = shown.filter((r) => r.status !== "running").length;
   const family = withStarted ? started.family : [];
   // iOS won't push a screen while the sheet is still leaving.

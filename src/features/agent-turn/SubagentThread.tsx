@@ -11,6 +11,7 @@ import { plural } from "../../../shared/activity-labels";
 import {
   agentKind,
   batchOf,
+  bySubagentStanding,
   leadName,
   modelName,
   type SubagentDetail,
@@ -49,7 +50,7 @@ export function SubagentThread({
       query.state.data?.status === "running" ? 1000 : false,
   });
   const run = detail.data;
-  const tabs = batchOf(runs, openId);
+  const tabs = batchOf(runs, openId).sort(bySubagentStanding);
   // Stays pressed until the run reports it stopped, which takes the button away.
   const [stopping, setStopping] = useState<string>();
   const [error, setError] = useState<string>();

@@ -4,7 +4,7 @@
 import type { AgentActivity, AgentProvider, ChatMessage } from "./projects";
 import { agentName } from "./agents";
 import { liveLabel, plural } from "./activity-labels";
-import { familyLine, type FamilyMember } from "./started-families";
+import { byStanding, familyLine, type FamilyMember } from "./started-families";
 import { inputBlocksThread } from "./thread-state";
 import { preview } from "./thread-news";
 
@@ -25,13 +25,6 @@ export function startedIds(result: string | undefined) {
     return undefined;
   }
 }
-
-/** Needs the user first, then working, then done. */
-export const startedRank = (c: FamilyMember) =>
-  c.waiting ? 0 : c.running ? 1 : 2;
-
-export const byStanding = <C extends FamilyMember>(a: C, b: C) =>
-  startedRank(a) - startedRank(b) || a.created - b.created;
 
 /** The lead's started threads, in the order they're listed. */
 export const startedOf = <C extends FamilyMember>(lead: string, chats: readonly C[]) =>
