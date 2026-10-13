@@ -1,4 +1,4 @@
-import type { WorkItemField } from "../../../shared/devops";
+import type { DevOpsSettings, WorkItemField } from "../../../shared/devops";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -26,6 +26,8 @@ export class DevOpsClient {
     private fetch: Fetch,
     readonly base: string,
     private auth: string,
+    /** Which sign-in `auth` came from, so a rejection blames the right one. */
+    private authKind: DevOpsSettings["auth"] = "pat",
   ) {}
 
   async whoAmI() {
@@ -93,7 +95,9 @@ export class DevOpsClient {
     const json = res.headers.get("content-type")?.includes("json");
     if (res.status === 401 || res.status === 203 || (res.ok && !json))
       throw new Error(
-        "Azure DevOps rejected the credentials. Check the token and its Work Items (Read) scope.",
+        this.authKind === "azure-cli"
+          ? "Azure DevOps rejected the Azure CLI sign-in. Run `az login` in a terminal and try again."
+          : "Azure DevOps rejected the credentials. Check the token and its Work Items (Read) scope.",
       );
     if (!res.ok) {
       const detail = json

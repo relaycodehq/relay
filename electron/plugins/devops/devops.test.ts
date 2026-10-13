@@ -2,7 +2,7 @@ import { it, expect, vi } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DevOpsUnreachable } from "./client";
+import { DevOpsClient, DevOpsUnreachable } from "./client";
 import { plainText } from "./parse";
 import { DevOps } from "./service";
 import { Store } from "../../app/store";
@@ -572,6 +572,30 @@ it("says who Azure DevOps takes the sign-in for, and tells a refusal from no net
   });
   await expect(offline.devops.whoAmI()).rejects.toBeInstanceOf(
     DevOpsUnreachable,
+  );
+});
+
+it("blames the sign-in that was used when Azure DevOps rejects it", async () => {
+  const refused = async () =>
+    new Response("<html>Sign in</html>", { status: 203 });
+  const pat = new DevOpsClient(
+    refused,
+    "https://dev.azure.com/contoso",
+    "Basic x",
+    "pat",
+  );
+  await expect(pat.whoAmI()).rejects.toThrow(
+    /token.*Work Items \(Read\) scope/,
+  );
+  const cli = new DevOpsClient(
+    refused,
+    "https://dev.azure.com/contoso",
+    "Bearer x",
+    "azure-cli",
+  );
+  await expect(cli.whoAmI()).rejects.toThrow(/Azure CLI sign-in.*az login/);
+  await expect(cli.whoAmI()).rejects.not.toThrow(
+    /personal access token|Work Items \(Read\)/i,
   );
 });
 

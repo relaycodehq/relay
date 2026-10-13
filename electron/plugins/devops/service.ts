@@ -134,6 +134,7 @@ export class DevOps {
       this.fetch,
       base,
       await this.auth.header(settings.auth, base),
+      settings.auth,
     );
   }
 
