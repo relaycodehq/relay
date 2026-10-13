@@ -12,6 +12,7 @@ import {
 import {
   askAgentVersions,
   checkAgentVersions,
+  useAgentUpdateChecks,
   linkAgent,
   signInAgent,
   signOutAgent,
@@ -68,6 +69,7 @@ export function AgentCards({
 }) {
   const versions = useAgentVersions();
   const failure = useAgentVersionsFailure();
+  const automatic = useAgentUpdateChecks();
   if (!versions)
     return failure ? (
       <ErrorBox
@@ -88,7 +90,10 @@ export function AgentCards({
         </AgentCard>
       ))}
       <p className="agent-cards-checked">
-        {checked}; Relay looks every few hours.
+        {checked}
+        {automatic === false
+          ? "; Relay looks only when you ask."
+          : "; Relay looks every few hours."}
         <button
           type="button"
           disabled={versions.checking}

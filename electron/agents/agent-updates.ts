@@ -31,7 +31,9 @@ import {
 import { acpAccount } from "./acp";
 import { releasedBy, releaseTimes, type ReleaseTimes } from "./npm-release-age";
 
-const checkEvery = 4 * 60 * 60 * 1000;
+export const checkEvery = 4 * 60 * 60 * 1000;
+/** How long after starting, or turning checks back on, the first one waits. */
+export const firstCheckAfter = 20_000;
 const latestLifetime = 60 * 60 * 1000;
 const probeTimeout = 15_000;
 const updateTimeout = 5 * 60_000;
@@ -388,6 +390,10 @@ export class AgentUpdates {
   private queue: Promise<unknown> = Promise.resolve();
   private latestCache = new Map<string, { at: number; version?: string }>();
   private timesCache = new Map<string, { at: number; times: ReleaseTimes }>();
+  private started = false;
+  private automatic = true;
+  /** The next automatic check; a check it started re-arms only while it's still this one. */
+  private timer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly emit: (state: AgentVersions) => void,
@@ -403,13 +409,39 @@ export class AgentUpdates {
     return this.state;
   }
 
-  start() {
-    const quietly = () =>
-      void this.check().catch((error) =>
-        console.warn("Agent version check failed:", error),
-      );
-    setTimeout(quietly, 20_000).unref();
-    setInterval(quietly, checkEvery).unref();
+  /** Starts looking every few hours, unless `automatic` is off. */
+  start(automatic = true) {
+    this.started = true;
+    this.automatic = automatic;
+    this.arm();
+  }
+
+  /**
+   * Turns the checks Relay makes on its own on or off; `check` still runs
+   * when asked. Back on, the next one comes when it would have, or shortly.
+   */
+  setAutomatic(automatic: boolean) {
+    if (automatic === this.automatic) return;
+    this.automatic = automatic;
+    this.arm();
+  }
+
+  private arm(after?: number) {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    if (!this.started || !this.automatic) return;
+    const due = (this.state.checkedAt ?? 0) + checkEvery - Date.now();
+    const timer = setTimeout(
+      () =>
+        void this.check()
+          .catch((error) => console.warn("Agent version check failed:", error))
+          .finally(() => {
+            if (this.timer === timer) this.arm(checkEvery);
+          }),
+      after ?? Math.max(firstCheckAfter, due),
+    );
+    timer.unref?.();
+    this.timer = timer;
   }
 
   /** Looks again; `fresh` skips the hour a registry answer is kept. */

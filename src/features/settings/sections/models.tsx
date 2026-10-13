@@ -11,9 +11,8 @@ import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
 import { useRecent } from "../../updates/useRecent";
 import {
-  setAgentUpdateNotices,
+  agentUpdateChecksQuery,
   updateAgent,
-  useAgentUpdateNotices,
   useAgentVersions,
 } from "../../updates/agent-updates";
 import { AccountRows } from "../../accounts/AccountRows";
@@ -32,6 +31,8 @@ import {
 } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import { WatchThreadsSetting } from "../WatchThreadsSetting";
+import { useSavedSetting } from "../useSavedSetting";
+import { api } from "../../../lib/api";
 import { RenderModeSetting } from "../RenderModeSetting";
 
 type AISave = ReturnType<typeof useSaveAISettings>;
@@ -67,7 +68,6 @@ export function useModelEntries(
   setError: (error: unknown) => void,
 ): SettingEntry[] {
   const ai = useSaveAISettings(setError);
-  const updateNotices = useAgentUpdateNotices();
   return [
     {
       id: "default-agent",
@@ -102,18 +102,12 @@ export function useModelEntries(
     {
       id: "agent-update-notices",
       category: "agents",
-      title: "Update notices",
+      title: "Agent update checks",
       description:
-        "The Update button under the sidebar when an agent has a newer release. Amp ships one every few hours, so you may want it off; the cards above still say so.",
+        "Every few hours, look for newer agent releases and offer them under the sidebar. Off, Relay looks only when you press Check now.",
       keywords:
-        "agent update notice notification nag reminder footer sidebar newer release version amp codex claude opencode",
-      render: () => (
-        <Switch
-          label="Offer agent updates under the sidebar"
-          checked={updateNotices}
-          onChange={setAgentUpdateNotices}
-        />
-      ),
+        "agent update check automatic background notice notification nag reminder footer sidebar newer release version amp codex claude opencode",
+      render: () => <AgentUpdateChecksSwitch />,
     },
     {
       id: "acp-registry",
@@ -268,5 +262,24 @@ function AgentSelect({ ai }: { ai: AISave }) {
       }))}
       onChange={(threadProvider) => void ai.save({ threadProvider })}
     />
+  );
+}
+
+function AgentUpdateChecksSwitch() {
+  const checks = useSavedSetting(
+    agentUpdateChecksQuery,
+    (enabled) => api.saveAgentUpdateChecks(enabled),
+    agentUpdateChecksQuery.queryKey,
+  );
+  return (
+    <>
+      <Switch
+        label="Check for agent updates on its own"
+        checked={checks.value ?? true}
+        disabled={!checks.loaded || checks.saving}
+        onChange={(enabled) => checks.set(enabled)}
+      />
+      {checks.error && <ErrorBox error={checks.error} />}
+    </>
   );
 }

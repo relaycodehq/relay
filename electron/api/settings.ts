@@ -226,6 +226,16 @@ export function settingsHandlers(ctx: ApiContext) {
       devSwitchTo(path),
     ),
     agentVersions: () => agentUpdates.current,
+    agentUpdateChecks: () => store.get().agentUpdateChecks ?? true,
+    saveAgentUpdateChecks: takes([z.boolean()], async (enabled) => {
+      await store.update((s) => {
+        s.agentUpdateChecks = enabled;
+      });
+      // What was saved last, should two saves cross.
+      const saved = store.get().agentUpdateChecks ?? true;
+      agentUpdates.setAutomatic(saved);
+      return saved;
+    }),
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),

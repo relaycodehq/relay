@@ -28,6 +28,8 @@ interface State {
   smartProjectNames?: boolean;
   /** Keep the computer from idling to sleep while Relay runs; unset is on. */
   keepAwake?: boolean;
+  /** Look for newer agent releases every few hours and offer them under the sidebar; unset is on. */
+  agentUpdateChecks?: boolean;
   /** Sounds for threads that finish, need you or fail; unset plays nothing. */
   sounds?: import("../../shared/sounds").SoundSettings;
   /** Sound files added in Settings → Sounds, kept in `sounds/` under app data. */

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { localSwitch } from "../../lib/local-switch";
 import type { AgentVersions } from "../../../shared/agent-updates";
 import type { AgentProvider } from "../../../shared/agents";
 
@@ -82,7 +82,36 @@ export async function signOutAgent(provider: AgentProvider) {
   change(await api.signOutAgent(provider));
 }
 
-/** Whether the sidebar footer offers newer agent releases; Settings always does. */
-const notices = localSwitch("relay-agent-update-notices");
-export const useAgentUpdateNotices = notices.use;
-export const setAgentUpdateNotices = notices.set;
+/** Where 0.12.0 kept a per-device switch that only hid the sidebar notices. */
+const legacyNoticesKey = "relay-agent-update-notices";
+
+async function readAgentUpdateChecks() {
+  let legacy: string | null = null;
+  try {
+    legacy = localStorage.getItem(legacyNoticesKey);
+  } catch {
+    // No storage, nothing to carry over.
+  }
+  const on =
+    legacy === "off"
+      ? await api.saveAgentUpdateChecks(false)
+      : await api.agentUpdateChecks();
+  try {
+    localStorage.removeItem(legacyNoticesKey);
+  } catch {
+    // Carried over already; asking again is harmless.
+  }
+  return on;
+}
+
+export const agentUpdateChecksQuery = {
+  queryKey: ["agent-update-checks"],
+  queryFn: readAgentUpdateChecks,
+};
+
+/**
+ * Whether Relay looks for newer agent releases on its own and offers them
+ * under the sidebar; Settings still shows them and checks when asked.
+ * Undefined until it's known, so a turned-off notice never flashes.
+ */
+export const useAgentUpdateChecks = () => useQuery(agentUpdateChecksQuery).data;

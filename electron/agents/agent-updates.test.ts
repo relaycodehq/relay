@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AgentUpdates,
+  checkEvery,
+  firstCheckAfter,
   installOf,
   type AgentUpdatesIo,
   type Exec,
@@ -508,5 +510,131 @@ describe("AgentUpdates installing what's missing", () => {
       update: { status: "updated", installed: true },
     });
     expect(agent("amp").missing).toBeUndefined();
+  });
+});
+
+/** A machine with no agents on it, whose lookups wait while `hold` is closed. */
+function idleMachine() {
+  let release = () => {};
+  let held = Promise.resolve();
+  const io: AgentUpdatesIo = {
+    platform: "darwin",
+    find: async (name) => {
+      await held;
+      throw new Error(`${name} was not found.`);
+    },
+    realpath: async (path) => path,
+    exists: async () => false,
+    exec: async () => ({ code: 1, stdout: "", output: "", timedOut: false }),
+    fetch: async () => new Response("{}"),
+    claudeChannel: async () => "latest",
+  };
+  const emitted: AgentVersions[] = [];
+  const updates = new AgentUpdates((state) => emitted.push(state), io);
+  return {
+    updates,
+    /** How many checks have begun. */
+    checks: () => emitted.filter((s) => s.checking).length,
+    hold() {
+      held = new Promise((resolve) => (release = resolve));
+    },
+    release: () => release(),
+  };
+}
+
+describe("AgentUpdates checking on its own", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("checks shortly after starting, then every few hours", async () => {
+    const { updates, checks } = idleMachine();
+    updates.start();
+    await vi.advanceTimersByTimeAsync(firstCheckAfter - 1);
+    expect(checks()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(checks()).toBe(1);
+    await vi.advanceTimersByTimeAsync(checkEvery);
+    expect(checks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(checkEvery);
+    expect(checks()).toBe(3);
+  });
+
+  it("never checks when started with checks off, but still checks when asked", async () => {
+    const { updates, checks } = idleMachine();
+    updates.start(false);
+    await vi.advanceTimersByTimeAsync(3 * checkEvery);
+    expect(checks()).toBe(0);
+    await updates.check(true);
+    expect(checks()).toBe(1);
+    expect(updates.current.checkedAt).toBeDefined();
+    // Asking doesn't start the schedule.
+    await vi.advanceTimersByTimeAsync(3 * checkEvery);
+    expect(checks()).toBe(1);
+  });
+
+  it("stops when turned off and picks up again when turned back on", async () => {
+    const { updates, checks } = idleMachine();
+    updates.start();
+    await vi.advanceTimersByTimeAsync(firstCheckAfter);
+    expect(checks()).toBe(1);
+    updates.setAutomatic(false);
+    await vi.advanceTimersByTimeAsync(3 * checkEvery);
+    expect(checks()).toBe(1);
+    updates.setAutomatic(true);
+    // The last check is long past, so the next one comes shortly.
+    await vi.advanceTimersByTimeAsync(firstCheckAfter);
+    expect(checks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(checkEvery);
+    expect(checks()).toBe(3);
+  });
+
+  it("waits out the hours since the last check when turned back on", async () => {
+    const { updates, checks } = idleMachine();
+    updates.start(false);
+    await updates.check(true);
+    updates.setAutomatic(true);
+    await vi.advanceTimersByTimeAsync(checkEvery - 1);
+    expect(checks()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(checks()).toBe(2);
+  });
+
+  it("doesn't reschedule from a check that was running when checks went off", async () => {
+    const { updates, checks, hold, release } = idleMachine();
+    updates.start();
+    hold();
+    await vi.advanceTimersByTimeAsync(firstCheckAfter);
+    expect(updates.current.checking).toBe(true);
+    updates.setAutomatic(false);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updates.current.checking).toBe(false);
+    await vi.advanceTimersByTimeAsync(3 * checkEvery);
+    expect(checks()).toBe(1);
+  });
+
+  it("keeps one schedule when checks go off and on during a check", async () => {
+    const { updates, checks, hold, release } = idleMachine();
+    updates.start();
+    hold();
+    await vi.advanceTimersByTimeAsync(firstCheckAfter);
+    updates.setAutomatic(false);
+    updates.setAutomatic(true);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checks()).toBe(1);
+    // That check never finished before going on again, so the next is soon,
+    // not four hours after the old one.
+    await vi.advanceTimersByTimeAsync(firstCheckAfter);
+    expect(checks()).toBe(2);
+    // Two schedules would check twice in the next four hours.
+    await vi.advanceTimersByTimeAsync(checkEvery);
+    expect(checks()).toBe(3);
+    await vi.advanceTimersByTimeAsync(checkEvery);
+    expect(checks()).toBe(4);
   });
 });

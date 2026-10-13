@@ -563,6 +563,9 @@ export interface Api
   agentVersions(): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
   checkAgentVersions(): Promise<AgentVersions>;
+  /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
+  agentUpdateChecks(): Promise<boolean>;
+  saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
   /**

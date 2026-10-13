@@ -634,7 +634,8 @@ app
     devBuild.start();
     listenDevSwitch(quit);
     // Tests' stand-in agents only answer what a test expects of them.
-    if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
+    if (!process.env.RELAY_TEST_DATA)
+      agentUpdates.start(loaded.get().agentUpdateChecks ?? true);
     setApplicationMenu(window);
     if (app.isPackaged && process.platform === "linux" && process.env.APPIMAGE)
       registerAppImage({
