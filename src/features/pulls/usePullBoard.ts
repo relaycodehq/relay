@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
 import type { Account, Progress, Review } from "../../../shared/types";
 import { api } from "../../lib/api";
@@ -161,9 +161,12 @@ export function usePullSearch(
   state: PullState,
   account: Account,
 ) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [PULL_BOARD, "find", account.server, account.id, query, state],
-    queryFn: () => api.search("all", query, state, 1, account.server),
+    queryFn: ({ pageParam }) =>
+      api.search("all", query, state, pageParam, account.server),
+    initialPageParam: 1,
+    getNextPageParam: (page) => page.nextPage ?? undefined,
     enabled: !!query,
   });
 }

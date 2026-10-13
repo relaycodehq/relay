@@ -588,9 +588,11 @@ function SearchResults({
 }) {
   const found = usePullSearch(query, state, account);
   if (found.isPending) return <Loading text="Searching…" />;
-  if (found.error)
+  if (!found.data)
     return <ErrorBox error={found.error} retry={() => void found.refetch()} />;
-  const pulls = found.data.items.map((item) => relate(item, board, account));
+  const pulls = found.data.pages
+    .flatMap((page) => page.items)
+    .map((item) => relate(item, board, account));
   if (!pulls.length)
     return <p className="pulls-none">No pull requests match “{query}”.</p>;
   return (
@@ -598,8 +600,8 @@ function SearchResults({
       <h2>
         Results
         <small>
-          {found.data.total ?? pulls.length}
-          {found.data.nextPage ? "+" : ""}
+          {found.data.pages[0].total ?? pulls.length}
+          {found.hasNextPage ? "+" : ""}
         </small>
       </h2>
       <div className="pulls-list">
@@ -612,6 +614,25 @@ function SearchResults({
           />
         ))}
       </div>
+      {found.error && (
+        <ErrorBox
+          error={found.error}
+          retry={() =>
+            void (found.isFetchNextPageError
+              ? found.fetchNextPage()
+              : found.refetch())
+          }
+        />
+      )}
+      {found.hasNextPage && !found.isFetchNextPageError && (
+        <button
+          className="pulls-more"
+          disabled={found.isFetchingNextPage}
+          onClick={() => void found.fetchNextPage()}
+        >
+          {found.isFetchingNextPage ? "Loading…" : "Load more pull requests"}
+        </button>
+      )}
     </section>
   );
 }
@@ -628,7 +649,7 @@ function relate(item: ListedPull, board: Board, account: Account) {
     (item.user.login.toLowerCase() === account.user.login.toLowerCase()
       ? "mine"
       : "other");
-  return boardPull(item, relation);
+  return boardPull(item, relation, account.server);
 }
 
 function refOf(key: string, repo?: string): Repo {
