@@ -11,10 +11,10 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./shell-path", () => ({
-  pathReady: async () => {},
-  refreshPath: async () => false,
-}));
+const refreshPath = vi.hoisted(() =>
+  vi.fn<(searchedAt: number) => Promise<boolean>>(async () => false),
+);
+vi.mock("./shell-path", () => ({ pathReady: async () => {}, refreshPath }));
 
 import {
   findExecutable,
@@ -60,6 +60,7 @@ beforeEach(async () => {
   process.env.PATH = join(root, "bin");
   setLinkedAgents({});
   setLinkedTools({});
+  refreshPath.mockReset().mockResolvedValue(false);
 });
 
 afterEach(async () => {
@@ -134,6 +135,23 @@ describe.skipIf(!posix)("finding an agent CLI", () => {
 
   it("reports an agent that is nowhere", async () => {
     await expect(findExecutable("opencode")).rejects.toThrow(/not found/);
+  });
+
+  it("searches again when the PATH was read again, as for a CLI installed since launch", async () => {
+    const installed = join(root, "installed");
+    const tool = await program(installed, "relay-fresh-cli", "exit 0");
+    refreshPath.mockImplementation(async () => {
+      process.env.PATH = [process.env.PATH, installed].join(delimiter);
+      return true;
+    });
+    expect(await findExecutable("relay-fresh-cli")).toBe(tool);
+    expect(refreshPath).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't read the PATH again for an agent it found", async () => {
+    await program(join(root, "bin"), "claude", "exit 1");
+    await findExecutable("claude");
+    expect(refreshPath).not.toHaveBeenCalled();
   });
 
   it("uses a linked gh before the one on PATH, and says when it is gone", async () => {
