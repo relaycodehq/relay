@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import type { ChatMessage } from "../../../shared/projects";
 
 /** A message in the view, and how far below the top of the view it starts. */
@@ -213,24 +219,26 @@ export function useThreadScroll({
   function onScroll() {
     const e = scroll.current!;
     const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
+    // Holding a message in place scrolls too; it mustn't resume following.
+    // Within a pixel: some screens report back a rounded position.
+    const held =
+      returning.current && Math.abs(e.scrollTop - placed.current) < 1;
     // Going by distance alone, a small step up while an answer
     // streams stays near the bottom and the next piece pulls the
     // reader back. Any step up lets go; coming back down resumes.
     // Pinning only moves down, and content shrinking at the bottom
     // leaves no distance, so neither lets go by itself.
-    if (e.scrollTop < lastTop.current - 1 && distance > 1)
-      follow.current = false;
-    else if (e.scrollTop > lastTop.current && distance < 80)
-      follow.current = true;
+    if (!held) {
+      if (e.scrollTop < lastTop.current - 1 && distance > 1)
+        follow.current = false;
+      else if (e.scrollTop > lastTop.current && distance < 80)
+        follow.current = true;
+    }
     lastTop.current = e.scrollTop;
     setScrolledUp(distance > 160);
-    // Holding a message in place scrolls too; the reader scrolling
-    // anywhere else lets it go.
-    if (returning.current) {
-      // Within a pixel: some screens report back a rounded position.
-      if (Math.abs(e.scrollTop - placed.current) < 1) return;
-      returning.current = undefined;
-    }
+    if (held) return;
+    // The reader scrolling anywhere else lets the held message go.
+    returning.current = undefined;
     if (follow.current) {
       readingPlaces.delete(place);
       return;
@@ -244,6 +252,26 @@ export function useThreadScroll({
     column,
     composerDock,
     onScroll,
+    /** Inspecting details holds the reader's place before their height changes,
+     * including keyboard clicks and native details/summary disclosures. */
+    onClickCapture(event: MouseEvent<HTMLDivElement>) {
+      const view = scroll.current;
+      const disclosure =
+        event.target instanceof Element &&
+        event.target.closest("summary, button[aria-expanded]");
+      if (!view || !disclosure || !view.contains(disclosure)) return;
+      const message = disclosure.closest<HTMLElement>("[data-message-id]");
+      if (!message) return;
+      follow.current = false;
+      returning.current = {
+        id: message.dataset.messageId!,
+        offset:
+          message.getBoundingClientRect().top -
+          view.getBoundingClientRect().top,
+      };
+      placed.current = view.scrollTop;
+      readingPlaces.set(place, returning.current);
+    },
     /** How many of the latest shown messages are mounted. */
     visible,
     /** Older messages wait behind a button; the idle fill isn't coming for them. */

@@ -19,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { screenshot } from "../fixtures/screenshot";
 
 const lorem =
   "Relay keeps the thread pinned while answers stream in and remembers where the reader left off. ";
@@ -116,6 +117,174 @@ async function settled(page: Page) {
     })
     .toBe(true);
 }
+
+test("holds an opened handoff note in view instead of following the bottom", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-handoff-scroll-")),
+  );
+  const repo = join(root, "project"),
+    data = join(root, "data"),
+    bin = join(root, "bin");
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(repo);
+    await mkdir(bin);
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
+    for (const name of ["codex", "claude"])
+      await fakeCli(join(bin, name), agent);
+    await mkdir(join(data, "project-chats"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const projectId = randomUUID();
+    const chat = thread(projectId, "Handoff", 4);
+    chat.messages[1]!.body = Array.from(
+      { length: 12 },
+      (_, i) => `Earlier answer ${i}. ${lorem.repeat(3)}`,
+    ).join("\n\n");
+    chat.messages[2] = {
+      ...chat.messages[2]!,
+      role: "assistant",
+      handoff: { from: "claude", to: "codex" },
+      body: Array.from(
+        { length: 16 },
+        (_, i) => `Handoff note ${i}. ${lorem.repeat(3)}`,
+      ).join("\n\n"),
+    };
+    chat.messages[3]!.body = "I'll continue from the handoff note.";
+    await writeFile(
+      join(data, "project-chats", chat.id + ".json"),
+      JSON.stringify(chat),
+    );
+    await writeFile(
+      join(data, "state.json"),
+      JSON.stringify({
+        version: 1,
+        folders: {},
+        progress: {},
+        projects: [
+          {
+            id: projectId,
+            path: repo,
+            name: "project",
+            repository: null,
+            added: 1,
+          },
+        ],
+        chats: [{ ...chat, messages: undefined }],
+      }),
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+      ),
+    ) as Record<string, string>;
+    app = await electron.launch({
+      args: ["tests/fixtures/launch.cjs"],
+      env: {
+        ...env,
+        ...pathWith(env, bin),
+        RELAY_TEST_DATA: data,
+        RELAY_TEST_HEADED: "0",
+        RELAY_TEST_NATIVE_STORAGE: "0",
+      },
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.locator(".sb-thread", { hasText: "Handoff" }).click();
+    const show = page.getByRole("button", { name: "Show note", exact: true });
+    await expect(show).toBeVisible();
+    await settled(page);
+    const fromBottom = () =>
+      page.evaluate(() => {
+        const e = document.querySelector(".project-messages")!;
+        return e.scrollHeight - e.scrollTop - e.clientHeight;
+      });
+    expect(await fromBottom()).toBeLessThan(2);
+    const before = await offsetOf(page, "handoff-2");
+    await show.click();
+    await settled(page);
+    expect(Math.abs((await offsetOf(page, "handoff-2")) - before)).toBeLessThan(
+      2,
+    );
+    await expect(
+      page.getByText("Handoff note 0.", { exact: false }),
+    ).toBeInViewport();
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-handoff-note-open.png"),
+    });
+
+    // Keyboard activation must hold the same place when closing and reopening.
+    await page
+      .getByRole("button", { name: "Hide note", exact: true })
+      .press("Enter");
+    await settled(page);
+    expect(Math.abs((await offsetOf(page, "handoff-2")) - before)).toBeLessThan(
+      2,
+    );
+    await show.press("Enter");
+    await settled(page);
+    expect(Math.abs((await offsetOf(page, "handoff-2")) - before)).toBeLessThan(
+      2,
+    );
+    await page.getByRole("button", { name: "Hide note", exact: true }).click();
+
+    // Opening the note while an answer grows also takes priority over following.
+    const prompt = page.getByRole("textbox").last();
+    await prompt.fill("fixture stream long");
+    await prompt.press("Enter");
+    await expect(
+      page.getByText("Paragraph 2.", { exact: false }),
+    ).toBeVisible();
+    await show.evaluate((button) => {
+      window.addEventListener(
+        "click",
+        () => {
+          const row = button.closest<HTMLElement>("[data-message-id]")!;
+          row.dataset.clickOffset = String(
+            row.getBoundingClientRect().top -
+              document
+                .querySelector(".project-messages")!
+                .getBoundingClientRect().top,
+          );
+        },
+        { once: true, capture: true },
+      );
+    });
+    await show.click();
+    const streamingBefore = await page
+      .locator('[data-message-id="handoff-2"]')
+      .evaluate((row) => Number((row as HTMLElement).dataset.clickOffset));
+    const drift: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      await page.waitForTimeout(50);
+      drift.push((await offsetOf(page, "handoff-2")) - streamingBefore);
+    }
+    expect(Math.max(...drift.map(Math.abs))).toBeLessThan(2);
+    await expect(
+      page.getByRole("button", { name: "Hide note", exact: true }),
+    ).toBeInViewport();
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-handoff-note-streaming.png"),
+    });
+
+    // A reader who returns to the end follows the streaming answer again.
+    const box = (await page.locator(".project-messages").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 200);
+    await page.mouse.wheel(0, 20000);
+    await expect.poll(fromBottom).toBeLessThan(2);
+    const trailing: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(50);
+      trailing.push(await fromBottom());
+    }
+    expect(Math.max(...trailing)).toBeLessThan(2);
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("reopens a long thread where the reader left it, before or after paging back", async () => {
   const root = await realpath(

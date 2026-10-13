@@ -80,7 +80,7 @@ export function ThreadMessages({
     sideThreads,
     leadAnswered,
   },
-  view: { scroll, column, onScroll, visible, earlier, showEarlier, dockHeight },
+  view: { scroll, column, onScroll, onClickCapture, visible, earlier, showEarlier, dockHeight },
   councils: { review, fixFindings, setFindingStatus, resumeReview },
   actions: {
     signIn,
@@ -211,7 +211,7 @@ export function ThreadMessages({
     (h) => inView(h) && !listed.some((m) => m.id === h.input.id),
   );
   return (
-    <div className="project-messages" ref={scroll} onScroll={onScroll}>
+    <div className="project-messages" ref={scroll} onScroll={onScroll} onClickCapture={onClickCapture}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}
       {history.error && (
         <ErrorBox error={history.error} retry={() => void history.refetch()} />
