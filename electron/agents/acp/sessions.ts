@@ -73,7 +73,7 @@ export class AcpAgent implements Lease {
   /** What the next Relay reads about this process. */
   keep(run?: { id: number }) {
     this.connection.keep({
-      provider: this.profile.provider,
+      provider: hostedName(this.profile),
       caps: this.caps,
       session: this.session,
       run,
@@ -85,12 +85,13 @@ export class AcpAgent implements Lease {
   }
 }
 
+const hostedName = (profile: AcpProfile) => profile.hostedAs ?? profile.provider;
 const hosted = new Map<AcpProvider, HostedSessions<AcpAgent>>();
 function sessionsOf(profile: AcpProfile) {
   let sessions = hosted.get(profile.provider);
   if (!sessions) {
     sessions = new HostedSessions<AcpAgent>({
-      provider: profile.provider,
+      provider: hostedName(profile),
       name: profile.name,
       kind: "process",
       close: (agent) => agent.close(),
@@ -117,7 +118,7 @@ async function launch(
   };
   const child = await sessionsOf(profile).spawn(
     key,
-    { provider: profile.provider },
+    { provider: hostedName(profile) },
     { ...spec, cwd, group: true },
     () =>
       spawn(spec.command, spec.args, {
@@ -301,7 +302,7 @@ export function disposeAcp(profile: AcpProfile) {
 export function reattachAcp(profile: AcpProfile, owns: (key: string) => boolean) {
   return sessionsOf(profile).reattach(owns, (found) => {
     const meta = savedMeta(found, metaSchema);
-    if (!meta?.caps || meta.provider !== profile.provider) return;
+    if (!meta?.caps || meta.provider !== hostedName(profile)) return;
     const { info } = found;
     const child = new HostedChild(found.attachProcess(), (entries) => {
       connection.continueAfter(Math.max(meta.run?.id ?? 0, highestRequestId(entries)));

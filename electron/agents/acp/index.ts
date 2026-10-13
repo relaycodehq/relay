@@ -57,6 +57,8 @@ function profileRuntime(profile: AcpProfile): AgentRuntime {
       },
     }),
     models: catalog.models,
+    // Asks a fresh session again; ACP has no call to refresh the list itself.
+    reloadModels: async () => catalog.forget(),
     defaults: catalog.defaults,
     commands: catalog.commands,
     dispose: async () => disposeAcp(profile),

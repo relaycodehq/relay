@@ -44,6 +44,7 @@ import {
   refreshOpenCodeModels,
 } from "./opencode/catalog";
 import { acpRegistry, acpRuntime, registryRuntime } from "./acp";
+import { byGeneration } from "./opencode/generation";
 import { museRuntime } from "./muse";
 import type { AgentRuntime } from "./types";
 import { counted } from "./usage-count";
@@ -91,11 +92,12 @@ const claude: AgentRuntime = {
 };
 
 /**
- * OpenCode works in one `opencode serve` Relay starts on first use. Its
- * sessions live in OpenCode's own storage; closing one only lets go of what
- * Relay keeps for the thread (its Always grants, its watcher).
+ * Deprecated: Settings asks its users to update to OpenCode 2, and this goes
+ * once they have. OpenCode 1 works in one `opencode serve` Relay starts on
+ * first use. Its sessions live in OpenCode's own storage; closing one only
+ * lets go of what Relay keeps for the thread (its Always grants, its watcher).
  */
-const opencode: AgentRuntime = {
+const opencode1: AgentRuntime = {
   run: runOpenCode,
   closeSession: async (key) => closeOpenCodeSession(key),
   subagents: (key) => openCodeSubagentBooks.get(key),
@@ -128,7 +130,11 @@ const cursor: AgentRuntime = {
 const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   codex: counted("codex", codex),
   claude: counted("claude", claude),
-  opencode: counted("opencode", opencode),
+  // OpenCode 2 has no such server; it runs over ACP like Amp.
+  opencode: counted(
+    "opencode",
+    byGeneration(opencode1, acpRuntime("opencode")),
+  ),
   cursor: counted("cursor", cursor),
   muse: counted("muse", museRuntime),
   amp: counted("amp", acpRuntime("amp")),

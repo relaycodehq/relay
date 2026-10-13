@@ -2,6 +2,7 @@
 // from its sign-ins, its config or the environment, so Relay asks it rather
 // than reading those itself; the key never leaves the main process.
 import { openCode } from "./opencode/client";
+import { openCodeGeneration } from "./opencode/generation";
 import {
   configProvidersSchema,
   OpenCodeShapeError,
@@ -45,6 +46,9 @@ function empty(message: string): OpenRouterCredit {
 }
 
 async function load(): Promise<OpenRouterCredit> {
+  // Relay reaches OpenCode 2 over ACP, which has no call for its keys.
+  if ((await openCodeGeneration()) === 2)
+    return empty("OpenCode 2 doesn't share its OpenRouter key with Relay");
   let key: string | null;
   try {
     key = await openRouterKey();

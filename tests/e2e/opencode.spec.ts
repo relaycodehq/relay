@@ -13,8 +13,12 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-/** Relay with fake Codex, Claude and OpenCode on PATH, and a Git project added. */
-async function launchWithOpenCode() {
+/**
+ * Relay with fake Codex, Claude and OpenCode on PATH, and a Git project added.
+ * OpenCode 1 is a fake `opencode serve`; OpenCode 2 a fake ACP server playing
+ * `acp`, the scenario tests/fixtures/acp-agent.cjs reads.
+ */
+async function launchWithOpenCode(acp?: Record<string, unknown>) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-opencode-")));
   const bin = join(root, "bin"),
     capture = join(root, "opencode.jsonl");
@@ -26,7 +30,15 @@ async function launchWithOpenCode() {
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
   await fakeCli(
     join(bin, "opencode"),
-    await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"),
+    await readFile(
+      resolve(
+        acp
+          ? "tests/fixtures/acp-agent.cjs"
+          : "tests/fixtures/opencode-server.cjs",
+      ),
+      "utf8",
+    ),
+    acp ? "opencode v2.0.28" : "1.19.0",
   );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -42,6 +54,10 @@ async function launchWithOpenCode() {
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_OPENCODE_CAPTURE: capture,
+      ...(acp && {
+        RELAY_ACP_SCENARIO: JSON.stringify(acp),
+        RELAY_ACP_LOG: capture,
+      }),
     },
   });
   const page = await app.firstWindow();
@@ -221,6 +237,113 @@ test("refreshing OpenCode's models restarts it, once the user agrees to interrup
       )
       .toBe(true);
     await expect(approval).toBeVisible();
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the thread", async () => {
+  test.setTimeout(90000);
+  const select = (
+    id: string,
+    currentValue: string,
+    options: [string, string][],
+  ) => ({
+    id,
+    name: id,
+    category: id,
+    type: "select",
+    currentValue,
+    options: options.map(([value, name]) => ({ value, name })),
+  });
+  const { app, page, root, capture } = await launchWithOpenCode({
+    configOptions: [
+      select("model", "opencode/big-pickle", [
+        ["opencode/big-pickle", "Big Pickle"],
+        ["opencode/wonder", "Wonder"],
+      ]),
+      select("mode", "build", [
+        ["build", "Build"],
+        ["plan", "Plan"],
+      ]),
+    ],
+    turn: [
+      {
+        ask: {
+          toolCall: {
+            toolCallId: "t1",
+            title: "Write notes.md",
+            kind: "edit",
+            status: "pending",
+            content: [
+              { type: "diff", path: "notes.md", oldText: "", newText: "hello" },
+            ],
+          },
+          options: [
+            { optionId: "yes", name: "Allow", kind: "allow_once" },
+            { optionId: "always", name: "Always", kind: "allow_always" },
+            { optionId: "no", name: "Reject", kind: "reject_once" },
+          ],
+        },
+      },
+      {
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Wrote notes.md." },
+        },
+      },
+    ],
+  });
+  try {
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Choose model and provider" })
+      .click();
+    await page
+      .getByRole("toolbar", { name: "Model providers" })
+      .getByRole("button", { name: "OpenCode", exact: true })
+      .click();
+    const wonder = page.getByRole("option", { name: "Wonder" });
+    await expect(wonder).toBeVisible();
+    await wonder.click();
+    await page
+      .getByRole("combobox", { name: "Runtime mode", exact: true })
+      .click();
+    await page.getByRole("option", { name: /Supervised/ }).click();
+
+    await page.getByLabel("Message project").fill("Write notes.md");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    const approval = page.getByRole("region", { name: "Write notes.md" });
+    await expect(approval).toBeVisible();
+    await screenshot(page, { path: "test-results/opencode2-approval.png" });
+    await approval.getByRole("button", { name: "Once", exact: true }).click();
+    await expect(page.getByText("Wrote notes.md.")).toBeVisible();
+    const answer = page.getByRole("article", { name: "opencode answer" });
+    await expect(answer.locator("header strong")).toHaveText("OpenCode");
+
+    const sent = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    // Picked by Relay, not the HTTP server OpenCode 1 runs.
+    const set = sent
+      .filter((m) => m.method === "session/set_config_option")
+      .map((m) => [m.params.configId, m.params.value]);
+    expect(set).toContainEqual(["model", "opencode/wonder"]);
+    expect(sent.some((m) => m.method === "session/prompt")).toBe(true);
+    // The ask the user answered; a helper's own asks are always turned down.
+    expect(
+      sent.filter((m) => m.result?.outcome).map((m) => m.result.outcome),
+    ).toContainEqual({ outcome: "selected", optionId: "yes" });
+
+    await page.reload();
+    await expect(page.getByText("Wrote notes.md.")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Choose model and provider" }),
+    ).toHaveText(/Wonder/);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

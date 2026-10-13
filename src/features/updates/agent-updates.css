@@ -105,6 +105,16 @@
 .agent-card-notes p[data-failed] {
   color: var(--danger);
 }
+.agent-card-notes p[data-attention] {
+  color: #c39236;
+}
+.agent-card-notes p code {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  user-select: all;
+}
 .agent-cards-checked {
   display: flex;
   align-items: center;

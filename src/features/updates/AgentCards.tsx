@@ -180,6 +180,12 @@ function AgentCard({
                 : behind && !agent.command
                   ? "Relay can't tell how it was installed, so update it the way you installed it."
                   : undefined;
+  // OpenCode 1 runs through a server API that 2 dropped; Relay keeps it only until 2 is everywhere.
+  const deprecated =
+    !unknown &&
+    agent.provider === "opencode" &&
+    !!agent.current &&
+    Number(agent.current.split(".")[0]) < 2;
   const output =
     run?.status === "failed" && run.output
       ? { label: "Output", text: run.output }
@@ -310,8 +316,15 @@ function AgentCard({
           )}
         </span>
       </div>
-      {(note || output || !!linkError) && (
+      {(deprecated || note || output || !!linkError) && (
         <div className="agent-card-notes">
+          {deprecated && (
+            <p data-attention>
+              OpenCode 1 is deprecated in Relay and stops working in a coming
+              release. Update to OpenCode 2:
+              <code>curl -fsSL https://opencode.ai/v2/install | bash</code>
+            </p>
+          )}
           {note && (
             <p data-failed={run?.status === "failed" || undefined}>{note}</p>
           )}

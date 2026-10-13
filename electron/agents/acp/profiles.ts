@@ -8,7 +8,7 @@ import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
 
 /** The agents Relay runs over ACP: its own, and those installed from the ACP registry. */
-export type AcpProvider = "amp" | "antigravity" | RegistryProvider;
+export type AcpProvider = "amp" | "antigravity" | "opencode" | RegistryProvider;
 
 export type AcpAccount = { signedIn: boolean; email?: string };
 
@@ -23,6 +23,11 @@ export interface AcpProfile {
   provider: AcpProvider;
   /** As messages name it. */
   name: string;
+  /**
+   * What the agent host knows its processes as, when `provider` is taken by
+   * another way of running the same agent.
+   */
+  hostedAs?: string;
   /** Gets what it runs from, for agents Relay downloads; sign-in does it first. */
   setUp?(): Promise<void>;
   /** The command line that starts its ACP server. */
@@ -168,7 +173,26 @@ const antigravity: AcpProfile = {
   install: "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
 };
 
-export const acpProfiles: Record<"amp" | "antigravity", AcpProfile> = {
+/**
+ * OpenCode 2 dropped the HTTP API Relay drives OpenCode 1 through and ships an
+ * ACP server instead; agents/opencode picks between the two by version.
+ */
+const opencode: AcpProfile = {
+  provider: "opencode",
+  name: "OpenCode",
+  // Apart from OpenCode 1's server, so neither closes the other's after a restart.
+  hostedAs: "opencode-acp",
+  command: async () => ({ command: await findExecutable("opencode"), args: ["acp"] }),
+  // Its approvals come to Relay; plan is its read-only agent.
+  wishes: ({ interaction, readOnly }) => [
+    { option: "mode", value: readOnly || interaction === "plan" ? "plan" : "build" },
+  ],
+  compact: "/compact",
+  install: "Install OpenCode from opencode.ai, or in Settings → AI models → Agents.",
+};
+
+export const acpProfiles: Record<"amp" | "antigravity" | "opencode", AcpProfile> = {
   amp,
   antigravity,
+  opencode,
 };
