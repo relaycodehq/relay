@@ -7,8 +7,9 @@ import {
 } from "../../lib/shortcuts";
 
 /**
- * Stop's keys while an answer runs: its shortcut, which by default is Escape
- * twice in the composer. `armed` once the first Escape is in.
+ * Stop's keys while an answer runs: none unless someone set them, so a stray
+ * Escape only closes things. 2× Esc, when chosen, counts in the composer and
+ * is `armed` once the first Escape is in.
  */
 export function useStopKeys(running: boolean, onStop: () => void) {
   const keys = useShortcutLabel("stop");

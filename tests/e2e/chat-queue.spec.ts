@@ -142,9 +142,14 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
       .click();
     await expect(prompt).toContainText("Check the cache key first");
     await expect(queue.locator(".queued-message")).toHaveCount(1);
-    // Escape that closes the command menu doesn't arm the stop button.
+    // Escape closes the command menu, and Escape alone, once or twice, stops
+    // nothing: only the button does, or keys someone picked.
     const armed = page.getByRole("button", {
       name: "Press Escape again to stop",
+      exact: true,
+    });
+    const stopButton = page.getByRole("button", {
+      name: "Stop answer",
       exact: true,
     });
     await prompt.fill("/");
@@ -153,20 +158,19 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
     await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
       0,
     );
-    await expect(armed).toHaveCount(0);
     await prompt.fill("");
-    // One Escape only arms it, and it disarms on its own.
     await page.keyboard.press("Escape");
-    await expect(armed).toHaveText("esc");
-    await screenshot(page.locator(".composer-tools"), {
-      path: "test-results/chat-stop-armed.png",
-    });
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(armed).toHaveCount(0);
+    await expect(stopButton).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Stop answer", exact: true }),
-    ).toBeVisible();
+      page.getByText("Stopped · partial output kept", { exact: true }),
+    ).toHaveCount(0);
     await expect(queue.locator(".queued-message")).toHaveCount(1);
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
+    await stopButton.click();
     await expect(
       page.getByText("Stopped · partial output kept", { exact: true }),
     ).toBeVisible();
@@ -209,6 +213,39 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
     expect(calls.filter((c) => c.turn).at(-1).turn.input[0].text).toContain(
       "Then explain the invalidation",
     );
+
+    // 2× Esc stops once it's picked in Settings; the Escape that closes
+    // Settings doesn't count toward it.
+    await prompt.fill("wait for cancellation");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(stopButton).toBeVisible();
+    const settings = page.locator("section.settings-screen");
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+Comma" : "Control+Comma",
+    );
+    await settings.getByRole("button", { name: "Keyboard shortcuts" }).click();
+    const stopRow = settings.locator(
+      'section.setting[aria-label="Stop the answer and pause queued messages"]',
+    );
+    await expect(stopRow.locator(".shortcut-key")).toHaveText("None");
+    await stopRow.locator(".shortcut-key").click();
+    await screenshot(stopRow, { path: "test-results/chat-stop-pick-keys.png" });
+    await stopRow.getByRole("button", { name: "Use 2× Esc" }).click();
+    await expect(stopRow.locator(".shortcut-key")).toHaveText("2× Esc");
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+    await expect(armed).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(armed).toHaveText("esc");
+    await screenshot(page.locator(".composer-tools"), {
+      path: "test-results/chat-stop-armed.png",
+    });
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByText("Stopped · partial output kept", { exact: true }),
+    ).toHaveCount(2);
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().every((w) => !relaySeen(w)),

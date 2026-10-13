@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   command,
+  doubleEscapeCombo,
   MAX_BINDINGS,
   recordCombo,
   sameCombo,
@@ -229,6 +230,20 @@ export function ShortcutKeys({ id }: { id: ShortcutId }) {
         </span>
       </div>
       <Status id={id} edit={edit} slot={edit?.slot} list={list}>
+        {edit?.kind === "record" &&
+          command(id).doubleEscape &&
+          !list.some((c) => c.twice) && (
+            <span className="shortcut-status-actions">
+              <button
+                type="button"
+                // Keeps the recorder focused, which would cancel on blur.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commit(edit.slot, doubleEscapeCombo)}
+              >
+                Use 2× Esc
+              </button>
+            </span>
+          )}
         {edit?.kind === "confirm" && (
           <span className="shortcut-status-actions">
             <button

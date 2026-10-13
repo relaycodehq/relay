@@ -102,9 +102,34 @@ describe("saved shortcuts", () => {
     expect(s.matches("settle", cmdE)).toBe(true);
   });
 
+  it("stops on no key until someone picks one, and keeps the keys they saved", async () => {
+    const s = await load();
+    expect(s.bindings("stop")).toEqual([]);
+    expect(s.pressedTwice("stop")).toBe(false);
+    expect(s.matches("stop", key("Escape"))).toBe(false);
+    expect(s.isCustomized("stop")).toBe(false);
+
+    saved.set(
+      "relay-shortcuts",
+      JSON.stringify({
+        stop: [
+          combo("Escape", { twice: true }),
+          combo("Period", { meta: true }),
+        ],
+      }),
+    );
+    vi.resetModules();
+    const kept = await load();
+    expect(kept.pressedTwice("stop")).toBe(true);
+    expect(kept.matches("stop", key("Escape"))).toBe(false);
+    expect(kept.matches("stop", key("Period", { meta: true }))).toBe(true);
+    expect(kept.isCustomized("stop")).toBe(true);
+  });
+
   it("labels a digit family and a double press", async () => {
     const s = await load();
     expect(s.shortcutLabel("jump-thread")).toBe("⌘1–9");
+    s.setBindings("stop", [combo("Escape", { twice: true })]);
     expect(s.shortcutLabel("stop")).toBe("2× Esc");
     expect(s.shortcutLabel("zoom-in")).toBe("⌘+");
     expect(s.digitOf("jump-thread", key("Digit4", { meta: true }))).toBe(4);
