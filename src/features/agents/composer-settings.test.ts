@@ -8,6 +8,7 @@ import {
   saveComposerSettings,
   saveSentSettings,
   startThreadSettings,
+  withSent,
   type ComposerSettings,
 } from "./composer-settings";
 import { newThreadModelsOf, withNewThreadModels } from "./composer-models";
@@ -148,12 +149,8 @@ it("starts every new thread on the models the desktop and phone share", () => {
     },
     interactionMode: "plan",
   });
-  // A thread with nothing saved here, from the phone or another build,
-  // opens on them too, not on Codex's Default.
-  expect(loadComposerSettings("unseen").models).toMatchObject({
-    codex: { choice: sol },
-    claude: { ...plain("opus", "max"), contextWindow: "200k" },
-  });
+  // An existing thread has no business inheriting new-draft picks.
+  expect(loadComposerSettings("unseen").models).toEqual({});
   // A thread's own settings stay its own.
   saveComposerSettings("thread", {
     ...loaded,
@@ -168,6 +165,43 @@ it("starts every new thread on the models the desktop and phone share", () => {
   expect(
     withNewThreadModels(loaded.models, newThreadModelsOf(loaded.models)),
   ).toEqual({ ...loaded.models, ...blanks });
+});
+
+it("restores an unseen spawned thread from its send, ignoring new-draft picks", () => {
+  cacheNewThreadModels({ claude: plain("sonnet", "low") });
+  const sent = {
+    id: "spawned",
+    provider: "claude" as const,
+    ...plain("opus", "max"),
+    contextWindow: "200k" as const,
+    runtimeMode: "auto" as const,
+    interactionMode: "plan" as const,
+  };
+  const settings = withSent(loadComposerSettings("thread"), sent);
+  expect(settings).toEqual({
+    provider: "claude",
+    models: { claude: { ...plain("opus", "max"), contextWindow: "200k" } },
+    runtimeMode: "auto",
+    interactionMode: "plan",
+    sent: sent.id,
+  });
+  saveComposerSettings("thread", {
+    ...settings,
+    models: { claude: plain("sonnet", "high") },
+  });
+  // Unsent changes stay selected when reopening the same conversation.
+  const reopened = loadComposerSettings("thread");
+  expect(withSent(reopened, sent)).toBe(reopened);
+  expect(reopened.models.claude).toEqual(plain("sonnet", "high"));
+  // A genuinely newer send, from another device, becomes its baseline.
+  expect(withSent(reopened, { ...sent, id: "phone" }).models.claude).toEqual({
+    ...plain("opus", "max"),
+    contextWindow: "200k",
+  });
+  // A branch inherits models, but acknowledges its own sends separately.
+  expect(
+    loadComposerSettings("thread:side", { settingsKey: "thread" }).sent,
+  ).toBeUndefined();
 });
 
 it("remembers the model a message went to an agent with, not one to people", () => {

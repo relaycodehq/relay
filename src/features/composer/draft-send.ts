@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { ChatSummary } from "../../../shared/projects";
+import {
+  lastComposerSettings,
+  type ChatSummary,
+} from "../../../shared/projects";
 import {
   draftRecipient,
   takesOver,
@@ -13,6 +16,8 @@ import {
   composerProvider,
   loadComposerSettings,
   startThreadSettings,
+  withSent,
+  saveComposerSettings,
 } from "../agents/composer-settings";
 import {
   isPickAgent,
@@ -47,6 +52,7 @@ import { aiSettingsQuery } from "../agents/useAISettings";
 import { agentModelsQuery } from "../agents/useAgentPicks";
 import { codexModels } from "../agents/useCodexModels";
 import { newThreadAgentQuery } from "./useNewThreadAgent";
+import { fetchChat } from "../../lib/chat-events";
 
 // A thread made for a draft whose message then failed takes the next try.
 const started = new Map<string, ChatSummary>();
@@ -72,7 +78,12 @@ export async function sendDraft(
   )
     return null;
   const ai = await qc.query(aiSettingsQuery);
-  const settings = loadComposerSettings(id);
+  const local = loadComposerSettings(id);
+  const settings = withSent(
+    local,
+    chat ? lastComposerSettings(await fetchChat(qc, chat.id)) : undefined,
+  );
+  if (settings !== local) saveComposerSettings(id, settings);
   // A new thread's composer takes up the agent last picked for one.
   const lastAgent = chat
     ? undefined
@@ -132,10 +143,17 @@ export async function sendDraft(
     ));
   started.set(id, target);
   const attachments = loadDraftAttachments(id);
+  const messageId = crypto.randomUUID();
   await api.sendProjectChat(target.id, {
     ...withAttachments(value, attachments),
-    id: crypto.randomUUID(),
+    id: messageId,
   });
+  // A background send has no mounted composer to acknowledge its own input.
+  if (recipient !== "message" && value.delivery !== "queue")
+    saveComposerSettings(id, {
+      ...loadComposerSettings(id),
+      sent: messageId,
+    });
   started.delete(id);
   if (!chat) {
     startThreadSettings(id, target.id, recipient);

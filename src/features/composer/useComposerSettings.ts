@@ -4,14 +4,15 @@ import {
   sameModel,
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
+import type { SentComposerSettings } from "../../../shared/projects";
 import type { Recipient } from "../../../shared/recipient";
 import { codexQuestionChoice } from "../../../shared/settings";
 import {
   composerProvider,
   followLastAgent,
-  hasComposerSettings,
   loadComposerSettings,
   saveComposerSettings,
+  withSent,
   type AgentFollow,
   type ComposerSettings,
   type InheritedSettings,
@@ -35,19 +36,19 @@ export function useComposerSettings({
   key,
   inherit,
   agent,
+  lastSent,
 }: {
   key: string;
   /** With nothing saved under `key` yet: start from these settings. */
   inherit?: InheritedSettings;
   /** The agent holding the thread's context; the composer runs it until one is picked here. */
   agent?: AgentProvider;
+  /** The conversation's last message, wherever it was sent from. */
+  lastSent?: SentComposerSettings;
 }) {
   const ai = useAISettings();
-  const [saved] = useState(() => loadComposerSettings(key, inherit));
-  const [unsaved] = useState(
-    () =>
-      !hasComposerSettings(key) &&
-      !(inherit && hasComposerSettings(inherit.settingsKey)),
+  const [saved] = useState(() =>
+    withSent(loadComposerSettings(key, inherit), lastSent),
   );
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
@@ -59,22 +60,33 @@ export function useComposerSettings({
   useFollowLastAgent(followsLastAgent, picked, setProvider);
   const [models, setModels] = useState(saved.models);
   const saveLastModel = useFollowLastModels(
-    followsLastAgent || unsaved,
     followsLastAgent,
     models,
     setModels,
   );
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
+  const [sent, setSent] = useState(saved.sent);
   const settings: ComposerSettings = {
     provider: picked,
     models,
     runtimeMode,
     interactionMode,
+    ...(sent ? { sent } : {}),
   };
   useEffect(() => {
     saveComposerSettings(key, settings);
-  }, [key, picked, models, runtimeMode, interactionMode]);
+  }, [key, picked, models, runtimeMode, interactionMode, sent]);
+  // A message sent elsewhere while this composer is open moves it too.
+  useEffect(() => {
+    const next = withSent(settings, lastSent);
+    if (next === settings) return;
+    setProvider(next.provider);
+    setModels(next.models);
+    setRuntimeMode(next.runtimeMode);
+    setInteractionMode(next.interactionMode);
+    setSent(next.sent);
+  }, [lastSent?.id]);
   return {
     ...settings,
     /** The agent it runs: the one picked here, else the thread's or the default. */
@@ -91,6 +103,11 @@ export function useComposerSettings({
     /** Saved at once rather than by the effect, for a thread the next send starts. */
     save: (changes: Partial<ComposerSettings>) =>
       saveComposerSettings(key, { ...settings, ...changes }),
+    /** A message going out from here: these settings already know of it. */
+    noteSent(id: string | undefined) {
+      setSent(id);
+      saveComposerSettings(key, { ...settings, sent: id });
+    },
   };
 }
 
@@ -111,25 +128,20 @@ function useFollowLastAgent(
 }
 
 /**
- * Its models follow the ones last picked for a new thread or sent with, here
- * or on the phone; picking one here makes it the model for both (`always`).
- * A thread with nothing saved here takes them up once.
+ * A new thread's models follow the ones last picked for a new thread or sent
+ * with, here or on the phone; picking one here makes it the model for both.
  */
 function useFollowLastModels(
   follows: boolean,
-  always: boolean,
   models: ComposerModels,
   set: (next: ComposerModels) => void,
 ) {
   const [lastModels, saveLastModel] = useNewThreadModels(follows);
-  const tookLastModels = useRef(false);
   const shared = useMemo(() => newThreadModelsOf(models), [models]);
   const current = useRef(models);
   current.current = models;
   useEffect(() => {
     if (!follows || !lastModels) return;
-    if (!always && tookLastModels.current) return;
-    tookLastModels.current = true;
     const changed = Object.fromEntries(
       runnableAgents().flatMap((p) =>
         lastModels[p] && !sameModel(lastModels[p], shared[p])
@@ -144,7 +156,7 @@ function useFollowLastModels(
   useEffect(() => {
     const before = shownModels.current;
     shownModels.current = shared;
-    if (!always || !before) return;
+    if (!follows || !before) return;
     for (const p of runnableAgents())
       if (
         !sameModel(shared[p], before[p]) &&

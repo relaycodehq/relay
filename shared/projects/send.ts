@@ -5,6 +5,7 @@ import { accountIdSchema } from "../agent-accounts";
 import { lineQuestionSchema } from "../questions";
 import { aiSettingsSchema } from "../settings";
 import { filePathSchema, idSchema } from "../validation";
+import { recipient } from "../recipient";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z
@@ -95,6 +96,21 @@ export const resumeSettingsSchema = projectChatSendSchema
   })
   .strict();
 export type ResumeSettings = z.infer<typeof resumeSettingsSchema>;
+
+/** Only the settings an agent actually receives; notes have none. */
+export function sentSettingsOf(
+  input: ProjectChatSend,
+): ResumeSettings | undefined {
+  const provider = recipient(input);
+  if (provider === "message") return;
+  return {
+    provider,
+    choice: input.choice,
+    ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
+    runtimeMode: input.runtimeMode,
+    interactionMode: input.interactionMode,
+  };
+}
 
 /** Who a message says it's from, when another thread's agent sent it, what page it answers, and its skill pills. */
 export const sentBy = (

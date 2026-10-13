@@ -7,6 +7,7 @@ export * from "./projects/worktrees";
 export * from "./projects/messages";
 export * from "./projects/send";
 export * from "./projects/chat";
+export * from "./projects/composer";
 export * from "./projects/sync";
 export * from "./projects/api";
 export type { AgentProvider } from "./agents";

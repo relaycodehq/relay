@@ -50,7 +50,7 @@ export function useThreadSend({
 }) {
   async function send(
     value: ComposedSend,
-    dispatch?: () => void,
+    dispatch?: (id: string) => void,
   ): Promise<boolean> {
     // Held from before the switch is asked about: nothing else is written,
     // asked or cleared meanwhile.
@@ -60,12 +60,13 @@ export function useThreadSend({
       if (value.side) return await askAside(value, write, dispatch);
       if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
       if (chat) markDraftSent(chat.id);
-      dispatch?.();
+      const messageId = crypto.randomUUID();
+      dispatch?.(messageId);
       async function post(target: ChatSummary, elsewhere?: { id: string }) {
         const input = {
           // A side conversation leaves the thread's attachments waiting.
           ...withAttachments(value, root ? { codeRefs: [] } : attachments),
-          id: crypto.randomUUID(),
+          id: messageId,
           ...(root ? { parentId: root.id } : {}),
           ...(viewing ? { viewing } : {}),
         };
@@ -95,16 +96,16 @@ export function useThreadSend({
   async function askAside(
     value: ComposedSend,
     write: HeldWrite,
-    dispatch?: () => void,
+    dispatch?: (id: string) => void,
   ) {
     if (!chat) {
       setError(new Error(asideNeedsAnswer));
       return false;
     }
     markDraftSent(chat.id);
-    dispatch?.();
+    const question = crypto.randomUUID();
+    dispatch?.(question);
     return write.run(async () => {
-      const question = crypto.randomUUID();
       await api.sendProjectChat(chat.id, {
         ...value,
         id: question,

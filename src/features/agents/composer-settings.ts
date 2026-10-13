@@ -3,7 +3,10 @@ import {
   type InteractionMode,
   type RuntimeMode,
 } from "../../../shared/agent-modes";
-import type { ProjectChatSend } from "../../../shared/projects";
+import type {
+  ProjectChatSend,
+  SentComposerSettings,
+} from "../../../shared/projects";
 import {
   newThreadModelsSchema,
   type NewThreadModels,
@@ -26,6 +29,11 @@ export interface ComposerSettings {
   models: ComposerModels;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
+  /**
+   * The thread's last message these settings know of. One sent without them,
+   * from the phone, another computer or an agent, replaces them; see withSent.
+   */
+  sent?: string;
 }
 const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
@@ -81,8 +89,6 @@ export function followLastAgent(
     return { at: { adopted: picked, known: picked }, save: picked };
   return { at: { ...at, known: picked } };
 }
-/** Whether a composer saved settings under `key`. */
-export const hasComposerSettings = (key: string) => read(key) !== null;
 /** Where a composer with nothing saved yet starts from. */
 export interface InheritedSettings {
   /** The composer whose settings it starts on. */
@@ -97,23 +103,25 @@ export function loadComposerSettings(
 ): ComposerSettings {
   let saved = read(key);
   let provider = pickedProvider(key, saved);
+  const own = !!saved;
   if (!saved && inherit) {
     saved = read(inherit.settingsKey);
     provider = inherit.provider ?? pickedProvider(inherit.settingsKey, saved);
   }
   return {
     provider,
-    // A thread this window has no settings for (started on the phone, or in
-    // another build of Relay) opens on the models last used, like a new one.
-    models:
-      isNewThread(key) || !saved
-        ? withNewThreadModels(
-            readComposerModels(saved),
-            cachedNewThreadModels() ?? {},
-          )
-        : readComposerModels(saved),
+    // Shared defaults belong only to new drafts. Existing conversations
+    // restore their own last send, never another thread's model picks.
+    models: isNewThread(key)
+      ? withNewThreadModels(
+          readComposerModels(saved),
+          cachedNewThreadModels() ?? {},
+        )
+      : readComposerModels(saved),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
+    // An inherited one's last message says nothing about this conversation.
+    ...(own && typeof saved?.sent === "string" ? { sent: saved.sent } : {}),
   };
 }
 export function saveComposerSettings(
@@ -167,22 +175,44 @@ export function forkThreadSettings(
 export function saveSentSettings(
   key: string,
   provider: ComposerSettings["provider"],
-  sent: Pick<
-    ProjectChatSend,
-    "provider" | "choice" | "contextWindow" | "runtimeMode" | "interactionMode"
-  >,
+  sent: SentSettings,
 ) {
-  const saved = loadComposerSettings(key);
   saveComposerSettings(key, {
-    ...saved,
-    models: withNewThreadModels(saved.models, {
-      [sent.provider]: {
-        choice: sent.choice,
-        ...(sent.contextWindow ? { contextWindow: sent.contextWindow } : {}),
-      },
-    }),
+    ...withSentModel(loadComposerSettings(key), sent),
     provider,
-    runtimeMode: sent.runtimeMode,
-    interactionMode: sent.interactionMode,
   });
+}
+type SentSettings = Pick<
+  ProjectChatSend,
+  "provider" | "choice" | "contextWindow" | "runtimeMode" | "interactionMode"
+>;
+const withSentModel = (
+  settings: ComposerSettings,
+  sent: SentSettings,
+): ComposerSettings => ({
+  ...settings,
+  models: withNewThreadModels(settings.models, {
+    [sent.provider]: {
+      choice: sent.choice,
+      ...(sent.contextWindow ? { contextWindow: sent.contextWindow } : {}),
+    },
+  }),
+  runtimeMode: sent.runtimeMode,
+  interactionMode: sent.interactionMode,
+});
+/**
+ * `settings` on the thread's last message when they don't know of it: it went
+ * from the phone, another computer or an agent, or before this window kept
+ * any. Notes do not carry agent settings and are filtered by the caller.
+ */
+export function withSent(
+  settings: ComposerSettings,
+  sent: SentComposerSettings | undefined,
+): ComposerSettings {
+  if (!sent || sent.id === settings.sent) return settings;
+  return {
+    ...withSentModel(settings, sent),
+    provider: sent.provider,
+    sent: sent.id,
+  };
 }

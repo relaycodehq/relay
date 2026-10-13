@@ -10,7 +10,10 @@ import { Paperclip } from "lucide-react";
 import { reportsUsage, type AgentProvider } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
-import type { ResumeSettings } from "../../../shared/projects";
+import type {
+  ResumeSettings,
+  SentComposerSettings,
+} from "../../../shared/projects";
 import type { InheritedSettings } from "../agents/composer-settings";
 import { useComposerToolbar } from "./composer-toolbar";
 import { effortStep, quickStep } from "../quick-switch/effort-shortcut";
@@ -88,6 +91,8 @@ export interface ComposerConversation {
   busy: boolean;
   /** The agent holding its context; the composer runs it until one is picked here. */
   agent?: AgentProvider;
+  /** This conversation's own latest sent settings, once its history loads. */
+  lastSent?: SentComposerSettings;
   /** The agent whose last answer proposed a plan, offered to build it. */
   planner?: AgentProvider;
   /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
@@ -143,7 +148,7 @@ export function ProjectComposer({
   onSend: (
     value: ComposedSend,
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
-    dispatch?: () => void,
+    dispatch?: (id: string) => void,
   ) => Promise<boolean>;
   /**
    * Left out while what runs can't be stopped, as a compaction. `steers`
@@ -169,6 +174,7 @@ export function ProjectComposer({
     key: keys.settings,
     inherit: keys.inherit,
     agent,
+    lastSent: conversation.lastSent,
   });
   const catalogs = useModelCatalogs(projectId);
   const promptInput = useRef<PromptInputHandle>(null);
@@ -263,9 +269,29 @@ export function ProjectComposer({
     complete: !!attachment?.complete,
     intercept: commands.interceptSend,
     // A new thread's agent starts on the account picked here.
-    onSend: (value, dispatch) => {
+    onSend: async (value, dispatch) => {
       const account = accounts.of(value.to ?? value.provider);
-      return onSend(account ? { ...value, account } : value, dispatch);
+      const before = composer.sent;
+      let noted = false;
+      const accepted = await onSend(
+        account ? { ...value, account } : value,
+        (id) => {
+          // /btw has its own composer; queued and scheduled messages have not
+          // replaced this conversation's latest send yet.
+          if (
+            value.to !== "message" &&
+            !value.side &&
+            !value.sendAt &&
+            value.delivery !== "queue"
+          ) {
+            composer.noteSent(id);
+            noted = true;
+          }
+          dispatch?.();
+        },
+      );
+      if (!accepted && noted) composer.noteSent(before);
+      return accepted;
     },
   });
   return (

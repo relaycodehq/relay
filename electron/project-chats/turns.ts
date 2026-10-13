@@ -6,7 +6,12 @@ import type {
   ProjectChatSend,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot, sentBy, threadWorktree } from "../../shared/projects";
+import {
+  replyRoot,
+  sentBy,
+  sentSettingsOf,
+  threadWorktree,
+} from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import {
@@ -288,12 +293,15 @@ export class ChatTurns {
         provider: asked?.provider ?? input.provider,
         version: 1,
         ...(resumed && { resumed: true }),
-        ...(chat.handover?.kickoff === input.id && { handedOver: true as const }),
+        ...(chat.handover?.kickoff === input.id && {
+          handedOver: true as const,
+        }),
         ...(input.images?.length
           ? { images: await this.core.storage.saveImages(id, input.images) }
           : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...sentBy(input),
+        ...(asked ? { sentSettings: sentSettingsOf(input) } : {}),
       };
       chat.messages.push(user);
       const superseded =

@@ -1,20 +1,39 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+  realpath,
+} from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 // A thread this window has no composer settings for (started on the phone, or
-// in a build of Relay on another origin) used to open on Codex's Default
-// instead of the agent that answered and the model last used with it.
+// in a build of Relay on another origin) must restore its own launch settings,
+// even after a new-draft pick changes the shared defaults.
 test.setTimeout(60_000);
 
-test("opens a thread with no saved settings on its agent and last model", async () => {
+test("an unopened thread keeps its launch settings after changing a new draft's effort", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-tm-")));
   const repo = join(root, "project"),
-    data = join(root, "data");
+    data = join(root, "data"),
+    bin = join(root, "bin"),
+    capture = join(root, "calls.jsonl");
   await mkdir(repo);
+  await mkdir(bin);
+  const script = (
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")
+  ).replace(
+    "models: [],",
+    `models: [{ value: "claude-test-model", displayName: "Test Claude", supportsEffort: true, supportedEffortLevels: ["low", "high", "max"] }],`,
+  );
+  for (const name of ["claude", "codex"])
+    await fakeCli(join(bin, name), script);
   await mkdir(join(data, "project-chats"), { recursive: true });
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   const projectId = randomUUID();
@@ -27,6 +46,19 @@ test("opens a thread with no saved settings on its agent and last model", async 
     created: start,
     updated: start + 1000,
     provider: "claude",
+    lastInput: {
+      id: "q",
+      body: "@claude hello",
+      provider: "claude",
+      choice: {
+        model: "claude-test-model",
+        fast: false,
+        reasoningEffort: "max",
+      },
+      contextWindow: "200k",
+      runtimeMode: "auto",
+      interactionMode: "plan",
+    },
     messages: [
       {
         id: "q",
@@ -67,14 +99,14 @@ test("opens a thread with no saved settings on its agent and last model", async 
           added: 1,
         },
       ],
-      chats: [{ ...chat, messages: undefined }],
+      chats: [{ ...chat, messages: undefined, lastInput: undefined }],
       newThreadAgent: "claude",
       newThreadModels: {
         claude: {
           choice: {
             model: "claude-test-model",
             fast: false,
-            reasoningEffort: "",
+            reasoningEffort: "low",
           },
         },
         codex: {
@@ -92,6 +124,8 @@ test("opens a thread with no saved settings on its agent and last model", async 
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
+      ...pathWith(env, bin),
+      RELAY_AGENT_CAPTURE: capture,
       RELAY_TEST_DATA: data,
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
@@ -104,11 +138,71 @@ test("opens a thread with no saved settings on its agent and last model", async 
       localStorage.setItem("relay-sidebar-view", "activity"),
     );
     await page.reload();
+    await page.screenshot({ path: join(tmpdir(), "relay-settings-first-frame.png") });
+    await page
+      .getByRole("button", { name: /^New thread in project$/i })
+      .click();
+    const effort = page.getByRole("button", {
+      name: "Reasoning effort and context window",
+      exact: true,
+    });
+    await expect(effort).toContainText("Low");
+    await effort.click();
+    await page
+      .getByRole("menuitemradio", { name: "High", exact: true })
+      .click();
+    await expect(effort).toContainText("High");
     await page.locator(".sb-card", { hasText: "Earlier work" }).first().click();
     await expect(page.locator('[data-message-id="a"]')).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
-    ).toHaveText(/claude-test-model/);
+    ).toHaveText(/Test Claude/);
+    await expect(effort).toContainText("Max");
+    await expect(effort).toContainText("200k");
+    await expect(
+      page.getByRole("combobox", { name: "Runtime mode", exact: true }),
+    ).toHaveText("Auto-accept edits");
+    await expect(
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: join(tmpdir(), "relay-thread-settings-reopen.png"),
+    });
+    // A local unsent pick belongs to this conversation when it is reopened.
+    await effort.click();
+    await page.getByRole("menuitemradio", { name: "Low", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^New thread in project$/i })
+      .click();
+    await expect(effort).toContainText("High");
+    await page.locator(".sb-card", { hasText: "Earlier work" }).first().click();
+    await expect(effort).toContainText("Low");
+    await expect(effort).toContainText("200k");
+    // The restored model is also what is sent, not only what the toolbar shows.
+    await page.getByLabel("Message project").fill("Say hello again");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect
+      .poll(async () => {
+        const calls = (await readFile(capture, "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line));
+        return calls.find(
+          (call) =>
+            call.provider === "claude" &&
+            call.prompt?.includes("Say hello again"),
+        )?.args;
+      })
+      .toEqual(
+        expect.arrayContaining([
+          "--model",
+          "claude-test-model",
+          "--effort",
+          "low",
+        ]),
+      );
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

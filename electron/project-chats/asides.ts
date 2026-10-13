@@ -4,7 +4,7 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import { replyRoot, sentSettingsOf } from "../../shared/projects";
 import { agentMention, agentName } from "../../shared/agents";
 import { agentAsked } from "../../shared/recipient";
 import { sideRefusal } from "../../shared/commands";
@@ -67,6 +67,7 @@ export class SideQuestions {
       created: Date.now(),
       provider,
       version: 1,
+      sentSettings: sentSettingsOf({ ...input, to: provider }),
       ...(input.images?.length
         ? { images: await this.core.storage.saveImages(chat.id, input.images) }
         : {}),

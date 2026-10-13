@@ -6,6 +6,7 @@ import type { SentSkill } from "../skill-mentions";
 import type { AgentQuestion } from "../agent-modes";
 import type { HtmlRender } from "../html-render";
 import type { Streamed } from "../usage";
+import type { ResumeSettings } from "./send";
 
 export interface PageAnswer {
   title: string;
@@ -77,6 +78,8 @@ export interface WorktreeCommandRun {
   stopped?: "timeout" | "cancelled";
 }
 export interface ChatMessage {
+  /** The exact composer settings a user message went to its agent with. */
+  sentSettings?: ResumeSettings;
   /** Local marker: Relay sent this prompt to resume a stopped answer; shown as a divider. */
   resumed?: boolean;
   /** The prompt Relay sent to start a handed-over thread on the computer that took it; the handoff note's row stands for it. */

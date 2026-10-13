@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { defaultAISettings } from "../../../shared/settings";
-import type { ChatSummary, Project } from "../../../shared/projects";
+import type { ChatSummary, Project, ProjectChatSend } from "../../../shared/projects";
 import type { CodeReference } from "../../../shared/code-references";
 import type { DraftImage } from "../images/draft-images";
 import { threadStorage } from "../../lib/thread-storage";
 import { readDraft, writeDraft } from "./drafts";
 import { sendDraft, unsent } from "./draft-send";
+import { loadComposerSettings, saveComposerSettings } from "../agents/composer-settings";
 
 const images = new Map<string, DraftImage[]>();
-const sends: { resolve: () => void; body: string; images?: unknown[] }[] = [];
+const sends: (ProjectChatSend & { resolve: () => void })[] = [];
+let lastInput: ProjectChatSend | undefined;
 vi.mock("../images/draft-images", () => ({
   loadDraftImages: async (key: string) => images.get(key) ?? [],
   saveDraftImages: async (key: string, list: DraftImage[]) =>
@@ -23,12 +25,13 @@ vi.mock("../../lib/api", () => ({
   api: {
     aiSettings: async () => defaultAISettings,
     agentModels: async () => [],
+    projectChat: async () => ({ ...chat, messages: [], lastInput }),
     sendProjectChat: (
       _id: string,
-      send: { body: string; images?: unknown[] },
+      send: ProjectChatSend,
     ) =>
       new Promise<void>((resolve) =>
-        sends.push({ resolve, body: send.body, images: send.images }),
+        sends.push({ resolve, ...send }),
       ),
   },
 }));
@@ -38,6 +41,7 @@ beforeEach(() => {
   store.clear();
   images.clear();
   sends.length = 0;
+  lastInput = undefined;
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
@@ -127,6 +131,25 @@ it("empties a draft nobody touched while it went out", async () => {
   await send.finish();
   expect(readDraft(key)).toBe("");
   expect(images.get(key)).toEqual([]);
+});
+
+it("restores a background send from the thread and preserves picks changed while sending", async () => {
+  lastInput = {
+    id: "phone",
+    body: "@codex Prior work",
+    provider: "codex",
+    choice: { model: "gpt-6-sol", fast: true, reasoningEffort: "high" },
+    runtimeMode: "auto",
+    interactionMode: "default",
+  };
+  writeDraft(key, "Continue the work");
+  const send = await sendHeldBack();
+  expect(sends[0].choice).toEqual(lastInput.choice);
+  expect(sends[0].runtimeMode).toBe("auto");
+  const changed = { ...loadComposerSettings(chat.id), runtimeMode: "approval-required" as const };
+  saveComposerSettings(chat.id, changed);
+  await send.finish();
+  expect(loadComposerSettings(chat.id)).toEqual({ ...changed, sent: sends[0].id });
 });
 
 it("sends a draft that holds only a screenshot", async () => {

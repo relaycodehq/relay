@@ -42,6 +42,7 @@ import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { WorktreeBranchField } from "./WorktreeBranchField";
 import "../changes/branch-picker.css";
 import { threadCost } from "../../../shared/thread-cost";
+import { lastComposerSettings } from "../../../shared/projects";
 
 /** What goes out with the main conversation's next message besides its text. */
 function AttachedContext({
@@ -171,7 +172,7 @@ export function ThreadComposer({
   handle: { chat, id, busy, setError },
   project,
   scope,
-  thread: { root, messages, shown, running, mainRunning },
+  thread: { history, root, messages, shown, running, mainRunning },
   councils: { reviewing },
   background: { agentBatch, earlierBatches, pending, stopped, leftBehind },
   session: {
@@ -218,7 +219,10 @@ export function ThreadComposer({
     query: string,
   ) => CommandOption[] | undefined;
   onProjectSettings: () => void;
-  onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
+  onSend: (
+    value: ComposedSend,
+    dispatch?: (id: string) => void,
+  ) => Promise<boolean>;
   /** Takes the newest queued message back into the composer; false when none waits. */
   onEditQueued: () => boolean;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
@@ -248,6 +252,7 @@ export function ThreadComposer({
   const waiting = root?.side ? false : mainRunning || reviewing;
   const held =
     busy ||
+    (!!chat && history.isPending) ||
     worktree.unavailable ||
     (!!chat?.sentTo && !liveAway(chat)) ||
     !!chat?.cameFrom?.returnedAt;
@@ -291,6 +296,7 @@ export function ThreadComposer({
         running: waiting,
         busy: held,
         agent: chat && threadContextAgent(chat),
+        lastSent: lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
         chatId: chat?.id,
         accounts: chat?.accounts,

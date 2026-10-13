@@ -19,6 +19,7 @@ import { defaultAISettings } from "../../shared/settings";
 import { triageState } from "../../shared/chat-activity";
 import {
   applyChatPatch,
+  sentSettingsOf,
   type ChatMessage,
   type ChatSummary,
 } from "../../shared/projects";
@@ -1672,6 +1673,7 @@ it("steers an active Codex turn natively, and resumes its saved session with the
   await chats.send(chat.id, followup);
   expect((await chats.get(chat.id)).queue).toHaveLength(0);
   expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(followup.id);
+  expect((await chats.get(chat.id)).messages.at(-1)?.sentSettings).toEqual(sentSettingsOf(followup));
   await chats.cancel(chat.id);
   await vi.waitFor(async () =>
     expect(
