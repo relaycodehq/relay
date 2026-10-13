@@ -749,8 +749,8 @@ export type ServerFrame =
   | { t: "result"; id: number; ok: false; error: string }
   /** `s` numbers a streaming frame the client acknowledges with `got`. */
   | { t: "event"; event: WireEvent; s?: number }
-  /** Keepalive: a phone that stops hearing these treats the link as dead. */
-  | { t: "tick" };
+  /** Keepalive and current routes: a phone that stops hearing these treats the link as dead. */
+  | { t: "tick"; hosts?: string[] };
 
 /** The unencrypted opening, one each way; see shared/remote-crypto. */
 export interface HelloFrame {

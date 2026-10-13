@@ -439,6 +439,57 @@ it("resumes previously enabled access with no saved LAN choice and no Tailscale"
   await p.client.call("overview");
 });
 
+it("refreshes a connected phone's saved routes after LAN addresses change", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  let hosts = ["127.0.0.1"];
+  const changedHost = interfaceHost ?? "localhost";
+  const { remote } = await desktop(
+    undefined,
+    { current: { status: "missing", addresses: [] } },
+    {},
+    () => hosts,
+    {},
+  );
+  await remote.setEnabled(true);
+  let learned: RemoteCredentials | undefined;
+  const updates: RemoteCredentials[] = [];
+  const p = phone(
+    { link: parsePairingUrl((await remote.pairing()).url)!, device: "Phone" },
+    {
+      onCredentials: (c) => {
+        learned = c;
+        updates.push(c);
+      },
+    },
+  );
+  await p.until("online");
+  hosts = [changedHost];
+  await vi.advanceTimersByTimeAsync(15_000);
+  await vi.waitFor(() =>
+    expect(
+      updates.some(
+        (c) => c.hosts.join(",") === [changedHost, "127.0.0.1"].join(","),
+      ),
+    ).toBe(true),
+  );
+  // A route update can move the link without an offline transition or changing its token.
+  await vi.waitFor(() => expect(p.client.route?.host).toBe(changedHost));
+  expect(learned).toMatchObject({
+    hosts: [changedHost],
+    token: p.credentials()!.token,
+    deviceId: p.credentials()!.deviceId,
+  });
+  expect(p.statuses.filter((s) => s.status !== "online")).toEqual([
+    { status: "connecting", detail: undefined },
+  ]);
+  await p.client.call("overview");
+  p.client.close();
+  const again = phone(learned!);
+  await again.until("online");
+  expect(again.client.route?.host).toBe(changedHost);
+  await again.client.call("overview");
+});
+
 /**
  * Names stand in for routes: each maps to the desktop on 127.0.0.1 while
  * `up`, and to a socket that never answers, like a LAN address on another
