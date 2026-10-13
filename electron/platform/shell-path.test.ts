@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   extractPath,
   extractRegistryPath,
   hydratePath,
   loginShells,
   mergePath,
+  pathRefresher,
   type Run,
 } from "./shell-path";
 
@@ -117,11 +118,14 @@ describe("hydratePath", () => {
       SystemRoot: "C:\\Windows",
       LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local",
     };
-    const exec: Run = async (file, args) => {
-      expect(file).toBe("C:\\Windows\\System32\\reg.exe");
-      return args[1].startsWith("HKLM")
-        ? "\r\nHKEY_LOCAL_MACHINE\\...\\Environment\r\n    Path    REG_EXPAND_SZ    %SystemRoot%\\system32;C:\\Program Files\\GitHub CLI\\\r\n\r\n"
-        : "\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    %LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin;%UNSET%\\bin\r\n\r\n";
+    const exec: Run = async (file) => {
+      expect(file).toBe(
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      );
+      return registryOutput(
+        "%SystemRoot%\\system32;C:\\Program Files\\GitHub CLI\\",
+        "%LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin;%UNSET%\\bin",
+      );
     };
     await hydratePath(env, { platform: "win32", exec });
     expect(env.PATH).toBe(
@@ -137,20 +141,61 @@ describe("hydratePath", () => {
 });
 
 describe("extractRegistryPath", () => {
-  it("expands variables whatever their case, and gives nothing without a Path", () => {
+  it("decodes folders outside any code page and expands variables whatever their case", () => {
     expect(
       extractRegistryPath(
-        "    Path    REG_EXPAND_SZ    %userprofile%\\.bun\\bin\r\n",
-        {
-          USERPROFILE: "C:\\Users\\me",
-        },
+        registryOutput("C:\\Users\\Lubomír\\bin", "%userprofile%\\.bun\\bin"),
+        { USERPROFILE: "C:\\Users\\Lubomír" },
       ),
-    ).toBe("C:\\Users\\me\\.bun\\bin");
+    ).toBe("C:\\Users\\Lubomír\\bin;C:\\Users\\Lubomír\\.bun\\bin");
+  });
+
+  it("gives nothing without a Path, or for anything but the script's lines", () => {
+    expect(extractRegistryPath(registryOutput("", ""), {})).toBeUndefined();
     expect(
       extractRegistryPath(
-        "ERROR: The system was unable to find the specified registry key or value.",
+        "Get-Item : Cannot find path 'HKCU:\\Environment'",
         {},
       ),
     ).toBeUndefined();
   });
 });
+
+describe("pathRefresher", () => {
+  const gate = () => {
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    return { open, opened };
+  };
+
+  it("lets every lookup that missed together search again after one read", async () => {
+    const reading = gate();
+    const read = vi.fn(() => reading.opened);
+    const refresh = pathRefresher(read, 10_000);
+    const misses = Promise.all([refresh(0), refresh(0), refresh(0)]);
+    reading.open();
+    expect(await misses).toEqual([true, true, true]);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells a lookup that began before the last read to search again, without reading", async () => {
+    let clock = 1_000;
+    const read = vi.fn(async () => {
+      clock = 2_000;
+    });
+    const refresh = pathRefresher(read, 10_000, () => clock);
+    expect(await refresh(500)).toBe(true);
+    expect(await refresh(1_500)).toBe(true);
+    expect(await refresh(2_500)).toBe(false);
+    expect(read).toHaveBeenCalledTimes(1);
+    clock = 12_000;
+    expect(await refresh(11_000)).toBe(true);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+});
+
+function registryOutput(machine: string, user: string) {
+  return [machine, user]
+    .map((path) => Buffer.from(path, "utf8").toString("base64"))
+    .join("\r\n");
+}

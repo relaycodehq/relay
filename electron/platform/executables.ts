@@ -203,8 +203,10 @@ async function locate(name: string) {
       found.push(path);
     }
   };
+  const searchedAt = Date.now();
   let tool = await search();
-  if (!tool && !found.length && (await refreshPath())) tool = await search();
+  if (!tool && !found.length && (await refreshPath(searchedAt)))
+    tool = await search();
   if (tool) return tool;
   if (!found.length)
     throw new Error(

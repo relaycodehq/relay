@@ -15,6 +15,7 @@ const run: Run = async (file, args) =>
     await promisify(execFile)(file, args, {
       encoding: "utf8",
       timeout: SHELL_TIMEOUT,
+      windowsHide: true,
     })
   ).stdout;
 
@@ -93,18 +94,24 @@ async function readLaunchctlPath(exec: Run = run) {
   return (await exec("/bin/launchctl", ["getenv", "PATH"])).trim() || undefined;
 }
 
-const pathKeys = [
-  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
-  "HKCU\\Environment",
-];
+/**
+ * Prints the machine's then the user's `Path`, unexpanded, one base64 line
+ * each. reg.exe would print them in the console's code page, which mangles a
+ * folder named outside it (`C:\\Users\\Lubomír`); base64 survives any.
+ */
+const registryPathScript = [
+  "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+  "HKCU:\\Environment",
+]
+  .map(
+    (key) =>
+      `try { $v = (Get-Item -LiteralPath '${key}' -ErrorAction Stop).GetValue('Path', '', 'DoNotExpandEnvironmentNames') } catch { $v = '' }; ` +
+      "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$v))",
+  )
+  .join("; ");
 
-/** The `Path` value in `reg query` output, its `%VARIABLES%` expanded from `env`. */
-export function extractRegistryPath(
-  output: string,
-  env: NodeJS.ProcessEnv,
-): string | undefined {
-  const value = /^\s*Path\s+REG_(?:EXPAND_)?SZ\s+(.*?)\s*$/im.exec(output)?.[1];
-  if (!value) return undefined;
+/** `value` with its `%VARIABLES%` expanded from `env`, whatever their case. */
+function expandVariables(value: string, env: NodeJS.ProcessEnv) {
   const lookup = new Map(
     Object.entries(env).map(([key, val]) => [key.toLowerCase(), val]),
   );
@@ -114,6 +121,21 @@ export function extractRegistryPath(
   );
 }
 
+/** The `Path` values `registryPathScript` printed, decoded, expanded and joined. */
+export function extractRegistryPath(
+  output: string,
+  env: NodeJS.ProcessEnv,
+): string | undefined {
+  const parts = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[A-Za-z0-9+/]+={0,2}$/.test(line))
+    .map((line) => Buffer.from(line, "base64").toString("utf8"))
+    .filter(Boolean)
+    .map((value) => expandVariables(value, env));
+  return parts.join(";") || undefined;
+}
+
 /**
  * Windows keeps the PATH in the registry, the machine's then the user's, and
  * a process gets the copy its parent had. Relay started by a long-running
@@ -121,19 +143,20 @@ export function extractRegistryPath(
  * or GitHub CLI installed after login. The registry has the current one.
  */
 async function readRegistryPath(env: NodeJS.ProcessEnv, exec: Run = run) {
-  const reg = win32.join(
+  const powershell = win32.join(
     env.SystemRoot ?? env.windir ?? "C:\\Windows",
     "System32",
-    "reg.exe",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
   );
-  const parts = await Promise.all(
-    pathKeys.map((key) =>
-      exec(reg, ["query", key, "/v", "Path"])
-        .then((output) => extractRegistryPath(output, env))
-        .catch(() => undefined),
-    ),
-  );
-  return parts.filter(Boolean).join(";") || undefined;
+  const output = await exec(powershell, [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    registryPathScript,
+  ]).catch(() => "");
+  return extractRegistryPath(output, env);
 }
 
 /**
@@ -184,27 +207,49 @@ function accountShell() {
 }
 
 let hydration: Promise<void> | undefined;
-let hydratedAt = 0;
-const refreshAfter = 60_000;
 
 /** Fills the process PATH once; executable lookups wait for it. */
 export function pathReady(): Promise<void> {
-  return (hydration ??= hydrate());
+  return (hydration ??= hydratePath(process.env).catch(() => {}));
+}
+
+/**
+ * Wraps `read` for lookups that found nothing. Resolves whether the PATH was
+ * read again since `searchedAt`, when the lookup began, so it's worth
+ * searching once more. Misses at the same time share one read, and reads are
+ * at least `every` ms apart.
+ */
+export function pathRefresher(
+  read: () => Promise<void>,
+  every: number,
+  now = Date.now,
+) {
+  let reading: Promise<void> | undefined;
+  let readAt = -Infinity;
+  return async (searchedAt: number): Promise<boolean> => {
+    if (readAt >= searchedAt) return true;
+    if (!reading) {
+      if (now() - readAt < every) return false;
+      reading = read().finally(() => {
+        readAt = now();
+        reading = undefined;
+      });
+    }
+    await reading;
+    return true;
+  };
 }
 
 /**
  * Reads the PATH again for a program that wasn't found: one installed since
- * Relay started shows up without a restart. At most once a minute, since a
- * login shell can take seconds.
+ * Relay started shows up without a restart. Only on Windows, where that is a
+ * registry read; elsewhere it would mean login shells, seconds each, for every
+ * tool that simply isn't installed.
  */
-export async function refreshPath(): Promise<boolean> {
-  await pathReady();
-  if (Date.now() - hydratedAt < refreshAfter) return false;
-  await (hydration = hydrate());
-  return true;
-}
-
-function hydrate() {
-  hydratedAt = Date.now();
-  return hydratePath(process.env).catch(() => {});
-}
+export const refreshPath: (searchedAt: number) => Promise<boolean> =
+  process.platform === "win32"
+    ? pathRefresher(async () => {
+        await pathReady();
+        await hydratePath(process.env).catch(() => {});
+      }, 10_000)
+    : async () => false;
