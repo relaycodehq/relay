@@ -464,13 +464,20 @@ export interface ProjectChecksApi {
     where: string,
     head: string,
   ): Promise<ProjectCheckState | null>;
+  /** `holder` identifies the window; windows on one folder share its checker. */
   startLocalChecks(
     where: string,
     head: string,
     target: string,
+    holder: string,
+    paused: boolean,
   ): Promise<ProjectCheckState>;
-  stopLocalChecks(where: string): Promise<void>;
-  pauseLocalChecks(where: string, paused: boolean): Promise<void>;
+  stopLocalChecks(where: string, holder: string): Promise<void>;
+  pauseLocalChecks(
+    where: string,
+    paused: boolean,
+    holder: string,
+  ): Promise<void>;
   updateLocalCheckBuffer(
     where: string,
     head: string,

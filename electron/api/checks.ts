@@ -14,6 +14,8 @@ import type { CheckLimits } from "../checks/service";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const targetSchema = z.string().max(4096);
+/** A window's hold on a checker it shares with other windows. */
+const holderSchema = z.string().max(64);
 
 /** Diagnostics, symbols and line history, in a project's folders and in linked pull requests. */
 export function checkHandlers(ctx: ApiContext) {
@@ -48,8 +50,8 @@ export function checkHandlers(ctx: ApiContext) {
       projectChecks.state(local(where), head),
     ),
     startLocalChecks: takes(
-      [workspaceIdSchema, shaSchema, targetSchema],
-      async (where, head, target) => {
+      [workspaceIdSchema, shaSchema, targetSchema, holderSchema, z.boolean()],
+      async (where, head, target, holder, paused) => {
         const { root, projectId } = await place(where);
         return projectChecks.start(
           local(where),
@@ -59,16 +61,20 @@ export function checkHandlers(ctx: ApiContext) {
           head,
           target,
           limits(projectId),
+          { holder, paused },
         );
       },
     ),
-    stopLocalChecks: takes([workspaceIdSchema], (where) => {
-      projectChecks.stop(local(where));
-    }),
+    stopLocalChecks: takes(
+      [workspaceIdSchema, holderSchema],
+      (where, holder) => {
+        projectChecks.stop(local(where), holder);
+      },
+    ),
     pauseLocalChecks: takes(
-      [workspaceIdSchema, z.boolean()],
-      (where, paused) => {
-        projectChecks.pause(local(where), paused);
+      [workspaceIdSchema, z.boolean(), holderSchema],
+      (where, paused, holder) => {
+        projectChecks.pause(local(where), paused, holder);
       },
     ),
     updateLocalCheckBuffer: takes(
@@ -96,15 +102,18 @@ export function checkHandlers(ctx: ApiContext) {
     projectCheckState: takes([refSchema, shaSchema], (r, head) =>
       projectChecks.state(prKey(r), head),
     ),
-    stopProjectChecks: takes([refSchema], (r) => {
-      projectChecks.stop(prKey(r));
+    stopProjectChecks: takes([refSchema, holderSchema], (r, holder) => {
+      projectChecks.stop(prKey(r), holder);
     }),
-    pauseProjectChecks: takes([refSchema, z.boolean()], (r, paused) => {
-      projectChecks.pause(prKey(r), paused);
-    }),
+    pauseProjectChecks: takes(
+      [refSchema, z.boolean(), holderSchema],
+      (r, paused, holder) => {
+        projectChecks.pause(prKey(r), paused, holder);
+      },
+    ),
     startProjectChecks: takes(
-      [refSchema, shaSchema, targetSchema],
-      (r, head, target) => {
+      [refSchema, shaSchema, targetSchema, holderSchema, z.boolean()],
+      (r, head, target, holder, paused) => {
         const dir = requireFolder(r);
         return projectChecks.start(
           prKey(r),
@@ -114,6 +123,7 @@ export function checkHandlers(ctx: ApiContext) {
           head,
           target,
           limits(folderProject(dir)),
+          { holder, paused },
         );
       },
     ),

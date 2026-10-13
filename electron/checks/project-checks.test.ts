@@ -592,4 +592,39 @@ describe("project language support", () => {
     expect(second.id).not.toBe(first.id);
     expect(second.projectId).toBe("p1");
   });
+  it("shares a folder's checker between windows and keeps other folders' running", async () => {
+    const { root, head } = await languageProject(server);
+    const other = await languageProject(server);
+    roots.push(root, other.root);
+    const service = new ProjectChecks(resolve("electron/checks/worker.mjs"));
+    services.push(service);
+    const start = (key: string, dir: string, sha: string, holder: string) =>
+      service.start(
+        key,
+        dir,
+        server,
+        ref,
+        sha,
+        "typescript:tsconfig.json",
+        undefined,
+        { holder, paused: true },
+      );
+    const status = async (key = "pr", sha = head) =>
+      (await service.state(key, sha))?.status;
+    const [a, b] = await Promise.all([
+      start("pr", root, head, "a"),
+      start("pr", root, head, "b"),
+    ]);
+    expect(b.id).toBe(a.id);
+    expect(await status()).toBe("paused");
+    // One window still looking keeps it checking.
+    service.pause("pr", false, "b");
+    await ready(service, head);
+    await start("other", other.root, other.head, "c");
+    service.stop("pr", "b");
+    expect(await status()).toBe("paused");
+    service.stop("pr", "a");
+    expect(await status()).toBe("stopped");
+    expect(await status("other", other.head)).toBe("paused");
+  });
 });

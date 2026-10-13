@@ -3,6 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Pull } from "../../../shared/types";
 import type { ProjectCheckState } from "../../../shared/checks";
 import { api } from "../../lib/api";
+import { useWindowFocused } from "../../lib/window-focus";
+
+/** How long Relay sits in the background before the checker quits to free its memory. */
+const SLEEP_AFTER_MS = 2 * 60_000;
 
 function useWindowHidden() {
   const [hidden, setHidden] = useState(() => document.hidden);
@@ -14,9 +18,24 @@ function useWindowHidden() {
   return hidden;
 }
 
+/** True once the window has been unfocused or hidden for `SLEEP_AFTER_MS`. */
+function useAsleep(away: boolean) {
+  const [asleep, setAsleep] = useState(false);
+  useEffect(() => {
+    if (!away) {
+      setAsleep(false);
+      return;
+    }
+    const timer = setTimeout(() => setAsleep(true), SLEEP_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [away]);
+  return asleep;
+}
+
 /**
  * `busy` pauses rechecking (e.g. while an agent is editing the tree); so does a
  * hidden window. The language service stays loaded and checks once on resume.
+ * After a while in the background it quits instead, and starts cold on return.
  */
 export function useProjectChecks(
   pull?: Pull,
@@ -24,7 +43,11 @@ export function useProjectChecks(
   busy = false,
 ) {
   const qc = useQueryClient();
+  // This window's hold on a checker other windows may share.
+  const [holder] = useState(() => crypto.randomUUID());
   const hidden = useWindowHidden(),
+    focused = useWindowFocused(),
+    asleep = useAsleep(hidden || !focused),
     paused = busy || hidden;
   const identity = local
     ? `${local.id}:${local.head}`
@@ -63,19 +86,25 @@ export function useProjectChecks(
         ? api.localCheckState(local.id, local.head)
         : api.projectCheckState(pull!, pull!.head.sha),
     enabled: !!(pull || local),
-    refetchInterval: enabled ? (paused ? 5000 : 1000) : false,
+    refetchInterval: enabled && !asleep ? (paused ? 5000 : 1000) : false,
     retry: false,
   });
   const target =
     info.data?.targets.find((t) => t.id === selection) ?? info.data?.targets[0];
   useEffect(() => {
-    if ((!pull && !local) || !target || !enabled) return;
+    if ((!pull && !local) || !target || !enabled || asleep) return;
     let current = true;
     setError(undefined);
     void (
       local
-        ? api.startLocalChecks(local.id, local.head, target.id)
-        : api.startProjectChecks(pull!, pull!.head.sha, target.id)
+        ? api.startLocalChecks(local.id, local.head, target.id, holder, paused)
+        : api.startProjectChecks(
+            pull!,
+            pull!.head.sha,
+            target.id,
+            holder,
+            paused,
+          )
     )
       .then((s) => {
         if (current) qc.setQueryData(queryKey, s);
@@ -86,21 +115,23 @@ export function useProjectChecks(
     return () => {
       current = false;
       void (
-        local ? api.stopLocalChecks(local.id) : api.stopProjectChecks(pull!)
+        local
+          ? api.stopLocalChecks(local.id, holder)
+          : api.stopProjectChecks(pull!, holder)
       ).catch(() => {});
       qc.setQueryData(queryKey, null);
     };
-  }, [identity, target?.id, enabled, retry]);
+  }, [identity, target?.id, enabled, asleep, retry]);
   useEffect(() => {
-    if ((!pull && !local) || !enabled) return;
+    if ((!pull && !local) || !enabled || asleep) return;
     void (
       local
-        ? api.pauseLocalChecks(local.id, paused)
-        : api.pauseProjectChecks(pull!, paused)
+        ? api.pauseLocalChecks(local.id, paused, holder)
+        : api.pauseProjectChecks(pull!, paused, holder)
     )
       .then(() => qc.invalidateQueries({ queryKey }))
       .catch(() => {});
-  }, [identity, enabled, paused]);
+  }, [identity, enabled, asleep, paused]);
   const toggle = (value: boolean) => {
     localStorage.setItem(preference, value ? "on" : "off");
     setPreferenceVersion((n) => n + 1);
@@ -128,6 +159,8 @@ export function useProjectChecks(
     state: state.data,
     enabled,
     paused,
+    /** Quit to free memory while Relay is in the background. */
+    asleep,
     busy,
     error: error ?? info.error ?? state.error,
     toggle,

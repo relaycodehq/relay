@@ -79,7 +79,7 @@ export function ProjectChecksButton({
     [limit, setLimit] = useState(50);
   const s = checks.state,
     running = s?.status === "checking",
-    paused = s?.status === "paused";
+    paused = s?.status === "paused" || (checks.asleep && checks.enabled);
   const problems =
     s?.diagnostics.filter(
       (d) =>
@@ -98,9 +98,11 @@ export function ProjectChecksButton({
           : !checks.enabled
             ? "Live checks off"
             : paused
-              ? checks.busy
-                ? "Checks paused · agent working"
-                : "Checks paused"
+              ? checks.asleep
+                ? "Checks asleep"
+                : checks.busy
+                  ? "Checks paused · agent working"
+                  : "Checks paused"
               : running
                 ? "Checking…"
                 : s?.status === "ready"
@@ -109,9 +111,11 @@ export function ProjectChecksButton({
   if (quiet && !checks.error && !checks.info?.targets.length && !open)
     return null;
   const ready = s?.status === "ready" && checks.enabled && !checks.error;
-  const hint = paused
-    ? "Live checks resume once the agent finishes and the window is visible"
-    : "Live diagnostics for the linked local project";
+  const hint = checks.asleep
+    ? "Live checks stopped to free memory while Relay was in the background and start again when you come back"
+    : paused
+      ? "Live checks resume once the agent finishes and the window is visible"
+      : "Live diagnostics for the linked local project";
   return (
     <>
       <button
@@ -155,7 +159,9 @@ export function ProjectChecksButton({
             Diagnostics appear in diffs and the editor and update as you type.
             Checks use the working tree and unsaved editor buffer. Only matching
             file contents get inline diagnostics. Rechecking pauses while an
-            agent is working or the window is hidden, then runs once.
+            agent is working or the window is hidden, then runs once. After two
+            minutes with Relay in the background the checker quits to free its
+            memory and starts again when you return.
           </p>
           {!!checks.error && <ErrorBox error={checks.error} />}
           {!checks.info ? (

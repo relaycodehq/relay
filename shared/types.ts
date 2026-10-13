@@ -291,9 +291,15 @@ export interface Api
     ref: PullRef,
     head: string,
     targetId: string,
+    holder: string,
+    paused: boolean,
   ): Promise<ProjectCheckState>;
-  stopProjectChecks(ref: PullRef): Promise<void>;
-  pauseProjectChecks(ref: PullRef, paused: boolean): Promise<void>;
+  stopProjectChecks(ref: PullRef, holder: string): Promise<void>;
+  pauseProjectChecks(
+    ref: PullRef,
+    paused: boolean,
+    holder: string,
+  ): Promise<void>;
   updateCheckBuffer(
     ref: PullRef,
     head: string,
