@@ -1,6 +1,6 @@
 import { openPath } from "./open-path";
 import { app, dialog, nativeImage, shell } from "electron";
-import { lstat } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
@@ -15,6 +15,7 @@ import {
 } from "../../shared/projects";
 import {
   checkNewLinks,
+  expandHome,
   inspectFolder,
   linkSuggestions,
   listFolders,
@@ -54,6 +55,8 @@ const folderInputSchema = z
   .min(1)
   .max(4096)
   .refine((v) => /^(~|\/|[a-zA-Z]:[\\/])/.test(v) && !v.includes("\0"));
+/** Where a file call works: a workspace, or the folder of a file outside every project. */
+const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
 
 export function projectHandlers(ctx: ApiContext) {
   const {
@@ -74,6 +77,12 @@ export function projectHandlers(ctx: ApiContext) {
       );
     const client = await clientFor(known);
     return { client, repo: await projects.linked(projectId, client) };
+  }
+  /** A file an answer names outside the project opens from its own folder, like a plain one. */
+  async function fileRoot(where: string) {
+    return workspaceIdSchema.safeParse(where).success
+      ? place(where)
+      : { root: await realpath(expandHome(where)), plain: true };
   }
   async function pullRequestPlace(where: string) {
     // A worktree thread's PR opens from its own branch.
@@ -255,12 +264,12 @@ export function projectHandlers(ctx: ApiContext) {
       },
     ),
     projectFileInfo: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => fileInfo((await place(where)).root, path),
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => fileInfo((await fileRoot(where)).root, path),
     ),
     projectImage: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => readImage((await place(where)).root, path),
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => readImage((await fileRoot(where)).root, path),
     ),
     projectThumbnail: takes(
       [workspaceIdSchema, workingPathSchema],
@@ -277,9 +286,9 @@ export function projectHandlers(ctx: ApiContext) {
       },
     ),
     revealProjectPath: takes(
-      [workspaceIdSchema, folderPathSchema],
+      [fileRootSchema, folderPathSchema],
       async (where, path) => {
-        const full = await entryPath((await place(where)).root, path);
+        const full = await entryPath((await fileRoot(where)).root, path);
         // A folder opens in Finder to show what's inside; a file is selected in its folder.
         if (await lstat(full).then((s) => s.isDirectory())) {
           await openPath(full);
@@ -291,9 +300,9 @@ export function projectHandlers(ctx: ApiContext) {
       async (where, path) => join((await place(where)).root, path),
     ),
     openProjectPath: takes(
-      [workspaceIdSchema, workingPathSchema],
+      [fileRootSchema, workingPathSchema],
       async (where, path) =>
-        openPath(entryPath((await place(where)).root, path)),
+        openPath(entryPath((await fileRoot(where)).root, path)),
     ),
     createProjectEntry: takes(
       [workspaceIdSchema, workingPathSchema, z.enum(["file", "dir"])],
@@ -311,12 +320,12 @@ export function projectHandlers(ctx: ApiContext) {
         shell.trashItem(await entryPath((await place(where)).root, path)),
     ),
     projectFile: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => projects.file(await place(where), path),
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => projects.file(await fileRoot(where), path),
     ),
     saveProjectFile: takes(
       [
-        workspaceIdSchema,
+        fileRootSchema,
         workingPathSchema,
         // A plain folder has no HEAD.
         shaSchema.or(z.literal("")),
@@ -324,7 +333,7 @@ export function projectHandlers(ctx: ApiContext) {
         textSchema,
       ],
       async (where, path, head, version, contents) =>
-        projects.save(await place(where), path, head, version, contents),
+        projects.save(await fileRoot(where), path, head, version, contents),
     ),
     projectCiStatus: takes(
       [idSchema, idSchema.nullish()],

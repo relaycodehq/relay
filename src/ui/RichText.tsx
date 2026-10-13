@@ -26,7 +26,7 @@ import type { Position } from "unist";
 import type { PluggableList, Plugin } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
 import {
-  projectFileLink,
+  chatFileLink,
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import { api } from "../lib/api";
@@ -215,7 +215,7 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
 /** Parent folders for file names the message links under several paths. */
 const FileLinkSuffixes = createContext<ReadonlyMap<string, string>>(new Map());
 
-/** Every in-project file a message links or names in inline code. */
+/** Every file a message links or names in inline code. */
 function linkedProjectFiles(text: string, root: string): string[] {
   const paths = new Set<string>();
   // Fenced code never becomes a chip; the odd segments are the fences.
@@ -223,12 +223,12 @@ function linkedProjectFiles(text: string, root: string): string[] {
     if (index % 2) return;
     for (const [, href] of segment.matchAll(/\]\(<?([^)\s>]+)/g))
       if (href) {
-        const target = projectFileLink(href, root);
+        const target = chatFileLink(href, root);
         if (target) paths.add(target.path);
       }
     for (const [, code] of segment.matchAll(/`([^`\n]+)`/g))
       if (code) {
-        const target = projectFileLink(code.trim(), root, true);
+        const target = chatFileLink(code.trim(), root, true);
         if (target) paths.add(target.path);
       }
   });
@@ -406,7 +406,7 @@ export const RichText = memo(function RichText({
       a: ({ href, children }) => {
         const target =
           projectRoot && linksFiles && href
-            ? projectFileLink(href, projectRoot)
+            ? chatFileLink(href, projectRoot)
             : null;
         const shown = !target && href ? link?.(href, children) : undefined;
         if (shown !== undefined) return shown;
@@ -439,7 +439,7 @@ export const RichText = memo(function RichText({
           return <ColorCode value={value} />;
         const target =
           !className && projectRoot && linksFiles && !value.includes("\n")
-            ? projectFileLink(value, projectRoot, true)
+            ? chatFileLink(value, projectRoot, true)
             : null;
         const command = className ? null : inlineCommand(value);
         return target ? (

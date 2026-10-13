@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { linksTo, matchLink, projectFileLink } from "./project-file-links";
+import {
+  chatFileLink,
+  linksTo,
+  matchLink,
+  projectFileLink,
+  splitOutsidePath,
+} from "./project-file-links";
 const root = "/Users/test/workspace";
 it("resolves markdown links and inline code file references into the linked project", () => {
   expect(projectFileLink("src/app/main.ts:42", root)).toEqual({
@@ -88,4 +94,44 @@ it("finds the file a bare name or partial path names", () => {
   ]);
   expect(matchLink(link("app/main.ts"), paths)).toEqual(["src/app/main.ts"]);
   expect(matchLink(link("in.ts"), paths)).toEqual([]);
+});
+it("links files outside the clone by their absolute path", () => {
+  expect(
+    chatFileLink("/tmp/wi-stale-operator-account-link.md", root, true),
+  ).toEqual({
+    path: "/tmp/wi-stale-operator-account-link.md",
+    directory: false,
+    outside: true,
+  });
+  expect(chatFileLink("~/notes/plan.md:12", root, true)).toMatchObject({
+    path: "~/notes/plan.md",
+    line: 12,
+    outside: true,
+  });
+  expect(chatFileLink("file:///etc/hosts.allow", root)?.outside).toBe(true);
+  // Inside the clone it stays a project link.
+  expect(chatFileLink("/Users/test/workspace/src/a.ts", root)).toEqual({
+    path: "src/a.ts",
+    directory: false,
+  });
+});
+it("leaves routes, folders and commands outside the clone as text", () => {
+  for (const value of [
+    "/api/users.json",
+    "/tmp/drafts/",
+    "/usr/local/bin/node",
+  ])
+    expect(chatFileLink(value, root, true)).toBeNull();
+});
+it("splits an outside path into its folder and name", () => {
+  expect(splitOutsidePath("/tmp/a/b.md")).toEqual({
+    folder: "/tmp/a",
+    name: "b.md",
+  });
+  expect(splitOutsidePath("/x.md")).toEqual({ folder: "/", name: "x.md" });
+  expect(splitOutsidePath("~/x.md")).toEqual({ folder: "~", name: "x.md" });
+  expect(splitOutsidePath("C:\\x.md")).toEqual({
+    folder: "C:\\",
+    name: "x.md",
+  });
 });

@@ -10,6 +10,7 @@ import { DiskState, EditHistory, ReloadButton } from "./controls";
 export function EditorBar({
   lead,
   path,
+  title,
   file,
   editor,
   symbols,
@@ -23,6 +24,8 @@ export function EditorBar({
   /** Before the path, like the file list's toggle. */
   lead?: ReactNode;
   path: string;
+  /** The path on hover, when the bar's path isn't the whole story. */
+  title?: string;
   file: LocalFileSession;
   editor: () => FileEditor | undefined;
   symbols: ReactNode;
@@ -39,7 +42,7 @@ export function EditorBar({
   return (
     <div className="editor-bar">
       {lead}
-      <EditorPath path={path} title={source?.path ?? path}>
+      <EditorPath path={path} title={title ?? source?.path ?? path}>
         <DiskState
           file={file}
           className={`editor-bar-state ${dirty ? "dirty" : ""}`}

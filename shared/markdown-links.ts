@@ -193,6 +193,18 @@ function positive(digits: string | undefined) {
   return value > 0 && Number.isSafeInteger(value) ? value : undefined;
 }
 
+/**
+ * An absolute or home path (position removed) that names a file rather than
+ * a route or folder: under a system root or `~`, ending in a file name.
+ */
+export function isOutsideFilePath(path: string) {
+  const unix =
+    path.startsWith("~/") || OS_ROOTS.some((r) => path.startsWith(r));
+  if (!unix && !WINDOWS_ABSOLUTE.test(path)) return false;
+  const last = path.split(/[/\\]/).at(-1)!;
+  return EXTENSIONLESS_FILES.has(last) || EXTENSION.test(last);
+}
+
 /** `path` has its position removed, `written` still carries it. */
 function isFilePath(path: string, written: string) {
   if (WINDOWS_ABSOLUTE.test(path) || EXPLICIT_RELATIVE.test(path)) return true;

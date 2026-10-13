@@ -16,6 +16,7 @@ import { ancestors } from "../lib/file-tree";
 import { useExpanded } from "../features/files/useFileTree";
 import type { Viewing } from "../features/thread/useThreadView";
 import { FileTree } from "../features/files/FileTree";
+import { OutsideFile } from "../features/files/OutsideFile";
 import {
   FileBar,
   FolderView,
@@ -81,7 +82,10 @@ export function ProjectChanges({
 }
 
 type Selection =
-  { kind: "file"; path: string; line?: number } | { kind: "dir"; path: string };
+  | { kind: "file"; path: string; line?: number }
+  | { kind: "dir"; path: string }
+  /** A file outside the project, by its absolute path. */
+  | { kind: "outside"; path: string; line?: number };
 
 /**
  * The folder the thread works in: a tree read straight from disk (ignored
@@ -127,7 +131,9 @@ export function ProjectFiles({
     setSelection(next);
   };
   useRequests(opens, (target) => {
-    if (target.search !== undefined) {
+    if (target.outside)
+      setSelection({ kind: "outside", path: target.path, line: target.line });
+    else if (target.search !== undefined) {
       setFilter(target.search);
       setSelection(null);
     } else {
@@ -243,7 +249,11 @@ export function ProjectFiles({
             where={where}
             title={project.name}
             selected={selection?.path ?? null}
-            lockedPath={locked && file ? file.path : null}
+            lockedPath={
+              locked && selection?.kind !== "dir"
+                ? (selection?.path ?? null)
+                : null
+            }
             expansion={expansion}
             onSelect={(path, kind) => select({ kind, path })}
             onCreated={(path, kind) => select({ kind, path })}
@@ -271,7 +281,18 @@ export function ProjectFiles({
           />
         )}
       </aside>
-      {file ? (
+      {selection?.kind === "outside" ? (
+        <OutsideFile
+          path={selection.path}
+          line={selection.line}
+          checks={checks}
+          lead={listToggle}
+          onOpen={(path) => {
+            if (!blocked()) setSelection({ kind: "outside", path });
+          }}
+          onClose={() => setSelection(null)}
+        />
+      ) : file ? (
         info.error ? (
           <div className="files-main">
             <FileBar lead={listToggle} path={file.path} />

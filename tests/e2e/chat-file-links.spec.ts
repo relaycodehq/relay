@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-async function launch(root: string) {
+async function launch(root: string, extra: Record<string, string> = {}) {
   const bin = join(root, "bin");
   await mkdir(bin);
   await fakeCli(
@@ -34,6 +34,7 @@ async function launch(root: string) {
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: join(root, "agent.jsonl"),
+      ...extra,
     },
   });
 }
@@ -68,9 +69,8 @@ test("a chat file link with a line opens its local diff at that line", async () 
         filePaths: [dir],
       });
     }, repo);
-    await page
-      .getByRole("button", { name: "Add project folder", exact: true })
-      .click();
+    await page.evaluate(() => window.relay.addProject());
+    await page.reload();
     await page.getByLabel("Message project").fill("fixture long link");
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -82,6 +82,52 @@ test("a chat file link with a line opens its local diff at that line", async () 
     );
     await expect(local.locator('[data-line="250"]').first()).toBeInViewport();
     await expect(page.locator(".project-file-list")).toHaveCount(0);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a chat file link outside the project opens and saves in Files", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-chat-outside-")),
+  );
+  const repo = join(root, "project"),
+    draft = join(root, "drafts", "work-item.md");
+  execFileSync("git", ["init", "-q", "-b", "main", repo]);
+  await mkdir(join(root, "drafts"));
+  await writeFile(draft, "# Work item\nUnlink the old account.\n");
+  const app = await launch(root, { RELAY_TEST_OUTSIDE_FILE: draft });
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page.reload();
+    await page.getByLabel("Message project").fill("fixture outside link");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await page.locator(`.chat-file-link[title="${draft}:2"]`).click();
+    const editor = page.locator(".project-inline-editor");
+    await expect(editor.locator(".editor-bar-path")).toContainText(
+      join(root, "drafts") + "/work-item.md",
+    );
+    const surface = editor.locator('[contenteditable="true"]').last();
+    await expect(surface).toContainText("Unlink the old account.");
+    await surface.click();
+    await page.keyboard.press("Meta+End");
+    await page.keyboard.type(" Then relink.");
+    await page
+      .getByRole("button", { name: "Save locally", exact: true })
+      .click();
+    await expect
+      .poll(() => readFile(draft, "utf8"))
+      .toContain("Unlink the old account. Then relink.");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

@@ -1,10 +1,16 @@
 import { filePathSchema } from "./validation";
-import { filePathInInlineCode, resolveFileLink } from "./markdown-links";
+import {
+  filePathInInlineCode,
+  isOutsideFilePath,
+  resolveFileLink,
+} from "./markdown-links";
 
 export type ProjectFileLink = {
   path: string;
   line?: number;
   directory: boolean;
+  /** `path` is absolute (or from `~`), a file outside the project. */
+  outside?: boolean;
 };
 
 /** Whether a link names this file, or a folder that contains it. */
@@ -47,6 +53,42 @@ export function projectFileLink(
     path,
     ...("line" in target && target.line ? { line: target.line } : {}),
     directory,
+  };
+}
+
+/**
+ * A file link in an answer: one in the clone, else a file elsewhere on disk
+ * named by its absolute path, like a draft an agent wrote to /tmp.
+ */
+export function chatFileLink(
+  value: string,
+  root: string,
+  inline = false,
+): ProjectFileLink | null {
+  const inside = projectFileLink(value, root, inline);
+  if (inside || !root) return inside;
+  const candidate = inline ? filePathInInlineCode(value) : value;
+  const target = candidate ? resolveFileLink(candidate) : null;
+  if (!target || !isOutsideFilePath(target.path)) return null;
+  // What the clone itself turned down stays text.
+  if (target.path.startsWith(root.replace(/\/+$/, "") + "/")) return null;
+  return {
+    path: target.path,
+    ...(target.line ? { line: target.line } : {}),
+    directory: false,
+    outside: true,
+  };
+}
+
+/** `/tmp/a/b.md` → `{ folder: "/tmp/a", name: "b.md" }`. */
+export function splitOutsidePath(path: string) {
+  const at = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  const folder = path.slice(0, at);
+  return {
+    // A bare `C:` is that drive's current folder, not its root.
+    folder:
+      at === 0 ? "/" : /^[A-Za-z]:$/.test(folder) ? folder + "\\" : folder,
+    name: path.slice(at + 1),
   };
 }
 

@@ -265,10 +265,13 @@ export function ImageFile({
   where,
   info,
   lead,
+  shownPath = info.path,
 }: {
   where: string;
   info: FileInfo;
   lead?: ReactNode;
+  /** What the bar shows instead of the path, like a file's full path outside the project. */
+  shownPath?: string;
 }) {
   const [error, setError] = useState<unknown>();
   const [actual, setActual] = useState(false);
@@ -283,7 +286,7 @@ export function ImageFile({
     <section className="image-file" aria-label="Image">
       <FileBar
         lead={lead}
-        path={info.path}
+        path={shownPath}
         detail={[
           natural && `${natural.width} × ${natural.height}`,
           formatSize(info.size),
@@ -336,15 +339,18 @@ export function OtherFile({
   where,
   info,
   lead,
+  shownPath = info.path,
 }: {
   where: string;
   info: FileInfo;
   lead?: ReactNode;
+  /** What the bar shows instead of the path, like a file's full path outside the project. */
+  shownPath?: string;
 }) {
   const [error, setError] = useState<unknown>();
   return (
     <section className="other-file" aria-label="File">
-      <FileBar lead={lead} path={info.path} detail={formatSize(info.size)}>
+      <FileBar lead={lead} path={shownPath} detail={formatSize(info.size)}>
         <RevealButtons
           where={where}
           path={info.path}

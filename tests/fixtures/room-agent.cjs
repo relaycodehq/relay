@@ -977,6 +977,7 @@ if (args.includes("--permission-prompt-tool")) {
           "fixture edit files":
             "Added `src/guard.ts`; `src/cache.ts:1` needed no change.",
           "fixture long link": "See `src/long.ts:250`.",
+          "fixture outside link": `Draft ready. File: \`${process.env.RELAY_TEST_OUTSIDE_FILE}:2\`.`,
           "fixture pr links":
             "See `src/lib/cache.ts`, `src/components/file-60.tsx` and `src/nowhere.ts`.",
         }).find(([prompt]) => said.includes(prompt))?.[1] ??

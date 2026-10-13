@@ -34,6 +34,7 @@ export default function LocalFileEditor({
   project,
   inline = false,
   path,
+  shownPath,
   line,
   onClose,
   lead,
@@ -46,6 +47,8 @@ export default function LocalFileEditor({
   project?: LocalProject;
   inline?: boolean;
   path: string;
+  /** What the bar shows instead of `path`, like a file's full path outside the project. */
+  shownPath?: string;
   line?: number;
   onClose: () => void;
   /** Before the path in the inline bar. */
@@ -141,7 +144,8 @@ export default function LocalFileEditor({
       {inline && (
         <EditorBar
           lead={lead}
-          path={path}
+          path={shownPath ?? path}
+          title={shownPath}
           file={file}
           editor={view.editor}
           symbols={symbols.controls}

@@ -77,8 +77,9 @@ export function usePaneOpens(
   }
   // A file clicked in the chat shows its diff in Changes (Review in a PR
   // thread), or opens in Files when it has none. A name that fits several
-  // files lists them in Files.
+  // files lists them in Files. A file outside the project opens in Files too.
   async function openChatFile(target: ProjectFileLink) {
+    if (target.outside) return openInEditor(target);
     if (pull) return revealChange(target);
     const id = folder.where;
     try {
