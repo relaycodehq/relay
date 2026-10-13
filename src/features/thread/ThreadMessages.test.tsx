@@ -8,7 +8,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ChatMessage, ProjectChat } from "../../../shared/projects";
 import { ThreadMessages } from "./ThreadMessages";
-import { clearArrival, markArrivalRead, noteArrival } from "./arrival";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -56,10 +55,10 @@ const chat = {
   ],
 } as unknown as ProjectChat;
 
-function thread(messages: ChatMessage[], sample = chat) {
+function thread(messages: ChatMessage[]) {
   return {
     history: {
-      data: { ...sample, messages },
+      data: { ...chat, messages },
       isPending: false,
       error: null,
       refetch: async () => undefined,
@@ -75,13 +74,13 @@ function thread(messages: ChatMessage[], sample = chat) {
 }
 
 const noop = () => {};
-function view(messages: ChatMessage[], sample = chat) {
+function view(messages: ChatMessage[]) {
   return (
     <QueryClientProvider client={new QueryClient()}>
       <ThreadMessages
-        handle={{ chat: sample, busy: false } as never}
+        handle={{ chat, busy: false } as never}
         projectPath="/sample/relay"
-        thread={thread(messages, sample)}
+        thread={thread(messages)}
         view={
           {
             scroll: { current: null },
@@ -133,102 +132,7 @@ let root: Root | undefined;
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
-  clearArrival();
   document.body.innerHTML = "";
-});
-
-let sampleId = 0;
-function unreadThread(messages: ChatMessage[]) {
-  const sample = { ...chat, id: `unread-${sampleId++}` };
-  noteArrival({
-    chatId: sample.id,
-    readTo: 20,
-    updated: 30,
-    now: 40,
-    opened: true,
-    refocused: false,
-  });
-  const host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  act(() => root!.render(view(messages, sample)));
-  return { host, chatId: sample.id };
-}
-
-it.each<Partial<ChatMessage>>([
-  { handoff: { from: "claude", to: "codex" } },
-  { role: "user", resumed: true },
-  { compaction: true },
-  { reload: { skills: { added: ["release"], removed: [] } } },
-  { role: "user", pageAnswer: { title: "Pick a layout" } },
-  {
-    worktreeCommand: {
-      kind: "setup",
-      command: "npm ci",
-      output: "ok",
-      exitCode: 0,
-    },
-  },
-])("folds unread into an adjacent divider already seen: %j", (extra) => {
-  const { host, chatId } = unreadThread([
-    message("prompt", "user", "Fix the flaky spec"),
-    message("line", "assistant", "A session note", {
-      created: 10,
-      ended: 11,
-      ...extra,
-    }),
-    message("answer", "assistant", "Done.", { created: 30 }),
-  ]);
-  const mark = host.querySelector('[data-message-id="line"] .unread-mark');
-  expect(mark).not.toBeNull();
-  expect(host.querySelector(".unread-divider")).toBeNull();
-  act(() => markArrivalRead(chatId));
-  expect(mark?.hasAttribute("data-read")).toBe(true);
-  expect(host.querySelector('[data-message-id="line"]')).not.toBeNull();
-});
-
-it("finds the visible divider across hidden handoff prompts", () => {
-  const { host } = unreadThread([
-    message("prompt", "user", "Fix the flaky spec"),
-    message("line", "assistant", "Handoff note", {
-      created: 10,
-      handoff: { from: "claude", to: "codex", computer: "macmini" },
-    }),
-    message("kickoff", "user", "Carry on with this work", {
-      created: 12,
-      handedOver: true,
-    }),
-    message("answer", "assistant", "Done.", { created: 30 }),
-  ]);
-  expect(host.querySelector('[data-message-id="kickoff"]')).toBeNull();
-  expect(
-    host.querySelector('[data-message-id="line"] .unread-mark'),
-  ).not.toBeNull();
-  expect(host.querySelector(".unread-divider")).toBeNull();
-});
-
-it("keeps a standalone unread divider when a visible message separates the lines", () => {
-  const { host } = unreadThread([
-    message("line", "assistant", "Handoff note", {
-      created: 10,
-      handoff: { from: "claude", to: "codex" },
-    }),
-    message("prompt", "user", "Now check the phone", { created: 12 }),
-    message("answer", "assistant", "Done.", { created: 30 }),
-  ]);
-  expect(host.querySelector(".unread-mark")).toBeNull();
-  expect(host.querySelectorAll(".unread-divider")).toHaveLength(1);
-});
-
-it("keeps unread on the notes directly above it, including under a hidden prompt", () => {
-  const { host } = unreadThread([
-    message("prompt", "user", "Fix the flaky spec"),
-    // This id has a ran-here note in the sample chat.
-    message("a1", "user", "Carry on", { created: 10, handedOver: true }),
-    message("answer", "assistant", "Done.", { created: 30 }),
-  ]);
-  expect(host.querySelector(".message-notes .unread-mark")).not.toBeNull();
-  expect(host.querySelector(".unread-divider")).toBeNull();
 });
 
 it("keeps every message and the lines under them as the thread grows, each row its own", () => {
