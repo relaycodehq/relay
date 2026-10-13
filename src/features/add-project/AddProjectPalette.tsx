@@ -34,7 +34,7 @@ import { timeAgo } from "../../lib/relative-date";
 import { useReturnFocus } from "../../lib/focus-return";
 import { ErrorBox } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
-import { GitHubMark } from "../settings/BrandIcons";
+import { GitHubMark } from "../../ui/BrandIcons";
 import {
   JobProgress,
   NewProjectFields,

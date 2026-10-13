@@ -8,7 +8,7 @@ import type {
   SourceControlKind,
   SourceControlProvider,
 } from "../../../shared/source-control";
-import { GiteaMark, GitHubMark } from "./BrandIcons";
+import { GiteaMark, GitHubMark } from "../../ui/BrandIcons";
 import {
   CliPathField,
   RescanButton,

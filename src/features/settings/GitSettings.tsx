@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import type { GitInfo } from "../../../shared/working-tree";
-import { GitMark } from "./BrandIcons";
+import { GitMark } from "../../ui/BrandIcons";
 import { CliPathField, ToolRow, ToolRows, withCode } from "../../ui/ToolRow";
 import { ErrorBox } from "../../ui/ui";
 
