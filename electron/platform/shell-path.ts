@@ -9,15 +9,22 @@ export type Run = (file: string, args: string[]) => Promise<string>;
 const START = "__RELAY_PATH_START__";
 const END = "__RELAY_PATH_END__";
 const SHELL_TIMEOUT = 5000;
+/** A cold PowerShell, with antivirus scanning it, can take seconds to start. */
+const REGISTRY_TIMEOUT = 15_000;
 
-const run: Run = async (file, args) =>
-  (
-    await promisify(execFile)(file, args, {
-      encoding: "utf8",
-      timeout: SHELL_TIMEOUT,
-      windowsHide: true,
-    })
-  ).stdout;
+const runFor =
+  (timeout: number): Run =>
+  async (file, args) =>
+    (
+      await promisify(execFile)(file, args, {
+        encoding: "utf8",
+        timeout,
+        windowsHide: true,
+      })
+    ).stdout;
+
+const run = runFor(SHELL_TIMEOUT);
+const runRegistry = runFor(REGISTRY_TIMEOUT);
 
 /**
  * Started with the launch PATH, the shell hands it back reordered: macOS's
@@ -142,7 +149,10 @@ export function extractRegistryPath(
  * parent, or its updater, misses whatever an installer added since: a Codex
  * or GitHub CLI installed after login. The registry has the current one.
  */
-async function readRegistryPath(env: NodeJS.ProcessEnv, exec: Run = run) {
+async function readRegistryPath(
+  env: NodeJS.ProcessEnv,
+  exec: Run = runRegistry,
+) {
   const powershell = win32.join(
     env.SystemRoot ?? env.windir ?? "C:\\Windows",
     "System32",
@@ -155,8 +165,36 @@ async function readRegistryPath(env: NodeJS.ProcessEnv, exec: Run = run) {
     "-NonInteractive",
     "-Command",
     registryPathScript,
-  ]).catch(() => "");
-  return extractRegistryPath(output, env);
+  ]).catch((error: unknown) => {
+    warnOnce(`Could not read the PATH from the registry: ${failure(error)}`);
+    return undefined;
+  });
+  if (output === undefined) return undefined;
+  const path = extractRegistryPath(output, env);
+  if (path) lastWarning = undefined;
+  else warnOnce("The registry gave Relay no PATH to read.");
+  return path;
+}
+
+/** Why PowerShell failed, without the whole script execFile's message repeats. */
+function failure(error: unknown) {
+  const { killed, stderr, code } = error as {
+    killed?: boolean;
+    stderr?: string;
+    code?: unknown;
+  };
+  if (killed) return `PowerShell took longer than ${REGISTRY_TIMEOUT / 1000} s`;
+  if (typeof code === "number")
+    return `PowerShell exited with ${code}${stderr?.trim() ? `: ${stderr.trim()}` : ""}`;
+  return error instanceof Error ? error.message : String(error);
+}
+
+let lastWarning: string | undefined;
+/** A lookup that keeps missing reads again every few seconds; say each failure once. */
+function warnOnce(message: string) {
+  if (message === lastWarning) return;
+  lastWarning = message;
+  console.warn(message);
 }
 
 /**
