@@ -2,6 +2,8 @@ import { expect, it, vi } from "vitest";
 import type { AgentModel, AgentProvider } from "../../shared/agents";
 import type { ModelCatalogs } from "../../shared/composer-commands";
 import type { RemoteClient } from "../../shared/remote-client";
+import { composerCommand } from "../../shared/composer-commands";
+import { supportsFast } from "../../shared/model-fit";
 
 const { saveModels } = vi.hoisted(() => ({ saveModels: vi.fn() }));
 vi.mock("../../mobile/src/remote/offline", () => ({
@@ -28,6 +30,34 @@ const opus: AgentModel = {
   description: "",
   efforts: [],
 };
+
+it("keeps Cursor Fast capability in the phone catalog and uses it for /fast", async () => {
+  const grok: AgentModel = {
+    id: "grok-4.7",
+    name: "Grok",
+    description: "",
+    efforts: ["high"],
+    fast: true,
+  };
+  const { desktop } = desktopAnswering([grok]);
+  const lists = await loadModelLists(desktop, ["cursor"]);
+  expect(supportsFast("cursor", grok.id, knownModels(desktop).cursor)).toBe(
+    true,
+  );
+  expect(
+    composerCommand("fast", "on", {
+      recipient: "cursor",
+      targets: ["cursor"],
+      model: grok.id,
+      fast: false,
+      plan: false,
+      catalogs: lists,
+    }),
+  ).toEqual({ command: "fast", fast: true });
+  expect(saveModels).toHaveBeenCalledWith(
+    expect.objectContaining({ cursor: [grok] }),
+  );
+});
 
 /** A desktop answering with `lists` in turn, counting how often it's asked. */
 function desktopAnswering(...lists: AgentModel[][]) {

@@ -5,11 +5,7 @@ import {
   type ReasoningEffort,
   type ModelChoice,
 } from "../../../shared/settings";
-import {
-  helperProviders,
-  type AgentProvider,
-  agentInfo,
-} from "../../../shared/agents";
+import { helperProviders, type AgentProvider } from "../../../shared/agents";
 import { onModel } from "../../../shared/model-fit";
 import { useCatalogs } from "./useCatalogs";
 import { ComposerModelPicker } from "./ComposerModelPicker";
@@ -69,7 +65,13 @@ export function ModelField<P extends AgentProvider = AgentProvider>({
         onSelect={(next, model) => {
           if (next === "message") return;
           onChange(
-            onModel(next, value, model, catalogs.effortsOf(next, model)),
+            onModel(
+              next,
+              value,
+              model,
+              catalogs.effortsOf(next, model),
+              catalogs.modelsOf(next),
+            ),
             next as P,
           );
         }}
@@ -94,7 +96,7 @@ export function ModelField<P extends AgentProvider = AgentProvider>({
           />
         </>
       )}
-      {agentInfo(agent).fast && (
+      {catalogs.offersFast(agent, value.model) && (
         <button
           type="button"
           className="composer-control composer-fast"

@@ -258,13 +258,48 @@ export const Cursor = {
           displayName: "Composer 2.5",
           description: "Cursor's own model",
           parameters: [
-            {
-              id: "reasoning",
-              values: [{ value: "low" }, { value: "high" }],
-            },
+            { id: "fast", values: [{ value: "false" }, { value: "true" }] },
           ],
           variants: [
-            { params: [{ id: "reasoning", value: "low" }], isDefault: true },
+            { params: [{ id: "fast", value: "true" }], isDefault: true },
+          ],
+        },
+        {
+          id: "grok-4.7",
+          displayName: "Grok 4.7",
+          description: "Grok with effort and speed settings",
+          parameters: [
+            {
+              id: "reasoning_effort",
+              values: [{ value: "low" }, { value: "high" }],
+            },
+            { id: "fast", values: [{ value: "false" }, { value: "true" }] },
+          ],
+          variants: [
+            {
+              params: [
+                { id: "reasoning_effort", value: "high" },
+                { id: "fast", value: "true" },
+              ],
+              isDefault: true,
+            },
+          ],
+        },
+        {
+          id: "claude-opus-fixture",
+          displayName: "Opus fixture",
+          parameters: [
+            { id: "thinking", values: [{ value: "false" }, { value: "true" }] },
+            { id: "effort", values: [{ value: "low" }, { value: "high" }] },
+          ],
+          variants: [
+            {
+              params: [
+                { id: "thinking", value: "true" },
+                { id: "effort", value: "high" },
+              ],
+              isDefault: true,
+            },
           ],
         },
       ];

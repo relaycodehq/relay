@@ -126,6 +126,7 @@ export function withComposerChange(
           on.choice,
           model,
           modelEfforts(provider, model, catalogs),
+          catalogs[provider],
         ),
         ...windowFor(provider, model, contextWindow),
       };

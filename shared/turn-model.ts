@@ -68,7 +68,12 @@ export function resolveTurnModel(
 
 /** "Opus 5.5 Medium"; "" when neither is known. */
 export function turnModelLabel(model: TurnModel): string {
-  return [model.name, model.effort && effortLabels[model.effort]]
+  if (!model.name && !model.effort) return "";
+  return [
+    model.name,
+    model.effort && effortLabels[model.effort],
+    model.fast && "Fast",
+  ]
     .filter(Boolean)
     .join(" ");
 }

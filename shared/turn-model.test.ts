@@ -11,6 +11,18 @@ const model = (id: string, name: string): AgentModel => ({
 const claudeModels = [model("opus", "Opus 5.5"), model("sonnet", "Sonnet 5.5")];
 
 describe("turn model", () => {
+  it("records Cursor Fast and includes it in the answer's model label", () => {
+    const turn = resolveTurnModel(
+      "cursor",
+      {
+        choice: { model: "grok-4.7", fast: true, reasoningEffort: "high" },
+      },
+      [{ ...model("grok-4.7", "Grok 4.7"), fast: true }],
+      null,
+    );
+    expect(turn.fast).toBe(true);
+    expect(turnModelLabel(turn)).toBe("Grok 4.7 High Fast");
+  });
   it("takes the matching window alias's label and default effort for a full id", () => {
     expect(
       resolveTurnModel(

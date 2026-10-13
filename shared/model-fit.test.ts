@@ -5,6 +5,7 @@ import {
   modelName,
   onModel,
   onWindow,
+  supportsFast,
 } from "./model-fit";
 import { agentProviders } from "./agents";
 
@@ -30,10 +31,54 @@ it("moves to a model keeping the effort only if the model takes it", () => {
   expect(onModel("codex", choice("a"), "b", ["low", "high"])).toEqual(
     choice("b"),
   );
-  expect(onModel("cursor", choice("a"), "b", ["low"])).toEqual({
+  expect(onModel("opencode", choice("a"), "b", ["low"])).toEqual({
     model: "b",
     reasoningEffort: "",
     fast: false,
+  });
+});
+
+it("discovers Cursor Fast by model and keeps saved choices while its catalog loads", () => {
+  const models = [
+    {
+      id: "grok-4.7",
+      name: "Grok",
+      description: "",
+      efforts: ["high" as const],
+      fast: true,
+    },
+    {
+      id: "composer-2.5",
+      name: "Composer",
+      description: "",
+      efforts: [],
+      fast: true,
+    },
+    { id: "auto", name: "Auto", description: "", efforts: [], fast: false },
+  ];
+  expect(supportsFast("cursor", "grok-4.7", models)).toBe(true);
+  expect(supportsFast("cursor", "composer-2.5", models)).toBe(true);
+  expect(supportsFast("cursor", "", models)).toBe(false);
+  expect(supportsFast("cursor", "grok-4.7", undefined)).toBe(false);
+  expect(supportsFast("codex", "", undefined)).toBe(true);
+  expect(supportsFast("opencode", "grok-4.7", models)).toBe(false);
+  expect(
+    onModel(
+      "cursor",
+      choice("grok-4.7"),
+      "",
+      [],
+      models.filter((m) => m.id !== "auto"),
+    ).fast,
+  ).toBe(false);
+  expect(onModel("cursor", choice("grok-4.7"), "auto", [], models).fast).toBe(
+    false,
+  );
+  expect(
+    onModel("cursor", choice("grok-4.7"), "composer-2.5", [], models).fast,
+  ).toBe(true);
+  expect(fitModel("cursor", { choice: choice("grok-4.7") })).toEqual({
+    choice: choice("grok-4.7"),
   });
 });
 

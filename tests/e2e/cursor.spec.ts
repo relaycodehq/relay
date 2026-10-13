@@ -95,16 +95,34 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
       .click();
     const composer = page.getByRole("option", { name: "Composer 2.5" });
     await expect(composer).toBeVisible();
-    await screenshot(page, { path: "test-results/cursor-picker.png" });
+    await screenshot(page, { path: join(tmpdir(), "relay-cursor-picker.png") });
     await composer.click();
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
     ).toHaveText(/Composer 2\.5/);
+    const fast = page.getByRole("button", { name: "Fast mode", exact: true });
+    await expect(fast).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      page.getByRole("combobox", { name: "Reasoning effort", exact: true }),
+    ).toHaveCount(0);
+    await fast.click();
+    await expect(fast).toHaveAttribute("aria-pressed", "true");
+    await screenshot(page.locator(".composer-tools").last(), {
+      path: join(tmpdir(), "relay-cursor-fast-composer.png"),
+    });
+    await page
+      .getByRole("button", { name: "Choose model and provider" })
+      .click();
+    await page.getByLabel("Search models").fill("grok");
+    await page.getByRole("option", { name: "Grok 4.7" }).click();
     // The SDK names the model's reasoning settings; Relay shows them as effort.
     await page
       .getByRole("combobox", { name: "Reasoning effort", exact: true })
       .click();
     await page.getByRole("option", { name: "High", exact: true }).click();
+    await screenshot(page.locator(".composer-tools").last(), {
+      path: join(tmpdir(), "relay-cursor-fast-grok.png"),
+    });
 
     // Cursor can limit what an agent does but can't stop to ask, so its
     // approval modes say what they really do.
@@ -114,7 +132,7 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
     await expect(
       page.getByRole("option", { name: /Supervised/ }),
     ).toContainText("Cursor can't ask");
-    await screenshot(page, { path: "test-results/cursor-modes.png" });
+    await screenshot(page, { path: join(tmpdir(), "relay-cursor-modes.png") });
     await page.getByRole("option", { name: /Full access/ }).click();
 
     await page.getByLabel("Message project").fill("Look around [[tools]]");
@@ -124,7 +142,7 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
     const answer = page.getByRole("article", { name: "cursor answer" });
     await expect(answer).toContainText("Done.");
     await expect(answer.locator("header strong")).toHaveText("Cursor");
-    await screenshot(page, { path: "test-results/cursor-answer.png" });
+    await screenshot(page, { path: join(tmpdir(), "relay-cursor-answer.png") });
 
     const sent = (await readFile(capture, "utf8"))
       .trim()
@@ -132,13 +150,14 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
       .map((line) => JSON.parse(line));
     // The thread's title runs beside its answer, as a helper job with its own instructions.
     const turn = sent.find((call) => !call.options?.systemPrompt);
-    expect(turn.sendOptions).toEqual({
-      model: {
-        id: "composer-2.5",
-        params: [{ id: "reasoning", value: "high" }],
-      },
-      mode: "agent",
+    expect(turn.sendOptions.model).toEqual({
+      id: "grok-4.7",
+      params: [
+        { id: "reasoning_effort", value: "high" },
+        { id: "fast", value: "true" },
+      ],
     });
+    expect(turn.sendOptions.mode).toBe("agent");
 
     // Naming the thread asks Cursor too, as a bare helper job: no tools, no
     // project settings, and the title's own instructions.
@@ -162,7 +181,29 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
     await expect(page.getByText("Done.")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
-    ).toHaveText(/Composer 2\.5/);
+    ).toHaveText(/Grok 4\.7/);
+    await expect(fast).toHaveAttribute("aria-pressed", "true");
+    await fast.click();
+    await page.getByLabel("Message project").fill("say hello");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect
+      .poll(async () => {
+        const calls = (await readFile(capture, "utf8"))
+          .trim()
+          .split("\n")
+          .map((l) => JSON.parse(l));
+        return calls.filter((c) => !c.options.systemPrompt).at(-1)?.sendOptions
+          .model;
+      })
+      .toEqual({
+        id: "grok-4.7",
+        params: [
+          { id: "reasoning_effort", value: "high" },
+          { id: "fast", value: "false" },
+        ],
+      });
 
     // Settings lists the SDK Relay downloaded and who is signed in.
     await page.getByRole("button", { name: "Open settings" }).click();
@@ -172,14 +213,16 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
     });
     await settings.getByRole("button", { name: "AI models" }).click();
     await settings.getByRole("button", { name: "Check now" }).click();
-    await expect(settings).toContainText(
-      /Version 1\.0\.32 · downloaded by Relay/,
+    await expect(settings.getByText(/Version 1\.0\.32/)).toContainText(
+      "installed by Relay",
     );
     await expect(settings).toContainText("Signed in as dev@example.com");
     await expect(
       settings.getByRole("button", { name: "Sign out" }),
     ).toBeVisible();
-    await screenshot(page, { path: "test-results/cursor-settings.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-cursor-settings.png"),
+    });
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

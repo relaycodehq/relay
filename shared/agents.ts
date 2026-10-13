@@ -53,7 +53,7 @@ export interface AgentInfo {
   reviewCommand?: string;
   /** What could still let this agent change files while it reviews, shown in the setup. */
   reviewWarning?: string;
-  /** Codex's Fast service tier. */
+  /** Offers Fast mode; some agents expose it only on models that list it. */
   fast: boolean;
   /** Codex skills, picked with `$name` or `/skill:name`. */
   skills: boolean;
@@ -136,7 +136,7 @@ export const agents = {
     defaultModel: "Cursor default",
     helper: false,
     reviewCommand: "/review-bugbot",
-    fast: false,
+    fast: true,
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
@@ -346,6 +346,8 @@ export interface AgentModel {
   name: string;
   description: string;
   efforts: ReasoningEffort[];
+  /** Supports explicit Standard and Fast selection, where speed is model-specific. */
+  fast?: boolean;
   /** The agent suggests moving to a newer model. */
   legacy?: boolean;
   /** The effort it runs when none is set. */

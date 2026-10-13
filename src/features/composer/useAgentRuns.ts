@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  type AgentProvider,
-  agentInfo,
-} from "../../../shared/agents";
+import { type AgentProvider } from "../../../shared/agents";
 import type { NewThreadModel } from "../../../shared/new-thread-models";
 import type { SendSettings } from "../../../shared/compose-send";
 import type { ResumeSettings } from "../../../shared/projects";
@@ -27,7 +24,7 @@ import {
   pickAgents,
   withModel,
 } from "../agents/composer-models";
-import { onWindow } from "../../../shared/model-fit";
+import { onModel, onWindow, supportsFast } from "../../../shared/model-fit";
 import { stepEffort } from "../quick-switch/effort-shortcut";
 import type { ComposerRun, QuickPreset } from "../quick-switch/quick-switch";
 import type { ComposerState } from "./useComposerSettings";
@@ -63,6 +60,12 @@ export function useAgentRuns(
   const choiceFor = (to: string): ModelChoice | undefined =>
     messageChoice(to, models, codex, isPickAgent(to) ? pickOf(to) : blankPick);
   const contextFor = (to: string) => messageContext(to, models);
+  const offersFast = (to: AgentProvider) =>
+    supportsFast(
+      to,
+      modelOf(models, to).choice.model,
+      catalogs.picks[to]?.models,
+    );
   const set = (provider: AgentProvider, next: NewThreadModel) =>
     setModels((all) => withModel(all, provider, next));
   const change = (
@@ -111,13 +114,13 @@ export function useAgentRuns(
         catalogs.picks[next]?.models?.find((m) => m.id === model)?.efforts ??
         [];
       change(next, ({ choice }) => ({
-        choice: {
-          ...choice,
+        choice: onModel(
+          next,
+          choice,
           model,
-          reasoningEffort: efforts.includes(choice.reasoningEffort)
-            ? choice.reasoningEffort
-            : "",
-        },
+          efforts,
+          catalogs.picks[next]?.models,
+        ),
       }));
     }
     if (next === "claude") {
@@ -236,7 +239,15 @@ export function useAgentRuns(
           choice:
             p.provider === "codex"
               ? supportedChoice(choice, codexModels)
-              : choice,
+              : onModel(
+                  p.provider,
+                  choice,
+                  p.model,
+                  catalogs.picks[p.provider]?.models?.find(
+                    (m) => m.id === p.model,
+                  )?.efforts ?? [],
+                  catalogs.picks[p.provider]?.models,
+                ),
         });
       onPick();
     },
@@ -246,6 +257,7 @@ export function useAgentRuns(
       (to === "claude" &&
         (claudeEfforts.length > 0 || !!claudeRuns?.longContext)) ||
       (isPickAgent(to) && pickOf(to).efforts.length > 0),
+    offersFast,
     setEffort,
     /** Stable, for Codex's effort menu. */
     setCodexEffort,
@@ -260,7 +272,7 @@ export function useAgentRuns(
       agentChoice(to, models, pickOf(to), codex).fast,
     /** Fast mode, for an agent that has it. */
     setFast(to: AgentProvider, fast: boolean) {
-      if (!agentInfo(to).fast) return;
+      if (fast && !offersFast(to)) return;
       const choice = to === "codex" ? codex : modelOf(models, to).choice;
       if (choice) set(to, { choice: { ...choice, fast } });
     },

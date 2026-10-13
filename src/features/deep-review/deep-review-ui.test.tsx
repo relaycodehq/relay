@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DeepReviewSetup } from "./DeepReview";
 import type { Project } from "../../../shared/projects";
+import type { DeepReviewState } from "../../../shared/deep-review";
+import { DeepReviewRequest } from "./Request";
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -14,6 +16,56 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it("keeps Fast and Standard reviewers on the same model as distinct entries", () => {
+  const standard = {
+    provider: "cursor" as const,
+    choice: {
+      model: "grok-4.7",
+      reasoningEffort: "high" as const,
+      fast: false,
+    },
+  };
+  const state: DeepReviewState = {
+    request: "request",
+    scope: {
+      target: { kind: "uncommitted" },
+      label: "Uncommitted changes",
+      branch: "main",
+    },
+    reviewers: [
+      { ...standard, chatId: "standard" },
+      {
+        ...standard,
+        choice: { ...standard.choice, fast: true },
+        chatId: "fast",
+      },
+    ],
+    lead: standard,
+    runChecks: false,
+    runtimeMode: "full-access",
+    status: "reviewing",
+  };
+  const html = renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <DeepReviewRequest
+        message={{
+          id: "request",
+          body: "",
+          created: 1,
+          role: "user",
+          status: "complete",
+          version: 1,
+          provider: "cursor",
+        }}
+        state={state}
+      />
+    </QueryClientProvider>,
+  );
+  expect(html.match(/grok-4\.7/g)).toHaveLength(3);
+  expect(html).toContain("High · Fast");
+  expect(html).not.toContain("×2");
+});
 
 const project: Project = {
   id: "p1",

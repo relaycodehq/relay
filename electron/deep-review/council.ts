@@ -47,7 +47,7 @@ export function memberLabel(member: {
 }) {
   const model = member.choice.model || "default model";
   const effort = member.choice.reasoningEffort || "default effort";
-  return `${agentName(member.provider)} (${model}, ${effort})`;
+  return `${agentName(member.provider)} (${model}, ${effort}${member.choice.fast ? ", Fast" : ""})`;
 }
 
 /**

@@ -192,6 +192,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         if (tokens > 0)
           options.onUsage?.({
             model: options.choice.model || "cursor",
+            fast: options.choice.fast,
             tokens: { input: 0, cacheWrite: 0, cacheRead: 0, output: tokens },
           });
         return;
@@ -278,6 +279,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         images,
         model: options.choice.model || undefined,
         effort: options.choice.reasoningEffort || undefined,
+        fast: options.choice.fast,
         mode: options.interactionMode === "plan" ? "plan" : "agent",
         ...(helper
           ? {

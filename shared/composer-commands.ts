@@ -1,9 +1,7 @@
 import { runtimeModes, type RuntimeMode } from "./agent-modes";
 import {
-  agentInfo,
   agentName,
   agentProviders,
-  agents,
   type AgentModel,
   type AgentProvider,
 } from "./agents";
@@ -15,6 +13,7 @@ import {
   withClaudeContextWindow,
   type ReasoningEffort,
 } from "./settings";
+import { supportsFast } from "./model-fit";
 
 /** Who a composer's message goes to; "message" is a note no agent answers. */
 export type ComposerTarget = AgentProvider | "message";
@@ -186,10 +185,13 @@ export function composerCommand<T extends ComposerTarget>(
     return { command, runtimeMode: mode.value };
   }
   if (command === "plan") return { command, plan: toggled(settings.plan) };
-  if (!agentInfo(recipient)?.fast)
-    return `Fast mode is only available for ${agentProviders
-      .filter((p) => agents[p].fast)
-      .map(agentName)
-      .join(" and ")}.`;
-  return { command, fast: toggled(settings.fast) };
+  const fast = toggled(settings.fast);
+  if (
+    !supportsFast(recipient, settings.model, settings.catalogs[recipient]) &&
+    !(recipient === "cursor" && !fast)
+  )
+    return recipient === "cursor"
+      ? "Fast mode is not available for this Cursor model."
+      : "Fast mode is only available for Codex and supported Cursor models.";
+  return { command, fast };
 }

@@ -54,7 +54,7 @@ export const relayCommands = [
     description: "Set what the agent may do without asking",
     args: "<mode>",
   },
-  { name: "fast", description: "Toggle Codex Fast mode", args: "[on|off]" },
+  { name: "fast", description: "Toggle Fast mode", args: "[on|off]" },
   {
     name: "add-dir",
     description: "Let the agent reach another folder in this thread",

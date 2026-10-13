@@ -94,7 +94,7 @@ describe("reading models saved in the old shapes", () => {
     ).toEqual({
       opencode: { choice: choice("m") },
       claude: { choice: choice("opus") },
-      cursor: { choice: choice("auto") },
+      cursor: { choice: choice("auto", "", true) },
     });
   });
 });

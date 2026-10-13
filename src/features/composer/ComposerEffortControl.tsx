@@ -4,11 +4,7 @@ import {
   defaultEffortLabel,
   defaultEffortShort,
 } from "../../../shared/agent-defaults";
-import {
-  type AgentModel,
-  type AgentProvider,
-  agentInfo,
-} from "../../../shared/agents";
+import { type AgentModel, type AgentProvider } from "../../../shared/agents";
 import {
   effortLabels,
   effortShortLabels,
@@ -102,7 +98,7 @@ export function ComposerEffortControl({
     ],
   );
   const fast = runs.fastOf(to);
-  const fastButton = agentInfo(to).fast && (
+  const fastButton = runs.offersFast(to) && (
     <button
       type="button"
       className="composer-control composer-fast"
@@ -138,20 +134,22 @@ export function ComposerEffortControl({
   const pick = runs.pickOf(to);
   return (
     <>
-      <ComposerSelect<ReasoningEffort>
-        label="Reasoning effort"
-        value={pick.reasoningEffort}
-        options={[
-          { value: "", label: "Default" },
-          ...pick.efforts.map((value) => ({
-            value,
-            label: effortLabels[value],
-            short: effortShortLabels[value],
-          })),
-        ]}
-        onChange={(effort) => runs.setEffort(to, effort)}
-        heading={{ label: "Reasoning", hint }}
-      />
+      {pick.efforts.length > 0 && (
+        <ComposerSelect<ReasoningEffort>
+          label="Reasoning effort"
+          value={pick.reasoningEffort}
+          options={[
+            { value: "", label: "Default" },
+            ...pick.efforts.map((value) => ({
+              value,
+              label: effortLabels[value],
+              short: effortShortLabels[value],
+            })),
+          ]}
+          onChange={(effort) => runs.setEffort(to, effort)}
+          heading={{ label: "Reasoning", hint }}
+        />
+      )}
       {fastButton}
     </>
   );

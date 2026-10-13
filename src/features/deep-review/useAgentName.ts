@@ -1,11 +1,9 @@
 import { findClaudeModel, effortLabels } from "../../../shared/settings";
-import {
-  type AgentProvider,
-  agentInfo,
-} from "../../../shared/agents";
+import { type AgentProvider, agentInfo } from "../../../shared/agents";
 import type { LeadAgent, ReviewAgent } from "../../../shared/deep-review";
 import { useClaudeModels } from "../agents/useClaudeModels";
 import { useCodexModels } from "../agents/useCodexModels";
+import { fastFor } from "../../../shared/model-fit";
 
 /** Names an agent by its model, as the pickers do. */
 export function useAgentName() {
@@ -21,7 +19,12 @@ export function useAgentName() {
         : agent.choice.model || agentInfo(agent.provider).defaultModel;
 }
 
-export const effortName = (agent: ReviewAgent | LeadAgent) =>
-  agent.choice.reasoningEffort
-    ? effortLabels[agent.choice.reasoningEffort]
-    : "Default";
+export const traitsName = (agent: ReviewAgent | LeadAgent) =>
+  [
+    agent.choice.reasoningEffort
+      ? effortLabels[agent.choice.reasoningEffort]
+      : "Default",
+    fastFor(agent.provider, agent.choice.fast) && "Fast",
+  ]
+    .filter(Boolean)
+    .join(" · ");

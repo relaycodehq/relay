@@ -5,7 +5,7 @@ import { hasCouncilReport } from "../../../../shared/council";
 import { agentMentionPattern, agentName } from "../../../../shared/agents";
 import type { ReviewAgent } from "../../../../shared/deep-review";
 import type { ProjectFileLink } from "../../../../shared/project-file-links";
-import { effortName, useAgentName } from "../useAgentName";
+import { traitsName, useAgentName } from "../useAgentName";
 import { useFollowEnd } from "./useFollowEnd";
 import { useMemberThread } from "./useMemberThread";
 import { RichText } from "../../../ui/RichText";
@@ -44,7 +44,7 @@ export function CouncilMember({
       <header>
         <ProviderIcon provider={agent.provider} />
         <strong>{name(agent)}</strong>
-        <span className="muted">{effortName(agent)}</span>
+        <span className="muted">{traitsName(agent)}</span>
         <span className="spacer" />
         {tokens > 0 && (
           <span

@@ -18,6 +18,7 @@ export async function nameReviewSetup(
         agent: agentName(r.provider),
         model: r.choice.model || "default",
         effort: r.choice.reasoningEffort || "default",
+        fast: r.choice.fast,
         asked:
           asked.kind === "custom"
             ? asked.text

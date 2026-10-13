@@ -3,6 +3,7 @@ import {
   composerProvider,
   cacheNewThreadModels,
   followLastAgent,
+  forkThreadSettings,
   type AgentFollow,
   loadComposerSettings,
   saveComposerSettings,
@@ -37,6 +38,25 @@ const plain = (
   model: string,
   reasoningEffort: "" | "low" | "high" | "max" = "",
 ) => ({ choice: { model, fast: false, reasoningEffort } });
+
+it("restores Cursor Fast on reopen, remote sends, and forks", () => {
+  const choice = {
+    model: "grok-4.7",
+    reasoningEffort: "high" as const,
+    fast: true,
+  };
+  const sent = { ...modes, provider: "cursor" as const, choice };
+  saveSentSettings("cursor", "cursor", sent);
+  expect(loadComposerSettings("cursor").models.cursor?.choice).toEqual(choice);
+  const remote = { ...sent, id: "sent-cursor" };
+  expect(
+    withSent(loadComposerSettings("new-cursor"), remote).models.cursor?.choice,
+  ).toEqual(choice);
+  forkThreadSettings("cursor", "fork-cursor", "cursor");
+  expect(loadComposerSettings("fork-cursor").models.cursor?.choice).toEqual(
+    choice,
+  );
+});
 
 it("reopens a returned Claude message on Claude's model, keeping Codex's", () => {
   saveComposerSettings("chat", {

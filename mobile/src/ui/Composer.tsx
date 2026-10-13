@@ -358,7 +358,7 @@ export const Composer = forwardRef<
   const setting = async (name: ComposerCommand, args: string): Promise<CommandResult> => {
     if (!args && name !== "plan" && name !== "fast") return setSheet(name === "permissions" ? "mode" : "model"), true;
     const known =
-      name === "model" ? await loadCatalogs(agentProviders) : name === "effort" ? await loadCatalogs([provider]) : {};
+      name === "model" ? await loadCatalogs(agentProviders) : name === "effort" || name === "fast" ? await loadCatalogs([provider]) : {};
     const change = composerCommand(name, args, {
       recipient: provider,
       targets: agentProviders,

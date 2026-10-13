@@ -7,7 +7,6 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { agentInfo } from "../../../shared/agents";
 import { useRunnableAgents } from "../agents/registry-agents";
 import { onModel } from "../../../shared/model-fit";
 import { effortLabels, type ReasoningEffort } from "../../../shared/settings";
@@ -166,6 +165,7 @@ export function QuickSwitchSettings() {
                         p,
                         model,
                         catalogs.effortsOf(next, model),
+                        catalogs.modelsOf(next),
                       ),
                     });
                   }}
@@ -189,7 +189,7 @@ export function QuickSwitchSettings() {
                     />
                   </>
                 )}
-                {agentInfo(p.provider).fast && (
+                {catalogs.offersFast(p.provider, p.model) && (
                   <button
                     type="button"
                     className="composer-control composer-fast"

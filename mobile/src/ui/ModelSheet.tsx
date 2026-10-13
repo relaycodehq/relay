@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
-import { agentInfo, agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
-import { listedModel, onWindow } from "../../../shared/model-fit";
+import { agentName, agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
+import { listedModel, onWindow, supportsFast } from "../../../shared/model-fit";
 import { withComposerChange } from "../../../shared/remote-compose";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ReasoningEffort } from "../../../shared/settings";
@@ -179,7 +179,7 @@ export function ModelSheet({
           ))}
         </>
       )}
-      {agentInfo(provider)?.fast && (
+      {supportsFast(provider, settings.choice.model, list) && (
         <ToggleRow
           label="Fast"
           hint={`${agentName(provider)}'s faster service tier; uses more of your limit.`}

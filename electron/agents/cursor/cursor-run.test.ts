@@ -187,15 +187,76 @@ describe("a Cursor turn", () => {
     expect(seen.plans).toContain("1. Do it");
   });
 
-  it("gives Cursor's own model its reasoning effort by the name that model uses", async () => {
+  it("sends effort and explicit Standard even when Grok defaults to Fast", async () => {
     const { options } = turn("say hello", {
-      choice: { model: "composer-2.5", fast: false, reasoningEffort: "high" },
+      choice: { model: "grok-4.7", fast: false, reasoningEffort: "high" },
     });
     await runCursor(options);
     expect((await asked())[0].sendOptions.model).toEqual({
-      id: "composer-2.5",
-      params: [{ id: "reasoning", value: "high" }],
+      id: "grok-4.7",
+      params: [
+        { id: "reasoning_effort", value: "high" },
+        { id: "fast", value: "false" },
+      ],
     });
+  });
+
+  it.each([true, false])(
+    "sends explicit Fast=%s for a model with no effort levels",
+    async (fast) => {
+      const { options } = turn("say hello", {
+        choice: { model: "composer-2.5", fast, reasoningEffort: "" },
+      });
+      await runCursor(options);
+      const [sent] = await asked();
+      const model = {
+        id: "composer-2.5",
+        params: [{ id: "fast", value: String(fast) }],
+      };
+      expect(sent.options.model).toEqual(model);
+      expect(sent.sendOptions.model).toEqual(model);
+    },
+  );
+
+  it("switches Fast on and off in a warm session while keeping effort", async () => {
+    let id: string | undefined;
+    const session = {
+      key: "cursor-fast-switch",
+      onId: async (next: string) => {
+        id = next;
+      },
+    };
+    try {
+      for (const fast of [false, true, false]) {
+        await runCursor(
+          turn("say hello", {
+            session: { ...session, id },
+            choice: { model: "grok-4.7", fast, reasoningEffort: "high" },
+          }).options,
+        );
+      }
+      const sent = await asked();
+      expect(new Set(sent.map((s) => s.agent)).size).toBe(1);
+      expect(sent.map((s) => s.sendOptions.model.params)).toEqual(
+        [false, true, false].map((fast) => [
+          { id: "reasoning_effort", value: "high" },
+          { id: "fast", value: String(fast) },
+        ]),
+      );
+    } finally {
+      await closeCursorConnection(session.key);
+    }
+  });
+
+  it("refuses Fast on a model that does not offer it instead of silently running Standard", async () => {
+    await expect(
+      runCursor(
+        turn("say hello", {
+          choice: { model: "auto", fast: true, reasoningEffort: "" },
+        }).options,
+      ),
+    ).rejects.toThrow("Auto does not offer Fast mode");
+    expect(await asked()).toEqual([]);
   });
 
   it("sends images along and starts a new agent when Cursor forgot the old one", async () => {
@@ -507,9 +568,20 @@ describe("Cursor's models", () => {
     const models = await cursorModels();
     expect(models.find((m) => m.id === "composer-2.5")).toMatchObject({
       name: "Composer 2.5",
-      efforts: ["low", "high"],
-      defaultEffort: "low",
+      efforts: [],
+      fast: true,
     });
+    expect(models.find((m) => m.id === "grok-4.7")).toMatchObject({
+      efforts: ["low", "high"],
+      defaultEffort: "high",
+      fast: true,
+    });
+    expect(models.find((m) => m.id === "claude-opus-fixture")).toMatchObject({
+      efforts: ["low", "high"],
+      defaultEffort: "high",
+      fast: false,
+    });
+    expect(models.find((m) => m.id === "auto")?.fast).toBe(false);
     expect(models.find((m) => m.id === "auto")?.efforts).toEqual([]);
     expect(await cursorDefaults()).toEqual({ model: "auto", effort: "" });
   });

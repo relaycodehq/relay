@@ -1,5 +1,5 @@
 import { reviewerPrompt, type ReviewAgent } from "../../../shared/deep-review";
-import { effortName } from "./useAgentName";
+import { traitsName } from "./useAgentName";
 
 const clip = (text: string) =>
   text.length > 40 ? text.slice(0, 40) + "…" : text;
@@ -15,7 +15,7 @@ export function reviewerLabel(
 ) {
   const asked = reviewerPrompt(reviewer.provider, reviewer.prompt);
   const prompt = clip(asked.kind === "custom" ? asked.text : asked.note);
-  return [`${slot}. ${model}`, effortName(reviewer), prompt]
+  return [`${slot}. ${model}`, traitsName(reviewer), prompt]
     .filter(Boolean)
     .join(" · ");
 }

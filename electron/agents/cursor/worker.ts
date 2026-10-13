@@ -4,7 +4,7 @@
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
-import type { SDKAgent, SDKModel, Run } from "@cursor/sdk";
+import type { SDKAgent, SDKModel, Run, ModelSelection } from "@cursor/sdk";
 import type {
   CursorLoginUrl,
   CursorMethod,
@@ -72,22 +72,29 @@ const forgetList = (error: unknown): never => {
   throw error;
 };
 
-/** The model, with its reasoning effort set the way this model names it. */
-async function modelSelection(run: CursorRun) {
-  if (!run.model) return { id: "auto" };
-  if (!run.effort) return { id: run.model };
-  const model = (await models().catch(forgetList)).find(
-    (m) => m.id === run.model,
-  );
+/** The model's effort and speed, with Standard sent explicitly even if Fast is its default. */
+async function modelSelection(run: CursorRun): Promise<ModelSelection> {
+  const id = run.model || "auto";
+  const model = (await models().catch(forgetList)).find((m) => m.id === id);
   const param = model?.parameters?.find(
     (p) =>
       /effort|reason|think/i.test(p.id) &&
       p.values.some((v) => v.value === run.effort),
   );
-  return {
-    id: run.model,
-    ...(param ? { params: [{ id: param.id, value: run.effort }] } : {}),
-  };
+  const params: NonNullable<ModelSelection["params"]> = [];
+  if (param && run.effort) params.push({ id: param.id, value: run.effort });
+  const speed = model?.parameters?.find((p) => p.id === "fast");
+  if (speed) {
+    const value = String(run.fast);
+    if (!speed.values.some((v) => v.value === value))
+      throw new Error(
+        `${model?.displayName || id} does not support ${run.fast ? "Fast" : "Standard"} mode.`,
+      );
+    params.push({ id: speed.id, value });
+  } else if (run.fast) {
+    throw new Error(`${model?.displayName || id} does not offer Fast mode.`);
+  }
+  return { id, ...(params.length ? { params } : {}) };
 }
 
 // Agents stay open between a thread's turns, so the next one starts warm.

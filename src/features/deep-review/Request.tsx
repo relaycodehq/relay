@@ -6,7 +6,7 @@ import type {
   LeadAgent,
   ReviewAgent,
 } from "../../../shared/deep-review";
-import { effortName, useAgentName } from "./useAgentName";
+import { traitsName, useAgentName } from "./useAgentName";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 
 function AgentChip({
@@ -20,7 +20,7 @@ function AgentChip({
     <span className="deep-review-agent">
       <ProviderIcon provider={agent.provider} />
       {name}
-      <span className="muted">{effortName(agent)}</span>
+      <span className="muted">{traitsName(agent)}</span>
     </span>
   );
 }

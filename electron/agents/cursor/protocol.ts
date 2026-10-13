@@ -30,6 +30,8 @@ export interface CursorRun {
   model?: string;
   /** A setting of the model, e.g. its reasoning effort. */
   effort?: string;
+  /** Explicit speed selection, rather than the model's default variant. */
+  fast: boolean;
   mode: "agent" | "plan";
   sandbox: boolean;
   autoReview: boolean;

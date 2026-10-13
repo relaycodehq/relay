@@ -160,8 +160,43 @@ describe("composer commands", () => {
       "Use /plan on or /plan off.",
     );
     expect(composerCommand("fast", "", phone({ recipient: "claude" }))).toBe(
-      "Fast mode is only available for Codex.",
+      "Fast mode is only available for Codex and supported Cursor models.",
     );
+  });
+  it("toggles Cursor Fast only on a model that advertises it", () => {
+    const settings = phone({
+      recipient: "cursor",
+      model: "grok-4.7",
+      catalogs: {
+        cursor: [
+          {
+            id: "grok-4.7",
+            name: "Grok",
+            description: "",
+            efforts: [],
+            fast: true,
+          },
+        ],
+      },
+    });
+    expect(composerCommand("fast", "on", settings)).toEqual({
+      command: "fast",
+      fast: true,
+    });
+    expect(composerCommand("fast", "off", { ...settings, fast: true })).toEqual(
+      { command: "fast", fast: false },
+    );
+    expect(composerCommand("fast", "on", { ...settings, model: "auto" })).toBe(
+      "Fast mode is not available for this Cursor model.",
+    );
+    expect(
+      composerCommand("fast", "off", {
+        ...settings,
+        model: "auto",
+        fast: true,
+        catalogs: {},
+      }),
+    ).toEqual({ command: "fast", fast: false });
   });
   it("finds permission modes by value or label", () => {
     expect(

@@ -8,7 +8,7 @@ import {
   type LeadAgent,
   type ReviewAgent,
 } from "../../../shared/deep-review";
-import { effortLabels } from "../../../shared/settings";
+import { traitsName } from "./useAgentName";
 import {
   forgetReviewSetup,
   pinReviewSetup,
@@ -27,7 +27,6 @@ type Name = (agent: ReviewAgent | LeadAgent) => string;
 /** Who reviews, who leads, and the prompts that aren't an agent's own review. */
 function summary(entry: SavedReviewSetup, name: Name) {
   const { reviewers, lead } = entry.setup;
-  const effort = lead.choice.reasoningEffort;
   const prompts = reviewers.flatMap((r) => {
     const asked = reviewerPrompt(r.provider, r.prompt);
     if (asked.kind === "own") return [];
@@ -39,11 +38,12 @@ function summary(entry: SavedReviewSetup, name: Name) {
     ];
   });
   return {
-    models: reviewers.map(name).join(" · "),
-    detail: [
-      `${name(lead)}${effort ? ` ${effortLabels[effort]}` : ""} leads`,
-      ...prompts,
-    ].join(" · "),
+    models: reviewers
+      .map((r) => `${name(r)}${r.choice.fast ? " Fast" : ""}`)
+      .join(" · "),
+    detail: [`${name(lead)} · ${traitsName(lead)} leads`, ...prompts].join(
+      " · ",
+    ),
   };
 }
 

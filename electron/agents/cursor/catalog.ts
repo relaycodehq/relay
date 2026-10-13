@@ -37,7 +37,11 @@ const makerOf = (model: { id: string; name: string }) => {
 
 /** One SDK model as the picker lists it; its effort levels are the settings that name one. */
 function agentModelOf(model: CursorModel): AgentModel {
-  const parameter = model.parameters.find((p) => effortParameter.test(p.id));
+  const parameter = model.parameters.find(
+    (p) =>
+      effortParameter.test(p.id) &&
+      p.values.some((v) => !!reasoningEffortSchema.safeParse(v).data),
+  );
   const efforts = (parameter?.values ?? []).flatMap((v): ReasoningEffort[] => {
     const effort = reasoningEffortSchema.safeParse(v).data;
     return effort ? [effort] : [];
@@ -50,6 +54,12 @@ function agentModelOf(model: CursorModel): AgentModel {
     description: model.description.slice(0, 300),
     group: makerOf(model),
     efforts,
+    fast: model.parameters.some(
+      (p) =>
+        p.id === "fast" &&
+        p.values.includes("true") &&
+        p.values.includes("false"),
+    ),
     ...(defaultEffort ? { defaultEffort } : {}),
   };
 }

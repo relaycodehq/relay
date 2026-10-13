@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { runtimeModes } from "../../../shared/agent-modes";
-import {
-  agentName,
-  runnableAgents,
-  agentInfo,
-} from "../../../shared/agents";
+import { agentName, runnableAgents } from "../../../shared/agents";
 import {
   isComposerCommand,
   type CommandOption,
@@ -138,7 +134,7 @@ export function useSettingCommands({
           current: m.value === state.runtimeMode,
         }));
       if (command === "plan") return toggles(interactionMode === "plan");
-      if (command === "fast" && agentInfo(to).fast)
+      if (command === "fast" && runs.offersFast(to))
         return toggles(runs.fastOf(to));
       return undefined;
     },

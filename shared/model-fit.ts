@@ -15,6 +15,16 @@ import {
 export const fastFor = (provider: AgentProvider, fast: boolean) =>
   !!agentInfo(provider)?.fast && fast;
 
+/** Cursor's speed is a model parameter; Codex offers Fast independently of its catalog. */
+export const supportsFast = (
+  provider: string,
+  model: string,
+  models: readonly Pick<AgentModel, "id" | "fast">[] | undefined,
+) =>
+  provider === "codex" ||
+  (provider === "cursor" &&
+    models?.find((m) => m.id === (model || "auto"))?.fast === true);
+
 /** The 200k window is Claude's, and a model with 1M built in asks for none. */
 export const windowFor = (
   provider: string,
@@ -40,12 +50,17 @@ export const onModel = (
   choice: ModelChoice,
   model: string,
   efforts: readonly ReasoningEffort[],
+  models?: readonly AgentModel[],
 ): ModelChoice => ({
   model,
   reasoningEffort: efforts.includes(choice.reasoningEffort)
     ? choice.reasoningEffort
     : "",
-  fast: fastFor(provider, choice.fast),
+  fast:
+    fastFor(provider, choice.fast) &&
+    (provider !== "cursor" ||
+      (models === undefined && model !== "") ||
+      supportsFast(provider, model, models)),
 });
 
 /** The model `id` is in `models`, however the agent spells it. */

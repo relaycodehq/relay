@@ -1,5 +1,6 @@
 import type { AgentProvider } from "../../../shared/agents";
 import { modelEfforts } from "../../../shared/composer-commands";
+import { supportsFast } from "../../../shared/model-fit";
 import { useAgentPicks } from "./useAgentPicks";
 import { useClaudeModels } from "./useClaudeModels";
 import { useCodexModels } from "./useCodexModels";
@@ -22,5 +23,7 @@ export function useCatalogs() {
     claude.refresh();
     picks.refresh();
   };
-  return { modelsOf, effortsOf, refresh };
+  const offersFast = (p: AgentProvider, model: string) =>
+    supportsFast(p, model, modelsOf(p));
+  return { modelsOf, effortsOf, offersFast, refresh };
 }

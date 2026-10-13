@@ -5,6 +5,7 @@ import {
   mkdir,
   writeFile,
   readFile,
+  copyFile,
   rm,
   realpath,
 } from "node:fs/promises";
@@ -29,6 +30,9 @@ import {
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "./prompts";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
+import { build } from "esbuild";
+import { configureCursor } from "../agents/cursor/sdk";
+import { forgetCursorModels } from "../agents/cursor/catalog";
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
   findExecutable: vi.fn(),
@@ -478,6 +482,89 @@ afterEach(async () => {
   // Windows holds a folder a just-stopped agent ran in for a moment.
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
+
+it.each([true, false])(
+  "sends the chosen Cursor speed to review members and lead (lead Fast=%s)",
+  async (fast) => {
+    const worker = join(root, "cursor-worker.mjs");
+    await build({
+      entryPoints: ["electron/agents/cursor/worker.ts"],
+      bundle: true,
+      platform: "node",
+      target: "node22",
+      format: "esm",
+      outfile: worker,
+      logLevel: "silent",
+    });
+    const sdk = join(root, "cursor-sdk");
+    const pkg = join(sdk, "1.0.32/node_modules/@cursor/sdk");
+    await mkdir(join(pkg, "dist/esm"), { recursive: true });
+    await copyFile(
+      "tests/fixtures/cursor-sdk.mjs",
+      join(pkg, "dist/esm/index.js"),
+    );
+    await writeFile(
+      join(pkg, "package.json"),
+      JSON.stringify({
+        name: "@cursor/sdk",
+        version: "1.0.32",
+        type: "module",
+      }),
+    );
+    await writeFile(
+      join(sdk, "current.json"),
+      JSON.stringify({ version: "1.0.32" }),
+    );
+    configureCursor({
+      worker,
+      root: sdk,
+      store: join(root, "cursor-store"),
+      fetch: async () => {
+        throw new Error("No network in tests");
+      },
+    });
+    forgetCursorModels();
+    const log = join(root, "cursor.jsonl");
+    vi.stubEnv("CURSOR_FAKE_LOG", log);
+    await writeFile(join(repo, "src/queue.ts"), "export const queue = [1];\n");
+    const chat = await chats.create(projectId, { kind: "review" });
+    const cursorChoice = (speed: boolean) => ({
+      model: "grok-4.7",
+      reasoningEffort: "high" as const,
+      fast: speed,
+    });
+    await chats.startDeepReview(
+      chat.id,
+      config({
+        reviewers: [
+          { provider: "cursor", choice: cursorChoice(true) },
+          { provider: "cursor", choice: cursorChoice(false) },
+        ],
+        lead: { provider: "cursor", choice: cursorChoice(fast) },
+      }),
+    );
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    );
+    const records = (await readFile(log, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((r) => !r.options.systemPrompt);
+    expect(records).toHaveLength(3);
+    const speedOf = (r: any) =>
+      r.sendOptions.model.params.find((p: any) => p.id === "fast").value;
+    expect(records.slice(0, 2).map(speedOf).sort()).toEqual(["false", "true"]);
+    expect(speedOf(records[2])).toBe(String(fast));
+    expect(
+      records.every((r) =>
+        r.sendOptions.model.params.some(
+          (p: any) => p.id === "reasoning_effort" && p.value === "high",
+        ),
+      ),
+    ).toBe(true);
+  },
+);
 
 it("won't review a clean checkout", async () => {
   const chat = await chats.create(projectId, { kind: "review" });

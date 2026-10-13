@@ -477,13 +477,14 @@ export function ProjectComposer({
               account: accounts.several(to) && (
                 <AccountControl provider={to} accounts={accounts} />
               ),
-              effort: to !== "message" && runs.offersEffort(to) && (
-                <ComposerEffortControl
-                  to={to}
-                  runs={runs}
-                  codexModels={catalogs.codex}
-                />
-              ),
+              effort: to !== "message" &&
+                (runs.offersEffort(to) || runs.offersFast(to)) && (
+                  <ComposerEffortControl
+                    to={to}
+                    runs={runs}
+                    codexModels={catalogs.codex}
+                  />
+                ),
               context: meter,
               access: to !== "message" && (
                 <RuntimeModeSelect
