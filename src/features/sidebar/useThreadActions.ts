@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  ChatSummary,
-  ChatTriage,
-  ChatTriageState,
-  Project,
+import {
+  lastComposerSettings,
+  type ChatSummary,
+  type ChatTriage,
+  type ChatTriageState,
+  type Project,
 } from "../../../shared/projects";
 import { triageState } from "../../../shared/chat-activity";
 import { nextAfterSettle, triaged } from "./activity";
@@ -12,6 +13,7 @@ import { api } from "../../lib/api";
 import { undos } from "../../lib/undo";
 import { errorMessage } from "../../lib/error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
+import { fetchChat } from "../../lib/chat-events";
 
 export type ThreadMenuAction =
   | { kind: "new" }
@@ -236,7 +238,13 @@ export function useThreadActions({
     setError(undefined);
     try {
       const forked = await api.forkProjectChat(c.id);
-      forkThreadSettings(c.id, forked.id, forked.provider);
+      const history = await fetchChat(qc, forked.id);
+      forkThreadSettings(
+        c.id,
+        forked.id,
+        forked.provider,
+        lastComposerSettings(history),
+      );
       await refresh(c);
       open(forked);
     } catch (e) {

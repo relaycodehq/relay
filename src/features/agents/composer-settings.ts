@@ -159,12 +159,17 @@ export function forkThreadSettings(
   from: string,
   to: string,
   provider: AgentProvider | undefined,
+  /** The fork's copied history has new message ids of its own. */
+  sent: SentComposerSettings | undefined,
 ) {
-  const settings = loadComposerSettings(from);
+  const saved = loadComposerSettings(from);
+  // A sidebar fork can come from a thread never opened in this window.
+  const settings = read(from) ? saved : withSent(saved, sent);
   saveComposerSettings(to, {
     ...settings,
     ...(provider ? { provider } : {}),
     interactionMode: "default",
+    sent: sent?.id,
   });
 }
 /**

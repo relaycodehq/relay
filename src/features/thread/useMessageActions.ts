@@ -7,6 +7,7 @@ import {
 } from "../../../shared/project-file-links";
 import {
   rootOf,
+  lastComposerSettings,
   type ChatMessage,
   type ChatSummary,
   type WorktreeStatus,
@@ -20,6 +21,7 @@ import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import { useStableCallback } from "../../lib/useStableCallback";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "../../lib/working-tree-key";
+import { fetchChat } from "../../lib/chat-events";
 
 export type ThreadMessageActions = ReturnType<typeof useMessageActions>;
 
@@ -73,7 +75,13 @@ export function useMessageActions({
     setError(undefined);
     try {
       const forked = await api.forkProjectChat(chatId, m.id);
-      forkThreadSettings(chatId, forked.id, m.provider);
+      const history = await fetchChat(qc, forked.id);
+      forkThreadSettings(
+        chatId,
+        forked.id,
+        m.provider,
+        lastComposerSettings(history),
+      );
       await onForked(forked);
     } catch (e) {
       setError(e);

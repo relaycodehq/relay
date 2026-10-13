@@ -74,7 +74,9 @@ export function useResumeCommand({
       workspace === "worktree" ? branch : undefined,
       links,
     );
-    if (created) forkThreadSettings(settingsKey, chat.id, session.provider);
+    // Imported terminal logs have no Relay send settings to acknowledge.
+    if (created)
+      forkThreadSettings(settingsKey, chat.id, session.provider, undefined);
     // The session is in Relay now, which the next listing should say.
     qc.removeQueries({ queryKey: key });
     await (created ? onContinued(chat) : onOpenThread(chat));

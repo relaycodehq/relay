@@ -214,6 +214,46 @@ test("an unopened thread keeps its launch settings after changing a new draft's 
           "low",
         ]),
       );
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Fork into a new thread", exact: true })
+      .last()
+      .click();
+    await expect(page.locator(".sb-thread.selected")).toContainText(
+      "Fork: Earlier work",
+    );
+    await expect(
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toHaveCount(0);
+    const forkId = await page.evaluate(
+      async (projectId) =>
+        (await window.relay.projectChats(projectId)).find(
+          (c) => c.title === "Fork: Earlier work",
+        )!.id,
+      projectId,
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) =>
+            JSON.parse(localStorage.getItem(`composer-settings:${id}`)!)
+              .interactionMode,
+          forkId,
+        ),
+      )
+      .toBe("default");
+    await expect(effort).toContainText("Low");
+    await page.screenshot({
+      path: join(tmpdir(), "relay-thread-settings-fork.png"),
+    });
+  } catch (error) {
+    const page = await app.firstWindow();
+    await page.screenshot({
+      path: join(tmpdir(), "relay-thread-settings-failed.png"),
+    });
+    throw error;
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

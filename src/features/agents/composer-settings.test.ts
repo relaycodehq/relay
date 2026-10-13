@@ -52,7 +52,7 @@ it("restores Cursor Fast on reopen, remote sends, and forks", () => {
   expect(
     withSent(loadComposerSettings("new-cursor"), remote).models.cursor?.choice,
   ).toEqual(choice);
-  forkThreadSettings("cursor", "fork-cursor", "cursor");
+  forkThreadSettings("cursor", "fork-cursor", "cursor", remote);
   expect(loadComposerSettings("fork-cursor").models.cursor?.choice).toEqual(
     choice,
   );
@@ -222,6 +222,35 @@ it("restores an unseen spawned thread from its send, ignoring new-draft picks", 
   expect(
     loadComposerSettings("thread:side", { settingsKey: "thread" }).sent,
   ).toBeUndefined();
+});
+
+it("keeps a fork's inherited picks and Build mode against its remapped history", () => {
+  saveComposerSettings("source", {
+    ...modes,
+    provider: "claude",
+    models: { claude: plain("sonnet", "high") },
+    interactionMode: "plan",
+    sent: "original-message",
+  });
+  const copied = {
+    id: "copied-message",
+    provider: "claude" as const,
+    ...plain("opus", "low"),
+    runtimeMode: "full-access" as const,
+    interactionMode: "plan" as const,
+  };
+  forkThreadSettings("source", "fork", "claude", copied);
+  const settings = loadComposerSettings("fork");
+  expect(withSent(settings, copied)).toBe(settings);
+  expect(settings.models.claude).toEqual(plain("sonnet", "high"));
+  expect(settings.interactionMode).toBe("default");
+  // A sidebar fork from an unseen thread still starts on its actual model.
+  forkThreadSettings("unseen", "sidebar-fork", "claude", copied);
+  expect(loadComposerSettings("sidebar-fork")).toMatchObject({
+    models: { claude: plain("opus", "low") },
+    interactionMode: "default",
+    sent: copied.id,
+  });
 });
 
 it("remembers the model a message went to an agent with, not one to people", () => {
