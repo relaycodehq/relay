@@ -5,6 +5,7 @@ import {
   nativeImage,
   nativeTheme,
   shell,
+  type WebContents,
 } from "electron";
 import { z } from "zod";
 import { fetchThemes, searchThemes } from "../../shared/open-vsx";
@@ -16,6 +17,7 @@ import { takes, type ApiContext, type Handlers } from "./context";
 /** The window and the OS around it: chrome, zoom, badge, clipboard, links. */
 export function desktopHandlers(ctx: ApiContext) {
   const { window, menubar } = ctx;
+  const interfaceScales = new WeakMap<WebContents, number>();
   return {
     applyAppearance: takes(
       [
@@ -64,7 +66,9 @@ export function desktopHandlers(ctx: ApiContext) {
       const contents = window.caller()?.webContents;
       if (!contents) return;
       // Keep whatever ⌘+ and ⌘− added on top of the old size.
-      const own = contents.getZoomFactor() / window.interfaceScale;
+      const own =
+        contents.getZoomFactor() / (interfaceScales.get(contents) ?? 1);
+      interfaceScales.set(contents, scale);
       window.interfaceScale = scale;
       contents.setZoomFactor(own * scale);
     }),

@@ -41,13 +41,28 @@ export function persistedStore<T>(
   serialize: (value: T) => string | null,
 ) {
   const listeners = new Set<() => void>();
-  let current = (() => {
+  const read = () => {
     try {
       return parse(localStorage.getItem(key));
     } catch {
       return parse(null);
     }
-  })();
+  };
+  let current = read();
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
+  // A thread's own window shares storage, but has its own store and listeners.
+  if (typeof window !== "undefined")
+    window.addEventListener?.("storage", (event) => {
+      if (
+        event.storageArea !== localStorage ||
+        (event.key !== null && event.key !== key)
+      )
+        return;
+      current = read();
+      notify();
+    });
   const subscribe = (listener: () => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -71,7 +86,7 @@ export function persistedStore<T>(
       } catch {
         // Still applies for this session.
       }
-      for (const listener of listeners) listener();
+      notify();
     },
   };
 }

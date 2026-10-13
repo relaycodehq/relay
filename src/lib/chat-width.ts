@@ -26,13 +26,14 @@ function apply(width: number) {
   document.documentElement.style.setProperty("--thread-width", `${width}px`);
 }
 
+store.subscribe(() => apply(store.get()));
+
 export function initChatWidth() {
   apply(store.get());
 }
 
 export function setChatWidth(width: number) {
   store.set(width);
-  apply(width);
 }
 
 export const useChatWidth = store.use;

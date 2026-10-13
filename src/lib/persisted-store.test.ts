@@ -57,4 +57,46 @@ describe("persistedStore", () => {
     store.set(3);
     expect(store.get()).toBe(3);
   });
+
+  it("takes another window's change without writing it back", () => {
+    const target = new EventTarget();
+    vi.stubGlobal("window", target);
+    const store = number("n");
+    const changed = vi.fn();
+    store.subscribe(changed);
+    const write = vi.spyOn(localStorage, "setItem");
+    saved.set("n", "7");
+    target.dispatchEvent(
+      Object.assign(new Event("storage"), {
+        key: "n",
+        storageArea: localStorage,
+      }),
+    );
+    expect(store.get()).toBe(7);
+    expect(changed).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("ignores other keys and session storage, and resets when storage is cleared", () => {
+    const target = new EventTarget();
+    vi.stubGlobal("window", target);
+    saved.set("n", "7");
+    const store = number("n");
+    const changed = vi.fn();
+    store.subscribe(changed);
+    const event = (key: string | null, storageArea: unknown = localStorage) =>
+      target.dispatchEvent(
+        Object.assign(new Event("storage"), { key, storageArea }),
+      );
+    event("other");
+    event("n", {});
+    expect(changed).not.toHaveBeenCalled();
+    saved.clear();
+    event(null);
+    expect(store.get()).toBe(1);
+    expect(changed).toHaveBeenCalledOnce();
+    saved.set("n", "{oops");
+    event("n");
+    expect(store.get()).toBe(1);
+  });
 });

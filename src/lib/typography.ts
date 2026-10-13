@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { persistedStore } from "./persisted-store";
 
 /**
  * Fonts and sizes per surface: the interface, the prompt box, code and the
@@ -61,28 +61,22 @@ export const sizes = {
 };
 
 const STORAGE_KEY = "relay-typography";
-const listeners = new Set<() => void>();
-let value = read();
+const store = persistedStore(STORAGE_KEY, parseTypography, JSON.stringify);
 
-function read(): Typography {
+function parseTypography(raw: string | null): Typography {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    const saved = JSON.parse(raw ?? "{}");
     const family = (v: unknown) =>
       typeof v === "string" ? v.trim().slice(0, 100) : "";
     const size = (key: keyof typeof sizes) =>
       sizes[key].includes(saved[key]) ? saved[key] : defaultTypography[key];
-    // Before it could follow the interface, 13 was the default that got saved
-    // along with every other change; keeping it pinned would leave the prompt
-    // behind whenever the interface size moves.
-    const promptSize =
-      saved.promptSize === 13 ? FOLLOW_INTERFACE : size("promptSize");
     const flag = (key: "smoothing" | "wrap" | "advanced") =>
       typeof saved[key] === "boolean" ? saved[key] : defaultTypography[key];
     return {
       sans: family(saved.sans),
       interfaceSize: size("interfaceSize"),
       prompt: family(saved.prompt),
-      promptSize,
+      promptSize: size("promptSize"),
       mono: family(saved.mono),
       codeSize: size("codeSize"),
       terminal: family(saved.terminal),
@@ -119,6 +113,7 @@ export function terminalFont(t: Typography) {
 let appliedScale: number | undefined;
 
 function apply() {
+  const value = store.get();
   const root = document.documentElement.style;
   const sans = fontStack(value.sans, DEFAULT_SANS);
   const px = (size: number) => `${unzoomed(value, size)}px`;
@@ -146,26 +141,14 @@ function apply() {
   }
 }
 
+store.subscribe(apply);
+
 export function initTypography() {
   apply();
 }
 
 export function setTypography(patch: Partial<Typography>) {
-  value = { ...value, ...patch };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-  } catch {
-    // Still applies for this session.
-  }
-  apply();
-  for (const listener of listeners) listener();
+  store.set({ ...store.get(), ...patch });
 }
 
-export const useTypography = () =>
-  useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => value,
-  );
+export const useTypography = store.use;
