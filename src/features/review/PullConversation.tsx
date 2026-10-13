@@ -35,9 +35,18 @@ export function PullConversation({
   });
   // Pages come oldest first; load them all so reviews interleave in order.
   useEffect(() => {
-    if (discussion.hasNextPage && !discussion.isFetchingNextPage)
+    if (
+      discussion.hasNextPage &&
+      !discussion.isFetchingNextPage &&
+      !discussion.isFetchNextPageError
+    )
       void discussion.fetchNextPage();
-  }, [discussion.hasNextPage, discussion.isFetchingNextPage, discussion.data]);
+  }, [
+    discussion.hasNextPage,
+    discussion.isFetchingNextPage,
+    discussion.isFetchNextPageError,
+    discussion.data,
+  ]);
   const timeline = conversationTimeline(
     reviews,
     comments,

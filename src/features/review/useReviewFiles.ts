@@ -31,9 +31,21 @@ export function useReviewFiles(
     enabled: !!pull && !restoring,
   });
   useEffect(() => {
-    if (!result && filter && files.hasNextPage && !files.isFetchingNextPage)
+    if (
+      !result &&
+      filter &&
+      files.hasNextPage &&
+      !files.isFetchingNextPage &&
+      !files.isFetchNextPageError
+    )
       void files.fetchNextPage();
-  }, [filter, files.hasNextPage, files.isFetchingNextPage, files.data]);
+  }, [
+    filter,
+    files.hasNextPage,
+    files.isFetchingNextPage,
+    files.isFetchNextPageError,
+    files.data,
+  ]);
   const all = useMemo(
     () => result?.files ?? files.data?.pages.flatMap((p) => p.items) ?? [],
     [files.data, result],

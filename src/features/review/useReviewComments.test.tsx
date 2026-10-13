@@ -28,6 +28,58 @@ const tick = async () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+it("stops after a next review page fails and allows an explicit retry", async () => {
+  let available = false;
+  vi.mocked(api.reviews).mockImplementation(async (_ref, page) => {
+    if (page === 2 && !available) throw new Error("Page unavailable");
+    return { items: [], nextPage: page === 1 ? 2 : null };
+  });
+  vi.mocked(api.reviewComments).mockResolvedValue([]);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const root = createRoot(document.createElement("div"));
+  let current!: ReturnType<typeof useReviewComments>;
+  function Probe() {
+    current = useReviewComments(pull, onPaths);
+    return null;
+  }
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    );
+    await vi.waitFor(async () => {
+      await tick();
+      expect(current.reviews.isFetchNextPageError).toBe(true);
+    });
+    for (let count = 0; count < 5; count++) await tick();
+    expect(vi.mocked(api.reviews).mock.calls.map(([, page]) => page)).toEqual([
+      1, 2,
+    ]);
+    expect(current.reviews.data?.pages).toHaveLength(1);
+    expect(current.comments.isPending).toBe(true);
+    available = true;
+    await act(async () => {
+      await current.reviews.fetchNextPage();
+    });
+    await vi.waitFor(async () => {
+      await tick();
+      expect(current.comments.isSuccess).toBe(true);
+    });
+    expect(vi.mocked(api.reviews).mock.calls.map(([, page]) => page)).toEqual([
+      1, 2, 2,
+    ]);
+    expect(current.reviews.hasNextPage).toBe(false);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
+
 it("does not reuse reviews or line comments from another host", async () => {
   const review = { id: 1, comments_count: 1 };
   vi.mocked(api.reviews).mockResolvedValue({

@@ -26,9 +26,18 @@ export function useReviewComments(
   });
   // Review metadata is small; page it fully so line discussions cannot silently disappear.
   useEffect(() => {
-    if (reviews.hasNextPage && !reviews.isFetchingNextPage)
+    if (
+      reviews.hasNextPage &&
+      !reviews.isFetchingNextPage &&
+      !reviews.isFetchNextPageError
+    )
       void reviews.fetchNextPage();
-  }, [reviews.hasNextPage, reviews.isFetchingNextPage, reviews.data]);
+  }, [
+    reviews.hasNextPage,
+    reviews.isFetchingNextPage,
+    reviews.isFetchNextPageError,
+    reviews.data,
+  ]);
   const all = reviews.data?.pages.flatMap((p) => p.items) ?? [];
   const comments = useQuery({
     queryKey: [
