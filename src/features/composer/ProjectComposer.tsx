@@ -508,12 +508,10 @@ export function ProjectComposer({
               ),
               usage: reportsUsage(to) ? (
                 <UsageRing provider={to} account={accounts.of(to)} />
+              ) : runsOnOpenRouter ? (
+                <OpenRouterCreditButton threadCost={threadCost?.usd} />
               ) : (
-                runsOnOpenRouter ? (
-                  <OpenRouterCreditButton threadCost={threadCost?.usd} />
-                ) : (
-                  threadCost && <ThreadCostButton cost={threadCost} />
-                )
+                threadCost && <ThreadCostButton cost={threadCost} />
               ),
               mic: (
                 <DictationButton

@@ -161,12 +161,17 @@ describe("models shared with new threads and the phone", () => {
     expect(shared.codex).toEqual({ choice: choice("") });
     // Codex's Default follows the line-question setting again.
     const { codex: _, ...defaults } = shared;
-    expect(withNewThreadModels(models, shared)).toEqual({ ...defaults, ...models });
+    expect(withNewThreadModels(models, shared)).toEqual({
+      ...defaults,
+      ...models,
+    });
   });
 
   it("carries registry agents' models, and offers them once installed", () => {
     const goose = { choice: choice("gpt-5.5") };
-    expect(readComposerModels({ models: { "acp:goose": goose, "acp:../x": goose } })).toEqual({
+    expect(
+      readComposerModels({ models: { "acp:goose": goose, "acp:../x": goose } }),
+    ).toEqual({
       "acp:goose": goose,
     });
     expect(newThreadModelsOf({})["acp:goose"]).toBeUndefined();
@@ -174,7 +179,9 @@ describe("models shared with new threads and the phone", () => {
     try {
       expect(isPickAgent("acp:goose")).toBe(true);
       expect(pickAgents()).toContain("acp:goose");
-      expect(newThreadModelsOf({ "acp:goose": goose })["acp:goose"]).toEqual(goose);
+      expect(newThreadModelsOf({ "acp:goose": goose })["acp:goose"]).toEqual(
+        goose,
+      );
     } finally {
       knowRegistryAgents([]);
     }

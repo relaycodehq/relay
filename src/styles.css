@@ -1962,16 +1962,16 @@ body.resizing-table-column {
    cache flame, the terminal cursor) stops with every other animation. */
 @media (prefers-reduced-motion: reduce) {
   *:not(
-      .spinner,
-      .spinner-arc,
-      .spin,
-      .sb-version-spin,
-      .running-tasks-list li.restart .running-task-buttons button:first-child svg,
-      .context-meter-trigger[data-compacting] > svg,
-      .live-shine,
-      .update-comet-spin,
-      .read-aloud-button[data-reading="loading"] svg
-    ),
+    .spinner,
+    .spinner-arc,
+    .spin,
+    .sb-version-spin,
+    .running-tasks-list li.restart .running-task-buttons button:first-child svg,
+    .context-meter-trigger[data-compacting] > svg,
+    .live-shine,
+    .update-comet-spin,
+    .read-aloud-button[data-reading="loading"] svg
+  ),
   *:not(.thinking-glyph)::before,
   *:not(.sb-status.waiting i)::after {
     animation: none !important;

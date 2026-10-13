@@ -408,7 +408,12 @@ const agents = {
   models: async (agent: string) =>
     agent === "codex"
       ? [
-          { id: "gpt-6-astra", name: "GPT-6 Astra", description: "", efforts: ["low", "high"] },
+          {
+            id: "gpt-6-astra",
+            name: "GPT-6 Astra",
+            description: "",
+            efforts: ["low", "high"],
+          },
           { id: "gpt-6-sol", name: "GPT-6 Sol", description: "", efforts: [] },
         ]
       : [],
@@ -520,7 +525,9 @@ test("a thread that fails as it starts is reported failed and settled once its r
   api.triage = async (id: string, t: { kind: string }) => {
     if (chats.get(id)!.running) {
       settledWhileRunning = true;
-      throw new Error("Wait for the running answer and its requests before settling.");
+      throw new Error(
+        "Wait for the running answer and its requests before settling.",
+      );
     }
     return triage(id, t);
   };
@@ -549,7 +556,11 @@ test("a thread that fails as it starts is reported failed and settled once its r
       threads: [{ prompt: "Draw an icon", agent: "codex" }],
     }),
   );
-  expect(thread).toMatchObject({ agent: "codex", failed: error, settled: true });
+  expect(thread).toMatchObject({
+    agent: "codex",
+    failed: error,
+    settled: true,
+  });
   expect(chats.get(thread.id)!.settledAt).toBeDefined();
   expect(settledWhileRunning).toBe(false);
 });
@@ -573,7 +584,9 @@ test("reading on from `next` returns an answer that was still streaming, finishe
   const { lead, chats, api } = fakeChats();
   const threads = new StartedThreads(api);
   const [child] = parse(
-    await call(threads, lead.id, "start_threads", { threads: [{ prompt: "A" }] }),
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
   );
   const answer = {
     id: "a1",
@@ -588,7 +601,10 @@ test("reading on from `next` returns an answer that was still streaming, finishe
   const read = (args: object = {}) =>
     call(threads, lead.id, "read_thread", { id: child.id, ...args });
   const first = parse(await read());
-  expect(first.messages.at(-1)).toMatchObject({ id: "a1", status: "streaming" });
+  expect(first.messages.at(-1)).toMatchObject({
+    id: "a1",
+    status: "streaming",
+  });
   Object.assign(answer, { body: "Working on it. Done.", status: "complete" });
   const second = parse(await read({ after: first.next }));
   expect(second.messages).toEqual([
