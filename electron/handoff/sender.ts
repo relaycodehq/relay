@@ -108,7 +108,8 @@ export class Handoffs {
       void this.follow(id);
     });
     computers.onOffline((id) => {
-      for (const c of this.liveOn(id)) this.chats.setHandoffLive(c.id, undefined);
+      for (const c of this.liveOn(id))
+        this.chats.setHandoffLive(c.id, undefined);
     });
     computers.onEvent((id, event) => this.event(id, event));
   }
@@ -226,7 +227,8 @@ export class Handoffs {
    */
   async runHere(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
-    if (!sentTo) return this.sendHere(chatId, await this.chats.takeHandoffSends(chatId));
+    if (!sentTo)
+      return this.sendHere(chatId, await this.chats.takeHandoffSends(chatId));
     if (!sentTo.live || sentTo.state !== "away")
       throw new Error("This thread isn't live on another computer.");
     if (this.computers.status(sentTo.computerId) === "online")
@@ -312,7 +314,10 @@ export class Handoffs {
     if (event.kind !== "message") return;
     const parsed = handoffMessageSchema.safeParse(event.message);
     if (!parsed.success)
-      return console.warn("A live handoff's message didn't read:", parsed.error);
+      return console.warn(
+        "A live handoff's message didn't read:",
+        parsed.error,
+      );
     void this.chats
       .mirrorHandoff(chat.id, handoffId, parsed.data as ChatMessage)
       .catch((e) => console.warn("A live handoff's message wasn't kept:", e));
@@ -661,8 +666,7 @@ export class Handoffs {
   }
   /** Keeps the notice for the computer until it has heard, even across a restart. */
   private async saveAbandoned(computerId: string, id: string) {
-    const known = this.computers.get(computerId).abandoned ?? [];
-    await this.computers.setPending(computerId, "abandoned", [
+    await this.computers.setPending(computerId, "abandoned", (known) => [
       ...new Set([...known, id]),
     ]);
   }
@@ -888,7 +892,14 @@ export class Handoffs {
           if (!unsupportedCall(e)) left.push(each);
         }
       }
-      await this.computers.setPending(computerId, kind, left);
+      // Another takeback can save a notice while this one's call is pending.
+      // Remove only this run's delivered ids from the latest saved list.
+      const delivered = new Set(ids.filter((each) => !left.includes(each)));
+      await this.computers.setPending(computerId, kind, (pending) =>
+        [...new Set([...pending, ...left])].filter(
+          (each) => !delivered.has(each),
+        ),
+      );
     };
     // One at a time, so a later run can't write over what an earlier one saved.
     const next = this.telling.then(run, run);

@@ -169,11 +169,12 @@ export class Computers {
   async setPending(
     id: string,
     kind: "unacknowledged" | "abandoned",
-    ids: string[],
+    update: (ids: string[]) => string[],
   ) {
     await this.store.update((s) => {
       const computer = s.computers?.find((c) => c.id === id);
       if (!computer) return;
+      const ids = update(computer[kind] ?? []);
       if (ids.length) computer[kind] = ids;
       else delete computer[kind];
     });
