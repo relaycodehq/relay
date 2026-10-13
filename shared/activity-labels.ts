@@ -1,5 +1,6 @@
 // Moved from the desktop's AgentTurn so the phone app words a turn the same way.
 import type { AgentActivity, TraceDropped } from "./projects";
+import { askedQuestions, isQuestionCall } from "./asked-questions";
 
 export function duration(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -47,7 +48,12 @@ export function summarizeActivity(
   const failed = new Set<string>();
   const stopped = new Set<string>();
   const running = new Set<string>();
+  let questions = 0;
   for (const a of activity) {
+    if (isQuestionCall(a) && a.status === "complete") {
+      questions += askedQuestions(a)?.length ?? 1;
+      continue;
+    }
     if (a.status !== "complete") {
       (a.status === "failed"
         ? failed
@@ -70,6 +76,7 @@ export function summarizeActivity(
   for (const [kind, seen] of groups)
     counts.set(kind, (counts.get(kind) ?? 0) + seen.size);
   const labels = [...counts].map(([kind, n]) => summaries[kind](n));
+  if (questions) labels.push(`Asked you ${plural(questions, "question")}`);
   const failures = failed.size + (dropped.failed ?? 0);
   if (failures) labels.push(`${plural(failures, "tool call")} failed`);
   if (stopped.size)
@@ -132,6 +139,10 @@ export function programName(command: string): string | undefined {
 
 /** The past-tense line for a finished call, e.g. "Ran rg" or "Read AgentTurn.tsx". */
 export function doneLabel(a: AgentActivity) {
+  if (isQuestionCall(a))
+    return a.status === "complete"
+      ? `Asked you ${plural(askedQuestions(a)?.length ?? 1, "question")}`
+      : "Didn't get your answer";
   if (a.status === "failed") {
     switch (a.kind) {
       case "command":
@@ -188,6 +199,7 @@ export function doneLabel(a: AgentActivity) {
 
 /** The present-tense line shown while a call runs, e.g. "Reading AgentTurn.tsx". */
 export function liveLabel(a: AgentActivity) {
+  if (isQuestionCall(a)) return "Waiting for your answer";
   switch (a.kind) {
     case "command":
       return `Running ${programName(a.label) ?? "command"}`;

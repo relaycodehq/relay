@@ -15,9 +15,11 @@ import {
   Brain,
   ChevronRight,
   Clock3,
+  CornerDownRight,
   FilePen,
   FileText,
   Globe,
+  MessageCircleQuestion,
   Search,
   Terminal,
   Wrench,
@@ -44,6 +46,11 @@ import { RichText } from "../../ui/RichText";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { isStartThreads, startedIds } from "../../../shared/started-threads";
+import {
+  askedQuestions,
+  isQuestionCall,
+  type AskedQuestion,
+} from "../../../shared/asked-questions";
 import { StartedChip } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
@@ -66,6 +73,9 @@ const icons = {
   agent: Bot,
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
+
+const iconOf = (a: AgentActivity) =>
+  isQuestionCall(a) ? MessageCircleQuestion : icons[a.kind];
 
 /** Each agent call's own tool calls, by the agent call's id, and how to show their paths. */
 const Subagents = createContext({
@@ -187,11 +197,13 @@ function ToolRow({
   label: string;
   onChanges: () => void;
 }) {
+  const asked = askedQuestions(a);
   // A failed call looks like any other: commands fail as part of the work.
-  const Icon = icons[a.kind];
+  const Icon = iconOf(a);
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
   const read = useImageRead(a);
+  if (asked) return <QuestionsRow activity={a} asked={asked} />;
   const heading = (
     <>
       {a.status === "running" ? (
@@ -201,7 +213,13 @@ function ToolRow({
       ) : (
         <Icon size={14} />
       )}
-      <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
+      <span className={a.kind === "command" ? "mono" : undefined}>
+        {isQuestionCall(a)
+          ? a.status === "running"
+            ? liveLabel(a)
+            : doneLabel(a)
+          : label}
+      </span>
       <Progress activity={a} />
       {isStartThreads(a) && <StartedChip ids={startedIds(a.detail)} />}
     </>
@@ -238,6 +256,39 @@ function ToolRow({
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
       )}
+    </Fold>
+  );
+}
+
+/** What you were asked and answered, one question per row under the call. */
+function QuestionsRow({
+  activity: a,
+  asked,
+}: {
+  activity: AgentActivity;
+  asked: AskedQuestion[];
+}) {
+  return (
+    <Fold
+      className={`agent-step ${a.status}`}
+      summary={
+        <summary className="agent-step-heading">
+          <MessageCircleQuestion size={14} />
+          <span>{doneLabel(a)}</span>
+        </summary>
+      }
+    >
+      <div className="agent-questions">
+        {asked.map((q, i) => (
+          <div className="agent-question" key={i}>
+            <div>{q.question}</div>
+            <div className="agent-question-answer">
+              <CornerDownRight size={12} aria-hidden />
+              <span>{q.answer}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </Fold>
   );
 }
@@ -358,10 +409,10 @@ export function AgentTurn({
     heading.kind === "working"
       ? Clock3
       : heading.kind === "call"
-        ? icons[heading.activity.kind]
+        ? iconOf(heading.activity)
         : heading.kind === "done"
           ? heading.last
-            ? icons[heading.last.kind]
+            ? iconOf(heading.last)
             : Brain
           : null;
   return (
@@ -423,7 +474,9 @@ export function AgentTurn({
                       onOpenFile={onOpenFile}
                     />
                   </div>
-                ) : live && index === parts.length - 1 ? (
+                ) : live &&
+                  index === parts.length - 1 &&
+                  !isQuestionCall(part.activity[0]!) ? (
                   <OpenBatch
                     key={part.id}
                     activity={part.activity}
@@ -520,7 +573,7 @@ function OpenBatch({
   const [open, setOpen] = useState(false);
   const { head, earlier } = batchHead(activity);
   const running = head.status === "running";
-  const Icon = icons[head.kind];
+  const Icon = iconOf(head);
   const calls = useContext(Subagents).calls.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
   // With nothing folded behind it, an image's row opens the image instead.

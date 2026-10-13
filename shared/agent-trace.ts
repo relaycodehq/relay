@@ -3,6 +3,7 @@
 import type { AgentActivity, AgentTrace, ChatMessage } from "./projects";
 import { summarizeActivity } from "./activity-labels";
 import { isImagePath } from "./answer-images";
+import { isQuestionCall } from "./asked-questions";
 
 /** A turn's events in order; saves from before traces kept only the calls. */
 function traceOf(message: ChatMessage): AgentTrace[] {
@@ -54,7 +55,8 @@ export const stoppedNote = (message: ChatMessage) =>
     ? "Stopped · partial output kept"
     : "Stopped";
 
-/** Consecutive tool calls become one run; commentary splits them. */
+/** Consecutive tool calls become one run; commentary splits them, and a
+ * question to you stands as a run of its own. */
 export function groupTrace(entries: AgentTrace[]) {
   const parts: TracePart[] = [];
   for (const entry of entries) {
@@ -63,7 +65,12 @@ export function groupTrace(entries: AgentTrace[]) {
       continue;
     }
     const last = parts.at(-1);
-    if (last?.kind === "run") last.activity.push(entry.activity);
+    if (
+      last?.kind === "run" &&
+      !isQuestionCall(entry.activity) &&
+      !isQuestionCall(last.activity[0]!)
+    )
+      last.activity.push(entry.activity);
     else parts.push({ kind: "run", id: entry.id, activity: [entry.activity] });
   }
   return parts;
