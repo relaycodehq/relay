@@ -233,6 +233,7 @@ describe("auto-settle", () => {
       { waiting: true },
       { nextSend: later + day },
       { autoSettleOff: true as const },
+      { pinnedAt: 900 },
       { archivedAt: 2_000 },
       { snoozedAt: 1_000, snoozedUntil: later + day },
       { snoozedAt: 500, snoozedUntil: later + day },

@@ -1,6 +1,6 @@
 // A thread's live state in the sidebar: the mark at the end of a row, and
 // the state and agents on an Activity card.
-import { CalendarClock, CircleAlert } from "lucide-react";
+import { CalendarClock, CircleAlert, Pin } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import {
   elapsedLabel,
@@ -87,6 +87,12 @@ export function StatusMark({
     return (
       <span className="sb-status scheduled" title={sendsTitle(chat.nextSend)}>
         <CalendarClock size={12} />
+      </span>
+    );
+  if (chat.pinnedAt)
+    return (
+      <span className="sb-status pinned" title="Pinned">
+        <Pin size={11} />
       </span>
     );
   return <time className="sb-age">{shortAge(chat.updated, now)}</time>;

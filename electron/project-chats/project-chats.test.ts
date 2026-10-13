@@ -3190,6 +3190,23 @@ it("settles a quiet thread by itself until it's moved back by hand", async () =>
     vi.useRealTimers();
   }
 });
+it("keeps a pinned thread out of auto-settle and keeps when it was first pinned", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(chat.updated + 3 * 86_400_000);
+    const pinned = await chats.triage(chat.id, { kind: "pin", pinned: true });
+    expect(chats.list(projectId)[0].autoSettled).toBeUndefined();
+    vi.setSystemTime(chat.updated + 4 * 86_400_000);
+    await chats.triage(chat.id, { kind: "pin", pinned: true });
+    expect(chats.list(projectId)[0].pinnedAt).toBe(pinned.pinnedAt);
+    await chats.triage(chat.id, { kind: "pin", pinned: false });
+    expect(chats.list(projectId)[0]).toMatchObject({ autoSettled: true });
+    expect(chats.list(projectId)[0].pinnedAt).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 it("keeps a note closed with I know this as known in its thread, and its line in the known list", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();

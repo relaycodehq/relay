@@ -18,6 +18,11 @@ export function triaged(
       return { ...chat, markedUnread: true };
     case "auto-settle":
       return { ...chat, autoSettleOff: action.enabled ? undefined : true };
+    case "pin":
+      return {
+        ...chat,
+        pinnedAt: action.pinned ? (chat.pinnedAt ?? now) : undefined,
+      };
     case "restore": {
       const next = { ...chat, autoSettled: undefined };
       setTriageState(next, action.to);

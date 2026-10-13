@@ -119,8 +119,11 @@ export function useThreadActions({
     action: ChatTriage,
     back?: () => void,
   ) => {
-    // Mark unread and auto-settle leave where the thread is alone, and with it any undo.
-    const moves = action.kind !== "unread" && action.kind !== "auto-settle";
+    // Mark unread, auto-settle and pin leave its Activity section alone, and with it any undo.
+    const moves =
+      action.kind !== "unread" &&
+      action.kind !== "auto-settle" &&
+      action.kind !== "pin";
     const token = moves ? undos.claim([c.id]) : undefined;
     const before = triageState(c);
     patch(c, (entry) => triaged(entry, action, Date.now()));

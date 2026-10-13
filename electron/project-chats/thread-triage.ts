@@ -45,9 +45,16 @@ export class ThreadTriage {
           }
       return chatSummary(chat);
     }
-    if (triage.kind === "unread" || triage.kind === "auto-settle") {
+    if (
+      triage.kind === "unread" ||
+      triage.kind === "auto-settle" ||
+      triage.kind === "pin"
+    ) {
       if (triage.kind === "unread") chat.markedUnread = true;
-      else if (triage.enabled) delete chat.autoSettleOff;
+      else if (triage.kind === "pin") {
+        if (!triage.pinned) delete chat.pinnedAt;
+        else chat.pinnedAt ??= now;
+      } else if (triage.enabled) delete chat.autoSettleOff;
       else chat.autoSettleOff = true;
       await this.core.storage.save(chat);
       return chatSummary(chat);

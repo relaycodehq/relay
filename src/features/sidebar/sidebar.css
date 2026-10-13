@@ -551,10 +551,18 @@
 .sb-thread-row.stale:hover .sb-thread {
   opacity: 1;
 }
-.sb .sb-thread-archive {
+.sb-thread-actions {
   position: absolute;
   top: 50%;
   right: 6px;
+  display: flex;
+  transform: translateY(-50%);
+}
+/* A running thread has no Archive; Pin sits beside its spinner instead. */
+.sb-thread-actions:not(:has(.sb-thread-archive)) {
+  right: 28px;
+}
+.sb .sb-thread-action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -563,26 +571,29 @@
   padding: 0;
   border-radius: 5px;
   color: var(--muted);
-  transform: translateY(-50%);
   /* Hidden but still in the Tab order; display:none would take it out. */
   opacity: 0;
   pointer-events: none;
 }
-.sb .sb-thread-archive:hover {
+.sb .sb-thread-action:hover {
   background: color-mix(in srgb, var(--text) 10%, transparent);
   color: var(--text);
 }
-.sb-thread-row:hover .sb-thread-archive,
-.sb .sb-thread-archive:focus-visible {
+.sb-thread-row:hover .sb-thread-action,
+.sb-thread-actions:has(:focus-visible) .sb-thread-action {
   opacity: 1;
   pointer-events: auto;
 }
-/* Only where Archive takes its place; a running thread has none and keeps
-   its spinner. */
+/* Room for the icons, so the title ends before them instead of under them. */
+.sb-thread-row:hover .sb-thread,
+.sb-thread-row:has(.sb-thread-action:focus-visible) .sb-thread {
+  padding-right: 54px;
+}
+/* Only where Archive takes its place; a running thread keeps its spinner. */
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-age,
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status,
-.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-age,
-.sb-thread-row:has(.sb-thread-archive:focus-visible) .sb-thread > .sb-status {
+.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child)) .sb-thread > .sb-age,
+.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child)) .sb-thread > .sb-status {
   visibility: hidden;
 }
 .sb .sb-thread.sb-ghost {
@@ -731,7 +742,8 @@
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
-.sb-status.scheduled {
+.sb-status.scheduled,
+.sb-status.pinned {
   color: var(--muted);
 }
 .sb-status.waiting i {

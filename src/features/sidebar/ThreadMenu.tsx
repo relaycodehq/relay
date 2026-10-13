@@ -10,6 +10,8 @@ import {
   Hourglass,
   Mail,
   Pencil,
+  Pin,
+  PinOff,
   RefreshCw,
   RotateCcw,
   Settings2,
@@ -151,6 +153,12 @@ export function ThreadMenu({
           Move into its own worktree…
         </MenuAction>
       )}
+      <MenuAction
+        icon={chat.pinnedAt ? <PinOff size={13} /> : <Pin size={13} />}
+        onClick={() => triage({ kind: "pin", pinned: !chat.pinnedAt })}
+      >
+        {chat.pinnedAt ? "Unpin thread" : "Pin thread"}
+      </MenuAction>
       {section === "settled" ? (
         <MenuAction
           icon={<RotateCcw size={13} />}
@@ -256,7 +264,9 @@ export function ThreadMenu({
           <ChevronRight size={12} />
         </Menu.SubmenuTrigger>
         <MenuPopup side="right" align="start">
-          {autoSettleDays === null && !settleOnCommit ? (
+          {chat.pinnedAt ? (
+            <div className="sb-menu-heading">Off while pinned</div>
+          ) : autoSettleDays === null && !settleOnCommit ? (
             <div className="sb-menu-heading">Off in Settings</div>
           ) : (
             <>

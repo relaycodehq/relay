@@ -49,6 +49,7 @@ type AutoSettled = Triaged &
     | "archivedAt"
     | "unsettledAt"
     | "autoSettleOff"
+    | "pinnedAt"
     | "pending"
     | "nextSend"
     | "heldWakeups"
@@ -100,6 +101,7 @@ function autoSettle(
     (days == null && !onCommit) ||
     chat.archivedAt ||
     chat.autoSettleOff ||
+    chat.pinnedAt ||
     chat.running ||
     chat.waiting ||
     chatSettled(chat) ||

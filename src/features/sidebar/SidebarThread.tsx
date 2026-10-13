@@ -1,7 +1,7 @@
 // What every thread the sidebar lists shares: its rows in Projects, Scratchpad
 // and search, its right-click menu, and its name field.
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { Archive } from "lucide-react";
+import { Archive, Pin, PinOff } from "lucide-react";
 import {
   threadTitleSchema,
   type ChatSummary,
@@ -53,9 +53,11 @@ export function ThreadTitle({
   );
 }
 
-/** A long thread list's first few, or all of them with `all`. */
-export const firstThreads = (chats: ChatSummary[], all: boolean) =>
-  all ? chats : chats.slice(0, THREADS_PER_PROJECT);
+/** A long thread list's first few, or all of them with `all`; pinned ones lead. */
+export function firstThreads(chats: ChatSummary[], all: boolean) {
+  const listed = [...chats].sort((a, b) => +!!b.pinnedAt - +!!a.pinnedAt);
+  return all ? listed : listed.slice(0, THREADS_PER_PROJECT);
+}
 
 /** The row that expands or collapses a long thread list. */
 export function ShowMore({
@@ -200,16 +202,28 @@ export function ThreadRow({
           )}
           <StatusMark chat={c} unread={unread(c)} now={now} />
         </button>
-        {!c.running && !c.pending?.length && !c.nextSend && (
+        <span className="sb-thread-actions">
           <button
-            className="sb-thread-archive"
-            title="Archive"
-            aria-label={`Archive ${c.title}`}
-            onClick={() => void actions.triage(c, { kind: "archive" })}
+            className="sb-thread-action"
+            title={c.pinnedAt ? "Unpin" : "Pin"}
+            aria-label={`${c.pinnedAt ? "Unpin" : "Pin"} ${c.title}`}
+            onClick={() =>
+              void actions.triage(c, { kind: "pin", pinned: !c.pinnedAt })
+            }
           >
-            <Archive size={13} />
+            {c.pinnedAt ? <PinOff size={13} /> : <Pin size={13} />}
           </button>
-        )}
+          {!c.running && !c.pending?.length && !c.nextSend && (
+            <button
+              className="sb-thread-action sb-thread-archive"
+              title="Archive"
+              aria-label={`Archive ${c.title}`}
+              onClick={() => void actions.triage(c, { kind: "archive" })}
+            >
+              <Archive size={13} />
+            </button>
+          )}
+        </span>
       </ContextMenu.Trigger>
       <ThreadRowMenu chat={c} rows={rows} />
     </ContextMenu.Root>

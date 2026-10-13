@@ -68,6 +68,8 @@ export interface ChatSummary {
   unsettledAt?: number;
   /** Never settled automatically; only the thread's menu turns it back on. */
   autoSettleOff?: true;
+  /** Listed first in its project or Scratchpad, and never settled automatically. */
+  pinnedAt?: number;
   /** Live: settled by inactivity, a merged PR or a commit, not by hand; never persisted. */
   autoSettled?: true;
   /** When the latest turn that committed ended; see `settleOnCommit`. */
@@ -206,6 +208,7 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("archive") }).strict(),
   z.object({ kind: z.literal("unread") }).strict(),
   z.object({ kind: z.literal("auto-settle"), enabled: z.boolean() }).strict(),
+  z.object({ kind: z.literal("pin"), pinned: z.boolean() }).strict(),
   // Undo: puts `to` back only while the thread still holds `from`, what the
   // undone action left, so it can't reverse anything done to it since.
   z
