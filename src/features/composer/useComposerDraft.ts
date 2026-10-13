@@ -18,6 +18,7 @@ import {
   isScreenshot,
   loadDraftImages,
   onDraftImagesChanged,
+  onDraftImagesSaved,
   prepareScreenshot,
   saveDraftImages,
   type DraftImage,
@@ -29,6 +30,7 @@ import { pickedSkills } from "../../../shared/skill-mentions";
 import {
   attachedImages,
   dataUrlBytes,
+  imageToken,
   nextImageNumber,
   onlyImageTokens,
 } from "../../../shared/image-refs";
@@ -121,6 +123,12 @@ export function useComposerDraft(
     const off = onDraftImagesChanged((changed) => {
       if (changed === key) reload();
     });
+    // A paste can finish after this composer was closed and opened again.
+    const offSaved = onDraftImagesSaved((changed, saved) => {
+      if (changed !== key) return;
+      imageQueue.current = Promise.resolve(saved);
+      setImages(saved);
+    });
     // A phone sent it through this computer, screenshots and all.
     const offTaken = onDraftTaken((thread) => {
       if (splitDraftKey(key)?.thread === thread) reload();
@@ -128,6 +136,7 @@ export function useComposerDraft(
     return () => {
       live = false;
       off();
+      offSaved();
       offTaken();
     };
   }, [key]);
@@ -146,7 +155,9 @@ export function useComposerDraft(
   }
   async function attachImages(files: File[], point?: Point) {
     try {
-      const existing = await imageQueue.current;
+      const existing = await (shownKey.current === key
+        ? imageQueue.current
+        : loadDraftImages(key));
       // The draft as it is now, with the pills of any batch before this one.
       const text = readDraft(key);
       const kept = attachedImages(text, existing);
@@ -163,14 +174,22 @@ export function useComposerDraft(
       // Screenshots whose pills were deleted make room here, not on undo.
       const next = [...kept, ...prepared];
       await saveDraftImages(key, next);
+      const ns = prepared.flatMap((image) => image.n ?? []);
       // Kept for the thread it was pasted in, even once another one shows.
-      if (shownKey.current !== key) return;
-      imageQueue.current = Promise.resolve(next);
-      setImages(next);
-      editor.current?.insertImages(
-        prepared.flatMap((image) => image.n ?? []),
-        point,
-      );
+      if (shownKey.current === key) {
+        imageQueue.current = Promise.resolve(next);
+        setImages(next);
+      }
+      if (shownKey.current === key && editor.current)
+        editor.current.insertImages(ns, point);
+      else if (ns.length) {
+        // Navigation clears the editor ref; its tokens must still be saved.
+        const now = readDraft(key);
+        writeDraft(
+          key,
+          `${now}${now ? " " : ""}${ns.map(imageToken).join(" ")}`,
+        );
+      }
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not attach screenshot.",
@@ -304,7 +323,9 @@ export function useComposerDraft(
       if (!isLongPaste(pasted) || pastedTexts(pasted).length) return;
       event.preventDefault();
       event.stopPropagation();
-      setError(editor.current?.insertPaste(pasted) ? undefined : PASTE_TOO_LONG);
+      setError(
+        editor.current?.insertPaste(pasted) ? undefined : PASTE_TOO_LONG,
+      );
     },
     drop(event: DragEvent) {
       const files = Array.from(event.dataTransfer.files);

@@ -6,6 +6,10 @@ import {
 import type { LineQuestion } from "../../../shared/questions";
 import { threadStorage } from "../../lib/thread-storage";
 import { onDraftTaken } from "../composer/drafts";
+import {
+  sameDraftAttachment,
+  unsentCodeRefs,
+} from "../composer/draft-attachments";
 
 export type ComposerAttachments = ReturnType<typeof useComposerAttachments>;
 
@@ -60,9 +64,13 @@ export function useComposerAttachments(id: string) {
     },
     /** Gone with the message they went out with. */
     clear() {
-      setSelection(undefined);
-      setWorkItem(undefined);
-      setCodeRefs([]);
+      setSelection((now) =>
+        sameDraftAttachment(now, selection) ? undefined : now,
+      );
+      setWorkItem((now) =>
+        sameDraftAttachment(now, workItem) ? undefined : now,
+      );
+      setCodeRefs((now) => unsentCodeRefs(now, codeRefs));
     },
   };
 }

@@ -9,14 +9,21 @@ import { threadStorage } from "../../lib/thread-storage";
 
 // What a thread's main composer attached besides its text, kept per thread
 // (or unsent thread) until the message goes.
+export const sameDraftAttachment = (now: unknown, sent: unknown) =>
+  JSON.stringify(now) === JSON.stringify(sent);
+
+/** References attached since the send, including newer code at the same location. */
+export const unsentCodeRefs = (now: CodeReference[], sent: CodeReference[]) =>
+  now.filter((ref) => !sent.some((old) => sameDraftAttachment(ref, old)));
+
 /** Clears what went out with `sent`, keeping anything attached since. */
 export function clearDraftAttachments(id: string, sent: DraftAttachments) {
   const { selection, workItem, codeRefs } = threadStorage(id);
-  const same = (now: unknown, then: unknown) =>
-    JSON.stringify(now) === JSON.stringify(then);
-  if (same(selection.load(), sent.selection)) selection.clear();
-  if (same(workItem.load(), sent.workItem)) workItem.clear();
-  if (same(codeRefs.load(), sent.codeRefs)) codeRefs.clear();
+  if (sameDraftAttachment(selection.load(), sent.selection)) selection.clear();
+  if (sameDraftAttachment(workItem.load(), sent.workItem)) workItem.clear();
+  const now = codeRefs.load();
+  const left = unsentCodeRefs(now, sent.codeRefs);
+  if (left.length !== now.length) codeRefs.save(left);
 }
 
 export interface DraftAttachments {

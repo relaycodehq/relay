@@ -108,7 +108,7 @@ it("keeps what was written and attached while the draft went out", async () => {
     "Fix the flaky test [Image #1]\n\nand the slow one [Image #2]",
   );
   images.set(key, [shot("a", 1), shot("b", 2)]);
-  threadStorage(chat.id).codeRefs.save([ref("src/b.ts")]);
+  threadStorage(chat.id).codeRefs.save([ref("src/a.ts"), ref("src/b.ts")]);
   expect(await send.finish()).toBe(chat);
 
   expect(readDraft(key)).toBe("and the slow one [Image #2]");
