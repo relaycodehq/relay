@@ -1486,9 +1486,11 @@ body.resizing-table-column {
 /* In pathLength units (100 = full turn): a short dash grows to a half-ring,
    then its tail sweeps round to meet the head. The dash left over at the end
    lines up with the start, so the loop has no seam. */
-/* The turn runs on the compositor; the stretching arc repaints every frame.
-   Four running threads in the sidebar measured ~18% of the main thread and
-   a frame of typing latency, turning alone ~1%. */
+/* Long-running spinners rotate a fixed arc on the compositor. 48 steps per
+   1.6s turn gives 30 position updates/sec without repainting the arc. */
+.spinner.steady {
+  animation-timing-function: steps(48);
+}
 .spinner.steady .spinner-arc {
   animation: none;
 }
