@@ -14,6 +14,7 @@ import {
   rmdir,
   stat,
   utimes,
+  writeFile,
 } from "node:fs/promises";
 import { extname, join } from "node:path";
 
@@ -23,6 +24,8 @@ const IMAGE_MAX_BYTES = 30_000_000;
 export const SHOWN_IMAGES_MAX_BYTES = 500_000_000;
 const PRUNE_EVERY_MS = 60 * 60_000;
 const ID = /^[\w-]{1,80}$/;
+/** Copies are named by a hash of their path, so this can't clash with one. */
+const PREVIEW_SHOT = "preview.jpg";
 
 export class ShownImages {
   private pruned = 0;
@@ -55,6 +58,21 @@ export class ShownImages {
     // The copy's age is when it was kept, whatever the file says.
     const now = new Date();
     await utimes(copy, now, now);
+    if (Date.now() - this.pruned >= PRUNE_EVERY_MS) void this.prune();
+  }
+
+  /** Where answer `messageId` keeps the preview's last frame; see shared/preview's TurnPreview. */
+  previewShot(chatId: string, messageId: string) {
+    return join(this.folder(chatId, messageId), PREVIEW_SHOT);
+  }
+
+  /** Keeps the preview's last frame, over an earlier one of the same answer. */
+  async keepPreviewShot(chatId: string, messageId: string, jpeg: Buffer) {
+    await mkdir(this.folder(chatId, messageId), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(this.previewShot(chatId, messageId), jpeg, { mode: 0o600 });
     if (Date.now() - this.pruned >= PRUNE_EVERY_MS) void this.prune();
   }
 

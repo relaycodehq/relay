@@ -76,6 +76,8 @@ const ANSWER_TAIL = 4000;
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 const POLL_MS = 1000;
+/** The preview's frame under an answer: sharp at the card's 720 px on a 2x screen. */
+const PREVIEW_SHOT_WIDTH = 1440;
 /** How long start_threads watches new threads for one that fails as it starts, as Relay serves it. */
 export const EARLY_FAILURE_MS = 10_000;
 const EARLY_POLL_MS = 250;
@@ -100,6 +102,7 @@ type Chats = Pick<
   | "triage"
   | "settleItself"
   | "showRender"
+  | "showPreview"
   | "askWithPage"
   | "enterWorktree"
   | "notes"
@@ -342,13 +345,18 @@ export class StartedThreads {
       case "console_errors":
         if (!this.previews)
           return toolText("Previews aren't available in this Relay.", true);
-        return answerPreviewTool(
-          this.previews,
-          { projectId: lead.projectId, chatId: lead.id },
-          name as PreviewToolName,
-          input,
-          signal,
-        );
+        {
+          const result = await answerPreviewTool(
+            this.previews,
+            { projectId: lead.projectId, chatId: lead.id },
+            name as PreviewToolName,
+            input,
+            signal,
+          );
+          if (name !== "console_errors" && !result.isError)
+            await this.keepPreview(lead.id);
+          return result;
+        }
       case "ask_html":
         return this.askPage(lead, input, signal);
       case "show_html":
@@ -365,6 +373,34 @@ export class StartedThreads {
           signal,
         );
     }
+  }
+
+  /**
+   * Leaves the thread's preview under the answer, with the page as it looks
+   * now: drawn off screen when the panel is closed, which is when the user
+   * most needs to see it's there.
+   */
+  private async keepPreview(chatId: string) {
+    const previews = this.previews!;
+    const state = previews.current(chatId);
+    if (!state?.url || state.error) return;
+    const frame = await previews.capture(chatId).catch((e) => {
+      console.warn("Could not draw the preview for its answer:", e);
+      return null;
+    });
+    const scaled =
+      frame && frame.getSize().width > PREVIEW_SHOT_WIDTH
+        ? frame.resize({ width: PREVIEW_SHOT_WIDTH })
+        : frame;
+    await this.chats
+      .showPreview(
+        chatId,
+        { url: state.url, title: state.title, at: Date.now() },
+        scaled && !scaled.isEmpty() ? scaled.toJPEG(80) : null,
+      )
+      .catch((e) =>
+        console.warn("Could not leave the preview in the answer:", e),
+      );
   }
 
   /**

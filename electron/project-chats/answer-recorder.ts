@@ -12,6 +12,7 @@ import type { TurnModel } from "../../shared/turn-model";
 import type { WatchNote } from "../../shared/watch";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
+import type { TurnPreview } from "../../shared/preview";
 import { addStreamed, type Streamed } from "../../shared/usage";
 
 /** A fresh assistant message the agent is about to stream into. */
@@ -169,6 +170,12 @@ export class AnswerRecorder {
   render(render: HtmlRender) {
     if (this.stopped) return;
     (this.message.renders ??= []).push(render);
+    this.changed();
+  }
+  /** The thread's preview as the agent left it, under the reply; a later open replaces it. */
+  preview(preview: TurnPreview) {
+    if (this.stopped) return;
+    this.message.preview = preview;
     this.changed();
   }
   /** A page the agent asks with (ask_html): an open question until answered or skipped. */

@@ -27,6 +27,7 @@ import type {
 import { PAGE_QUESTION_ID, replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
 import type { HtmlRender } from "../../shared/html-render";
+import type { TurnPreview } from "../../shared/preview";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
@@ -884,6 +885,35 @@ export class ProjectChats {
       throw new Error("This thread has no running answer to show it in.");
     await this.storage.renders.save(id, render.id, pages);
     active.render(render);
+  }
+  /**
+   * Leaves the thread's preview under the answer its agent is writing, with
+   * the page's last frame when one could be drawn. A later open replaces it.
+   */
+  async showPreview(
+    id: string,
+    preview: Omit<TurnPreview, "shot">,
+    jpeg: Buffer | null,
+  ) {
+    const active = this.active.get(id);
+    if (!active?.preview || !active.answerId || active.finishing) return;
+    if (active.stopping) return;
+    const shot =
+      !!jpeg &&
+      (await this.storage.shown
+        .keepPreviewShot(id, active.answerId(), jpeg)
+        .then(
+          () => true,
+          (e) => {
+            console.warn("Could not keep the preview's frame:", e);
+            return false;
+          },
+        ));
+    active.preview({ ...preview, ...(shot ? { shot } : {}) });
+  }
+  /** The preview's last frame a turn kept, as a data URL. */
+  previewShot(chatId: string, messageId: string) {
+    return this.files.previewShot(chatId, messageId);
   }
   /**
    * Leaves a page the thread's agent asks with (ask_html) in the answer it is

@@ -132,6 +132,8 @@ export class TurnRunner {
     if (!rules.side && active?.abort === abort) {
       active.render = (render) => answer.render(render);
       active.askPage = (group) => answer.askPage(group);
+      active.preview = (preview) => answer.preview(preview);
+      active.answerId = () => answer.message.id;
     }
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");

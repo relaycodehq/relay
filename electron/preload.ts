@@ -141,6 +141,7 @@ const methods = [
   "projectChatImage",
   "projectChatQueuedImages",
   "projectChatReadImage",
+  "projectChatPreviewShot",
   "revealProjectChatReadImage",
   "revealProjectTurnFile",
   "sendProjectChat",

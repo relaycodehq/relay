@@ -272,6 +272,8 @@ export interface ProjectChatApi {
     messageId: string,
     path: string,
   ): Promise<string>;
+  /** The thread's preview as the turn `messageId` left it, as a JPEG data URL. */
+  projectChatPreviewShot(id: string, messageId: string): Promise<string>;
   /** Shows that image file in Finder. */
   revealProjectChatReadImage(
     id: string,

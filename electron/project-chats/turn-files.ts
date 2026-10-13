@@ -69,6 +69,16 @@ export class TurnFiles {
     return imageFileData((await exists(kept)) ? kept : path);
   }
 
+  /** The preview's last frame the turn `messageId` kept. */
+  async previewShot(chatId: string, messageId: string) {
+    const chat = await this.core.storage.load(chatId);
+    if (!chat.messages.find((m) => m.id === messageId)?.preview?.shot)
+      throw new Error("This turn kept no frame of the preview.");
+    return imageFileData(
+      this.core.storage.shown.previewShot(chatId, messageId),
+    );
+  }
+
   /** The image file to show in Finder: where the agent left it, or the answer's copy once that's gone. */
   async revealImagePath(chatId: string, messageId: string, path: string) {
     await this.turnImagePath(chatId, messageId, path);

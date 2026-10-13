@@ -6,6 +6,7 @@ import type { Account } from "../../shared/types";
 import type { SettingsCategory } from "../lib/settings-page";
 import { LOCKED_MESSAGE, type NavigationLock } from "../lib/navigation-lock";
 import { paneFrame, usePaneRow, type PaneId } from "../lib/workspace-panes";
+import { useStableCallback } from "../lib/useStableCallback";
 import { usePanelTabs } from "../features/panel/panel-tabs";
 import { useHostAccount } from "../features/pulls/useHostAccount";
 import { NO_VIEWING, type ThreadView } from "../features/thread/useThreadView";
@@ -16,6 +17,7 @@ import {
 import { HandoffButton } from "../features/handoff/HandoffButton";
 import { ProjectChat } from "../features/thread/ProjectChat";
 import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
+import { ThreadPreviewContext } from "../features/browser/TurnPreview";
 import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import { FolderGone } from "../features/projects/FolderGone";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
@@ -29,6 +31,7 @@ import { usePullThreads } from "./usePullThreads";
 import type { ShellNavigation } from "./useShellNavigation";
 import { useThreadFolder } from "./useThreadFolder";
 import { useThreadTerminal } from "./useThreadTerminal";
+import { useThreadPreviewPanel } from "./useThreadPreviewPanel";
 
 type ChatProps = ComponentProps<typeof ProjectChat>;
 
@@ -188,6 +191,12 @@ export function ThreadWorkspace({
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
   const row = usePaneRow(panes.measure);
+  const previewPanel = useThreadPreviewPanel(
+    project.id,
+    panel,
+    panes.visible.includes("panel"),
+    useStableCallback(() => opens.openSurface("browser")),
+  );
   const frame = (id: PaneId) => ({
     ...paneFrame(panes.layout, id, panes.visible),
     onResize: panes.resize,
@@ -215,39 +224,41 @@ export function ThreadWorkspace({
                 ),
             }}
           >
-            <ProjectChat
-              key={chat?.id ?? draftId}
-              ref={composer}
-              project={project}
-              projects={projects}
-              chat={chat}
-              draftId={draftId}
-              draftScope={nav.draftScope}
-              viewing={codeOpen ? view.viewing : NO_VIEWING}
-              contextText={view.context}
-              onContextUsed={() => view.setContext(undefined)}
-              scopes={{
-                canChoosePR: !!host.account || host.pending,
-                onClearScope: () => nav.newThreadIn({ kind: "project" }),
-                onChoosePR,
-                onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
-                onDeepReview: () => nav.newThreadIn({ kind: "review" }),
-              }}
-              opens={{
-                onOpenCode: opens.openCode,
-                onOpenFile: opens.openChatFile,
-                onOpenTurnDiff: opens.openTurnDiff,
-              }}
-              onCommand={onCommand}
-              onDraftWorkspace={nav.setDraftWorkspace}
-              onStartThread={onStartThread}
-              onCreated={onCreated}
-              onForked={onOpened}
-              onOpenThread={onOpened}
-              onSwitchProject={(next) => navigate(next, undefined, true)}
-              onAddProject={onAddProject}
-              onProjectSettings={() => onSettings("project", project.id)}
-            />
+            <ThreadPreviewContext.Provider value={previewPanel}>
+              <ProjectChat
+                key={chat?.id ?? draftId}
+                ref={composer}
+                project={project}
+                projects={projects}
+                chat={chat}
+                draftId={draftId}
+                draftScope={nav.draftScope}
+                viewing={codeOpen ? view.viewing : NO_VIEWING}
+                contextText={view.context}
+                onContextUsed={() => view.setContext(undefined)}
+                scopes={{
+                  canChoosePR: !!host.account || host.pending,
+                  onClearScope: () => nav.newThreadIn({ kind: "project" }),
+                  onChoosePR,
+                  onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
+                  onDeepReview: () => nav.newThreadIn({ kind: "review" }),
+                }}
+                opens={{
+                  onOpenCode: opens.openCode,
+                  onOpenFile: opens.openChatFile,
+                  onOpenTurnDiff: opens.openTurnDiff,
+                }}
+                onCommand={onCommand}
+                onDraftWorkspace={nav.setDraftWorkspace}
+                onStartThread={onStartThread}
+                onCreated={onCreated}
+                onForked={onOpened}
+                onOpenThread={onOpened}
+                onSwitchProject={(next) => navigate(next, undefined, true)}
+                onAddProject={onAddProject}
+                onProjectSettings={() => onSettings("project", project.id)}
+              />
+            </ThreadPreviewContext.Provider>
           </StartedThreadsContext.Provider>
           <RunningTasks
             key={project.id}

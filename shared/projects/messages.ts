@@ -6,6 +6,7 @@ import type { SentSkill } from "../skill-mentions";
 import type { AgentQuestion } from "../agent-modes";
 import type { AskedQuestion } from "../asked-questions";
 import type { HtmlRender } from "../html-render";
+import type { TurnPreview } from "../preview";
 import type { Streamed } from "../usage";
 import type { ResumeSettings } from "./send";
 
@@ -137,6 +138,8 @@ export interface ChatMessage {
   notes?: WatchNote[];
   /** Local: pages the agent showed in its answer with show_html, above its reply. */
   renders?: HtmlRender[];
+  /** Local: the thread's preview as this turn's agent left it, under its reply; the latest open wins. */
+  preview?: TurnPreview;
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */

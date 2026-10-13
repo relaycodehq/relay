@@ -1489,3 +1489,80 @@ test("a Relay not run under npm run dev refuses to restart, without asking", asy
   ).toMatchObject({ isError: true });
   expect(asked).toEqual([]);
 });
+
+/** A thread's preview showing one page, its panel closed: frames come from `capture`. */
+function fakePreviews(capture: () => Promise<unknown>) {
+  const state = {
+    key: "",
+    url: "http://localhost:5173/pricing",
+    title: "Pricing · Acme",
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    poppedOut: false,
+    picking: false,
+    server: { state: "running", port: 5173, ours: false },
+  };
+  return {
+    open: async () => state,
+    reveal: () => {},
+    home: () => state.url,
+    settled: async () => {},
+    current: () => state,
+    consoleErrors: () => [],
+    browserUrl: async () => "http://checkout.relay.localhost:1377/pricing",
+    capture,
+  } as any;
+}
+const frame = (width: number) => {
+  const image = {
+    getSize: () => ({ width, height: width / 1.6 }),
+    isEmpty: () => false,
+    resize: vi.fn(({ width }: { width: number }) => frame(width)),
+    toJPEG: () => Buffer.from(`jpeg ${width}`),
+  };
+  return image;
+};
+
+test("open_preview leaves the page and its frame, scaled to the card, under the answer", async () => {
+  const { lead, api } = fakeChats();
+  const shown: unknown[][] = [];
+  api.showPreview = async (...args: unknown[]) => void shown.push(args);
+  const threads = new StartedThreads(api, {
+    previews: fakePreviews(async () => frame(2560)),
+  });
+  expect(
+    (await call(threads, lead.id, "open_preview", {})).isError,
+  ).toBeFalsy();
+  expect(shown).toEqual([
+    [
+      lead.id,
+      {
+        url: "http://localhost:5173/pricing",
+        title: "Pricing · Acme",
+        at: expect.any(Number),
+      },
+      Buffer.from("jpeg 1440"),
+    ],
+  ]);
+  await call(threads, lead.id, "console_errors", {});
+  expect(shown).toHaveLength(1);
+});
+
+test("a preview that can't be drawn still leaves its page, and the tool still answers", async () => {
+  const { lead, api } = fakeChats();
+  const shown: unknown[][] = [];
+  api.showPreview = async (...args: unknown[]) => void shown.push(args);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const threads = new StartedThreads(api, {
+    previews: fakePreviews(() =>
+      Promise.reject(new Error("Relay's window is closed")),
+    ),
+  });
+  const result = await call(threads, lead.id, "open_preview", {});
+  expect(JSON.parse(resultText(result)).url).toBe(
+    "http://localhost:5173/pricing",
+  );
+  expect(shown).toEqual([[lead.id, expect.any(Object), null]]);
+  warn.mockRestore();
+});

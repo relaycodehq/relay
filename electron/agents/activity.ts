@@ -200,6 +200,9 @@ const relayToolLabels: Record<string, string> = {
   show_html: "Showed a page",
   preview_html: "Looked at a page",
   ask_html: "Asked with a page",
+  open_preview: "Opened the preview",
+  screenshot: "Looked at the preview",
+  console_errors: "Read the preview's console",
 };
 
 /** An MCP call's label and which server's tool it was. */

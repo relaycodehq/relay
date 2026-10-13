@@ -38,6 +38,20 @@ export interface PreviewState {
   worktree?: string;
 }
 
+/**
+ * The thread's preview as a turn left it, shown under its answer: the page
+ * and, when it could be drawn, its last frame (kept beside the answer's
+ * images, see electron/project-chats/shown-images).
+ */
+export interface TurnPreview {
+  url: string;
+  title: string;
+  /** When the frame was taken, or the page opened when there's none. */
+  at: number;
+  /** A frame was kept. */
+  shot?: boolean;
+}
+
 export interface PreviewBounds {
   x: number;
   y: number;

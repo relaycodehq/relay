@@ -246,6 +246,10 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, idSchema, imagePathSchema],
       (id, messageId, path) => projectChats.readImage(id, messageId, path),
     ),
+    projectChatPreviewShot: takes(
+      [idSchema, messageIdSchema],
+      (id, messageId) => projectChats.previewShot(id, messageId),
+    ),
     revealProjectChatReadImage: takes(
       [idSchema, idSchema, imagePathSchema],
       async (id, messageId, path) => {

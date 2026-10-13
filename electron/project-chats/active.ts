@@ -1,4 +1,5 @@
 import type { HtmlRender } from "../../shared/html-render";
+import type { TurnPreview } from "../../shared/preview";
 import type {
   AsyncAgentQuestions,
   ProjectChatSend,
@@ -20,6 +21,9 @@ export interface ActiveChat {
   steer?: AgentControl["steer"];
   /** Adds a page the agent showed to the answer it is writing. */
   render?: (render: HtmlRender) => void;
+  /** Leaves the thread's preview under the answer; `answerId` names the answer it lands in. */
+  preview?: (preview: TurnPreview) => void;
+  answerId?: () => string;
   /** Leaves a page the agent asks with in the answer, as an open question. */
   askPage?: (group: AsyncAgentQuestions) => void;
   /** Counts the rest of the answer's edits in the worktree the thread just moved to. */
