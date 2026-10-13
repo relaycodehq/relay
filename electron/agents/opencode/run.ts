@@ -14,6 +14,7 @@ import {
   askQuestions,
   permissionRules,
   readOnlyReply,
+  unattendedReject,
   forgetThreadGrants,
   threadGrants,
   type PermissionAnswer,
@@ -308,9 +309,9 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           ? await askPermission(request, ask, signal, grants).catch(() => ({
               reply: "reject" as const,
             }))
-          : {
-              reply: options.readOnly ? readOnlyReply(request) : "reject",
-            };
+          : options.readOnly
+            ? readOnlyReply(request)
+            : unattendedReject(request);
       if (answer.reply === "reject") deniedPermissions.add(request.permission);
       await call("POST", `/permission/${request.id}/reply`, {
         reply: answer.reply,

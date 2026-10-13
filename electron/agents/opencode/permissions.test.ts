@@ -55,7 +55,8 @@ describe("linked folders under OpenCode", () => {
         patterns: [command],
         metadata: { command },
       }) as PermissionRequest;
-    const bash = (command: string) => readOnlyReply(request("bash", command));
+    const bash = (command: string) =>
+      readOnlyReply(request("bash", command)).reply;
     expect(bash("git show HEAD:src/app.ts")).toBe("once");
     expect(bash("rg -n TODO src | head -20")).toBe("once");
     for (const command of [
@@ -67,7 +68,12 @@ describe("linked folders under OpenCode", () => {
       "git status > out.txt",
     ])
       expect(bash(command), command).toBe("reject");
-    expect(readOnlyReply(request("edit", "a.ts"))).toBe("reject");
+    // A reject carries a message, so only the call fails and the review goes on.
+    expect(readOnlyReply(request("edit", "a.ts"))).toMatchObject({
+      reply: "reject",
+      message: expect.any(String),
+    });
+    expect(readOnlyReply(request("bash", "rm a.ts")).message).toBeTruthy();
   });
   it("reaches linked folders without asking, and asks before editing a read-only one", () => {
     const rules = permissionRules("auto-accept-edits", {

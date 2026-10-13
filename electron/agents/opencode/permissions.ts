@@ -141,13 +141,32 @@ function modeRules(
  * it only reads, and nothing else does. OpenCode hands the whole command
  * along; the patterns are its parts, with their redirects.
  */
-export function readOnlyReply(request: PermissionRequest): "once" | "reject" {
-  if (request.permission !== "bash") return "reject";
+export function readOnlyReply(request: PermissionRequest): PermissionAnswer {
   const command = request.metadata?.command;
   const commands =
     typeof command === "string" ? [command] : (request.patterns ?? []);
-  return commands.length && commands.every(readsOnly) ? "once" : "reject";
+  if (
+    request.permission === "bash" &&
+    commands.length &&
+    commands.every(readsOnly)
+  )
+    return { reply: "once" };
+  return {
+    reply: "reject",
+    message:
+      request.permission === "bash"
+        ? "Not allowed in a read-only review: only commands that read run. Use a read-only command instead."
+        : `Not allowed in a read-only review: ${request.permission}. Carry on without it.`,
+  };
 }
+
+/** With nobody to ask, a reject still fails only the call; a bare one ends OpenCode's turn. */
+export const unattendedReject = (
+  request: PermissionRequest,
+): PermissionAnswer => ({
+  reply: "reject",
+  message: `Not allowed here: ${request.permission}. Carry on without it.`,
+});
 
 /** OpenCode's own glob: `*` spans anything, slashes too; `?` one character. */
 const wildcard = (glob: string, value: string) =>
