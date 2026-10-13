@@ -300,10 +300,7 @@ function switchHint(data?: PhoneRemoteState) {
   if (data.listening)
     return "Listening, but this computer isn't on a network right now.";
   if (data.enabled)
-    return "Waiting for Tailscale on this computer. Phones can't reach Relay until it's back.";
-  // Optional: a main process from before Tailscale answers without it until Relay restarts.
-  if (data.tailnet?.status !== "connected" && !data.lan)
-    return "Off. Turning it on lets in phones on this Wi-Fi; there's no Tailscale here.";
+    return "Waiting for Tailscale on this computer. Turn on Local network to let phones connect on the same Wi-Fi.";
   return "Off. Nothing listens for phones.";
 }
 

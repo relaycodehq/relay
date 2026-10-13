@@ -17,7 +17,7 @@ export interface RemoteDevice {
 }
 export interface RemoteSettings {
   enabled?: boolean;
-  /** Phones on the local network may connect too, not only the tailnet's. */
+  /** Defaults to true; false explicitly restricts access to the tailnet. */
   lan?: boolean;
   /** The bridge's X25519 secret: sealed by the OS credential store, or `plain:` where there is none. */
   key?: string;

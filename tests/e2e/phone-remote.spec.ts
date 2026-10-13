@@ -81,9 +81,32 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       exact: true,
     });
     await settings.getByRole("button", { name: "Phone", exact: true }).click();
+    const lan = settings.getByRole("switch", {
+      name: "Local network",
+      exact: true,
+    });
+    await expect(lan).toBeChecked();
     await settings
       .getByRole("switch", { name: "Allow phone connections" })
       .check();
+    await expect(
+      settings.getByText(/Phones on this network or your tailnet reach Relay/),
+    ).toBeVisible();
+    await expect(
+      settings.getByText("Tailscale on your phone, optional", { exact: true }),
+    ).toBeVisible();
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-lan-default-settings.png"),
+    });
+    // Tailscale-only is still an explicit choice, and survives access being toggled.
+    await lan.uncheck();
+    await settings
+      .getByRole("switch", { name: "Allow phone connections" })
+      .uncheck();
+    await settings
+      .getByRole("switch", { name: "Allow phone connections" })
+      .check();
+    await expect(lan).not.toBeChecked();
     await expect(
       settings.getByText(/Only devices on your tailnet reach Relay/),
     ).toBeVisible();
@@ -130,7 +153,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       ),
     ).toBeVisible();
     await screenshot(page, {
-      path: test.info().outputPath("settings-phone.png"),
+      path: join(tmpdir(), "relay-tailscale-only-settings.png"),
     });
     await settings
       .getByRole("button", { name: "Back to app", exact: true })

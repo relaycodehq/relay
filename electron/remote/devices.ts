@@ -43,7 +43,10 @@ export class RemoteDevices {
     private now = () => Date.now(),
   ) {}
   get settings(): RemoteSettings {
-    return this.store.get().phoneRemote ?? {};
+    const saved = this.store.get().phoneRemote;
+    // Access is still opt-in. Once enabled, the same Wi-Fi should work unless
+    // the user explicitly chose Tailscale only; existing keys/devices stay put.
+    return { ...saved, lan: saved?.lan ?? true };
   }
   list() {
     return this.settings.devices ?? [];
