@@ -41,6 +41,24 @@ export class Gitea {
   withRepositoryCredential<T>(send: (token: string) => Promise<T>): Promise<T> {
     return send(this.token);
   }
+  /**
+   * Another token when this one is refused. tea's OAuth logins hand out one
+   * that expires within hours and refresh it only when asked again.
+   */
+  renewToken?: () => Promise<string>;
+  private renewing?: Promise<string | null>;
+  /** A token other than the refused `stale`, asked for once however many requests were refused. */
+  private async renewed(stale: string): Promise<string | null> {
+    if (this.token !== stale) return this.token;
+    this.renewing ??= this.renewToken!()
+      .then(
+        (token) => (this.token = token.trim()),
+        () => null,
+      )
+      .finally(() => (this.renewing = undefined));
+    const fresh = await this.renewing;
+    return fresh && fresh !== stale ? fresh : null;
+  }
   private controllers = new Set<AbortController>();
   dispose() {
     for (const c of this.controllers) c.abort();
@@ -61,22 +79,34 @@ export class Gitea {
     const timer = setTimeout(() => controller.abort(), 30000);
     try {
       const url = `${this.account.server}/api/v1${path}`;
-      const response = await this.fetchRequest(url, {
-        method: options.method ?? "GET",
-        headers: {
-          Authorization: `token ${this.token}`,
-          Accept: options.raw ? "application/octet-stream" : "application/json",
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        redirect: "error",
-        credentials: "omit",
-        signal: options.signal
-          ? AbortSignal.any([controller.signal, options.signal])
-          : controller.signal,
-      }).catch((error: unknown) => {
-        throw networkError(error, this.account.server);
-      });
+      const send = (token: string) =>
+        this.fetchRequest(url, {
+          method: options.method ?? "GET",
+          headers: {
+            Authorization: `token ${token}`,
+            Accept: options.raw
+              ? "application/octet-stream"
+              : "application/json",
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+          redirect: "error",
+          credentials: "omit",
+          signal: options.signal
+            ? AbortSignal.any([controller.signal, options.signal])
+            : controller.signal,
+        }).catch((error: unknown) => {
+          throw networkError(error, this.account.server);
+        });
+      const used = this.token;
+      let response = await send(used);
+      if (response.status === 401 && this.renewToken) {
+        const fresh = await this.renewed(used);
+        if (fresh) {
+          await response.body?.cancel();
+          response = await send(fresh);
+        }
+      }
       if (!response.ok) {
         await response.body?.cancel();
         throw new ApiError(

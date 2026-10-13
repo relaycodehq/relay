@@ -75,7 +75,7 @@ import { HandoffReceiver } from "./handoff/receiver";
 import { Handoffs } from "./handoff/sender";
 import { pathReady } from "./platform/shell-path";
 import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
-import { applyLinkedTools } from "./source-control";
+import { applyLinkedTools, teaTokenFor } from "./source-control";
 import { Store } from "./app/store";
 import { projectTasks } from "./terminal/tasks";
 import { threadTerminals } from "./terminal/thread-terminals";
@@ -139,7 +139,7 @@ let menubarSounds: MenubarSounds | undefined;
 let handoffs: { computers: Computers; sender: Handoffs } | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
-const login = new GiteaLogin();
+const login = new GiteaLogin(teaTokenFor);
 const github = new GithubLogin((url, options) => net.fetch(url, options));
 /** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({

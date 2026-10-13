@@ -71,7 +71,7 @@ import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
 import { PhoneAppFiles } from "../remote/phone-app";
 import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
-import { applyLinkedTools } from "../source-control";
+import { applyLinkedTools, teaTokenFor } from "../source-control";
 import {
   agentProjects,
   answerRelayTools,
@@ -164,7 +164,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const agentAccounts = new AgentAccounts(store, () => {});
   applyLinkedTools(store);
   void gitExecutable().catch(() => {});
-  const login = new GiteaLogin();
+  const login = new GiteaLogin(teaTokenFor);
   const projects = new Projects(store);
   const github = new GithubLogin(fetcher);
   const hostOf = async (repo: Repo) =>

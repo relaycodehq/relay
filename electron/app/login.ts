@@ -2,6 +2,7 @@ import { net, safeStorage } from "electron";
 import { Gitea } from "../pull-requests/gitea";
 import type { Store } from "./store";
 import type { SourceControlSettings } from "../../shared/source-control";
+import type { Account } from "../../shared/types";
 
 /** Linux's basic_text backend stores plaintext; secrets then stay in memory. */
 const canEncrypt = async () =>
@@ -30,6 +31,11 @@ export const giteaOn = (s: {
 
 /** The signed-in Gitea account, and bringing a saved one back from the Keychain. */
 export class GiteaLogin {
+  /**
+   * `tokenFromCli` asks the CLI signed in to the account (tea) for a token,
+   * when Relay's is refused or there is none saved.
+   */
+  constructor(private tokenFromCli?: (account: Account) => Promise<string>) {}
   private current: Gitea | null = null;
   /** Hears sign-ins and sign-outs, a restored account's too. */
   changed?: () => void;
@@ -37,6 +43,8 @@ export class GiteaLogin {
     return this.current;
   }
   set client(next: Gitea | null) {
+    const fromCli = this.tokenFromCli;
+    if (next && fromCli) next.renewToken = () => fromCli(next.account);
     this.current = next;
     this.changed?.();
   }
@@ -60,17 +68,21 @@ export class GiteaLogin {
       this.restore === "unlocking" ||
       !giteaOn(saved) ||
       !saved.account ||
-      !saved.encryptedToken
+      (!saved.encryptedToken && !this.tokenFromCli)
     )
       return;
+    const { account, encryptedToken } = saved;
     const generation = ++this.generation;
     this.restore = "unlocking";
     try {
-      const result = await unseal(saved.encryptedToken);
+      const sealed =
+        encryptedToken && (await unseal(encryptedToken).catch(() => ""));
+      // Nothing saved where the computer has no keyring, or nothing readable.
+      const result = sealed || (await this.tokenFromCli?.(account));
       // A delayed Keychain response must not undo a new sign-in or sign-out.
       if (generation !== this.generation) return;
       if (!result) throw new Error("Empty saved credential");
-      this.client = new Gitea(saved.account, result, (url, options) =>
+      this.client = new Gitea(account, result, (url, options) =>
         net.fetch(url, options),
       );
       this.restore = "idle";

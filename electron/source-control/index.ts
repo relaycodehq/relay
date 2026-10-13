@@ -10,6 +10,7 @@ import { gitea } from "./gitea";
 import { github } from "./github";
 
 export { applyLinkedTools, linkCli, resolveCliPath, unlinkCli } from "./clis";
+export { teaTokenFor } from "./tea";
 
 /**
  * The pull request and CI hosts, as the tools and accounts on this computer

@@ -4,6 +4,8 @@ import {
   type TeaLogin,
   type TeaSetup,
 } from "../../shared/source-control";
+import type { Account } from "../../shared/types";
+import { normalizeServer } from "../../shared/validation";
 import {
   findExecutable,
   runExecutable,
@@ -35,7 +37,33 @@ export async function teaSetup(): Promise<TeaSetup> {
   };
 }
 
-/** Asks tea for the token of `login` the way git does, through its credential helper. */
+/** A token from the tea login for `account`'s server and user. */
+export async function teaTokenFor(account: Account): Promise<string> {
+  const user = account.user.login.toLowerCase();
+  const login = (await teaSetup()).logins.find(
+    (l) =>
+      serverOf(l.url) === account.server &&
+      (!l.user || l.user.toLowerCase() === user),
+  );
+  if (!login)
+    throw new Error(
+      `tea has no login for ${account.user.login} on ${new URL(account.server).host}.`,
+    );
+  return teaToken(login);
+}
+
+const serverOf = (url: string) => {
+  try {
+    return normalizeServer(url);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Asks tea for the token of `login` the way git does, through its credential
+ * helper, which first refreshes an OAuth token that is about to expire.
+ */
 export async function teaToken(login: TeaLogin): Promise<string> {
   const path = await findExecutable("tea");
   const url = new URL(login.url);
@@ -46,7 +74,24 @@ export async function teaToken(login: TeaLogin): Promise<string> {
     "",
     "",
   ].join("\n");
-  const child = spawnExecutable(path, ["logins", "helper", "get"], {
+  // --login (tea 0.12) picks the login itself; older tea goes by host alone.
+  const token =
+    credentialPassword(
+      await credentialHelper(path, ["--login", login.name], request),
+    ) ?? credentialPassword(await credentialHelper(path, [], request));
+  if (!token)
+    throw new Error(
+      `tea has no token for ${login.name}. Run \`tea login add\` with a token for ${url.host}.`,
+    );
+  return token;
+}
+
+async function credentialHelper(
+  path: string,
+  args: string[],
+  request: string,
+): Promise<string> {
+  const child = spawnExecutable(path, ["logins", "helper", "get", ...args], {
     env: process.env,
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,
@@ -72,10 +117,5 @@ export async function teaToken(login: TeaLogin): Promise<string> {
   child.stdin?.on("error", () => {});
   child.stdin?.end(request);
   await done;
-  const token = credentialPassword(stdout);
-  if (!token)
-    throw new Error(
-      `tea has no token for ${login.name}. Run \`tea login add\` with a token for ${url.host}.`,
-    );
-  return token;
+  return stdout;
 }
