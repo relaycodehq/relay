@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { terminate, stopProcessTree } from "./terminate";
-import { pathReady } from "./shell-path";
+import { pathReady, refreshPath } from "./shell-path";
 import { agentProviders, type AgentProvider } from "../../shared/agents";
 import { parseVersion } from "../../shared/agent-updates";
 
@@ -57,6 +57,15 @@ function searchPaths() {
           process.env.ProgramFiles &&
             join(process.env.ProgramFiles, "Git", "cmd"),
           process.env.ProgramFiles && join(process.env.ProgramFiles, "nodejs"),
+          // Codex's own Windows installer, which needs no npm.
+          process.env.LOCALAPPDATA &&
+            join(
+              process.env.LOCALAPPDATA,
+              "Programs",
+              "OpenAI",
+              "Codex",
+              "bin",
+            ),
         ]
       : [
           "/opt/homebrew/bin",
@@ -188,10 +197,15 @@ async function locate(name: string) {
     return chosen;
   }
   const found: string[] = [];
-  for await (const path of candidates(name)) {
-    if (!isAgent(name)) return path;
-    found.push(path);
-  }
+  const search = async () => {
+    for await (const path of candidates(name)) {
+      if (!isAgent(name)) return path;
+      found.push(path);
+    }
+  };
+  let tool = await search();
+  if (!tool && !found.length && (await refreshPath())) tool = await search();
+  if (tool) return tool;
   if (!found.length)
     throw new Error(
       isAgent(name) && ownAgents
