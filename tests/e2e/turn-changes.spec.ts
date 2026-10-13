@@ -111,11 +111,13 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     expect(await readFile(readme, "utf8")).toBe("# Cache\n");
     expect(await readFile(guard, "utf8")).toContain("guard");
     // The header rolls back the rest of the turn; redo brings it all back.
-    await card.getByRole("button", { name: "Roll back", exact: true }).click();
+    await card
+      .getByTitle("Roll back this turn's changes", { exact: true })
+      .click();
     await expect(card).toContainText("Rolled back");
     await expect(readFile(guard, "utf8")).rejects.toThrow();
     await screenshot(card, { path: "test-results/turn-changes-reverted.png" });
-    await card.getByRole("button", { name: "Redo", exact: true }).click();
+    await card.getByTitle("Redo this turn's changes", { exact: true }).click();
     await expect(card).not.toContainText("Rolled back");
     expect(await readFile(readme, "utf8")).toContain("Edited by the agent.");
     expect(await readFile(guard, "utf8")).toContain("guard");

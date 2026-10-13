@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -10,6 +11,7 @@ import {
   realpath,
   rm,
   symlink,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -272,6 +274,265 @@ it("rolls back and redoes a turn that added and retargeted symlinks", async () =
   expect(await readlink(join(root, "moved"))).toBe("gone.ts");
 });
 
+it.skipIf(process.platform === "win32")(
+  "rolls back and redoes executable-bit changes without content changes",
+  async () => {
+    git("config", "core.filemode", "true");
+    await chmod(join(root, "a.ts"), 0o644);
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await chmod(join(root, "a.ts"), 0o755);
+    expect(await finishTurn(root, id, before)).toEqual([
+      { path: "a.ts", additions: 0, deletions: 0 },
+    ]);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o644);
+    expect(git("status", "--porcelain")).toBe("");
+    expect(result.undo).toBeTruthy();
+    await redoRevert(root, id, result.undo!, ["a.ts"]);
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o755);
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "keeps a private file private when rolling back and redoing only its executable bit",
+  async () => {
+    git("config", "core.filemode", "true");
+    await chmod(join(root, "a.ts"), 0o600);
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await chmod(join(root, "a.ts"), 0o700);
+    await finishTurn(root, id, before);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o600);
+    await redoRevert(root, id, result.undo!, ["a.ts"]);
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o700);
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "keeps private permissions when restoring a file with different contents",
+  async () => {
+    await chmod(join(root, "a.ts"), 0o600);
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await writeFile(join(root, "a.ts"), "one\nTWO\n");
+    await finishTurn(root, id, before);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await read("a.ts")).toBe("one\ntwo\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o600);
+  },
+);
+
+it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "restores already deleted files if a later checkout fails",
+  async () => {
+    await mkdir(join(root, "locked"));
+    await writeFile(join(root, "locked", "old.txt"), "old\n");
+    git("add", ".");
+    git("commit", "-qm", "Directory");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await rm(join(root, "locked", "old.txt"));
+    await writeFile(join(root, "created.txt"), "created\n");
+    await chmod(join(root, "created.txt"), 0o600);
+    const paths = (await finishTurn(root, id, before)).map((file) => file.path);
+    const status = git("status", "--porcelain");
+    await chmod(join(root, "locked"), 0o555);
+    try {
+      await expect(revertTurn(root, id, paths)).rejects.toThrow(
+        "Permission denied",
+      );
+      expect(await read("created.txt")).toBe("created\n");
+      expect((await stat(join(root, "created.txt"))).mode & 0o777).toBe(0o600);
+      expect(await read("locked/old.txt")).toBeNull();
+      expect(git("status", "--porcelain")).toBe(status);
+      expect(
+        git("for-each-ref", "refs/relay/rewinds", "refs/relay/reverts"),
+      ).toBe("");
+    } finally {
+      await chmod(join(root, "locked"), 0o755);
+    }
+  },
+);
+
+it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "keeps and reports the durable preimage if filesystem recovery also fails",
+  async () => {
+    await mkdir(join(root, "locked"));
+    await writeFile(join(root, "locked", "old.txt"), "old\n");
+    await writeFile(
+      join(root, ".gitattributes"),
+      "locked/old.txt filter=fail\n",
+    );
+    git("add", ".");
+    git("commit", "-qm", "Directory");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await rm(join(root, "locked", "old.txt"));
+    await writeFile(join(root, "created.txt"), "created\n");
+    const paths = (await finishTurn(root, id, before)).map((file) => file.path);
+    // The failed checkout makes the root unwritable after created.txt was
+    // deleted, so the recovery write fails too. This script lives only in the fixture.
+    await writeFile(
+      join(root, ".git", "fail-smudge"),
+      'chmod 555 "$PWD"\nexit 1\n',
+    );
+    git("config", "filter.fail.clean", "cat");
+    git("config", "filter.fail.smudge", "sh .git/fail-smudge");
+    git("config", "filter.fail.required", "true");
+    try {
+      const error = await revertTurn(root, id, paths).catch(
+        (failure: unknown) => failure,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Recovery also failed");
+      const ref = /Git ref (refs\/relay\/rewinds\/[a-f0-9-]+)/.exec(
+        (error as Error).message,
+      )?.[1];
+      expect(ref).toBeDefined();
+      expect(git("show", `${ref}:created.txt`)).toBe("created");
+      expect(
+        git("for-each-ref", "--format=%(refname)", "refs/relay/rewinds"),
+      ).toBe(ref);
+    } finally {
+      await chmod(root, 0o755);
+    }
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "keeps later contents when rolling back an executable-bit change",
+  async () => {
+    git("config", "core.filemode", "true");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await chmod(join(root, "a.ts"), 0o755);
+    await finishTurn(root, id, before);
+    await writeFile(join(root, "a.ts"), "one\ntwo\nlater\n");
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await read("a.ts")).toBe("one\ntwo\nlater\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o644);
+    await redoRevert(root, id, result.undo!, ["a.ts"]);
+    expect(await read("a.ts")).toBe("one\ntwo\nlater\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o755);
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "keeps a later executable-bit change when rolling back content",
+  async () => {
+    git("config", "core.filemode", "true");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await writeFile(join(root, "a.ts"), "one\nTWO\n");
+    await finishTurn(root, id, before);
+    await chmod(join(root, "a.ts"), 0o755);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await read("a.ts")).toBe("one\ntwo\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o755);
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "keeps a later executable-bit change when the user already restored the original contents",
+  async () => {
+    git("config", "core.filemode", "true");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await writeFile(join(root, "a.ts"), "one\nTWO\n");
+    await finishTurn(root, id, before);
+    await writeFile(join(root, "a.ts"), "one\ntwo\n");
+    await chmod(join(root, "a.ts"), 0o755);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await read("a.ts")).toBe("one\ntwo\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o755);
+  },
+);
+
+it.skipIf(process.platform === "win32")(
+  "preserves later binary contents when rolling back only an executable bit",
+  async () => {
+    git("config", "core.filemode", "true");
+    await writeFile(join(root, "a.ts"), Buffer.from([0, 1, 2]));
+    git("commit", "-qam", "Binary");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await chmod(join(root, "a.ts"), 0o755);
+    await finishTurn(root, id, before);
+    const later = Buffer.from([0, 3, 4]);
+    await writeFile(join(root, "a.ts"), later);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await readFile(join(root, "a.ts"))).toEqual(later);
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o644);
+  },
+);
+
+it("rolls back and redoes directory-to-file replacements", async () => {
+  await mkdir(join(root, "a"));
+  await writeFile(join(root, "a", "nested.txt"), "nested\n");
+  git("add", ".");
+  git("commit", "-qm", "Directory");
+  const id = randomUUID();
+  const before = (await startTurn(root, id))!;
+  await rm(join(root, "a"), { recursive: true });
+  await writeFile(join(root, "a"), "replacement\n");
+  const paths = (await finishTurn(root, id, before)).map((file) => file.path);
+  const result = await revertTurn(root, id, paths);
+  expect(result.conflicts).toEqual([]);
+  expect(await read("a/nested.txt")).toBe("nested\n");
+  expect(git("status", "--porcelain")).toBe("");
+  expect(git("for-each-ref", "--format=%(refname)", "refs/relay/reverts")).toBe(
+    revertRef(id, result.undo!),
+  );
+  expect((await redoRevert(root, id, result.undo!, paths)).conflicts).toEqual(
+    [],
+  );
+  expect(await read("a")).toBe("replacement\n");
+});
+
+it("rolls back and redoes file-to-directory replacements", async () => {
+  const id = randomUUID();
+  const before = (await startTurn(root, id))!;
+  await rm(join(root, "a.ts"));
+  await mkdir(join(root, "a.ts"));
+  await writeFile(join(root, "a.ts", "nested.txt"), "nested\n");
+  const paths = (await finishTurn(root, id, before)).map((file) => file.path);
+  const result = await revertTurn(root, id, paths);
+  expect(result.conflicts).toEqual([]);
+  expect(await read("a.ts")).toBe("one\ntwo\n");
+  expect(git("status", "--porcelain")).toBe("");
+  expect((await redoRevert(root, id, result.undo!, paths)).conflicts).toEqual(
+    [],
+  );
+  expect(await read("a.ts/nested.txt")).toBe("nested\n");
+});
+
+it("does not replace a directory containing later or ignored files, even when forced", async () => {
+  const id = randomUUID();
+  const before = (await startTurn(root, id))!;
+  await rm(join(root, "a.ts"));
+  await mkdir(join(root, "a.ts", "build"), { recursive: true });
+  await writeFile(join(root, "a.ts", "nested.txt"), "nested\n");
+  const paths = (await finishTurn(root, id, before)).map((file) => file.path);
+  await writeFile(join(root, "a.ts", "build", "later.txt"), "keep me\n");
+  for (const force of [false, true]) {
+    expect(await revertTurn(root, id, paths, force)).toEqual({
+      moved: [],
+      conflicts: ["a.ts"],
+    });
+    expect(await read("a.ts/nested.txt")).toBe("nested\n");
+    expect(await read("a.ts/build/later.txt")).toBe("keep me\n");
+  }
+});
+
 it("rolls back one file and leaves the rest of the turn", async () => {
   const id = await agentTurn();
   await revertTurn(root, id, ["a.ts"]);
@@ -307,6 +568,24 @@ it("keeps later edits that merge and refuses ones that don't", async () => {
   expect((await revertTurn(root, id, ["a.ts"], true)).conflicts).toEqual([]);
   expect(await read("a.ts")).toBe("1\n2\n3\n4\n5\n6\n7\n8\n");
 });
+
+it.skipIf(process.platform === "win32")(
+  "preserves private permissions while merging a content rollback",
+  async () => {
+    await writeFile(join(root, "a.ts"), "1\n2\n3\n4\n5\n6\n7\n8\n");
+    git("commit", "-qam", "Longer");
+    const id = randomUUID();
+    const before = (await startTurn(root, id))!;
+    await writeFile(join(root, "a.ts"), "1\nTWO\n3\n4\n5\n6\n7\n8\n");
+    await finishTurn(root, id, before);
+    await writeFile(join(root, "a.ts"), "1\nTWO\n3\n4\n5\n6\n7\nEIGHT\n");
+    await chmod(join(root, "a.ts"), 0o600);
+    const result = await revertTurn(root, id, ["a.ts"]);
+    expect(result.conflicts).toEqual([]);
+    expect(await read("a.ts")).toBe("1\n2\n3\n4\n5\n6\n7\nEIGHT\n");
+    expect((await stat(join(root, "a.ts"))).mode & 0o777).toBe(0o600);
+  },
+);
 
 it("writes nothing when any file of the turn conflicts", async () => {
   const id = await agentTurn();

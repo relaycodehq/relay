@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
+  chmod,
   copyFile,
   lstat,
   mkdtemp,
+  readFile,
   readlink,
+  readdir,
   rm,
   rmdir,
   stat,
@@ -359,7 +362,7 @@ export const revertRef = (messageId: string, commit: string) =>
 export interface RewindResult {
   /** Files now as the rollback (or redo) intended. */
   moved: string[];
-  /** Files edited since that couldn't merge; nothing was written when any exist, unless forced. */
+  /** Files edited since that couldn't merge; nothing was written when any exist. */
   conflicts: string[];
   /** The rollback's snapshot; redo restores what it replaced. */
   undo?: string;
@@ -367,19 +370,43 @@ export interface RewindResult {
 
 export type Step =
   | { path: string; kind: "keep" | "restore" | "delete" }
-  | { path: string; kind: "merge"; contents: Buffer };
+  | { path: string; kind: "mode"; mode: string }
+  | { path: string; kind: "merge"; contents: Buffer; mode?: string };
 
-const blobId = (root: string, rev: string, path: string) =>
-  run(root, ["rev-parse", "-q", "--verify", `${rev}:${path}`]).then(
-    (s) => s.trim(),
-    () => null,
+interface Entry {
+  id: string;
+  mode: string;
+}
+
+/** Trees are directories, not entries checkout-index can restore. */
+async function blobEntry(
+  root: string,
+  rev: string,
+  path: string,
+): Promise<Entry | null> {
+  const output = await run(
+    root,
+    ["ls-tree", "-z", "--full-tree", rev, "--", path],
+    {
+      GIT_LITERAL_PATHSPECS: "1",
+    },
   );
+  const [mode, type, id] = output.slice(0, output.indexOf("\t")).split(" ");
+  return type === "blob" ? { id, mode } : null;
+}
+
+const sameEntry = (a: Entry | null, b: Entry | null, trustMode: boolean) =>
+  a === null || b === null
+    ? a === b
+    : a.id === b.id &&
+      (a.mode === b.mode ||
+        (!trustMode && a.mode.startsWith("100") && b.mode.startsWith("100")));
 
 /**
  * The worktree entry's blob id as `git add` would store it, and whether it is
  * a plain file; "other" for a folder and the like.
  */
-async function worktreeId(root: string, path: string) {
+async function worktreeEntry(root: string, path: string) {
   const info = await lstat(join(root, path)).catch(() => null);
   if (!info) return null;
   if (info.isSymbolicLink()) {
@@ -389,14 +416,46 @@ async function worktreeId(root: string, path: string) {
       const text = join(dir, "link");
       await writeFile(text, await readlink(join(root, path), "buffer"));
       const id = await run(root, ["hash-object", "--no-filters", "--", text]);
-      return { id: id.trim(), file: false };
+      return { id: id.trim(), mode: "120000", file: false };
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   }
-  if (!info.isFile()) return { id: "other", file: false };
+  if (info.isDirectory()) return { id: "other", mode: "040000", file: false };
+  if (!info.isFile()) return { id: "other", mode: "other", file: false };
   const id = await run(root, [...noMonitor, "hash-object", "--", path]);
-  return { id: id.trim(), file: true };
+  return {
+    id: id.trim(),
+    mode: info.mode & 0o100 ? "100755" : "100644",
+    file: true,
+  };
+}
+
+/** Only explicitly deleted files may disappear when a directory becomes a file. */
+async function canClearDirectory(
+  root: string,
+  path: string,
+  deleted: Set<string>,
+): Promise<boolean> {
+  for (const entry of await readdir(join(root, path), {
+    withFileTypes: true,
+  })) {
+    const child = `${path}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (!(await canClearDirectory(root, child, deleted))) return false;
+    } else if (!deleted.has(child)) return false;
+  }
+  return true;
+}
+
+/** Drop empty directories only; never recursively remove files written meanwhile. */
+async function clearEmptyDirectory(root: string, path: string): Promise<void> {
+  const info = await lstat(join(root, path)).catch(() => null);
+  if (!info?.isDirectory()) return;
+  for (const entry of await readdir(join(root, path), { withFileTypes: true }))
+    if (entry.isDirectory())
+      await clearEmptyDirectory(root, `${path}/${entry.name}`);
+  await rmdir(join(root, path));
 }
 
 /** A blob as it would be checked out, line endings and filters applied. */
@@ -439,29 +498,127 @@ export async function plan(
 ) {
   const steps: Step[] = [];
   const conflicts: string[] = [];
+  const directories: string[] = [];
+  const trustMode = await run(root, ["config", "--bool", "core.filemode"]).then(
+    (value) => value.trim() !== "false",
+    () => true,
+  );
   await Promise.all(
     paths.map(async (path) => {
       const [had, want, entry] = await Promise.all([
-        blobId(root, from, path),
-        blobId(root, to, path),
-        worktreeId(root, path),
+        blobEntry(root, from, path),
+        blobEntry(root, to, path),
+        worktreeEntry(root, path),
       ]);
-      const now = entry?.id ?? null;
-      if (now === want) return steps.push({ path, kind: "keep" });
+      const directory = entry?.mode === "040000";
+      const now = directory ? null : (entry ?? null);
+      if (sameEntry(now, want, trustMode))
+        return steps.push({ path, kind: "keep" });
+      if (entry?.file && want?.mode.startsWith("100") && entry.id === want.id) {
+        const mode = force || entry.mode === had?.mode ? want.mode : entry.mode;
+        return steps.push(
+          mode === entry.mode
+            ? { path, kind: "keep" }
+            : { path, kind: "mode", mode },
+        );
+      }
       const replace: Step = { path, kind: want ? "restore" : "delete" };
-      if (force || now === had) return steps.push(replace);
+      if (force || sameEntry(now, had, trustMode)) {
+        if (directory && want) directories.push(path);
+        return steps.push(replace);
+      }
+      // Text and executable mode merge separately, so a later chmod survives
+      // a content rollback and later text survives an executable-bit rollback.
       const contents =
-        had && want && entry?.file
-          ? await mergeBack(root, path, from, to)
+        had?.mode.startsWith("100") &&
+        want?.mode.startsWith("100") &&
+        entry?.file
+          ? had.id === want.id
+            ? await readFile(join(root, path))
+            : await mergeBack(root, path, from, to)
           : null;
-      if (contents) steps.push({ path, kind: "merge", contents });
-      else conflicts.push(path);
+      if (contents) {
+        const mode = entry!.mode === had!.mode ? want!.mode : entry!.mode;
+        steps.push({
+          path,
+          kind: "merge",
+          contents,
+          ...(trustMode && mode !== entry!.mode ? { mode } : {}),
+        });
+      } else conflicts.push(path);
     }),
   );
+  const deleted = new Set(
+    steps.filter((step) => step.kind === "delete").map((step) => step.path),
+  );
+  for (const path of directories)
+    if (!(await canClearDirectory(root, path, deleted))) conflicts.push(path);
   return { steps, conflicts: conflicts.sort() };
 }
 
-export async function apply(root: string, to: string, steps: Step[]) {
+/** Keeps a durable preimage until writing succeeds; attempts recovery on failure. */
+export async function apply(
+  root: string,
+  to: string,
+  steps: Step[],
+  before?: string,
+) {
+  if (steps.every((step) => step.kind === "keep")) return;
+  before ??= await snapshot(root);
+  const permissions = await fileModes(root, steps);
+  const recoveryRef = `refs/relay/rewinds/${randomUUID()}`;
+  await run(root, [...durable, "update-ref", recoveryRef, before]);
+  try {
+    await applySteps(root, to, steps, permissions);
+  } catch (error) {
+    try {
+      const recovery = await plan(
+        root,
+        steps.map((step) => step.path),
+        to,
+        before,
+        false,
+      );
+      if (recovery.conflicts.length)
+        throw new Error(
+          `Files changed meanwhile block recovery: ${recovery.conflicts.join(", ")}`,
+        );
+      await applySteps(root, before, recovery.steps, permissions);
+    } catch (recoveryError) {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}. Recovery also failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}. The original files are kept at Git ref ${recoveryRef}.`,
+        { cause: error },
+      );
+    }
+    await run(root, ["update-ref", "-d", recoveryRef]);
+    throw error;
+  }
+  await run(root, ["update-ref", "-d", recoveryRef]);
+}
+
+async function fileModes(root: string, steps: Step[]) {
+  const modes = new Map<string, number>();
+  await Promise.all(
+    steps.map(async (step) => {
+      const info = await lstat(join(root, step.path)).catch(() => null);
+      if (info?.isFile()) modes.set(step.path, info.mode & 0o7777);
+    }),
+  );
+  return modes;
+}
+
+/** Git records the owner's executable bit; leave unrelated permissions intact. */
+function executableMode(mode: number, executable: boolean) {
+  if (!!(mode & 0o100) === executable) return mode;
+  return executable ? mode | ((mode & 0o444) >> 2) | 0o100 : mode & ~0o111;
+}
+
+async function applySteps(
+  root: string,
+  to: string,
+  steps: Step[],
+  permissions: Map<string, number>,
+) {
   const restore = steps.filter((s) => s.kind === "restore").map((s) => s.path);
   if (restore.length) {
     // A scratch index checks files out of `to` with their modes and filters,
@@ -470,15 +627,40 @@ export async function apply(root: string, to: string, steps: Step[]) {
     const env = { GIT_INDEX_FILE: index };
     try {
       await run(root, ["read-tree", to], env);
+      await deleteSteps(root, steps);
+      for (const path of restore) await clearEmptyDirectory(root, path);
       await run(root, ["checkout-index", "-f", "--", ...restore], env);
+      for (const path of restore) {
+        const mode = permissions.get(path);
+        if (mode === undefined) continue;
+        const info = await lstat(join(root, path));
+        if (info.isFile())
+          await chmod(
+            join(root, path),
+            executableMode(mode, !!(info.mode & 0o100)),
+          );
+      }
     } finally {
       await rm(dirname(index), { recursive: true, force: true });
     }
-  }
+  } else await deleteSteps(root, steps);
   for (const step of steps) {
-    if (step.kind === "merge")
+    if (step.kind === "merge") {
       await writeFile(join(root, step.path), step.contents);
-    if (step.kind !== "delete") continue;
+    }
+    if ((step.kind === "merge" || step.kind === "mode") && step.mode) {
+      const path = join(root, step.path);
+      const mode = (await stat(path)).mode & 0o7777;
+      await chmod(path, executableMode(mode, step.mode === "100755"));
+    }
+  }
+}
+
+async function deleteSteps(root: string, steps: Step[]) {
+  const deleted = steps
+    .filter((step) => step.kind === "delete")
+    .sort((a, b) => b.path.split("/").length - a.path.split("/").length);
+  for (const step of deleted) {
     await rm(join(root, step.path), { force: true });
     // Like Git, drop folders the deletion left empty.
     for (let dir = dirname(step.path); dir !== "."; dir = dirname(dir))
@@ -511,7 +693,7 @@ export async function revertTurn(
   const { steps, conflicts } = await plan(root, paths, ref, `${ref}^`, force);
   if (conflicts.length) return { moved: [], conflicts };
   const before = await snapshot(root);
-  await apply(root, `${ref}^`, steps);
+  await apply(root, `${ref}^`, steps, before);
   const after = await snapshot(root, before);
   await run(root, [
     ...durable,
