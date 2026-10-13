@@ -27,6 +27,7 @@ export function AppFrame({
   showing,
   sidebar = true,
   onAdd = () => {},
+  onOpen = () => {},
   children,
 }: {
   /** What the titlebar names, e.g. the thread or "Settings". */
@@ -36,6 +37,8 @@ export function AppFrame({
   /** Settings hides the sidebar, as in the app. */
   sidebar?: boolean;
   onAdd?: () => void;
+  /** A thread picked in the sidebar, for previews that show more than one. */
+  onOpen?: (chat?: ChatSummary) => void;
   children: ReactNode;
 }) {
   return (
@@ -52,7 +55,7 @@ export function AppFrame({
               initialView="threads"
               projects={projects}
               showing={showing ?? {}}
-              onOpen={() => {}}
+              onOpen={(_, chat) => onOpen(chat)}
               onPickNew={() => {}}
               onNewScratch={() => {}}
               onSendDraft={() => {}}
