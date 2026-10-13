@@ -59,6 +59,21 @@ it("keeps partially staged work separate, commits only the index, then pushes ex
   await performGitAction(root, { kind: "push", revision: tree.revision });
   expect((await workingTree(root)).ahead).toBe(0);
 });
+it("counts a never-pushed branch's commits as ahead, and pushing sets its upstream", async () => {
+  git("switch", "-q", "-c", "feature");
+  git("commit", "-q", "--allow-empty", "-m", "One");
+  git("commit", "-q", "--allow-empty", "-m", "Two");
+  let tree = await workingTree(root);
+  expect(tree).toMatchObject({
+    upstream: null,
+    pushTarget: "origin/feature",
+    ahead: 2,
+    behind: 0,
+  });
+  expect(tree.outgoing.map((c) => c.subject)).toEqual(["Two", "One"]);
+  tree = await performGitAction(root, { kind: "push", revision: tree.revision });
+  expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
+});
 it("commits only the chosen files and leaves the rest of the checkout alone", async () => {
   await writeFile(join(root, "gone.ts"), "x\n");
   git("add", "gone.ts");

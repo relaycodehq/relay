@@ -87,8 +87,12 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   const t = tree.data;
   // Without it the label would say it's loading forever.
   const branchError = branch === undefined ? tree.error : null;
+  // A branch never pushed has no upstream, but its commits still go somewhere.
   const sync =
-    !t?.upstream || !t.branch || t.operation || (!t.ahead && !t.behind)
+    !t?.branch ||
+    t.operation ||
+    !(t.upstream || t.pushTarget) ||
+    (!t.ahead && !t.behind)
       ? null
       : t.ahead && t.behind
         ? "rebase"
@@ -359,7 +363,9 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                   ? `Couldn’t fetch ${t.upstream}: ${remote.error.message}`
                   : sync === "rebase" && !clash
                     ? `Rebase your ${t.ahead} onto the ${t.behind} new on ${t.upstream}`
-                    : undefined
+                    : !t.upstream
+                      ? `Not on ${t.pushTarget} yet. Push ${t.ahead} commit${t.ahead === 1 ? "" : "s"}`
+                      : undefined
             }
             onClick={() => void runSync()}
           >

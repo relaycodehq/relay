@@ -296,6 +296,14 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   // Staging the status line doesn't show (such as `git add -p`) only happens
   // on changed paths. The whole index is megabytes in a large repository.
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
+  const destinationRead = pushDestination(root, branch);
+  // A branch never pushed has no upstream; what it would push is everything
+  // the push remote doesn't have on any branch yet.
+  const outgoingRange = upstream
+    ? Promise.resolve([`${upstream}..HEAD`])
+    : destinationRead.then((d) =>
+        d && head ? ["HEAD", "--not", `--remotes=${d.remote}`] : null,
+      );
   const [index, stamps, destination, counts, log, lines, ignored] =
     await Promise.all([
       tracked.length
@@ -320,9 +328,18 @@ export async function workingTree(root: string): Promise<WorkingTree> {
             : [c.path, null];
         }),
       ),
-      pushDestination(root, branch),
+      destinationRead,
       !upstream
-        ? [0, 0]
+        ? outgoingRange.then(async (range) =>
+            range
+              ? [
+                  0,
+                  Number(
+                    (await git(root, ["rev-list", "--count", ...range])).trim(),
+                  ),
+                ]
+              : [0, 0],
+          )
         : head
           ? git(root, [
               "rev-list",
@@ -335,8 +352,10 @@ export async function workingTree(root: string): Promise<WorkingTree> {
               Number(out.trim()),
               0,
             ]),
-      upstream && head
-        ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
+      head
+        ? outgoingRange.then((range) =>
+            range ? git(root, ["log", "-30", "--format=%H %s", ...range]) : "",
+          )
         : "",
       lineCounts(root, changes, head),
       ignoredTouches(root, head),

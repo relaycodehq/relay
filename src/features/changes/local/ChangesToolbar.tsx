@@ -79,7 +79,7 @@ export function ChangesToolbar({
                   kind="branch"
                 />
               </span>
-              {tree?.upstream && (tree.ahead > 0 || tree.behind > 0) && (
+              {tree && (tree.ahead > 0 || tree.behind > 0) && (
                 <span className="pane-chip">
                   {tree.ahead > 0 && `↑${tree.ahead}`}
                   {tree.ahead > 0 && tree.behind > 0 && " "}
@@ -96,10 +96,12 @@ export function ChangesToolbar({
     <header className="working-toolbar">
       <GitBranch size={15} />
       <strong>{tree ? checkoutLabel(tree) : "Local checkout"}</strong>
-      {tree?.upstream && (
+      {tree?.upstream ? (
         <span className="muted">
           {tree.ahead} ahead · {tree.behind} behind
         </span>
+      ) : (
+        !!tree?.ahead && <span className="muted">{tree.ahead} not pushed</span>
       )}
       <span className="spacer" />
       {actions}
