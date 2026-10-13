@@ -276,7 +276,7 @@ export const handoffMessageSchema = z
     provider: agentProviderSchema.optional(),
     parentId: z.string().max(200).nullish(),
   })
-  .passthrough();
+  .loose();
 export const handoffMessagesSchema = z.array(handoffMessageSchema).max(20_000);
 
 /** The conversation half of a handoff; the code travels as a bundle beside it. */

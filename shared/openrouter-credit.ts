@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { MeterPace } from "./provider-usage";
 
-const dollars = z.number().finite();
+const dollars = z.number();
 
 export const openRouterCreditSchema = z
   .object({

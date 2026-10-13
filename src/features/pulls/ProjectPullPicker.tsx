@@ -143,11 +143,7 @@ export function ProjectPullPicker({
                       event.stopPropagation();
                       setOpen(false);
                     }
-                    if (
-                      event.key !== "Enter" ||
-                      event.nativeEvent.isComposing ||
-                      event.keyCode === 229
-                    )
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing)
                       return;
                     const first = matches[0];
                     const number = highlighted.current

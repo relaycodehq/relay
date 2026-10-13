@@ -19,9 +19,7 @@ export function followSounds(qc: QueryClient) {
       focusedThreadWindow() !== chatId,
     async play(heard) {
       // A main process from before sounds has nothing to answer with.
-      const app = await qc
-        .fetchQuery(soundSettingsQuery)
-        .catch(() => undefined);
+      const app = await qc.query(soundSettingsQuery).catch(() => undefined);
       if (!app) return false;
       const projects = qc
         .getQueriesData<Project[]>({ queryKey: ["projects"] })

@@ -3,7 +3,7 @@ import { draftKeySchema, draftWriteSchema } from "../../shared/drafts";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const heldResultSchema = z.union([
-  z.object({ chatId: z.string().uuid() }).strict(),
+  z.object({ chatId: z.uuid() }).strict(),
   z.object({ error: z.string().max(2000) }).strict(),
 ]);
 
@@ -19,7 +19,7 @@ export function draftHandlers(ctx: ApiContext) {
       drafts.other(key, drop),
     ),
     waitingDraftSends: () => drafts.waitingSends(),
-    finishDraftSend: takes([z.string().uuid(), heldResultSchema], (id, result) =>
+    finishDraftSend: takes([z.uuid(), heldResultSchema], (id, result) =>
       drafts.finishSend(id, result),
     ),
   } satisfies Handlers;

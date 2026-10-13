@@ -16,7 +16,7 @@ export function usePromptHistory(
     keyDown(e: KeyboardEvent, draft: string) {
       if (!sent || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return false;
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return false;
-      if (e.nativeEvent.isComposing || e.keyCode === 229) return false;
+      if (e.nativeEvent.isComposing) return false;
       const input = prompt.current;
       if (!input) return false;
       let caret = 0;

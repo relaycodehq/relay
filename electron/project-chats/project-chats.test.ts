@@ -481,7 +481,7 @@ it("keeps a user's thread name over the prompt excerpt and generated titles", as
   expect(requests.filter((r) => r.turn)).toHaveLength(1);
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
-  expect((await chats.list(projectId))[0].title).toBe("Cache work");
+  expect(chats.list(projectId)[0].title).toBe("Cache work");
 });
 it("asks the outgoing agent for a handoff note before another agent takes over", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

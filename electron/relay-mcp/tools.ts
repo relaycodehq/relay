@@ -24,12 +24,10 @@ const FIND_LIMIT = 50;
 export const WAIT_LIMIT_SECONDS = 600;
 
 const threadId = z
-  .string()
   .uuid()
   .describe("A thread id from start_threads, list_threads or find_threads.");
 
 const projectId = z
-  .string()
   .uuid()
   .describe("A project id from list_projects or add_project.");
 

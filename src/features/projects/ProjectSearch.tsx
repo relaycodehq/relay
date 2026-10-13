@@ -95,12 +95,7 @@ export function ProjectSearch({
               event.stopPropagation();
               onEscape();
             }
-            if (
-              event.key !== "Enter" ||
-              event.nativeEvent.isComposing ||
-              event.keyCode === 229
-            )
-              return;
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
             const next =
               matches.find((item) => item.id === highlighted.current) ??
               matches[0];

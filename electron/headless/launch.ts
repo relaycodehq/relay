@@ -33,7 +33,7 @@ const configSchema = z
     /** Installs releases as they come out; unset is on. */
     autoUpdate: z.boolean().optional(),
   })
-  .passthrough();
+  .loose();
 /** What `relay` was told once and keeps: `headless.json` in the home folder. */
 export type HeadlessConfig = z.infer<typeof configSchema>;
 

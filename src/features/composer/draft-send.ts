@@ -71,12 +71,12 @@ export async function sendDraft(
     (scope.kind === "review" && !chat)
   )
     return null;
-  const ai = await qc.fetchQuery(aiSettingsQuery);
+  const ai = await qc.query(aiSettingsQuery);
   const settings = loadComposerSettings(id);
   // A new thread's composer takes up the agent last picked for one.
   const lastAgent = chat
     ? undefined
-    : await qc.fetchQuery(newThreadAgentQuery).catch(() => undefined);
+    : await qc.query(newThreadAgentQuery).catch(() => undefined);
   // The agent the thread's composer would warn about leaving.
   const holder = chat && threadContextAgent(chat);
   const provider = composerProvider(
@@ -94,7 +94,7 @@ export async function sendDraft(
   const pick = isPickAgent(recipient)
     ? livePick(
         settings.models[recipient],
-        await qc.fetchQuery(agentModelsQuery(recipient)).catch(() => []),
+        await qc.query(agentModelsQuery(recipient)).catch(() => []),
       )
     : { model: "", reasoningEffort: "" as const };
   const choice = messageChoice(recipient, settings.models, selected, pick);

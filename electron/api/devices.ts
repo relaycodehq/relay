@@ -3,10 +3,10 @@ import { takes, type ApiContext } from "./context";
 
 const boundsSchema = z
   .object({
-    x: z.number().finite(),
-    y: z.number().finite(),
-    width: z.number().finite().min(0).max(20_000),
-    height: z.number().finite().min(0).max(20_000),
+    x: z.number(),
+    y: z.number(),
+    width: z.number().min(0).max(20_000),
+    height: z.number().min(0).max(20_000),
   })
   .strict();
 

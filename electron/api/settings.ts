@@ -278,13 +278,15 @@ export function settingsHandlers(ctx: ApiContext) {
     }),
     signInAgent: takes([agentProviderSchema], async (provider) => {
       const { signIn } = agentRuntime(provider);
-      if (!signIn) throw new Error(`${agentName(provider)} signs in in a terminal.`);
+      if (!signIn)
+        throw new Error(`${agentName(provider)} signs in in a terminal.`);
       await signIn();
       return agentUpdates.check(true);
     }),
     signOutAgent: takes([agentProviderSchema], async (provider) => {
       const { signOut } = agentRuntime(provider);
-      if (!signOut) throw new Error(`${agentName(provider)} signs out in a terminal.`);
+      if (!signOut)
+        throw new Error(`${agentName(provider)} signs out in a terminal.`);
       await signOut();
       return agentUpdates.check(true);
     }),
@@ -320,8 +322,6 @@ export function settingsHandlers(ctx: ApiContext) {
     phoneAppearance: takes([phoneAppearanceSchema], (appearance) =>
       requirePhoneRemote().setAppearance(appearance),
     ),
-    revokePhone: takes([z.string().uuid()], (id) =>
-      requirePhoneRemote().revoke(id),
-    ),
+    revokePhone: takes([z.uuid()], (id) => requirePhoneRemote().revoke(id)),
   } satisfies Handlers;
 }

@@ -93,7 +93,7 @@ it("makes an existing public socket directory private even with a permissive uma
     server = await serveControl(path, {} as ControlApi);
     expect((await stat(dir)).mode & 0o777).toBe(0o700);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
-    expect(process.umask()).toBe(0);
+    expect(process.umask(0)).toBe(0);
   } finally {
     process.umask(mask);
     if (server)

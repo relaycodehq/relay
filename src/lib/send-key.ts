@@ -37,8 +37,7 @@ export function sendAction(
   sendKey: SendKey,
   runningAction: RunningSendAction,
 ): "send" | "steer" | null {
-  if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229)
-    return null;
+  if (e.key !== "Enter" || e.nativeEvent.isComposing) return null;
   if (e.altKey) return null;
   const primary = runningAction === "steer" ? "steer" : "send";
   const alternate = runningAction === "steer" ? "send" : "steer";

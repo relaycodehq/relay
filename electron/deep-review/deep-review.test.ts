@@ -631,7 +631,7 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
   expect(await chats.worktreeRoot(projectId, chat.id)).toBe(checkout.path);
   expect(
-    (await chats.list(projectId)).find((c) => c.id === chat.id)?.reviewFolder,
+    chats.list(projectId).find((c) => c.id === chat.id)?.reviewFolder,
   ).toEqual({ path: checkout.path, branch: "panel" });
 
   // Reviewers and the lead work in it, with their own reviews.

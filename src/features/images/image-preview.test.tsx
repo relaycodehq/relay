@@ -26,8 +26,8 @@ function Keys({ keep }: { keep?: string }) {
 
 const render = async (keep?: string) => {
   const client = new QueryClient();
-  await client.prefetchQuery(imageQuery(loaded));
-  await client.prefetchQuery(imageQuery(missing));
+  await client.query(imageQuery(loaded)).catch(() => {});
+  await client.query(imageQuery(missing)).catch(() => {});
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <Keys keep={keep} />

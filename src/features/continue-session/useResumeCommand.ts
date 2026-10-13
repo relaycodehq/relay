@@ -55,7 +55,7 @@ export function useResumeCommand({
       (!state || Date.now() - state.dataUpdatedAt > FRESH_MS)
     )
       void qc
-        .fetchQuery({
+        .query({
           queryKey: key,
           queryFn: () => api.terminalSessions(project.id),
           staleTime: FRESH_MS,

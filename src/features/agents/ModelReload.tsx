@@ -36,7 +36,7 @@ export function ModelReload({ provider }: { provider: AgentProvider }) {
     try {
       const { running } = await api.reloadAgentModels(provider, stopRunning);
       if (running.length) return setState({ kind: "confirm", running });
-      const models = await qc.fetchQuery({
+      const models = await qc.query({
         ...agentModelsQuery(provider),
         staleTime: 0,
       });

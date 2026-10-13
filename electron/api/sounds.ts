@@ -7,7 +7,7 @@ import {
 import { CustomSounds } from "../sounds";
 import { takes, type ApiContext, type Handlers } from "./context";
 
-const idSchema = z.string().uuid();
+const idSchema = z.uuid();
 const nameSchema = z.string().trim().min(1).max(120);
 const bytesSchema = z.custom<Uint8Array>(
   (b) =>

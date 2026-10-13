@@ -125,7 +125,7 @@ it("takes the thread, its answer's edits and its next session into the worktree"
   // The edit made after the move is the answer's, in the worktree.
   expect(moved.messages[1].changes?.map((c) => c.path)).toEqual(["moved.txt"]);
   expect(existsSync(join(repo, "moved.txt"))).toBe(false);
-  const summary = (await chats.list(projectId)).find((c) => c.id === chat.id);
+  const summary = chats.list(projectId).find((c) => c.id === chat.id);
   expect(summary?.branch).toBe("relay/acp-agents");
 
   await chats.send(chat.id, input("@codex fixture echo: still here"));

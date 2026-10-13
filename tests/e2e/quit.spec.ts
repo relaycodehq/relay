@@ -64,7 +64,6 @@ test("keeping unsaved code edits cancels a quit without shutting Relay down", as
     await page.evaluate(() =>
       addEventListener("beforeunload", (event) => {
         event.preventDefault();
-        event.returnValue = "";
       }),
     );
     // Chromium only asks before unload once the page has had a user gesture.
@@ -155,7 +154,6 @@ test("dev IPC keeps unsaved edits on cancellation, then quits cleanly on retry",
       (window as any).unsavedBuffer = "keep this edit";
       addEventListener("beforeunload", (event) => {
         event.preventDefault();
-        event.returnValue = "";
       });
     });
     await page.mouse.click(5, 5);

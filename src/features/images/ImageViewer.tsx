@@ -147,7 +147,8 @@ export function ImageViewer({
   // The neighbours load while this one is looked at, so stepping is instant.
   useEffect(() => {
     for (const neighbour of [images[index - 1], images[index + 1]])
-      if (neighbour) void queryClient.prefetchQuery(imageQuery(neighbour));
+      if (neighbour)
+        void queryClient.query(imageQuery(neighbour)).catch(() => {});
   }, [images, index, queryClient]);
 
   useEffect(() => setFailure(undefined), [image.key]);

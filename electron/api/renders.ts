@@ -26,15 +26,15 @@ const shotSchema = z
     to: z.enum(["clipboard", "file"]),
     rect: z
       .object({
-        x: z.number().finite().min(0),
-        y: z.number().finite().min(0),
-        width: z.number().finite().min(1).max(20_000),
-        height: z.number().finite().min(1).max(20_000),
+        x: z.number().min(0),
+        y: z.number().min(0),
+        width: z.number().min(1).max(20_000),
+        height: z.number().min(1).max(20_000),
       })
       .strict()
       .optional(),
     width: z.number().int().min(100).max(4000),
-    scale: z.number().finite().min(1).max(4),
+    scale: z.number().min(1).max(4),
   })
   .strict();
 

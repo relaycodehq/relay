@@ -11,7 +11,7 @@ const name = z
 export const repoSchema = z.object({
   owner: name,
   name,
-  server: z.string().url().max(2048).optional(),
+  server: z.url().max(2048).optional(),
 });
 export const refSchema = repoSchema.extend({
   number: z.number().int().positive(),
@@ -27,7 +27,7 @@ export const filePathSchema = z
       !v.split("/").some((s) => s === ".." || s === "."),
     "Invalid file path",
   );
-export const idSchema = z.string().uuid();
+export const idSchema = z.uuid();
 export const shaSchema = z.string().regex(/^[a-f0-9]{40,64}$/);
 /** A SHA-256 of file contents, as `digest` makes for versions and checks. */
 export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);

@@ -10,12 +10,12 @@ export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const usageWindowSchema = z.object({
   kind: z.enum(["session", "weekly"]),
-  usedPercent: z.number().finite().min(0).max(100),
-  resetsAt: z.number().finite().nullable(),
-  periodMs: z.number().finite().positive(),
+  usedPercent: z.number().min(0).max(100),
+  resetsAt: z.number().nullable(),
+  periodMs: z.number().positive(),
 });
 const usageCreditsSchema = z.object({
-  balance: z.number().finite().min(0),
+  balance: z.number().min(0),
   unlimited: z.boolean(),
   /** Codex's guess at how many local messages the balance buys, low to high. */
   messages: z.tuple([z.number(), z.number()]).nullish(),

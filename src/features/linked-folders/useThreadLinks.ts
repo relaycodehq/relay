@@ -208,7 +208,7 @@ export function useThreadLinks({
     const state = qc.getQueryState<T>(key);
     if (!state)
       void qc
-        .fetchQuery({ queryKey: key, queryFn: load, staleTime: 30_000 })
+        .query({ queryKey: key, queryFn: load, staleTime: 30_000 })
         .catch(() => undefined)
         .then(bump);
     return state?.data;

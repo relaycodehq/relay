@@ -180,7 +180,7 @@ export default function ProjectShell() {
     const p = projects.data?.find((p) => p.id === projectId);
     if (!p) return;
     void qc
-      .fetchQuery({
+      .query({
         queryKey: ["project-chats", projectId],
         queryFn: () => api.projectChats(projectId),
       })

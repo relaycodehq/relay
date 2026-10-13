@@ -35,6 +35,22 @@
 - `tests/unit/layout.test.ts` fails when one of these rules is broken, or when
   features, or the folders of `electron/`, import each other in a circle.
 
+## Deprecated APIs
+
+- **Keep the checks footer at 0 suggestions.** It counts TypeScript's
+  suggestion diagnostics, and deprecated calls are nearly all of them. The
+  ones that kept coming back:
+  - Zod 4: `z.number()` already rejects Infinity, so no `.finite()`; write
+    `z.uuid()` and `z.url()`, not `z.string().uuid()`/`.url()`; `.loose()`,
+    not `.passthrough()`.
+  - TanStack Query: `qc.query(options)` instead of `fetchQuery`, and
+    `qc.query(options).catch(() => {})` instead of `prefetchQuery`. Unlike
+    `fetchQuery`, `query` applies `select`.
+  - IME: `e.nativeEvent.isComposing` alone; no `keyCode === 229`. The
+    renderer only runs in Chromium, where that flag is set.
+  - `beforeunload`: `event.preventDefault()` alone, no `returnValue`
+    (`tests/e2e/quit.spec.ts` covers it).
+
 ## Showing options
 
 - **Show visual choices as working UI in the browser.** When asked for ideas

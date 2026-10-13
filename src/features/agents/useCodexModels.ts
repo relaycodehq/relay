@@ -52,6 +52,6 @@ export function useCodexModels() {
 }
 /** The same list outside React, asking Codex only when nothing has yet. */
 export async function codexModels(qc: QueryClient): Promise<CodexModel[]> {
-  const models = await qc.fetchQuery(codexModelsQuery).catch(() => []);
+  const models = await qc.query(codexModelsQuery).catch(() => []);
   return models.length ? models : (readSaved() ?? fallbackCodexModels);
 }

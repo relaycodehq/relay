@@ -164,7 +164,6 @@ export function useLocalFile(
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (!isDirty() && !savingRef.current) return;
       event.preventDefault();
-      event.returnValue = "";
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);

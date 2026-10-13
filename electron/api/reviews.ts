@@ -26,7 +26,7 @@ export function reviewHandlers(ctx: ApiContext) {
         z.string().max(500),
         z.enum(["open", "closed", "all"]),
         pageSchema,
-        z.string().url().max(2048).optional(),
+        z.url().max(2048).optional(),
       ],
       async (filter, q, state, page, server) => {
         if (isGithubServer(server))

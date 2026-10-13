@@ -48,7 +48,7 @@ export function usePullThreads(
       number: ref.number,
     };
     const chatsOf = () =>
-      qc.fetchQuery({
+      qc.query({
         queryKey: ["project-chats", p.id],
         queryFn: () => api.projectChats(p.id),
         staleTime: 0,

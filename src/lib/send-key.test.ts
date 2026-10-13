@@ -15,7 +15,6 @@ const key = (
 ) =>
   ({
     key: "Enter",
-    keyCode: 13,
     metaKey: !!mods.meta,
     ctrlKey: !!mods.ctrl,
     shiftKey: !!mods.shift,
@@ -62,10 +61,7 @@ describe("sendAction", () => {
         (e.nativeEvent as { isComposing: boolean }).isComposing = true;
         expect(sendAction(e, "enter", action)).toBeNull();
       });
-      it("ignores the legacy IME key code and non-Enter keys", () => {
-        expect(
-          sendAction({ ...key(), keyCode: 229 }, "enter", action),
-        ).toBeNull();
+      it("ignores non-Enter keys", () => {
         expect(sendAction({ ...key(), key: "a" }, "enter", action)).toBeNull();
       });
     },

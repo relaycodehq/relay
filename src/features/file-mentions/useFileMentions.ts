@@ -98,8 +98,7 @@ export function useFileMentions({
     onPick(item.path, { start: trigger.start, end: at });
   }
   function onKeyDown(e: KeyboardEvent<HTMLElement>) {
-    if (!visible || e.nativeEvent.isComposing || e.keyCode === 229)
-      return false;
+    if (!visible || e.nativeEvent.isComposing) return false;
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();

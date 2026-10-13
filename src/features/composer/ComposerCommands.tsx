@@ -347,8 +347,7 @@ export function useComposerCommands({
     return true;
   }
   function onKeyDown(e: KeyboardEvent<HTMLElement>) {
-    if (!visible || e.nativeEvent.isComposing || e.keyCode === 229)
-      return false;
+    if (!visible || e.nativeEvent.isComposing) return false;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

@@ -92,7 +92,7 @@ export function CommitSheet({
     setError(undefined);
     try {
       // The poll can be up to 3s old; don't commit files that already left.
-      const fresh = await qc.fetchQuery({
+      const fresh = await qc.query({
         queryKey: key,
         queryFn: () => api.projectWorkingTree(where),
         staleTime: 0,

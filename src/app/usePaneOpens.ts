@@ -92,7 +92,7 @@ export function usePaneOpens(
       if (target.directory) return openInEditor(target);
       const found = matchLink(
         target,
-        await qc.fetchQuery({
+        await qc.query({
           queryKey: ["project-files", id],
           queryFn: () => api.projectFiles(id),
           staleTime: 5000,

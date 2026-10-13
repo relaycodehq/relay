@@ -22,7 +22,7 @@ export interface PullRequestPlan {
 }
 export const createPullRequestSchema = z
   .object({
-    planId: z.string().uuid(),
+    planId: z.uuid(),
     base: z.string().min(1).max(250),
     title: z.string().trim().min(1).max(255),
     body: z.string().max(64000),
