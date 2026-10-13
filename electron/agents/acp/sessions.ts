@@ -1,11 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
 import { HostedChild } from "../../agent-host/child";
-import type { Entry } from "../../agent-host/protocol";
 import { executableCommand } from "../../platform/executables";
 import { withTimeout } from "../../util/timeout";
 import { signedOutError } from "../errors";
 import { HostedSessions, savedMeta, type Lease } from "../hosted-sessions";
+import { highestRequestId, replayLines } from "../hosted-replay";
 import { withWorktreeEnv } from "../worktree-env";
 import { hearCommands } from "./commands";
 import { AcpConnection, AcpRequestError } from "./connection";
@@ -305,7 +305,7 @@ export function reattachAcp(profile: AcpProfile, owns: (key: string) => boolean)
     const { info } = found;
     const child = new HostedChild(found.attachProcess(), (entries) => {
       connection.continueAfter(Math.max(meta.run?.id ?? 0, highestRequestId(entries)));
-      return replay(entries, info.split);
+      return replayLines(entries, info.split);
     });
     const connection = new AcpConnection(child, profile.name);
     connection.onUpdate = (update) => hearCommands(profile.provider, update);
@@ -321,47 +321,4 @@ export function reattachAcp(profile: AcpProfile, owns: (key: string) => boolean)
     if (!info.open) child.release();
     return agent;
   });
-}
-
-const parsed = (text: string): Record<string, unknown> | undefined => {
-  try {
-    const value = JSON.parse(text);
-    return typeof value === "object" && value ? value : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * What a turn cut off by a restart still has to hear: its updates, its reply,
- * and the questions the agent asked that the last Relay never answered.
- */
-function replay(entries: Entry[], split: number): string[] {
-  const answered = new Set<unknown>();
-  for (const entry of entries) {
-    if (entry.kind !== "input") continue;
-    const sent = parsed(entry.text);
-    if (sent && !("method" in sent) && "id" in sent) answered.add(sent.id);
-  }
-  return entries.flatMap((entry) => {
-    if (entry.kind !== "line" || entry.seq < split) return [];
-    const said = parsed(entry.text);
-    if (said && "method" in said && "id" in said && answered.has(said.id)) return [];
-    return [entry.text];
-  });
-}
-
-/** The highest id Relay gave a request, in what it sent or the agent answered. */
-function highestRequestId(entries: Entry[]) {
-  let highest = 0;
-  for (const entry of entries) {
-    if (entry.kind !== "line" && entry.kind !== "input") continue;
-    const message = parsed(entry.text);
-    // Relay's requests go in with a method and come back without one; the
-    // agent's own are numbered by the agent.
-    const relays = entry.kind === "input" ? "method" in (message ?? {}) : !("method" in (message ?? {}));
-    if (!message || !relays) continue;
-    if (typeof message.id === "number") highest = Math.max(highest, message.id);
-  }
-  return highest;
 }
