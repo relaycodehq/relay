@@ -22,6 +22,7 @@ import { useReadAloudEntries } from "./sections/read-aloud";
 import { soundEntries } from "./sections/sounds";
 import { useShortcutEntries } from "./sections/shortcuts";
 import { useAboutEntries } from "./sections/about";
+import { reportEntries } from "./sections/report";
 import "./settings.css";
 
 export type { SettingsCategory };
@@ -90,6 +91,7 @@ export function Settings({
     ...readAloud,
     ...soundEntries(),
     ...shortcuts,
+    ...reportEntries(),
     ...about,
   ];
 

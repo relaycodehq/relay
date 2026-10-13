@@ -31,6 +31,8 @@ import { savedThreadWindows } from "../shared/thread-windows";
 import {
   offerCrashReport,
   offerWindowReport,
+  reportBug,
+  setUpBugReports,
   watchForCrashes,
   type LastRun,
 } from "./bug-report";
@@ -303,10 +305,24 @@ app
   .then(async () => {
     app.setName("Relay");
     quit.detachOnSignals();
-    if (lastRun) await offerCrashReport(lastRun);
+    const crash = lastRun ? await offerCrashReport(lastRun) : null;
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
+    const bugReports = setUpBugReports({
+      github,
+      projects: () => loaded.get().projects ?? [],
+      agents: () => agentUpdates.current.agents,
+      aiSettings: () => loaded.aiSettings(),
+      show: () => {
+        window.open();
+        window.send("relay:bug-report", null);
+      },
+    });
+    if (crash)
+      void reportBug(crash).catch((e) =>
+        console.warn("Could not open the bug report:", e),
+      );
     // The main window plays its own sounds; a thread in a window of its own
     // stays quiet while that window is in front.
     menubarSounds = new MenubarSounds(
@@ -515,6 +531,7 @@ app
       previews,
       devices,
       drafts: sharedDrafts,
+      bugReports,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

@@ -5,6 +5,7 @@ import { callFrom, type AppWindow } from "../app/window";
 import { accountHandlers } from "./account";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
+import { bugReportHandlers } from "./bug-reports";
 import { checkHandlers } from "./checks";
 import { combine } from "./combine";
 import { computerHandlers } from "./computers";
@@ -52,6 +53,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     draftHandlers(ctx),
     computerHandlers(ctx),
     usageHandlers(ctx),
+    bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   ]) satisfies Required<Handlers>;
   return async (method, args) => {

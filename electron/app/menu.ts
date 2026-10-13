@@ -100,7 +100,7 @@ export function setApplicationMenu(
         role: "help",
         submenu: [
           {
-            label: "Report a Bug…",
+            label: "Report a Problem…",
             click: () =>
               void reportBug().catch((e) =>
                 console.warn("Could not open the bug report:", e),

@@ -356,6 +356,18 @@ const methods = [
   "sharedDraftOther",
   "waitingDraftSends",
   "finishDraftSend",
+  "openBugReport",
+  "saveBugReport",
+  "writeBugReport",
+  "undoBugReportTidy",
+  "addBugReportScreenshot",
+  "removeBugReportScreenshot",
+  "bugReportScreenshot",
+  "sendBugReport",
+  "saveBugReportFiles",
+  "openBugReportIssue",
+  "discardBugReport",
+  "takeBugReportWanted",
 ] as const satisfies readonly ApiMethod[];
 // Fails to compile, naming the method, when the Api gains one this list lacks.
 const complete: Exclude<ApiMethod, (typeof methods)[number]> extends never
@@ -407,6 +419,7 @@ contextBridge.exposeInMainWorld("relay", {
   onOpenThread: on("relay:open-thread"),
   onSharedDraft: on("relay:shared-draft"),
   onDraftSend: on("relay:draft-send"),
+  onBugReport: on("relay:bug-report"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

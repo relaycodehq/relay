@@ -34,6 +34,7 @@ import type { ProjectAdding } from "../project-add";
 import type { Devices } from "../devices";
 import type { ThreadPreviews } from "../preview";
 import type { Drafts } from "../drafts";
+import type { BugReports } from "../bug-report/service";
 
 export interface Services {
   store: Store;
@@ -68,6 +69,8 @@ export interface Services {
   previews?: ThreadPreviews;
   /** Simulators and emulators in the panel; absent when Relay runs headless. */
   devices?: Devices;
+  /** The problem report; absent when Relay runs headless. */
+  bugReports?: BugReports;
 }
 
 /** What a method's promise resolves to in the page. */

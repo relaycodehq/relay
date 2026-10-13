@@ -337,6 +337,38 @@ export interface Api
   removeCustomSound(id: string): Promise<void>;
   /** Only the menubar's hidden sound player hears these. */
   onPlaySound(callback: (event: PlaySoundEvent) => void): () => void;
+  /** The problem report, looked at afresh: the system, the log and the `gh` login. */
+  openBugReport(): Promise<import("./bug-report").BugReportPreview>;
+  saveBugReport(
+    fields: import("./bug-report").BugReportFields,
+  ): Promise<import("./bug-report").BugReportPreview>;
+  /** Has the draft's agent tidy up its description; nothing else goes to the agent. */
+  writeBugReport(): Promise<import("./bug-report").BugReportPreview>;
+  /** Puts back the title and description the last tidy-up replaced. */
+  undoBugReportTidy(): Promise<import("./bug-report").BugReportPreview>;
+  /** An edited screenshot as a flattened PNG; `replacing` swaps it for that one. */
+  addBugReportScreenshot(
+    name: string,
+    png: Uint8Array,
+    replacing?: string,
+  ): Promise<import("./bug-report").BugReportPreview>;
+  removeBugReportScreenshot(
+    id: string,
+  ): Promise<import("./bug-report").BugReportPreview>;
+  bugReportScreenshot(id: string): Promise<Uint8Array>;
+  /**
+   * Posts what the preview with `digest` showed, and nothing else; without a
+   * `gh` login, opens GitHub's own form with it instead.
+   */
+  sendBugReport(digest: string): Promise<import("./bug-report").BugReportSent>;
+  /** Writes the report, the whole log and the screenshots to a folder; its path. */
+  saveBugReportFiles(): Promise<string>;
+  /** Opens the sent issue, with the screenshots' folder when they still need adding. */
+  openBugReportIssue(): Promise<void>;
+  discardBugReport(): Promise<import("./bug-report").BugReportPreview>;
+  /** Whether a menu or crash prompt asked for the report page since last asked. */
+  takeBugReportWanted(): Promise<boolean>;
+  onBugReport(callback: () => void): () => void;
   /** Plugged in, Relay keeps the computer from idling to sleep; on battery only while it has work or a paired device. */
   keepAwake(): Promise<boolean>;
   saveKeepAwake(enabled: boolean): Promise<boolean>;

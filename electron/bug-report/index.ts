@@ -1,8 +1,10 @@
-import { readFile } from "node:fs/promises";
-import { release } from "node:os";
+import { execFile, execFileSync } from "node:child_process";
+import { hostname, release, totalmem, userInfo } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   app,
+  clipboard,
   crashReporter,
   dialog,
   powerMonitor,
@@ -10,15 +12,32 @@ import {
   type BrowserWindow,
   type RenderProcessGoneDetails,
 } from "electron";
+import { agentName } from "../../shared/agents";
+import type { AgentVersion } from "../../shared/agent-updates";
+import type { BugReportOccasion } from "../../shared/bug-report";
+import type { Project } from "../../shared/projects";
+import type { AISettings } from "../../shared/settings";
 import { releasesRepo } from "../../shared/updates";
-import { issueUrl, type Occasion } from "./issue";
+import { computerName } from "../platform/computer-name";
+import { findExecutable } from "../platform/executables";
+import type { GithubLogin } from "../pull-requests/github-login";
+import { keepCrashedRunLog } from "./crash-log";
 import { trackRun, type LastRun } from "./last-run";
+import { BugReports } from "./service";
+import { execGh, issueHost } from "./submit";
+import { defaultWriter, writeUp } from "./write-up";
 
 export type { LastRun };
+export { BugReports };
+
+const exec = promisify(execFile);
+let reports: BugReports | undefined;
+let show: (() => void) | undefined;
 
 /**
  * Starts collecting native crash dumps and marks this run as started. Call
- * once Relay knows it's the only copy running, as early as it can.
+ * once Relay knows it's the only copy running, as early as it can, after the
+ * log's line for this run's start.
  */
 export function watchForCrashes() {
   // Dumps stay on this computer; a report only says that one exists.
@@ -28,6 +47,8 @@ export function watchForCrashes() {
     app.getVersion(),
     app.getPath("crashDumps"),
   );
+  // Before this run's logging can rotate it away.
+  if (run.last) keepCrashedRunLog(app.getPath("logs"), run.last.startedAt);
   app.on("will-quit", run.quit);
   // Being told to stop isn't quitting unexpectedly, even when the system
   // kills Relay before its quit finishes. A hung Relay can't answer these.
@@ -43,28 +64,75 @@ export function watchForCrashes() {
   return ask ? run.last : null;
 }
 
-/** Opens a new issue on GitHub with the log filled in, for the user to finish. */
-export async function reportBug(occasion: Occasion = { kind: "asked" }) {
-  const logs = app.getPath("logs");
-  const read = (name: string) =>
-    readFile(join(logs, name), "utf8").catch(() => "");
-  const [old, current] = await Promise.all([
-    read("main.old.log"),
-    read("main.log"),
-  ]);
-  await shell.openExternal(
-    issueUrl({
+/** The report page's service, made once Relay knows its projects and agents. */
+export function setUpBugReports(deps: {
+  github: GithubLogin;
+  projects: () => Project[];
+  agents: () => AgentVersion[];
+  aiSettings: () => AISettings;
+  /** Brings a window up on the report page. */
+  show: () => void;
+}) {
+  show = deps.show;
+  reports = new BugReports(
+    {
+      dir: join(app.getPath("userData"), "bug-report"),
+      logs: app.getPath("logs"),
       repo: releasesRepo,
-      occasion,
-      about: about(),
-      log: old + current,
-    }),
+      system: () => systemInfo(deps.agents()),
+      identity: () => ({
+        home: app.getPath("home"),
+        user: safeUserName(),
+        hosts: [
+          hostname(),
+          hostname().replace(/\.local$/, ""),
+          computerName(),
+          ...macNames(),
+        ],
+        relayData: app.getPath("userData"),
+        projects: deps.projects().map((p) => ({
+          path: p.path,
+          ...(p.repository
+            ? { repo: `${p.repository.owner}/${p.repository.name}` }
+            : {}),
+        })),
+      }),
+      host: async () => issueHost(await deps.github.require()),
+      gh: () => findExecutable("gh").catch(() => null),
+      exec: execGh,
+      writeUp: (writer, text, kind, seen) =>
+        writeUp(writer, text, kind, seen, AbortSignal.timeout(180_000)),
+      defaultWriter: () => {
+        const ai = deps.aiSettings();
+        return defaultWriter(
+          deps.agents().flatMap((a) => (a.current ? [a.provider] : [])),
+          { provider: ai.commitMessageProvider, choice: ai.commitMessage },
+        );
+      },
+    },
+    {
+      openExternal: (url) => shell.openExternal(url),
+      reveal: (path) => shell.showItemInFolder(path),
+      copy: (text) => clipboard.writeText(text),
+      downloads: app.getPath("downloads"),
+    },
   );
+  return reports;
+}
+
+/** Shows the report page, noting what made Relay offer it. */
+export async function reportBug(
+  occasion: BugReportOccasion = { kind: "asked" },
+) {
+  if (!reports) throw new Error("Relay is still starting.");
+  await reports.begin(occasion);
+  reports.want();
+  show?.();
 }
 
 /**
  * Asks before the rest of startup runs, so a launch that crashes again can
- * still be reported.
+ * still be reported; the page itself shows once the window is up.
  */
 export async function offerCrashReport(last: LastRun) {
   const { response } = await dialog.showMessageBox({
@@ -74,17 +142,14 @@ export async function offerCrashReport(last: LastRun) {
         ? `Relay quit unexpectedly ${last.crashes} times in a row.`
         : "Relay quit unexpectedly last time.",
     detail:
-      "Report it on GitHub? Relay opens a new issue with its log filled in, secrets removed, and you see all of it before anything is sent.",
-    buttons: ["Report on GitHub…", "Not Now"],
+      "Tell us what happened? Relay kept that run's log. You write the report, see everything it would send, and nothing leaves this computer until you press Send.",
+    buttons: ["Report a Problem…", "Not Now"],
     defaultId: 0,
     cancelId: 1,
   });
-  if (response === 0)
-    await reportBug({
-      kind: "quit",
-      at: last.startedAt,
-      dump: last.dump,
-    }).catch((e) => console.warn("Could not open the bug report:", e));
+  return response === 0
+    ? ({ kind: "quit", at: last.startedAt, dump: last.dump } as const)
+    : null;
 }
 
 /** The window went blank; offer to bring it back and to report it. */
@@ -99,7 +164,7 @@ export async function offerWindowReport(
     type: "error",
     message: "Relay's window crashed.",
     detail: `Its process ended (${reason}). Your threads are saved; reloading brings the window back.`,
-    buttons: ["Reload", "Report on GitHub…", "Close"],
+    buttons: ["Reload", "Reload and Report…", "Close"],
     defaultId: 0,
     cancelId: 2,
   });
@@ -111,12 +176,80 @@ export async function offerWindowReport(
   if (!win.isDestroyed()) win.webContents.reload();
 }
 
-function about() {
+let names: string[] | undefined;
+/**
+ * The Mac's names besides its host name: "Jana's MacBook Pro" as Sharing
+ * shows it, and the Bonjour name. Either can turn up in a log.
+ */
+function macNames() {
+  if (process.platform !== "darwin") return [];
+  names ??= ["ComputerName", "LocalHostName"].flatMap((key) => {
+    try {
+      const name = execFileSync("scutil", ["--get", key], {
+        encoding: "utf8",
+        timeout: 2000,
+      }).trim();
+      return name ? [name] : [];
+    } catch {
+      return [];
+    }
+  });
+  return names;
+}
+
+function safeUserName() {
+  try {
+    return userInfo().username;
+  } catch {
+    return "";
+  }
+}
+
+async function systemInfo(agents: AgentVersion[]) {
   const os =
     process.platform === "darwin"
       ? `macOS ${process.getSystemVersion()}`
       : process.platform === "win32"
         ? `Windows ${process.getSystemVersion()}`
         : `Linux ${release()}`;
-  return `Relay ${app.getVersion()} · ${os} ${process.arch} · Electron ${process.versions.electron}`;
+  const home = app.getPath("home");
+  const tilde = (path: string) =>
+    path.startsWith(home) ? `~${path.slice(home.length)}` : path;
+  return {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    os,
+    arch: process.arch,
+    translated: app.runningUnderARM64Translation,
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    memoryGb: Math.round(totalmem() / 2 ** 30),
+    // Paths are anonymized with the rest of the facts.
+    agents: agents.map((a) => ({
+      id: a.provider,
+      name: agentName(a.provider),
+      version: a.current ?? null,
+      ...(a.path ? { path: a.path } : {}),
+      ...(a.installer ? { how: a.installer } : {}),
+      ...(a.linked ? { linked: true } : {}),
+    })),
+    gh: await ghVersion(),
+    appPath: tilde(
+      app
+        .getAppPath()
+        .replace(/[\\/]Contents[\\/]Resources[\\/]app\.asar$/, ""),
+    ),
+    dataPath: tilde(app.getPath("userData")),
+  };
+}
+
+async function ghVersion() {
+  try {
+    const gh = await findExecutable("gh");
+    const { stdout } = await exec(gh, ["--version"], { timeout: 5000 });
+    return /\d+\.\d+\.\d+/.exec(stdout)?.[0] ?? null;
+  } catch {
+    return null;
+  }
 }

@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bug,
   Bot,
   FolderGit2,
   Info,
@@ -109,6 +110,13 @@ export const categories: {
     label: "Keyboard shortcuts",
     description: "Everything you can do from the keyboard.",
     icon: Keyboard,
+  },
+  {
+    id: "report",
+    label: "Report a problem",
+    description:
+      "Tell us what went wrong. You see everything that would be sent, and nothing leaves this computer until you send it.",
+    icon: Bug,
   },
   {
     id: "about",
