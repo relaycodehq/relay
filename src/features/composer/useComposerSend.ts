@@ -90,6 +90,7 @@ export function useComposerSend({
         const sent = await onSend(
           buildSend(runs.sendSettings(to)!, `@${to} ${btw.args}`, {
             side: true,
+            sendAt,
           }),
           outgoing.dispatch,
         );

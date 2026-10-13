@@ -516,7 +516,15 @@ export class ProjectChats {
       limitResume,
       goal,
     } = this.core.away?.get(chat.id) ?? {};
-    return { requests, queue, scheduled, queuePaused, stopped, limitResume, goal };
+    return {
+      requests,
+      queue,
+      scheduled,
+      queuePaused,
+      stopped,
+      limitResume,
+      goal,
+    };
   }
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.councils.startReview(id, config, pull);
@@ -584,7 +592,10 @@ export class ProjectChats {
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
     await this.worktrees.refreshAgentWorktrees(chat);
-    return { ...structuredClone(chat), ...structuredClone(this.waitingIn(chat)) };
+    return {
+      ...structuredClone(chat),
+      ...structuredClone(this.waitingIn(chat)),
+    };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
@@ -687,12 +698,12 @@ export class ProjectChats {
       held.scheduled?.some((s) => s.input.id === input.id)
     )
       return;
+    if (input.sendAt) return this.schedule.add(id, input);
     if (input.side || input.parentId) {
       const chat = await this.storage.load(id);
       if (input.side || replyRoot(chat.messages, input.parentId!).side)
         return this.asides.ask(chat, input);
     }
-    if (input.sendAt) return this.schedule.add(id, input);
     // Queued, it would wait for the very goal it pauses or clears.
     const asked = agentAsked(input);
     const goal = asked && parseGoalCommand(asked.question);

@@ -111,7 +111,7 @@ export function useThreadSend({
         side: true,
       });
       await refetch();
-      onOpen(question);
+      if (!value.sendAt) onOpen(question);
     });
   }
   /** Carries on the stopped answer with whichever agent the composer has picked. */

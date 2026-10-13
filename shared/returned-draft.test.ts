@@ -46,6 +46,22 @@ describe("a queued message back in the composer", () => {
     const reply = returnedDraft("", [], message(body), true);
     expect(reply).toMatchObject({ body, codeRefs: [] });
   });
+  it("restores a scheduled side question as /btw so resending stays on the side", () => {
+    const side: ProjectChatSend = {
+      ...message("@codex Does this support caching?"),
+      side: true,
+    };
+    expect(returnedDraft("", [], side, false)).toMatchObject({
+      body: "/btw Does this support caching?",
+      codeRefs: [],
+    });
+    expect(() => returnedDraft("Main question", [], side, false)).toThrow(
+      "Send or clear the current draft",
+    );
+    expect(() =>
+      returnedDraft("", [{ ...shot, id: "mine" }], side, false),
+    ).toThrow("Send or clear the current draft");
+  });
   it("refuses what one message can't hold", () => {
     expect(() =>
       returnedDraft("x".repeat(32000), [], message("more"), false),

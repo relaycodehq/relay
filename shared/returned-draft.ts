@@ -1,4 +1,5 @@
 import { parseCodeReferences, type CodeReference } from "./code-references";
+import { agentMention } from "./agents";
 import { attachedImages, imagesAfter, nextImageNumber } from "./image-refs";
 import { pastesAfter } from "./pasted-texts";
 import type { ProjectChatSend } from "./projects";
@@ -19,13 +20,22 @@ export type ReturnedImage = NonNullable<ProjectChatSend["images"]>[number] & {
 export function returnedDraft(
   draft: string,
   images: ReturnedImage[],
-  input: Pick<ProjectChatSend, "body" | "images">,
+  input: Pick<ProjectChatSend, "body" | "images" | "side">,
   reply: boolean,
   newId: () => string,
 ): { body: string; images: ReturnedImage[]; codeRefs: CodeReference[] } {
-  const code = reply
-    ? { refs: [], body: input.body }
-    : parseCodeReferences(input.body);
+  if (input.side && (draft.trim() || attachedImages(draft, images).length))
+    throw new Error(
+      "Send or clear the current draft before restoring this side question.",
+    );
+  const code = input.side
+    ? {
+        refs: [],
+        body: `/btw ${agentMention(input.body)?.question ?? input.body}`,
+      }
+    : reply
+      ? { refs: [], body: input.body }
+      : parseCodeReferences(input.body);
   const back = imagesAfter(
     pastesAfter(draft, code.body),
     (input.images ?? []).map((image) => ({ ...image, id: newId() })),

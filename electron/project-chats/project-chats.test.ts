@@ -2296,6 +2296,72 @@ it("holds a Send later message until its time, sends it now on request, and keep
   await waitForSummary(chat.id, (summary) => !summary.nextSend);
   expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id);
 });
+it.each([false, true])(
+  "holds a scheduled /btw message until its time, existing side conversation = %s",
+  async (reply) => {
+    const chat = await chats.create(projectId, { kind: "project" });
+    await chats.send(chat.id, input("@codex Main question"));
+    await waitForChatEvent(
+      chat.id,
+      ({ message }) =>
+        message.status === "complete" && message.role === "assistant",
+    );
+    let parentId: string | undefined;
+    if (reply) {
+      const first = { ...input("@codex Side question"), side: true as const };
+      await chats.send(chat.id, first);
+      await waitForChatEvent(
+        chat.id,
+        ({ message }) =>
+          message.parentId === first.id && message.status === "complete",
+      );
+      parentId = first.id;
+    }
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const hour = 3_600_000;
+    const later = {
+      ...input("@codex Scheduled side question"),
+      ...(parentId ? { parentId } : { side: true as const }),
+      sendAt: Date.now() + hour,
+    };
+    await chats.send(chat.id, later);
+    await chats.send(chat.id, later);
+    const saved = await chats.get(chat.id);
+    expect(saved.scheduled).toHaveLength(1);
+    expect(saved.scheduled?.[0]).toMatchObject({
+      input: { id: later.id },
+      at: later.sendAt,
+    });
+    expect(saved.messages.some((m) => m.id === later.id)).toBe(false);
+    expect(await agentCalls()).not.toContain("Scheduled side question");
+    await vi.advanceTimersByTimeAsync(hour - 1);
+    expect(
+      (await chats.get(chat.id)).messages.some((m) => m.id === later.id),
+    ).toBe(false);
+    const before = events.length;
+    await vi.advanceTimersByTimeAsync(1);
+    await waitForChatEvent(
+      chat.id,
+      ({ message }) => message.id === later.id,
+      before,
+    );
+    await waitForChatEvent(
+      chat.id,
+      ({ message }) =>
+        message.parentId === (parentId ?? later.id) &&
+        message.status === "complete" &&
+        message.role === "assistant",
+      before,
+    );
+    const sent = await chats.get(chat.id);
+    expect(sent.scheduled).toBeUndefined();
+    expect(sent.messages.find((m) => m.id === later.id)).toMatchObject(
+      parentId ? { parentId } : { side: true },
+    );
+    expect(await agentCalls()).toContain("Scheduled side question");
+  },
+);
+
 it("lists and rolls back only the files a turn's agent changed", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(

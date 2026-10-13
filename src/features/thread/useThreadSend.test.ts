@@ -173,3 +173,18 @@ it("keeps attachments when a send fails and clears unchanged ones after success"
   expect(current().attachments.selection).toBeUndefined();
   expect(current().attachments.workItem).toBeUndefined();
 });
+
+it("stays in the current conversation when a new side question is only scheduled", async () => {
+  const current = thread();
+  const sendAt = Date.now() + 86_400_000;
+  expect(await current().sending.send({ ...message, side: true, sendAt })).toBe(
+    true,
+  );
+  expect(api.sendProjectChat).toHaveBeenCalledWith(
+    id,
+    expect.objectContaining({ side: true, sendAt }),
+  );
+  expect(current().onOpen).not.toHaveBeenCalled();
+  expect(await current().sending.send({ ...message, side: true })).toBe(true);
+  expect(current().onOpen).toHaveBeenCalledWith(expect.any(String));
+});
