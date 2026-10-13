@@ -23,6 +23,7 @@ import {
 import { ComputerSheet } from "../ui/ComputerSwitch";
 import { ConnectionLine } from "../ui/ConnectionLine";
 import { NeedsYou } from "../ui/NeedsYou";
+import { ScreenFailed } from "../ui/ScreenFailed";
 import { Sidebar } from "../ui/Sidebar";
 import { ThemeProvider } from "../ui/ThemeProvider";
 import { StartupSplash } from "../ui/StartupSplash";
@@ -103,6 +104,7 @@ function Screens() {
           )}
           <View style={styles.pane}>
             <Stack
+              unstable_screenErrorBoundary={ScreenFailed}
               screenLayout={({ children, route }) => (
                 <ReportHeaderHeight>
                   <View style={styles.pane}>

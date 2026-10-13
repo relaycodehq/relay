@@ -179,7 +179,7 @@ export function ModelSheet({
           ))}
         </>
       )}
-      {agentInfo(provider).fast && (
+      {agentInfo(provider)?.fast && (
         <ToggleRow
           label="Fast"
           hint={`${agentName(provider)}'s faster service tier; uses more of your limit.`}

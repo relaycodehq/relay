@@ -289,7 +289,7 @@ export type CliProvider = Exclude<BuiltinProvider, AgentsWith<"sdk">>;
 export type SdkProvider = AgentsWith<"sdk"> | RegistryProvider;
 export const isCliProvider = (
   provider: AgentProvider,
-): provider is CliProvider => !agentInfo(provider).sdk;
+): provider is CliProvider => !agentInfo(provider)?.sdk;
 
 const helpers = agentsWith("helper");
 /** Agents that run Relay's helper jobs, see `AgentInfo.helper`. */
