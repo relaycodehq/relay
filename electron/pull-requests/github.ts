@@ -180,8 +180,9 @@ export class GitHub {
     public account: Account,
     private token: string,
     private fetchRequest: FetchRequest,
+    private rejected: () => void,
   ) {}
-  static async connect(fetchRequest: FetchRequest) {
+  static async connect(fetchRequest: FetchRequest, rejected: () => void) {
     const token = await ghToken();
     if (!token) throw new GithubSignedOut();
     const client = new GitHub(
@@ -193,6 +194,7 @@ export class GitHub {
       },
       token,
       fetchRequest,
+      rejected,
     );
     const user = (
       await client.request<{ id: number; login: string; name: string | null }>(
@@ -250,6 +252,7 @@ export class GitHub {
         throw networkError(error, API);
       });
       if (!response.ok) {
+        if (response.status === 401) this.rejected();
         const detail = await response.text().catch(() => "");
         const message = (() => {
           try {

@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { DevOpsSettings } from "../../../shared/devops";
 import { findExecutable } from "../../platform/executables";
-import type { Fetch } from "./client";
+import type { DevOpsCredential, Fetch } from "./client";
 
 const exec = promisify(execFile);
 
@@ -20,13 +20,38 @@ export class DevOpsAuth {
     private pat: () => Promise<string | undefined>,
   ) {}
 
-  /** Drops the `az` token, for when the organization or sign-in changes. */
+  /** Drops the `az` token when settings change or Azure rejects it. */
   forget() {
     this.generation++;
     this.cliToken = undefined;
   }
 
-  async header(auth: DevOpsSettings["auth"], base: string) {
+  async credential(
+    kind: DevOpsSettings["auth"],
+    base: string,
+  ): Promise<DevOpsCredential> {
+    const generation = this.generation;
+    const header = await this.header(kind, base);
+    return {
+      kind,
+      header,
+      rejected: () => {
+        // An old request mustn't discard a newer login, even with the same token.
+        if (generation !== this.generation) return false;
+        if (kind === "azure-cli") {
+          if (
+            this.cliToken?.base !== base ||
+            header !== `Bearer ${this.cliToken.value}`
+          )
+            return false;
+          this.forget();
+        }
+        return true;
+      },
+    };
+  }
+
+  private async header(auth: DevOpsSettings["auth"], base: string) {
     if (auth === "pat") {
       const pat = await this.pat();
       if (!pat)

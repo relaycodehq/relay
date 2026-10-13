@@ -32,6 +32,7 @@ export class DevOps {
     { key: string; at: number; items: WorkItem[] }
   >();
   private fieldList?: { key: string; at: number; fields: WorkItemField[] };
+  private cacheGeneration = 0;
   private relevance: RelevanceFilter;
 
   constructor(
@@ -71,8 +72,7 @@ export class DevOps {
       s.devops = settings;
       writeKeys(s);
     });
-    this.items.clear();
-    this.fieldList = undefined;
+    this.clearCaches();
     this.auth.forget();
     return this.status();
   }
@@ -124,29 +124,45 @@ export class DevOps {
   /** The fields the organization's work items have, by display name. */
   async fields(): Promise<WorkItemField[]> {
     const settings = this.settings();
-    return this.fieldsAt(settings, await this.client(settings));
+    const generation = this.cacheGeneration;
+    return this.fieldsAt(settings, await this.client(settings), generation);
   }
 
   /** Throws for a missing or malformed organization before any sign-in. */
   private async client(settings: DevOpsSettings) {
     const base = organizationUrl(settings.organization);
-    return new DevOpsClient(
-      this.fetch,
-      base,
-      await this.auth.header(settings.auth, base),
-      settings.auth,
-    );
+    const credential = await this.auth.credential(settings.auth, base);
+    return new DevOpsClient(this.fetch, base, {
+      ...credential,
+      rejected: () => {
+        if (!credential.rejected()) return false;
+        this.clearCaches();
+        return true;
+      },
+    });
   }
 
-  private async fieldsAt(settings: DevOpsSettings, client: DevOpsClient) {
+  private clearCaches() {
+    this.cacheGeneration++;
+    this.items.clear();
+    this.fieldList = undefined;
+  }
+
+  private async fieldsAt(
+    settings: DevOpsSettings,
+    client: DevOpsClient,
+    generation: number,
+  ) {
     const key = `${client.base}|${settings.project}`;
     if (
+      generation === this.cacheGeneration &&
       this.fieldList?.key === key &&
       Date.now() - this.fieldList.at < fieldsTtl
     )
       return this.fieldList.fields;
     const fields = await client.fields(settings.project);
-    this.fieldList = { key, at: Date.now(), fields };
+    if (generation === this.cacheGeneration)
+      this.fieldList = { key, at: Date.now(), fields };
     return fields;
   }
 
@@ -168,11 +184,13 @@ export class DevOps {
     if (!refresh && cached?.key === key && Date.now() - cached.at < itemsTtl)
       return cached.items;
     if (scope === "team" && !settings.team.members.length) return [];
+    const generation = this.cacheGeneration;
     const client = await this.client(settings);
     const items = await loadWorkItems(client, settings, scope, () =>
-      this.fieldsAt(settings, client),
+      this.fieldsAt(settings, client, generation),
     );
-    this.items.set(scope, { key, at: Date.now(), items });
+    if (generation === this.cacheGeneration)
+      this.items.set(scope, { key, at: Date.now(), items });
     return items;
   }
 }

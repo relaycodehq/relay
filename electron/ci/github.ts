@@ -187,12 +187,17 @@ export class GitHub {
 
   /** A GET, or a POST of `body` (never cached). */
   private async get<T>(path: string, body?: unknown): Promise<T> {
-    const token = await (this.token ??= this.login());
-    if (token !== this.cacheToken) {
+    const credential = (this.token ??= this.login());
+    const token = await credential;
+    if (this.token === credential && token !== this.cacheToken) {
       this.cache.clear();
+      this.failedJobs.clear();
       this.cacheToken = token;
     }
-    const cached = body === undefined ? this.cache.get(path) : undefined;
+    const cached =
+      body === undefined && this.cacheToken === token
+        ? this.cache.get(path)
+        : undefined;
     const response = await this.fetchRequest(API + path, {
       ...(body !== undefined
         ? { method: "POST", body: JSON.stringify(body) }
@@ -214,10 +219,15 @@ export class GitHub {
       // Picks up a fresh `gh auth login` on the next poll, including one made
       // after a tokenless request hit a private repo or the anonymous limit.
       if (
-        response.status === 401 ||
-        (!token && [403, 404, 429].includes(response.status))
-      )
+        this.token === credential &&
+        (response.status === 401 ||
+          (!token && [403, 404, 429].includes(response.status)))
+      ) {
         this.token = undefined;
+        this.cache.clear();
+        this.failedJobs.clear();
+        this.cacheToken = null;
+      }
       throw new Error(
         response.status === 401
           ? "GitHub rejected the gh login. Run `gh auth login` again."
@@ -240,7 +250,7 @@ export class GitHub {
       ),
     ) as T;
     const etag = body === undefined && response.headers.get("etag");
-    if (etag) {
+    if (etag && this.token === credential && this.cacheToken === token) {
       this.cache.delete(path);
       this.cache.set(path, { etag, data });
       if (this.cache.size > MAX_CACHED)

@@ -154,6 +154,16 @@ export function DevOpsSettings() {
     }
   }
 
+  async function checkSignIn() {
+    setError(undefined);
+    const result = await connection.refetch();
+    if (result.error) setError(result.error);
+    if (result.data?.signIn === "signed-in") {
+      void qc.invalidateQueries({ queryKey: ["devops-items"] });
+      void qc.invalidateQueries({ queryKey: ["devops-fields"] });
+    }
+  }
+
   const { hasPat, hasOpenRouterKey, persistent } = status.data;
   const keychain = persistent
     ? "Saved in your system keychain."
@@ -251,7 +261,22 @@ export function DevOpsSettings() {
                   />
                 )
               }
-            />
+            >
+              <button
+                type="button"
+                className="secondary"
+                disabled={
+                  connection.isFetching ||
+                  linking ||
+                  !settings.organization ||
+                  !az?.path
+                }
+                aria-busy={connection.isFetching}
+                onClick={() => void checkSignIn()}
+              >
+                Check sign-in
+              </button>
+            </SettingsRow>
           )}
         </SettingsCard>
       </div>

@@ -13,7 +13,10 @@ export class GithubLogin {
   require() {
     if (!this.client || Date.now() - this.at > RECHECK) {
       this.at = Date.now();
-      const next = GitHub.connect(this.fetchRequest);
+      const next = GitHub.connect(this.fetchRequest, () => {
+        // A late 401 from an old client mustn't discard its replacement.
+        if (this.client === next) this.client = null;
+      });
       this.client = next;
       next.catch(() => {
         if (this.client === next) this.client = null;

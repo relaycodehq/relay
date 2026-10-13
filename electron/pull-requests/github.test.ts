@@ -29,6 +29,7 @@ function github(
       if (!route) return new Response("{}", { status: 404 });
       return route(body, u);
     },
+    () => {},
   );
 }
 

@@ -51,6 +51,25 @@
   - `beforeunload`: `event.preventDefault()` alone, no `returnValue`
     (`tests/e2e/quit.spec.ts` covers it).
 
+## Integration sign-in recovery
+
+- **A rejected cached credential must be discarded by its owner.** Wire that
+  into the shared request path, so connection checks and feature requests both
+  recover. Pass the credential and its rejection handler together, or require
+  the handler when constructing a cached client. Keep saved PATs and API keys.
+- **Discard only the credential that was rejected.** A late response from an
+  old token, account or organization mustn't clear a newer login or its cached
+  data. Network errors, permission failures, rate limits and server errors must
+  not be treated as sign-outs; classify the provider's documented auth failures.
+- **Test recovery through the service callers.** Cover cached sign-in → auth
+  refusal → changed CLI login/credential → successful next operation without a
+  restart, plus late refusals, settings changes and non-auth failures. Assert
+  which credential was sent and how often the credential source was called.
+- **Give users a way to recheck after signing in externally.** Verify that UI
+  flow when it changes; Relay disables refetching on window focus. Any automatic
+  retry must be bounded and provider-aware. Retry a write only when the provider
+  guarantees the first attempt wasn't applied; never after an ambiguous failure.
+
 ## Showing options
 
 - **Show visual choices as working UI in the browser.** When asked for ideas

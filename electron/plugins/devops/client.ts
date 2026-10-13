@@ -5,6 +5,14 @@ export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 /** The network failed, as opposed to Azure DevOps turning the sign-in down. */
 export class DevOpsUnreachable extends Error {}
 
+/** One sign-in, including how its owner discards it if Azure rejects it. */
+export interface DevOpsCredential {
+  kind: DevOpsSettings["auth"];
+  header: string;
+  /** True when this is still the current sign-in; never deletes a saved PAT. */
+  rejected(): boolean;
+}
+
 export interface IterationNode {
   id: number;
   attributes?: { startDate?: string; finishDate?: string };
@@ -25,9 +33,7 @@ export class DevOpsClient {
   constructor(
     private fetch: Fetch,
     readonly base: string,
-    private auth: string,
-    /** Which sign-in `auth` came from, so a rejection blames the right one. */
-    private authKind: DevOpsSettings["auth"] = "pat",
+    private auth: DevOpsCredential,
   ) {}
 
   async whoAmI() {
@@ -81,7 +87,7 @@ export class DevOpsClient {
       res = await this.fetch(url, {
         method: body === undefined ? "GET" : "POST",
         headers: {
-          Authorization: this.auth,
+          Authorization: this.auth.header,
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
           Accept: "application/json",
         },
@@ -93,12 +99,14 @@ export class DevOpsClient {
     }
     // An invalid PAT gets a 203 sign-in page instead of a 401.
     const json = res.headers.get("content-type")?.includes("json");
-    if (res.status === 401 || res.status === 203 || (res.ok && !json))
+    if (res.status === 401 || res.status === 203 || (res.ok && !json)) {
+      this.auth.rejected();
       throw new Error(
-        this.authKind === "azure-cli"
+        this.auth.kind === "azure-cli"
           ? "Azure DevOps rejected the Azure CLI sign-in. Run `az login` in a terminal and try again."
           : "Azure DevOps rejected the credentials. Check the token and its Work Items (Read) scope.",
       );
+    }
     if (!res.ok) {
       const detail = json
         ? ((await res.json().catch(() => null)) as { message?: string } | null)

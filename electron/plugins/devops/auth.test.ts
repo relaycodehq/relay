@@ -46,33 +46,33 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 it("doesn't store a token an old organization's az call returns after the settings changed", async () => {
   const auth = new DevOpsAuth(fetchTenant, async () => undefined);
 
-  const stale = auth.header("azure-cli", "https://dev.azure.com/old");
+  const stale = auth.credential("azure-cli", "https://dev.azure.com/old");
   await tick();
   auth.forget();
 
   az.pending.shift()!.done();
-  expect(await stale).toBe(
+  expect((await stale).header).toBe(
     `Bearer token-${tenants["https://dev.azure.com/old"]}`,
   );
 
-  const fresh = auth.header("azure-cli", "https://dev.azure.com/new");
+  const fresh = auth.credential("azure-cli", "https://dev.azure.com/new");
   await tick();
   expect(az.pending).toHaveLength(1);
   az.pending.shift()!.done();
-  expect(await fresh).toBe(
+  expect((await fresh).header).toBe(
     `Bearer token-${tenants["https://dev.azure.com/new"]}`,
   );
 });
 
 it("reuses a token for the organization it was issued for", async () => {
   const auth = new DevOpsAuth(fetchTenant, async () => undefined);
-  const first = auth.header("azure-cli", "https://dev.azure.com/old");
+  const first = auth.credential("azure-cli", "https://dev.azure.com/old");
   await tick();
   az.pending.shift()!.done();
   await first;
 
-  expect(await auth.header("azure-cli", "https://dev.azure.com/old")).toBe(
-    `Bearer token-${tenants["https://dev.azure.com/old"]}`,
-  );
+  expect(
+    (await auth.credential("azure-cli", "https://dev.azure.com/old")).header,
+  ).toBe(`Bearer token-${tenants["https://dev.azure.com/old"]}`);
   expect(az.pending).toHaveLength(0);
 });
