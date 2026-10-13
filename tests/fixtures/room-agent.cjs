@@ -394,7 +394,13 @@ if (args.includes("--permission-prompt-tool")) {
                     delta: { type: "text_delta", text: "Looking into it." },
                   },
                 })
-              : finish("The background task finished."),
+              : text.includes("fixture background task with findings")
+                ? finish(
+                    leadReport([
+                      { ...queueFinding, id: "F2", title: "Found later" },
+                    ]),
+                  )
+                : finish("The background task finished."),
           300,
         );
       } else if (text.includes("fixture signed out")) {
@@ -930,8 +936,17 @@ if (args.includes("--permission-prompt-tool")) {
         return;
       }
       const echo = said.indexOf("fixture echo:");
+      // "fixture echo end" stops the echo before the framing Relay adds after the request.
+      const echoEnd = said.indexOf("fixture echo end", echo);
       const answer =
-        (echo >= 0 ? said.slice(echo + "fixture echo:".length).trim() : null) ??
+        (echo >= 0
+          ? said
+              .slice(
+                echo + "fixture echo:".length,
+                echoEnd < 0 ? undefined : echoEnd,
+              )
+              .trim()
+          : null) ??
         Object.entries({
           "fixture followup findings": [
             "Found two new issues: `F12` and `F13`.",

@@ -1,6 +1,7 @@
 import type { AgentRequest } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { DeepReviewState } from "../deep-review";
+import type { ThreadFindings } from "../findings";
 import type { ThreadNote } from "../thread-notes";
 import type { ChatHandover, HeldSend } from "../handoff";
 import type { ChatMessage } from "./messages";
@@ -53,6 +54,8 @@ export interface ProjectChat extends ChatSummary {
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
   deepReview?: DeepReviewState;
+  /** Findings the thread's answers published; see shared/findings. */
+  findings?: ThreadFindings;
   /** Each agent's session on a side conversation, by its root message. */
   replySessions?: Record<string, AgentSessions>;
   /** Local: what the next turn hears about a handoff between computers. */

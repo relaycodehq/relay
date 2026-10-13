@@ -2,7 +2,7 @@ import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import { unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
-import { reviewReports } from "../../../shared/deep-review";
+import { threadReports } from "../../../shared/findings";
 import { api } from "../../lib/api";
 import type {
   ChatMessage,
@@ -18,8 +18,8 @@ import type { ThreadScroll } from "./useThreadScroll";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import {
   DeepReviewCouncil,
-  DeepReviewReport,
   DeepReviewRequest,
+  FindingsTray,
   findingCode,
 } from "../deep-review/DeepReview";
 import type { RenderCompose } from "../html-render/HtmlRenders";
@@ -80,8 +80,23 @@ export function ThreadMessages({
     sideThreads,
     leadAnswered,
   },
-  view: { scroll, column, onScroll, onClickCapture, visible, earlier, showEarlier, dockHeight },
-  councils: { review, fixFindings, setFindingStatus, resumeReview },
+  view: {
+    scroll,
+    column,
+    onScroll,
+    onClickCapture,
+    visible,
+    earlier,
+    showEarlier,
+    dockHeight,
+  },
+  councils: {
+    review,
+    findings,
+    fixFindings,
+    setFindingStatus,
+    resumeReview,
+  },
   actions: {
     signIn,
     openReply,
@@ -113,17 +128,19 @@ export function ThreadMessages({
   /** Puts what a page in an answer composed in the composer below. */
   onCompose: RenderCompose;
 }) {
-  // Keyed on the report alone: a new renderer redraws the whole summary, and
-  // the review changes with every finding dismissed or fixed.
-  const reviewCode = useMemo(
+  // Keyed on the reports alone: a new renderer redraws the whole summary,
+  // and statuses change with every finding dismissed or fixed.
+  const reports = threadReports(findings);
+  const reportUnder = (id: string) => reports.find((r) => r.messageId === id);
+  const findingsCode = useMemo(
     () =>
-      chat && review
+      chat && reports.length
         ? findingCode(
             chat.id,
-            reviewReports(review).flatMap((r) => r.findings),
+            reports.flatMap((r) => r.findings),
           )
         : undefined,
-    [chat?.id, review?.report, review?.reports],
+    [chat?.id, findings?.reports],
   );
   // Said once, under the message that made the worktree.
   const renamedAfter =
@@ -211,7 +228,12 @@ export function ThreadMessages({
     (h) => inView(h) && !listed.some((m) => m.id === h.input.id),
   );
   return (
-    <div className="project-messages" ref={scroll} onScroll={onScroll} onClickCapture={onClickCapture}>
+    <div
+      className="project-messages"
+      ref={scroll}
+      onScroll={onScroll}
+      onClickCapture={onClickCapture}
+    >
       {chat && history.isPending && <Loading text="Opening conversation…" />}
       {history.error && (
         <ErrorBox error={history.error} retry={() => void history.refetch()} />
@@ -243,6 +265,7 @@ export function ThreadMessages({
               <DeepReviewRequest message={m} state={review} />
               <DeepReviewCouncil
                 state={review}
+                kept={reports[0]?.findings.length}
                 hasLead={leadAnswered}
                 busy={busy}
                 projectRoot={projectPath}
@@ -281,22 +304,21 @@ export function ThreadMessages({
                   ? () => api.rerunWorktreeSetup(chat.id, m.id)
                   : undefined
               }
-              {...(chat &&
-              review &&
-              reviewReports(review).some((r) => r.messageId === m.id)
+              {...(chat && m.provider && reportUnder(m.id)
                 ? {
-                    inlineCode: reviewCode,
+                    inlineCode: findingsCode,
                     after: (
-                      <DeepReviewReport
+                      <FindingsTray
                         chatId={chat.id}
-                        state={review}
-                        report={reviewReports(review).find(
-                          (r) => r.messageId === m.id,
-                        )}
-                        // A fix asked for while the lead works would wait in the
+                        report={reportUnder(m.id)!}
+                        statuses={findings?.statuses}
+                        reviewers={review?.reviewers}
+                        // A fix asked for while the agent works would wait in the
                         // queue, its findings still open to ask for again.
                         busy={busy || running}
-                        onFix={(findings) => void fixFindings(findings)}
+                        onFix={(picked) =>
+                          void fixFindings(picked, m.provider!)
+                        }
                         onStatus={setFindingStatus}
                         onOpenFile={openFile}
                       />

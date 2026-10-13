@@ -13,11 +13,8 @@ import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
 import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
-import type {
-  DeepReviewStart,
-  FindingStatus,
-  ReviewSetup,
-} from "../deep-review";
+import type { DeepReviewStart, ReviewSetup } from "../deep-review";
+import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
@@ -315,7 +312,8 @@ export interface ProjectCouncilApi {
   nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
   /** Runs the reviewers that didn't finish, then the lead. */
   resumeDeepReview(id: string): Promise<void>;
-  setDeepReviewFinding(
+  /** Opens or dismisses a finding an answer in the thread published. */
+  setFinding(
     id: string,
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,

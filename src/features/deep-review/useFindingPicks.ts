@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Finding, FindingStatus } from "../../../shared/deep-review";
+import type { Finding, FindingStatus } from "../../../shared/findings";
 import { findingStatus, firstPicks } from "./finding-picks";
 
 /** The open findings, which of them are ticked to fix, and fixing some. */

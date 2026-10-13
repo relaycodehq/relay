@@ -20,9 +20,8 @@ import { ChatStorage } from "../project-chats/storage";
 import type { ProjectChat } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
+import { fixRequest } from "../../shared/findings";
 import {
-  extractFindings,
-  fixRequest,
   reportedFindings,
   answeredFindings,
   type DeepReviewStart,
@@ -57,62 +56,7 @@ const config = (patch: Partial<DeepReviewStart> = {}): DeepReviewStart => ({
   ...patch,
 });
 
-describe("findings block", () => {
-  it("splits the lead's findings off its answer", () => {
-    const { body, report } = extractFindings(
-      'Fix `F1` first.\n\n```relay-findings\n{"findings":[{"id":"F1","priority":"P1","title":"Queue drops a message","files":[{"path":"src/q.ts","line":3}],"reviewers":[1,9]}],"dropped":[{"title":"Nit","reason":"Style only"}]}\n```\n',
-    );
-    expect(body).toBe("Fix `F1` first.");
-    expect(report?.findings).toEqual([
-      {
-        id: "F1",
-        priority: "P1",
-        title: "Queue drops a message",
-        files: [{ path: "src/q.ts", line: 3 }],
-        // A reviewer number that can't exist drops the list, not the finding.
-        reviewers: [],
-      },
-    ]);
-    expect(report?.dropped).toEqual([
-      { title: "Nit", reason: "Style only", reviewers: [] },
-    ]);
-  });
-  it("reads a block whose finding quotes a code fence", () => {
-    const { body, report } = extractFindings(
-      'See `F1`.\n\n```relay-findings\n{"findings":[{"id":"F1","priority":"P2","title":"Stops at the ``` in a string"}]}\n```\nWant it fixed?',
-    );
-    expect(report?.findings.map((f) => f.title)).toEqual([
-      "Stops at the ``` in a string",
-    ]);
-    expect(body).toBe("See `F1`.\n\nWant it fixed?");
-  });
-  it("keeps an answer whose block isn't a report as it was", () => {
-    for (const body of [
-      "No findings block here.",
-      "```relay-findings\nnot json\n```",
-      '```relay-findings\n{"findings":[{"id":"X","priority":"P9"}]}\n```',
-    ])
-      expect(extractFindings(body)).toEqual({ body });
-  });
-  it("writes a fix request the lead can read", () => {
-    expect(
-      fixRequest(
-        "claude",
-        [
-          {
-            id: "F2",
-            priority: "P2",
-            title: "Strip keeps animating",
-            files: [],
-            reviewers: [1],
-          },
-        ],
-        "Keep the timing.",
-      ),
-    ).toBe(
-      "@claude Fix this finding from the review:\n- `F2` Strip keeps animating (P2)\n\nKeep the timing.",
-    );
-  });
+describe("/code-review findings", () => {
   it("reads findings Claude reported to its tool", () => {
     expect(
       reportedFindings({
@@ -625,10 +569,11 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   );
   const done = await chats.get(chat.id);
   const state = done.deepReview!;
+  const report = done.findings!.reports[0]!;
   expect(state.reviewers).toHaveLength(2);
-  expect(state.report?.findings.map((f) => f.id)).toEqual(["F1"]);
-  expect(state.report?.dropped).toHaveLength(1);
-  const lead = done.messages.find((m) => m.id === state.report!.messageId)!;
+  expect(report.findings.map((f) => f.id)).toEqual(["F1"]);
+  expect(report.dropped).toHaveLength(1);
+  const lead = done.messages.find((m) => m.id === report.messageId)!;
   expect(lead.provider).toBe("claude");
   expect(lead.body).toBe("Reordering the queue can drop a message `F1`.");
   // The request and the lead's answer; the reviewers talk in their own threads.
@@ -663,7 +608,7 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   // Fixing goes through the lead, and marks the finding as it goes.
   const fix = {
     id: randomUUID(),
-    body: fixRequest("claude", state.report!.findings),
+    body: fixRequest("claude", report.findings),
     provider: "claude" as const,
     choice: { ...choice, model: "" },
     runtimeMode: "full-access" as const,
@@ -671,17 +616,17 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
     fixes: ["F1", "F9"],
   };
   await chats.send(chat.id, fix);
-  expect((await chats.get(chat.id)).deepReview?.statuses).toEqual({
+  expect((await chats.get(chat.id)).findings?.statuses).toEqual({
     F1: "fixing",
   });
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixed"),
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
   );
-  await chats.setDeepReviewFinding(chat.id, "F1", "dismissed");
-  expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("dismissed");
-  await expect(
-    chats.setDeepReviewFinding(chat.id, "F7", "dismissed"),
-  ).rejects.toThrow("no longer in this review");
+  await chats.setFinding(chat.id, "F1", "dismissed");
+  expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("dismissed");
+  await expect(chats.setFinding(chat.id, "F7", "dismissed")).rejects.toThrow(
+    "no longer in this thread",
+  );
 });
 
 it("reviews a branch that isn't checked out in a worktree of its own, fixes it on the branch, and removes the worktree once settled", async () => {
@@ -707,7 +652,9 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );
-  const state = (await chats.get(chat.id)).deepReview!;
+  const reviewed = await chats.get(chat.id);
+  const state = reviewed.deepReview!;
+  const report = reviewed.findings!.reports[0]!;
   const checkout = state.scope.checkout!;
   expect(checkout).toMatchObject({ made: true, branch: "panel" });
   expect(checkout.path).toBe(join(root, "worktrees", "deep-reviews", chat.id));
@@ -738,7 +685,7 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   // A fix checks the branch out there first.
   await chats.send(chat.id, {
     id: randomUUID(),
-    body: fixRequest("claude", state.report!.findings),
+    body: fixRequest("claude", report.findings),
     provider: "claude",
     choice: { ...choice, model: "" },
     runtimeMode: "full-access",
@@ -747,7 +694,7 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   });
   expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixed"),
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
   );
 
   // Settled, it goes, but not while it holds an edit.
@@ -1248,15 +1195,13 @@ it("frees the findings a fix was on when Relay died mid-fix", async () => {
     interactionMode: "default",
     fixes: ["F1"],
   });
-  expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixing");
+  expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixing");
   // A crash: nothing stops the fix or saves how it ended.
   const crashed = chats;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   try {
-    await chats.setDeepReviewFinding(chat.id, "F1", "dismissed");
-    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe(
-      "dismissed",
-    );
+    await chats.setFinding(chat.id, "F1", "dismissed");
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("dismissed");
   } finally {
     await crashed.dispose();
   }
@@ -1296,6 +1241,6 @@ it("lists the lead's findings when the user steered its first answer", async () 
     "user",
     "assistant",
   ]);
-  expect(done.deepReview?.report?.messageId).toBe(done.messages[3]!.id);
-  expect(done.deepReview?.report?.findings.map((f) => f.id)).toEqual(["F1"]);
+  expect(done.findings?.reports[0]?.messageId).toBe(done.messages[3]!.id);
+  expect(done.findings?.reports[0]?.findings.map((f) => f.id)).toEqual(["F1"]);
 });

@@ -1,22 +1,26 @@
+import type { DeepReviewStart } from "../../../shared/deep-review";
+import { fixRequest, type Finding } from "../../../shared/findings";
+import type { AgentProvider } from "../../../shared/agents";
 import {
-  fixRequest,
-  type DeepReviewStart,
-  type Finding,
-} from "../../../shared/deep-review";
-import type {
-  ChatSummary,
-  LinkedFolder,
-  ProjectChat as ProjectChatData,
+  lastComposerSettings,
+  type ChatSummary,
+  type LinkedFolder,
+  type ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { saveSentSettings } from "../agents/composer-settings";
+import {
+  loadComposerSettings,
+  saveSentSettings,
+  withSent,
+} from "../agents/composer-settings";
+import { modelOf } from "../agents/composer-models";
 import { useNewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
 import { noteUsed } from "../../lib/used";
 
 export type Councils = ReturnType<typeof useCouncils>;
 
-/** A thread's deep review: its state, and what the thread can do with them. */
+/** A thread's deep review and the findings its answers published, and what the thread can do with them. */
 export function useCouncils({
   handle: { chat, projectId, run, setError, refetch, listChanged },
   data,
@@ -64,17 +68,26 @@ export function useCouncils({
       await listChanged();
     });
   }
-  // Straight to the lead; whatever the composer holds stays there.
-  async function fixFindings(findings: Finding[]) {
-    if (!chat || !review || !findings.length) return;
+  /**
+   * Straight to the agent that reported them, a review's lead on the lead's
+   * settings; whatever the composer holds stays there.
+   */
+  async function fixFindings(findings: Finding[], reporter: AgentProvider) {
+    if (!chat || !findings.length) return;
+    const saved = review
+      ? undefined
+      : withSent(loadComposerSettings(chat.id), lastComposerSettings(data));
+    const provider = review?.lead.provider ?? reporter;
+    const model = saved && modelOf(saved.models, provider);
     await run(async () => {
       await api.sendProjectChat(chat.id, {
         id: crypto.randomUUID(),
-        body: fixRequest(review.lead.provider, findings),
-        to: review.lead.provider,
-        provider: review.lead.provider,
-        choice: review.lead.choice,
-        runtimeMode: review.runtimeMode,
+        body: fixRequest(provider, findings),
+        to: provider,
+        provider,
+        choice: review?.lead.choice ?? model!.choice,
+        ...(model?.contextWindow ? { contextWindow: model.contextWindow } : {}),
+        runtimeMode: review?.runtimeMode ?? saved!.runtimeMode,
         interactionMode: "default",
         fixes: findings.map((f) => f.id),
       });
@@ -85,7 +98,7 @@ export function useCouncils({
   function setFindingStatus(id: string, status: "open" | "dismissed") {
     if (!chat) return;
     void api
-      .setDeepReviewFinding(chat.id, id, status)
+      .setFinding(chat.id, id, status)
       .then(() => refetch())
       .catch(setError);
   }
@@ -98,6 +111,7 @@ export function useCouncils({
   }
   return {
     review,
+    findings: data?.findings,
     reviewing,
     startReview,
     fixFindings,

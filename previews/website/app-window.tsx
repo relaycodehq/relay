@@ -10,9 +10,9 @@ import { Message } from "../../src/features/thread/ProjectMessage";
 import { AgentRequestCard } from "../../src/features/thread/AgentRequestCard";
 import {
   DeepReviewCouncil,
-  DeepReviewReport,
   DeepReviewRequest,
   DeepReviewSetup,
+  FindingsTray,
 } from "../../src/features/deep-review/DeepReview";
 import { RunningTasks } from "../../src/features/terminal/RunningTasks";
 import { ComposerToolbar } from "../../src/features/composer/ComposerToolbar";
@@ -30,6 +30,7 @@ import {
   projectRoot,
   projects,
   review,
+  reviewReport,
   trace,
   turnMessages,
   turns,
@@ -280,7 +281,6 @@ function ReviewThread() {
   const state: DeepReviewState = {
     ...review,
     status: phase <= 1 ? "reviewing" : phase < 4 ? "leading" : "done",
-    report: phase === 4 ? review.report : undefined,
   };
   const request: ChatMessage = {
     id: review.request,
@@ -319,6 +319,7 @@ function ReviewThread() {
               <DeepReviewRequest message={request} state={state} />
               <DeepReviewCouncil
                 state={state}
+                kept={phase === 4 ? reviewReport.findings.length : undefined}
                 hasLead={phase >= 3}
                 busy={false}
                 projectRoot={projectRoot}
@@ -340,9 +341,10 @@ function ReviewThread() {
               onOpenFile={() => {}}
               after={
                 phase === 4 ? (
-                  <DeepReviewReport
+                  <FindingsTray
                     chatId=""
-                    state={state}
+                    report={reviewReport}
+                    reviewers={review.reviewers}
                     busy={false}
                     onFix={() => {}}
                     onStatus={() => {}}

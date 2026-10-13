@@ -126,11 +126,13 @@ it("stops reviews an earlier session left running, reopening findings being fixe
     } as unknown as ProjectChat["deepReview"],
   });
   expect(reviveChat(chat, () => false)).toBe(true);
-  expect(chat.deepReview).toMatchObject({
-    status: "failed",
+  expect(chat.deepReview).toMatchObject({ status: "failed" });
+  // An older save's findings move to the thread on the way.
+  expect(chat.findings).toEqual({
+    reports: [],
     statuses: { a: "open", b: "fixed" },
   });
-  expect(chat.deepReview?.fixing).toBeUndefined();
+  expect(chat.deepReview).not.toHaveProperty("statuses");
 });
 
 it("drops worktrees no command of the thread made, and duplicate or unclaimed records", () => {

@@ -2,6 +2,7 @@
 // The shapes are the app's own, so its real components draw them.
 import type { AgentActivity, AgentTrace, ChatMessage, ChatSummary, Project } from "../../shared/projects";
 import type { DeepReviewState } from "../../shared/deep-review";
+import type { PublishedReport } from "../../shared/findings";
 
 export const projectRoot = "/Users/you/relay";
 const p = (path: string) => `${projectRoot}/${path}`;
@@ -227,47 +228,48 @@ export const review: DeepReviewState = {
   runChecks: true,
   runtimeMode: "full-access" as DeepReviewState["runtimeMode"],
   status: "done",
-  report: {
-    messageId: "r2",
-    findings: [
-      {
-        id: "F1",
-        priority: "P1",
-        title: "Reordering the queue can drop a message",
-        files: [{ path: "src/features/thread/ProjectChat.tsx", line: 895 }],
-        reviewers: [1, 2],
-        check: "Reproduced with two queued messages: moving the second above the first while the first sends loses it.",
-      },
-      {
-        id: "F2",
-        priority: "P1",
-        title: "Thread keeps its PR scope after switching branch",
-        files: [
-          { path: "src/app/ProjectShell.tsx", line: 199 },
-          { path: "src/features/thread/ProjectChat.tsx", line: 456 },
-        ],
-        reviewers: [1],
-        check: "The scope is read once on mount and never again.",
-      },
-      {
-        id: "F3",
-        priority: "P2",
-        title: "Waiting strip keeps animating when the window is unfocused",
-        files: [{ path: "src/features/thread/waiting-strip.css", line: 12 }],
-        reviewers: [1, 2],
-      },
-      {
-        id: "F4",
-        priority: "P2",
-        title: "A pasted text card disappears on reload",
-        files: [{ path: "src/features/composer/PastedTextCard.tsx", line: 48 }],
-        reviewers: [2],
-      },
-    ],
-    dropped: [
-      { title: "Missing null check in useUnread", reason: "The caller already guards it.", reviewers: [2] },
-      { title: "Queue reorder drops a message", reason: "Same as F1.", reviewers: [2] },
-      { title: "Unused import in ProjectShell", reason: "It is used by the type on line 31.", reviewers: [1] },
-    ],
-  },
+};
+
+export const reviewReport: PublishedReport = {
+  messageId: "r2",
+  findings: [
+    {
+      id: "F1",
+      priority: "P1",
+      title: "Reordering the queue can drop a message",
+      files: [{ path: "src/features/thread/ProjectChat.tsx", line: 895 }],
+      reviewers: [1, 2],
+      check: "Reproduced with two queued messages: moving the second above the first while the first sends loses it.",
+    },
+    {
+      id: "F2",
+      priority: "P1",
+      title: "Thread keeps its PR scope after switching branch",
+      files: [
+        { path: "src/app/ProjectShell.tsx", line: 199 },
+        { path: "src/features/thread/ProjectChat.tsx", line: 456 },
+      ],
+      reviewers: [1],
+      check: "The scope is read once on mount and never again.",
+    },
+    {
+      id: "F3",
+      priority: "P2",
+      title: "Waiting strip keeps animating when the window is unfocused",
+      files: [{ path: "src/features/thread/waiting-strip.css", line: 12 }],
+      reviewers: [1, 2],
+    },
+    {
+      id: "F4",
+      priority: "P2",
+      title: "A pasted text card disappears on reload",
+      files: [{ path: "src/features/composer/PastedTextCard.tsx", line: 48 }],
+      reviewers: [2],
+    },
+  ],
+  dropped: [
+    { title: "Missing null check in useUnread", reason: "The caller already guards it.", reviewers: [2] },
+    { title: "Queue reorder drops a message", reason: "Same as F1.", reviewers: [2] },
+    { title: "Unused import in ProjectShell", reason: "It is used by the type on line 31.", reviewers: [1] },
+  ],
 };

@@ -65,6 +65,7 @@ export function chatSummary({
   movedIn,
   setupNote,
   deepReview,
+  findings: _findings,
   handover,
   outbox,
   carriedIds,

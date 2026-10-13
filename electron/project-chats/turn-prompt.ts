@@ -6,7 +6,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { agentMention, agentName } from "../../shared/agents";
-import { reviewReports } from "../../shared/deep-review";
+import { threadReports } from "../../shared/findings";
 
 export interface TurnPromptInput {
   chat: ProjectChat;
@@ -164,7 +164,7 @@ export function turnPrompt({
     (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
   };
   const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
-  const reports = reviewReports(chat.deepReview);
+  const reports = threadReports(chat.findings);
   const nextFinding =
     Math.max(
       0,

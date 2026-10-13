@@ -148,7 +148,7 @@ const methods = [
   "cancelProjectChat",
   "startDeepReview",
   "resumeDeepReview",
-  "setDeepReviewFinding",
+  "setFinding",
   "closeWatchNote",
   "watchSpend",
   "watchReview",

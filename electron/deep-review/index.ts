@@ -9,12 +9,9 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import {
-  extractFindings,
-  reviewReports,
   reviewThreadTitle,
   type DeepReviewStart,
   type DeepReviewState,
-  type FindingStatus,
   type ReviewerTask,
 } from "../../shared/deep-review";
 import {
@@ -24,8 +21,6 @@ import {
   startSlots,
   unfinishedSlots,
 } from "./council";
-import { settleFixes, startFixing } from "./fixes";
-import { addReport } from "./reports";
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import {
@@ -173,7 +168,7 @@ export class DeepReviews {
       state.reviewers.some((r) => this.host.active(r.chatId))
     )
       throw new Error("This review is already running.");
-    if (state.report)
+    if (chat.findings?.reports.length)
       throw new Error("The review is done. Ask the lead to continue instead.");
     const unfinished = await unfinishedSlots(this.host, state.reviewers);
     state.status = "reviewing";
@@ -205,32 +200,9 @@ export class DeepReviews {
     if (input.fixes?.length && checkout) await checkOutForFixes(checkout);
   }
 
-  /** A fix request marks its findings as being fixed; called before it's saved. */
-  sent(chat: ProjectChat, input: ProjectChatSend) {
-    startFixing(chat.deepReview, input);
-  }
-
-  async setFinding(
-    chatId: string,
-    findingId: string,
-    status: Extract<FindingStatus, "open" | "dismissed">,
-  ) {
-    const chat = await this.host.load(chatId);
-    const report = reviewReports(chat.deepReview).find((r) =>
-      r.findings.some((f) => f.id === findingId),
-    );
-    if (!report?.findings.some((f) => f.id === findingId))
-      throw new Error("That finding is no longer in this review.");
-    const statuses = (chat.deepReview!.statuses ??= {});
-    if (statuses[findingId] === "fixing")
-      throw new Error("The lead is fixing this one right now.");
-    statuses[findingId] = status;
-    await this.host.touch(chat, report.messageId);
-  }
-
   /**
    * After any turn in a review or reviewer thread: a reviewer finishing may
-   * hand over to the lead, and a lead's answer may carry the findings.
+   * hand over to the lead, and the lead's first answer ends the review.
    */
   async finished(chatId: string, turn: { request?: string; answer?: string }) {
     const chat = await this.host.load(chatId).catch(() => undefined);
@@ -245,35 +217,15 @@ export class DeepReviews {
     const answer = turn.answer
       ? chat.messages.find((m) => m.id === turn.answer)
       : undefined;
-    const fix = settleFixes(state, turn.request, answer?.status === "complete");
-    let changed = fix ? state.report?.messageId : undefined;
-    // Every completed follow-up can publish a fresh batch under its answer.
-    if (
-      answer?.role === "assistant" &&
-      !answer.parentId &&
-      answer.status === "complete" &&
-      (state.report || state.status === "leading" || state.status === "done")
-    ) {
-      const { body, report } = extractFindings(answer.body);
-      if (
-        report &&
-        !reviewReports(state).some((r) => r.messageId === answer.id)
-      ) {
-        const root = await this.host.root(chat.projectId);
-        answer.body = addReport(state, report, answer.id, body, root);
-        answer.version++;
-        changed = answer.id;
-      }
-    }
     // Only the lead's initial turn settles the review lifecycle.
     if (answer?.role === "assistant" && state.status === "leading") {
       if (answer.status === "complete") {
         state.status = "done";
-      } else
+      } else {
         state.status = answer.status === "cancelled" ? "stopped" : "failed";
-      changed = answer.id;
+      }
+      await this.host.touch(chat, answer.id);
     }
-    if (changed) await this.host.touch(chat, changed);
   }
 
   private async sendReviewers(chat: ProjectChat, slots: number[]) {

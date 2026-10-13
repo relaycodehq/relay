@@ -1,4 +1,4 @@
-import type { Finding, FindingStatus } from "../../../shared/deep-review";
+import type { Finding, FindingStatus } from "../../../shared/findings";
 
 /** The urgent ones start ticked. */
 export const firstPicks = (open: Finding[]) =>

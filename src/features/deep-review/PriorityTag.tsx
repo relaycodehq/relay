@@ -1,4 +1,4 @@
-import { priorityMeaning, type Finding } from "../../../shared/deep-review";
+import { priorityMeaning, type Finding } from "../../../shared/findings";
 
 export const findingRowId = (chatId: string, id: string) =>
   `finding-${chatId}-${id}`;

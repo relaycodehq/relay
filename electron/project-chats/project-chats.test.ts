@@ -19,6 +19,7 @@ import { defaultAISettings } from "../../shared/settings";
 import { triageState } from "../../shared/chat-activity";
 import {
   applyChatPatch,
+  lastComposerSettings,
   sentSettingsOf,
   type ChatMessage,
   type ChatSummary,
@@ -955,6 +956,88 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
     .split("\n")
     .map((line) => JSON.parse(line));
   expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
+});
+it("publishes findings in any thread, from a turn Claude started itself too", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@claude Start the fixture background task with findings"),
+    provider: "claude",
+  });
+  await vi.waitFor(async () => {
+    const { findings, messages } = await chats.get(chat.id);
+    const own = messages.find((m) => m.unprompted);
+    expect(own?.status).toBe("complete");
+    expect(findings?.reports.map((r) => r.messageId)).toEqual([own!.id]);
+    expect(own!.body).not.toContain("relay-findings");
+  });
+});
+/** An answer that ends with a valid findings block, as the fake agent echoes it. */
+const endsWithFindings = (title: string) =>
+  `fixture echo: Found one.\n\n\`\`\`relay-findings\n${JSON.stringify({
+    findings: [{ id: "F1", priority: "P2", title, files: [], reviewers: [] }],
+  })}\n\`\`\`\nfixture echo end`;
+it("publishes no findings from an answer that was stopped", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(
+    chat.id,
+    input(`@codex wait for cancellation ${endsWithFindings("Stopped")}`),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toMatch(/```$/),
+  );
+  await chats.cancel(chat.id);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+      "cancelled",
+    ),
+  );
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  const { findings, messages } = await chats.get(chat.id);
+  expect(findings).toBeUndefined();
+  expect(messages.at(-1)?.body).toContain("```relay-findings");
+});
+it("publishes no findings from a side question's answers", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) =>
+      message.role === "assistant" && message.status === "complete",
+  );
+  const side = {
+    ...input(`@codex ${endsWithFindings("Side question")}`),
+    side: true as const,
+  };
+  await chats.send(chat.id, side);
+  await waitForChatEvent(
+    chat.id,
+    ({ message }) =>
+      message.parentId === side.id && message.status === "complete",
+  );
+  // Carrying on in the side conversation stays on its branch too.
+  const reply = {
+    ...input(`@codex ${endsWithFindings("Side reply")}`),
+    parentId: side.id,
+  };
+  // The side turn lets go a moment after its answer completes.
+  await vi.waitFor(() => chats.send(chat.id, reply));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.filter(
+        (m) => m.role === "assistant" && m.parentId && m.status === "complete",
+      ),
+    ).toHaveLength(2),
+  );
+  const { findings, messages } = await chats.get(chat.id);
+  expect(findings).toBeUndefined();
+  const answers = messages.filter((m) => m.role === "assistant" && m.parentId);
+  for (const m of answers)
+    expect(m.body).toMatch(/```relay-findings[\s\S]*```$/);
+  expect(messages.find((m) => m.id === side.id)?.sentSettings).toEqual(sentSettingsOf(side));
+  expect(lastComposerSettings(await chats.get(chat.id), side.id)).toEqual({
+    ...sentSettingsOf(reply),
+    id: reply.id,
+  });
 });
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

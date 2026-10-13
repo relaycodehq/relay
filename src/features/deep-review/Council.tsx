@@ -9,6 +9,7 @@ import { CouncilMember } from "./council/CouncilMember";
 /** The reviewers side by side, folded away once the lead has reported. */
 export function DeepReviewCouncil({
   state,
+  kept,
   hasLead,
   busy,
   projectRoot,
@@ -16,6 +17,8 @@ export function DeepReviewCouncil({
   onResume,
 }: {
   state: DeepReviewState;
+  /** Findings in the lead's report, once there is one. */
+  kept?: number;
   /** The lead has answered at least once. */
   hasLead: boolean;
   busy: boolean;
@@ -26,7 +29,6 @@ export function DeepReviewCouncil({
   const name = useAgentName();
   const { open, toggle } = useCouncilFold(state.status === "done");
   const count = state.reviewers.length;
-  const kept = state.report?.findings.length;
   return (
     <section className="deep-review-council" aria-label="Reviewers">
       <CouncilToggle open={open} onToggle={toggle} members={state.reviewers}>

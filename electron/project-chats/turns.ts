@@ -37,6 +37,7 @@ import { assertHere } from "./handoff";
 import type { ChatQueue } from "./queue";
 import { supersedeQuestions } from "./async-questions";
 import { interrupt } from "./revive";
+import { startFixing } from "../findings";
 import { agentSession, parseSessionKey, sessionInput } from "./sessions";
 import type { ThreadTitles } from "./titles";
 import { forkFor, type TurnRunner } from "./turn-run";
@@ -317,7 +318,8 @@ export class ChatTurns {
         (chat.goal?.status === "complete" || chat.goal?.status === "failed")
       )
         delete chat.goal;
-      this.councils.sent(chat, input);
+      // A fix request marks its findings as being fixed.
+      startFixing(chat.findings, input);
       chat.updated = Date.now();
       ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
         root,

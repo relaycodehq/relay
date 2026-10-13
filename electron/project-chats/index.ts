@@ -2,7 +2,9 @@ import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
 import type { AgentProvider } from "../../shared/agents";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
-import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
+import type { DeepReviewStart } from "../../shared/deep-review";
+import type { FindingStatus } from "../../shared/findings";
+import { setFindingStatus } from "../findings";
 import type {
   ChatCameFrom,
   ChatSentTo,
@@ -533,12 +535,21 @@ export class ProjectChats {
   resumeDeepReview(id: string) {
     return this.councils.resumeReview(id);
   }
-  setDeepReviewFinding(
+  setFinding(
     id: string,
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ) {
-    return this.councils.setFinding(id, findingId, status);
+    return this.core.control(id, async () => {
+      const chat = await this.storage.load(id);
+      const report = setFindingStatus(chat.findings, findingId, status);
+      // The report shows under its answer, which redraws it.
+      const message = chat.messages.find((m) => m.id === report);
+      if (message) message.version++;
+      await this.storage.save(chat);
+      if (message)
+        this.core.emit({ chatId: id, message: structuredClone(message) });
+    });
   }
   /** The same chat object a running turn writes into, so its next publish keeps the note closed. */
   closeWatchNote(

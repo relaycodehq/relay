@@ -346,10 +346,10 @@ export function chatHandlers(ctx: ApiContext) {
     resumeDeepReview: takes([idSchema], (id) =>
       projectChats.resumeDeepReview(id),
     ),
-    setDeepReviewFinding: takes(
-      [idSchema, z.string().regex(/^F\d{1,3}$/), z.enum(["open", "dismissed"])],
+    setFinding: takes(
+      [idSchema, z.string().regex(/^F\d{1,6}$/), z.enum(["open", "dismissed"])],
       (id, findingId, status) =>
-        projectChats.setDeepReviewFinding(id, findingId, status),
+        projectChats.setFinding(id, findingId, status),
     ),
     closeWatchNote: takes(
       [idSchema, idSchema, idSchema, z.enum(watchCloses), z.boolean()],

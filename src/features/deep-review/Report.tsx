@@ -1,9 +1,10 @@
 import { ChevronRight, Wrench } from "lucide-react";
+import type { DeepReviewState } from "../../../shared/deep-review";
 import type {
-  DeepReviewState,
   Finding,
+  FindingStatus,
   FindingsReport,
-} from "../../../shared/deep-review";
+} from "../../../shared/findings";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { findingStatus, fixAllLabel } from "./finding-picks";
 import { useFindingPicks } from "./useFindingPicks";
@@ -11,35 +12,37 @@ import { FindingRow } from "./FindingRow";
 import { reviewerLabel } from "./reviewer-label";
 import { useAgentName } from "./useAgentName";
 
-/** The lead's findings, each with its files, to fix all or some of. */
-export function DeepReviewReport({
+/** An answer's findings, each with its files, to fix all or some of. */
+export function FindingsTray({
   chatId,
-  state,
-  report = state.report,
+  report,
+  statuses,
+  reviewers = [],
   busy,
   onFix,
   onStatus,
   onOpenFile,
 }: {
   chatId: string;
-  state: DeepReviewState;
-  report?: FindingsReport;
+  report: FindingsReport;
+  statuses?: Record<string, FindingStatus>;
+  /** A deep review's reviewers, whom each finding names by number. */
+  reviewers?: DeepReviewState["reviewers"];
   busy: boolean;
   onFix: (findings: Finding[]) => void;
   onStatus: (id: string, status: "open" | "dismissed") => void;
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
-  const findings = report?.findings ?? [];
+  const { findings, dropped } = report;
   const { open, selected, chosen, toggle, fix } = useFindingPicks(
     findings,
-    state.statuses,
+    statuses,
     onFix,
   );
   const name = useAgentName();
-  const reviewerLabels = state.reviewers.map((r, i) =>
+  const reviewerLabels = reviewers.map((r, i) =>
     reviewerLabel(r, name(r), i + 1),
   );
-  const dropped = report?.dropped ?? [];
   if (!findings.length && !dropped.length) return null;
   return (
     <div className="deep-review-report">
@@ -50,9 +53,9 @@ export function DeepReviewReport({
               <FindingRow
                 key={f.id}
                 finding={f}
-                status={findingStatus(state.statuses, f.id)}
+                status={findingStatus(statuses, f.id)}
                 chatId={chatId}
-                reviewers={state.reviewers}
+                reviewers={reviewers}
                 reviewerLabels={reviewerLabels}
                 ticked={selected.includes(f.id)}
                 busy={busy}

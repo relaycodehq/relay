@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import type {
-  DeepReviewStart,
-  FindingStatus,
-  ReviewerTask,
-} from "../../shared/deep-review";
+import type { DeepReviewStart, ReviewerTask } from "../../shared/deep-review";
 import {
   DeepReviews,
   ensureReviewCheckout,
@@ -62,11 +58,6 @@ export class Councils {
   /** A message is about to go out in the thread; a fix request readies the review's folder or refuses. */
   fixing(chat: ProjectChat, input: ProjectChatSend) {
     return this.reviews.fixing(chat, input);
-  }
-
-  /** A message went out in the thread. */
-  sent(chat: ProjectChat, input: ProjectChatSend) {
-    this.reviews.sent(chat, input);
   }
 
   /**
@@ -136,16 +127,6 @@ export class Councils {
       if (this.core.closing()) throw new Error("Relay is closing.");
       await this.reviews.resume(id);
     });
-  }
-
-  setFinding(
-    id: string,
-    findingId: string,
-    status: Extract<FindingStatus, "open" | "dismissed">,
-  ) {
-    return this.core.control(id, () =>
-      this.reviews.setFinding(id, findingId, status),
-    );
   }
 
   /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */

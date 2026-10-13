@@ -1,19 +1,21 @@
 import {
   checkoutPaths,
-  reviewReports,
-  type DeepReviewState,
+  extractFindings,
+  threadReports,
   type FindingsReport,
-} from "../../shared/deep-review";
+  type ThreadFindings,
+} from "../../shared/findings";
+import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 /** Adds a batch without letting reused IDs change an older finding's status. */
 export function addReport(
-  state: DeepReviewState,
+  findings: ThreadFindings,
   report: FindingsReport,
   messageId: string,
   body: string,
-  root: string,
+  root?: string,
 ) {
-  const previous = reviewReports(state);
+  const previous = threadReports(findings);
   if (previous.some((r) => r.messageId === messageId)) return body;
   const used = new Set(previous.flatMap((r) => r.findings.map((f) => f.id)));
   let next =
@@ -36,9 +38,27 @@ export function addReport(
     }
     used.add(finding.id);
   }
-  if (state.report) (state.reports ??= []).push(batch);
-  else state.report = batch;
+  findings.reports.push(batch);
   return body.replace(/`(F\d+)`/g, (match, id: string) =>
     renamed.has(id) ? `\`${renamed.get(id)}\`` : match,
   );
+}
+
+/**
+ * Moves the findings block that ends `answer` into the thread's reports,
+ * shown under that answer. Says whether there was one.
+ */
+export function publishFindings(
+  chat: ProjectChat,
+  answer: ChatMessage,
+  root?: string,
+) {
+  if (threadReports(chat.findings).some((r) => r.messageId === answer.id))
+    return false;
+  const { body, report } = extractFindings(answer.body);
+  if (!report) return false;
+  chat.findings ??= { reports: [] };
+  answer.body = addReport(chat.findings, report, answer.id, body, root);
+  answer.version++;
+  return true;
 }

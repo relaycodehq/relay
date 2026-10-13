@@ -27,6 +27,7 @@ import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { commitWatch } from "./turn-commit";
+import { publishFindings, settleFixes } from "../findings";
 import { relayToolsFor } from "../relay-mcp";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
@@ -448,6 +449,13 @@ export class TurnRunner {
         if (!answer.stopped && !abort.signal.aborted) done.body = namedBody;
       }
       done.status = abort.signal.aborted ? "cancelled" : "complete";
+      if (
+        done.status === "complete" &&
+        (turn.kind === "reply" || turn.kind === "adopt") &&
+        !done.parentId &&
+        !chat.reviewer
+      )
+        publishFindings(chat, done, root);
       const { thread } = agentSession(chat, provider, input.parentId);
       if (done.status === "complete" && point && thread)
         done.forkPoint = { thread, at: point };
@@ -492,6 +500,8 @@ export class TurnRunner {
       const owner = this.core.active.get(chat.id);
       if (owner?.abort === abort) owner.finishing = true;
       const ended = answer.message;
+      if (turn.kind === "reply")
+        settleFixes(chat.findings, input.id, ended.status === "complete");
       if (ended.status !== "failed") {
         if (rules.advancesSession(ended))
           sessionFor(chat, provider, branch).through = ended.id;

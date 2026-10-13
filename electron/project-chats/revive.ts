@@ -4,6 +4,7 @@ import { migrateAgentSessions } from "../../shared/projects";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import { settleActivities } from "./answer-recorder";
 import { ownAgentWorktrees } from "./agent-worktrees";
+import { migrateFindings, reopenFixes } from "../findings";
 
 /** An answer the app closed on, with what it had written so far. */
 export function interrupt(m: ChatMessage) {
@@ -46,8 +47,7 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  // A review whose agents ran in an earlier session can only be resumed,
-  // and a fix that was running then left its findings open.
+  // A review whose agents ran in an earlier session can only be resumed.
   const review = chat.deepReview;
   if (
     review &&
@@ -69,14 +69,8 @@ export function reviveChat(
     delete (chat as { ultraplans?: unknown }).ultraplans;
     interrupted = true;
   }
-  if (review?.fixing) {
-    for (const id of Object.values(review.fixing).flat())
-      if (review.statuses?.[id] === "fixing") {
-        review.statuses[id] = "open";
-        interrupted = true;
-      }
-    delete review.fixing;
-  }
+  if (migrateFindings(chat)) interrupted = true;
+  if (reopenFixes(chat.findings)) interrupted = true;
   for (const m of chat.messages) {
     // Older saves kept every tool call twice; the trace alone is shown.
     if (m.trace) delete m.activity;
