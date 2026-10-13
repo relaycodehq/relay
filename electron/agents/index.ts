@@ -44,6 +44,7 @@ import {
   refreshOpenCodeModels,
 } from "./opencode/catalog";
 import { acpRegistry, acpRuntime, registryRuntime } from "./acp";
+import { museRuntime } from "./muse";
 import type { AgentRuntime } from "./types";
 import { counted } from "./usage-count";
 import {
@@ -129,6 +130,7 @@ const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   claude: counted("claude", claude),
   opencode: counted("opencode", opencode),
   cursor: counted("cursor", cursor),
+  muse: counted("muse", museRuntime),
   amp: counted("amp", acpRuntime("amp")),
   antigravity: counted("antigravity", acpRuntime("antigravity")),
 };

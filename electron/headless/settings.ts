@@ -221,7 +221,7 @@ const rows: Row[] = [
         ? agentInfo(s.newThreadAgent).name
         : dim("the last one used"),
   },
-  ...(["claude", "codex", "opencode", "amp"] as const).map((provider): Row => ({
+  ...(["claude", "codex", "opencode", "muse", "amp"] as const).map((provider): Row => ({
     key: provider,
     section: "Agents",
     label: agentInfo(provider).cli,
@@ -401,6 +401,7 @@ export async function setValue(
     case "claude":
     case "codex":
     case "opencode":
+    case "muse":
     case "amp":
       if (!value || value === "auto") await call(ctx, "unlinkAgent", key);
       else await call(ctx, "linkAgent", key, value);
@@ -747,6 +748,7 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
     case "claude":
     case "codex":
     case "opencode":
+    case "muse":
     case "amp":
     case "git": {
       const path = await ask.text(

@@ -7,6 +7,7 @@ export const agentProviders = [
   "claude",
   "opencode",
   "cursor",
+  "muse",
   "amp",
   "antigravity",
 ] as const;
@@ -144,6 +145,23 @@ export const agents = {
     usage: false,
     modelGroups: true,
     sdk: true,
+  },
+  muse: {
+    login: "login",
+    name: "Muse",
+    cli: "Muse Code",
+    defaultModel: "Muse default",
+    helper: false,
+    // Its read-only permission profile holds a reviewer to reading.
+    reviewCommand: "Relay's review prompt",
+    fast: false,
+    skills: false,
+    commandsAlone: true,
+    compactInstructions: false,
+    side: true,
+    reload: true,
+    usage: true,
+    modelGroups: false,
   },
   amp: {
     login: "login",

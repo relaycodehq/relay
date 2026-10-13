@@ -18,6 +18,9 @@
 :is(.quick-switch-anchor, .quick-switch-sample) [data-provider="cursor"] {
   --quick-color: #d4d6de;
 }
+:is(.quick-switch-anchor, .quick-switch-sample) [data-provider="muse"] {
+  --quick-color: #0082fb;
+}
 .quick-popup,
 .quick-tab {
   transition: --quick-color 240ms ease;

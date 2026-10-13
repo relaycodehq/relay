@@ -17,6 +17,7 @@ import {
   type UsageWindow,
 } from "../../shared/provider-usage";
 import { readClaudeUsage } from "./claude/project";
+import { readMuseUsage } from "./muse";
 import type { UsageProvider } from "../../shared/agents";
 import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { recordUsage } from "./usage-history";
@@ -61,6 +62,8 @@ const readers: Record<
 > = {
   claude: { load: loadClaude, ttl: CLAUDE_TTL },
   codex: { load: loadCodex },
+  // Only one Muse sign-in: its accounts aren't Relay's to switch.
+  muse: { load: () => readMuseUsage() },
 };
 
 /** The limits of one of the agent's accounts; its usual sign-in when left out. */

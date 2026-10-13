@@ -163,7 +163,7 @@ it("starts every new thread on the models the desktop and phone share", () => {
   // Shared and read back, every agent keeps its model; Codex's Default
   // follows the line-question setting again.
   const blanks = Object.fromEntries(
-    ["opencode", "amp", "antigravity"].map((p) => [p, plain("")]),
+    ["opencode", "muse", "amp", "antigravity"].map((p) => [p, plain("")]),
   );
   expect(
     withNewThreadModels(loaded.models, newThreadModelsOf(loaded.models)),

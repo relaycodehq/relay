@@ -20,6 +20,7 @@ const noCustoms = {
   claude: [],
   opencode: [],
   cursor: [],
+  muse: [],
   amp: [],
   antigravity: [],
 } as Record<AgentProvider, string[]>;

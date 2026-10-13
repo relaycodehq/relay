@@ -31,6 +31,7 @@ import {
   OpenCode,
   Amp,
   Antigravity,
+  Meta,
 } from "./ProviderLogos";
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
@@ -59,6 +60,7 @@ const providerIcons: Record<BuiltinProvider | "message", typeof OpenAI> = {
   claude: ClaudeAI,
   opencode: OpenCode,
   cursor: CursorGlyph,
+  muse: Meta,
   amp: Amp,
   antigravity: Antigravity,
   message: MessageSquare,

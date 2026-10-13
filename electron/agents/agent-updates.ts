@@ -37,7 +37,10 @@ const probeTimeout = 15_000;
 const updateTimeout = 5 * 60_000;
 
 interface AgentPackage {
-  npm: string;
+  /** Its npm package; left out for a CLI only its own installer ships. */
+  npm?: string;
+  /** How to install one that isn't on npm, said where it's missing. */
+  install?: string;
   /** Its own updater, for installs its own installer made. */
   native: { args: string[]; owns: (path: string) => boolean };
   /** What Relay runs it through, installed beside it in Relay's own folder. */
@@ -85,6 +88,14 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     },
     with: ["amp-acp"],
   },
+  // Muse Code's launcher updates itself every hour, so Relay never does.
+  muse: {
+    install: "curl -fsSL https://dev.meta.ai/install.sh | bash",
+    native: {
+      args: [],
+      owns: (path) => /\/\.local\/bin\/muse(-bin-[^/]*)?(\.exe)?$/.test(foldPath(path)),
+    },
+  },
 };
 
 export interface Install {
@@ -122,6 +133,7 @@ export function installOf(
   const paths = [path, real];
   if (paths.some(native.owns))
     return { installer: "native", program: path, args: native.args };
+  if (!npm) return undefined;
   if (paths.some((p) => foldPath(p).includes("/.bun/bin/")))
     return {
       installer: "bun",
@@ -177,8 +189,9 @@ export function ownInstall(
   provider: CliProvider,
   root: string,
   spec = "latest",
-): Install {
+): Install | undefined {
   const { npm, with: extras = [] } = agentPackages[provider];
+  if (!npm) return undefined;
   const prefix = join(root, provider);
   return {
     installer: "relay",
@@ -490,17 +503,21 @@ export class AgentUpdates {
           linked,
           error: `The ${cli} you linked is gone: ${linkedPath}`,
         };
-      if (!root)
+      const own = root ? ownInstall(provider, root, tag) : undefined;
+      const { install: by } = agentPackages[provider];
+      if (!own)
         return {
           provider,
           linked,
-          error: `Relay couldn't find ${cli}. If it's installed, link it here.`,
+          error: by
+            ? `Relay couldn't find ${cli}. Install it with \`${by}\`, or link the one you have.`
+            : `Relay couldn't find ${cli}. If it's installed, link it here.`,
         };
       return {
         provider,
         linked,
         installer: "relay",
-        command: describeInstall(ownInstall(provider, root, tag)),
+        command: describeInstall(own),
         error: `Relay couldn't find ${cli}. Install it here, or link the one you have.`,
       };
     }
@@ -564,8 +581,10 @@ export class AgentUpdates {
     path: string,
     bun: string,
   ) {
+    const pkg = agentPackages[provider].npm;
+    if (!pkg) return false;
     const real = forwardSlashes(await this.io.realpath(path));
-    const dir = `/node_modules/${agentPackages[provider].npm}/`;
+    const dir = `/node_modules/${pkg}/`;
     const at = foldPath(real).lastIndexOf(foldPath(dir));
     if (at < 0) return false;
     const result = await this.io.exec(
@@ -599,8 +618,8 @@ export class AgentUpdates {
     fresh: boolean,
   ): Promise<Pick<AgentVersion, "latest" | "held">> {
     const days = (await this.io.npmReleaseAge?.().catch(() => 0)) ?? 0;
-    if (!days) return { latest };
     const pkg = agentPackages[provider].npm;
+    if (!days || !pkg) return { latest };
     let cached = this.timesCache.get(pkg);
     if (fresh || !cached || Date.now() - cached.at >= latestLifetime) {
       const times = await this.io
@@ -721,6 +740,8 @@ export class AgentUpdates {
     // Homebrew lags npm by hours, so compare with what `brew upgrade` delivers.
     if (install?.brew) return this.brewLatest(install.program, install.brew);
     const pkg = agentPackages[provider].npm;
+    // Nothing to compare with: it isn't on npm.
+    if (!pkg) return undefined;
     const key = `${pkg}@${tag}`;
     const cached = this.latestCache.get(key);
     if (!fresh && cached && Date.now() - cached.at < latestLifetime)

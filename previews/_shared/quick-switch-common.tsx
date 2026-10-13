@@ -48,6 +48,13 @@ export const catalog: Record<
     ],
     efforts: [],
   },
+  muse: {
+    models: [
+      { id: "muse-wonder-full-1.0", name: "Muse Wonder Full" },
+      { id: "muse-spark-1.3", name: "Muse Spark 1.3" },
+    ],
+    efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
   amp: {
     models: [
       { id: "smart", name: "Smart" },

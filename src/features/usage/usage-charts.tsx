@@ -21,6 +21,7 @@ import {
   Amp,
   Antigravity,
   ClaudeAI,
+  Meta,
   OpenAI,
   OpenCode,
 } from "../agents/ProviderLogos";
@@ -41,6 +42,7 @@ export const providerLogos = {
   codex: OpenAI,
   opencode: OpenCode,
   cursor: CursorGlyph,
+  muse: Meta,
   amp: Amp,
   antigravity: Antigravity,
 };

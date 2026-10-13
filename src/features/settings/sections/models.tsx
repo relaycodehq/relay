@@ -74,7 +74,7 @@ export function useModelEntries(
       category: "agents",
       title: "New threads start on",
       description: "Unless the project picked its own agent.",
-      keywords: "default agent new thread start codex claude opencode cursor",
+      keywords: "default agent new thread start codex claude opencode cursor muse meta",
       render: () => <AgentSelect ai={ai} />,
     },
     {
@@ -84,7 +84,7 @@ export function useModelEntries(
       description:
         "Relay runs the agent CLIs installed on this computer, and Cursor's SDK, which it downloads itself. Claude Code and Codex can each sign in to more than one account.",
       keywords:
-        "account accounts sign in login switch work personal subscription limit usage email plan profile version update upgrade install link path cli codex claude code opencode cursor sdk npm homebrew bun",
+        "account accounts sign in login switch work personal subscription limit usage email plan profile version update upgrade install link path cli codex claude code opencode cursor muse meta sdk npm homebrew bun",
       block: true,
       render: () => (
         <AgentCards
@@ -133,7 +133,7 @@ export function useModelEntries(
       description:
         "Default runs the agent's own model and effort. Fast mode uses more credits where available.",
       keywords:
-        "model grouping pull request steps line questions commit split message reasoning effort fast mode codex claude opencode cursor",
+        "model grouping pull request steps line questions commit split message reasoning effort fast mode codex claude opencode cursor muse",
       block: true,
       render: () => <ReviewModelsCard ai={ai} />,
     },
