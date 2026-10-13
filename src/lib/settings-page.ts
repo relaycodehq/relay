@@ -16,7 +16,6 @@ export type SettingsCategory =
   | "relay-models"
   | "quick-switch"
   | "integrations"
-  | "plugins"
   | "phone"
   | "computers"
   | "dictation"

@@ -3,24 +3,16 @@ import {
   useContext,
   useState,
   type InputHTMLAttributes,
-  type ReactNode,
 } from "react";
 
-/** What a plugin's settings call after a save, so its card can say so. */
+/** What a plugin's settings call after a save, so its row can say so. */
 export const PluginSavedContext = createContext<() => void>(() => {});
 export const usePluginSaved = () => useContext(PluginSavedContext);
 
-/** A muted status line in a plugin card's header; `attention` while it needs setting up. */
-export function PluginStatus({
-  children,
-  attention,
-}: {
-  children: ReactNode;
+/** A plugin's one line in its row, and whether it waits on you. */
+export interface PluginSummary {
+  text: string;
   attention?: boolean;
-}) {
-  return (
-    <small className={attention ? "plugin-attention" : ""}>{children}</small>
-  );
 }
 
 /** A text field that saves when you leave it or press Enter; Esc puts the saved value back. */

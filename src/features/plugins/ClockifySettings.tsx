@@ -21,10 +21,10 @@ import { ModelField } from "../agents/ModelField";
 import { useRunnableAgents } from "../agents/registry-agents";
 import { ErrorBox } from "../../ui/ui";
 import { ClockifyProjectMap } from "./ClockifyProjectMap";
-import { PluginStatus, usePluginSaved } from "./plugin-ui";
+import { usePluginSaved, type PluginSummary } from "./plugin-ui";
 
-/** The Clockify card's header line: who it reports to, or what's missing. */
-export function ClockifySummary() {
+/** The Clockify row's line: who it reports to, or what's missing. */
+export function useClockifySummary(): PluginSummary | null {
   const status = useClockifyStatus().data;
   const connected = !!status?.hasToken;
   const workspaces = useClockifyWorkspaces(
@@ -34,24 +34,17 @@ export function ClockifySummary() {
   const relayProjects = useTrackableProjects();
   if (!status) return null;
   const { workspaceId, projects } = status.settings;
-  if (!connected)
-    return <PluginStatus attention>Needs an API key</PluginStatus>;
-  if (!workspaceId)
-    return <PluginStatus attention>Choose a workspace</PluginStatus>;
+  if (!connected) return { text: "Needs an API key", attention: true };
+  if (!workspaceId) return { text: "Choose a workspace", attention: true };
   const tracked = Object.keys(projects).length;
   if (!tracked)
-    return <PluginStatus attention>Choose the projects to track</PluginStatus>;
+    return { text: "Choose the projects to track", attention: true };
   const workspace = workspaces.data?.find((w) => w.id === workspaceId)?.name;
   const total = relayProjects.data?.length;
   const count = total
     ? `${tracked} of ${total} projects`
     : `${tracked} ${tracked === 1 ? "project" : "projects"}`;
-  return (
-    <PluginStatus>
-      {workspace ? `${workspace} · ` : ""}
-      {count} tracked
-    </PluginStatus>
-  );
+  return { text: `${workspace ? `${workspace} · ` : ""}${count} tracked` };
 }
 
 /**

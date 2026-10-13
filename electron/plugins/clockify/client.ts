@@ -137,7 +137,7 @@ export class ClockifyClient {
 
   private async failure(response: Response) {
     if (response.status === 401)
-      return "Clockify didn't accept the API key. Check it in Settings → Plugins.";
+      return "Clockify didn't accept the API key. Check it in Settings → Integrations.";
     if (response.status === 403)
       return "Your Clockify account can't do that in this workspace.";
     if (response.status === 429)

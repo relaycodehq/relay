@@ -41,7 +41,7 @@ export function SidebarFooter({
         projectId={projectId}
         projectName={projectName}
         chatId={chatId}
-        onSetUp={() => onSettings("plugins")}
+        onSetUp={() => onSettings("integrations")}
       />
       <IconButton label="Usage" active={usage} onClick={onUsage}>
         <ChartColumn size={15} />

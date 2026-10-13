@@ -169,9 +169,8 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
         return original(input, init);
       }) as typeof net.fetch;
     }, repo);
-    await page
-      .getByRole("button", { name: "Add project folder", exact: true })
-      .click();
+    await page.evaluate(() => window.relay.addProject());
+    await page.reload();
     await expect(
       page.getByRole("heading", { name: /What should we work on in/ }),
     ).toBeVisible();
@@ -185,7 +184,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
       name: "Settings",
       exact: true,
     });
-    // Integrations keeps only the pull request and CI hosts.
+    // Source control keeps only the pull request and CI hosts.
     await settings.getByRole("button", { name: "Integrations" }).click();
     await expect(
       settings.getByRole("region", { name: "Source control" }),
@@ -194,14 +193,9 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
       settings.getByRole("region", { name: "Source control" }),
     ).not.toContainText("Azure DevOps");
 
-    // Azure DevOps is a plugin; switching it on opens its card to set it up.
-    await settings.getByRole("button", { name: "Plugins" }).click();
-    const plugin = settings
-      .locator(".plugin-card")
-      .filter({ hasText: "Azure DevOps work items" });
-    await plugin
-      .getByRole("switch", { name: "Turn on Azure DevOps work items" })
-      .check();
+    // Azure DevOps has a row of its own; switching it on opens it to set it up.
+    const plugin = settings.getByRole("region", { name: "Work items" });
+    await plugin.getByRole("switch", { name: "Use Azure DevOps" }).check();
     await expect(plugin).toContainText("Needs your organization");
     // Fields save as you leave them; the token waits for Connect.
     await plugin.getByLabel("Azure DevOps organization").fill("contoso");
@@ -210,15 +204,17 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(plugin).toContainText("Needs a personal access token");
     await plugin.getByLabel("Personal access token").fill("pat-123");
     await plugin.getByRole("button", { name: "Connect" }).click();
-    await expect(plugin.locator(".plugin-card-text small")).toHaveText(
+    await expect(plugin.locator(".tool-row-text p")).toHaveText(
       "contoso / Software · 3 open items assigned to you",
     );
     await expect(plugin).toContainText("Signed in as Ann Example.");
     await screenshot(page, { path: join(root, "settings.png") });
 
-    await plugin
-      .getByLabel("Show only the items that belong to the open project")
-      .check();
+    const matching = plugin.getByLabel(
+      "Show only the items that belong to the open project",
+    );
+    await matching.click();
+    await expect(matching).toBeChecked();
     await plugin.getByLabel("OpenRouter API key").fill("sk-or-test");
     await plugin.getByRole("button", { name: "Connect" }).click();
     await expect(plugin.getByRole("button", { name: "Replace" })).toHaveCount(

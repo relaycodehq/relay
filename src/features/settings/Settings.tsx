@@ -15,7 +15,6 @@ import { projectEntries } from "./sections/projects";
 import { useSettingsProject } from "../projects/ProjectSettings";
 import { useModelEntries } from "./sections/models";
 import { integrationEntries } from "./sections/integrations";
-import { pluginEntries } from "./sections/plugins";
 import { phoneEntries } from "./sections/phone";
 import { computerEntries } from "./sections/computers";
 import { useDictationEntries } from "./sections/dictation";
@@ -85,7 +84,6 @@ export function Settings({
     ...projectEntries(project),
     ...models,
     ...integrationEntries({ account, onConnect, onDisconnect }),
-    ...pluginEntries(),
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),
     ...dictation,

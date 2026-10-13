@@ -38,13 +38,13 @@ import {
 } from "./DevOpsOrder";
 import {
   CommitInput,
-  PluginStatus,
   SecretField,
   usePluginSaved,
+  type PluginSummary,
 } from "./plugin-ui";
 
-/** The card's header line: where the items come from, or what's missing. */
-export function DevOpsSummary() {
+/** The row's line: where the items come from, or what's missing. */
+export function useDevOpsSummary(): PluginSummary | null {
   const status = useDevOpsStatus().data;
   const settings = status?.settings;
   const connection = useDevOpsConnection(!!settings?.organization).data;
@@ -57,27 +57,23 @@ export function DevOpsSummary() {
   });
   if (!status || !settings) return null;
   if (!settings.organization)
-    return <PluginStatus attention>Needs your organization</PluginStatus>;
+    return { text: "Needs your organization", attention: true };
   if (settings.auth === "pat" && !status.hasPat)
-    return <PluginStatus attention>Needs a personal access token</PluginStatus>;
+    return { text: "Needs a personal access token", attention: true };
   // Without a server it's an answer from before the organization was saved.
   if (connection?.signIn === "signed-out" && connection.server)
-    return (
-      <PluginStatus attention>
-        Can't sign in to {connection.server}
-      </PluginStatus>
-    );
+    return { text: `Can't sign in to ${connection.server}`, attention: true };
   const where = [organizationLabel(settings.organization), settings.project]
     .filter(Boolean)
     .join(" / ");
   const count = items.data?.items.length;
-  return (
-    <PluginStatus>
-      {where}
-      {count !== undefined &&
-        ` · ${count} open ${count === 1 ? "item" : "items"} assigned to you`}
-    </PluginStatus>
-  );
+  return {
+    text:
+      where +
+      (count === undefined
+        ? ""
+        : ` · ${count} open ${count === 1 ? "item" : "items"} assigned to you`),
+  };
 }
 
 /** Who the sign-in is accepted as, or why it isn't. */

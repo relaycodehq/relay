@@ -59,7 +59,7 @@ interface State {
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;
   devopsOpenRouterKey?: string;
-  /** Built-in plugins turned on in Settings → Plugins. */
+  /** Built-in plugins turned on in Settings → Integrations. */
   plugins?: Partial<Record<import("../../shared/plugins").PluginId, boolean>>;
   /** Each plugin's secrets, encrypted with the OS credential store. */
   pluginSecrets?: Partial<

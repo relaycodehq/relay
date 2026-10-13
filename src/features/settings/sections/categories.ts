@@ -8,7 +8,6 @@ import {
   Mic,
   MonitorUp,
   Palette,
-  Puzzle,
   Smartphone,
   Sparkles,
   Volume2,
@@ -69,15 +68,8 @@ export const categories: {
     id: "integrations",
     label: "Integrations",
     description:
-      "Git, and the hosts your pull requests, CI and work items come from.",
+      "Git, the hosts your pull requests and CI come from, and the services Relay can work with.",
     icon: ListTodo,
-  },
-  {
-    id: "plugins",
-    label: "Plugins",
-    description:
-      "Extras that ship with Relay and stay out of sight until you turn them on.",
-    icon: Puzzle,
   },
   {
     id: "phone",

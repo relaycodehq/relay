@@ -22,7 +22,7 @@ export function ToolRows({ children }: { children: ReactNode }) {
 }
 
 /**
- * One tool or host in Settings → Integrations: its mark with a status dot,
+ * One tool, host or service in Settings → Integrations: its mark with a status dot,
  * name and version, one line of status, then its details behind a chevron
  * and, for what can be turned off, a switch.
  */
@@ -34,6 +34,10 @@ export function ToolRow({
   summary,
   toggle,
   details,
+  plainDetails,
+  aside,
+  open: openProp,
+  onOpenChange,
 }: {
   mark: ReactNode;
   name: string;
@@ -48,8 +52,20 @@ export function ToolRow({
     onChange: (on: boolean) => void;
   };
   details?: ReactNode;
+  /** For details that bring their own cards, so they don't sit in a box. */
+  plainDetails?: boolean;
+  /** Beside the chevron, e.g. a passing "Saved". */
+  aside?: ReactNode;
+  /** Set to hold the details open from outside, as a switch turned on does. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   return (
     <div className="tool-row-row" data-state={state}>
       <div className="tool-row-main">
@@ -64,6 +80,7 @@ export function ToolRow({
           </div>
           <p>{summary(() => setOpen(true))}</p>
         </div>
+        {aside}
         {details && (
           <IconButton
             label={`${open ? "Hide" : "Show"} ${name} details`}
@@ -83,7 +100,11 @@ export function ToolRow({
           />
         )}
       </div>
-      {open && details && <div className="tool-row-details">{details}</div>}
+      {open && details && (
+        <div className={`tool-row-details ${plainDetails ? "plain" : ""}`}>
+          {details}
+        </div>
+      )}
     </div>
   );
 }

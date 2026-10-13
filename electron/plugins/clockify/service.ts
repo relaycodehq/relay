@@ -124,14 +124,16 @@ export class ClockifyPlugin {
   private async client() {
     const token = await this.deps.secrets.get("clockify", "token");
     if (!token)
-      throw new Error("Add your Clockify API key in Settings → Plugins.");
+      throw new Error("Add your Clockify API key in Settings → Integrations.");
     return new ClockifyClient(this.deps.fetch, this.settings().host, token);
   }
 
   private workspace() {
     const id = this.settings().workspaceId;
     if (!id)
-      throw new Error("Choose a Clockify workspace in Settings → Plugins.");
+      throw new Error(
+        "Choose a Clockify workspace in Settings → Integrations.",
+      );
     return id;
   }
 
@@ -446,6 +448,8 @@ export class ClockifyPlugin {
 
   private requireEnabled() {
     if (!this.enabled())
-      throw new Error("Turn on Clockify time tracking in Settings → Plugins.");
+      throw new Error(
+        "Turn on Clockify time tracking in Settings → Integrations.",
+      );
   }
 }

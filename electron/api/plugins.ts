@@ -11,7 +11,7 @@ import {
 } from "../../shared/plugins";
 import { takes, type ApiContext, type Handlers } from "./context";
 
-/** Settings → Plugins, and each built-in plugin's own calls. */
+/** Settings → Integrations, and each built-in plugin's own calls. */
 export function pluginHandlers(ctx: ApiContext) {
   const { store, clockify, devops } = ctx;
   const toggles = (): PluginToggles => ({

@@ -1,4 +1,6 @@
 import type { Account } from "../../../../shared/types";
+import { pluginIds, plugins } from "../../../../shared/plugins";
+import { PluginRow } from "../../plugins/PluginSettings";
 import type { SettingEntry } from "../settings-search";
 import { GitSettings } from "../GitSettings";
 import {
@@ -34,5 +36,15 @@ export function integrationEntries(gitea: {
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings {...gitea} />,
     },
+    // Built-in plugins: services that stay out of sight until switched on.
+    ...pluginIds.map((id): SettingEntry => ({
+      id: `plugin-${id}`,
+      category: "integrations",
+      title: plugins[id].section,
+      description: plugins[id].description,
+      keywords: `plugin extension ${plugins[id].name} ${plugins[id].keywords}`,
+      block: true,
+      render: () => <PluginRow id={id} />,
+    })),
   ];
 }

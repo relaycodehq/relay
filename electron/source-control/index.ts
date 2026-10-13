@@ -14,7 +14,7 @@ export { teaTokenFor } from "./tea";
 
 /**
  * The pull request and CI hosts, as the tools and accounts on this computer
- * report them. Azure DevOps is the work items plugin's, in Settings → Plugins.
+ * report them. Azure DevOps is the work items plugin's, a row of its own.
  */
 export function sourceControlStatus(
   store: Store,
