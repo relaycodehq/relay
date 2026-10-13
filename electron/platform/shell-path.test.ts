@@ -140,6 +140,53 @@ describe("hydratePath", () => {
   });
 });
 
+describe("reading the registry's PATH", () => {
+  const windows = () => ({ PATH: "C:\\Windows", SystemRoot: "C:\\Windows" });
+
+  it("says once in the log that PowerShell timed out, and again after a read that worked", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const timedOut: Run = async () => {
+      throw Object.assign(new Error("Command failed: powershell.exe …"), {
+        killed: true,
+        signal: "SIGTERM",
+      });
+    };
+    await hydratePath(windows(), { platform: "win32", exec: timedOut });
+    await hydratePath(windows(), { platform: "win32", exec: timedOut });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/took longer than 15 s/);
+    await hydratePath(windows(), {
+      platform: "win32",
+      exec: async () => registryOutput("C:\\Windows", ""),
+    });
+    await hydratePath(windows(), { platform: "win32", exec: timedOut });
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it("logs PowerShell's own error rather than the script, and an empty answer", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await hydratePath(windows(), {
+      platform: "win32",
+      exec: async () => {
+        throw Object.assign(new Error("Command failed: powershell.exe …"), {
+          code: 1,
+          stderr: "Access is denied.\r\n",
+        });
+      },
+    });
+    await hydratePath(windows(), {
+      platform: "win32",
+      exec: async () => registryOutput("", ""),
+    });
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      "Could not read the PATH from the registry: PowerShell exited with 1: Access is denied.",
+      "The registry gave Relay no PATH to read.",
+    ]);
+    warn.mockRestore();
+  });
+});
+
 describe("extractRegistryPath", () => {
   it("decodes folders outside any code page and expands variables whatever their case", () => {
     expect(
