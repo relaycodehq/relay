@@ -489,11 +489,16 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           { includeLayers: false },
           configReadSchema,
         );
-        const mcpOverrides = Object.fromEntries(
-          Object.keys(configuration.config?.mcp_servers ?? {})
-            .filter((name) => !(options.relayTools && name === "relay"))
-            .map((name) => [`mcp_servers.${name}.enabled`, false]),
-        );
+        // A thread gets the MCP servers and plugins the terminal's `codex` would
+        // (computer use lives in them); one-offs and reviewers keep to none.
+        const ownTools = !!policy && !options.readOnly;
+        const mcpOverrides = ownTools
+          ? {}
+          : Object.fromEntries(
+              Object.keys(configuration.config?.mcp_servers ?? {})
+                .filter((name) => !(options.relayTools && name === "relay"))
+                .map((name) => [`mcp_servers.${name}.enabled`, false]),
+            );
         // Relay's own tools; a wait may hold its call for ten minutes.
         const relayServer = options.relayTools
           ? {
@@ -535,10 +540,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
               }),
           developerInstructions: instructions,
           config: {
-            web_search: "disabled",
+            ...(ownTools ? {} : { web_search: "disabled" }),
             features: {
               apps: false,
-              plugins: false,
+              plugins: ownTools,
               // Relay's one-offs stay on their own; threads may hand work to subagents.
               multi_agent: !!policy,
               send_message_to_user_async: !!options.onQuestions,
