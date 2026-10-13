@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 vi.mock("../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
-import { RunCommand } from "./CodeBlock";
+import { highlight, RunCommand, type Highlighted } from "./CodeBlock";
 import { RichText } from "./RichText";
 
 const inThread = (text: string) =>
@@ -55,4 +55,40 @@ it("draws a mermaid block only once it's closed, keeping its source until then",
   expect(closed).toContain('aria-label="Copy code"');
   // The source stands in until the diagram is drawn in the page.
   expect(closed).toContain("A --&gt; B");
+});
+
+it("colours a block streamed line by line exactly like the finished block", async () => {
+  // A comment and a template string that span lines carry grammar state over.
+  const code = [
+    "/* opens here",
+    "   still a comment */",
+    "const greeting = `hello",
+    "${name} and ${'quoted'}`;",
+    "export function f(a: number): string {",
+    "  return String(a); // trailing",
+    "}",
+  ].join("\n");
+  const lines = code.split("\n");
+  let prior: Highlighted | null = null;
+  for (let end = 1; end <= lines.length; end++)
+    prior = await highlight(
+      lines.slice(0, end).join("\n"),
+      "tsx",
+      "pierre-dark",
+      prior,
+    );
+  const whole = await highlight(code, "tsx", "pierre-dark", null);
+  // Offsets count from each pass's start; only what's drawn has to match.
+  const drawn = (lines: Highlighted["lines"] = []) =>
+    lines.map((line) =>
+      line.map(({ content, color, fontStyle }) => [content, color, fontStyle]),
+    );
+  expect(drawn(prior?.lines)).toEqual(drawn(whole.lines));
+  expect(
+    new Set(
+      drawn(whole.lines)
+        .flat()
+        .map(([, color]) => color),
+    ).size,
+  ).toBeGreaterThan(3);
 });

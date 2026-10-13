@@ -10,7 +10,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import type { ThemedToken } from "@pierre/diffs";
+import type { DiffsHighlighter, ThemedToken } from "@pierre/diffs";
 import {
   Check,
   ClipboardCheck,
@@ -24,16 +24,22 @@ import { blockCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { MermaidDiagram } from "./MermaidDiagram";
 
-// Tokenizing runs on the main thread; past this a block stays plain.
+// Tokenizing a block from scratch runs on the main thread; past this it stays plain.
 const MAX_HIGHLIGHT_LENGTH = 40_000;
-// Streaming grows the block every token; re-tokenize at most this often.
+// Streaming grows the block every token; tokenize new lines at most this often.
 const HIGHLIGHT_THROTTLE_MS = 120;
 
-interface Highlighted {
+type GrammarState = NonNullable<
+  ReturnType<DiffsHighlighter["codeToTokens"]>["grammarState"]
+>;
+
+export interface Highlighted {
   code: string;
   lang: string;
   theme: string;
   lines: ThemedToken[][];
+  /** Where the grammar stood after the last line, to carry on from there. */
+  grammar?: GrammarState;
 }
 
 // Read from the attributes applyToDocument sets on <html>, so the markdown
@@ -51,14 +57,49 @@ function subscribeSyntaxTheme(listener: () => void) {
   return () => observer.disconnect();
 }
 
-export async function tokenize(code: string, lang: string, theme: string) {
+async function highlighter(lang: string, theme: string) {
   // Loaded lazily so the markdown renderer doesn't pull Shiki in up front.
   const { getSharedHighlighter } = await import("@pierre/diffs");
-  const highlighter = await getSharedHighlighter({
-    themes: [theme],
-    langs: [lang],
-  });
-  return highlighter.codeToTokens(code, { lang, theme }).tokens;
+  return getSharedHighlighter({ themes: [theme], langs: [lang] });
+}
+
+export async function tokenize(code: string, lang: string, theme: string) {
+  return (await highlighter(lang, theme)).codeToTokens(code, { lang, theme })
+    .tokens;
+}
+
+/**
+ * Tokenizes `code`, and when `prior` holds its first lines, only the lines
+ * after them: a streamed block costs the same per pass however long it gets.
+ */
+export async function highlight(
+  code: string,
+  lang: string,
+  theme: string,
+  prior: Highlighted | null,
+): Promise<Highlighted> {
+  const shiki = await highlighter(lang, theme);
+  if (
+    prior?.grammar &&
+    prior.lang === lang &&
+    prior.theme === theme &&
+    code.startsWith(prior.code + "\n")
+  ) {
+    const more = shiki.codeToTokens(code.slice(prior.code.length + 1), {
+      lang,
+      theme,
+      grammarState: prior.grammar,
+    });
+    return {
+      code,
+      lang,
+      theme,
+      lines: [...prior.lines, ...more.tokens],
+      grammar: more.grammarState,
+    };
+  }
+  const { tokens, grammarState } = shiki.codeToTokens(code, { lang, theme });
+  return { code, lang, theme, lines: tokens, grammar: grammarState };
 }
 
 export function tokenStyle(token: ThemedToken): CSSProperties | undefined {
@@ -141,6 +182,26 @@ export function InlineCommand({
   );
 }
 
+// Lines keep their token arrays between passes, so only new ones re-render.
+const TokenLine = memo(function TokenLine({
+  line,
+  first,
+}: {
+  line: ThemedToken[];
+  first: boolean;
+}) {
+  return (
+    <span>
+      {!first && "\n"}
+      {line.map((token, i) => (
+        <span key={i} style={tokenStyle(token)}>
+          {token.content}
+        </span>
+      ))}
+    </span>
+  );
+});
+
 /** A fenced code block, coloured with the active syntax theme when its language is known. */
 export const CodeBlock = memo(function CodeBlock({
   code,
@@ -161,6 +222,7 @@ export const CodeBlock = memo(function CodeBlock({
     () => null,
   );
   const [highlighted, setHighlighted] = useState<Highlighted | null>(null);
+  const latest = useRef<Highlighted | null>(null);
   const lastRun = useRef(0);
   const [copied, copy] = useCopy();
   const [showSource, setShowSource] = useState(false);
@@ -171,8 +233,16 @@ export const CodeBlock = memo(function CodeBlock({
     [code, lang, closed],
   );
   const enabled = !!lang && !!theme && code.length <= MAX_HIGHLIGHT_LENGTH;
+  // While the fence is open only whole lines are tokenized: the grammar state
+  // after a finished line is what the next pass carries on from.
+  const target = closed
+    ? code
+    : code.slice(0, Math.max(0, code.lastIndexOf("\n")));
   useEffect(() => {
-    if (!enabled || !lang || !theme) return;
+    if (!enabled || !lang || !theme || !target) return;
+    const prior = latest.current;
+    if (prior?.code === target && prior.lang === lang && prior.theme === theme)
+      return;
     let cancelled = false;
     const wait = Math.max(
       0,
@@ -180,9 +250,11 @@ export const CodeBlock = memo(function CodeBlock({
     );
     const timer = setTimeout(() => {
       lastRun.current = performance.now();
-      tokenize(code, lang, theme).then(
-        (lines) => {
-          if (!cancelled) setHighlighted({ code, lang, theme, lines });
+      highlight(target, lang, theme, latest.current).then(
+        (next) => {
+          if (cancelled) return;
+          latest.current = next;
+          setHighlighted(next);
         },
         // Unknown fence languages simply stay plain.
         () => {},
@@ -192,7 +264,7 @@ export const CodeBlock = memo(function CodeBlock({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [code, lang, theme, enabled]);
+  }, [target, lang, theme, enabled]);
 
   // While a streamed block grows, keep the highlighted prefix and append
   // the new text plainly until the next pass catches up.
@@ -210,14 +282,7 @@ export const CodeBlock = memo(function CodeBlock({
         {usable ? (
           <>
             {usable.lines.map((line, index) => (
-              <span key={index}>
-                {index > 0 && "\n"}
-                {line.map((token, i) => (
-                  <span key={i} style={tokenStyle(token)}>
-                    {token.content}
-                  </span>
-                ))}
-              </span>
+              <TokenLine key={index} line={line} first={index === 0} />
             ))}
             {code.slice(usable.code.length)}
           </>
