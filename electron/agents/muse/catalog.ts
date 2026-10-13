@@ -60,11 +60,21 @@ export async function closeCatalog() {
 const effortsOf = (model: MuseModel): ReasoningEffort[] =>
   Array.isArray(model.variants) ? model.variants.filter(isEffort) : [];
 
+/** `muse-wonder-1.0` spelled out, for when Muse labels a model with its own id. */
+const spelledOut = (id: string) =>
+  id
+    .split("-")
+    .map((word) => (word ? word[0]!.toUpperCase() + word.slice(1) : word))
+    .join(" ");
+
 function agentModelOf(model: MuseModel): AgentModel {
   const efforts = effortsOf(model);
   return {
     id: model.modelId,
-    name: model.displayLabel || model.modelId,
+    name:
+      model.displayLabel && model.displayLabel !== model.modelId
+        ? model.displayLabel
+        : spelledOut(model.modelId),
     description: (model.description ?? "").slice(0, 300),
     efforts,
     ...(isEffort(model.defaultReasoningEffort) && { defaultEffort: model.defaultReasoningEffort }),

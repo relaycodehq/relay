@@ -342,6 +342,8 @@ describe("catalog", () => {
           variants: ["low", "medium", "high", "xhigh", "max", "ultra"],
         },
         { modelId: "muse-spark-1.3", displayLabel: "Muse Spark 1.3", description: null, isDefault: false, variants: { kind: "unknown" } },
+        // The live server labels this one with its own id.
+        { modelId: "muse-wonder-1.0", displayLabel: "muse-wonder-1.0", description: null, isDefault: false, variants: { kind: "unknown" } },
       ],
     });
     await expect(museModels()).resolves.toEqual([
@@ -354,6 +356,7 @@ describe("catalog", () => {
         contextWindow: 1048576,
       },
       { id: "muse-spark-1.3", name: "Muse Spark 1.3", description: "", efforts: [] },
+      { id: "muse-wonder-1.0", name: "Muse Wonder 1.0", description: "", efforts: [] },
     ]);
     await expect(museDefaults()).resolves.toMatchObject({ model: "muse-wonder-full-1.0", effort: "high" });
   });
