@@ -170,7 +170,7 @@ export class RemoteBridge {
   // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
   private sends = new Map<string, Promise<unknown>>();
   // A taken-back queue item no longer holds its id. Its lost answer still counts as a receipt.
-  private acceptedSends = new Set<string>();
+  private acceptedSends = new Map<string, unknown>();
   private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
@@ -299,7 +299,8 @@ export class RemoteBridge {
       return this.host.shrinkImage?.(dataUrl, max) ?? dataUrl;
     },
     renderPage: async (chatId, renderId, page) => {
-      if (!this.host.renderPage) throw new Error("This desktop can't show pages.");
+      if (!this.host.renderPage)
+        throw new Error("This desktop can't show pages.");
       return this.host.renderPage(chatId, renderId, page);
     },
     diff: async (source) => {
@@ -351,19 +352,20 @@ export class RemoteBridge {
     draftOther: async (key, drop) => this.requireDrafts().other(key, drop),
     sendDraft: async (key, chatId, send) => {
       const drafts = this.requireDrafts();
+      // A new thread has no chat id yet. Keep its result under the draft key,
+      // including after sending has removed the draft and its desktop extras.
+      if (!chatId)
+        return this.tracked(`draft:${key}`, send.id, async () => {
+          if (!drafts.holds(key))
+            throw new Error(
+              "This draft changed on the computer. Check it and send it again.",
+            );
+          return drafts.sendHeld(key, undefined, send);
+        });
       // Nothing of the desktop's left in it: it goes as any send does.
       if (!drafts.holds(key)) {
-        if (!chatId)
-          throw new Error(
-            "This draft changed on the computer. Check it and send it again.",
-          );
         await this.api.desktop("sendProjectChat", [chatId, send]);
         return { chatId };
-      }
-      if (!chatId) {
-        const made = await drafts.sendHeld(key, undefined, send);
-        this.refresh();
-        return made;
       }
       return this.tracked(chatId, send.id, () =>
         drafts.sendHeld(key, chatId, send),
@@ -401,7 +403,7 @@ export class RemoteBridge {
    */
   private async tracked<T>(chatId: string, id: string, run: () => Promise<T>) {
     const key = sendKey(chatId, id);
-    if (this.acceptedSends.has(key)) return;
+    if (this.acceptedSends.has(key)) return this.acceptedSends.get(key) as T;
     let job = this.sends.get(key);
     if (!job) {
       job = run();
@@ -409,7 +411,7 @@ export class RemoteBridge {
     }
     try {
       const value = await job;
-      this.acceptedSends.add(key);
+      this.acceptedSends.set(key, value);
       // Sends move thread states; phones hear before the call returns.
       this.refresh();
       return value as T;
@@ -436,7 +438,10 @@ export class RemoteBridge {
           `phone:${deviceId}`,
         );
       case "draftOther":
-        return a.draftOther(draftKeySchema.parse(args[0]), z.boolean().parse(args[1]));
+        return a.draftOther(
+          draftKeySchema.parse(args[0]),
+          z.boolean().parse(args[1]),
+        );
       case "sendDraft":
         return a.sendDraft(
           draftKeySchema.parse(args[0]),
@@ -596,7 +601,8 @@ const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
 function cutDetail(a: AgentActivity): AgentActivity {
   const detail = a.detail;
   // The started threads' ids, which a phone needs whole to tell its turn's threads apart.
-  if (!detail || detail.length <= phoneDetailPreview || isStartThreads(a)) return a;
+  if (!detail || detail.length <= phoneDetailPreview || isStartThreads(a))
+    return a;
   const half = phoneDetailPreview / 2;
   return {
     ...a,
