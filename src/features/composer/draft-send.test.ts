@@ -1,13 +1,20 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { defaultAISettings } from "../../../shared/settings";
-import type { ChatSummary, Project, ProjectChatSend } from "../../../shared/projects";
+import type {
+  ChatSummary,
+  Project,
+  ProjectChatSend,
+} from "../../../shared/projects";
 import type { CodeReference } from "../../../shared/code-references";
 import type { DraftImage } from "../images/draft-images";
 import { threadStorage } from "../../lib/thread-storage";
 import { readDraft, writeDraft } from "./drafts";
 import { sendDraft, unsent } from "./draft-send";
-import { loadComposerSettings, saveComposerSettings } from "../agents/composer-settings";
+import {
+  loadComposerSettings,
+  saveComposerSettings,
+} from "../agents/composer-settings";
 
 const images = new Map<string, DraftImage[]>();
 const sends: (ProjectChatSend & { resolve: () => void })[] = [];
@@ -26,13 +33,8 @@ vi.mock("../../lib/api", () => ({
     aiSettings: async () => defaultAISettings,
     agentModels: async () => [],
     projectChat: async () => ({ ...chat, messages: [], lastInput }),
-    sendProjectChat: (
-      _id: string,
-      send: ProjectChatSend,
-    ) =>
-      new Promise<void>((resolve) =>
-        sends.push({ resolve, ...send }),
-      ),
+    sendProjectChat: (_id: string, send: ProjectChatSend) =>
+      new Promise<void>((resolve) => sends.push({ resolve, ...send })),
   },
 }));
 
@@ -146,10 +148,16 @@ it("restores a background send from the thread and preserves picks changed while
   const send = await sendHeldBack();
   expect(sends[0].choice).toEqual(lastInput.choice);
   expect(sends[0].runtimeMode).toBe("auto");
-  const changed = { ...loadComposerSettings(chat.id), runtimeMode: "approval-required" as const };
+  const changed = {
+    ...loadComposerSettings(chat.id),
+    runtimeMode: "approval-required" as const,
+  };
   saveComposerSettings(chat.id, changed);
   await send.finish();
-  expect(loadComposerSettings(chat.id)).toEqual({ ...changed, sent: sends[0].id });
+  expect(loadComposerSettings(chat.id)).toEqual({
+    ...changed,
+    sent: sends[0].id,
+  });
 });
 
 it("sends a draft that holds only a screenshot", async () => {
