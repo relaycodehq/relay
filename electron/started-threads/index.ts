@@ -811,7 +811,15 @@ export class StartedThreads {
         true,
       );
     const { last, agent: caller, from } = this.leadSide(lead);
-    const refused = await this.agentChoices.refusal(threads, caller);
+    const refused = await this.agentChoices.refusal(
+      threads.map((t) => ({
+        ...t,
+        model:
+          t.model ?? ((t.agent ?? caller) === caller ? last.choice.model : ""),
+        fast: t.fast ?? ((t.agent ?? caller) === caller && last.choice.fast),
+      })),
+      caller,
+    );
     if (refused) return toolText(refused, true);
     const working = this.children(lead).filter((c) => c.running).length;
     if (!detached && working + threads.length > STARTED_LIMIT)
@@ -848,11 +856,13 @@ export class StartedThreads {
       const agent: AgentProvider = spec.agent ?? caller;
       const same = agent === caller;
       const model =
-        spec.model !== undefined || spec.effort !== undefined
+        spec.model !== undefined ||
+        spec.effort !== undefined ||
+        spec.fast !== undefined
           ? {
               choice: {
                 model: spec.model ?? (same ? last.choice.model : ""),
-                fast: same && last.choice.fast,
+                fast: spec.fast ?? (same && last.choice.fast),
                 reasoningEffort:
                   spec.effort ?? (same ? last.choice.reasoningEffort : ""),
               },

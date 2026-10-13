@@ -78,6 +78,12 @@ export const relayToolSchemas = {
               effort: reasoningEffortSchema
                 .optional()
                 .describe("Reasoning effort. Left out: as with model."),
+              fast: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Fast mode on or off, on a model that supports it (list_agents says which). Left out: inherit yours on the same agent, otherwise Standard.",
+                ),
               worktree: z
                 .boolean()
                 .optional()
@@ -391,7 +397,7 @@ const descriptions: Record<RelayToolName, string> = {
   usage_limits:
     "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
   list_agents:
-    'The agents you can start threads on here, with the models each offers (id, name, efforts), and which agents can\'t run here and why. `you` marks your own. Check it before start_threads when the user names an agent or model, which may be either: "sol" or "astra" can be a model\'s short name, not an agent.',
+    'The agents you can start threads on here, with the models each offers (id, name, efforts, fast), and which agents can\'t run here and why. `fast` says the model offers Fast mode. `you` marks your own. Check it before start_threads when the user names an agent or model, which may be either: "sol" or "astra" can be a model\'s short name, not an agent.',
   move_to_worktree:
     "Move this thread out of the project folder into a Git worktree of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
   list_notes:

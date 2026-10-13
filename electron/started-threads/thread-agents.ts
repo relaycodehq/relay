@@ -7,6 +7,7 @@ import {
   type AgentModel,
   type AgentProvider,
 } from "../../shared/agents";
+import { supportsFast } from "../../shared/model-fit";
 
 /** What the tools learn about the agents on this computer. */
 export interface ThreadAgents {
@@ -26,6 +27,7 @@ const LISTED_MODELS = 40;
 export interface AgentPick {
   agent?: AgentProvider;
   model?: string;
+  fast?: boolean;
 }
 
 export class AgentChoices {
@@ -83,9 +85,16 @@ export class AgentChoices {
           ", ",
         )}. A model's name goes in \`model\`, with the agent that offers it; list_agents has each one's models.`;
     const wrong: string[] = [];
-    for (const { agent = caller, model } of picks) {
-      if (!model) continue;
+    for (const { agent = caller, model, fast } of picks) {
+      if (!model && !fast) continue;
       const models = await this.models(agent);
+      if (fast && !supportsFast(agent, model ?? "", models)) {
+        wrong.push(
+          `${agentName(agent)} ${model || "default"} does not offer Fast mode${models === undefined ? " (its catalog could not be checked)" : ""}.`,
+        );
+        continue;
+      }
+      if (!model) continue;
       // An agent that lists none takes whatever it's given.
       if (!models?.length || models.some((m) => offers(m, model))) continue;
       const others = models.filter((m) =>
@@ -117,6 +126,7 @@ export class AgentChoices {
                   id: m.id,
                   ...(m.name !== m.id ? { name: m.name } : {}),
                   ...(m.efforts.length ? { efforts: m.efforts } : {}),
+                  ...(supportsFast(agent, m.id, models) ? { fast: true } : {}),
                 })),
               }
             : { note: "It couldn't list its models just now." }),

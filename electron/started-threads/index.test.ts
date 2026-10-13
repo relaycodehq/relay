@@ -452,14 +452,62 @@ test("list_agents gives the agents that can run here with their models", async (
     agent: "codex",
     name: "Codex",
     models: [
-      { id: "gpt-6-astra", name: "GPT-6 Astra", efforts: ["low", "high"] },
-      { id: "gpt-6-sol", name: "GPT-6 Sol" },
+      {
+        id: "gpt-6-astra",
+        name: "GPT-6 Astra",
+        efforts: ["low", "high"],
+        fast: true,
+      },
+      { id: "gpt-6-sol", name: "GPT-6 Sol", fast: true },
     ],
   });
   expect(listed.agents.find((a: any) => a.agent === "claude").you).toBe(true);
   expect(listed.unavailable).toEqual([
     { agent: "amp", why: "Amp isn't installed on this computer." },
   ]);
+});
+
+test("Cursor children inherit Fast, can override it, and advertise model support", async () => {
+  const { lead, sent, api } = fakeChats();
+  lead.lastInput!.provider = "cursor";
+  lead.lastInput!.to = "cursor";
+  lead.lastInput!.runtimeMode = "full-access";
+  lead.lastInput!.choice = {
+    model: "grok-4.7",
+    fast: true,
+    reasoningEffort: "high",
+  };
+  const threads = new StartedThreads(api, {
+    agents: {
+      ...agents,
+      models: async () => [
+        {
+          id: "grok-4.7",
+          name: "Grok 4.7",
+          description: "",
+          efforts: ["high" as const],
+          fast: true,
+        },
+        { id: "auto", name: "Auto", description: "", efforts: [], fast: false },
+      ],
+    },
+  });
+  const listed = parse(
+    await call(threads, lead.id, "list_agents", { agent: "cursor" }),
+  );
+  expect(listed.agents[0].models[0].fast).toBe(true);
+  await call(threads, lead.id, "start_threads", {
+    threads: [{ prompt: "Inherited" }, { prompt: "Standard", fast: false }],
+  });
+  expect(sent.map((s) => s.input.choice)).toEqual([
+    { model: "grok-4.7", fast: true, reasoningEffort: "high" },
+    { model: "grok-4.7", fast: false, reasoningEffort: "high" },
+  ]);
+  const refused = await call(threads, lead.id, "start_threads", {
+    threads: [{ prompt: "Unsupported", model: "auto", fast: true }],
+  });
+  expect(resultText(refused)).toContain("does not offer Fast mode");
+  expect(sent).toHaveLength(2);
 });
 
 test("a thread that fails as it starts is reported failed and settled once its run ends", async () => {
