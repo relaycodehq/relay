@@ -121,12 +121,14 @@ async function startHosted(
   });
   hosted = running;
   return new Promise<string>((resolve, reject) => {
+    let output = "";
     const timer = setTimeout(() => {
       stopOpenCodeServer();
-      reject(new Error("OpenCode's server did not start in time."));
+      reject(tooSlow(output));
     }, 30000);
     follow(running, (entry) => {
       if (entry.kind === "line") {
+        output = `${output}${entry.text}\n`.slice(-4000);
         const match = bannerPattern.exec(entry.text);
         if (match) {
           clearTimeout(timer);
@@ -143,6 +145,12 @@ async function startHosted(
     });
   });
 }
+
+/** What it printed is the only hint why OpenCode never said where it listens. */
+const tooSlow = (output: string) =>
+  new Error(
+    `OpenCode's server did not start in time.${output.trim() ? ` ${output.trim().slice(-300)}` : ""}`,
+  );
 
 /** Reads a hosted server's log for as long as it runs; its end ends the server. */
 function follow(running: HostedProcess, also?: (entry: Entry) => void) {
@@ -171,10 +179,7 @@ async function startLocal(
   child = process_;
   const url = await new Promise<string>((resolve, reject) => {
     let output = "";
-    const timer = setTimeout(
-      () => fail(new Error("OpenCode's server did not start in time.")),
-      30000,
-    );
+    const timer = setTimeout(() => fail(tooSlow(output)), 30000);
     const fail = (error: Error) => {
       clearTimeout(timer);
       stop(process_);
