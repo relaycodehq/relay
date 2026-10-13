@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
-import { awayDuring, unreadStart } from "../../../shared/chat-activity";
+import { unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
 import { reviewReports } from "../../../shared/deep-review";
 import { api } from "../../lib/api";
@@ -171,12 +171,17 @@ export function ThreadMessages({
         ].filter((note): note is MessageNote => !!note);
   // A row that draws its own line carries the unread mark instead of a second
   // line stacking against it: the one where the unseen part starts, or the one
-  // right above it when that also happened while you were away.
+  // visibly right above it, even if that row was already read. A hidden handoff
+  // prompt has no row, but any notes under it still do.
   const unreadAt = onScreen.findIndex((m) => m.id === unread?.id);
-  const above = onScreen[unreadAt - 1];
+  const above =
+    unreadAt < 0
+      ? undefined
+      : onScreen
+          .slice(0, unreadAt)
+          .findLast((m) => m.side || !m.handedOver || notesUnder(m).length);
   // The notes line under the message above sits right against it too.
-  const lines = (m: ChatMessage | false | undefined) =>
-    !!m && !m.side && drawsLine(m);
+  const lines = (m: ChatMessage | undefined) => !!m && !m.side && drawsLine(m);
   const markOn =
     unreadAt < 0
       ? undefined
@@ -184,7 +189,7 @@ export function ThreadMessages({
         ? onScreen[unreadAt]!.id
         : above && notesUnder(above).length
           ? `notes-${above.id}`
-          : lines(above && arrival && awayDuring(above, arrival.away) && above)
+          : lines(above)
             ? above!.id
             : undefined;
   const unreadProps = unread && {
