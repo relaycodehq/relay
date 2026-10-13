@@ -11,7 +11,10 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./shell-path", () => ({ pathReady: async () => {} }));
+vi.mock("./shell-path", () => ({
+  pathReady: async () => {},
+  refreshPath: async () => false,
+}));
 
 import {
   findExecutable,

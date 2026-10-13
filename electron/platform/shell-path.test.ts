@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractPath,
+  extractRegistryPath,
   hydratePath,
   loginShells,
   mergePath,
@@ -97,7 +98,7 @@ describe("hydratePath", () => {
     expect(env.PATH).toBe(`${bare}:/opt/homebrew/bin`);
   });
 
-  it("leaves PATH alone when nothing answers, and on Windows", async () => {
+  it("leaves PATH alone when nothing answers", async () => {
     const failing: Run = async () => {
       throw new Error("no");
     };
@@ -105,10 +106,51 @@ describe("hydratePath", () => {
     await hydratePath(env, { platform: "linux", exec: failing });
     expect(env.PATH).toBe(bare);
     const windows = { PATH: "C:\\Windows" };
-    await hydratePath(windows, {
-      platform: "win32",
-      exec: async () => marked("/should/not/run"),
-    });
+    await hydratePath(windows, { platform: "win32", exec: failing });
     expect(windows.PATH).toBe("C:\\Windows");
+  });
+
+  it("adds what Windows' registry has since the launch, machine before user", async () => {
+    // Relay started before Codex's installer added its folder to the user's Path.
+    const env = {
+      PATH: "C:\\Program Files\\Git\\cmd;C:\\Windows\\system32",
+      SystemRoot: "C:\\Windows",
+      LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local",
+    };
+    const exec: Run = async (file, args) => {
+      expect(file).toBe("C:\\Windows\\System32\\reg.exe");
+      return args[1].startsWith("HKLM")
+        ? "\r\nHKEY_LOCAL_MACHINE\\...\\Environment\r\n    Path    REG_EXPAND_SZ    %SystemRoot%\\system32;C:\\Program Files\\GitHub CLI\\\r\n\r\n"
+        : "\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_EXPAND_SZ    %LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin;%UNSET%\\bin\r\n\r\n";
+    };
+    await hydratePath(env, { platform: "win32", exec });
+    expect(env.PATH).toBe(
+      [
+        "C:\\Program Files\\Git\\cmd",
+        "C:\\Windows\\system32",
+        "C:\\Program Files\\GitHub CLI\\",
+        "C:\\Users\\me\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin",
+        "%UNSET%\\bin",
+      ].join(";"),
+    );
+  });
+});
+
+describe("extractRegistryPath", () => {
+  it("expands variables whatever their case, and gives nothing without a Path", () => {
+    expect(
+      extractRegistryPath(
+        "    Path    REG_EXPAND_SZ    %userprofile%\\.bun\\bin\r\n",
+        {
+          USERPROFILE: "C:\\Users\\me",
+        },
+      ),
+    ).toBe("C:\\Users\\me\\.bun\\bin");
+    expect(
+      extractRegistryPath(
+        "ERROR: The system was unable to find the specified registry key or value.",
+        {},
+      ),
+    ).toBeUndefined();
   });
 });

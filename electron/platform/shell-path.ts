@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { userInfo } from "node:os";
-import { delimiter } from "node:path";
+import { delimiter, win32 } from "node:path";
 import { promisify } from "node:util";
 
 /** Runs a program and resolves with its stdout; rejects on failure or timeout. */
@@ -93,16 +93,69 @@ async function readLaunchctlPath(exec: Run = run) {
   return (await exec("/bin/launchctl", ["getenv", "PATH"])).trim() || undefined;
 }
 
+const pathKeys = [
+  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+  "HKCU\\Environment",
+];
+
+/** The `Path` value in `reg query` output, its `%VARIABLES%` expanded from `env`. */
+export function extractRegistryPath(
+  output: string,
+  env: NodeJS.ProcessEnv,
+): string | undefined {
+  const value = /^\s*Path\s+REG_(?:EXPAND_)?SZ\s+(.*?)\s*$/im.exec(output)?.[1];
+  if (!value) return undefined;
+  const lookup = new Map(
+    Object.entries(env).map(([key, val]) => [key.toLowerCase(), val]),
+  );
+  return value.replace(
+    /%([^%;]+)%/g,
+    (whole, name: string) => lookup.get(name.toLowerCase()) ?? whole,
+  );
+}
+
+/**
+ * Windows keeps the PATH in the registry, the machine's then the user's, and
+ * a process gets the copy its parent had. Relay started by a long-running
+ * parent, or its updater, misses whatever an installer added since: a Codex
+ * or GitHub CLI installed after login. The registry has the current one.
+ */
+async function readRegistryPath(env: NodeJS.ProcessEnv, exec: Run = run) {
+  const reg = win32.join(
+    env.SystemRoot ?? env.windir ?? "C:\\Windows",
+    "System32",
+    "reg.exe",
+  );
+  const parts = await Promise.all(
+    pathKeys.map((key) =>
+      exec(reg, ["query", key, "/v", "Path"])
+        .then((output) => extractRegistryPath(output, env))
+        .catch(() => undefined),
+    ),
+  );
+  return parts.filter(Boolean).join(";") || undefined;
+}
+
 /**
  * Apps started from the Dock or a launcher inherit a bare PATH without the
- * user's tools; a login shell reads the profile that sets the real one.
- * Merges that PATH into `env` as `mergePath` orders them.
+ * user's tools; a login shell reads the profile that sets the real one, and
+ * on Windows the registry holds it. Merges that PATH into `env` as
+ * `mergePath` orders them.
  */
 export async function hydratePath(
   env: NodeJS.ProcessEnv,
   options: { platform?: NodeJS.Platform; userShell?: string; exec?: Run } = {},
 ): Promise<void> {
   const platform = options.platform ?? process.platform;
+  if (platform === "win32") {
+    const merged = mergePath(
+      env.PATH,
+      await readRegistryPath(env, options.exec),
+      ";",
+    );
+    if (merged) env.PATH = merged;
+    return;
+  }
   if (platform !== "darwin" && platform !== "linux") return;
   let shellPath: string | undefined;
   const shells = loginShells(
@@ -131,7 +184,27 @@ function accountShell() {
 }
 
 let hydration: Promise<void> | undefined;
+let hydratedAt = 0;
+const refreshAfter = 60_000;
+
 /** Fills the process PATH once; executable lookups wait for it. */
 export function pathReady(): Promise<void> {
-  return (hydration ??= hydratePath(process.env).catch(() => {}));
+  return (hydration ??= hydrate());
+}
+
+/**
+ * Reads the PATH again for a program that wasn't found: one installed since
+ * Relay started shows up without a restart. At most once a minute, since a
+ * login shell can take seconds.
+ */
+export async function refreshPath(): Promise<boolean> {
+  await pathReady();
+  if (Date.now() - hydratedAt < refreshAfter) return false;
+  await (hydration = hydrate());
+  return true;
+}
+
+function hydrate() {
+  hydratedAt = Date.now();
+  return hydratePath(process.env).catch(() => {});
 }
