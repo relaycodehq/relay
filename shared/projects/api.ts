@@ -415,6 +415,12 @@ export interface ProjectFilesApi {
 /** Changes, commits, branches and pull requests. */
 export interface ProjectGitApi {
   projectWorkingTree(where: string): Promise<WorkingTree>;
+  /**
+   * The calling window now shows `where`'s working tree, or none: Relay says
+   * when it may have changed (`relay:working-tree`). False where it can't,
+   * and the window polls instead.
+   */
+  watchWorkingTree(where: string | null): Promise<boolean>;
   projectWorkingDiff(
     where: string,
     path: string,

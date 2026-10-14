@@ -36,4 +36,6 @@ export interface RelayEvents {
   "relay:draft-send": import("./drafts").HeldSend;
   /** A menu or crash prompt wants the report page; `takeBugReportWanted` says if it still does. */
   "relay:bug-report": null;
+  /** Something changed in this place's folder that its working tree may show. */
+  "relay:working-tree": string;
 }

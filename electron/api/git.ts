@@ -43,6 +43,10 @@ export function gitHandlers(ctx: ApiContext) {
     projectWorkingTree: takes([workspaceIdSchema], async (where) =>
       workingTree(await placeRoot(where)),
     ),
+    watchWorkingTree: takes([workspaceIdSchema.nullable()], async (where) => {
+      const owner = ctx.window.caller();
+      return !!owner && !!ctx.treeWatch && ctx.treeWatch.show(owner, where);
+    }),
     projectWorkingDiff: takes(
       [workspaceIdSchema, workingPathSchema, z.enum(["staged", "unstaged"])],
       async (where, path, area) =>

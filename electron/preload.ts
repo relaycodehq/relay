@@ -85,6 +85,7 @@ const methods = [
   "projectFile",
   "saveProjectFile",
   "projectWorkingTree",
+  "watchWorkingTree",
   "projectTasks",
   "stopProjectTask",
   "restartProjectTask",
@@ -431,6 +432,7 @@ contextBridge.exposeInMainWorld("relay", {
   onSharedDraft: on("relay:shared-draft"),
   onDraftSend: on("relay:draft-send"),
   onBugReport: on("relay:bug-report"),
+  onWorkingTree: on("relay:working-tree"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

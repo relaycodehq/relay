@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { workspaceId } from "../../shared/workspaces";
 import { liveAway } from "../../shared/handoff";
 import {
@@ -43,13 +44,18 @@ export function useThreadFolder({
           : undefined,
       )
     : "";
-  // The one poller for the working tree: panes, pickers and the chat read this
+  const hasTree = !!project && !inbox && !project.plain && !deleted;
+  // Away, its folder is on that computer; a watch here would see the copy left behind.
+  const watched = useTreeWatch(hasTree && !away ? where : null);
+  // The one reader of the working tree: panes, pickers and the chat read this
   // cache. Every polling observer would run its own round of Git commands.
+  // Watched, it refreshes when the folder changes; the slow poll catches what
+  // a watch misses, as a change on another volume or one made while it started.
   const tree = useQuery({
     queryKey: workingTreeKey(where),
     queryFn: () => api.projectWorkingTree(where),
-    enabled: !!project && !inbox && !project.plain && !deleted,
-    refetchInterval: 3000,
+    enabled: hasTree,
+    refetchInterval: watched ? 60_000 : 3000,
   });
   // A plain folder has no tree to poll; its root listing, shared with the
   // Files tree, notices the folder going instead.
@@ -100,4 +106,47 @@ export function useThreadFolder({
     deleted,
     checks,
   };
+}
+
+/**
+ * Asks Relay to say when `where`'s working tree may have changed, and
+ * refreshes it then; true while Relay watches it. One per window: Relay
+ * watches the one place each window last asked for. A hidden window refreshes
+ * once it shows again, as the poll it replaces waited.
+ */
+function useTreeWatch(where: string | null) {
+  const qc = useQueryClient();
+  const [watched, setWatched] = useState<string | null>(null);
+  useEffect(() => {
+    if (where === null) return;
+    let missed = false,
+      live = true;
+    const refresh = () => {
+      missed = false;
+      void qc.invalidateQueries({
+        queryKey: workingTreeKey(where),
+        exact: true,
+      });
+    };
+    const off = api.onWorkingTree((changed) => {
+      if (changed !== where) return;
+      if (document.hidden) missed = true;
+      else refresh();
+    });
+    const shown = () => {
+      if (missed && !document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", shown);
+    api.watchWorkingTree(where).then(
+      (ok) => live && setWatched(ok ? where : null),
+      () => live && setWatched(null),
+    );
+    return () => {
+      live = false;
+      off();
+      document.removeEventListener("visibilitychange", shown);
+      void api.watchWorkingTree(null).catch(() => {});
+    };
+  }, [where, qc]);
+  return where !== null && watched === where;
 }

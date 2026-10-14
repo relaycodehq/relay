@@ -36,6 +36,7 @@ import type { ThreadPreviews } from "../preview";
 import type { Drafts } from "../drafts";
 import type { DragTray } from "../bug-report/drag-tray";
 import type { BugReports } from "../bug-report/service";
+import type { TreeWatch } from "../git/tree-watch";
 
 export interface Services {
   store: Store;
@@ -74,6 +75,8 @@ export interface Services {
   bugReports?: BugReports;
   /** The report's files floated over GitHub to drag in; absent headless. */
   dragTray?: DragTray;
+  /** Tells windows when their working tree may have changed; absent headless. */
+  treeWatch?: TreeWatch;
 }
 
 /** What a method's promise resolves to in the page. */
