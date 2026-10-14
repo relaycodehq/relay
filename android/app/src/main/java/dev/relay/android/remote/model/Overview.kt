@@ -66,6 +66,8 @@ data class RemoteChatSummary(
     val goal: ThreadGoal? = null,
     val startedBy: StartedBy? = null,
     val limitResume: LimitResume? = null,
+    /** Moves whenever the thread's notes do; fetch them again then. From Bridge.NOTES. */
+    val notesMark: String? = null,
 )
 
 /** `{kind:"task", id, description, since, agent?} | {kind:"wakeup", id, prompt, recurring, at?}`, flattened. */
