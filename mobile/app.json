@@ -2,7 +2,7 @@
   "expo": {
     "name": "Relay",
     "slug": "relay-remote",
-    "version": "0.13.3",
+    "version": "0.13.4",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "relay-remote",
