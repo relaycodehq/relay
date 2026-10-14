@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.NotConnected
 import dev.relay.android.remote.client.RemoteClient
@@ -61,6 +62,9 @@ class FailureState {
 
 @Composable
 fun rememberFailures() = remember { FailureState() }
+
+/** Where the thread screen's rows and strips say what failed. */
+val LocalFailures = staticCompositionLocalOf { FailureState() }
 
 @Composable
 fun FailureDialog(state: FailureState) {
