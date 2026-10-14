@@ -3,7 +3,6 @@ import type {
   ChatMessage,
   ProjectChat,
 } from "../../shared/projects";
-import type { CodexSkill } from "../agents/provider-commands";
 import type { GoalCommand } from "../../shared/goal";
 import type { AgentJob } from "../agents/types";
 
@@ -12,7 +11,6 @@ export type ChatTurn =
   /** Answers a message sent in the thread. */
   | {
       kind: "reply";
-      skills?: CodexSkill[];
       /** The user's own words within the prompt. */
       request?: string;
       /** The prompt told the session everything it hadn't heard yet. */

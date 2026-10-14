@@ -232,7 +232,16 @@ export const commandListSchema = z.array(
       name: z.string(),
       description: text,
       hints: lenient(z.array(z.string())),
+      /** `skill` for a skill OpenCode also lists as a command. */
+      source: text,
     })
+    .loose(),
+);
+
+/** `GET /skill`: the skills OpenCode loads for a folder. */
+export const skillListSchema = z.array(
+  z
+    .object({ name: z.string(), description: text, location: z.string() })
     .loose(),
 );
 

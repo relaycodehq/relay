@@ -7,6 +7,8 @@ import {
   type ReasoningEffort,
 } from "../../../shared/settings";
 import { cursorFileCommands } from "./commands";
+import { discoverCursorSkills } from "./skills";
+import { skillCommands } from "../skill-presentation";
 import { cursorCall } from "./connection";
 import type { CursorModel } from "./protocol";
 import { currentSdk } from "./sdk";
@@ -90,6 +92,11 @@ export async function cursorDefaults(): Promise<AgentDefaults | null> {
   };
 }
 
-/** Cursor's SDK doesn't list commands, so they're read from the folders it reads. */
-export const cursorCommands = (root: string): Promise<ProviderCommand[]> =>
-  cursorFileCommands(root);
+/** Cursor's SDK doesn't list commands or skills, so they're read from the folders it reads. */
+export async function cursorCommands(root: string): Promise<ProviderCommand[]> {
+  const [commands, skills] = await Promise.all([
+    cursorFileCommands(root),
+    discoverCursorSkills(root),
+  ]);
+  return [...commands, ...skillCommands(skills)];
+}

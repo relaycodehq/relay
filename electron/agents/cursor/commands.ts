@@ -1,12 +1,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ProviderCommand } from "../../../shared/commands";
+import { pickable, type AgentSkill } from "../skill-presentation";
+import { planSkillDispatch } from "../skill-dispatch";
+import { mayMentionSkill } from "../../../shared/skill-mentions";
+import { discoverCursorSkills } from "./skills";
 
 interface FileCommand extends ProviderCommand {
   body: string;
-  /** Skills only: the folder holding SKILL.md and the files it points at. */
-  folder?: string;
 }
 
 /** Cursor reads these too, so Relay lists the same ones. Earlier folders win. */
@@ -16,36 +18,9 @@ const commandFolders = (root: string) => [
   { dir: join(homedir(), ".cursor", "commands"), source: "personal" as const },
   { dir: join(homedir(), ".claude", "commands"), source: "personal" as const },
 ];
-const skillFolders = (root: string) => [
-  { dir: join(root, ".cursor", "skills"), source: "project" as const },
-  { dir: join(root, ".claude", "skills"), source: "project" as const },
-  { dir: join(root, ".agents", "skills"), source: "project" as const },
-  { dir: join(homedir(), ".cursor", "skills"), source: "personal" as const },
-  { dir: join(homedir(), ".claude", "skills"), source: "personal" as const },
-  { dir: join(homedir(), ".agents", "skills"), source: "personal" as const },
-  {
-    dir: join(homedir(), ".cursor", "skills-cursor"),
-    source: "system" as const,
-  },
-];
-
-/** Cursor's bundled skills that configure its own CLI or IDE, which Relay has its own way of. */
-const notForRelay = new Set([
-  "canvas",
-  "migrate-to-skills",
-  "new-repo",
-  "origin",
-  "rename-chat",
-  "sdk",
-  "share",
-  "shell",
-  "statusline",
-  "update-cli-config",
-  "update-cursor-settings",
-]);
 const validName = /^[a-zA-Z0-9_.:-]+$/;
 
-function frontmatter(text: string) {
+function splitFrontmatter(text: string) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   const fields: Record<string, string> = {};
   for (const line of (match?.[1] ?? "").split(/\r?\n/)) {
@@ -65,7 +40,7 @@ async function readCommands(dir: string, source: FileCommand["source"]) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const name = entry.name.slice(0, -3);
     const text = await readFile(join(dir, entry.name), "utf8").catch(() => "");
-    const { fields, body } = frontmatter(text);
+    const { fields, body } = splitFrontmatter(text);
     if (!validName.test(name) || !body) continue;
     found.push({
       name,
@@ -80,50 +55,23 @@ async function readCommands(dir: string, source: FileCommand["source"]) {
   return found;
 }
 
-async function readSkills(dir: string, source: FileCommand["source"]) {
-  const found: FileCommand[] = [];
-  for (const entry of await entries(dir)) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-    const folder = join(dir, entry.name);
-    const text = await readFile(join(folder, "SKILL.md"), "utf8").catch(
-      () => "",
-    );
-    const { fields, body } = frontmatter(text);
-    const name = fields.name || entry.name;
-    if (!validName.test(name) || !body) continue;
-    if (source === "system" && notForRelay.has(name)) continue;
-    found.push({
-      name,
-      source,
-      description: (fields.description ?? "").slice(0, 300),
-      ...(fields["argument-hint"]
-        ? { argumentHint: fields["argument-hint"].slice(0, 80) }
-        : {}),
-      body,
-      folder,
-    });
-  }
-  return found;
-}
-
-/** The commands and skills Cursor would find for `root`, on disk. */
+/** The commands Cursor would find for `root`, on disk. */
 async function fileCommands(root: string): Promise<FileCommand[]> {
-  const groups = await Promise.all([
-    ...commandFolders(root).map((f) => readCommands(f.dir, f.source)),
-    ...skillFolders(root).map((f) => readSkills(f.dir, f.source)),
-  ]);
+  const groups = await Promise.all(
+    commandFolders(root).map((f) => readCommands(f.dir, f.source)),
+  );
   const byName = new Map<string, FileCommand>();
   for (const command of groups.flat())
     if (!byName.has(command.name)) byName.set(command.name, command);
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Cursor's own commands and skills in `root`, for the composer's menu. */
+/** Cursor's own commands in `root`, for the composer's menu. */
 export async function cursorFileCommands(
   root: string,
 ): Promise<ProviderCommand[]> {
   return (await fileCommands(root)).map(
-    ({ body: _body, folder: _folder, ...command }) => command,
+    ({ body: _body, ...command }) => command,
   );
 }
 
@@ -142,8 +90,8 @@ function fillArguments(body: string, args: string) {
 
 /**
  * Cursor's SDK sends `/name` as plain text, where its CLI would swap in the
- * command's text. Does that swap; anything that isn't a known command is
- * returned as typed.
+ * command's or skill's text. Does that swap; anything that isn't a known
+ * command or skill is returned as typed.
  */
 export async function expandCursorCommand(
   prompt: string,
@@ -151,10 +99,46 @@ export async function expandCursorCommand(
 ): Promise<string> {
   const match = /^\s*\/([a-zA-Z0-9_.:-]+)(?:[ \t]+([\s\S]*))?$/.exec(prompt);
   if (!match) return prompt;
+  const args = match[2]?.trim() ?? "";
   const command = (await fileCommands(root)).find((c) => c.name === match[1]);
-  if (!command) return prompt;
-  const text = fillArguments(command.body, match[2]?.trim() ?? "");
-  return command.folder
-    ? `Follow the "${command.name}" skill, whose files are in ${command.folder}.\n\n${text}`
-    : text;
+  if (command) return fillArguments(command.body, args);
+  const skill = (await discoverCursorSkills(root)).find(
+    (s) => s.name === match[1] && pickable(s),
+  );
+  if (!skill) return prompt;
+  return expandCursorSkill(skill, args);
+}
+
+async function expandCursorSkill(skill: AgentSkill, args: string) {
+  const { body } = splitFrontmatter(await readFile(skill.path, "utf8"));
+  return `Follow the "${skill.name}" skill, whose files are in ${dirname(skill.path)}.\n\n${fillArguments(body, args)}`;
+}
+
+/**
+ * The prompt as Cursor's SDK should get it. The SDK sends `/name` as plain
+ * text, so the last `$skill` mentioned becomes the `/name` that opens its own
+ * block, which is then swapped for the skill's text; what comes before it
+ * goes first, earlier mentions as `/name`.
+ */
+export async function cursorPrompt(
+  prompt: string,
+  cwd: string,
+  request?: string,
+) {
+  if (!mayMentionSkill(request ?? prompt))
+    return expandCursorCommand(prompt, cwd);
+  const skills = await discoverCursorSkills(cwd).catch(() => []);
+  const plan = planSkillDispatch(
+    prompt,
+    new Set(skills.filter(pickable).map((s) => s.name)),
+    request,
+  );
+  if (!plan) return expandCursorCommand(prompt, cwd);
+  // The dispatch names a known skill. Keep its identity instead of resolving
+  // a same-named slash command, and accept arguments on following lines too.
+  const [, name, args = ""] = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(plan.command)!;
+  const skill = skills.find((s) => s.name === name)!;
+  return [plan.lead, await expandCursorSkill(skill, args.trim())]
+    .filter(Boolean)
+    .join("\n\n");
 }

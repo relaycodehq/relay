@@ -5,6 +5,7 @@ import { memoOnce } from "../../util/memo";
 import { signedOutError } from "../errors";
 import { withTimeout } from "../../util/timeout";
 import { heardCommands } from "./commands";
+import { skillCommands } from "../skill-presentation";
 import type { AcpProfile } from "./profiles";
 import { acquireAcpAgent, openSession } from "./sessions";
 import { currentOf, modelsOf } from "./settings";
@@ -52,11 +53,15 @@ export function acpCatalog(profile: AcpProfile) {
         effort: current.effort,
       };
     },
-    commands: async (_root: string): Promise<ProviderCommand[]> => {
-      const heard = heardCommands(profile.provider);
-      if (heard) return heard;
-      await fresh().catch(() => undefined);
-      return heardCommands(profile.provider) ?? [];
+    commands: async (root: string): Promise<ProviderCommand[]> => {
+      const [heard, skills] = await Promise.all([
+        heardCommands(profile.provider) ??
+          fresh()
+            .catch(() => undefined)
+            .then(() => heardCommands(profile.provider) ?? []),
+        profile.skills?.(root).catch(() => []) ?? [],
+      ]);
+      return [...heard, ...skillCommands(skills)];
     },
     forget: fresh.forget,
   };

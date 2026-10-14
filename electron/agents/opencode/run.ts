@@ -729,7 +729,13 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     if (job.kind === "adopt") await pickUp();
     else {
       const note = await options.context?.().catch(() => undefined);
-      const command = commandPattern.exec(options.prompt.trim());
+      // A picked skill opens the user's request, inside Relay's prompt wrapper.
+      // OpenCode runs it as the command of that name.
+      const command = commandPattern.exec(
+        (options.request ?? options.prompt)
+          .trim()
+          .replace(/^\p{Sc}(?=[a-zA-Z0-9])/u, "/"),
+      );
       const known =
         command &&
         parseOpenCodeResponse(
@@ -742,6 +748,33 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       const images = await imageParts(options.images);
       signal.throwIfAborted();
       if (known && command) {
+        const from = options.request
+          ? options.prompt.indexOf(options.request)
+          : -1;
+        const framing =
+          from < 0
+            ? ""
+            : (
+                options.prompt.slice(0, from) +
+                options.prompt.slice(from + options.request!.length)
+              ).trim();
+        const context = [
+          ...(note ? [{ type: "text", text: note, synthetic: true }] : []),
+          ...(framing
+            ? [{ type: "text", text: framing, synthetic: true }]
+            : []),
+        ];
+        // Store Relay's notes without starting another answer. Command arguments
+        // remain only the user's words, while the native turn can read the context.
+        if (context.length)
+          await call("POST", `/session/${sessionID}/message`, {
+            noReply: true,
+            agent,
+            ...(model ? { model } : {}),
+            system: instructions(options),
+            parts: context,
+          });
+        signal.throwIfAborted();
         busy = true;
         await call("POST", `/session/${sessionID}/command`, {
           command: command[1],

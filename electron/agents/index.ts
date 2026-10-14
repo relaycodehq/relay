@@ -23,7 +23,7 @@ import {
   reloadClaudeSession,
 } from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
-import { presentSkill } from "./skill-presentation";
+import { codexSkill, skillCommands } from "./skill-presentation";
 import { closeOpenCodeSession, runOpenCode } from "./opencode/run";
 import { openCodeSubagentBooks } from "./opencode/subagents";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
@@ -68,7 +68,8 @@ const codex: AgentRuntime = {
     ]);
     return codexAgentDefaults(defaults, models);
   },
-  commands: async (root) => (await codexSkills(root)).map(presentSkill),
+  commands: async (root) =>
+    skillCommands((await codexSkills(root)).map(codexSkill)),
   reattach: (owns) => reattachCodexSessions(owns),
 };
 

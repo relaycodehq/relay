@@ -173,7 +173,7 @@ export const Composer = forwardRef<
   const [dismissed, setDismissed] = useState<string>();
   const { usage, reload: reloadUsage } = useUsage(settings.provider);
   const provider = settings.provider;
-  const wantsCommands = /^\s*[/$]/.test(text) || /\s\$\S*$/.test(text);
+  const wantsCommands = /^\s*(?:\/|\p{Sc})/u.test(text) || /\s\p{Sc}\S*$/u.test(text);
   const { commands, loading, failed } = useProviderCommands(projectId, provider, wantsCommands);
   const items = dismissed === text ? null : commandItems(text, provider, commands);
   useImperativeHandle(ref, () => ({
@@ -391,7 +391,7 @@ export const Composer = forwardRef<
     }
     if (item.kind === "command") return edit(`/${item.name} `);
     // A skill goes in where it was typed, as `$name`.
-    edit(text.replace(/(^|\s)[$/][^\s]*$/, `$1$${item.name} `));
+    edit(text.replace(/(^|\s)(?:\p{Sc}|\/)[^\s]*$/u, `$1$${item.name} `));
   };
 
   const empty = !text.trim() && !images.length && !computerShots.length;

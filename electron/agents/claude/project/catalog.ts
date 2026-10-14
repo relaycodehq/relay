@@ -4,7 +4,10 @@ import { withTimeout } from "../../../util/timeout";
 import type { ClaudeModel } from "../../../../shared/settings";
 import type { ClaudeDefaults } from "../../../../shared/agent-defaults";
 import type { ProviderCommand } from "../../../../shared/commands";
+import { accountFor, accountHome } from "../../accounts";
 import { chromeArgs, readSettings, withProbe } from "./sdk";
+import { pickable, skillCommands } from "../../skill-presentation";
+import { discoverClaudeSkills } from "./skills";
 
 /**
  * Asks the installed CLI which models this account can use, again once it's
@@ -89,9 +92,31 @@ const hiddenCommands = new Set([
   "workflow-launch-exec",
 ]);
 type ClaudeProbe = { commands: ProviderCommand[]; defaults?: ClaudeDefaults };
-/** Claude's commands and skills for this checkout, as the SDK resolves them. */
-export const listClaudeCommands = (root: string) =>
-  probeClaude(root).then((probe) => probe.commands);
+/**
+ * Claude's commands for this checkout, as the SDK resolves them, and its
+ * skills, as they are on disk.
+ */
+export async function listClaudeCommands(root: string) {
+  const [probe, skills] = await Promise.all([
+    probeClaude(root),
+    claudeSkills(root),
+  ]);
+  const listed = skillCommands(skills);
+  const named = new Set(listed.map((s) => s.name.toLowerCase()));
+  // The CLI lists most skills as commands too; each is offered once, as the skill.
+  return [
+    ...probe.commands.filter((c) => !named.has(c.name.toLowerCase())),
+    ...listed,
+  ];
+}
+/** The skills a `$name` in a message for `cwd` may start. */
+export const pickableClaudeSkills = async (cwd: string, account?: string) =>
+  new Set(
+    (await claudeSkills(cwd, account)).filter(pickable).map((s) => s.name),
+  );
+/** `account` is the thread's own; the menu has none and asks about the one in use. */
+const claudeSkills = (cwd: string, account = accountFor("claude")) =>
+  discoverClaudeSkills(accountHome("claude", account), cwd);
 /** What threads in this checkout run on Default; null when Claude can't say. */
 export const claudeDefaults = (root: string) =>
   probeClaude(root).then((probe) => probe.defaults ?? null);
@@ -105,15 +130,10 @@ const probeClaude = memoByKey<ClaudeProbe>((root) =>
       extraArgs: chromeArgs,
     },
     async (stream) => {
-      const [commands, defaults, skills] = await withTimeout(
+      const [commands, defaults] = await withTimeout(
         Promise.all([
           stream.supportedCommands(),
           readSettings(stream).catch(() => undefined),
-          // Commands don't say which are skills; this lists only those.
-          stream
-            .reloadSkills()
-            .then((r) => new Set(r.skills.map((s) => s.name)))
-            .catch(() => new Set<string>()),
         ]),
         20000,
         "Claude did not list commands.",
@@ -135,7 +155,6 @@ const probeClaude = memoByKey<ClaudeProbe>((root) =>
           ...(c.argumentHint
             ? { argumentHint: c.argumentHint.slice(0, 80) }
             : {}),
-          ...(skills.has(c.name) ? { skill: true as const } : {}),
         }));
       return { commands: listed, defaults };
     },

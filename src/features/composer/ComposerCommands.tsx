@@ -29,6 +29,15 @@ import {
   type CommandOption,
   type RelayCommand,
 } from "../../../shared/commands";
+import {
+  agentSkills,
+  agentSlashCommands,
+  searchSkills,
+  searchSlashItems,
+  skillLabel,
+  type SlashItem,
+} from "../../../shared/skill-search";
+import type { ProviderCommand } from "../../../shared/commands";
 import type { SkillPick } from "./ComposerPromptInput";
 import { api } from "../../lib/api";
 import {
@@ -97,41 +106,77 @@ export function useComposerCommands({
   });
   const query = (argument?.query ?? trigger?.query ?? "").toLowerCase();
   // An agent whose commands run when the message starts with one lists
-  // commands; the others list skills to mention.
+  // commands beside its skills; skills go in as `$name` from either menu.
   const commandsAlone =
     provider !== "message" && agentInfo(provider).commandsAlone;
   const prefix = trigger?.prefix ?? "/";
-  type Item = {
-    kind: "relay" | "argument" | "command" | "skill";
-    name: string;
+  type Item = Omit<SlashItem, "kind"> & {
+    kind: SlashItem["kind"] | "argument";
     label: string;
-    description: string;
     source: string;
     Icon: typeof Zap;
     current?: boolean;
     fill?: string;
   };
-  const items: Item[] = (
+  const listed =
+    provider !== "message" && !inline ? (providerCommands.data ?? []) : [];
+  const skills = agentSkills(listed);
+  type SlashRow = Item & SlashItem;
+  const skillItem = (c: ProviderCommand, label: string): SlashRow => ({
+    kind: "skill",
+    name: c.name,
+    skill: c,
+    label,
+    description: c.description,
+    source:
+      {
+        app: "App",
+        repo: "Repo",
+        project: "Project",
+        personal: "Personal",
+        system: "System",
+        claude: "Claude",
+        other: "Provider",
+      }[c.source ?? "other"] + " Skill",
+    Icon: {
+      app: Blocks,
+      repo: Folder,
+      project: Folder,
+      personal: UserRound,
+      system: Settings,
+      claude: Package,
+      other: Package,
+    }[c.source ?? "other"],
+  });
+  const items: Item[] =
     argCommand && argOptions
-      ? argOptions.map((o) => ({
-          kind: "argument" as const,
-          name: o.value,
-          label: `/${argCommand.name} ${o.label}`,
-          description: o.description ?? "",
-          source: o.current ? "Current" : (o.source ?? "Relay"),
-          Icon: o.current
-            ? Check
-            : o.fill || o.folder
-              ? Folder
-              : o.terminal
-                ? SquareTerminal
-                : Zap,
-          current: o.current,
-          fill: o.fill,
-        }))
-      : [
-          ...(prefix === "/"
-            ? relayCommands
+      ? argOptions
+          .map((o) => ({
+            kind: "argument" as const,
+            name: o.value,
+            label: `/${argCommand.name} ${o.label}`,
+            description: o.description ?? "",
+            source: o.current ? "Current" : (o.source ?? "Relay"),
+            Icon: o.current
+              ? Check
+              : o.fill || o.folder
+                ? Folder
+                : o.terminal
+                  ? SquareTerminal
+                  : Zap,
+            current: o.current,
+            fill: o.fill,
+          }))
+          .filter((c) =>
+            `${c.name} ${c.label} ${c.description}`
+              .toLowerCase()
+              .includes(query),
+          )
+      : prefix === "$"
+        ? searchSkills(skills, query).map((c) => skillItem(c, skillLabel(c)))
+        : searchSlashItems<SlashRow>(
+            [
+              ...relayCommands
                 .filter((c) => !inline || composerCommands.includes(c.name))
                 .filter(
                   (c) =>
@@ -146,66 +191,23 @@ export function useComposerCommands({
                   description: c.description,
                   source: "Relay",
                   Icon: Zap,
-                }))
-            : []),
-          ...(provider !== "message" && !inline
-            ? (providerCommands.data ?? [])
-            : []
-          )
-            // Mid-message, such an agent only takes its skills: `$name`.
-            .filter((c) => prefix === "/" || !commandsAlone || c.skill)
-            // Relay runs its own command of the same name, e.g. /add-dir.
-            .filter((c) => !relayCommands.some((r) => r.name === c.name))
-            .map((c) =>
-              commandsAlone && prefix === "/"
-                ? {
-                    kind: "command" as const,
-                    name: c.name,
-                    label:
-                      "/" +
-                      c.name +
-                      (c.argumentHint ? " " + c.argumentHint : ""),
-                    description: c.description,
-                    source: agentName(provider as AgentProvider),
-                    Icon: SquareTerminal,
-                  }
-                : {
-                    kind: "skill" as const,
-                    name:
-                      prefix === "$" ? c.name.replace(/^skill:/, "") : c.name,
-                    label:
-                      (prefix === "/" ? "/skill:" : "") +
-                      (c.displayName || c.name.replace(/^skill:/, "")),
-                    description: c.description,
-                    source:
-                      {
-                        app: "App",
-                        repo: "Repo",
-                        project: "Project",
-                        personal: "Personal",
-                        system: "System",
-                        claude: "Claude",
-                        other: "Provider",
-                      }[c.source ?? "other"] + " Skill",
-                    Icon: {
-                      app: Blocks,
-                      repo: Folder,
-                      project: Folder,
-                      personal: UserRound,
-                      system: Settings,
-                      claude: Package,
-                      other: Package,
-                    }[c.source ?? "other"],
-                  },
-            ),
-        ]
-  )
-    .filter((c) =>
-      `${c.name} ${c.label} ${c.kind === "argument" ? c.description : ""}`
-        .toLowerCase()
-        .includes(query),
-    )
-    .slice(0, 60);
+                })),
+              ...(commandsAlone ? agentSlashCommands(listed) : [])
+                // Relay runs its own command of the same name, e.g. /add-dir.
+                .filter((c) => !relayCommands.some((r) => r.name === c.name))
+                .map((c) => ({
+                  kind: "command" as const,
+                  name: c.name,
+                  label:
+                    "/" + c.name + (c.argumentHint ? " " + c.argumentHint : ""),
+                  description: c.description,
+                  source: agentName(provider as AgentProvider),
+                  Icon: SquareTerminal,
+                })),
+              ...skills.map((c) => skillItem(c, `/skill:${c.name}`)),
+            ],
+            query,
+          );
   // Mid-sentence, a slash that matches nothing is just text, e.g. a path;
   // so is a `$` that names no skill, e.g. `$5` or `$HOME`.
   const visible = open && ((!inline && prefix === "/") || items.length > 0);
@@ -294,10 +296,11 @@ export function useComposerCommands({
       else run(command.name, "", start);
     } else if (item.kind === "command")
       onFill({ start: 0, end: at, text: `/${item.name} ` });
-    else
+    else if (item.skill)
+      // Either menu puts in a `$name`, which the agent's runtime starts.
       onSkillPick({
-        token: `${prefix}${item.name}`,
-        label: item.label.replace(/^\/skill:/, ""),
+        token: `$${item.name}`,
+        label: skillLabel(item.skill),
         start: trigger?.start ?? 0,
         end: trigger?.end ?? draft.length,
       });
@@ -333,12 +336,6 @@ export function useComposerCommands({
       return true;
     }
     if (agentCommand(draft)) return false;
-    if (
-      provider !== "message" &&
-      agentInfo(provider).skills &&
-      /^\/skill:[^\s]+(?:\s|$)/.test(draft.trim())
-    )
-      return false;
     setError(
       commandsAlone && providerCommands.isFetching
         ? `Loading ${agentName(provider as AgentProvider)} commands… try again in a moment.`

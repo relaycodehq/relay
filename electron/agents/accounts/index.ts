@@ -72,10 +72,13 @@ export function accountHomes() {
   return accounts.map(({ provider, id }) => ({
     provider,
     account: id,
-    home:
-      id === SYSTEM_ACCOUNT ? usualHome(provider) : profileDir(provider, id),
+    home: accountHome(provider, id),
   }));
 }
+
+/** The config folder the CLI reads when run as this account. */
+export const accountHome = (provider: AccountProvider, id: string) =>
+  id === SYSTEM_ACCOUNT ? usualHome(provider) : profileDir(provider, id);
 
 export class AgentAccounts {
   private signIn:

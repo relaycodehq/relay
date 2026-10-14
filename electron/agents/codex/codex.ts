@@ -1,4 +1,3 @@
-import { dirname } from "node:path";
 import {
   codexPolicy,
   codexReviewerPolicy,
@@ -42,6 +41,7 @@ import {
 import { withWorktreeEnv } from "../worktree-env";
 import { ANSWER_IMAGE_PROMPT } from "../../../shared/answer-images";
 import { renderPrompt } from "../../../shared/html-render";
+import { skillMentionPattern } from "../../../shared/skill-mentions";
 /** Where a Codex app server finds the token for Relay's tools. */
 const RELAY_TOKEN_ENV = "RELAY_MCP_TOKEN";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
@@ -60,8 +60,6 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     ":minimal": "read",
     [options.cwd]: "deny",
   };
-  for (const skill of options.skills ?? [])
-    filesystem[dirname(skill.path)] ??= "read";
   for (const image of options.images ?? []) filesystem[image.path] = "read";
   options.signal.throwIfAborted();
   const policy = oneOff
@@ -446,7 +444,15 @@ export async function runCodex(options: AgentOptions): Promise<string> {
                 threadId,
                 expectedTurnId: turnId,
                 input: [
-                  ...(text ? [{ type: "text", text, text_elements: [] }] : []),
+                  ...(text
+                    ? [
+                        {
+                          type: "text",
+                          text: codexMentions(text),
+                          text_elements: [],
+                        },
+                      ]
+                    : []),
                   ...(images ?? []).map((image) => ({
                     type: "localImage",
                     path: image.path,
@@ -681,16 +687,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
               ? [
                   {
                     type: "text",
-                    text: goalTurn ?? options.prompt,
+                    text: codexMentions(goalTurn ?? options.prompt),
                     text_elements: [],
                   },
                 ]
               : []),
-            ...(options.skills ?? []).map((skill) => ({
-              type: "skill",
-              name: skill.name,
-              path: skill.path,
-            })),
             ...(options.images ?? []).map((image) => ({
               type: "localImage",
               path: image.path,
@@ -788,3 +789,10 @@ export function codexContextUsage(value: unknown): ContextUsage | undefined {
       : {}),
   };
 }
+
+/**
+ * Codex parses only `$name` as a skill, while the composer takes any currency
+ * sign (`€review`); amounts like `€20` don't match and stay prose.
+ */
+export const codexMentions = (text: string) =>
+  text.replace(skillMentionPattern, "$1$$$2");

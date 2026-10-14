@@ -123,7 +123,6 @@ export interface AgentOptions {
     path: string;
     mimeType: "image/png" | "image/jpeg" | "image/webp";
   }[];
-  skills?: { name: string; path: string }[];
   runtimeMode?: RuntimeMode;
   interactionMode?: InteractionMode;
   /** A deep review's reviewer: it may read and run anything but changes no files. */

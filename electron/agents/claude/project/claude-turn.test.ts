@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -619,4 +619,50 @@ it("holds an answer with follow-ups to the size limit", async () => {
   ).rejects.toThrow("Answer size limit reached.");
   // What was shown before the limit stays, and never past it.
   expect(shown).toBe(long);
+});
+
+it("sends a picked `$skill` as the /name Claude runs, manual-only ones included", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "relay-claude-skill-turn-"));
+  const config = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = join(repo, "no-user-config");
+  const write = async (name: string, flags: string) => {
+    await mkdir(join(repo, ".claude", "skills", name), { recursive: true });
+    await writeFile(
+      join(repo, ".claude", "skills", name, "SKILL.md"),
+      `---\n${flags}---\n\nSay ${name}.\n`,
+    );
+  };
+  try {
+    await mkdir(join(repo, ".git"));
+    // Claude Code's model can't start this one; only the user's /name can.
+    await write("relay-audit-manual", "disable-model-invocation: true\n");
+    // The CLI takes no /name for this one, so it stays text for the model.
+    await write("relay-audit-agent", "user-invocable: false\n");
+    await write("relay-audit-off", "");
+    await writeFile(
+      join(repo, ".claude", "settings.json"),
+      JSON.stringify({ skillOverrides: { "relay-audit-off": "off" } }),
+    );
+    const sent: unknown[] = [];
+    for (const prompt of [
+      "$relay-audit-manual hi",
+      "$relay-audit-agent go",
+      "$relay-audit-off go",
+    ]) {
+      claude(async function* ({ next }) {
+        sent.push((await next()).message.content);
+        yield result("done");
+      });
+      await run({ cwd: repo, prompt });
+    }
+    expect(sent).toEqual([
+      [{ type: "text", text: "/relay-audit-manual hi" }],
+      [{ type: "text", text: "$relay-audit-agent go" }],
+      [{ type: "text", text: "$relay-audit-off go" }],
+    ]);
+  } finally {
+    if (config === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = config;
+    await rm(repo, { recursive: true, force: true });
+  }
 });

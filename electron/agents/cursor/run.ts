@@ -9,7 +9,7 @@ import {
   TurnText,
   type CursorCall,
 } from "./activity";
-import { expandCursorCommand } from "./commands";
+import { cursorPrompt } from "./commands";
 import { cursorErrorName } from "./error-codes";
 import {
   acquireCursorConnection,
@@ -265,7 +265,11 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         })),
       );
       signal.throwIfAborted();
-      const prompt = await expandCursorCommand(options.prompt, options.cwd);
+      const prompt = await cursorPrompt(
+        options.prompt,
+        options.cwd,
+        options.request,
+      );
       const writableLinks = (options.links ?? [])
         .filter((l) => l.access === "write")
         .map((l) => l.path);

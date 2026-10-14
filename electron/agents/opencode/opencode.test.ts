@@ -213,6 +213,52 @@ describe("what OpenCode sends", () => {
   });
 });
 
+it("runs a skill picked with `$` as OpenCode's command of that name, and `$HOME` as text", async () => {
+  await turn("$explain the cache").run;
+  const calls = await captured();
+  const command = calls.find((c) => /\/session\/[^/]+\/command$/.test(c.path));
+  expect(command.body).toMatchObject({
+    command: "explain",
+    arguments: "the cache",
+  });
+  const before = calls.length;
+  await turn("$HOME is where").run;
+  const after = (await captured()).slice(before);
+  expect(after.some((c) => /^\/session\/[^/]+\/command$/.test(c.path))).toBe(
+    false,
+  );
+  expect(after.some((c) => /prompt_async$/.test(c.path))).toBe(true);
+});
+
+it("invokes a wrapped skill request and keeps Relay's context out of its arguments", async () => {
+  const request = "€explain\nthe cache";
+  await turn(`My request: ${request}\nRelay's note: stay in this worktree.`, {
+    request,
+    context: async () => "Environment note",
+  }).run;
+  const calls = await captured();
+  const command = calls.find((c) => /\/session\/[^/]+\/command$/.test(c.path));
+  expect(command).toBeDefined();
+  expect(command.body).toMatchObject({
+    command: "explain",
+    arguments: "the cache",
+  });
+  const context = calls.find(
+    (c) => c.method === "POST" && /\/message$/.test(c.path),
+  );
+  expect(context.body.noReply).toBe(true);
+  expect(context.body.parts).toEqual([
+    { type: "text", text: "Environment note", synthetic: true },
+    {
+      type: "text",
+      text: "My request: \nRelay's note: stay in this worktree.",
+      synthetic: true,
+    },
+  ]);
+  expect(calls.indexOf(context)).toBeLessThan(calls.indexOf(command));
+  expect(calls.some((c) => /prompt_async$/.test(c.path))).toBe(false);
+});
+
 it("fails only the call when the user declines, and the agent carries on", async () => {
   const { run } = turn("Write notes.md", {
     onRequest: async () => ({ kind: "approval", decision: "decline" }),
@@ -517,16 +563,23 @@ it("lists the signed-in providers' models, leaving Anthropic's to Relay's Claude
 describe("what OpenCode lists and configures", () => {
   beforeEach(() => openCodeModels.forget());
 
-  it("reads the default model and the commands of a project", async () => {
+  it("reads the default model and the commands and skills of a project", async () => {
     expect(await openCodeDefaults(root)).toEqual({
       model: "zen/pickle",
       effort: "",
     });
+    // A skill it also lists as a command is offered once, as the skill.
     expect(await openCodeCommands(root)).toEqual([
       {
         name: "init",
         source: "other",
         description: "Create AGENTS.md",
+      },
+      {
+        name: "explain",
+        skill: true,
+        source: "other",
+        description: "Explain code",
       },
     ]);
   });

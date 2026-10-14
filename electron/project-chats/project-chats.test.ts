@@ -1711,7 +1711,59 @@ it("forks a thread at an answer, and its first turn continues that answer's sess
   expect(text).not.toContain("LATER question");
 });
 
-it("discovers an enabled skill and sends its native input to Codex without trusting a renderer path", async () => {
+it("runs a picked OpenCode skill through the thread's real prompt wrapper", async () => {
+  const codex = await findExecutable("codex");
+  const cli = await fakeCli(
+    join(root, "opencode"),
+    await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"),
+    "1.18.0",
+  );
+  vi.mocked(findExecutable).mockImplementation(async (name) =>
+    name === "opencode" ? cli : codex,
+  );
+  vi.stubEnv("RELAY_OPENCODE_CAPTURE", join(root, "opencode-capture.jsonl"));
+  const { disposeOpenCode } = await import("../agents/opencode/client");
+  try {
+    const chat = await chats.create(projectId, { kind: "project" });
+    await chats.send(chat.id, {
+      ...input("@opencode $explain the cache"),
+      provider: "opencode",
+      choice: { model: "zen/pickle", reasoningEffort: "high", fast: false },
+    });
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).requests).toHaveLength(1),
+    );
+    chats.respond(chat.id, (await chats.get(chat.id)).requests![0].id, {
+      kind: "approval",
+      decision: "accept",
+    });
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+    );
+    const calls = (await readFile(join(root, "opencode-capture.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const command = calls.find((c) =>
+      /\/session\/[^/]+\/command$/.test(c.path),
+    );
+    expect(command?.body).toMatchObject({
+      command: "explain",
+      arguments: "the cache",
+    });
+    const context = calls.find(
+      (c) => c.method === "POST" && /\/message$/.test(c.path),
+    );
+    expect(context?.body.noReply).toBe(true);
+    expect(
+      context.body.parts.map((p: { text: string }) => p.text).join("\n"),
+    ).toContain("This is a general discussion of the linked project");
+  } finally {
+    disposeOpenCode();
+  }
+});
+
+it("lists Codex's enabled skills and sends a picked one as the `$name` Codex parses", async () => {
   const { codexSkills } = await import("../agents/provider-commands");
   const skills = await codexSkills(join(root, "repo"));
   expect(skills.map((s) => s.name)).toEqual(["explain"]);
@@ -1721,11 +1773,8 @@ it("discovers an enabled skill and sends its native input to Codex without trust
     .map((s) => JSON.parse(s));
   expect(discovery).toEqual([expect.objectContaining({ discovery: true })]);
   const chat = await chats.create(projectId, { kind: "project" });
-  await expect(
-    chats.send(chat.id, input("@codex /skill:disabled-skill check it")),
-  ).rejects.toThrow(/no longer available/);
-  expect((await chats.get(chat.id)).messages).toHaveLength(0);
-  await chats.send(chat.id, input("@codex Explain the cache using $explain"));
+  // Any currency sign picks a skill; Codex only reads `$`.
+  await chats.send(chat.id, input("@codex Explain the cache using €explain"));
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
@@ -1733,11 +1782,11 @@ it("discovers an enabled skill and sends its native input to Codex without trust
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
-  expect(calls.find((c) => c.turn).turn.input).toContainEqual({
-    type: "skill",
-    name: "explain",
-    path: join(root, "repo/.agents/skills/explain/SKILL.md"),
-  });
+  const turn = calls.find((c) => c.turn).turn.input as { type: string; text?: string }[];
+  expect(turn.map((i) => i.type)).not.toContain("skill");
+  expect(turn.find((i) => i.type === "text")?.text).toContain(
+    "Explain the cache using $explain",
+  );
 });
 
 it("steers an active Codex turn natively, and resumes its saved session with the steer it never read after stop", async () => {

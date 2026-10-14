@@ -1,4 +1,4 @@
-import { skillMentions } from "../../../../shared/skill-mentions";
+import { skillMentions } from "../../shared/skill-mentions";
 
 /**
  * Claude Code runs a skill only from a text block that starts with `/name`,

@@ -1,5 +1,5 @@
-// The desktop composer's slash menu (src/features/composer/ComposerCommands.tsx):
-// Relay's own actions, then the agent's commands or skills.
+// The desktop composer's `/` and `$` menus (src/features/composer/ComposerCommands.tsx):
+// Relay's own actions, the agent's commands, and its skills.
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { agentInfo, agentName, type AgentProvider } from "../../../shared/agents";
@@ -9,12 +9,27 @@ import {
   type ProviderCommand,
   type RelayCommand,
 } from "../../../shared/commands";
+import {
+  agentSkills,
+  agentSlashCommands,
+  searchSkills,
+  searchSlashItems,
+  skillLabel,
+} from "../../../shared/skill-search";
 import { useRemote } from "../remote/RemoteProvider";
 import { mono, type, useTheme } from "./theme";
 
 export type CommandItem =
   | { kind: "relay"; name: RelayCommand; label: string; description: string; args?: string }
-  | { kind: "command" | "skill"; name: string; label: string; description: string; source: string };
+  | { kind: "command"; name: string; label: string; description: string; source: string }
+  | {
+      kind: "skill";
+      name: string;
+      skill: ProviderCommand;
+      label: string;
+      description: string;
+      source: string;
+    };
 
 // Relay's actions that have no phone counterpart yet.
 const unavailable: RelayCommand[] = ["openpr"];
@@ -74,44 +89,44 @@ export function commandItems(
   const trigger = commandTrigger(text);
   // Relay's actions start a message; a slash mid-sentence is just text.
   if (!trigger || trigger.inline) return null;
-  const query = trigger.query.toLowerCase();
-  const commandsAlone = agentInfo(provider)?.commandsAlone;
-  const items: CommandItem[] = [
-    ...(trigger.prefix === "/"
-      ? relayCommands
-          .filter((c) => !unavailable.includes(c.name))
-          .filter((c) => c.name !== "btw" || !!agentInfo(provider)?.side)
-          .map((c): CommandItem => ({
-            kind: "relay",
-            name: c.name,
-            label: "/" + c.name + ("args" in c ? " " + c.args : ""),
-            description: c.description,
-            ...("args" in c ? { args: c.args } : {}),
-          }))
-      : []),
-    ...commands
-      .filter(() => trigger.prefix === "/" || !commandsAlone)
-      .map((c): CommandItem =>
-        commandsAlone
-          ? {
-              kind: "command",
-              name: c.name,
-              label: "/" + c.name + (c.argumentHint ? " " + c.argumentHint : ""),
-              description: c.description,
-              source: agentName(provider),
-            }
-          : {
-              kind: "skill",
-              name: c.name.replace(/^skill:/, ""),
-              label: (trigger.prefix === "/" ? "/skill:" : "$") + (c.displayName || c.name.replace(/^skill:/, "")),
-              description: c.description,
-              source: `${sources[c.source ?? "other"]} skill`,
-            },
-      ),
-  ];
-  return items
-    .filter((c) => `${c.name} ${c.label}`.toLowerCase().includes(query))
-    .slice(0, 60);
+  const skills = agentSkills(commands);
+  const skillItem = (c: ProviderCommand, label: string) => ({
+    kind: "skill" as const,
+    name: c.name,
+    skill: c,
+    label,
+    description: c.description,
+    source: `${sources[c.source ?? "other"]} skill`,
+  });
+  // Either menu puts a skill in as `$name`, which the agent's runtime starts.
+  if (trigger.prefix === "$")
+    return searchSkills(skills, trigger.query).map((c) => skillItem(c, skillLabel(c)));
+  return searchSlashItems<CommandItem>(
+    [
+      ...relayCommands
+        .filter((c) => !unavailable.includes(c.name))
+        .filter((c) => c.name !== "btw" || !!agentInfo(provider)?.side)
+        .map((c): CommandItem => ({
+          kind: "relay",
+          name: c.name,
+          label: "/" + c.name + ("args" in c ? " " + c.args : ""),
+          description: c.description,
+          ...("args" in c ? { args: c.args } : {}),
+        })),
+      ...(agentInfo(provider)?.commandsAlone ? agentSlashCommands(commands) : [])
+        // Relay runs its own command of the same name, e.g. /add-dir.
+        .filter((c) => !relayCommands.some((r) => r.name === c.name))
+        .map((c): CommandItem => ({
+          kind: "command",
+          name: c.name,
+          label: "/" + c.name + (c.argumentHint ? " " + c.argumentHint : ""),
+          description: c.description,
+          source: agentName(provider),
+        })),
+      ...skills.map((c) => skillItem(c, `/skill:${c.name}`)),
+    ],
+    trigger.query,
+  );
 }
 
 export function CommandMenu({

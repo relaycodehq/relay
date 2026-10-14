@@ -106,7 +106,11 @@ export interface ProviderCommand {
   name: string;
   description: string;
   argumentHint?: string;
-  /** A skill of an agent whose commands go out alone: mentioned anywhere with `$name`. */
+  /**
+   * A skill: offered under `$` and as `/skill:name`, both of which put
+   * `$name` in the message for the agent's runtime to start it. Only skills
+   * the user may start are listed at all.
+   */
   skill?: true;
 }
 export interface CommandOption {
@@ -165,11 +169,12 @@ export function startsWithCommand(text: string) {
  */
 export function commandTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
-  const match = /(^|\s)([$/])([^\s]*)$/.exec(before);
+  // Any currency sign opens the skill menu, as `$` does.
+  const match = /(^|\s)(\p{Sc}|\/)([^\s]*)$/u.exec(before);
   if (!match || (match[2] === "/" && match[3].includes("/"))) return null;
   const start = match.index + match[1].length;
   return {
-    prefix: match[2] as "/" | "$",
+    prefix: (match[2] === "/" ? "/" : "$") as "/" | "$",
     query: match[3],
     start,
     end: cursor,

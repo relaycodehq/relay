@@ -432,7 +432,25 @@ const server = http.createServer(async (req, res) => {
       connected: ["zen", "anthropic"],
     });
   if (path === "/command")
-    return send(200, [{ name: "init", description: "Create AGENTS.md" }]);
+    return send(200, [
+      { name: "init", description: "Create AGENTS.md" },
+      // OpenCode lists its skills as commands too.
+      {
+        name: "explain",
+        description: "Explain code",
+        source: "skill",
+        hints: [],
+      },
+    ]);
+  if (path === "/skill")
+    return send(200, [
+      {
+        name: "explain",
+        description: "Explain code",
+        location: "/project/.opencode/skill/explain/SKILL.md",
+        content: "Explain it.",
+      },
+    ]);
   if (path === "/session/status")
     return send(
       200,
@@ -460,6 +478,31 @@ const server = http.createServer(async (req, res) => {
       model: { id: "pickle", providerID: "zen" },
     });
   }
+  if (
+    (m = /^\/session\/([^/]+)\/message$/.exec(path)) &&
+    req.method === "POST"
+  ) {
+    if (!json.noReply)
+      return send(400, { message: "Expected context-only message" });
+    const messageID = id("msg");
+    const message = {
+      info: {
+        id: messageID,
+        sessionID: m[1],
+        role: "user",
+        time: { created: Date.now() },
+      },
+      parts: json.parts.map((part) => ({
+        ...part,
+        id: id("part"),
+        messageID,
+        sessionID: m[1],
+      })),
+    };
+    sessions.get(m[1]).messages.push(message);
+    emit("message.updated", { sessionID: m[1], info: message.info });
+    return send(200, message);
+  }
   if ((m = /^\/session\/([^/]+)\/message$/.exec(path)))
     return send(
       200,
@@ -485,6 +528,12 @@ const server = http.createServer(async (req, res) => {
   if ((m = /^\/session\/([^/]+)\/prompt_async$/.exec(path))) {
     send(204);
     void turn(m[1], json.parts.map((p) => p.text ?? "").join("\n"));
+    return;
+  }
+  // A command runs as a turn of its own, like the prompt it expands to.
+  if ((m = /^\/session\/([^/]+)\/command$/.exec(path))) {
+    send(200, {});
+    void turn(m[1], `/${json.command} ${json.arguments}`.trim());
     return;
   }
   if ((m = /^\/session\/([^/]+)\/abort$/.exec(path))) {

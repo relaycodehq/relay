@@ -6,6 +6,8 @@ import type { RegistryProvider } from "../../../shared/agents";
 import { findExecutable, runExecutable } from "../../platform/executables";
 import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
+import { discoverAntigravitySkills } from "./antigravity-skills";
+import type { AgentSkill } from "../skill-presentation";
 
 /** The agents Relay runs over ACP: its own, and those installed from the ACP registry. */
 export type AcpProvider = "amp" | "antigravity" | "opencode" | RegistryProvider;
@@ -59,6 +61,8 @@ export interface AcpProfile {
   account?(): Promise<AcpAccount | undefined>;
   /** The prompt that compacts its session, when it has one. */
   compact?: string;
+  /** Skills it doesn't list over ACP, read from its folders for `cwd`. */
+  skills?(cwd: string): Promise<AgentSkill[]>;
   /** What to tell someone it can't find. */
   install: string;
   /** An answer that is really the agent reporting a failure. */
@@ -170,6 +174,7 @@ const antigravity: AcpProfile = {
   },
   authMethod: async () => (await antigravityChoice()) ?? "oauth-personal",
   account: antigravityAccount,
+  skills: (cwd) => discoverAntigravitySkills(cwd),
   install: "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
 };
 

@@ -255,7 +255,6 @@ export class TurnRunner {
             .catch((e) => console.warn("Could not save the goal:", e));
         },
         onSteered: (id: string) => answer.continueBelow(id),
-        skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
         job: agentJob(turn, chat),
         // A reviewer's work counts toward the thread it serves.
         usage: {

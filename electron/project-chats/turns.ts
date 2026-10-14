@@ -14,19 +14,13 @@ import {
 } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
-import {
-  agentName,
-  agents,
-  helperProviders,
-  agentInfo,
-} from "../../shared/agents";
+import { agentName, agentInfo } from "../../shared/agents";
 import { latestContext } from "../../shared/context-usage";
 import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatTurn } from "./chat-turn";
 import { checkedOutOr } from "../git/git";
-import { codexSkills, type CodexSkill } from "../agents/provider-commands";
 import { promptTitle } from "../agents/thread-titles";
 import { relayNote } from "./relay-note";
 import { turnPrompt } from "./turn-prompt";
@@ -224,34 +218,6 @@ export class ChatTurns {
         return;
       }
       const asked = agentAsked(input);
-      const skillMatches = [
-        ...(asked?.question ?? "").matchAll(
-          /(?:^|\s)(\/skill:|\$)([A-Za-z_][A-Za-z0-9_.:-]*)/g,
-        ),
-      ];
-      let skills: CodexSkill[] = [];
-      if (skillMatches.length && asked && agentInfo(asked.provider).skills) {
-        const available = await codexSkills(root);
-        for (const match of skillMatches) {
-          // As shared/skill-mentions reads them, so a pilled skill is one sent.
-          const name = match[2].replace(/[.:-]+$/, "");
-          const skill = available.find((s) => s.name === name);
-          if (!skill && match[1] === "/skill:")
-            throw new Error(
-              `This ${agentName(asked.provider)} skill is no longer available. Refresh the command menu.`,
-            );
-          if (skill && !skills.some((s) => s.name === skill.name))
-            skills.push(skill);
-        }
-        if (skills.length > 10)
-          throw new Error("Choose at most ten skills per message.");
-      } else if (skillMatches.some((m) => m[1] === "/skill:"))
-        throw new Error(
-          `This skill belongs to ${helperProviders
-            .filter((p) => agents[p].skills)
-            .map(agentName)
-            .join(" or ")}. Select it to run the skill.`,
-        );
       const parent = input.parentId
         ? replyRoot(chat.messages, input.parentId)
         : undefined;
@@ -345,7 +311,6 @@ export class ChatTurns {
         parent,
         root,
         user,
-        skills,
         evidence,
       });
       this.starts.add(starting);
@@ -365,14 +330,12 @@ export class ChatTurns {
       parent,
       root,
       user,
-      skills,
       evidence,
     }: {
       asked: NonNullable<ReturnType<typeof agentAsked>>;
       parent: ChatMessage | undefined;
       root: string;
       user: ChatMessage;
-      skills: CodexSkill[];
       evidence: unknown;
     },
   ) {
@@ -488,7 +451,6 @@ export class ChatTurns {
       });
       this.reply(chat, active, answer, root, prompt, input, {
         kind: "reply",
-        skills,
         request,
         caughtUp,
         briefed,

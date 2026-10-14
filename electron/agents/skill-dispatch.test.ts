@@ -30,10 +30,11 @@ describe("planSkillDispatch", () => {
     ).toEqual({ lead: "/review the diff, then", command: "/commit it" });
   });
 
-  it("drops a sentence's punctuation from the name but keeps it as text", () => {
-    expect(planSkillDispatch("do it with $commit...", skills)).toEqual({
-      lead: "do it with",
-      command: "/commit...",
+  it("takes a mention only where whitespace or the end follows it, as T3 does", () => {
+    expect(planSkillDispatch("do it with $commit...", skills)).toBeUndefined();
+    expect(planSkillDispatch("pay $20k, then €commit it", skills)).toEqual({
+      lead: "pay $20k, then",
+      command: "/commit it",
     });
   });
 

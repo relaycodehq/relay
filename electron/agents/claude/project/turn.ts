@@ -8,8 +8,8 @@ import {
 } from "./config";
 import { ClaudeTurnReader } from "./reader";
 import { claudeImages } from "./sdk";
-import { listClaudeCommands } from "./catalog";
-import { planSkillDispatch } from "./skill-dispatch";
+import { pickableClaudeSkills } from "./catalog";
+import { planSkillDispatch } from "../../skill-dispatch";
 import { mayMentionSkill } from "../../../../shared/skill-mentions";
 import { guardSteer } from "../../turn-kit";
 import {
@@ -102,7 +102,12 @@ export async function runClaudeProject(
       claudeImages(options.images),
       compacting
         ? undefined
-        : skillDispatch(options.prompt, options.cwd, options.request),
+        : skillDispatch(
+            options.prompt,
+            options.cwd,
+            account.id,
+            options.request,
+          ),
     ]);
     options.signal.throwIfAborted();
     if (compacting && !session.threadId && !options.session?.id)
@@ -135,7 +140,7 @@ export async function runClaudeProject(
             () =>
               Promise.all([
                 claudeImages(steerImages),
-                skillDispatch(text, options.cwd, request),
+                skillDispatch(text, options.cwd, account.id, request),
               ]),
             ([attached, dispatch]) => {
               const uuid = randomUUID();
@@ -236,12 +241,15 @@ function userContent(
   ];
 }
 /** A `$skill` in the prompt, laid out so Claude runs it; undefined sends the prompt as it is. */
-async function skillDispatch(prompt: string, cwd: string, request?: string) {
+async function skillDispatch(
+  prompt: string,
+  cwd: string,
+  account: string,
+  request?: string,
+) {
   if (!mayMentionSkill(request ?? prompt)) return undefined;
-  const commands = await listClaudeCommands(cwd).catch(() => []);
-  return planSkillDispatch(
-    prompt,
-    new Set(commands.filter((c) => c.skill).map((c) => c.name)),
-    request,
+  const skills = await pickableClaudeSkills(cwd, account).catch(
+    () => new Set<string>(),
   );
+  return planSkillDispatch(prompt, skills, request);
 }
