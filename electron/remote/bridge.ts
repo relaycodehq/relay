@@ -124,6 +124,13 @@ const imageSourceSchema = z.discriminatedUnion("kind", [
       path: pathSchema,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("preview"),
+      chatId: idSchema,
+      messageId: idSchema,
+    })
+    .strict(),
 ]);
 const diffSourceSchema = z.discriminatedUnion("kind", [
   z
@@ -260,6 +267,9 @@ export class RemoteBridge {
           at: q.at,
         })),
         ...(patch.worktree ? { worktree: patch.worktree } : {}),
+        ...(patch.workspaceMoves?.length
+          ? { workspaceMoves: patch.workspaceMoves }
+          : {}),
         ...(patch.stopped ? { stopped: patch.stopped } : {}),
         ...(summary?.pending ? { pending: summary.pending } : {}),
         ...(last
@@ -291,10 +301,12 @@ export class RemoteBridge {
       const dataUrl = (await this.host.dispatch(
         ...((source.kind === "attached"
           ? ["projectChatImage", [source.chatId, source.imageId]]
-          : [
-              "projectChatReadImage",
-              [source.chatId, source.messageId, source.path],
-            ]) as [ApiMethod, unknown[]]),
+          : source.kind === "preview"
+            ? ["projectChatPreviewShot", [source.chatId, source.messageId]]
+            : [
+                "projectChatReadImage",
+                [source.chatId, source.messageId, source.path],
+              ]) as [ApiMethod, unknown[]]),
       )) as string;
       return this.host.shrinkImage?.(dataUrl, max) ?? dataUrl;
     },
@@ -669,6 +681,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.goal ? { goal: c.goal } : {}),
     ...(c.startedBy ? { startedBy: c.startedBy } : {}),
     ...(c.limitResume ? { limitResume: c.limitResume } : {}),
+    ...(c.notesMark ? { notesMark: c.notesMark } : {}),
   };
 }
 

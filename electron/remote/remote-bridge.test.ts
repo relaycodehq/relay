@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { RemoteBridge, toRemoteDiff, type RemoteHost } from "./bridge";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { SubagentDetail } from "../../shared/subagents";
-import type { RemoteDiff, RemoteEvent } from "../../shared/remote";
+import type {
+  RemoteDiff,
+  RemoteEvent,
+  RemoteOverview,
+} from "../../shared/remote";
 
 afterEach(() => vi.useRealTimers());
 
@@ -479,17 +483,72 @@ it("sends a thread's image shrunk to what the phone shows, through the desktop's
     { kind: "read", chatId, messageId, path: "/r/shot.png" },
     1200,
   ]);
+  await b.handle("image", [{ kind: "preview", chatId, messageId }, 900]);
   expect(dispatched).toEqual([
     { method: "projectChatImage", args: [chatId, imageId] },
     {
       method: "projectChatReadImage",
       args: [chatId, messageId, "/r/shot.png"],
     },
+    { method: "projectChatPreviewShot", args: [chatId, messageId] },
   ]);
-  expect(shrunk.map(([, max]) => max)).toEqual([264, 1200]);
-  await expect(
-    b.handle("image", [{ kind: "attached", chatId, imageId }, 1e6]),
-  ).rejects.toThrow();
+  expect(shrunk.map(([, max]) => max)).toEqual([264, 1200, 900]);
+  for (const source of [
+    { kind: "attached", chatId, imageId },
+    // A preview names its turn only: no path to point elsewhere.
+    { kind: "preview", chatId, messageId, path: "/etc/passwd" },
+    { kind: "preview", chatId, messageId: "../shot" },
+  ])
+    await expect(
+      b.handle("image", [source, source.kind === "attached" ? 1e6 : 900]),
+    ).rejects.toThrow();
+  expect(dispatched).toHaveLength(3);
+});
+
+it("sends where a thread moved and when its notes did, so a phone can show both", async () => {
+  const moves = [
+    {
+      at: 5,
+      after: "m1",
+      how: "moved" as const,
+      to: "/w/x",
+      branch: "relay/x",
+    },
+  ];
+  const summary: ChatSummary = {
+    id: chatId,
+    projectId,
+    title: "T",
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+    notesMark: "2.40",
+  };
+  const events: RemoteEvent[] = [];
+  const b = new RemoteBridge(
+    {
+      projects: async () => [{ id: projectId, name: "Relay" }],
+      projectPath: () => "/r",
+      chats: () => [summary],
+      chat: async () => ({ ...summary, messages: [], workspaceMoves: moves }),
+      name: () => "Studio",
+    } as unknown as RemoteHost,
+    (e) => events.push(e),
+  );
+  const chat = (await b.handle("chat", [chatId])) as {
+    workspaceMoves?: unknown;
+  };
+  expect(chat.workspaceMoves).toEqual(moves);
+  expect(
+    ((await b.handle("overview", [])) as RemoteOverview).chats[0]!.notesMark,
+  ).toBe("2.40");
+  // A note ticked moves the mark; the phone hears it as any summary change.
+  b.refresh();
+  summary.notesMark = "2.41";
+  b.refresh();
+  expect(
+    events.map((e) => e.kind === "chats" && e.chats[0]!.notesMark),
+  ).toEqual(["2.40", "2.41"]);
 });
 
 it("hands a phone the pages an answer showed, only for well-formed ids", async () => {
