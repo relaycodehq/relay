@@ -84,10 +84,12 @@ export async function sendDraft(
     chat ? lastComposerSettings(await fetchChat(qc, chat.id)) : undefined,
   );
   if (settings !== local) saveComposerSettings(id, settings);
-  // A new thread's composer takes up the agent last picked for one.
-  const lastAgent = chat
-    ? undefined
-    : await qc.query(newThreadAgentQuery).catch(() => undefined);
+  // A new thread's composer takes up the agent last picked for one, unless
+  // its draft has frozen.
+  const lastAgent =
+    chat || settings.frozen
+      ? undefined
+      : await qc.query(newThreadAgentQuery).catch(() => undefined);
   // The agent the thread's composer would warn about leaving.
   const holder = chat && threadContextAgent(chat);
   const provider = composerProvider(

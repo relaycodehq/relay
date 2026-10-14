@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runnableAgents, type AgentProvider } from "../../../shared/agents";
 import {
   sameModel,
@@ -57,10 +57,14 @@ export function useComposerSettings({
   // A new thread starts on the agent last picked for one, here or on the
   // phone; picking one here makes it that agent for both.
   const followsLastAgent = key.startsWith("new:");
-  useFollowLastAgent(followsLastAgent, picked, setProvider);
+  const [frozen, setFrozen] = useState(saved.frozen);
+  const freeze = useCallback(() => setFrozen(true), []);
+  useFollowLastAgent(followsLastAgent, !!frozen, picked, setProvider);
   const [models, setModels] = useState(saved.models);
   const saveLastModel = useFollowLastModels(
     followsLastAgent,
+    !!frozen,
+    freeze,
     models,
     setModels,
   );
@@ -74,6 +78,7 @@ export function useComposerSettings({
     runtimeMode,
     interactionMode,
     ...(sent ? { sent } : {}),
+    ...(frozen ? { frozen } : {}),
   };
   // A failed send can acknowledge its old baseline after the user has
   // already changed the next message's settings.
@@ -81,7 +86,7 @@ export function useComposerSettings({
   currentSettings.current = settings;
   useEffect(() => {
     saveComposerSettings(key, settings);
-  }, [key, picked, models, runtimeMode, interactionMode, sent]);
+  }, [key, picked, models, runtimeMode, interactionMode, sent, frozen]);
   // A message sent elsewhere while this composer is open moves it too.
   useEffect(() => {
     // A local queue or schedule may go out after the user picked settings
@@ -125,6 +130,7 @@ export function useComposerSettings({
 
 function useFollowLastAgent(
   follows: boolean,
+  frozen: boolean,
   picked: Recipient | undefined,
   setProvider: (provider: AgentProvider) => void,
 ) {
@@ -132,19 +138,25 @@ function useFollowLastAgent(
   const at = useRef<AgentFollow>({});
   useEffect(() => {
     if (!follows || lastAgent === undefined) return;
+    // A frozen draft keeps its agent; one picked here still goes out.
+    if (frozen && at.current.adopted === undefined)
+      at.current = { adopted: lastAgent, known: picked };
     const next = followLastAgent(at.current, lastAgent, picked);
     at.current = next.at;
-    if (next.adopt) setProvider(next.adopt);
+    if (next.adopt && !frozen) setProvider(next.adopt);
     if (next.save) saveLastAgent(next.save);
-  }, [follows, lastAgent, picked, saveLastAgent]);
+  }, [follows, frozen, lastAgent, picked, saveLastAgent]);
 }
 
 /**
- * A new thread's models follow the ones last picked for a new thread or sent
- * with, here or on the phone; picking one here makes it the model for both.
+ * A new thread's draft is created on the models last picked for a new thread
+ * or sent with, here or on the phone, then freezes; picking one here makes it
+ * the model for both.
  */
 function useFollowLastModels(
   follows: boolean,
+  frozen: boolean,
+  freeze: () => void,
   models: ComposerModels,
   set: (next: ComposerModels) => void,
 ) {
@@ -153,7 +165,8 @@ function useFollowLastModels(
   const current = useRef(models);
   current.current = models;
   useEffect(() => {
-    if (!follows || !lastModels) return;
+    if (!follows || !lastModels || frozen) return;
+    freeze();
     const changed = Object.fromEntries(
       runnableAgents().flatMap((p) =>
         lastModels[p] && !sameModel(lastModels[p], shared[p])
@@ -163,7 +176,7 @@ function useFollowLastModels(
     );
     if (!Object.keys(changed).length) return;
     set(withNewThreadModels(current.current, changed));
-  }, [follows, lastModels]);
+  }, [follows, frozen, lastModels]);
   const shownModels = useRef<NewThreadModels>(undefined);
   useEffect(() => {
     const before = shownModels.current;

@@ -34,6 +34,11 @@ export interface ComposerSettings {
    * from the phone, another computer or an agent, replaces them; see withSent.
    */
   sent?: string;
+  /**
+   * A new thread's draft took the shared picks when it was created; from then
+   * on only picks in it change it, not sends or picks elsewhere.
+   */
+  frozen?: true;
 }
 const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
@@ -108,20 +113,23 @@ export function loadComposerSettings(
     saved = read(inherit.settingsKey);
     provider = inherit.provider ?? pickedProvider(inherit.settingsKey, saved);
   }
+  const frozen = own && isNewThread(key) && saved?.frozen === true;
   return {
     provider,
     // Shared defaults belong only to new drafts. Existing conversations
     // restore their own last send, never another thread's model picks.
-    models: isNewThread(key)
-      ? withNewThreadModels(
-          readComposerModels(saved),
-          cachedNewThreadModels() ?? {},
-        )
-      : readComposerModels(saved),
+    models:
+      isNewThread(key) && !frozen
+        ? withNewThreadModels(
+            readComposerModels(saved),
+            cachedNewThreadModels() ?? {},
+          )
+        : readComposerModels(saved),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
     // An inherited one's last message says nothing about this conversation.
     ...(own && typeof saved?.sent === "string" ? { sent: saved.sent } : {}),
+    ...(frozen ? { frozen } : {}),
   };
 }
 export function saveComposerSettings(
@@ -144,8 +152,9 @@ export function startThreadSettings(
   to: string,
   provider: Provider,
 ) {
-  const settings = loadComposerSettings(from);
+  const { frozen: _, ...settings } = loadComposerSettings(from);
   saveComposerSettings(to, { ...settings, provider });
+  // The next draft here is a new one, created on the shared picks.
   saveComposerSettings(from, {
     ...settings,
     interactionMode: "default",

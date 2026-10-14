@@ -6,10 +6,14 @@ import {
 } from "../../../tests/unit/hook-harness";
 import { defaultAISettings } from "../../../shared/settings";
 import type { SentComposerSettings } from "../../../shared/projects";
+import type { AgentProvider } from "../../../shared/agents";
+import type { NewThreadModels } from "../../../shared/new-thread-models";
+import { onWindow } from "../../../shared/model-fit";
 import {
   cacheNewThreadModels,
   loadComposerSettings,
   saveComposerSettings,
+  startThreadSettings,
   withSent,
 } from "../agents/composer-settings";
 import { useComposerSettings } from "./useComposerSettings";
@@ -18,17 +22,24 @@ vi.mock("react", () => harnessReact);
 vi.mock("../agents/useAISettings", () => ({
   useAISettings: () => ({ data: defaultAISettings }),
 }));
-const follow = vi.hoisted(() => ({ models: vi.fn(), agent: vi.fn() }));
+const follow = vi.hoisted(() => ({
+  models: vi.fn(),
+  agent: vi.fn(),
+  lastModels: undefined as NewThreadModels | undefined,
+  lastAgent: undefined as AgentProvider | undefined,
+  saveModel: vi.fn(),
+  saveAgent: vi.fn(),
+}));
 vi.mock("./useNewThreadModels", () => ({
   useNewThreadModels: (enabled: boolean) => {
     follow.models(enabled);
-    return [undefined, vi.fn()];
+    return [follow.lastModels, follow.saveModel];
   },
 }));
 vi.mock("./useNewThreadAgent", () => ({
   useNewThreadAgent: (enabled: boolean) => {
     follow.agent(enabled);
-    return [undefined, vi.fn()];
+    return [follow.lastAgent, follow.saveAgent];
   },
 }));
 
@@ -36,6 +47,8 @@ const store = new Map<string, string>();
 beforeEach(() => {
   store.clear();
   vi.clearAllMocks();
+  follow.lastModels = undefined;
+  follow.lastAgent = undefined;
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
@@ -156,4 +169,54 @@ it("keeps a pending queue or steer's baseline on reopen, and preserves picks whe
   rerender();
   expect(current().models.claude?.choice.reasoningEffort).toBe("low");
   expect(current().sent).toBe("queued");
+});
+
+const opus = {
+  model: "claude-opus-5-5",
+  fast: false,
+  reasoningEffort: "" as const,
+};
+const opus200k: NewThreadModels = {
+  claude: { choice: opus, contextWindow: "200k" },
+};
+
+it("freezes a new draft once created: sends and picks elsewhere leave it be", () => {
+  follow.lastModels = opus200k;
+  follow.lastAgent = "claude";
+  const draft = () => useComposerSettings({ key: "new:p" });
+  let current = mount(draft);
+  rerender();
+  expect(current().models.claude?.contextWindow).toBe("200k");
+  current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") }));
+  rerender();
+  rerender();
+  // A 200k send to Codex in another thread.
+  follow.lastModels = opus200k;
+  follow.lastAgent = "codex";
+  rerender();
+  rerender();
+  expect(current().models.claude?.contextWindow).toBeUndefined();
+  expect(current().provider).toBe("claude");
+  cacheNewThreadModels(opus200k);
+  current = mount(draft);
+  rerender();
+  rerender();
+  expect(current().models.claude?.contextWindow).toBeUndefined();
+  expect(current().provider).toBe("claude");
+  expect(follow.saveAgent).not.toHaveBeenCalled();
+});
+
+it("creates the next draft on the shared picks after one starts a thread", () => {
+  follow.lastModels = opus200k;
+  const draft = () => useComposerSettings({ key: "new:p" });
+  let current = mount(draft);
+  rerender();
+  current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") }));
+  rerender();
+  startThreadSettings("new:p", "thread", "claude");
+  expect(loadComposerSettings("thread").frozen).toBeUndefined();
+  cacheNewThreadModels(opus200k);
+  current = mount(draft);
+  rerender();
+  expect(current().models.claude?.contextWindow).toBe("200k");
 });
