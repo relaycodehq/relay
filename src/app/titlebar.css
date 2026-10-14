@@ -234,6 +234,12 @@
   background: transparent;
   border-right: 0;
 }
+/* A window this narrow needs the room for its controls more than the mark. */
+@media (max-width: 760px) {
+  .project-titlebar.sidebar-collapsed .project-titlebar-brand .relay-mark {
+    display: none;
+  }
+}
 
 /* Only under `npm run dev`; a drag region would swallow the right-click. */
 .relay-mark-trigger {
