@@ -1,0 +1,2 @@
+-keep class org.bouncycastle.math.ec.rfc7748.** { *; }
+-dontwarn org.bouncycastle.**
