@@ -99,6 +99,8 @@ private fun Open(chatId: String, message: ChatMessage, group: AsyncAgentQuestion
         }
         Hint("Answer whenever you're ready.")
         val page = group.page
+        // What the agent asks with its page, unless it's only the title again.
+        group.questions.firstOrNull()?.question?.takeIf { page != null && it.isNotEmpty() && it != page.title }?.let { Hint(it) }
         // AskPage shares out the height it's given; in the thread's list that has to be bounded.
         if (page != null) Column(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp)) {
             AskPage(remote, chatId, page, busy, onAnswer = { answer ->
