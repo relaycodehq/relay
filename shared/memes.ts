@@ -316,11 +316,18 @@ export const builtInMemes: BuiltIn[] = [
 export const memeName = (m: Pick<MemeEntry, "id" | "name">) =>
   m.name ?? m.id.charAt(0).toUpperCase() + m.id.slice(1).replace(/-/g, " ");
 
+/** Tells the agent a meme is the person joking around, not a task about memes. */
+const MEME_SAYS =
+  "I'm answering with a reaction meme, a playful way of saying:";
+
 /** The line the agent reads in place of the picture. */
 export const memeToken = (m: Pick<MemeEntry, "id" | "meaning">) =>
-  `[meme ${m.id}: ${m.meaning.replace(/[\]\n]+/g, " ").trim()}]`;
+  `[meme ${m.id}] ${MEME_SAYS} ${m.meaning.replace(/\s*\n+\s*/g, " ").trim()}`;
 
-const tokenPattern = /\[meme ([a-z0-9]+(?:-[a-z0-9]+)*): ([^\]\n]+)\]/g;
+const tokenPattern = new RegExp(
+  `^\\[meme ([a-z0-9]+(?:-[a-z0-9]+)*)\\] ${MEME_SAYS.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} ([^\\n]+)$`,
+  "gm",
+);
 
 /** The memes a sent message's text holds, where they are in it. */
 export function memeTokens(text: string) {

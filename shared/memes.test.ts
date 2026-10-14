@@ -12,10 +12,12 @@ import {
 } from "./memes";
 
 describe("meme tokens", () => {
-  it("reads back the memes a message sent, where they are in it", () => {
+  it("tells the agent it's a playful answer, and reads back where each one is", () => {
     const dew = memeToken({ id: "dew-it", meaning: "Yes, go ahead and do it." });
-    const text = `${dew}\nand then ${memeToken({ id: "perhaps", meaning: "Maybe." })}`;
-    expect(dew).toBe("[meme dew-it: Yes, go ahead and do it.]");
+    expect(dew).toBe(
+      "[meme dew-it] I'm answering with a reaction meme, a playful way of saying: Yes, go ahead and do it.",
+    );
+    const text = `${dew}\nand also\n${memeToken({ id: "perhaps", meaning: "Maybe." })}`;
     expect(memeTokens(text)).toEqual([
       { id: "dew-it", meaning: "Yes, go ahead and do it.", start: 0, end: dew.length },
       {
@@ -27,15 +29,21 @@ describe("meme tokens", () => {
     ]);
   });
 
-  it("keeps a meaning with brackets or line breaks one readable token", () => {
-    const token = memeToken({ id: "x", meaning: "first]\nsecond" });
+  it("keeps a meaning with line breaks one line", () => {
+    const token = memeToken({ id: "x", meaning: "first\n second]" });
     expect(memeTokens(token)).toEqual([
-      expect.objectContaining({ id: "x", meaning: "first second" }),
+      expect.objectContaining({ id: "x", meaning: "first second]" }),
     ]);
   });
 
   it("leaves text that only looks like one alone", () => {
-    expect(memeTokens("[meme Dew It: caps] [meme dew-it:] [memes x: y]")).toEqual([]);
+    const real = memeToken({ id: "dew-it", meaning: "Go." });
+    for (const text of [
+      real.replace("dew-it", "Dew It"),
+      "[meme dew-it] Go.",
+      `quoting ${real}`,
+    ])
+      expect(memeTokens(text), text).toEqual([]);
   });
 });
 
