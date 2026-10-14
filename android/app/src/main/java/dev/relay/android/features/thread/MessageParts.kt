@@ -291,7 +291,7 @@ fun MessageActions(message: ChatMessage, onReply: (() -> Unit)?, onFork: (() -> 
             }),
             tint = c.mutedForeground,
         )
-        // TODO(read-aloud): ReadAloudButton for a complete answer with text.
+        // TODO(read-aloud): features.readaloud.ReadAloudButton(remote, message.id, message.body) for a complete answer with text.
         if (onFork != null) Icon(TablerIcons.Outline.ArrowsSplit, "Fork into a new thread", Modifier.pressable(onClick = onFork), tint = c.mutedForeground)
         if (onReply != null) Icon(TablerIcons.Outline.CornerUpLeft, "Reply to message", Modifier.pressable(onClick = onReply), tint = c.mutedForeground)
     }

@@ -78,7 +78,7 @@ fun MessageView(
     failures: FailureState,
 ) {
     val uri = LocalUriHandler.current
-    // TODO(markdown): fileLinkTarget's folder/line handling arrives with the markdown feature.
+    // TODO(markdown): pass Markdown(..., folder = root, openPath = callbacks.onOpenPath, image = ...) once the real signature lands.
     val openLink: (String) -> Unit = link@{ value ->
         if (webLink.containsMatchIn(value)) {
             runCatching { uri.openUri(value) }
@@ -134,9 +134,9 @@ fun MessageView(
         }
         if (!user) AgentRun(chatId, m, root)
         if (!user && startCalls(m).isNotEmpty()) StartedInTurn(chatId, m)
-        // TODO(renders): RenderCards draw the pages; until then they're named.
+        // TODO(renders): features.renders.MessageRenders(remote, chatId, m.renders, Modifier, onCompose) draws the pages; until then they're named.
         if (!m.renders.isNullOrEmpty()) RenderNotes(m.renders)
-        // TODO(images): pasted images above what you wrote, the agent's after its answer.
+        // TODO(images): features.images.MessageImages(remote, messageImages(chatId, m, root), onOpen, Modifier): pasted images above what you wrote, the agent's after its answer.
         if (user) {
             val body = withoutMention(m.body)
             // A screenshot sent on its own leaves nothing for the bubble to hold.
