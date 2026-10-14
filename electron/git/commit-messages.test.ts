@@ -13,23 +13,26 @@ import {
 const runs: (AgentOptions & { provider: string })[] = [];
 const plainReply = '{"subject":"Raise the limit","body":""}';
 let reply = plainReply;
-const failing = new Map<string, string>();
+const failing = new Map<string, Error>();
 vi.mock("../agents", () => ({
   agentRuntime: (provider: string) => ({
     run: async (options: AgentOptions) => {
       runs.push({ ...options, provider });
       const failure = failing.get(provider);
-      if (failure) throw new Error(failure);
+      if (failure) throw failure;
       return reply;
     },
   }),
 }));
 const { generateCommitMessage } = await import("./commit-messages");
+const { NotInstalledError } = await import("../platform/executables");
+const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 let root: string;
 afterEach(async () => {
   runs.length = 0;
   failing.clear();
+  warn.mockClear();
   reply = plainReply;
   await rm(root, { recursive: true, force: true });
 });
@@ -104,19 +107,27 @@ it("drops the attribution lines agents like to sign off with", async () => {
   );
 });
 
-it("falls back to Claude on its own model when Codex can't run, not on Codex's", async () => {
+it("stops on the chosen agent's own error instead of having Claude write in its place", async () => {
   await changedRepo();
-  failing.set("codex", "Codex is not signed in");
+  failing.set("codex", new Error("Codex sandbox refused to start"));
+  await expect(write(defaultAISettings)).rejects.toThrow(
+    "Codex sandbox refused to start",
+  );
+  expect(runs.map((r) => r.provider)).toEqual(["codex"]);
+  expect(warn).toHaveBeenCalledWith(
+    expect.stringMatching(/commitMessage failed on Codex:$/),
+    expect.any(Error),
+  );
+});
+
+it("lets Claude write on its own model only when Codex isn't installed", async () => {
+  await changedRepo();
+  failing.set("codex", new NotInstalledError("codex was not found."));
   expect(await write(defaultAISettings)).toBe("Raise the limit");
   expect(runs.map((r) => r.provider)).toEqual(["codex", "claude"]);
   expect(runs[1].choice).toMatchObject({ model: "", reasoningEffort: "" });
-});
-
-it("says why the user's own agent failed, not only the fallback's", async () => {
-  await changedRepo();
-  failing.set("codex", "Codex is not signed in");
-  failing.set("claude", "Claude could not complete this question");
-  await expect(write(defaultAISettings)).rejects.toThrow(
-    /^Codex: Codex is not signed in\. Claude: Claude could not/,
+  expect(warn).toHaveBeenCalledWith(
+    expect.stringMatching(/failed on Codex; trying Claude:$/),
+    expect.any(NotInstalledError),
   );
 });

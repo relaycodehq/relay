@@ -8,47 +8,48 @@ import {
   type AISettings,
   type ModelChoice,
 } from "../../shared/settings";
+import { NotInstalledError } from "../platform/executables";
 
 type HelperJob = "questions" | "split" | "commitMessage" | "timesheet";
 
-/**
- * Each agent a helper job tries, with the model to ask it for: the user's pick
- * on their agent, Relay's default on the agent that default is for, and the
- * agent's own default anywhere else. Handing a fallback agent Relay's default
- * gave Claude a Codex model whenever Codex was missing or signed out.
- */
-export function helperAttempts(
-  settings: AISettings,
-  job: HelperJob,
-): { provider: AgentProvider; choice: ModelChoice }[] {
-  const first = settings[`${job}Provider`];
-  return helperFallbacks(first).map((provider) => ({
-    provider,
-    choice:
-      provider === first
-        ? settings[job]
-        : provider === defaultAISettings[`${job}Provider`]
-          ? defaultAISettings[job]
-          : { model: "", fast: false, reasoningEffort: "" },
-  }));
+/** The model to ask `provider` for: Relay's default when that default is for it, else the agent's own. */
+function fallbackChoice(job: HelperJob, provider: AgentProvider): ModelChoice {
+  return provider === defaultAISettings[`${job}Provider`]
+    ? defaultAISettings[job]
+    : { model: "", fast: false, reasoningEffort: "" };
 }
 
-/** Every agent's failure, the user's own agent first, so a fallback's error doesn't hide why theirs failed. */
-export function helperFailure(
-  failures: { provider: AgentProvider; error: unknown }[],
-  otherwise: string,
-): Error {
-  if (!failures.length) return new Error(otherwise);
-  if (failures.length === 1 && failures[0].error instanceof Error)
-    return failures[0].error;
-  return new Error(
-    failures
-      .map(({ provider, error }) => {
-        const said = (error instanceof Error ? error.message : String(error))
-          .trim()
-          .replace(/(?<![.!?])$/, ".");
-        return `${agentName(provider)}: ${said}`;
-      })
-      .join(" "),
-  );
+/**
+ * Runs a helper job on the agent the user chose for it. Another agent steps in
+ * only when the chosen one isn't installed; any other failure is the chosen
+ * agent's to report, so a broken Codex shows its own error instead of Claude
+ * quietly writing in its place. Every failure goes to main.log, since the
+ * error the user sees is all they'd otherwise have to send.
+ */
+export async function runHelperJob<T>(
+  settings: AISettings,
+  job: HelperJob,
+  signal: AbortSignal,
+  run: (provider: AgentProvider, choice: ModelChoice) => Promise<T>,
+): Promise<T> {
+  const first = settings[`${job}Provider`];
+  const providers = helperFallbacks(first);
+  for (const [i, provider] of providers.entries()) {
+    try {
+      return await run(
+        provider,
+        provider === first ? settings[job] : fallbackChoice(job, provider),
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      const next = providers[i + 1];
+      const missing = error instanceof NotInstalledError;
+      console.warn(
+        `Helper job ${job} failed on ${agentName(provider)}${missing && next ? `; trying ${agentName(next)}` : ""}:`,
+        error,
+      );
+      if (!missing || !next) throw error;
+    }
+  }
+  throw new Error("No agent can run Relay's helper jobs.");
 }

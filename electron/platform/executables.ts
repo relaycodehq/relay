@@ -90,6 +90,9 @@ async function unwrapShim(path: string) {
   return target ? join(dirname(path), target) : path;
 }
 
+/** No program by that name is installed or on PATH, as opposed to one that's there but failed. */
+export class NotInstalledError extends Error {}
+
 export const findExecutable = (name: string) => locate(name);
 
 /**
@@ -209,7 +212,7 @@ async function locate(name: string) {
     tool = await search();
   if (tool) return tool;
   if (!found.length)
-    throw new Error(
+    throw new NotInstalledError(
       isAgent(name) && ownAgents
         ? `${name} was not found. Install it in Settings → AI models → Agents, or put it on PATH.`
         : `${name} was not found. Install it and make sure it is on PATH.`,

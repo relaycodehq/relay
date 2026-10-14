@@ -1,7 +1,7 @@
 import { agentRuntime } from "../../agents";
 import { emptyCwd, unfence } from "../../agents/helper-output";
-import { helperAttempts, helperFailure } from "../../agents/helper-fallback";
-import type { AgentProvider } from "../../../shared/agents";
+import { runHelperJob } from "../../agents/helper-fallback";
+import { agentName } from "../../../shared/agents";
 import type { ClockifyBlock } from "../../../shared/clockify";
 import type { ProjectChat } from "../../../shared/projects";
 import { redacted } from "../../../shared/redact-secrets";
@@ -93,9 +93,11 @@ export async function describeBlocks(
     "",
     evidence,
   ].join("\n");
-  const failures: { provider: AgentProvider; error: unknown }[] = [];
-  for (const { provider, choice } of helperAttempts(settings, "timesheet")) {
-    try {
+  return runHelperJob(
+    settings,
+    "timesheet",
+    signal,
+    async (provider, choice) => {
       const output = await agentRuntime(provider).run({
         cwd: await emptyCwd(),
         prompt,
@@ -110,15 +112,11 @@ export async function describeBlocks(
         },
       });
       const descriptions = parseDescriptions(output, ids);
-      if (descriptions) return descriptions;
-      failures.push({
-        provider,
-        error: new Error("It returned no usable descriptions."),
-      });
-    } catch (error) {
-      signal.throwIfAborted();
-      failures.push({ provider, error });
-    }
-  }
-  throw helperFailure(failures, "Could not describe the day.");
+      if (!descriptions)
+        throw new Error(
+          `${agentName(provider)} returned no usable descriptions.`,
+        );
+      return descriptions;
+    },
+  );
 }
