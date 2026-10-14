@@ -70,7 +70,8 @@ fun Sheet(
     val shape = RoundedCornerShape(topStart = Radii.xxl, topEnd = Radii.xxl)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        modifier = modifier.ring(c.border, shape),
+        // No ring: ModalBottomSheet hands the modifier to a full-window layer, so it drew a stray outline over the screen.
+        modifier = modifier,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = shape,
         containerColor = c.popover,
