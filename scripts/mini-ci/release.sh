@@ -88,6 +88,22 @@ fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
 
+# Linux builds in Docker; boot it now so it's up by the time that starts.
+docker_was_running=1
+if ! docker info >/dev/null 2>&1; then
+  docker_was_running=0
+  open -a Docker
+fi
+linux_pid=""
+cleanup() {
+  if [[ -n "$linux_pid" ]] && kill -0 "$linux_pid" 2>/dev/null; then
+    kill "$linux_pid" 2>/dev/null || true
+    docker rm -f relay-ci-linux >/dev/null 2>&1 || true
+  fi
+  ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
 install() { # <dir>: npm ci, skipped while the lockfile is unchanged
   local stamp="$1/node_modules/.relay-ci-lock" hash
   hash="$(shasum -a 256 "$1/package-lock.json" | cut -d' ' -f1)"
@@ -107,15 +123,44 @@ node scripts/sync-version.mjs "$version"
 step "Building"
 npm run build
 
+step "Phone bundle"
+node scripts/export-phone-bundle.mjs "$version"
+
+# In an x64 container under Rosetta. Sources go in and installers come out as
+# tar streams: a shared mount drops executable bits and breaks the AppImage.
+# Runs alongside the tests and the other platforms; it only reads dist,
+# dist-phone and tracked files, which nothing after this point changes.
+build_linux() {
+  for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 3; done
+  # dist/ is the same on every platform, so only the Electron side is rebuilt.
+  { git ls-files -z | tar --null -T - -cf - dist dist-phone; } |
+    docker run --rm -i --name relay-ci-linux --platform linux/amd64 \
+      -v relay-ci-npm:/root/.npm -v relay-ci-cache:/root/.cache \
+      -e VERSION="$version" -e npm_config_fund=false -e npm_config_audit=false \
+      -e ONNXRUNTIME_NODE_INSTALL=skip \
+      electronuserland/builder:22 bash -c '
+        set -euo pipefail
+        exec 3>&1 1>&2
+        mkdir /work && cd /work && tar -xf -
+        npm ci
+        node scripts/sync-version.mjs "$VERSION"
+        node scripts/build-electron.mjs
+        npx electron-builder --linux AppImage dir --x64 --publish never
+        python3 scripts/package-omarchy.py
+        tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" >&3
+      ' | tar -xf - -C "$out"
+}
+linux_log="$ROOT/linux.log"
+step "Linux, in the background"
+build_linux >"$linux_log" 2>&1 &
+linux_pid=$!
+
 step "Testing"
 # Flagged, not blocking, as on GitHub: a formatting slip shouldn't hold back a release.
 npm run format:check || echo "Formatting check failed (not blocking)."
 npm run test:setup
 npx vitest run --maxWorkers=2
 python3 -m unittest discover -s tests/packaging
-
-step "Phone bundle"
-node scripts/export-phone-bundle.mjs "$version"
 
 step "Headless"
 # One archive for every platform, carrying the phone bundle just exported.
@@ -151,35 +196,14 @@ npx electron-builder --win --x64 --publish never
 cp "release/Relay-$version-win-x64.exe" "$out/"
 
 step "Linux"
-# In an x64 container under Rosetta. Sources go in and installers come out as
-# tar streams: a shared mount drops executable bits and breaks the AppImage.
+linux_ok=1
+wait "$linux_pid" || linux_ok=0
+linux_pid=""
+cat "$linux_log" && rm -f "$linux_log"
+((linux_ok)) || { echo "The Linux build failed." >&2; exit 1; }
+# Docker's VM would sit on 4 GB through the Android build.
+((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
 docker_was_running=1
-if ! docker info >/dev/null 2>&1; then
-  docker_was_running=0
-  open -a Docker
-  for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 3; done
-fi
-quit_docker() { ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true; }
-trap quit_docker EXIT
-# dist/ is the same on every platform, so only the Electron side is rebuilt.
-{ git ls-files -z | tar --null -T - -cf - dist dist-phone; } |
-  docker run --rm -i --platform linux/amd64 \
-    -v relay-ci-npm:/root/.npm -v relay-ci-cache:/root/.cache \
-    -e VERSION="$version" -e npm_config_fund=false -e npm_config_audit=false \
-    -e ONNXRUNTIME_NODE_INSTALL=skip \
-    electronuserland/builder:22 bash -c '
-      set -euo pipefail
-      exec 3>&1 1>&2
-      mkdir /work && cd /work && tar -xf -
-      npm ci
-      node scripts/sync-version.mjs "$VERSION"
-      node scripts/build-electron.mjs
-      npx electron-builder --linux AppImage dir --x64 --publish never
-      python3 scripts/package-omarchy.py
-      tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" >&3
-    ' | tar -xf - -C "$out"
-quit_docker
-trap - EXIT
 
 step "Android"
 runtime="$(node mobile/scripts/runtime.mjs)"
@@ -206,6 +230,9 @@ else
       -Pkotlin.daemon.jvmargs=-Xmx1g
   )
   cp mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
+  # React Native's Gradle plugin rewrites library manifests inside node_modules,
+  # which changes the runtime. Reinstall next time so it's fingerprinted clean.
+  rm -f mobile/node_modules/.relay-ci-lock
 fi
 rm -rf "$previous_apk"
 
