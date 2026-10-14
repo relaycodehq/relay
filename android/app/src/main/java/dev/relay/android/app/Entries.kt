@@ -3,10 +3,11 @@ package dev.relay.android.app
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import dev.relay.android.app.gallery.GalleryScreen
-import dev.relay.android.app.screens.HomeScreen
 import dev.relay.android.app.screens.PaneEmpty
 import dev.relay.android.app.screens.PlaceholderScreen
 import dev.relay.android.app.screens.SettingsScreen
+import dev.relay.android.features.home.HomeScreen
+import dev.relay.android.features.project.ProjectScreen
 import dev.relay.android.lib.navigation.Route
 
 /**
@@ -16,7 +17,7 @@ import dev.relay.android.lib.navigation.Route
  *     entry<Route.Thread> { ThreadScreen(it.id, container.remote) }
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
-    entry<Route.Home> { if (wide()) PaneEmpty() else HomeScreen() }
+    entry<Route.Home> { if (wide()) PaneEmpty() else HomeScreen(container.remote, container.home, container.computerSeen, pane = false, selected = null) }
     entry<Route.Settings> { SettingsScreen(container.prefs) }
     entry<Route.Gallery> { GalleryScreen() }
 
@@ -25,7 +26,7 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Thread> { PlaceholderScreen("Thread", it) }
     entry<Route.Reply> { PlaceholderScreen("Reply", it) }
     entry<Route.SubagentRun> { PlaceholderScreen("Subagent", it) }
-    entry<Route.Project> { PlaceholderScreen("Project", it) }
+    entry<Route.Project> { ProjectScreen(it.id, container.remote, container.home) }
     entry<Route.Turn> { PlaceholderScreen("Turn", it) }
     entry<Route.Diff> { PlaceholderScreen("Diff", it) }
     entry<Route.Changes> { PlaceholderScreen("Changes", it) }

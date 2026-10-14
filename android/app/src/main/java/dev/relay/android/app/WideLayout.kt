@@ -23,7 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
-import dev.relay.android.app.screens.HomeScreen
+import dev.relay.android.features.home.HomeScreen
+import dev.relay.android.lib.navigation.LocalNavigator
+import dev.relay.android.lib.navigation.Route
 import dev.relay.android.ui.Divider
 import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.LocalPaneToggle
@@ -41,8 +43,16 @@ internal fun sidebarBounds(windowDp: Float): Pair<Float, Float> =
 
 internal fun defaultSidebarWidth(windowDp: Float): Float = (windowDp * 0.36f).coerceIn(280f, 360f)
 
+/** Home beside the detail pane, marking what the pane has open. */
 @Composable
-fun HomeSidebar() = HomeScreen()
+fun HomeSidebar(container: AppContainer) {
+    val selected = when (val open = LocalNavigator.current.stack.getOrNull(1)) {
+        is Route.Thread -> open.id
+        is Route.Project -> open.id
+        else -> null
+    }
+    HomeScreen(container.remote, container.home, container.computerSeen, pane = true, selected = selected)
+}
 
 /**
  * On a wide window: the sidebar (resizable by its edge, hideable from the
