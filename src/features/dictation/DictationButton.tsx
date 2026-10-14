@@ -308,10 +308,6 @@ function MicrophoneMenu({
   /** The mic button, which becomes the trigger. */
   children: ReactElement;
 }) {
-  // Listed up front so the menu doesn't open short and then grow.
-  const options = useMicrophones();
-  const chosen = useDictationMicrophone();
-  const value = options.some((o) => o.value === chosen) ? chosen : "";
   return (
     <ContextMenu.Root disabled={disabled}>
       <ContextMenu.Trigger render={children} />
@@ -325,29 +321,39 @@ function MicrophoneMenu({
               <ContextMenu.GroupLabel className="composer-menu-label">
                 Microphone
               </ContextMenu.GroupLabel>
-              <ContextMenu.RadioGroup
-                value={value}
-                onValueChange={setDictationMicrophone}
-              >
-                {options.map((option) => (
-                  <ContextMenu.RadioItem
-                    className="composer-select-item"
-                    key={option.value}
-                    value={option.value}
-                    closeOnClick
-                  >
-                    {option.label}
-                    <ContextMenu.RadioItemIndicator>
-                      <Check size={13} />
-                    </ContextMenu.RadioItemIndicator>
-                  </ContextMenu.RadioItem>
-                ))}
-              </ContextMenu.RadioGroup>
+              <MicrophoneOptions />
             </ContextMenu.Group>
           </ContextMenu.Popup>
         </ContextMenu.Positioner>
       </ContextMenu.Portal>
     </ContextMenu.Root>
+  );
+}
+
+/** Mounted only while the menu is open, so devices are listed only then. */
+function MicrophoneOptions() {
+  const options = useMicrophones();
+  const chosen = useDictationMicrophone();
+  const value = options.some((o) => o.value === chosen) ? chosen : "";
+  return (
+    <ContextMenu.RadioGroup
+      value={value}
+      onValueChange={setDictationMicrophone}
+    >
+      {options.map((option) => (
+        <ContextMenu.RadioItem
+          className="composer-select-item"
+          key={option.value}
+          value={option.value}
+          closeOnClick
+        >
+          {option.label}
+          <ContextMenu.RadioItemIndicator>
+            <Check size={13} />
+          </ContextMenu.RadioItemIndicator>
+        </ContextMenu.RadioItem>
+      ))}
+    </ContextMenu.RadioGroup>
   );
 }
 
