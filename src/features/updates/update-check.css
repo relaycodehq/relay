@@ -35,7 +35,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  animation: update-orbit 1s linear infinite;
+  animation: update-orbit 1s steps(20) infinite;
 }
 .update-comet-tail {
   position: absolute;

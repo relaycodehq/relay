@@ -107,10 +107,12 @@
 - **Keep live rows from jumping.** Rows that come and go with each tool call
   should reserve their height instead of mounting and unmounting; the thread
   stays pinned to the bottom, so every height change jolts it.
-- **Keep it cheap.** Move things with `transform`/`opacity`; step text shimmers
-  (`steps(...)`) instead of animating every frame, unless a shimmer on its own
-  layer measures as cheap as paused and steps would read as lag (the agent
-  trace's `.live-shine`).
+- **Keep it cheap.** Move things with `transform`/`opacity`, and step every
+  endless loop at 20 updates a second (`steps(seconds × 20)`; for an eased
+  loop, sample the curve into a few keyframes, each with its own `steps`).
+  A smooth loop asks for a frame every display refresh even on the
+  compositor: with 5 threads running, the smooth `.live-shine` alone cost
+  ~17% of a core, stepped ~2%.
 - **Reduced motion is global.** `src/styles.css` stops every animation and
   transition under `prefers-reduced-motion`, except the loops that show
   something is working (spinners, the live shimmer, the thinking glyph): a

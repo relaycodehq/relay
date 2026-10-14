@@ -763,7 +763,7 @@
   inset: 0;
   border-radius: inherit;
   background: color-mix(in srgb, var(--sb-waiting) 55%, transparent);
-  animation: sb-pulse 1.6s ease-out infinite;
+  animation: sb-pulse 1.6s infinite;
 }
 
 /* Activity view rows: no chrome until hover; the open
@@ -1438,7 +1438,7 @@
   display: inline-flex;
 }
 .sb-version[data-shows="checking"] .sb-version-spin {
-  animation: spin 0.9s linear infinite;
+  animation: spin 0.9s steps(18) infinite;
 }
 .sb-version-done,
 .sb-version-failed {
@@ -1487,7 +1487,23 @@
 .sb .sb-update.failed {
   color: var(--muted);
 }
+/* ease-out sampled at 25% and 50%, stepped at 20 updates a second. */
 @keyframes sb-pulse {
+  from {
+    transform: scale(1);
+    opacity: 1;
+    animation-timing-function: steps(8);
+  }
+  25% {
+    transform: scale(1.64);
+    opacity: 0.62;
+    animation-timing-function: steps(8);
+  }
+  50% {
+    transform: scale(2.16);
+    opacity: 0.32;
+    animation-timing-function: steps(16);
+  }
   to {
     transform: scale(2.7);
     opacity: 0;

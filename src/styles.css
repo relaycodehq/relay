@@ -1449,8 +1449,11 @@ body.resizing-table-column {
   border: 0;
   color: var(--muted);
 }
+/* Endless loops step at 20 updates a second (steps = seconds × 20). A smooth
+   loop asks for a frame every display refresh whether it repaints or not:
+   a smooth shimmer on a visible window cost ~17% of a core, 20 steps ~2%. */
 .spin {
-  animation: spin 1.2s linear infinite;
+  animation: spin 1.2s steps(24) infinite;
 }
 @keyframes spin {
   to {
@@ -1463,7 +1466,7 @@ body.resizing-table-column {
 .spinner {
   flex: none;
   display: inline-flex;
-  animation: spin 1.6s linear infinite;
+  animation: spin 1.6s steps(32) infinite;
 }
 .spinner svg {
   display: block;
@@ -1481,27 +1484,46 @@ body.resizing-table-column {
 .spinner-arc {
   stroke-linecap: round;
   stroke-dasharray: 30 150;
-  animation: spinner-arc 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation: spinner-arc 1.2s infinite;
 }
-/* In pathLength units (100 = full turn): a short dash grows to a half-ring,
-   then its tail sweeps round to meet the head. The dash left over at the end
-   lines up with the start, so the loop has no seam. */
-/* Long-running spinners rotate a fixed arc on the compositor. 48 steps per
-   1.6s turn gives 30 position updates/sec without repainting the arc. */
-.spinner.steady {
-  animation-timing-function: steps(48);
-}
+/* Long-running spinners rotate a fixed arc on the compositor, without
+   repainting it. */
 .spinner.steady .spinner-arc {
   animation: none;
 }
+/* In pathLength units (100 = full turn): a short dash grows to a half-ring,
+   then its tail sweeps round to meet the head. The dash left over at the end
+   lines up with the start, so the loop has no seam. Each half eases in and
+   out (cubic-bezier(0.65, 0, 0.35, 1) sampled at its quarters) over 12
+   steps: 3 slow, 6 fast, 3 slow. */
 @keyframes spinner-arc {
   0% {
     stroke-dasharray: 5 150;
     stroke-dashoffset: 0;
+    animation-timing-function: steps(3);
+  }
+  12.5% {
+    stroke-dasharray: 8.5 150;
+    stroke-dashoffset: -1.3;
+    animation-timing-function: steps(6);
+  }
+  37.5% {
+    stroke-dasharray: 51.5 150;
+    stroke-dashoffset: -16.7;
+    animation-timing-function: steps(3);
   }
   50% {
     stroke-dasharray: 55 150;
     stroke-dashoffset: -18;
+    animation-timing-function: steps(3);
+  }
+  62.5% {
+    stroke-dashoffset: -23.5;
+    animation-timing-function: steps(6);
+  }
+  87.5% {
+    stroke-dashoffset: -89.5;
+    animation-timing-function: steps(3);
   }
   100% {
     stroke-dasharray: 55 150;
