@@ -538,7 +538,22 @@ export class RemoteClient {
     };
   }
   private receive(frame: ServerFrame) {
-    if (frame.t === "result") {
+    if (
+      frame.t === "tick" &&
+      frame.hosts &&
+      !("link" in this.target) &&
+      this.host
+    ) {
+      // A network can change without dropping the wildcard listener or the
+      // existing Tailscale connection. Keep the next connect's routes current.
+      const hosts = learnHosts(frame.hosts.filter(validHost), this.host);
+      if (hosts.join(",") === this.target.hosts.join(",")) return;
+      this.target = { ...this.target, hosts };
+      this.options.onCredentials?.(this.target);
+      this.worse.clear();
+      this.watchRoutes();
+      this.tryBetter();
+    } else if (frame.t === "result") {
       const call = this.calls.get(frame.id);
       if (!call) return;
       this.calls.delete(frame.id);

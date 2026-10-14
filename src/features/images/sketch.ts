@@ -21,6 +21,8 @@ export interface Stroke {
   shapeWidth?: number;
   /** Blurs the screenshot under the stroke instead of inking it; a closed shape blurs its whole inside. */
   blur?: boolean;
+  /** Covers the screenshot in solid black, evenly wide; a closed shape covers its whole inside. */
+  redact?: boolean;
 }
 export interface Sketch {
   width: number;
@@ -252,31 +254,62 @@ export function drawSketch(
       ctx.restore();
     }
   }
-  strokes.forEach((stroke) => stroke.blur || drawStroke(ctx, stroke));
+  for (const stroke of strokes) {
+    if (stroke.blur) continue;
+    if (!stroke.redact) {
+      drawStroke(ctx, stroke);
+      continue;
+    }
+    // Even and opaque: a taper or a see-through edge would let text show.
+    const width = Math.max(...stroke.widths);
+    drawStroke(ctx, {
+      ...stroke,
+      color: redactColor,
+      widths: stroke.widths.map(() => width),
+    });
+    if (stroke.shape?.kind === "ellipse" || stroke.shape?.closed) {
+      ctx.fillStyle = redactColor;
+      ctx.fill(shapePath(stroke.shape));
+    }
+  }
+}
+
+export const redactColor = "#000";
+
+/**
+ * The screenshot with its drawing burned in, drawn afresh as a PNG at
+ * `scale`: only pixels survive, none of the source file's metadata.
+ */
+export async function sketchPng(image: DraftImage, scale = 1): Promise<Blob> {
+  const img = new Image();
+  img.src = image.dataUrl;
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not draw on screenshot.");
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const sketch = image.sketch;
+  if (sketch?.strokes.length) {
+    ctx.scale(canvas.width / sketch.width, canvas.height / sketch.height);
+    const blurred = sketch.strokes.some((s) => s.blur)
+      ? blurredCopy(img, sketch.width, sketch.height)
+      : undefined;
+    drawSketch(ctx, sketch.strokes, blurred, sketch);
+  }
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
+  if (!blob) throw new Error("Could not draw on screenshot.");
+  return blob;
 }
 
 /** Burns the drawing into the screenshot; images without ink pass through. */
 export async function flattenSketch(image: DraftImage): Promise<DraftImage> {
   const { sketch, ...plain } = image;
   if (!sketch?.strokes.length) return plain;
-  const img = new Image();
-  img.src = image.dataUrl;
-  await img.decode();
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not draw on screenshot.");
-  ctx.drawImage(img, 0, 0);
-  ctx.scale(canvas.width / sketch.width, canvas.height / sketch.height);
-  const blurred = sketch.strokes.some((s) => s.blur)
-    ? blurredCopy(img, sketch.width, sketch.height)
-    : undefined;
-  drawSketch(ctx, sketch.strokes, blurred, sketch);
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
-  if (!blob) throw new Error("Could not draw on screenshot.");
+  const blob = await sketchPng(image);
   const prepared = await prepareScreenshot(
     new File([blob], image.name, { type: "image/png" }),
   );

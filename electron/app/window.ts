@@ -18,6 +18,7 @@ import { ThreadWindows } from "./thread-windows";
 
 /** The window whose page made the API call running now. */
 const callers = new AsyncLocalStorage<BrowserWindow | null>();
+const pageErrorLimit = 100;
 
 /** Runs `call` as one made from `win`'s page; see `AppWindow.caller`. */
 export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
@@ -279,6 +280,19 @@ export class AppWindow {
       },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    // The page's errors land in main.log too, so a report after a blank
+    // window says what broke. Capped: a render loop can throw every frame.
+    let pageErrors = 0;
+    win.webContents.on("console-message", (details) => {
+      if (details.level !== "error" || pageErrors > pageErrorLimit) return;
+      pageErrors++;
+      const where = `${details.sourceId.split(/[\\/]/).pop()}:${details.lineNumber}`;
+      console.warn(
+        pageErrors > pageErrorLimit
+          ? "Window error: over 100 in this window; the rest aren't logged"
+          : `Window error: ${details.message.slice(0, 4000)} (${where})`,
+      );
+    });
     // The renderer's caption buttons swap maximize for restore.
     const sendMaximized = () =>
       win.webContents.send("relay:maximized", win.isMaximized());

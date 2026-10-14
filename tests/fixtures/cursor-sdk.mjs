@@ -1,7 +1,14 @@
 // A stand-in for @cursor/sdk, scripted by the prompt, for the Cursor worker's tests.
 // It records what it was asked to $CURSOR_FAKE_LOG, one JSON object per line.
-import { appendFileSync, existsSync, watch } from "node:fs";
-import { dirname } from "node:path";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  watch,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 
 const log = (entry) => {
   if (process.env.CURSOR_FAKE_LOG)
@@ -47,6 +54,8 @@ class Run {
     this.wake = () => {};
   }
   async cancel() {
+    // Like a run stuck in a tool call that doesn't heed the cancel.
+    if (this.stuck) return new Promise(() => {});
     this.cancelled = true;
     this.wake();
   }
@@ -93,9 +102,36 @@ class FakeAgent {
         "ConfigurationError",
         "Local SDK sandboxing was requested, but sandboxing is not supported in this environment. Disable local.sandboxOptions.enabled or remove ~/.cursor/sandbox.json to run without sandboxing.",
       );
+    // Like the SDK's store, a turn counts as running until it ends, even
+    // after its process died; only a forced send gets past one.
+    const storeDir = this.options.local?.store?.dir;
+    const active = storeDir && join(storeDir, `${this.agentId}.active`);
+    if (active && existsSync(active)) {
+      if (!sendOptions.local?.force)
+        throw named(
+          "UnknownAgentError",
+          `Agent ${this.agentId} already has active run`,
+        );
+      rmSync(active);
+      log({ pid: process.pid, agent: this.agentId, expired: true });
+    }
+    if (active) {
+      mkdirSync(storeDir, { recursive: true });
+      writeFileSync(active, String(process.pid));
+    }
     const say = (update) => sendOptions.onDelta({ update });
     const run = new Run(undefined);
-    run.wait = async () => {
+    const script = async () => {
+      if (/\[\[stuck\]\]/.test(prompt)) {
+        run.stuck = true;
+        say({ type: "text-delta", text: "Reading the pull request. " });
+        say({
+          type: "tool-call-started",
+          callId: "t1",
+          toolCall: { type: "task", args: { description: "Read PR 2246" } },
+        });
+        return new Promise(() => {});
+      }
       if (/\[\[auth\]\]/.test(prompt))
         throw named("AuthenticationError", "The API key was rejected.");
       if (/\[\[ratelimit\]\]/.test(prompt))
@@ -215,6 +251,13 @@ class FakeAgent {
       say({ type: "text-delta", text: "Hel" });
       say({ type: "text-delta", text: "lo" });
       return { status: "finished", result: "Hello" };
+    };
+    run.wait = async () => {
+      try {
+        return await script();
+      } finally {
+        if (active) rmSync(active, { force: true });
+      }
     };
     return run;
   }

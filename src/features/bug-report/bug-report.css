@@ -1,0 +1,360 @@
+/* Laid out like VS Code's issue reporter: one column of plain fields. */
+.report-problem {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+/* Labels and inputs elsewhere carry a form's spacing; this page sets its own. */
+.report-problem label {
+  margin: 0;
+  font-weight: 400;
+}
+.report-problem input[type="checkbox"] {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+.report-guidance {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.report-guidance .text-button,
+.report-banner .text-button {
+  padding: 0;
+  font-size: inherit;
+}
+.report-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.report-row label {
+  font-weight: 600;
+  font-size: 13px;
+}
+.report-row select {
+  min-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.report-field > span,
+.report-field > label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+}
+.report-field em {
+  font-style: normal;
+  color: var(--danger);
+}
+.report-field > small {
+  margin-top: -2px;
+  font-size: 12px;
+}
+.report-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* Tidy up with [agent ▾]: small, under the box, off unless pressed. */
+.report-tidy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  font-size: 12px;
+}
+.report-tidy > button:not(.text-button) {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.report-tidy > .text-button {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.report-shots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.report-shot {
+  position: relative;
+  margin: 0;
+  width: 132px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.report-shot img,
+.report-shot-blank {
+  display: block;
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+  object-position: top left;
+  background: var(--hover);
+}
+.report-shot figcaption {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 7px;
+  font-size: 11px;
+  min-width: 0;
+}
+.report-shot figcaption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-shot figcaption small {
+  color: var(--muted);
+}
+.report-shot-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.report-shot:hover .report-shot-actions,
+.report-shot:focus-within .report-shot-actions {
+  opacity: 1;
+}
+.report-shot-actions button {
+  padding: 4px;
+}
+.report-shot-adder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.report-shot-adder button {
+  padding: 5px 10px;
+}
+
+/* Include my system information (show) */
+.report-included {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-include-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.report-include-row label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+.report-include-row .text-button {
+  padding: 0;
+  font-size: 12px;
+}
+.report-include-body {
+  margin: 4px 0 8px 22px;
+}
+.report-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.report-facts li + li {
+  border-top: 1px solid var(--border);
+}
+.report-facts label {
+  display: grid;
+  flex-direction: unset;
+  grid-template-columns: auto 110px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.report-facts code,
+.report-log {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+.report-facts input:not(:checked) ~ * {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.report-log {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+/* The issue, as GitHub draws it. */
+.report-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.report-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.report-preview-bar .segmented button {
+  flex: none;
+  font-size: 12px;
+  padding: 4px 12px;
+}
+.report-payload {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: opacity 0.15s;
+}
+.report-payload[data-updating] {
+  opacity: 0.7;
+}
+.report-payload-title {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 17px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.report-payload-body {
+  padding: 4px 16px 14px;
+  max-height: 520px;
+  overflow: auto;
+  font-size: 13px;
+}
+.report-payload-body details {
+  margin: 8px 0;
+}
+.report-payload-body summary {
+  cursor: pointer;
+}
+.report-payload-body sub {
+  color: var(--muted);
+  font-size: 11px;
+}
+.report-payload-body img,
+.report-preview-shot {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.report-payload-source {
+  margin: 0;
+  padding: 12px 16px;
+  max-height: 520px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.report-preview-later {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.report-preview-later p {
+  margin: 0;
+  font-size: 12px;
+}
+.report-preview-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.report-preview-shots .report-preview-shot {
+  max-height: 120px;
+}
+
+/* Send stays in reach, as VS Code's button does at the bottom. */
+.report-footer {
+  position: sticky;
+  bottom: -28px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: -28px;
+  padding: 12px 0 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.report-footer > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.report-actions .text-button {
+  padding: 0;
+  font-size: 12.5px;
+}
+.report-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.report-danger {
+  color: var(--danger) !important;
+}
+.report-banner {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.report-banner p {
+  margin: 0 0 10px;
+}
+.report-banner .report-actions {
+  gap: 8px;
+}
+.report-banner.done {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.report-banner.warn {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}

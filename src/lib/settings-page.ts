@@ -22,6 +22,7 @@ export type SettingsCategory =
   | "read-aloud"
   | "sounds"
   | "shortcuts"
+  | "report"
   | "about";
 
 const OPEN_SETTINGS = "relay:open-settings";

@@ -1,10 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Store } from "../app/store";
 import { PhoneRemote } from "./phone-remote";
+import { lanAddresses } from "./lan";
+import type { RemoteSettings } from "../app/store-types";
 import type { RemoteHost } from "./bridge";
 import {
   RemoteClient,
@@ -117,17 +120,30 @@ async function desktop(
   },
   extra: Partial<Omit<RemoteHost, "name">> = {},
   lan: () => string[] = () => [],
+  settings: RemoteSettings = { lan: false },
 ) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
   const store = new Store(join(dir, "state"));
   await store.load();
+  await store.update((s) => {
+    s.phoneRemote = settings;
+  });
+  // Keep the port across listener restarts, just as the desktop does.
+  const port = await new Promise<number>((resolve, reject) => {
+    const listener = createServer();
+    listener.once("error", reject);
+    listener.listen(0, "127.0.0.1", () => {
+      const { port } = listener.address() as { port: number };
+      listener.close((error) => (error ? reject(error) : resolve(port)));
+    });
+  });
   const fake = fakeHost(respond);
   const remote = new PhoneRemote(
     store,
     async (v) => "sealed:" + v,
     async (v) => v.slice(7),
     { ...fake.host, ...extra },
-    0,
+    port,
     async () => tailnet.current,
     lan,
   );
@@ -252,9 +268,13 @@ it("listens on the local network when allowed, Tailscale or not", async () => {
   const tailnet = {
     current: { status: "missing", addresses: [] } as PhoneTailnet,
   };
-  const { remote } = await desktop(undefined, tailnet, {}, () => [
-    "127.0.0.1",
-  ]);
+  const { remote } = await desktop(
+    undefined,
+    tailnet,
+    {},
+    () => ["127.0.0.1"],
+    {},
+  );
   // Without Tailscale, turning access on lets in the local network.
   await remote.setEnabled(true);
   expect(await remote.state()).toMatchObject({
@@ -277,6 +297,197 @@ it("listens on the local network when allowed, Tailscale or not", async () => {
   tailnet.current = { status: "missing", addresses: [] };
   await remote.setLan(false);
   expect(await remote.state()).toMatchObject({ listening: false, hosts: [] });
+});
+
+it("defaults to LAN with Tailscale present, and an old pairing learns it on reconnect", async () => {
+  const tailnet = {
+    current: {
+      status: "connected",
+      addresses: ["100.100.1.2"],
+    } as PhoneTailnet,
+  };
+  const { remote, store } = await desktop(
+    undefined,
+    tailnet,
+    {},
+    () => ["127.0.0.1"],
+    {},
+  );
+  expect(await remote.state()).toMatchObject({ lan: true, listening: true });
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const saved = p.credentials()!;
+  p.client.close();
+  const key = store.get().phoneRemote!.key;
+
+  // A pre-LAN pairing knows only its old route. Signing in adds LAN without a new token.
+  let learned: RemoteCredentials | undefined;
+  const again = phone(
+    { ...saved, hosts: ["100.100.1.2"], routes: ["tailscale", "local"] },
+    {
+      WebSocket: routed(new Set(["100.100.1.2", "127.0.0.1"])),
+      onCredentials: (c) => {
+        learned = c;
+      },
+    },
+  );
+  await again.until("online");
+  expect(learned).toMatchObject({
+    hosts: ["127.0.0.1", "100.100.1.2"],
+    token: saved.token,
+    deviceId: saved.deviceId,
+    routes: ["tailscale", "local"],
+  });
+  expect(again.client.route).toEqual({
+    host: "100.100.1.2",
+    kind: "tailscale",
+  });
+  expect((await again.client.call("overview")).projects[0].id).toBe(projectId);
+  expect(store.get().phoneRemote!.key).toBe(key);
+  expect(remote.devices.list()).toHaveLength(1);
+});
+
+const interfaceHost = lanAddresses(networkInterfaces())[0];
+it.skipIf(!interfaceHost)(
+  "pairs and reconnects through a real LAN interface with no Tailscale",
+  async () => {
+    const { remote, summary } = await desktop(
+      undefined,
+      { current: { status: "missing", addresses: [] } },
+      {},
+      () => [interfaceHost!],
+      {},
+    );
+    await remote.setEnabled(true);
+    const link = parsePairingUrl((await remote.pairing()).url)!;
+    expect(link.hosts).toEqual([interfaceHost]);
+    const p = phone({ link, device: "LAN phone" });
+    await p.until("online");
+    expect(p.client.route).toEqual({ host: interfaceHost, kind: "local" });
+    expect((await p.client.call("overview")).chats[0].id).toBe(chatId);
+    const saved = p.credentials()!;
+    p.client.close();
+    const again = phone(saved);
+    await again.until("online");
+    expect(again.client.route).toEqual({ host: interfaceHost, kind: "local" });
+    await again.client.call("overview");
+    summary.title = "Updated over LAN";
+    remote.chatsEvent({ projectId, chats: [summary] });
+    await again.untilEvents((events) =>
+      events.some(
+        (e) => e.kind === "chats" && e.chats[0]?.title === "Updated over LAN",
+      ),
+    );
+    await remote.setLan(false);
+    await again.until("offline");
+    expect((await remote.state()).listening).toBe(false);
+    await remote.setLan(true);
+    again.client.wake();
+    await again.until("online");
+    expect(again.client.route?.host).toBe(interfaceHost);
+    await again.client.call("overview");
+    expect(remote.devices.list()).toHaveLength(1);
+  },
+);
+
+it("preserves explicit LAN off across enabling, offline Tailscale and startup", async () => {
+  const tailnet = {
+    current: { status: "missing", addresses: [] } as PhoneTailnet,
+  };
+  const { remote } = await desktop(undefined, tailnet, {}, () => ["127.0.0.1"]);
+  await remote.setEnabled(true);
+  await remote.start();
+  expect(await remote.state()).toMatchObject({
+    enabled: true,
+    lan: false,
+    listening: false,
+  });
+  tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
+  await remote.start();
+  expect(await remote.state()).toMatchObject({
+    lan: false,
+    listening: true,
+    hosts: ["127.0.0.1"],
+  });
+  await remote.setEnabled(false);
+  await remote.setEnabled(true);
+  expect((await remote.state()).lan).toBe(false);
+});
+
+it("resumes previously enabled access with no saved LAN choice and no Tailscale", async () => {
+  const { remote } = await desktop(
+    undefined,
+    { current: { status: "missing", addresses: [] } },
+    {},
+    () => ["127.0.0.1"],
+    { enabled: true },
+  );
+  await remote.start();
+  expect(await remote.state()).toMatchObject({
+    enabled: true,
+    lan: true,
+    listening: true,
+  });
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Phone",
+  });
+  await p.until("online");
+  await p.client.call("overview");
+});
+
+it("refreshes a connected phone's saved routes after LAN addresses change", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  let hosts = ["127.0.0.1"];
+  const changedHost = interfaceHost ?? "localhost";
+  const { remote } = await desktop(
+    undefined,
+    { current: { status: "missing", addresses: [] } },
+    {},
+    () => hosts,
+    {},
+  );
+  await remote.setEnabled(true);
+  let learned: RemoteCredentials | undefined;
+  const updates: RemoteCredentials[] = [];
+  const p = phone(
+    { link: parsePairingUrl((await remote.pairing()).url)!, device: "Phone" },
+    {
+      onCredentials: (c) => {
+        learned = c;
+        updates.push(c);
+      },
+    },
+  );
+  await p.until("online");
+  hosts = [changedHost];
+  await vi.advanceTimersByTimeAsync(15_000);
+  await vi.waitFor(() =>
+    expect(
+      updates.some(
+        (c) => c.hosts.join(",") === [changedHost, "127.0.0.1"].join(","),
+      ),
+    ).toBe(true),
+  );
+  // A route update can move the link without an offline transition or changing its token.
+  await vi.waitFor(() => expect(p.client.route?.host).toBe(changedHost));
+  expect(learned).toMatchObject({
+    hosts: [changedHost],
+    token: p.credentials()!.token,
+    deviceId: p.credentials()!.deviceId,
+  });
+  expect(p.statuses.filter((s) => s.status !== "online")).toEqual([
+    { status: "connecting", detail: undefined },
+  ]);
+  await p.client.call("overview");
+  p.client.close();
+  const again = phone(learned!);
+  await again.until("online");
+  expect(again.client.route?.host).toBe(changedHost);
+  await again.client.call("overview");
 });
 
 /**

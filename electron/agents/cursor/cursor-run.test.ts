@@ -18,6 +18,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 import { forgetCursorModels, cursorDefaults, cursorModels } from "./catalog";
 import { closeCursorConnection } from "./connection";
@@ -284,6 +285,50 @@ describe("a Cursor turn", () => {
     controller.abort();
     await cancelled;
   });
+
+  it("ends a worker whose turn ignores Stop, so the thread's next turn resumes its agent instead of finding it busy", async () => {
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const ids: string[] = [];
+    const session = {
+      key: "stuck-thread",
+      onId: async (id: string) => void ids.push(id),
+    };
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => (started = resolve));
+    const stuck = turn("[[stuck]] review the pull request", {
+      session,
+      onActivity: () => started(),
+    });
+    try {
+      const running = runCursor(stuck.options);
+      const stopped = expect(running).rejects.toThrow(/Cancelled by you/);
+      await ready;
+      stuck.controller.abort();
+      await stopped;
+      const [first] = await asked();
+      // Not left in a kept worker, running beside the next turn.
+      await vi.waitFor(() => expect(alive(first.pid)).toBe(false));
+
+      const next = turn("say hello", {
+        session: { ...session, id: ids.at(-1) },
+      });
+      expect(await runCursor(next.options)).toBe("Hello");
+      const sent = await asked();
+      expect(sent.some((entry) => entry.expired)).toBe(true);
+      const resumed = sent.filter((entry) => entry.prompt).at(-1);
+      expect(resumed.agent).toBe(first.agent);
+      expect(resumed.pid).not.toBe(first.pid);
+    } finally {
+      await closeCursorConnection("stuck-thread");
+    }
+  }, 30_000);
 
   it("takes a steering message while it works and answers it", async () => {
     let steer!: NonNullable<

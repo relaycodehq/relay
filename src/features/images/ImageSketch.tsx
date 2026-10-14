@@ -5,7 +5,15 @@ import {
   useState,
   type PointerEvent,
 } from "react";
-import { Check, Droplet, PenLine, Redo2, Trash2, Undo2 } from "lucide-react";
+import {
+  Check,
+  Droplet,
+  EyeOff,
+  PenLine,
+  Redo2,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import type { DraftImage } from "./draft-images";
 import {
   blurredCopy,
@@ -15,6 +23,7 @@ import {
   drawSketch,
   isLine,
   recognizeShape,
+  redactColor,
   scaleShape,
   shapeCenter,
   sketchColors,
@@ -33,7 +42,7 @@ import { mac } from "../../lib/mod-key";
 
 const PEN_KEY = "relay-sketch-pen";
 interface Pen {
-  tool: "pen" | "blur";
+  tool: "pen" | "blur" | "redact";
   color: string;
   size: number;
   blurSize: number;
@@ -47,7 +56,7 @@ function savedPen(): Pen {
   }
   const { tool, color, size, blurSize } = saved;
   return {
-    tool: tool === "blur" ? "blur" : "pen",
+    tool: tool === "blur" || tool === "redact" ? tool : "pen",
     color: sketchColors.includes(color!) ? color! : sketchColors[0],
     size: sketchSizes.includes(size!) ? size! : sketchSizes[1],
     blurSize: blurSizes.includes(blurSize!) ? blurSize! : blurSizes[1],
@@ -89,7 +98,10 @@ export function SketchEditor({
   const [pen, setPen] = useState(savedPen);
   const [size, setSize] = useState(image.sketch);
   const blurring = pen.tool === "blur";
-  const brush = blurring ? pen.blurSize : pen.size;
+  const redacting = pen.tool === "redact";
+  /** Blur and black-out hide things, so they share the wide brushes. */
+  const hiding = blurring || redacting;
+  const brush = hiding ? pen.blurSize : pen.size;
   const blurred = useRef<HTMLCanvasElement>(undefined);
   const pointer = useRef<Pointer>(undefined);
   const builder = useRef<StrokeBuilder>(undefined);
@@ -198,7 +210,7 @@ export function SketchEditor({
 
   function recognize(stroke: Stroke) {
     const shape = recognizeShape(stroke.points);
-    return shape && stroke.blur ? blurShape(shape) : shape;
+    return shape && (stroke.blur || stroke.redact) ? blurShape(shape) : shape;
   }
 
   function checkHold() {
@@ -237,6 +249,7 @@ export function SketchEditor({
       unit,
     );
     if (blurring) builder.current.stroke.blur = true;
+    if (redacting) builder.current.stroke.redact = true;
     active.current = builder.current.stroke;
     hold.current = {
       point,
@@ -345,7 +358,11 @@ export function SketchEditor({
           data-blur={blurring || undefined}
           hidden
           style={{
-            background: blurring ? undefined : pen.color,
+            background: blurring
+              ? undefined
+              : redacting
+                ? redactColor
+                : pen.color,
             width: Math.max(brush, 4),
             height: Math.max(brush, 4),
           }}
@@ -357,7 +374,7 @@ export function SketchEditor({
             type="button"
             aria-label="Pen"
             title="Pen"
-            aria-pressed={!blurring}
+            aria-pressed={!hiding}
             className="sketch-tool"
             onClick={() => setPen((p) => ({ ...p, tool: "pen" }))}
           >
@@ -373,6 +390,16 @@ export function SketchEditor({
           >
             <Droplet size={16} />
           </button>
+          <button
+            type="button"
+            aria-label="Black out"
+            title="Black out · solid cover, nothing shows through · pause on a box to cover all of it"
+            aria-pressed={redacting}
+            className="sketch-tool"
+            onClick={() => setPen((p) => ({ ...p, tool: "redact" }))}
+          >
+            <EyeOff size={16} />
+          </button>
           <span className="sketch-separator" />
           {sketchColors.map((color) => (
             <button
@@ -380,13 +407,13 @@ export function SketchEditor({
               type="button"
               className="sketch-color"
               aria-label={`Color ${color}`}
-              aria-pressed={!blurring && pen.color === color}
+              aria-pressed={!hiding && pen.color === color}
               style={{ color }}
               onClick={() => setPen((p) => ({ ...p, tool: "pen", color }))}
             />
           ))}
           <span className="sketch-separator" />
-          {(blurring ? blurSizes : sketchSizes).map((width, i) => (
+          {(hiding ? blurSizes : sketchSizes).map((width, i) => (
             <button
               key={i}
               type="button"
@@ -395,7 +422,7 @@ export function SketchEditor({
               aria-pressed={brush === width}
               onClick={() =>
                 setPen((p) =>
-                  blurring ? { ...p, blurSize: width } : { ...p, size: width },
+                  hiding ? { ...p, blurSize: width } : { ...p, size: width },
                 )
               }
             >
@@ -435,8 +462,8 @@ export function SketchEditor({
           </button>
         </div>
         <p>
-          Pause to snap a shape · Blur a box to hide all of it · {mod}Z undo ·
-          Esc done · Burned in when sent
+          Pause to snap a shape · Blur or black out a box to hide all of it ·{" "}
+          {mod}Z undo · Esc done · Burned in when sent
         </p>
       </div>
     </dialog>

@@ -10,6 +10,7 @@ import {
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
 import { projectFor } from "../features/pulls/pull-board";
+import { useReportRequests } from "../features/bug-report/useReportRequests";
 import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
 import { useShortcut } from "../lib/shortcuts";
@@ -106,6 +107,8 @@ export default function ProjectShell() {
   );
   const showSettings = useStableCallback(settings.show);
   useEffect(() => onOpenSettings(showSettings), [showSettings]);
+  const showReport = useStableCallback(() => settings.show("report"));
+  useReportRequests(showReport);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   // Scratchpad chats have their own sidebar section and never show as projects.

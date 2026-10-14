@@ -56,11 +56,13 @@ export interface ShortcutCommand {
   menu?: boolean;
   /** It sends a message, so Enter with ⌘, ⌃ or ⌥ held may be its key. */
   sends?: boolean;
+  /** Settings offers Esc pressed twice, which the recorder can't take. */
+  doubleEscape?: boolean;
   defaults: (mac: boolean) => KeyCombo[];
 }
 
 /** `mod` is ⌘ on macOS and Ctrl elsewhere; the key is the last part. */
-function combo(mac: boolean, spec: string, twice?: boolean): KeyCombo {
+function combo(mac: boolean, spec: string): KeyCombo {
   const parts = spec.split("+");
   const code = parts.pop()!;
   const has = (name: string) => parts.includes(name);
@@ -70,12 +72,20 @@ function combo(mac: boolean, spec: string, twice?: boolean): KeyCombo {
     ctrl: has("ctrl") || (!mac && has("mod")),
     meta: has("meta") || (mac && has("mod")),
     shift: has("shift"),
-    ...(twice ? { twice } : {}),
   };
 }
 const one =
-  (spec: string, twice?: boolean) =>
-  (mac: boolean): KeyCombo[] => [combo(mac, spec, twice)];
+  (spec: string) =>
+  (mac: boolean): KeyCombo[] => [combo(mac, spec)];
+
+export const doubleEscapeCombo: KeyCombo = {
+  code: "Escape",
+  alt: false,
+  ctrl: false,
+  meta: false,
+  shift: false,
+  twice: true,
+};
 
 const shortcutCommands = {
   settings: {
@@ -151,9 +161,10 @@ const shortcutCommands = {
     title: "Stop the answer and pause queued messages",
     group: "Threads",
     description:
-      "2× Esc needs a second press, so a stray Esc can't stop anything. Keys of your own stop right away.",
+      "None by default, so Esc only closes things and the Stop button stops. Keys you set stop right away; 2× Esc waits for a second press.",
     keywords: "cancel interrupt escape",
-    defaults: one("Escape", true),
+    doubleEscape: true,
+    defaults: () => [],
   },
   "effort-down": {
     title: "Less reasoning effort",

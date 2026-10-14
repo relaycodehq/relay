@@ -421,7 +421,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     .catch((e) => console.warn("Could not reconcile thread summaries:", e));
   rearmOnWake(powerMonitor, () => chats.armWakeups());
   if (!process.env.RELAY_TEST_DATA) {
-    agentUpdates.start();
+    agentUpdates.start(store.get().agentUpdateChecks ?? true);
     keepUpdated(updater, {
       enabled: () => autoUpdateEnabled(home),
       busy: () => chats.working() > 0 || receiver.busy,

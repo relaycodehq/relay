@@ -235,12 +235,20 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       );
     return { ...params, sandbox: false };
   };
+  /** No run this turn sent is left without the worker's answer. */
+  let answered = true;
+  const awaited = <T>(reply: Promise<T>) => {
+    answered = false;
+    reply.then(
+      () => (answered = true),
+      () => (answered = true),
+    );
+    return reply;
+  };
   const send = (params: CursorRun) => {
     const id = connection.reserve();
     connection.keep({ agentId: options.session?.id, run: { run, id } });
-    const reply = connection.request("run", params, id);
-    void reply.catch(() => {});
-    return reply;
+    return awaited(connection.request("run", params, id));
   };
 
   try {
@@ -248,8 +256,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     let reply: Promise<CursorRunResult>;
     let params: CursorRun | undefined;
     if (adopted) {
-      reply = connection.wait(adopted.id) as Promise<CursorRunResult>;
-      void reply.catch(() => {});
+      reply = awaited(connection.wait(adopted.id) as Promise<CursorRunResult>);
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
     } else {
@@ -385,11 +392,14 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     connection.unlisten(run);
     // What the last Relay's steers and cancels were answered with, in the replay.
     if (adopted) connection.dropOrphans();
-    settle(connection, agentId, !!key);
+    // Given up on before the worker said the turn ended (a cancel it never
+    // confirmed, an answer cut off at its limit), the turn may still run
+    // there. Ending the worker ends it; the next turn resumes the agent.
+    settle(connection, agentId, !!key && answered);
   }
 }
 
-/** The turn is over: the worker keeps its agent for the next, unless it was a private one. */
+/** The turn is over: the worker keeps its agent for the next, unless it was a private one or still busy. */
 function settle(
   connection: CursorConnection,
   agentId: string | undefined,

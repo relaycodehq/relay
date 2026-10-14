@@ -100,6 +100,8 @@ async function modelSelection(run: CursorRun): Promise<ModelSelection> {
 // Agents stay open between a thread's turns, so the next one starts warm.
 const open = new Map<string, { key: string; agent: SDKAgent }>();
 const runs = new Map<string, Run>();
+/** Agents with a turn running in this worker. */
+const busy = new Set<string>();
 
 async function agentFor(
   run: CursorRun,
@@ -280,11 +282,19 @@ async function startWith(
         })),
       }
     : params.prompt;
+  // The SDK saves a turn as running until it ends, so one whose worker died
+  // mid-turn (stopped while stuck, Relay quitting, a crash) leaves its agent
+  // refusing every message after with "already has active run". Only a
+  // worker that runs the agent's turns itself has a live one to wait for.
+  const force = !busy.has(agent.agentId);
   const run = await agent
     .send(message as string, {
       ...(model ? { model } : {}),
       mode: params.mode,
-      ...(Object.keys(customTools).length ? { local: { customTools } } : {}),
+      local: {
+        force,
+        ...(Object.keys(customTools).length ? { customTools } : {}),
+      },
       onDelta: ({ update }) => forward(params.run, update),
     })
     .catch((error) => {
@@ -303,6 +313,7 @@ async function startWith(
     update: { type: "agent", agentId: agent.agentId },
   });
   runs.set(params.run, run);
+  busy.add(agent.agentId);
   try {
     const result = await run.wait();
     flush(params.run);
@@ -319,6 +330,7 @@ async function startWith(
     };
   } finally {
     runs.delete(params.run);
+    busy.delete(agent.agentId);
   }
 }
 
