@@ -46,7 +46,9 @@
 }
 .composer-skill-chip {
   display: inline-flex;
-  align-items: center;
+  /* The label sets the pill's baseline, so it sits on the text's line; the
+     icon would otherwise lend its own and lift the label a few pixels. */
+  align-items: baseline;
   vertical-align: baseline;
   gap: 4px;
   max-width: 100%;
@@ -68,6 +70,7 @@
 }
 .composer-skill-icon {
   flex: none;
+  align-self: center;
   width: 13px;
   height: 13px;
   color: transparent;
@@ -87,6 +90,7 @@
 }
 .composer-file-icon {
   flex: none;
+  align-self: center;
   width: 13px;
   height: 13px;
   background: var(--muted);
@@ -99,6 +103,7 @@
 /* A screenshot's place in the message: the file tag around a thumbnail big
    enough to recognise. A paste is just the picture; its name says nothing. */
 .composer-image-chip {
+  align-items: center;
   gap: 6px;
   padding: 2px 7px 2px 2px;
   vertical-align: middle;
