@@ -27,7 +27,10 @@ import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
 import { useShellNavigation, type Surface } from "./useShellNavigation";
 import { roomFor } from "../lib/workspace-panes";
-import { useSidebarVisibility } from "./useSidebarVisibility";
+import {
+  useSidebarVisibility,
+  useWindowFitsSidebar,
+} from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
 import { useThreadView } from "../features/thread/useThreadView";
 import { PullsSurface } from "./PullsSurface";
@@ -113,6 +116,9 @@ export default function ProjectShell() {
     },
     noPanes ? 0 : roomFor(panes.shown),
   );
+  // Settings' own nav stands where the sidebar does.
+  const sidebarShown = !sidebar.hidden || settings.open;
+  useWindowFitsSidebar(sidebarShown, sidebar.toggled);
   const showSettings = useStableCallback(settings.show);
   useEffect(() => onOpenSettings(showSettings), [showSettings]);
   const showReport = useStableCallback(() => settings.show("report"));

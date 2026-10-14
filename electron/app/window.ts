@@ -4,6 +4,7 @@ import {
   dialog,
   nativeImage,
   nativeTheme,
+  screen,
   type IpcMainInvokeEvent,
   type Rectangle,
   type WebContents,
@@ -19,6 +20,8 @@ import { ThreadWindows } from "./thread-windows";
 /** The window whose page made the API call running now. */
 const callers = new AsyncLocalStorage<BrowserWindow | null>();
 const pageErrorLimit = 100;
+/** The main window's narrowest, with the projects sidebar and without it (a thread window's). */
+const MAIN_MIN_WIDTH = { sidebar: 1050, alone: 560 };
 
 /** Runs `call` as one made from `win`'s page; see `AppWindow.caller`. */
 export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
@@ -56,6 +59,8 @@ export class AppWindow {
   private closingToQuit = false;
   /** A thread to open once the main window's page asks, as it loads. */
   private pendingThread?: ThreadWindow;
+  /** The main window's minimum width its sidebar wants; see `fitSidebar`. */
+  private sidebarMin = MAIN_MIN_WIDTH.sidebar;
   /** Hidden pages of Relay's own that may call the API, as a phone's draft send opens. */
   private helpers = new Set<BrowserWindow>();
 
@@ -73,7 +78,7 @@ export class AppWindow {
         this.build(
           {
             ...(bounds ?? { width: 1100, height: 900 }),
-            minWidth: 560,
+            minWidth: MAIN_MIN_WIDTH.alone,
             minHeight: 500,
           },
           unloadKept,
@@ -103,6 +108,42 @@ export class AppWindow {
   caller(): BrowserWindow | null {
     const from = callers.getStore();
     return from && !from.isDestroyed() ? from : this.win;
+  }
+
+  /**
+   * The main window's minimum follows its sidebar. Shown by the user's
+   * toggle in a window narrower than that, the window widens, staying on its
+   * screen. Shown any other way, it keeps its size, and the narrower minimum
+   * stays until the window grows past the sidebar's.
+   */
+  fitSidebar(shown: boolean, toggled: boolean) {
+    const win = this.win;
+    if (!win || win.isDestroyed() || callers.getStore() !== win) return;
+    this.sidebarMin = shown ? MAIN_MIN_WIDTH.sidebar : MAIN_MIN_WIDTH.alone;
+    const bounds = win.getBounds();
+    if (
+      toggled &&
+      bounds.width < this.sidebarMin &&
+      !win.isFullScreen() &&
+      !win.isMaximized()
+    ) {
+      const area = screen.getDisplayMatching(bounds).workArea;
+      const width = Math.min(this.sidebarMin, area.width);
+      const x = Math.max(
+        area.x,
+        Math.min(bounds.x, area.x + area.width - width),
+      );
+      win.setBounds({ ...bounds, x, width }, true);
+    }
+    this.holdMinWidth(win);
+  }
+
+  /** Raises the minimum to the sidebar's only once the window is that wide. */
+  private holdMinWidth(win: BrowserWindow) {
+    const [width] = win.getSize();
+    const [held, minHeight] = win.getMinimumSize();
+    const minWidth = width >= this.sidebarMin ? this.sidebarMin : held;
+    if (minWidth !== held) win.setMinimumSize(minWidth, minHeight);
   }
 
   /** The window a thread's things lay over: its own if it has one, else the main one. */
@@ -199,13 +240,19 @@ export class AppWindow {
     // Hidden while Relay sat in the menubar alone.
     if (process.platform === "darwin") void app.dock?.show();
     const win = this.build(
-      { width: 1500, height: 960, minWidth: 1050, minHeight: 650 },
+      {
+        width: 1500,
+        height: 960,
+        minWidth: MAIN_MIN_WIDTH.sidebar,
+        minHeight: 650,
+      },
       () => {
         this.closingToQuit = false;
         this.hooks.quitCancelled();
       },
     );
     this.win = win;
+    win.on("resize", () => this.holdMinWidth(win));
     // A reloaded window starts without terminals; shells keep their output until it asks.
     win.webContents.on("did-start-navigation", (details) => {
       if (details.isMainFrame && !details.isSameDocument)

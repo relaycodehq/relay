@@ -324,6 +324,7 @@ const methods = [
   "setBadge",
   "windowControl",
   "isMaximized",
+  "setSidebarShown",
   "parseUrl",
   "phoneRemoteState",
   "setPhoneRemote",

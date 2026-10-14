@@ -677,6 +677,11 @@ export interface Api
   /** The Windows caption buttons, which the renderer draws itself. */
   windowControl(action: "minimize" | "toggleMaximize" | "close"): Promise<void>;
   isMaximized(): Promise<boolean>;
+  /**
+   * The main window narrows further while its projects sidebar is hidden.
+   * `toggled`: the user showed it, so a window too narrow for it widens.
+   */
+  setSidebarShown(shown: boolean, toggled: boolean): Promise<void>;
   onMaximized(callback: (maximized: boolean) => void): () => void;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;

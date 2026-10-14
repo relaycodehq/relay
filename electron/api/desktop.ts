@@ -107,6 +107,9 @@ export function desktopHandlers(ctx: ApiContext) {
       },
     ),
     isMaximized: () => window.caller()?.isMaximized() ?? false,
+    setSidebarShown: takes([z.boolean(), z.boolean()], (shown, toggled) =>
+      window.fitSidebar(shown, toggled),
+    ),
     writeClipboard: takes([textSchema], async (text) => {
       await clipboard.writeText(text);
     }),

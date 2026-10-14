@@ -72,7 +72,10 @@ export function useSidebarVisibility(
     window.clearTimeout(peekTimer.current);
     peekTimer.current = window.setTimeout(() => setPeek(false), 250);
   };
+  // Set by the toggle until the next commit, which reads it.
+  const toggled = useRef(false);
   const toggle = () => {
+    toggled.current = true;
     window.clearTimeout(peekTimer.current);
     setPeek(false);
     if (zoom.on) return zoom.exit();
@@ -152,5 +155,25 @@ export function useSidebarVisibility(
     peekClose,
     layoutRef: setLayout,
     asideRef,
+    toggled,
   };
+}
+
+/**
+ * Tells the main window when its sidebar comes or goes, so its minimum width
+ * follows. Only the user's own toggle may widen it; Settings, zoom and panes
+ * keep its size. A layout effect, so it sees the commit the toggle caused
+ * before anything else can render in between.
+ */
+export function useWindowFitsSidebar(
+  shown: boolean,
+  toggled: { current: boolean },
+) {
+  const was = useRef<boolean>(undefined);
+  useLayoutEffect(() => {
+    if (was.current !== shown)
+      void window.relay.setSidebarShown(shown, toggled.current);
+    was.current = shown;
+    toggled.current = false;
+  });
 }
