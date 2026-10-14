@@ -156,9 +156,8 @@ fun ModelSheet(
     fun pick(id: String) = onChange(withComposerChange(settings, ComposerChange.Model(provider, id), mapOf(provider to list.orEmpty())), null)
 
     Sheet(onDismiss, title = "Model") {
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-            SegmentedTabs(agentProviders.map { TabOption(it, agentName(it)) }, provider, { onChange(settings, it) }, fill = false)
-        }
+        // Unfilled segmented tabs scroll themselves; another scroll around them measures them unbounded and crashes.
+        SegmentedTabs(agentProviders.map { TabOption(it, agentName(it)) }, provider, { onChange(settings, it) }, fill = false)
         if (efforts.isNotEmpty()) {
             SectionHeader("Reasoning")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
