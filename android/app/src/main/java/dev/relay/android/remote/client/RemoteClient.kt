@@ -12,10 +12,14 @@ import dev.relay.android.remote.model.RemoteCredentials
 import dev.relay.android.remote.model.RemoteEvent
 import dev.relay.android.remote.model.RemoteJson
 import dev.relay.android.remote.model.ServerFrame
+import dev.relay.android.remote.tunnel.TunnelFrame
+import dev.relay.android.remote.tunnel.TunnelStreams
 import dev.relay.android.remote.validHost
+import dev.relay.android.remote.wire.Opened
 import dev.relay.android.remote.wire.WireData
-import dev.relay.android.remote.wire.openFrame
+import dev.relay.android.remote.wire.openWire
 import dev.relay.android.remote.wire.sealFrame
+import dev.relay.android.remote.wire.sealTunnel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -131,6 +135,9 @@ class RemoteClient(
     private var chats: List<RemoteChatSummary>? = null
 
     private class Pending(val result: CompletableDeferred<JsonElement>, val timer: Job)
+
+    /** Raw TCP to the desktop's own loopback over this link, from Bridge.TUNNEL. */
+    val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name })
 
     /** The desktop's name, from the link or the saved credentials. */
     val name: String
@@ -391,6 +398,8 @@ class RemoteClient(
         bridgeVersion = link.frame.bridge
         streaming.clear()
         chats = null
+        // Streams belong to the socket they opened on.
+        tunnel.reset("Relay moved to another route.")
         val fresh = link.frame.hosts?.filter(::validHost)
         val t = target
         if (link.frame.t == "paired" && t is RemoteStart.Pair) {
@@ -454,7 +463,8 @@ class RemoteClient(
         race(hosts, object : Race {
             override fun stale() = closed || current !== was
             override fun claim(link: Link): Boolean {
-                if (calls.isNotEmpty()) {
+                // A move would cut open pages' connections, Vite's live reload among them.
+                if (calls.isNotEmpty() || tunnel.active > 0) {
                     busy = true
                     return false
                 }
@@ -541,7 +551,15 @@ class RemoteClient(
                     socket.send(sealFrame(ready, signInFrame().toString(), compact = false))
                     return
                 }
-                val frame = RemoteJson.decodeFromString(ServerFrame.serializer(), openFrame(open, data))
+                val wire = openWire(open, data)
+                if (wire is Opened.Tunnel) {
+                    if (state == DialState.Won && current === this) {
+                        keepAlive(this)
+                        tunnelFrame(wire.frame)
+                    }
+                    return
+                }
+                val frame = RemoteJson.decodeFromString(ServerFrame.serializer(), (wire as Opened.Json).text)
                 if (state == DialState.Dialing) {
                     if (frame.t == "denied") return fail(Denied(frame.reason ?: "Relay said no."))
                     if (frame.t != "paired" && frame.t != "ready") return fail(Exception("Unexpected answer from Relay."))
@@ -651,6 +669,20 @@ class RemoteClient(
         current?.socket?.send(sealFrame(open, frame.toString(), compact))
     }
 
+    private fun sendTunnel(frame: TunnelFrame) {
+        val open = channel ?: return
+        current?.socket?.send(sealTunnel(open, frame))
+    }
+
+    /** A tunnel frame's trouble is the tunnel's, not the link's. */
+    private fun tunnelFrame(frame: TunnelFrame) {
+        try {
+            tunnel.receive(frame)
+        } catch (e: Exception) {
+            warn("Couldn't take in a tunnel frame:", e)
+        }
+    }
+
     private fun drop(reason: String) {
         watchdog?.cancel()
         betterTimer?.cancel()
@@ -662,6 +694,7 @@ class RemoteClient(
         bridgeVersion = null
         streaming.clear()
         chats = null
+        tunnel.reset(reason)
         dial?.quit()
         for (call in calls.values) {
             call.timer.cancel()

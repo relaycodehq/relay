@@ -47,6 +47,8 @@ import dev.relay.android.remote.model.TurnPreview
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
+import dev.relay.android.features.tunnel.rememberTunnels
+import dev.relay.android.remote.tunnel.LocalUrls
 import dev.relay.android.ui.ring
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
@@ -79,7 +81,10 @@ fun TurnPreviewCard(chatId: String, messageId: String, preview: TurnPreview) {
     val chrome = c.foreground.copy(alpha = 0.03f).compositeOver(c.background)
     val edge = c.foreground.copy(alpha = 0.14f)
     val short = shortUrl(preview.url)
-    val link = remember(preview.url) { opensOnPhone(preview.url) }
+    // The computer's own localhost opens here through the tunnel, where the desktop has one.
+    val tunnels = rememberTunnels(remote)
+    val local = remember(preview.url) { LocalUrls.link(preview.url) != null }
+    val link = remember(preview.url, tunnels) { opensOnPhone(preview.url) || (local && tunnels) }
     val open = { runCatching { uri.openUri(preview.url) }; Unit }
     // The frame hangs off the bar's lower edge; without one the bar is a card of its own.
     val bar = if (preview.shot == true) RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp) else RoundedCornerShape(9.dp)
@@ -102,7 +107,7 @@ fun TurnPreviewCard(chatId: String, messageId: String, preview: TurnPreview) {
                 Text(short, style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
             }
             if (link) Box(Modifier.pressable(open).padding(7.dp)) {
-                Icon(TablerIcons.Outline.ExternalLink, "Open in your browser", size = 14.dp, tint = c.mutedForeground)
+                Icon(TablerIcons.Outline.ExternalLink, if (local) "Open here through your computer" else "Open in your browser", size = 14.dp, tint = c.mutedForeground)
             }
         }
         if (preview.shot == true) Frame(chatId, messageId, preview.title.ifEmpty { short }, edge)

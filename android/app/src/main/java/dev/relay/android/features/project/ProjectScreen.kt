@@ -26,6 +26,7 @@ import dev.relay.android.features.home.LocalProjectIconPath
 import dev.relay.android.features.home.ThreadRow
 import dev.relay.android.features.home.projectIconPath
 import dev.relay.android.features.home.threadDraft
+import dev.relay.android.features.tunnel.rememberTunnels
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.backAction
@@ -35,6 +36,7 @@ import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.projectTasks
 import dev.relay.android.remote.client.projectWorkingTree
 import dev.relay.android.remote.model.WorkingTree
+import dev.relay.android.remote.tunnel.SiteAddress
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.RowSize
@@ -49,6 +51,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.GitCommit
 import io.github.lyxnx.compose.ui.tablericons.outline.GitCompare
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
+import io.github.lyxnx.compose.ui.tablericons.outline.World
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -74,7 +77,7 @@ internal fun changesLine(tree: WorkingTree) = listOfNotNull(
     if (tree.behind > 0) "${tree.behind} to pull" else null,
 ).joinToString(" · ")
 
-private class Glance(val tree: WorkingTree?, val tasks: Int?)
+private class Glance(val tree: WorkingTree?, val tasks: Int?, val ports: List<Int> = emptyList())
 
 /** The working tree (git projects only) and how many tasks run; a failed half is left out. */
 private suspend fun RemoteClient.glance(id: String, git: Boolean): Glance = coroutineScope {
@@ -86,8 +89,9 @@ private suspend fun RemoteClient.glance(id: String, git: Boolean): Glance = coro
         null
     }
     val tree = async { if (git) quiet { projectWorkingTree(id) } else null }
-    val tasks = async { quiet { projectTasks(id).size } }
-    Glance(tree.await(), tasks.await())
+    val tasks = async { quiet { projectTasks(id) } }
+    val running = tasks.await()
+    Glance(tree.await(), running?.size, running.orEmpty().flatMap { it.ports }.distinct().sorted())
 }
 
 /** A project: its checkout at a glance, its panes, and every thread in it (mobile/src/app/project/[id].tsx). */
@@ -107,6 +111,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
     val drafts = remember(overview) { home.drafts.list(overview) }
     val git = project != null && project.plain != true
     val online = status.state == LinkState.Online
+    val tunnels = rememberTunnels(remote)
     var glance by remember { mutableStateOf<Glance?>(null) }
     var refreshing by remember { mutableStateOf(false) }
 
@@ -159,6 +164,15 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
                             "Tasks",
                             running?.let { if (it > 0) "$it running" else "Nothing running" },
                         ) { navigator.push(Route.Tasks(id)) }
+                    }
+                    if (tunnels) item(key = "sites") {
+                        val ports = glance?.ports.orEmpty()
+                        Entry(
+                            TablerIcons.Outline.World,
+                            "Sites",
+                            if (ports.isEmpty()) "Open localhost on ${overview?.name ?: "the computer"}"
+                            else ports.joinToString(", ") { "localhost:$it" },
+                        ) { navigator.push(Route.Browser(ports.singleOrNull()?.let { SiteAddress(it).href })) }
                     }
                     item(key = "threads-head") { SectionHeader("Threads", Modifier.padding(horizontal = 12.dp)) }
                     items(chats, key = { it.id }) { chat ->

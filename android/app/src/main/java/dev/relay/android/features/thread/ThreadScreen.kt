@@ -385,6 +385,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                         onHistory = { where?.let { nav.push(Route.History(it)) } },
                         onCompact = actions::compact,
                         onArchive = { sheet = Sheet.Archive },
+                        onSites = if (bridge >= Bridge.TUNNEL) ({ nav.push(Route.Browser()) }) else null,
                     ),
                 ),
                 onClose = { if (sheet == Sheet.Thread) sheet = null },

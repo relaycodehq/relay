@@ -162,6 +162,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 - WebSocket binary frame = `seal( flag(1 byte) || body )`.
   - `flag 0x00`: body is UTF-8 JSON.
   - `flag 0x01`: body is **raw DEFLATE** (no zlib header) of the UTF-8 JSON. The phone uses fflate level 6; the desktop uses `deflateRawSync` level 6.
+  - `flag 0x02` (bridge ≥ 23): a port tunnel frame, bytes rather than JSON; see "Port tunnel" in section 5.
 - Deflate is used only when `256 ≤ jsonBytes ≤ deflateUpTo` and the result is smaller. `deflateUpTo` is 1 MiB on the phone (`:25-35`) and unlimited on the desktop (`server.ts:90-96`).
 - The desktop caps inflate output at 32 MiB.
 - Any other flag throws "Unknown frame".
@@ -378,6 +379,15 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - Only the newest snapshot per message is held back.
   - Non-streaming messages are always sent whole.
 - **Both ends reset all patch state on every connection.**
+
+### Port tunnel (bridge 23, `shared/remote-tunnel.ts`)
+`adb reverse` over the bridge. The phone listens on its own 127.0.0.1 (the desktop's port when it's free and ≥ 1024, else any) and carries each connection to the same port on the desktop's loopback (127.0.0.1, then ::1; never another host, never the bridge's own port).
+- Only from a signed-in phone that sent `bridge ≥ 23`; the desktop **terminates** anyone else who sends one (`server.ts`, `tunnel()`).
+- Frame: `seal( 0x02 || op u8 || stream u32 BE || body )`. Ops: `1 open` (port u16 BE, phone → desktop), `2 opened`, `3 data` (1..32 KiB), `4 packed` (the same as raw DEFLATE; the desktop packs ≥ 1 KiB chunks that shrink), `5 credit` (u32), `6 end` (TCP FIN), `7 close` (UTF-8 reason, empty for none; also an open's refusal).
+- Flow control: per stream and direction at most 256 KiB unconsumed (written to the receiver's socket); the receiver credits consumed bytes back once ≥ 64 KiB. More than the window drops the stream.
+- Lifecycle: the phone opens; `opened` or `close(reason)`; data both ways; each side sends `end` as its socket's read side ends; the desktop sends `close("")` once its socket has fully closed, and `close(reason)` on errors. A `close` from either side ends the stream; frames for unknown streams are ignored. At most 24 streams per phone. Every stream ends with the connection.
+- `sites()`: `[{port, title, command, projectId, project, chatId?, worktree?}]`, projects' tasks with a listening port, one per port, the bridge's own left out.
+- Vectors: `shared/remote-tunnel.test.ts` and `TunnelFrameTest.kt` hold the same bytes.
 
 ---
 

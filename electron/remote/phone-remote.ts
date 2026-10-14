@@ -25,6 +25,7 @@ import { lanAddresses } from "./lan";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
+import { listSites, Tunnel } from "../tunnel";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/);
 const appReportSchema = z
@@ -173,8 +174,13 @@ export class PhoneRemote {
             throw new Error("Read aloud isn't available on this computer.");
           return this.readings.handle(deviceId, readAloudSchema.parse(args[0]));
         }
+        if (method === "sites") return listSites(host, [this.server.port]);
         return this.bridge.handle(method, args, deviceId);
       },
+      tunnel: (deviceId, send) =>
+        this.isComputer(deviceId)
+          ? undefined
+          : new Tunnel(send, { refused: () => [this.server.port] }),
       // Thread states are watched for phones; computers ask for theirs.
       onPresence: () =>
         this.bridge.setWatching(

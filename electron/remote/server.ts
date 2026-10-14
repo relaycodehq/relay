@@ -5,11 +5,19 @@ import {
   type Channel,
   type KeyPair,
 } from "../../shared/remote-crypto";
-import { openFrame, sealFrame, type Codec } from "../../shared/remote-wire";
+import {
+  isTunnel,
+  openFrame,
+  sealFrame,
+  sealTunnel,
+  type Codec,
+} from "../../shared/remote-wire";
+import type { TunnelFrame } from "../../shared/remote-tunnel";
 import {
   compactBridge,
   remoteBridgeVersion,
   remoteMethods,
+  tunnelBridge,
   type ClientFrame,
   type HelloFrame,
   type RemoteEvent,
@@ -34,7 +42,19 @@ export interface RemoteServerOptions {
   ) => Promise<unknown>;
   /** A phone came online or went away. */
   onPresence?: () => void;
+  /** A signed-in device's port tunnel, made at its first tunnel frame; none refuses it. See ../tunnel. */
+  tunnel?: (
+    deviceId: string,
+    send: (frame: TunnelFrame) => void,
+  ) => TunnelEnd | undefined;
   tickMs?: number;
+}
+
+/** One connection's tunnel, as the server drives it. */
+export interface TunnelEnd {
+  receive(frame: TunnelFrame): void;
+  /** The connection closed. */
+  close(): void;
 }
 
 interface Connection {
@@ -48,6 +68,7 @@ interface Connection {
   link?: LinkSender;
   /** The bridge the device said it speaks; 0 for ones from before it said. */
   bridge?: number;
+  tunnel?: TunnelEnd;
 }
 
 /** Unauthenticated sockets get this long to finish the handshake. */
@@ -211,6 +232,7 @@ export class RemoteServer {
     socket.on("pong", () => (c.alive = true));
     socket.on("close", () => {
       clearTimeout(unauthenticated);
+      c.tunnel?.close();
       this.connections.delete(c);
       if (c.deviceId) this.options.onPresence?.();
     });
@@ -230,18 +252,19 @@ export class RemoteServer {
         }
         return;
       }
-      let frame: ClientFrame;
+      let frame: unknown;
       try {
         frame = openFrame(
           c.channel,
           binary ? (data as Buffer) : data.toString(),
           nodeCodec,
-        ) as ClientFrame;
+        );
       } catch {
         // Not sealed with this session's key: someone else is talking.
         return socket.terminate();
       }
-      void this.receive(c, frame);
+      if (isTunnel(frame)) return this.tunnel(c, frame.frame);
+      void this.receive(c, frame as ClientFrame);
     });
   }
   private async receive(c: Connection, frame: ClientFrame) {
@@ -322,6 +345,24 @@ export class RemoteServer {
         error: e instanceof Error ? e.message : "Unexpected error",
       });
     }
+  }
+  /** Only from a signed-in device that said it speaks the tunnel; anyone else isn't a phone of ours. */
+  private tunnel(c: Connection, frame: TunnelFrame) {
+    if (!c.deviceId || (c.bridge ?? 0) < tunnelBridge)
+      return c.socket.terminate();
+    if (!this.stillPaired(c)) return;
+    const send = (f: TunnelFrame) => {
+      if (c.channel && c.socket.readyState === c.socket.OPEN)
+        c.socket.send(sealTunnel(c.channel, f));
+    };
+    c.tunnel ??= this.options.tunnel?.(c.deviceId, send);
+    if (c.tunnel) c.tunnel.receive(frame);
+    else if (frame.op === "open")
+      send({
+        op: "close",
+        stream: frame.stream,
+        reason: "Only a paired phone can open ports here.",
+      });
   }
   private tick() {
     for (const c of this.connections) {

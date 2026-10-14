@@ -15,6 +15,7 @@ import dev.relay.android.features.git.DiffScreen
 import dev.relay.android.features.git.HistoryScreen
 import dev.relay.android.features.git.TurnScreen
 import dev.relay.android.features.tasks.TasksScreen
+import dev.relay.android.features.tunnel.BrowserScreen
 import dev.relay.android.features.project.ProjectScreen
 import dev.relay.android.features.home.ProjectCardBadge
 import dev.relay.android.features.home.ProvideProjectIcons
@@ -63,4 +64,5 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.File> { FileScreen(container.remote, it.where, it.path) }
     entry<Route.History> { HistoryScreen(container.remote, it.where) }
     entry<Route.Tasks> { TasksScreen(container.remote, it.where) }
+    entry<Route.Browser> { BrowserScreen(container.remote, container.tunnels, it.url) }
 }

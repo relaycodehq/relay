@@ -34,6 +34,7 @@ import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
+import type { RemoteSite } from "./remote-tunnel";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -168,7 +169,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 22;
+export const remoteBridgeVersion = 23;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -252,6 +253,11 @@ export const folderHandoffBridge = 20;
 export const startHandoffBridge = 20;
 /** From here a send may carry the skills its pills picked (`skills`); older computers refuse the field. */
 export const skillsBridge = 21;
+/**
+ * From here a phone may tunnel TCP to the desktop's own loopback
+ * (shared/remote-tunnel) and list what listens there (`sites`).
+ */
+export const tunnelBridge = 23;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -558,6 +564,8 @@ export interface RemoteApi {
   image(source: RemoteImageSource, max: number): Promise<string>;
   /** One page of a thread's render, as the agent wrote it; missing before `renderBridge`. */
   renderPage(chatId: string, renderId: string, page: number): Promise<string>;
+  /** Projects' tasks listening on a port, one per port; from `tunnelBridge`. */
+  sites(): Promise<RemoteSite[]>;
   /** The phone's edit of a draft; the draft as it stands after, null once gone. From `draftsBridge`. */
   saveDraft(write: DraftWrite): Promise<SharedDraft | null>;
   /** Swaps in the version a clash kept, or with `drop` lets it go. From `draftsBridge`. */
@@ -637,6 +645,7 @@ export const remoteMethods = [
   "activityDetail",
   "image",
   "renderPage",
+  "sites",
   "saveDraft",
   "draftOther",
   "sendDraft",

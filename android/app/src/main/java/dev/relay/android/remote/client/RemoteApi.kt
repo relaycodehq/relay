@@ -17,6 +17,7 @@ import dev.relay.android.remote.model.RemoteImageSource
 import dev.relay.android.remote.model.RemoteJson
 import dev.relay.android.remote.model.RemoteOverview
 import dev.relay.android.remote.model.RemoteProjectIcon
+import dev.relay.android.remote.model.RemoteSite
 import dev.relay.android.remote.model.SentChat
 import dev.relay.android.remote.model.SharedDraft
 import dev.relay.android.remote.model.SubagentList
@@ -74,6 +75,9 @@ suspend fun RemoteClient.image(source: RemoteImageSource, max: Int): String = ca
 /** One page's HTML. From Bridge.RENDER. */
 suspend fun RemoteClient.renderPage(chatId: String, renderId: String, page: Int): String =
     call("renderPage", args(s(chatId), s(renderId), n(page))).to()
+
+/** Projects' tasks listening on a port, one per port. From Bridge.TUNNEL. */
+suspend fun RemoteClient.sites(): List<RemoteSite> = call("sites").to()
 
 /** The draft as it stands after, null once gone. From Bridge.DRAFTS. */
 suspend fun RemoteClient.saveDraft(write: DraftWrite): SharedDraft? =
