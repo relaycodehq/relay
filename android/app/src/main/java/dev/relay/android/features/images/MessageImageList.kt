@@ -20,12 +20,15 @@ sealed interface ImageSource {
     data class Read(val chatId: String, val messageId: String, val path: String) : ImageSource
     /** Pasted into a message still on its way; [PendingImages] holds it. */
     data class Pending(val messageId: String, val index: Int) : ImageSource
+    /** The preview's last frame a turn kept; only desktops from Bridge.PREVIEW hand it out. */
+    data class Preview(val chatId: String, val messageId: String) : ImageSource
 }
 
 internal fun ImageSource.remote(): RemoteImageSource? = when (this) {
     is ImageSource.Attached -> RemoteImageSource.attached(chatId, imageId)
     is ImageSource.Read -> RemoteImageSource.read(chatId, messageId, path)
     is ImageSource.Pending -> null
+    is ImageSource.Preview -> RemoteImageSource.preview(chatId, messageId)
 }
 
 /**

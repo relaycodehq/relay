@@ -52,6 +52,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
 import dev.relay.android.features.home.chatSettled
 import dev.relay.android.features.markdown.FileLinkTarget
+import dev.relay.android.features.notes.ThreadNotesButton
 import dev.relay.android.features.thread.logic.chainRoot
 import dev.relay.android.features.thread.logic.latestSetup
 import dev.relay.android.features.thread.logic.mainMessages
@@ -263,6 +264,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             onTitleClick = if (line != null) composer::openSettings else null,
             actions = {
                 if (rootId == null) {
+                    ThreadNotesButton(remote, id, summary?.notesMark, shown, list, composer::quote)
                     if (projectId != null) CiStatusButton(remote, projectId, id, running)
                     IconButton(TablerIcons.Outline.Dots, "Thread actions", { sheet = Sheet.Thread }, enabled = where != null)
                 }
@@ -293,7 +295,11 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     }
                 }
                 items(shown, key = { it.id }) { m ->
-                    MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                    // One child, so the reversed list keeps the line under its message.
+                    Column {
+                        MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                        if (rootId == null) WorkspaceMoveLine(t?.workspaceMoves, m.id)
+                    }
                 }
                 if (t != null && t.earlier > 0 && rootId == null) item("earlier") { Earlier(t.earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
             }

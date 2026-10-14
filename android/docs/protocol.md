@@ -5,7 +5,7 @@ ROOT = `/Users/lubomirmolin/Library/Application Support/Relay Experimental/workt
 **Corrections to the brief, checked against the code:**
 - **No relay server, rendezvous service or HTTP transport exists.** The only transport is a direct `ws://` WebSocket to the desktop over a local-network or Tailscale address.
 - **`relay-watch` is not a network component.** `mobile/modules/relay-watch` is only an Android foreground service plus notifications. It keeps the JS client alive in the background.
-- **"bridge 19" is `draftsBridge`.** The current bridge version is **21**. The "bridge 14 patches" are `compactBridge`.
+- **"bridge 19" is `draftsBridge`.** The current bridge version is **22**. The "bridge 14 patches" are `compactBridge`.
 
 Core files: `shared/remote.ts` (types and constants), `shared/remote-crypto.ts`, `shared/remote-wire.ts`, `shared/remote-delta.ts`, `shared/remote-routes.ts`, `shared/remote-client.ts` (the phone client, with no React Native in it). Desktop side: `electron/remote/server.ts`, `bridge.ts`, `link-sender.ts`, `devices.ts`, `phone-remote.ts`, `lan.ts`, `tailscale.ts`.
 
@@ -183,7 +183,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 ## 4. Version negotiation and handshake messages (`shared/remote.ts:168-241`, `:723-761`)
 
 ### Current bridge version and feature thresholds
-`remoteBridgeVersion = 21`. Features switch on at these bridge versions:
+`remoteBridgeVersion = 22`. Features switch on at these bridge versions:
 
 | Bridge | Constant(s) | What it enables |
 |---|---|---|
@@ -198,6 +198,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 19 | `draftsBridge` | Shared drafts |
 | 20 | `folderHandoffBridge`, `startHandoffBridge` | Handoff folder methods and start |
 | 21 | `skillsBridge` | `skills` field in a send |
+| 22 | `previewBridge`, `notesBridge`, `workspaceMovesBridge` | `image` with `{kind:"preview"}`; `notesMark` on summaries and `threadNotes` / `tickThreadNote` / `removeThreadNote`; `workspaceMoves` on a thread |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.
@@ -222,7 +223,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 - `bridge` is read as `Number(frame.bridge) || 0`.
 - Calls outside `remoteMethods`, or with `args.length > 4`, return `ok:false` (`:311-314`).
 - After `paired`/`ready`, the phone always calls `overview` (`RemoteProvider.tsx:163`).
-- The UI flags the desktop as outdated when `overview.bridge < 21` (`:397`).
+- The UI flags the desktop as outdated when `overview.bridge < 22` (`:397`).
 
 ---
 
@@ -244,11 +245,12 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?}`.
   - `RemoteChatSummary` (`:108-147`):
     - required: `id, projectId, title, scope, updated, created`;
-    - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, limitResume`.
+    - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, limitResume, notesMark`.
+    - `notesMark` (bridge ≥ 22) changes whenever the thread's notes do; fetch them again with `desktop("threadNotes", [id])`.
     - Up to 300, sorted by `updated` descending, then `id` ascending (`bridge.ts:571-588`, `chatOrder` `remote-delta.ts:102`).
   - `PhoneAppearance` / palette: `#rrggbb` colours, strict (`phone-remote.ts:77-103`).
 - **`chat(id:uuid, known?:Record<msgId,version> /* ≤20000 */, history?:1..1000 /* default 100 */, sendId?:uuid)`** → `RemoteChat` (`:331-361`; built at `bridge.ts:218-280`):
-  - `{id, projectId, title, scope, messages:(ChatMessage|string)[], requests, queuePaused, stopped?, pending?, worktree?, running, root?, earlier, cost?, queue:RemoteQueued[], scheduled:(RemoteQueued&{at})[], settings?, lastParentId?, hasSend?, sendPending?}`.
+  - `{id, projectId, title, scope, messages:(ChatMessage|string)[], requests, queuePaused, stopped?, pending?, worktree?, workspaceMoves? /* bridge ≥ 22, shared/workspace-moves.ts */, running, root?, earlier, cost?, queue:RemoteQueued[], scheduled:(RemoteQueued&{at})[], settings?, lastParentId?, hasSend?, sendPending?}`.
   - A string entry in `messages` is the id of a message the phone already holds at that version. Rebuild with `applyChatPatch` (`shared/projects/sync.ts:26-40`); a missing id throws `MissingMessage`.
   - `knownOf` = `{[m.id]: m.version}`.
   - `sendId` asks for a receipt: `hasSend` / `sendPending` (used by the outbox, `mobile/src/remote/outbox.ts:180`).
@@ -273,7 +275,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - Types are in `shared/subagents.ts:16-51`.
   - The phone polls every 5 s, backing off to 20 s without changes and 60 s on errors (`mobile/src/remote/subagent-poll.ts`).
 - **`image(source, max:int 16..4096)`** → data URL, shrunk so its longer side is at most `max`. Bridge ≥ 14.
-  - `source` = `{kind:"attached", chatId, imageId}` or `{kind:"read", chatId, messageId, path}`.
+  - `source` = `{kind:"attached", chatId, imageId}`, `{kind:"read", chatId, messageId, path}`, or from bridge 22 `{kind:"preview", chatId, messageId}` (the frame `ChatMessage.preview` kept when `shot`).
   - Older bridges: use `desktop("projectChatImage" | "projectChatReadImage")` instead.
 - **`renderPage(chatId, renderId, page:0..11)`** → HTML string (`RENDER_MAX_PAGES = 12`). Bridge ≥ 17.
   - `ChatMessage.renders: HtmlRender{id, title, pages:[{label?, heights?:number[] /* per RENDER_WIDTHS [320,480,640,800,960,1120] */}], created}` (`shared/html-render.ts:7-42`).
@@ -324,6 +326,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
     - `stopProjectChatPending` (`:226`)
     - `projectChatAgents` / `projectChatAgent` / `stopProjectChatAgent` (`:229-236`)
     - `projectChatImage` / `projectChatQueuedImages` / `projectChatReadImage` (`:239-245`)
+    - `threadNotes` (`:141`): `[id]` → `ThreadNote[]`; `tickThreadNote` (`:149`): `[id, noteId, item /* from 1 */, done]` and `removeThreadNote` (`:157`): `[id, noteId]` → the notes after. Bridge ≥ 22; `ThreadNote` is in `shared/thread-notes.ts`.
     - `selectAgentWorktree` (`:314`)
     - `closeWatchNote` (`:354`)
     - `projectWorktree` (`:285`)

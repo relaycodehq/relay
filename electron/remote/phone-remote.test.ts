@@ -871,6 +871,55 @@ it("only answers the allowlisted calls, and only after pairing", async () => {
   });
 });
 
+it("lets a phone read, tick and remove a thread's notes and see its preview, but not a paired computer", async () => {
+  const notes = [{ id: "n1", text: "- a\n- b", created: 1, updated: 1 }];
+  const { remote, dispatched } = await desktop(async (method) =>
+    method === "threadNotes"
+      ? notes
+      : method === "projectChatPreviewShot"
+        ? "data:image/jpeg;base64,AA=="
+        : [],
+  );
+  const pair = async (device: string, kind?: "computer") => {
+    const link = parsePairingUrl((await remote.pairing()).url)!;
+    const p = phone({ link, device, ...(kind ? { kind } : {}) });
+    await p.until("online");
+    return p.client;
+  };
+  const p = await pair("Pixel");
+  expect(await p.call("desktop", "threadNotes", [chatId])).toEqual(notes);
+  await p.call("desktop", "tickThreadNote", [chatId, "n1", 2, true]);
+  await p.call("desktop", "removeThreadNote", [chatId, "n1"]);
+  const messageId = randomUUID();
+  expect(
+    await p.call("image", { kind: "preview", chatId, messageId }, 600),
+  ).toMatch(/^data:image\/jpeg/);
+  // Keeping, pinning and reordering stay on the desktop.
+  for (const blocked of [
+    "keepThreadNote",
+    "pinThreadMessage",
+    "arrangeThreadNote",
+  ])
+    await expect(
+      p.call("desktop", blocked as "threadNotes", [chatId]),
+    ).rejects.toThrow();
+
+  // A paired computer hands threads over; it doesn't reach into them.
+  const computer = await pair("Studio", "computer");
+  await expect(
+    computer.call("desktop", "threadNotes", [chatId]),
+  ).rejects.toThrow("Computers can't do that.");
+  await expect(
+    computer.call("image", { kind: "preview", chatId, messageId }, 600),
+  ).rejects.toThrow("Computers can't do that.");
+  expect(dispatched).toEqual([
+    { method: "threadNotes", args: [chatId] },
+    { method: "tickThreadNote", args: [chatId, "n1", 2, true] },
+    { method: "removeThreadNote", args: [chatId, "n1"] },
+    { method: "projectChatPreviewShot", args: [chatId, messageId] },
+  ]);
+});
+
 it("lets a phone in past sockets someone holds open without a handshake", async () => {
   const { remote } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;

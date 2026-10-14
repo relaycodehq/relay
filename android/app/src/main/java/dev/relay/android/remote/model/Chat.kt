@@ -17,6 +17,8 @@ data class RemoteChat(
     val stopped: StoppedWorkList? = null,
     val pending: List<ChatPending>? = null,
     val worktree: ChatWorktree? = null,
+    /** From Bridge.WORKSPACE_MOVES. */
+    val workspaceMoves: List<WorkspaceMove>? = null,
     val running: Boolean = false,
     val root: String? = null,
     val earlier: Int = 0,
@@ -45,6 +47,22 @@ data class ChatWorktree(
     val start: String? = null,
     val base: String? = null,
     val landed: JsonObject? = null,
+)
+
+/** `shared/projects/worktrees.ts` WorkspaceMove: the thread works somewhere else from [after] on. */
+@Serializable
+data class WorkspaceMove(
+    val at: Long,
+    /** The main conversation's last message before it; its line shows under that one. */
+    val after: String? = null,
+    /** "moved" | "recreated" | "switched" */
+    val how: String,
+    /** The folder it works in from here on; null for the project folder. */
+    val to: String? = null,
+    val branch: String? = null,
+    val fresh: Boolean? = null,
+    val unasked: Boolean? = null,
+    val by: String? = null,
 )
 
 @Serializable
@@ -105,7 +123,7 @@ data class RemoteDiffSource(
 
 @Serializable
 data class RemoteImageSource(
-    /** "attached" | "read" */
+    /** "attached" | "read" | "preview" (from Bridge.PREVIEW) */
     val kind: String,
     val chatId: String,
     val imageId: String? = null,
@@ -115,6 +133,7 @@ data class RemoteImageSource(
     companion object {
         fun attached(chatId: String, imageId: String) = RemoteImageSource("attached", chatId, imageId = imageId)
         fun read(chatId: String, messageId: String, path: String) = RemoteImageSource("read", chatId, messageId = messageId, path = path)
+        fun preview(chatId: String, messageId: String) = RemoteImageSource("preview", chatId, messageId = messageId)
     }
 }
 

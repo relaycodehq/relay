@@ -144,6 +144,8 @@ export interface RemoteChatSummary {
   startedBy?: StartedBy;
   /** The answer a usage limit stopped, resumed once the limit lifts; missing before `awayBridge`. */
   limitResume?: LimitResume;
+  /** Changes with the thread's notes, so a phone knows to fetch them again; missing before `notesBridge`. */
+  notesMark?: string;
 }
 
 export interface RemoteProject {
@@ -166,7 +168,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 21;
+export const remoteBridgeVersion = 22;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -203,11 +205,22 @@ export const renderBridge = 17;
  * thread's message.
  */
 export const draftsBridge = 19;
+/** From here phones may fetch the preview frame a turn kept (`image` with `{kind: "preview"}`). */
+export const previewBridge = 22;
+/**
+ * From here thread summaries carry `notesMark`, and phones may list, tick and
+ * remove a thread's notes (`threadNotes`, `tickThreadNote`, `removeThreadNote`).
+ */
+export const notesBridge = 22;
+/** From here a thread carries where it moved (`workspaceMoves`), for the line under its message. */
+export const workspaceMovesBridge = 22;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
   | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string };
+  | { kind: "read"; chatId: string; messageId: string; path: string }
+  /** The preview's last frame turn `messageId` kept; from `previewBridge`. */
+  | { kind: "preview"; chatId: string; messageId: string };
 /**
  * From here a desktop tells phones which thread started which and when a
  * limited answer resumes, and takes `setLimitResume` and `closeWatchNote`.
@@ -343,6 +356,7 @@ export interface RemoteChat extends Pick<
   | "stopped"
   | "pending"
   | "worktree"
+  | "workspaceMoves"
 > {
   running: boolean;
   /** The folder the thread works in; tool labels drop it, as on the desktop. Older desktops leave it out. */
@@ -390,7 +404,7 @@ export type RemoteDiffSource =
 
 /**
  * Desktop calls a paired phone makes as they are, validated by the desktop's
- * own dispatch: threads, models, Git (stage, commit, push, pull, fetch,
+ * own dispatch: threads and their notes, models, Git (stage, commit, push, pull, fetch,
  * branches), read-only files, history, background tasks and subagents; only what the
  * phone app uses. Terminals, file saves, settings (bar the agent new threads
  * start on), sharing and anything that opens a desktop dialog are not on the
@@ -426,6 +440,9 @@ export const phoneDesktopMethods = [
   "projectChatImage",
   "projectChatReadImage",
   "projectChatQueuedImages",
+  "threadNotes",
+  "tickThreadNote",
+  "removeThreadNote",
   "agentModels",
   "agentDefaults",
   "aiSettings",

@@ -105,10 +105,10 @@ class ThreadModel(
                 if (event.message.status != "streaming") launch { load() }
             }
         }
-        // Running, waiting and queue changes arrive as thread summaries.
+        // Running, waiting, queue and worktree changes arrive as thread summaries.
         scope.launch {
             remote.overview.map { o ->
-                summaryOf(o)?.let { "${it.running}:${it.waiting}:${it.updated}:${it.title}:${it.queueMark}" } ?: ""
+                summaryOf(o)?.let { "${it.running}:${it.waiting}:${it.updated}:${it.title}:${it.queueMark}:${it.branch}:${it.worktree}" } ?: ""
             }.distinctUntilChanged().collect { signature ->
                 if (signature.isNotEmpty() && _thread.value != null) launch { load() }
             }

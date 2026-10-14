@@ -206,6 +206,7 @@ fun MessageView(
                 image = if (m.status == "streaming") hideImage else showImage,
             )
         }
+        if (!user && m.status != "streaming") m.preview?.let { TurnPreviewCard(chatId, m.id, it) }
         if (!user) strip(Modifier)
         viewing?.let { v -> if (remote != null) Lightbox(remote, v.images, v.index) { viewing = null } }
         if (!user) AsyncQuestions(chatId, m)
