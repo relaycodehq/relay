@@ -389,6 +389,9 @@ export class BugReports {
 
   /** Ends a recording early; what it caught so far is kept. */
   stopRecording() {
+    // A page opened while it saves shows "Saving", not the time left.
+    if (this.recording)
+      this.recording.endsAt = Math.min(this.recording.endsAt, this.now);
     this.recording?.stop.abort();
   }
 

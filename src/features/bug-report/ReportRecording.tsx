@@ -89,7 +89,9 @@ export function ReportRecording({
 
 function Recording({ endsAt }: { endsAt: number }) {
   const now = useNow(1000);
-  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  // Saving takes a few seconds, which the countdown mustn't hide.
+  const [stopped, setStopped] = useState(false);
+  const left = stopped ? 0 : Math.max(0, Math.ceil((endsAt - now) / 1000));
   return (
     <div className="report-recording report-shot-adder" role="status">
       <Spinner size={13} steady />
@@ -102,7 +104,10 @@ function Recording({ endsAt }: { endsAt: number }) {
         <button
           type="button"
           className="text-button"
-          onClick={() => void api.stopBugReportRecording()}
+          onClick={() => {
+            setStopped(true);
+            void api.stopBugReportRecording();
+          }}
         >
           Stop now
         </button>
