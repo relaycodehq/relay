@@ -255,6 +255,10 @@
   position: relative;
 }
 .project-chat:not(.empty-thread) .project-messages {
+  /* The same room each side, the scrollbar's 6px counted; the prompt rail
+     (thread-timeline.css) sits in the left one. */
+  padding-left: 50px;
+  padding-right: 44px;
   padding-bottom: calc(var(--composer-dock-height, 0px) + 12px);
 }
 .thread-bottom-composer {

@@ -9,7 +9,7 @@ import { persistedStore } from "./persisted-store";
 export const chatWidths = { min: 800, max: 1600, step: 10, default: 1040 };
 
 /** The chat pane's side padding (.project-messages, .thread-bottom-composer). */
-export const THREAD_GUTTER = 56;
+export const THREAD_GUTTER = 100;
 
 const store = persistedStore(
   "relay-chat-width",

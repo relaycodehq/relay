@@ -19,6 +19,10 @@ import "./thread-timeline.css";
 const PITCH = 9;
 /** How many ticks either side of the pointer the lens widens. */
 const LENS = 4;
+/** The widest strip the rail answers the pointer in. */
+const REACH = 40;
+/** The most a tick widens, as a scale of its resting width. */
+const WIDEST = 2.2;
 
 /** The turn at the top of the view, or at the very bottom the last one. */
 function turnInView(view: HTMLElement, turnOf: Map<string, number>) {
@@ -36,10 +40,10 @@ function turnInView(view: HTMLElement, turnOf: Map<string, number>) {
 /** How wide tick `i` draws, as a scale of its resting width: the turn being
  * read is longest, and the ticks around the pointer widen toward it. */
 function tickScale(i: number, pointer: number | null, active: number) {
-  if (i === active) return 2.2;
+  if (i === active) return WIDEST;
   if (pointer === null) return 1;
   const near = 1 - Math.abs(i - pointer) / LENS;
-  return near > 0 ? 1 + near * 1.2 : 1;
+  return near > 0 ? 1 + near * (WIDEST - 1) : 1;
 }
 
 /**
@@ -64,22 +68,30 @@ export function ThreadTimeline({
   const { turns, turnOf } = useMemo(() => timelineTurns(listed), [listed]);
   const [active, setActive] = useState(-1);
   const [pointer, setPointer] = useState<number | null>(null);
-  // Where the view starts and how tall it is above the composer.
-  const [room, setRoom] = useState({ top: 0, height: 0 });
+  // Where the view starts, how tall it is above the composer, and how much
+  // room is left of the message column.
+  const [room, setRoom] = useState({ top: 0, height: 0, reach: 0 });
   const rail = useRef<HTMLDivElement>(null);
   const ids = useId();
 
   useEffect(() => {
     const view = scroll.current;
     if (!view) return;
+    const column = view.querySelector<HTMLElement>(".thread-message-column");
     let frame = 0;
     const update = () => {
       frame = 0;
       setActive(turnInView(view, turnOf));
       const top = view.offsetTop,
-        height = view.clientHeight - bottomInset;
+        height = view.clientHeight - bottomInset,
+        // A narrow window has only the view's padding left of the text; the
+        // rail keeps to that, or it would sit over the text and catch the
+        // presses and drags meant to select it.
+        reach = Math.min(REACH, column?.offsetLeft ?? REACH);
       setRoom((r) =>
-        r.top === top && r.height === height ? r : { top, height },
+        r.top === top && r.height === height && r.reach === reach
+          ? r
+          : { top, height, reach },
       );
     };
     const later = () => (frame ||= requestAnimationFrame(update));
@@ -87,6 +99,7 @@ export function ThreadTimeline({
     view.addEventListener("scroll", later, { passive: true });
     const observer = new ResizeObserver(later);
     observer.observe(view);
+    if (column) observer.observe(column);
     return () => {
       view.removeEventListener("scroll", later);
       observer.disconnect();
@@ -127,6 +140,8 @@ export function ThreadTimeline({
         {
           "--timeline-top": `${room.top}px`,
           "--timeline-room": `${room.height}px`,
+          "--timeline-reach": `${room.reach}px`,
+          "--tick-widest": WIDEST,
           "--timeline-height": `${height + 16}px`,
         } as CSSProperties
       }

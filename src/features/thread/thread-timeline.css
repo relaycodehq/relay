@@ -1,17 +1,27 @@
 /* The prompt rail beside a thread. Ticks change width with scaleX, so hover
    moves nothing but transforms; nothing here loops. The rail stays out of
-   sight until the pointer enters the strip it lives in or it has focus. */
+   sight until the pointer enters the strip it lives in or it has focus. The
+   strip and the rail only take the pointer in the room left of the text, and
+   draw in it too: in a narrow window the rail moves to the edge and its ticks
+   shorten, so the widest still ends short of the text. */
 .thread-timeline {
+  --timeline-edge: clamp(2px, var(--timeline-reach) - 34px, 6px);
+  --tick-inset: clamp(2px, var(--timeline-reach) - 36px, 4px);
   position: absolute;
   z-index: 4;
   left: 0;
   top: var(--timeline-top);
-  width: 40px;
+  width: var(--timeline-reach);
   height: var(--timeline-room);
+}
+/* A selection dragged past the text's left edge would otherwise end in the
+   strip, which the browser reads as the end of the thread. */
+.project-messages:active ~ .thread-timeline {
+  pointer-events: none;
 }
 .thread-timeline-body {
   position: absolute;
-  left: 6px;
+  left: var(--timeline-edge);
   top: 50%;
   translate: 0 -50%;
   height: var(--timeline-height);
@@ -26,15 +36,20 @@
 }
 .thread-timeline-rail {
   position: relative;
-  width: 30px;
+  width: max(0px, var(--timeline-reach) - var(--timeline-edge));
   height: 100%;
   cursor: pointer;
   outline: none;
 }
 .thread-timeline-rail > i {
   position: absolute;
-  left: 4px;
-  width: 11px;
+  left: var(--tick-inset);
+  width: clamp(
+    0px,
+    (var(--timeline-reach) - var(--timeline-edge) - var(--tick-inset) - 4px) /
+      var(--tick-widest),
+    11px
+  );
   height: 2px;
   margin-top: -1px;
   border-radius: 1px;
@@ -42,6 +57,9 @@
   opacity: 0.45;
   transform: scaleX(var(--tick-scale, 1));
   transform-origin: left center;
+  /* The rail reads the pointer's height itself; a widened tick reaching over
+     the text mustn't catch it. */
+  pointer-events: none;
   transition:
     transform 140ms ease-out,
     opacity 140ms ease-out;
