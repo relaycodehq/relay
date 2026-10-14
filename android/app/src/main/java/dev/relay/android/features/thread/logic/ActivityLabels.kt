@@ -22,6 +22,46 @@ private fun summary(kind: String, n: Int): String = when (kind) {
     else -> "Used ${plural(n, "tool")}"
 }
 
+/**
+ * electron/agents/activity.ts relayToolLabels: keep the two the same. The desktop words
+ * Relay's own tools when the call is made, so a turn from before a tool had its words
+ * still says "relay: add_note"; the phone words those again.
+ */
+internal val RELAY_TOOL_LABELS = mapOf(
+    "start_threads" to "Started threads",
+    "list_threads" to "Checked on started threads",
+    "find_threads" to "Looked through threads",
+    "read_thread" to "Read a thread",
+    "send_to_thread" to "Messaged a started thread",
+    "wait_for_threads" to "Waited for started threads",
+    "stop_thread" to "Stopped a started thread",
+    "hand_off_thread" to "Moved a thread to another computer",
+    "settle_thread" to "Settled a started thread",
+    "settle_this_thread" to "Settles this thread when done",
+    "move_to_worktree" to "Moved the thread to its own worktree",
+    "list_notes" to "Read the notes",
+    "add_note" to "Added a note",
+    "tick_note" to "Ticked an item in the notes",
+    "usage_limits" to "Checked usage limits",
+    "list_agents" to "Listed agents",
+    "list_projects" to "Listed projects",
+    "add_project" to "Added a project",
+    "restart_relay" to "Restarted Relay",
+    "show_html" to "Showed a page",
+    "preview_html" to "Looked at a page",
+    "ask_html" to "Asked with a page",
+    "open_preview" to "Opened the preview",
+    "screenshot" to "Looked at the preview",
+    "console_errors" to "Read the preview's console",
+)
+
+/** A call's label, with Relay's own tools in words even where the desktop sent their raw name. */
+fun callLabel(a: AgentActivity): String {
+    val mcp = a.mcp ?: return a.label
+    if (mcp.server != "relay" || a.label != "relay: ${mcp.tool}") return a.label
+    return RELAY_TOOL_LABELS[mcp.tool] ?: a.label
+}
+
 /** A native question call, kept separate from ordinary tool calls. */
 fun isQuestionCall(a: AgentActivity) =
     a.kind == "tool" && (a.label == "AskUserQuestion" || a.label == "request_user_input")
@@ -121,7 +161,7 @@ fun doneLabel(a: AgentActivity): String {
         "search" -> "Search failed: ${a.label}"
         "web" -> "Web search failed"
         "agent" -> "Agent failed: ${a.label}"
-        else -> "Tool failed: ${a.label}"
+        else -> "Tool failed: ${callLabel(a)}"
     }
     if (a.status == "stopped") return when (a.kind) {
         "command" -> "Stopped ${program()}"
@@ -131,7 +171,7 @@ fun doneLabel(a: AgentActivity): String {
         "web" -> "Web search stopped"
         "agent" -> "Agent stopped: ${a.label}"
         // Its label is still the running one, e.g. "Generating an image".
-        else -> "Stopped: ${a.label}"
+        else -> "Stopped: ${callLabel(a)}"
     }
     return when (a.kind) {
         "command" -> "Ran ${program()}"
@@ -139,7 +179,7 @@ fun doneLabel(a: AgentActivity): String {
         "file" -> "Edited ${baseName(a.label)}"
         "search" -> "Searched for ${a.label}"
         "web" -> "Searched the web"
-        else -> a.label
+        else -> callLabel(a)
     }
 }
 
@@ -152,6 +192,6 @@ fun liveLabel(a: AgentActivity): String {
         "file" -> "Editing ${baseName(a.label)}"
         "search" -> "Searching for ${a.label}"
         "web" -> "Searching the web"
-        else -> a.label
+        else -> callLabel(a)
     }
 }

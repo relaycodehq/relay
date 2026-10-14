@@ -3,9 +3,12 @@ package dev.relay.android.features.thread.logic
 import dev.relay.android.remote.model.AgentActivity
 import dev.relay.android.remote.model.AgentTrace
 import dev.relay.android.remote.model.ChatMessage
+import dev.relay.android.remote.model.McpCall
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 // Cases from shared/activity-labels.test.ts and agent-turn-labels.test.ts, plus agent-trace's grouping.
@@ -73,6 +76,25 @@ class TurnWordsTest {
             .copy(detail = "The user answered: \"Which db?\"=\"Postgres\", \"Why?\"=\"It, scales\". Carry on.")
         assertEquals(listOf("Which db?" to "Postgres", "Why?" to "It, scales"), askedQuestions(asked)!!.map { it.question to it.answer })
         assertEquals("Asked you 2 questions", doneLabel(asked))
+    }
+
+    @Test fun wordsRelaysOwnToolsThatCameRaw() {
+        fun mcp(label: String, server: String, tool: String) =
+            call("t", "tool", "complete", label).copy(mcp = McpCall(server, tool))
+        assertEquals("Added a note", doneLabel(mcp("relay: add_note", "relay", "add_note")))
+        assertEquals("Tool failed: Read the notes", doneLabel(mcp("relay: list_notes", "relay", "list_notes").copy(status = "failed")))
+        assertEquals("linear: add_note", doneLabel(mcp("linear: add_note", "linear", "add_note")))
+        assertEquals("relay: new_tool", doneLabel(mcp("relay: new_tool", "relay", "new_tool")))
+        assertEquals("Opened the preview", callLabel(mcp("Opened the preview", "relay", "add_note")))
+    }
+
+    /** The table is copied from the desktop's; this says when the two drift apart. */
+    @Test fun relayToolWordsMatchTheDesktops() {
+        val source = File("../../electron/agents/activity.ts")
+        assumeTrue("needs the repo around the app", source.exists())
+        val table = Regex("relayToolLabels: Record<string, string> = \\{([\\s\\S]*?)\\n\\};").find(source.readText())!!.groupValues[1]
+        val desktop = Regex("(\\w+):\\s*\"([^\"]*)\"").findAll(table).associate { it.groupValues[1] to it.groupValues[2] }
+        assertEquals(desktop, RELAY_TOOL_LABELS)
     }
 
     @Test fun commentarySplitsRunsAndQuestionsStandAlone() {
