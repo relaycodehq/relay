@@ -1534,10 +1534,11 @@ body.resizing-table-column {
 /* Loops hold still while the window is unfocused: even visible, each one
    costs a frame per display refresh (one spinner measured ~18% of a core,
    paused ~0%). Only endless loops are listed, so an entrance or exit that
-   starts while unfocused still finishes. */
+   starts while unfocused still finishes. The sidebar's working spinners keep
+   turning, so a glance at the window still says which threads are busy. */
 :root[data-inactive]
   :is(
-    .spinner,
+    .spinner:not(:is(.sb-status, .sb-card-state).running .spinner),
     .spinner-arc,
     .spin,
     .sb-version-spin,
