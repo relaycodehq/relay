@@ -41,6 +41,7 @@ import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonVariant
 import dev.relay.android.ui.Haptic
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.TextField
 import dev.relay.android.ui.pressable
@@ -49,6 +50,7 @@ import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Dots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -83,6 +85,7 @@ fun RequestCard(
     val scope = rememberCoroutineScope()
     var busy by remember(request.id) { mutableStateOf(false) }
     var error by remember(request.id) { mutableStateOf<String?>(null) }
+    var moreOptions by remember(request.id) { mutableStateOf(false) }
     val decisions = decisionsOf(request)
     val canRemember = "acceptForSession" in decisions
     // Room for the thread above it; with the keyboard up its body scrolls.
@@ -133,10 +136,15 @@ fun RequestCard(
                     variant = if (decision == "accept") ButtonVariant.Default else ButtonVariant.Outline,
                     enabled = !busy,
                 )
+                if ("cancel" in decisions) IconButton(TablerIcons.Outline.Dots, "More approval options", { moreOptions = true }, enabled = !busy)
             }
         }
         error?.let { Hint(it, color = c.destructive) }
     }
+    if (moreOptions) MenuSheet(
+        listOf(MenuItem(decisionLabels.getValue("cancel")) { respond(mapOf("kind" to "approval", "decision" to "cancel")) }),
+        onClose = { moreOptions = false },
+    )
 }
 
 @Composable
