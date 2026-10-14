@@ -1,0 +1,92 @@
+/* A command palette near the top of the window: a search field over a list
+   of rows, with a footer of hints. Adding a project and searching threads. */
+.modal.palette {
+  width: 600px;
+  margin-top: 12vh;
+  padding: 0;
+  overflow: hidden;
+}
+.modal.palette[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: min(660px, calc(100vh - 14vh - 40px));
+}
+.palette-search {
+  padding: 10px 3px;
+}
+.palette-search input,
+.palette-search input:focus-visible {
+  width: 100%;
+  border: 0;
+  padding: 4px 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+}
+.palette-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 7px;
+}
+.palette-body hr {
+  margin: 5px 4px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.palette-body .composer-menu-label {
+  padding: 8px 9px 4px;
+}
+.palette-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  justify-content: flex-start;
+}
+.palette-row[data-highlighted] {
+  background: var(--hover);
+}
+.palette-row .headline-project-row-label strong {
+  font-size: 13px;
+}
+.palette-row .headline-project-row-label small {
+  font-size: 11px;
+}
+.palette-row mark {
+  background: none;
+  color: var(--accent);
+}
+.palette-row em {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+.palette-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.palette-foot > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.palette-foot .text-button {
+  padding: 0;
+  font-size: 11px;
+}
+.palette-foot code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

@@ -46,6 +46,8 @@ import { IconButton, Spinner } from "../../ui/ui";
 /** What every group and project in the tree works with. */
 export interface ProjectTree {
   groups: ProjectGroups;
+  /** The groups' tree as listed: only the projects the filter takes. */
+  shown: ProjectFolderNode;
   drag: ProjectDrag;
   folds: SidebarFolds;
   rows: SidebarRows;

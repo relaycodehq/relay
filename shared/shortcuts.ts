@@ -115,6 +115,12 @@ const shortcutCommands = {
     keywords: "inbox bell notifications",
     defaults: one("mod+alt+KeyU"),
   },
+  "search-threads": {
+    title: "Search threads",
+    group: "General",
+    keywords: "find open thread palette quick open",
+    defaults: one("mod+KeyP"),
+  },
   terminal: {
     title: "Show or hide the terminal",
     group: "General",

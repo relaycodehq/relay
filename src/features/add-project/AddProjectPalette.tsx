@@ -44,6 +44,7 @@ import {
 import { LinkStep } from "./LinkStep";
 import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
+import "../../ui/palette.css";
 import "./add-project.css";
 
 type Page = "root" | "folder" | "github" | "url" | "new";
@@ -384,7 +385,7 @@ export function AddProjectPalette({
   return (
     <dialog
       ref={dialog}
-      className="modal add-palette"
+      className="modal palette add-palette"
       aria-label="Add a project"
       onCancel={(e) => {
         e.preventDefault();
@@ -415,7 +416,7 @@ export function AddProjectPalette({
               <span>/ {title[page]}</span>
             </div>
           )}
-          <div className="headline-project-search add-palette-search">
+          <div className="headline-project-search palette-search">
             {page === "folder" ? (
               <FolderOpen size={15} />
             ) : page === "new" ? (
@@ -444,11 +445,11 @@ export function AddProjectPalette({
             />
           </div>
           {adding.job ? (
-            <div className="add-palette-body">
+            <div className="palette-body">
               <JobProgress job={adding.job} onCancel={adding.cancel} />
             </div>
           ) : page === "new" ? (
-            <div className="add-palette-body add-palette-form">
+            <div className="palette-body add-palette-form">
               <NewProjectFields
                 name={name}
                 spec={fullSpec}
@@ -470,7 +471,7 @@ export function AddProjectPalette({
             </div>
           ) : (
             <div
-              className="add-palette-body"
+              className="palette-body"
               role="listbox"
               aria-label="Choices"
             >
@@ -498,7 +499,7 @@ export function AddProjectPalette({
                       type="button"
                       role="option"
                       aria-selected={i === active}
-                      className="headline-project-row add-palette-row"
+                      className="headline-project-row palette-row"
                       data-highlighted={i === active ? "" : undefined}
                       disabled={adding.busy}
                       onMouseMove={() => setActive(i)}
@@ -541,7 +542,7 @@ export function AddProjectPalette({
               )}
             </div>
           )}
-          <div className="add-palette-foot">
+          <div className="palette-foot">
             {page === "github" || page === "url" || remote ? (
               <span>
                 Clones into <code>{tildePath(cloneInto)}</code>

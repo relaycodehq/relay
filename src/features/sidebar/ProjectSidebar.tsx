@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ChartColumn, GitPullRequest, Plus } from "lucide-react";
+import { Bell, ChartColumn, GitPullRequest, Plus, Search } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
-import type { ChatSummary, Project } from "../../../shared/projects";
+import type {
+  AgentProvider,
+  ChatSummary,
+  Project,
+} from "../../../shared/projects";
 import { chatActivitySections } from "../../../shared/chat-activity";
 import { startedFamilies } from "../../../shared/started-families";
 import { api } from "../../lib/api";
-import { useShortcutLabel } from "../../lib/shortcuts";
+import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
 import { useNow } from "../../lib/useNow";
 import { useSidebarView } from "./useSidebarView";
 import { useSidebarFolds } from "./useSidebarFolds";
@@ -15,7 +19,14 @@ import { useProjectGroups } from "./useProjectGroups";
 import { useProjectDrag } from "./useProjectDrag";
 import { useSidebarThreads } from "./useSidebarThreads";
 import { useUnread } from "./useUnread";
-import { useThreadSearch } from "./useThreadSearch";
+import {
+  chatAgents,
+  passes,
+  pruneTree,
+  SCRATCHPAD,
+  takesProject,
+  useThreadFilter,
+} from "./useThreadFilter";
 import { useThreadActions } from "./useThreadActions";
 import { useActivityKeys } from "./useActivityKeys";
 import { draftsFirst } from "./activity";
@@ -28,7 +39,8 @@ import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
 import { SnoozePickDialog } from "./SnoozeMenu";
 import type { SidebarRows } from "./SidebarThread";
-import { SearchField, SearchResults } from "./SidebarSearch";
+import { SearchPalette } from "./SearchPalette";
+import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
 import "./sidebar.css";
@@ -109,24 +121,57 @@ export function ProjectSidebar({
   const unread = useUnread(chatId, listed);
   // A deep review shows as one thread: its reviewers open from the review,
   // which stays picked while one of them is open.
-  const all = listed.filter((c) => !c.reviewer);
+  const everything = listed.filter((c) => !c.reviewer);
   const shown =
     listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
-  const search = useThreadSearch(all, byId);
+  const [searching, setSearching] = useState(false);
+  useShortcut("search-threads", true, () => setSearching(true));
+  const projectKey = (id: string) => (scratchIds.has(id) ? SCRATCHPAD : id);
+  const filtering = useThreadFilter();
+  // A removed project's id would hide everything, with nothing to untick.
+  const filter = {
+    ...filtering.filter,
+    projects: filtering.filter.projects.filter(
+      (id) => id === SCRATCHPAD || byId.has(id),
+    ),
+  };
+  const filtered = !!(filter.projects.length || filter.agents.length);
+  const all = filtered
+    ? everything.filter((c) => passes(filter, projectKey(c.projectId), c))
+    : everything;
   // Follows drafts as they gain or lose text; each card follows its own.
   const draftKeys = useDraftKeys();
-  const drafts = activityDrafts(
+  const everyDraft = activityDrafts(
     draftKeys,
     byId,
-    new Map(all.map((c) => [c.id, c])),
+    new Map(everything.map((c) => [c.id, c])),
   );
-  const drafted = new Set(drafts.flatMap((d) => (d.chat ? [d.chat.id] : [])));
-  const sections = draftsFirst(
-    chatActivitySections(all, now),
-    all,
-    drafted,
-    useDraftRaise(drafted),
+  const draftedIn = (ds: typeof everyDraft) =>
+    new Set(ds.flatMap((d) => (d.chat ? [d.chat.id] : [])));
+  const everyDrafted = draftedIn(everyDraft);
+  const raised = useDraftRaise(everyDrafted);
+  const every = draftsFirst(
+    chatActivitySections(everything, now),
+    everything,
+    everyDrafted,
+    raised,
   );
+  const kept = new Set(all.map((c) => c.id));
+  const drafts = filtered
+    ? everyDraft.filter((d) =>
+        d.chat
+          ? kept.has(d.chat.id)
+          : takesProject(filter, projectKey(d.project.id)),
+      )
+    : everyDraft;
+  const sections = filtered
+    ? draftsFirst(
+        chatActivitySections(all, now),
+        all,
+        draftedIn(drafts),
+        raised,
+      )
+    : every;
   const families = startedFamilies(sections.active, sections.settled);
   const actions = useThreadActions({
     chatId: shown,
@@ -138,7 +183,7 @@ export function ProjectSidebar({
     onProjectSettings: (id) => onSettings("project", id),
     setError,
   });
-  const activity = view === "activity" && !search.query;
+  const activity = view === "activity";
   const cmdHeld = useActivityKeys({
     active: sections.active,
     // ⌘1–9 count the cards, which started threads and settled leads don't get.
@@ -147,7 +192,8 @@ export function ProjectSidebar({
     jumping: activity,
     actions,
   });
-  const attention = useAttention(sections.active, unread, onAttention);
+  // The bell counts what wants you even where the filter hides it.
+  const attention = useAttention(every.active, unread, onAttention);
   const settleKeys = useShortcutLabel("settle");
   const rows: SidebarRows = {
     chatId: shown,
@@ -160,10 +206,50 @@ export function ProjectSidebar({
   };
   const newThreadKeys = useShortcutLabel("new-thread");
   const activityKeys = useShortcutLabel("activity");
+  const searchKeys = useShortcutLabel("search-threads");
+  // The filter offers the projects with threads, the one whose threads
+  // changed last first, and the agents threads ran.
+  const latest = new Map<string, { project: Project; at: number }>();
+  const agents = new Set<AgentProvider>();
+  for (const c of everything) {
+    const key = projectKey(c.projectId);
+    const project = byId.get(c.projectId);
+    if (project && !latest.has(key))
+      latest.set(key, { project, at: c.updated });
+    for (const a of chatAgents(c)) agents.add(a);
+  }
+  // A ticked agent no thread ran any more still shows, to untick it.
+  for (const a of filter.agents) agents.add(a);
+  const offered = [
+    ...[...latest].map(([key, last]) => ({ key, ...last })),
+    // A ticked one whose threads are gone still shows, to untick it.
+    ...filter.projects.flatMap((key) => {
+      const project = byId.get(key);
+      return project && !latest.has(key) ? [{ key, project }] : [];
+    }),
+  ];
   return (
     <div className="sb">
       <div className="sb-top">
-        <SearchField search={search} onOpen={openChat} />
+        {activity && (
+          <h2 className="sb-top-title">
+            Activity <small>({families.top.length})</small>
+          </h2>
+        )}
+        <button
+          className="sb-top-button sb-top-first"
+          aria-label="Search threads"
+          title={`Search threads  ${searchKeys}`.trim()}
+          onClick={() => setSearching(true)}
+        >
+          <Search size={15} />
+        </button>
+        <FilterMenu
+          state={filtering}
+          filter={filter}
+          projects={offered}
+          agents={[...agents]}
+        />
         <button
           className="sb-top-button"
           aria-label="New thread"
@@ -177,10 +263,7 @@ export function ProjectSidebar({
           aria-pressed={view === "activity"}
           aria-label="View activity"
           title={`View activity  ${activityKeys}`.trim()}
-          onClick={() => {
-            search.setText("");
-            toggleView();
-          }}
+          onClick={toggleView}
         >
           <Bell size={15} />
           {attention > 0 && (
@@ -192,9 +275,7 @@ export function ProjectSidebar({
       </div>
       {/* One scroller for every view, so it keeps its place across them. */}
       <div className={activity ? "sb-scroll sb-activity" : "sb-scroll"}>
-        {search.query ? (
-          <SearchResults search={search} rows={rows} />
-        ) : activity ? (
+        {activity ? (
           <ActivityView
             rows={rows}
             sections={sections}
@@ -227,16 +308,21 @@ export function ProjectSidebar({
                 Usage
               </button>
             </nav>
-            <Scratchpad
-              chats={all.filter((c) => scratchIds.has(c.projectId))}
-              draft={!!projectId && scratchIds.has(projectId) && !chatId}
-              rows={rows}
-              folds={folds}
-              onNew={onNewScratch}
-            />
+            {takesProject(filter, SCRATCHPAD) && (
+              <Scratchpad
+                chats={all.filter((c) => scratchIds.has(c.projectId))}
+                draft={!!projectId && scratchIds.has(projectId) && !chatId}
+                rows={rows}
+                folds={folds}
+                onNew={onNewScratch}
+              />
+            )}
             <ProjectsSection
               tree={{
                 groups,
+                shown: filter.projects.length
+                  ? pruneTree(groups.tree, (id) => filter.projects.includes(id))
+                  : groups.tree,
                 drag,
                 folds,
                 rows,
@@ -253,6 +339,14 @@ export function ProjectSidebar({
         )}
       </div>
       {viewError && <ErrorBox error={viewError} />}
+      {searching && (
+        <SearchPalette
+          threads={everything}
+          projects={byId}
+          onOpen={openChat}
+          onClose={() => setSearching(false)}
+        />
+      )}
       {actions.pickingSnooze && (
         <SnoozePickDialog
           onSnooze={(until) =>

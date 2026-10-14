@@ -18,6 +18,7 @@ export interface SearchOption {
 export function SearchSelect({
   label,
   value,
+  checked,
   options,
   onChange,
   placeholder = "Search…",
@@ -34,6 +35,8 @@ export function SearchSelect({
   label: string;
   /** The picked option, checked in the list; none for a menu of actions. */
   value?: string;
+  /** Picks several instead: these are checked, and picking one keeps it open. */
+  checked?: readonly string[];
   options: SearchOption[];
   onChange: (value: string) => void;
   placeholder?: string;
@@ -77,7 +80,9 @@ export function SearchSelect({
       {option.detail && (
         <small className="search-select-detail">{option.detail}</small>
       )}
-      {value !== undefined && option.value === value && (
+      {(checked
+        ? checked.includes(option.value)
+        : value !== undefined && option.value === value) && (
         <Check size={13} className="search-select-check" />
       )}
     </Combobox.Item>
@@ -129,6 +134,7 @@ export function SearchSelect({
               onValueChange={(next) => {
                 if (next === null) return;
                 onChange(next);
+                if (checked) return;
                 setOpen(false);
                 onOpenChange?.(false);
               }}

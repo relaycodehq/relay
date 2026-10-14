@@ -142,7 +142,7 @@ export function ProjectsSection({
       </div>
       {error && <p className="sb-note error">{error}</p>}
       {!folds.folded.projects && (
-        <GroupContents node={groups.tree} tree={tree} />
+        <GroupContents node={tree.shown} tree={tree} />
       )}
       {!folds.folded.projects && empty && (
         <p className="sb-note">Add a project folder to get started.</p>

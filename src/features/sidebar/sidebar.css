@@ -37,64 +37,59 @@
   color: var(--text);
 }
 
-/* Header: search, new thread, activity bell. */
+/* Header: the view's name, search, filter, new thread, activity bell. */
 .sb-top {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 12px 10px 8px;
+  /* Its edges line up with the cards' below. */
+  padding: 12px 8px 8px;
 }
-.sb-search {
+/* The view's name and count, where the buttons leave room. */
+.sb-top-title {
   flex: 1;
   min-width: 0;
-  height: 30px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 0 8px 0 10px;
-  border-radius: 8px;
-  color: var(--muted);
-  font-weight: 400;
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-  cursor: text;
-  transition: background-color 0.12s;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.sb-search:focus-within {
-  background: var(--surface);
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* Fills the box: a short field gets a short caret. */
-.sb-search input {
-  flex: 1;
-  align-self: stretch;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  padding: 0;
-  background: transparent;
+.sb .sb-top-title {
+  font-size: 13px;
   color: var(--text);
-  font-size: 12px;
 }
-.sb-search input::placeholder {
+.sb-top-title small {
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+/* Keeps the buttons right-aligned whether or not a title is showing. */
+.sb .sb-top-first {
+  margin-left: auto;
+}
+.sb .sb-filter[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+.sb .sb-filter.active {
+  color: var(--accent);
+}
+/* Shorter than SearchSelect's fixed height when there's little to list. */
+.search-select-popup.sb-filter-popup {
+  width: 300px;
+  height: auto;
+  max-height: min(400px, var(--available-height));
+}
+.sb-filter-popup .provider-glyph {
+  width: 14px;
+  height: 14px;
+  margin: 0 1px;
 }
 /* sidebar.css loads before styles.css, so a plain `outline: 0` loses the
-   tie with the global `input:focus-visible` ring. The box or border marks
-   focus instead. */
-.sb-search input:focus-visible,
+   tie with the global `input:focus-visible` ring. The border marks focus
+   instead. */
 .sb-group-input input:focus-visible {
   outline: none;
-}
-.sb .sb-search-clear {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  color: var(--muted);
 }
 .sb .sb-top-button {
   position: relative;
@@ -115,8 +110,8 @@
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
-/* A badge on the bell's corner, so a count arriving never widens the button
-   and shoves the search field. The ring cuts it out of the bell. */
+/* A badge on the bell's or the filter's corner, so a count arriving never
+   widens the button. The ring cuts it out of the button. */
 .sb-bell-count {
   position: absolute;
   top: -3px;
@@ -173,8 +168,7 @@
   color: var(--accent);
 }
 
-.sb-section-heading,
-.sb-view-heading {
+.sb-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -214,10 +208,6 @@
 .sb .sb-section-toggle:hover {
   color: var(--text);
   background: var(--hover);
-}
-.sb-view-heading small {
-  color: var(--muted);
-  font-size: 11px;
 }
 .sb-row-actions {
   display: flex;

@@ -63,22 +63,6 @@
 .add-actions button {
   font-size: 12px;
 }
-.add-palette-row {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  justify-content: flex-start;
-}
-.add-palette-row em {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  color: var(--muted);
-  font-size: 11px;
-  font-style: normal;
-}
 .add-new-card .settings-row {
   min-height: 48px;
   padding: 9px 14px;
@@ -155,18 +139,6 @@
   font-style: normal;
 }
 
-/* A command palette near the top of the window. */
-.modal.add-palette {
-  width: 600px;
-  margin-top: 12vh;
-  padding: 0;
-  overflow: hidden;
-}
-.modal.add-palette[open] {
-  display: flex;
-  flex-direction: column;
-  max-height: min(660px, calc(100vh - 14vh - 40px));
-}
 .add-palette .add-link-step {
   padding: 18px 18px 16px;
 }
@@ -188,68 +160,12 @@
 .add-palette-crumb .text-button:hover {
   color: var(--text);
 }
-.add-palette-search {
-  padding: 10px 3px;
-}
-.add-palette-search input,
-.add-palette-search input:focus-visible {
-  width: 100%;
-  border: 0;
-  padding: 4px 0;
-  outline: none;
-  background: transparent;
-  font-size: 14px;
-}
-.add-palette-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 6px 7px;
-}
-.add-palette-body hr {
-  margin: 5px 4px;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-.add-palette-body .composer-menu-label {
-  padding: 8px 9px 4px;
-}
-.add-palette-row[data-highlighted] {
-  background: var(--hover);
-}
-.add-palette-row .headline-project-row-label strong {
-  font-size: 13px;
-}
-.add-palette-row .headline-project-row-label small {
-  font-size: 11px;
-}
 .add-palette-form {
   padding: 12px 14px 14px;
 }
 .add-palette .add-note {
   margin: 8px 4px 4px;
 }
-.add-palette-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 14px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-}
-.add-palette-foot > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.add-palette-foot .text-button {
-  padding: 0;
-  font-size: 11px;
-}
-.add-palette-foot code,
 .add-note code {
   font-family: var(--font-mono);
   font-size: 11px;

@@ -722,11 +722,18 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toBeVisible();
     await expect(page.locator(".pane-header")).toHaveCount(0);
-    await page.getByLabel("Search threads").fill("does not exist");
+    await page.getByRole("button", { name: "Search threads" }).click();
+    const search = page.getByRole("textbox", { name: "Search threads" });
+    await search.fill("does not exist");
     await expect(
       page.getByText("No matching threads.", { exact: true }),
     ).toBeVisible();
-    await page.getByLabel("Search threads").fill("");
+    await search.fill("cache guard");
+    await expect(
+      page.getByRole("option", { name: /Cache guard behavior/ }).first(),
+    ).toBeVisible();
+    await search.press("Escape");
+    await expect(search).toHaveCount(0);
     await page
       .getByRole("button", { name: "Back to conversation", exact: true })
       .click();

@@ -100,12 +100,6 @@ export function ActivityView({
   );
   return (
     <>
-      <div className="sb-view-heading">
-        <h2>Activity</h2>
-        <small>
-          {families.top.length ? `${families.top.length} open` : "All settled"}
-        </small>
-      </div>
       <div ref={list} className={`sb-cards ${hints ? "shortcuts" : ""}`}>
         {unsent.map((d) => (
           <DraftCard
