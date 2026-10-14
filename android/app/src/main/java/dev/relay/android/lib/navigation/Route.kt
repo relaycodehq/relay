@@ -40,4 +40,7 @@ sealed interface Route : NavKey {
     @Serializable data class File(val where: String, val path: String) : Route
     @Serializable data class History(val where: String) : Route
     @Serializable data class Tasks(val where: String) : Route
+
+    /** A browser on the computer's localhost, through the tunnel: `url` an http://localhost link, null for the sites. */
+    @Serializable data class Browser(val url: String? = null) : Route
 }

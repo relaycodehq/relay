@@ -59,6 +59,8 @@ class ThreadMenuActions(
     val onHistory: () -> Unit,
     val onCompact: () -> Unit,
     val onArchive: () -> Unit,
+    /** Where the computer can tunnel its localhost to the phone. */
+    val onSites: (() -> Unit)? = null,
 )
 
 fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
@@ -88,6 +90,7 @@ fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
     add(MenuItem("Changes", onPress = a.onChanges))
     add(MenuItem("Files", onPress = a.onFiles))
     add(MenuItem("History", onPress = a.onHistory))
+    a.onSites?.let { add(MenuItem("Sites", "What runs on the computer's localhost, in a browser here", onPress = it)) }
     add(MenuItem("Compact the conversation", "The agent summarises it to free up its context.", onPress = a.onCompact))
     add(MenuItem("Archive", destructive = true, onPress = a.onArchive))
 }

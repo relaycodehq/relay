@@ -2,8 +2,8 @@ package dev.relay.android.features.tasks
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,13 +31,16 @@ import dev.relay.android.features.git.ago
 import dev.relay.android.features.git.call
 import dev.relay.android.features.git.errorText
 import dev.relay.android.features.git.rememberLive
+import dev.relay.android.features.tunnel.rememberTunnels
 import dev.relay.android.lib.navigation.LocalNavigator
+import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.projectTasks
 import dev.relay.android.remote.client.restartProjectTask
 import dev.relay.android.remote.client.stopProjectTask
 import dev.relay.android.remote.model.ProjectTask
+import dev.relay.android.remote.tunnel.SiteAddress
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.ButtonVariant
@@ -116,6 +119,7 @@ fun TasksScreen(remote: Remote, projectId: String) {
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
     val live = rememberLive(remote)
+    val open = if (rememberTunnels(remote)) { port: Int -> nav.push(Route.Browser(SiteAddress(port).href)) } else null
     // Processes come and go on their own; look again every few seconds while open.
     LaunchedEffect(live) {
         while (live) {
@@ -136,7 +140,7 @@ fun TasksScreen(remote: Remote, projectId: String) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (now.isEmpty()) item { EmptyNote("Nothing is running in this project.", Modifier.fillMaxWidth()) }
-                items(now, key = { it.id }) { task -> TaskCard(task, busy[task.id], model) }
+                items(now, key = { it.id }) { task -> TaskCard(task, busy[task.id], model, open) }
             }
         }
     }
@@ -144,7 +148,7 @@ fun TasksScreen(remote: Remote, projectId: String) {
 }
 
 @Composable
-private fun TaskCard(task: ProjectTask, busy: String?, model: TasksModel) {
+private fun TaskCard(task: ProjectTask, busy: String?, model: TasksModel, open: ((Int) -> Unit)?) {
     val c = RelayTheme.colors
     Card(Modifier.fillMaxWidth(), padding = 12.dp, gap = 6.dp) {
         Text(task.title, style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold))
@@ -152,7 +156,18 @@ private fun TaskCard(task: ProjectTask, busy: String?, model: TasksModel) {
             Text(task.command, style = RelayTheme.type.mono.copy(fontSize = 12.sp, lineHeight = 17.sp), color = c.mutedForeground, maxLines = 3)
         }
         Text(taskMeta(task), style = RelayTheme.type.xs, color = c.mutedForeground)
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+        // A task can listen on a few ports; their buttons wrap.
+        FlowRow(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (open != null) for (port in task.ports) Button(
+                "Open :$port",
+                { open(port) },
+                variant = ButtonVariant.Outline,
+                size = ButtonSize.Sm,
+            )
             Button(
                 if (busy == "restart") "Restarting…" else "Restart",
                 { model.restart(task) },

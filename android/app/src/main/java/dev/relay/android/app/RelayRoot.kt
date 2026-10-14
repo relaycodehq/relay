@@ -24,6 +24,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -34,6 +35,9 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.relay.android.features.home.ConnectionLine
 import dev.relay.android.features.home.NeedsYou
+import dev.relay.android.features.markdown.LocalOpensLocalhost
+import dev.relay.android.features.tunnel.rememberTunnelLinks
+import dev.relay.android.features.tunnel.rememberTunnels
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.remote.model.PhoneAppearance
 import dev.relay.android.remote.model.PhonePalette
@@ -95,7 +99,13 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
             if (sidebar || top is Route.Settings || top is Route.Pair || (top == Route.Home && !panes)) null
             else ({ ConnectionLine(remote) })
 
-        CompositionLocalProvider(LocalNavigator provides navigator, LocalToasts provides toasts) {
+        val links = rememberTunnelLinks(remote, LocalUriHandler.current, navigator)
+        CompositionLocalProvider(
+            LocalNavigator provides navigator,
+            LocalToasts provides toasts,
+            LocalUriHandler provides links,
+            LocalOpensLocalhost provides rememberTunnels(remote),
+        ) {
             Box(Modifier.fillMaxSize().background(RelayTheme.colors.background)) {
                 WideLayout(panes, prefs, sidebar = { HomeSidebar(container) }) {
                     CompositionLocalProvider(LocalScreenNotice provides notice) {

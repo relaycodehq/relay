@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.relay.android.remote.model.TurnFileChange
+import dev.relay.android.remote.tunnel.LocalUrls
 import dev.relay.android.ui.Divider
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.theme.RelayTheme
@@ -41,6 +43,12 @@ typealias ShowImage = @Composable (src: String, alt: String) -> Unit
 fun fileLinks(folder: String, changes: List<TurnFileChange> = emptyList(), open: (FileLinkTarget) -> Unit): OpenLink =
     { value, inline -> fileLinkTarget(value, inline, folder, changes)?.let { target -> { open(target) } } }
 
+/**
+ * Set where the computer tunnels its ports to the phone: a localhost URL in
+ * backticks, as agents often write a dev server's address, opens like a link.
+ */
+val LocalOpensLocalhost = compositionLocalOf { false }
+
 /** What the blocks share; one per Markdown, so blocks that didn't change skip. */
 @Immutable
 internal class MdContext(
@@ -48,12 +56,14 @@ internal class MdContext(
     val openPath: OpenLink?,
     val openWeb: (String) -> Unit,
     val image: ShowImage?,
+    val localhost: Boolean = false,
 ) {
     /** A file first, then a web link; anything else stays text, as on the desktop. */
     fun link(href: String): (() -> Unit)? =
         openPath?.invoke(href, false) ?: if (isWebUrl(href)) ({ openWeb(href) }) else null
 
     fun code(code: String): (() -> Unit)? = openPath?.invoke(code.trim(), true)
+        ?: code.trim().takeIf { localhost && LocalUrls.link(it) != null }?.let { url -> { openWeb(url) } }
 }
 
 /**
@@ -77,14 +87,15 @@ fun Markdown(
     val cache = remember { MarkdownCache() }
     val blocks = remember(markdown) { cache.blocks(markdown) }
     val uri = LocalUriHandler.current
-    val context = remember(small, onLink, folder, openPath, image, uri) {
+    val localhost = LocalOpensLocalhost.current
+    val context = remember(small, onLink, folder, openPath, image, uri, localhost) {
         val web = onLink ?: { href: String -> runCatching { uri.openUri(href) }; Unit }
         val paths = openPath ?: if (folder != null && onLink != null) {
             { value: String, inline: Boolean ->
                 if (fileLinkTarget(value, inline, folder) != null) ({ onLink(value) }) else null
             }
         } else null
-        MdContext(small, paths, web, image)
+        MdContext(small, paths, web, image, localhost)
     }
     val content = @Composable {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
