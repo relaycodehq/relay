@@ -3,6 +3,9 @@ package dev.relay.android.remote.wire
 import dev.relay.android.remote.crypto.Base64Url
 import dev.relay.android.remote.crypto.Channel
 import dev.relay.android.remote.crypto.decodeUtf8Strict
+import dev.relay.android.remote.tunnel.TunnelCodec
+import dev.relay.android.remote.tunnel.TunnelFrame
+import dev.relay.android.remote.tunnel.TunnelLimits
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 import java.util.zip.Inflater
@@ -77,15 +80,29 @@ fun sealFrame(channel: Channel, json: String, compact: Boolean): WireData {
 }
 
 /** `openFrame`: the JSON text inside. Throws on anything that doesn't open or has an unknown flag. */
-fun openFrame(channel: Channel, data: WireData): String = when (data) {
-    is WireData.Text -> channel.open(Base64Url.decode(data.text))
+fun openFrame(channel: Channel, data: WireData): String =
+    (openWire(channel, data) as? Opened.Json)?.text ?: throw IllegalArgumentException("Unknown frame.")
+
+/** What a frame opens to: JSON, or from the tunnel's bridge on a port tunnel frame. */
+sealed interface Opened {
+    data class Json(val text: String) : Opened
+    data class Tunnel(val frame: TunnelFrame) : Opened
+}
+
+/** Throws on anything that doesn't open, has an unknown flag or is a malformed tunnel frame. */
+fun openWire(channel: Channel, data: WireData): Opened = when (data) {
+    is WireData.Text -> Opened.Json(channel.open(Base64Url.decode(data.text)))
     is WireData.Binary -> {
         val plain = channel.openBytes(data.bytes)
         if (plain.isEmpty()) throw IllegalArgumentException("Unknown frame.")
         when (plain[0]) {
-            RAW -> decodeUtf8Strict(plain, 1)
-            DEFLATED -> decodeUtf8Strict(Codec.inflate(plain.copyOfRange(1, plain.size)))
+            RAW -> Opened.Json(decodeUtf8Strict(plain, 1))
+            DEFLATED -> Opened.Json(decodeUtf8Strict(Codec.inflate(plain.copyOfRange(1, plain.size))))
+            TunnelLimits.FLAG -> Opened.Tunnel(TunnelCodec.decode(plain))
             else -> throw IllegalArgumentException("Unknown frame.")
         }
     }
 }
+
+/** A tunnel frame, sealed as it is: always binary, since the tunnel's bridge is past compact's. */
+fun sealTunnel(channel: Channel, frame: TunnelFrame): WireData = WireData.Binary(channel.seal(TunnelCodec.encode(frame)))
