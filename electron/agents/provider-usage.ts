@@ -22,6 +22,7 @@ import type { UsageProvider } from "../../shared/agents";
 import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { recordUsage } from "./usage-history";
 import { profileDir } from "./accounts/profiles";
+import { withTimeout } from "../util/timeout";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -30,6 +31,8 @@ const EMPTY_TTL = 8_000;
 // Without a running session, each Claude reading starts the CLI.
 const CLAUDE_TTL = 150_000;
 const REFRESH_SLACK = 5 * 60 * 1000;
+// Claude starts its CLI for a reading, so this leaves it room.
+const LOAD_TIMEOUT = 60_000;
 
 type Source =
   | { kind: "file"; path: string }
@@ -82,8 +85,12 @@ export function readProviderUsage(
   }
   const existing = pending.get(key);
   if (existing) return existing;
-  const task = readers[provider]
-    .load(account)
+  // Later readings join this one, so one that never settles would freeze the ring.
+  const task = withTimeout(
+    readers[provider].load(account),
+    LOAD_TIMEOUT,
+    `${provider} usage took too long`,
+  )
     .catch((): ProviderUsage => ({
       provider,
       windows: [],
