@@ -72,14 +72,13 @@ export function turnRules(turn: ChatTurn) {
       (kind !== "reply" || turn.caughtUp !== false),
     /** A thread's first answer names it. */
     titles: kind !== "compact",
-    /** A deep reviewer's Codex review applies to its own turns only. */
-    reviews: kind !== "compact" && kind !== "adopt",
   };
 }
 
 /**
- * What the agent runs for a turn of this kind. A compaction or a picked-up
- * turn wins over a deep reviewer's Codex review, which wins over a side turn.
+ * What the agent runs for a turn of this kind. A deep reviewer's Codex review
+ * runs for its task, `/review`; anything else said in its thread, a steer or
+ * a follow-up, Codex answers like in any thread.
  */
 export function agentJob(
   turn: ChatTurn,
@@ -87,7 +86,11 @@ export function agentJob(
 ): AgentJob {
   if (turn.kind === "adopt" || turn.kind === "compact")
     return { kind: turn.kind };
-  if (chat.reviewer?.codex && turnRules(turn).reviews)
+  if (
+    chat.reviewer?.codex &&
+    turn.kind === "reply" &&
+    turn.request?.trim() === "/review"
+  )
     return { kind: "review", target: chat.reviewer.codex };
   if (turn.kind === "side") return { kind: "side" };
   if (turn.kind === "reply" && turn.goal)

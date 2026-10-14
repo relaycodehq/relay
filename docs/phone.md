@@ -83,4 +83,4 @@ The Playwright spec pairs through the real Settings screen, then approves an age
 
 - Published iOS builds, iOS background thread notifications, and physical iPhone validation of audio interruptions and lock-screen playback.
 - Creating pull requests stays on the desktop for now.
-- Deep reviews show as their messages; starting and steering them stays on the desktop, as do Gitea PR review, terminals and editing files.
+- Deep reviews show as their messages, and each reviewer as a thread under its review; starting a review stays on the desktop, as do Gitea PR review, terminals and editing files.

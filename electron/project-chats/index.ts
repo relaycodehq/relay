@@ -2,7 +2,7 @@ import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
 import type { AgentProvider } from "../../shared/agents";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
-import type { DeepReviewStart } from "../../shared/deep-review";
+import type { DeepReviewStart, ResumeReview } from "../../shared/deep-review";
 import type { FindingStatus } from "../../shared/findings";
 import { setFindingStatus } from "../findings";
 import type {
@@ -532,8 +532,8 @@ export class ProjectChats {
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.councils.startReview(id, config, pull);
   }
-  resumeDeepReview(id: string) {
-    return this.councils.resumeReview(id);
+  resumeDeepReview(id: string, only?: ResumeReview) {
+    return this.councils.resumeReview(id, only);
   }
   setFinding(
     id: string,

@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import type { DeepReviewStart, ReviewerTask } from "../../shared/deep-review";
+import type {
+  DeepReviewStart,
+  ResumeReview,
+  ReviewerTask,
+} from "../../shared/deep-review";
+import type { AgentProvider } from "../../shared/agents";
 import {
   DeepReviews,
   ensureReviewCheckout,
@@ -21,8 +26,8 @@ export interface CouncilHost {
 }
 
 /**
- * Deep reviews: several agents at work for one thread, each in a hidden
- * thread of its own, then a lead in the thread itself.
+ * Deep reviews: several agents at work for one thread, each in a thread of
+ * its own listed under it, then a lead in the thread itself.
  */
 export class Councils {
   private reviews: DeepReviews;
@@ -39,11 +44,12 @@ export class Councils {
       project: (id) => this.core.projects.get(id),
       root: (projectId) => this.core.projects.root(projectId),
       worktrees,
-      createReviewer: (parent, task) => this.createReviewer(parent, task),
+      createReviewer: (parent, reviewer) =>
+        this.createReviewer(parent, reviewer),
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
       active: (id) => this.core.active.has(id),
-      stop: (id) => this.core.active.get(id)?.abort.abort(),
+      stop: (id) => this.stopReviewer(id),
       close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
       discard: (chat) => this.core.storage.remove(chat),
@@ -112,6 +118,13 @@ export class Councils {
     await this.reviews.stop(chat);
   }
 
+  /** A turn is about to start in a thread; a reviewer's may take its stopped review back up. */
+  memberStarting(chat: ProjectChat) {
+    return this.reviews
+      .memberStarting(chat)
+      .catch((e) => console.warn("Could not reopen the deep review:", e));
+  }
+
   startReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
@@ -122,10 +135,10 @@ export class Councils {
     });
   }
 
-  resumeReview(id: string) {
+  resumeReview(id: string, only?: ResumeReview) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
-      await this.reviews.resume(id);
+      await this.reviews.resume(id, only);
     });
   }
 
@@ -138,25 +151,49 @@ export class Councils {
       this.core.emit({ chatId: chat.id, message: structuredClone(message) });
   }
 
-  /** A reviewer's own thread, shown only inside its review. */
-  private async createReviewer(parent: ProjectChat, task: ReviewerTask) {
+  /**
+   * A reviewer's own thread, listed under its review the way a thread its
+   * agent started is. It works in the review's checkout, never a worktree
+   * of its own, and only reads.
+   */
+  private async createReviewer(
+    parent: ProjectChat,
+    {
+      task,
+      title,
+      by,
+    }: { task: ReviewerTask; title: string; by: AgentProvider },
+  ) {
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId: parent.projectId,
       scope: { kind: "review" },
       reviewer: task,
-      title: `Reviewer ${task.slot + 1}`,
-      // Its name is fixed; no title is generated for it.
+      startedBy: { chatId: parent.id, agent: by },
+      title,
+      // Its name says which reviewer it is; no title is generated for it.
       renamed: true,
       created: Date.now(),
       updated: Date.now(),
       messages: [],
     };
     await this.core.storage.add(chat).catch(async (error: unknown) => {
-      // It may have been saved before the failure; don't leave it hidden on disk.
+      // It may have been saved before the failure; don't leave a stray on disk.
       await this.core.storage.remove(chat).catch(() => {});
       throw error;
     });
     return chat;
+  }
+
+  /** As the reviewer's own Stop: its turn ends and nothing queued for it goes out. */
+  private stopReviewer(id: string) {
+    const chat = this.core.storage.cached(id);
+    if (chat?.queue?.length && !chat.queuePaused) {
+      chat.queuePaused = true;
+      void this.core.storage
+        .save(chat)
+        .catch((e) => console.warn("Could not hold a reviewer's queue:", e));
+    }
+    this.core.active.stop(id);
   }
 }

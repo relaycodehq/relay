@@ -1,7 +1,7 @@
 import { agentName, type AgentProvider } from "../../shared/agents";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type { ModelChoice } from "../../shared/settings";
-import { hasCouncilReport } from "../../shared/council";
+import { hasCouncilReport, memberAnswer } from "../../shared/council";
 
 /** Council members read and reason but never change files, and none of them stops to ask. */
 export const councilTurn = {
@@ -9,16 +9,18 @@ export const councilTurn = {
   interactionMode: "default",
 } as const;
 
-/** A member thread's latest assistant message; nothing if the thread can't be loaded. */
+/** A member thread's latest answer; nothing if the thread can't be loaded. */
 export async function lastAnswer(
   host: { load(id: string): Promise<ProjectChat> },
   chatId: string,
 ) {
   const chat = await host.load(chatId).catch(() => undefined);
-  return (
-    chat && [...chat.messages].reverse().find((m) => m.role === "assistant")
-  );
+  return chat && memberAnswer(chat.messages);
 }
+
+/** Messages wait in a member's queue, going out once its turn ends. */
+export const queued = (chat: ProjectChat | undefined) =>
+  !!chat?.queue?.length && !chat.queuePaused;
 
 /** The slots whose member didn't finish its answer, to run again. */
 export async function unfinishedSlots(

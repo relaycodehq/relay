@@ -121,5 +121,14 @@ export function useCouncils({
     stopReview: () => {
       if (chat) void api.cancelProjectChat(chat.id).catch(setError);
     },
+    // A reviewer's own Stop, as in its thread.
+    stopReviewer: (slot: number) => {
+      const member = review?.reviewers[slot];
+      if (member) void api.cancelProjectChat(member.chatId).catch(setError);
+    },
+    rerunReviewer: (slot: number) =>
+      resume((chatId) => api.resumeDeepReview(chatId, { slot })),
+    leadWithReports: () =>
+      resume((chatId) => api.resumeDeepReview(chatId, { lead: true })),
   };
 }

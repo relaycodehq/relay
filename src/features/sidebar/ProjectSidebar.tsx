@@ -105,8 +105,13 @@ export function ProjectSidebar({
     if (p) onOpen(p, c);
   };
   const newThread = (p: Project) => onOpen(p, undefined, true);
-  const { all, away } = useSidebarThreads(realProjects, chatId);
-  const unread = useUnread(chatId, all);
+  const { all: listed, away } = useSidebarThreads(realProjects, chatId);
+  const unread = useUnread(chatId, listed);
+  // A deep review shows as one thread: its reviewers open from the review,
+  // which stays picked while one of them is open.
+  const all = listed.filter((c) => !c.reviewer);
+  const shown =
+    listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
   const search = useThreadSearch(all, byId);
   // Follows drafts as they gain or lose text; each card follows its own.
   const draftKeys = useDraftKeys();
@@ -124,7 +129,7 @@ export function ProjectSidebar({
   );
   const families = startedFamilies(sections.active, sections.settled);
   const actions = useThreadActions({
-    chatId,
+    chatId: shown,
     active: sections.active,
     projects: byId,
     scratch: scratchIds,
@@ -138,14 +143,14 @@ export function ProjectSidebar({
     active: sections.active,
     // ⌘1–9 count the cards, which started threads and settled leads don't get.
     cards: families.cards,
-    chatId,
+    chatId: shown,
     jumping: activity,
     actions,
   });
   const attention = useAttention(sections.active, unread, onAttention);
   const settleKeys = useShortcutLabel("settle");
   const rows: SidebarRows = {
-    chatId,
+    chatId: shown,
     now,
     unread,
     projects: byId,

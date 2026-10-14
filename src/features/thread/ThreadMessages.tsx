@@ -99,6 +99,9 @@ export function ThreadMessages({
     setFindingStatus,
     resumeReview,
     stopReview,
+    stopReviewer,
+    rerunReviewer,
+    leadWithReports,
   },
   actions: {
     signIn,
@@ -271,6 +274,9 @@ export function ThreadMessages({
                 onOpenFile={openFile}
                 onResume={resumeReview}
                 onStop={stopReview}
+                onStopMember={stopReviewer}
+                onResumeMember={rerunReviewer}
+                onLead={leadWithReports}
               />
             </Fragment>
           ) : (

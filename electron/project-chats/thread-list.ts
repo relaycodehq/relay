@@ -92,17 +92,32 @@ export class ThreadList {
     const chats = (this.core.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
-    // A review runs while any of its reviewers does.
+    const byId = new Map(chats.map((c) => [c.id, c]));
+    // A review runs while any of its reviewers does, until its lead takes
+    // over; a reviewer asked something later runs on its own.
     const helpers = new Map<string, ActiveChat[]>();
     for (const c of chats) {
       const parent = c.reviewer?.parent;
-      const active = parent && this.core.active.get(c.id);
+      const active =
+        parent && byId.get(parent)?.reviewing && this.core.active.get(c.id);
       if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
     }
     // Once for the list: it is read on every change to any of its threads.
     const live = this.core.sessions.pending();
+    // Reviewers show under their review, and go with it once it's archived.
+    const listed = (c: ChatSummary) => {
+      if (!c.reviewer) return true;
+      const review = byId.get(c.reviewer.parent);
+      return !!c.startedBy && !!review && !review.archivedAt;
+    };
+    // A reviewer's Git, files and terminal follow the folder its review reads.
+    const inReviewFolder = (c: ChatSummary): ChatSummary => {
+      const folder = c.reviewer && byId.get(c.reviewer.parent)?.reviewFolder;
+      return folder ? { ...c, reviewFolder: folder } : c;
+    };
     return chats
-      .filter((c) => !c.reviewer)
+      .filter(listed)
+      .map(inReviewFolder)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
         if (c.sentTo?.live) {

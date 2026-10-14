@@ -217,7 +217,7 @@ export function ThreadMenu({
           </MenuPopup>
         </Menu.SubmenuRoot>
       )}
-      {chat.startedBy && (
+      {chat.startedBy && !chat.reviewer && (
         <MenuAction
           icon={<Unlink size={13} />}
           onClick={() => onAction({ kind: "detach" })}

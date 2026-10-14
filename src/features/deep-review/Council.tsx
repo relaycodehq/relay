@@ -1,5 +1,8 @@
 import { Telescope } from "lucide-react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import type { DeepReviewState } from "../../../shared/deep-review";
+import { hasCouncilReport, memberAnswer } from "../../../shared/council";
+import { chatKey, fetchChat } from "../../lib/chat-events";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { useAgentName } from "./useAgentName";
 import { useCouncilFold } from "./council/useCouncilFold";
@@ -9,8 +12,12 @@ import {
   CouncilToggle,
 } from "./council/Council";
 import { CouncilMember } from "./council/CouncilMember";
+import { useStartedThreads } from "../agent-turn/StartedThreads";
 
-/** The reviewers side by side, folded away once the lead has reported. */
+/**
+ * The reviewers side by side, folded away once the lead has reported. Each
+ * opens its own thread, listed under this one, to be steered and continued.
+ */
 export function DeepReviewCouncil({
   state,
   kept,
@@ -21,7 +28,6 @@ export function DeepReviewCouncil({
   onOpenFile,
   onResume,
   onStop,
-  reportsIn,
   resumedBy,
   onStopMember,
   onResumeMember,
@@ -40,8 +46,6 @@ export function DeepReviewCouncil({
   onResume: () => void;
   /** Stops the reviewers at work, as the composer's Stop does. */
   onStop?: () => void;
-  /** Reviewers whose report is in. */
-  reportsIn?: number;
   /** The thread that last resumed the review, when another thread did. */
   resumedBy?: string;
   onStopMember?: (slot: number) => void;
@@ -50,6 +54,8 @@ export function DeepReviewCouncil({
   onLead?: () => void;
 }) {
   const name = useAgentName();
+  const started = useStartedThreads();
+  const reportsIn = useReportsIn(state);
   const { open, toggle } = useCouncilFold(state.status === "done");
   const count = state.reviewers.length;
   // A big council shows each agent once in its header, and smaller panes.
@@ -79,27 +85,33 @@ export function DeepReviewCouncil({
           data-count={count}
           data-many={many || undefined}
         >
-          {state.reviewers.map((r, i) => (
-            <CouncilMember
-              key={r.chatId}
-              number={i + 1}
-              agent={r}
-              chatId={r.chatId}
-              live={state.status === "reviewing"}
-              projectRoot={projectRoot}
-              onOpenFile={onOpenFile}
-              onStop={
-                onStopMember && state.status === "reviewing"
-                  ? () => onStopMember(i)
-                  : undefined
-              }
-              onResume={
-                onResumeMember && !hasLead && state.status !== "leading"
-                  ? () => onResumeMember(i)
-                  : undefined
-              }
-            />
-          ))}
+          {state.reviewers.map((r, i) => {
+            const thread = started?.threads.find((c) => c.id === r.chatId);
+            return (
+              <CouncilMember
+                key={r.chatId}
+                number={i + 1}
+                agent={r}
+                chatId={r.chatId}
+                live={state.status === "reviewing"}
+                projectRoot={projectRoot}
+                onOpenFile={onOpenFile}
+                onStop={
+                  onStopMember && state.status === "reviewing"
+                    ? () => onStopMember(i)
+                    : undefined
+                }
+                onResume={
+                  onResumeMember && !hasLead && state.status !== "leading"
+                    ? () => onResumeMember(i)
+                    : undefined
+                }
+                onOpen={
+                  thread && started ? () => started.open(thread) : undefined
+                }
+              />
+            );
+          })}
         </div>
       )}
       {onStop && state.status === "reviewing" && (
@@ -144,4 +156,23 @@ export function DeepReviewCouncil({
       )}
     </section>
   );
+}
+
+/** How many reviewers' reports a stopped review holds, from their threads. */
+function useReportsIn(state: DeepReviewState) {
+  const qc = useQueryClient();
+  const stopped = state.status === "stopped";
+  return useQueries({
+    queries: state.reviewers.map((r) => ({
+      queryKey: chatKey(r.chatId),
+      queryFn: () => fetchChat(qc, r.chatId),
+      enabled: stopped,
+    })),
+    combine: (members) =>
+      stopped && members.every((m) => m.data)
+        ? members.filter((m) =>
+            hasCouncilReport(memberAnswer(m.data!.messages)),
+          ).length
+        : undefined,
+  });
 }

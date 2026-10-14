@@ -26,9 +26,9 @@ it("plans a resume after a usage limit only for turns that carry on the user's a
   expect(turnRules({ kind: "compact" }).plansResume).toBe(false);
 });
 
-it("runs each turn kind as its job, a compaction or picked-up turn over a reviewer's Codex review", () => {
+it("runs each turn kind as its job, and a reviewer's Codex review only for its task", () => {
   const kinds: ChatTurn[] = [
-    { kind: "reply" },
+    { kind: "reply", request: "/review" },
     { kind: "handoff" },
     { kind: "side" },
     { kind: "compact" },
@@ -41,14 +41,13 @@ it("runs each turn kind as its job, a compaction or picked-up turn over a review
   expect(jobs({})).toEqual(["prompt", "prompt", "side", "compact", "adopt"]);
   // A reviewer without Codex's own review sends its prompt like any thread.
   expect(jobs({ reviewer })).toEqual(jobs({}));
-  expect(jobs({ reviewer: { ...reviewer, codex: target } })).toEqual([
-    "review",
-    "review",
-    "review",
-    "compact",
-    "adopt",
-  ]);
-  expect(
-    agentJob({ kind: "reply" }, { reviewer: { ...reviewer, codex: target } }),
-  ).toEqual({ kind: "review", target });
+  const codex = { reviewer: { ...reviewer, codex: target } };
+  expect(jobs(codex)).toEqual(["review", "prompt", "side", "compact", "adopt"]);
+  expect(agentJob({ kind: "reply", request: "/review" }, codex)).toEqual({
+    kind: "review",
+    target,
+  });
+  // A steer or a follow-up in its thread is answered, not reviewed again.
+  for (const request of ["Look at the queue too.", "Continue", undefined])
+    expect(agentJob({ kind: "reply", request }, codex).kind).toBe("prompt");
 });

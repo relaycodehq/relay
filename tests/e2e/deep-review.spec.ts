@@ -135,9 +135,10 @@ test("empty OpenCode reviews show failure and retry instead of Done", async () =
       .click();
     const panes = page.locator(".deep-review-pane");
     await expect(panes).toHaveCount(2);
+    // Each offers its own Retry beside the review's Try again.
     await expect(panes.locator(".deep-review-pane-status")).toHaveText([
-      "Didn't finish",
-      "Didn't finish",
+      "Didn't finishRetry",
+      "Didn't finishRetry",
     ]);
     await expect(panes.locator(".agent-error-message")).toHaveCount(2);
     await expect(panes.first()).toContainText(

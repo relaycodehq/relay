@@ -82,7 +82,7 @@ Type `/` to see Relay commands alongside the selected agent's available commands
 
 GitHub uses your `gh` sign-in; Gitea is configured under **Settings → Integrations**. The titlebar shows CI for the thread's branch, including an older verdict labelled as behind the current commit when the tip has no result. See [pull request review](pr-review.md) for the review workflow.
 
-**Deep review** accepts uncommitted changes, a branch, a commit or a PR. Configure several reviewing models and their prompts, then a lead examines the findings and fixes what holds up. Findings identify their reviewers, and setups can be saved for reuse.
+**Deep review** accepts uncommitted changes, a branch, a commit or a PR. Configure several reviewing models and their prompts, then a lead examines the findings and fixes what holds up. The review stays one thread in the sidebar; open a reviewer from its pane to follow, steer, stop or continue it like any thread, and the lead waits for its latest answer. Findings identify their reviewers, and setups can be saved for reuse.
 
 **Settings → Computers** pairs another Relay for thread handoff. Current versions keep the conversation live on the original computer while the other one runs the agent; Files and Changes still show the local checkout. Offline messages wait, or **Run here instead** continues locally with the conversation already received, leaving the remote computer's later code changes there. A normal **Bring back** transfers the work too. Both computers need the repository added with a matching Git remote; Relay does not clone it during handoff.
 

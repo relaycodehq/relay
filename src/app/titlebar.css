@@ -137,6 +137,27 @@
 .breadcrumb-slash {
   opacity: 0.5;
 }
+/* A reviewer's review, between the project and the reviewer. */
+.project-window-title > .breadcrumb-link {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 400;
+  /* Buttons are centred flex boxes here, which clip long text at both ends. */
+  display: block;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.project-window-title > .breadcrumb-link:hover {
+  color: var(--text);
+}
 /* Title and controls share what the brand column leaves. The controls never
    shrink, so the title clips first, and their labels give way in steps
    (data-fit, below) before it gets too short to read. */

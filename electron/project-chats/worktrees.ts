@@ -731,7 +731,8 @@ export class ThreadWorktrees {
     // its terminal makes it.
     const review = await this.councils.root(chat, false);
     if (review) return review;
-    if (reviewFolder(chat)) return this.core.projects.root(projectId);
+    if (reviewFolder(chat) || chat.reviewer)
+      return this.core.projects.root(projectId);
     if (chat.worktree && expectedWorktree)
       throw new Error(
         "This thread's active workspace changed. Refresh before trying again.",

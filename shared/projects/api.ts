@@ -14,7 +14,11 @@ import type { ContextReport } from "../context-report";
 import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type { HelperPick } from "../settings";
-import type { DeepReviewStart, ReviewSetup } from "../deep-review";
+import type {
+  DeepReviewStart,
+  ResumeReview,
+  ReviewSetup,
+} from "../deep-review";
 import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
@@ -317,8 +321,12 @@ export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
   /** A short name for a deep review setup, written by a helper agent; null when none could. */
   nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
-  /** Runs the reviewers that didn't finish, then the lead. */
-  resumeDeepReview(id: string): Promise<void>;
+  /**
+   * Runs the reviewers that didn't finish, then the lead. `slot` runs that
+   * reviewer's task again before the lead starts; `lead` hands a stopped
+   * review to the lead with the reports that are in.
+   */
+  resumeDeepReview(id: string, only?: ResumeReview): Promise<void>;
   /** Opens or dismisses a finding an answer in the thread published. */
   setFinding(
     id: string,

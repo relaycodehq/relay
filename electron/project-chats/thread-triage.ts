@@ -236,6 +236,8 @@ export class ThreadTriage {
   async detach(id: string) {
     const chat = await this.core.storage.load(id);
     if (!chat.startedBy) return chatSummary(chat);
+    if (chat.reviewer)
+      throw new Error("A reviewer stays with its deep review.");
     if (this.core.active.has(chat.startedBy.chatId))
       throw new Error(
         "The thread that started it is working; detach once it's done.",

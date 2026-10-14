@@ -8,12 +8,20 @@ it("counts blocking requests from helpers even when the parent keeps running", (
     id: "parent",
     projectId: "p",
     title: "Parent",
-    scope: { kind: "project" },
+    scope: { kind: "review" },
     created: 1,
     updated: 1,
     asking: true,
+    reviewing: true,
   };
-  const helper = { ...parent, id: "helper", reviewer: { parent: "parent" } };
+  const helper: ChatSummary = {
+    ...parent,
+    id: "helper",
+    reviewing: undefined,
+    asking: undefined,
+    reviewer: { parent: "parent", slot: 0 },
+    startedBy: { chatId: "parent", agent: "claude" },
+  };
   let blocked = false;
   const running = new Map([
     ["parent", { started: 1, requests: { list: () => [] } }],
@@ -26,13 +34,23 @@ it("counts blocking requests from helpers even when the parent keeps running", (
     sessions: { pending: () => [] },
   } as unknown as ChatCore;
   const threads = new ThreadList(core);
-  expect(threads.list("p")[0]).toMatchObject({ running: true, waiting: true });
-  expect(threads.list("p")[0].blocked).toBeUndefined();
+  const review = () => threads.list("p").find((c) => c.id === "parent")!;
+  expect(review()).toMatchObject({ running: true, waiting: true });
+  expect(review().blocked).toBeUndefined();
   blocked = true;
-  expect(threads.list("p")[0].blocked).toBe(true);
+  expect(review().blocked).toBe(true);
+  // The reviewer is listed too, under its review, and blocked on its own.
+  expect(threads.list("p").find((c) => c.id === "helper")).toMatchObject({
+    running: true,
+    blocked: true,
+  });
+  // Once the lead has the reports, a reviewer at work is its own business.
+  parent.reviewing = undefined;
+  expect(review().blocked).toBeUndefined();
+  parent.reviewing = true;
   running.clear();
-  expect(threads.list("p")[0]).toMatchObject({ waiting: true });
-  expect(threads.list("p")[0].running).toBeUndefined();
+  expect(review()).toMatchObject({ waiting: true });
+  expect(review().running).toBeUndefined();
   parent.sentTo = { state: "away" } as ChatSummary["sentTo"];
-  expect(threads.list("p")[0].waiting).toBeUndefined();
+  expect(review().waiting).toBeUndefined();
 });

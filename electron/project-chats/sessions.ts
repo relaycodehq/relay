@@ -185,7 +185,7 @@ export class ProviderSessions {
     return new Set([...this.keys].map((key) => parseSessionKey(key).chatId));
   }
 
-  /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
+  /** Ends a thread's agent processes; they resume their sessions if it runs again. */
   close(chatId: string) {
     for (const key of this.keys)
       if (parseSessionKey(key).chatId === chatId) this.end(key);

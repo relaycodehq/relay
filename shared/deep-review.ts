@@ -2,7 +2,12 @@
 // lead agent checks what they found and fixes it with the user.
 import { z } from "zod";
 import { runtimeModeSchema, type RuntimeMode } from "./agent-modes";
-import { agentProviderSchema, agents, reviewerProviderSchema } from "./agents";
+import {
+  agentName,
+  agentProviderSchema,
+  agents,
+  reviewerProviderSchema,
+} from "./agents";
 import { aiSettingsSchema, type ModelChoice } from "./settings";
 import { refSchema } from "./validation";
 
@@ -138,7 +143,7 @@ export interface DeepReviewState {
   /** The user message that asked for the review. */
   request: string;
   scope: ReviewScope;
-  /** Each reviewer works in a hidden thread of its own. */
+  /** Each reviewer works in a thread of its own, listed under the review's. */
   reviewers: (ReviewAgent & { chatId: string })[];
   lead: LeadAgent;
   runChecks: boolean;
@@ -151,6 +156,23 @@ export interface DeepReviewState {
    */
   leadStopped?: string;
 }
+/** Picks a stopped review up in part: one reviewer again, or the lead with the reports that are in. */
+export type ResumeReview = { slot: number } | { lead: true };
+
+/** A reviewer's thread name: its place in the review and what it runs on. */
+export function reviewerTitle(slot: number, reviewer: ReviewAgent) {
+  const { model, reasoningEffort, fast } = reviewer.choice;
+  return [
+    `Reviewer ${slot + 1}`,
+    agentName(reviewer.provider),
+    model,
+    reasoningEffort,
+    fast && "Fast",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** A reviewer thread's place in its review. */
 export interface ReviewerTask {
   parent: string;

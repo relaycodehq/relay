@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatKey, fetchChat } from "../../../lib/chat-events";
 
-/** A council member's hidden thread, kept fresh like the main one. */
+/** A reviewer's thread, kept fresh like the open one while the review runs. */
 export function useMemberThread(chatId: string, live: boolean) {
   const qc = useQueryClient();
   const history = useQuery({

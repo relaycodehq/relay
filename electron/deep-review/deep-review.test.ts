@@ -17,6 +17,7 @@ import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { ChatStorage } from "../project-chats/storage";
+import { WorktreeSetup } from "../project-chats/worktree-setup";
 import type { ProjectChat } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
@@ -605,15 +606,34 @@ it("counts five reviewers as one working thread alongside two ordinary threads",
   });
 });
 
-it("runs each reviewer in a hidden thread, then the lead, and lists its findings", async () => {
+it("runs each reviewer in a thread listed under the review, then the lead, and lists its findings", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "review" });
   await chats.startDeepReview(chat.id, config({ focus: "the queue" }));
 
   const listed = chats.list(projectId);
-  expect(listed.map((c) => c.id)).toEqual([chat.id]);
-  expect(listed[0]?.title).toBe("Deep review · Uncommitted changes");
-  expect(listed[0]?.running).toBe(true);
+  const started = (await chats.get(chat.id)).deepReview!.reviewers;
+  expect(listed.map((c) => c.id).sort()).toEqual(
+    [chat.id, ...started.map((r) => r.chatId)].sort(),
+  );
+  const reviewThread = listed.find((c) => c.id === chat.id)!;
+  expect(reviewThread.title).toBe("Deep review · Uncommitted changes");
+  expect(reviewThread.running).toBe(true);
+  // Each reviewer is a thread the review started, named for what it runs on.
+  const members = started.map((r) => listed.find((c) => c.id === r.chatId)!);
+  expect(members.map((c) => [c.title, c.startedBy, c.running])).toEqual([
+    [
+      "Reviewer 1 · Codex · fixture-model · high",
+      { chatId: chat.id, agent: "claude" },
+      true,
+    ],
+    ["Reviewer 2 · Claude · high", { chatId: chat.id, agent: "claude" }, true],
+  ]);
+  // In the review's folder, never a worktree of its own.
+  for (const c of members) {
+    expect(c.worktree).toBeUndefined();
+    expect(c.reviewFolder).toBeUndefined();
+  }
 
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
@@ -636,6 +656,17 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   expect(codex!.reviewer).toMatchObject({ parent: chat.id, slot: 0 });
   expect(codex!.messages.at(-1)?.body).toContain("Queue reorder");
   expect(claude!.messages[0]?.body).toBe("@claude /code-review high");
+  // The task reads as the review's, whose name leads back to it.
+  expect(claude!.messages[0]).toMatchObject({
+    author: "Deep review",
+    fromThread: chat.id,
+  });
+  // Its composer and Continue pick up the reviewer's agent and settings.
+  expect(codex!.lastInput).toMatchObject({
+    provider: "codex",
+    choice,
+    runtimeMode: "approval-required",
+  });
 
   const records = await capture();
   const review = records.find((r) => r.review);
@@ -732,6 +763,11 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(claude.messages[0]?.body).toBe(
     `@claude /code-review high ${state.scope.base}...${head}`,
   );
+  // A reviewer's thread shows the folder it read, not the project's checkout.
+  expect(
+    chats.list(projectId).find((c) => c.id === claude.id)?.reviewFolder,
+  ).toEqual({ path: checkout.path, branch: "panel" });
+  expect(await chats.worktreeRoot(projectId, claude.id)).toBe(checkout.path);
 
   // A fix checks the branch out there first.
   await chats.send(chat.id, {
@@ -759,6 +795,7 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   // Looking at the thread reads the checkout, without making the folder again.
   expect(await chats.worktreeRoot(projectId, chat.id)).toBe(repo);
+  expect(await chats.worktreeRoot(projectId, claude.id)).toBe(repo);
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
 });
@@ -1337,4 +1374,315 @@ it("lists the lead's findings when the user steered its first answer", async () 
   ]);
   expect(done.findings?.reports[0]?.messageId).toBe(done.messages[3]!.id);
   expect(done.findings?.reports[0]?.findings.map((f) => f.id)).toEqual(["F1"]);
+});
+
+describe("reviewers in threads of their own", () => {
+  const claudeChoice = { ...choice, model: "" };
+  /**
+   * A Claude reviewer that works until it's steered or stopped. The cue
+   * sits past the part of the prompt the lead is told about, or the
+   * fixture's lead would wait for a steer too.
+   */
+  const waiting = {
+    provider: "claude" as const,
+    choice: claudeChoice,
+    prompt: `${"Read the queue closely. ".repeat(14)}fixture wait for steer`,
+  };
+  const message = (
+    body: string,
+    patch: Partial<Parameters<ProjectChats["send"]>[1]> = {},
+  ) => ({
+    id: randomUUID(),
+    body,
+    provider: "claude" as const,
+    choice: claudeChoice,
+    runtimeMode: "approval-required" as const,
+    interactionMode: "default" as const,
+    ...patch,
+  });
+  const leadPrompts = async () =>
+    (await capture())
+      .filter(
+        (r) =>
+          r.provider === "claude" &&
+          typeof r.prompt === "string" &&
+          r.prompt.includes("You lead a deep review"),
+      )
+      .map((r) => r.prompt as string);
+  const statusOf = async (id: string) =>
+    (await chats.get(id)).deepReview?.status;
+  const memberOf = async (id: string, slot: number) =>
+    (await chats.get(id)).deepReview!.reviewers[slot]!.chatId;
+  const lastBody = async (id: string) =>
+    (await chats.get(id)).messages.at(-1)?.body;
+  let review: string;
+  beforeEach(async () => {
+    await writeFile(
+      join(repo, "src", "queue.ts"),
+      "export const queue = [1];\n",
+    );
+    review = (await chats.create(projectId, { kind: "review" })).id;
+  });
+
+  it("takes a steer while a reviewer works, and hands the lead the answer it steered, once", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [waiting, { provider: "codex", choice }] }),
+    );
+    const claude = await memberOf(review, 0);
+    await vi.waitFor(async () =>
+      expect(await lastBody(claude)).toBe("Looking into it."),
+    );
+    // Sent from the reviewer's own thread, as any steer.
+    await chats.sendYours(
+      claude,
+      message("@claude Check the queue's order too.", { delivery: "steer" }),
+    );
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const steered = await chats.get(claude);
+    expect(steered.messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(steered.messages[2]?.steered).toBe(true);
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain("Noted:");
+    expect(lead[0]).not.toContain("Looking into it.");
+  });
+
+  it("waits for a message queued for a reviewer, and gives the lead what it answered", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [{ provider: "codex", choice }] }),
+    );
+    const codex = await memberOf(review, 0);
+    await chats.sendYours(
+      codex,
+      message("@codex fixture echo: Also the retry path is fine.", {
+        provider: "codex",
+        choice,
+        delivery: "queue",
+      }),
+    );
+    expect((await chats.get(codex)).queue).toHaveLength(1);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain("Also the retry path is fine.");
+    expect(lead[0]).not.toContain("Queue reorder");
+    // Codex answered the follow-up rather than reviewing again.
+    expect((await capture()).filter((r) => r.review)).toHaveLength(1);
+  });
+
+  it("stops one reviewer in its thread, and continuing it there takes the review to the lead", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [waiting, { provider: "codex", choice }] }),
+    );
+    const claude = await memberOf(review, 0);
+    await vi.waitFor(async () =>
+      expect(await lastBody(claude)).toBe("Looking into it."),
+    );
+    await chats.cancel(claude);
+    // The other reviewer reported; the stopped one keeps the lead waiting.
+    await vi.waitFor(async () =>
+      expect(await statusOf(review)).toBe("stopped"),
+    );
+    expect(await leadPrompts()).toHaveLength(0);
+    await chats.resume(claude);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain("Claude found the same cache guard.");
+    expect(lead[0]).not.toContain("didn't finish");
+  });
+
+  it("runs one reviewer's task again, or hands a stopped review to the lead with the reports in", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [waiting, { provider: "codex", choice }] }),
+    );
+    const claude = await memberOf(review, 0);
+    const stopClaude = async (answers: number) => {
+      await vi.waitFor(async () => {
+        const main = (await chats.get(claude)).messages;
+        expect(main.filter((m) => m.role === "assistant")).toHaveLength(
+          answers,
+        );
+        expect(main.at(-1)?.body).toBe("Looking into it.");
+      });
+      await chats.cancel(claude);
+      await vi.waitFor(async () =>
+        expect(await statusOf(review)).toBe("stopped"),
+      );
+    };
+    await stopClaude(1);
+    await chats.resumeDeepReview(review, { slot: 0 });
+    await stopClaude(2);
+    expect((await chats.get(claude)).messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    await vi.waitFor(() =>
+      expect(
+        chats.list(projectId).find((c) => c.id === claude)?.running,
+      ).toBeFalsy(),
+    );
+    await chats.resumeDeepReview(review, { lead: true });
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain("Queue reorder can drop a message");
+    expect(lead[0]).toContain("didn't finish");
+    await expect(chats.resumeDeepReview(review, { slot: 0 })).rejects.toThrow(
+      "Ask the lead instead",
+    );
+  });
+
+  it("holds what's queued for its reviewers when the review stops", async () => {
+    await chats.startDeepReview(review, config({ reviewers: [waiting] }));
+    const claude = await memberOf(review, 0);
+    await vi.waitFor(async () =>
+      expect(await lastBody(claude)).toBe("Looking into it."),
+    );
+    await chats.sendYours(
+      claude,
+      message("@claude And the tests.", { delivery: "queue" }),
+    );
+    await chats.cancel(review);
+    await vi.waitFor(async () => {
+      const member = await chats.get(claude);
+      expect(member.messages.at(-1)?.status).toBe("cancelled");
+      expect(
+        chats.list(projectId).find((c) => c.id === claude)?.running,
+      ).toBeFalsy();
+    });
+    const member = await chats.get(claude);
+    expect(member.queue).toHaveLength(1);
+    expect(member.queuePaused).toBe(true);
+    expect(await statusOf(review)).toBe("stopped");
+  });
+
+  it("doesn't count a later question to a reviewer as another report", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [{ provider: "codex", choice }] }),
+    );
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const codex = await memberOf(review, 0);
+    await chats.sendYours(
+      codex,
+      message("@codex fixture echo: It was the queue.", {
+        provider: "codex",
+        choice,
+      }),
+    );
+    await vi.waitFor(async () =>
+      expect((await chats.get(codex)).messages.at(-1)).toMatchObject({
+        status: "complete",
+        body: "It was the queue.",
+      }),
+    );
+    // Nor does the review show it as at work meanwhile.
+    expect(await statusOf(review)).toBe("done");
+    expect(await leadPrompts()).toHaveLength(1);
+    expect((await chats.get(review)).messages).toHaveLength(2);
+  });
+
+  it("moves on when its reviewers' turns fail before their agents start", async () => {
+    const prepare = WorktreeSetup.prototype.prepare;
+    const failing = vi
+      .spyOn(WorktreeSetup.prototype, "prepare")
+      .mockImplementation(async function (
+        this: WorktreeSetup,
+        ...args: Parameters<WorktreeSetup["prepare"]>
+      ) {
+        if (args[0].reviewer) throw new Error("setup broke");
+        return prepare.apply(this, args);
+      });
+    try {
+      await chats.startDeepReview(review, config());
+      await vi.waitFor(async () =>
+        expect(await statusOf(review)).toBe("failed"),
+      );
+    } finally {
+      failing.mockRestore();
+    }
+    const member = await chats.get(await memberOf(review, 0));
+    expect(member.messages.at(-1)).toMatchObject({
+      status: "failed",
+      error: "setup broke",
+    });
+    await chats.resumeDeepReview(review);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+  });
+
+  it("keeps a reviewer with its review: no detaching, and gone from the list once the review is archived", async () => {
+    await chats.startDeepReview(
+      review,
+      config({ reviewers: [{ provider: "codex", choice }] }),
+    );
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const codex = await memberOf(review, 0);
+    await expect(chats.detach(codex)).rejects.toThrow(
+      "A reviewer stays with its deep review.",
+    );
+    await chats.triage(review, { kind: "archive" });
+    expect(chats.list(projectId).some((c) => c.id === codex)).toBe(false);
+    // Still there to open from the review.
+    expect((await chats.get(codex)).messages.at(-1)?.status).toBe("complete");
+  });
+
+  it("lists reviewers saved as hidden threads under their review, settled with it", async () => {
+    await chats.startDeepReview(review, config());
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    await chats.triage(review, { kind: "settle" });
+    const [codex, claude] = (await chats.get(review)).deepReview!.reviewers;
+    const settledAt = (await chats.get(review)).settledAt;
+    await chats.dispose();
+    // As an older Relay left them: hidden, unnamed and never settled.
+    const hide = <T extends object>(c: T) => {
+      const old = { ...c } as T & Record<string, unknown>;
+      delete old.startedBy;
+      delete old.settledAt;
+      return old;
+    };
+    for (const [i, id] of [codex!.chatId, claude!.chatId].entries()) {
+      const file = join(root, "chats", `${id}.json`);
+      const saved = JSON.parse(await readFile(file, "utf8"));
+      await writeFile(
+        file,
+        JSON.stringify({ ...hide(saved), title: `Reviewer ${i + 1}` }),
+      );
+    }
+    await store.update((s) => {
+      s.chats = s.chats!.map((c) =>
+        c.reviewer
+          ? { ...hide(c), title: `Reviewer ${c.reviewer.slot + 1}` }
+          : c,
+      );
+    });
+    chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+    expect(chats.list(projectId).map((c) => c.id)).toEqual([review]);
+    await chats.reconcileSummaries();
+    const listed = chats.list(projectId);
+    expect(
+      [codex!.chatId, claude!.chatId].map((id) => {
+        const c = listed.find((l) => l.id === id);
+        return [c?.title, c?.startedBy?.chatId, c?.settledAt];
+      }),
+    ).toEqual([
+      ["Reviewer 1 · Codex · fixture-model · high", review, settledAt],
+      ["Reviewer 2 · Claude · high", review, settledAt],
+    ]);
+    // Their conversations are as they were.
+    expect((await chats.get(claude!.chatId)).messages[0]?.body).toBe(
+      "@claude /code-review high",
+    );
+  });
 });

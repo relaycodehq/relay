@@ -19,6 +19,7 @@ import type {
   ScheduledChatMessage,
 } from "../../shared/projects";
 import { reviewFolder } from "../../shared/projects";
+import { reviewerTitle } from "../../shared/deep-review";
 import { contextAgent } from "../../shared/recipient";
 import { notesMark } from "../../shared/thread-notes";
 import { keyedQueue } from "../util/keyed-queue";
@@ -106,6 +107,7 @@ export function chatSummary({
     ...(notesAt ? { notesMark: notesAt } : {}),
     ...(open ? { asking: true as const } : {}),
     ...(review ? { reviewFolder: review } : {}),
+    ...(deepReview?.status === "reviewing" ? { reviewing: true as const } : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }
@@ -281,6 +283,7 @@ export class ChatStorage {
    */
   async reconcile(storeSavedAt: number) {
     await this.dropThinkers();
+    await this.adoptReviewers();
     const listed = this.store.get().chats ?? [];
     const recent = await Promise.all(
       listed.map(async ({ id, providers }) => {
@@ -317,6 +320,48 @@ export class ChatStorage {
     await this.store.update((s) => {
       s.chats = (s.chats ?? []).filter((c) => !isThinker(c));
     });
+  }
+
+  /**
+   * Deep reviewers once worked in hidden threads; now they're listed under
+   * their review, as threads its agent started are. Older ones join it the
+   * same way, named for what they ran on and settled with it if it is, so
+   * an old review doesn't come back to Activity with them. One whose review
+   * is gone stays unlisted.
+   */
+  private async adoptReviewers() {
+    const listed = this.store.get().chats ?? [];
+    const byId = new Map(listed.map((c) => [c.id, c]));
+    // Read without caching: a long history of reviews needn't sit in memory.
+    const read = async (id: string) =>
+      this.cache.get(id) ??
+      (JSON.parse(
+        await readFile(join(this.dir, id + ".json"), "utf8"),
+      ) as ProjectChat);
+    for (const stray of listed) {
+      const review = stray.reviewer && byId.get(stray.reviewer.parent);
+      if (!review || stray.startedBy) continue;
+      try {
+        const [parent, chat] = await Promise.all([
+          read(review.id),
+          read(stray.id),
+        ]);
+        const state = parent.deepReview;
+        const slot = chat.reviewer?.slot ?? -1;
+        const reviewer = state?.reviewers[slot];
+        chat.startedBy = {
+          chatId: parent.id,
+          agent: state?.lead.provider ?? review.provider ?? "claude",
+        };
+        if (reviewer?.chatId === chat.id)
+          chat.title = reviewerTitle(slot, reviewer);
+        if (review.settledAt && !chat.settledAt)
+          chat.settledAt = review.settledAt;
+        await this.save(chat);
+      } catch (e) {
+        console.warn("Could not list an older reviewer under its review:", e);
+      }
+    }
   }
 
   async addSummary(chat: ProjectChat) {

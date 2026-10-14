@@ -1,7 +1,9 @@
-// One agent of a council in its hidden thread: a deep review's reviewer.
-import { CircleCheck, RotateCcw } from "lucide-react";
+// A deep review's reviewer at a glance, beside the others: its thread's main
+// conversation as it goes, and the way into that thread, where it's steered,
+// stopped and continued like any other.
+import { ArrowUpRight, CircleCheck, RotateCcw } from "lucide-react";
 import { clock } from "../../../../shared/waiting";
-import { hasCouncilReport } from "../../../../shared/council";
+import { hasCouncilReport, memberAnswer } from "../../../../shared/council";
 import { duration } from "../../../../shared/activity-labels";
 import { agentMentionPattern, agentName } from "../../../../shared/agents";
 import type { ReviewAgent } from "../../../../shared/deep-review";
@@ -29,6 +31,7 @@ export function CouncilMember({
   onOpenFile,
   onStop,
   onResume,
+  onOpen,
 }: {
   number: number;
   agent: ReviewAgent;
@@ -36,14 +39,16 @@ export function CouncilMember({
   live: boolean;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
-  /** Stops this reviewer alone; the lead goes on with the others' reports. */
+  /** Stops this reviewer, as Stop in its thread does; the lead waits until it's continued or skipped. */
   onStop?: () => void;
   /** Runs a reviewer that stopped or didn't finish again, before the lead starts. */
   onResume?: () => void;
+  /** Opens the reviewer's own thread. */
+  onOpen?: () => void;
 }) {
   const name = useAgentName();
-  const messages = useMemberThread(chatId, live);
-  const answer = [...messages].reverse().find((m) => m.role === "assistant");
+  const messages = useMemberThread(chatId, live).filter((m) => !m.parentId);
+  const answer = memberAnswer(messages);
   const tokens = answer?.context
     ? (answer.context.totalTokens ?? answer.context.usedTokens)
     : 0;
@@ -55,7 +60,18 @@ export function CouncilMember({
     >
       <header>
         <ProviderIcon provider={agent.provider} />
-        <strong>{name(agent)}</strong>
+        {onOpen ? (
+          <button
+            type="button"
+            className="deep-review-pane-name"
+            title={`Open reviewer ${number}'s thread`}
+            onClick={onOpen}
+          >
+            {name(agent)}
+          </button>
+        ) : (
+          <strong>{name(agent)}</strong>
+        )}
         <span className="muted">{traitsName(agent)}</span>
         {answer &&
           (answer.status === "streaming" || answer.ended !== undefined) && (
@@ -107,7 +123,7 @@ export function CouncilMember({
             type="button"
             className="icon-button deep-review-pane-stop"
             aria-label={`Stop ${name(agent)}`}
-            title={`Stop ${name(agent)}; the lead goes on with the other reports`}
+            title={`Stop ${name(agent)}`}
             onClick={onStop}
           >
             <svg
@@ -121,6 +137,17 @@ export function CouncilMember({
             </svg>
           </button>
         )}
+        {onOpen && (
+          <button
+            type="button"
+            className="icon-button deep-review-pane-open"
+            aria-label={`Open reviewer ${number}'s thread`}
+            title="Open its thread to steer, stop or continue it"
+            onClick={onOpen}
+          >
+            <ArrowUpRight size={14} />
+          </button>
+        )}
       </header>
       <div className="deep-review-pane-thread" ref={scroll} onScroll={onScroll}>
         <div ref={column}>
@@ -128,8 +155,7 @@ export function CouncilMember({
             m.role === "user" ? (
               <article className="project-message user" key={m.id}>
                 <header>
-                  <strong>You</strong>
-                  <span className="muted">via Deep review</span>
+                  <strong>{m.author ?? "You"}</strong>
                 </header>
                 <div className="markdown deep-review-pane-prompt">
                   <p>{m.body.replace(agentMentionPattern, "")}</p>

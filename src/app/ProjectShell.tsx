@@ -82,6 +82,14 @@ export default function ProjectShell() {
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);
   const { project, chat, draftId, panes, inbox, navigate } = nav;
+  /** A deep review's reviewer is reached from its review, and leads back to it. */
+  const reviewOf = (c: ChatSummary | undefined) => {
+    const parent = c?.reviewer?.parent;
+    const review = parent && nav.chats.data?.find((r) => r.id === parent);
+    return review && project
+      ? { title: review.title, open: () => void navigate(project, review) }
+      : undefined;
+  };
   const usage = nav.surface === "usage";
   // Leaving Usage goes back to the page it was opened from.
   const usageFrom = useRef<Surface>("project");
@@ -234,7 +242,12 @@ export default function ProjectShell() {
           ) : usage ? (
             <UsageTitle onBack={toggleUsage} />
           ) : (
-            <ProjectTitle project={project} chat={chat} onError={setError} />
+            <ProjectTitle
+              project={project}
+              chat={chat}
+              review={reviewOf(chat)}
+              onError={setError}
+            />
           )}
           <span className="spacer" />
           {!settings.open && !elsewhere && project && !poppedOut && (

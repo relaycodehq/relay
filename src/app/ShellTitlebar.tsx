@@ -80,14 +80,19 @@ export function TitlebarBrand({
   );
 }
 
-/** The window title: the project with its CI status, and the open thread. */
+/**
+ * The window title: the project with its CI status, and the open thread; a
+ * deep review's reviewer comes after its review, which opens on a click.
+ */
 export function ProjectTitle({
   project,
   chat,
+  review,
   onError,
 }: {
   project?: Project;
   chat?: ChatSummary;
+  review?: { title: string; open: () => void };
   onError: (error: unknown) => void;
 }) {
   return (
@@ -107,6 +112,19 @@ export function ProjectTitle({
         {project?.name ?? "Workspace"}
       </span>
       <span className="breadcrumb-slash">/</span>
+      {review && (
+        <>
+          <button
+            type="button"
+            className="breadcrumb-link"
+            title={`Back to ${review.title}`}
+            onClick={review.open}
+          >
+            {review.title}
+          </button>
+          <span className="breadcrumb-slash">/</span>
+        </>
+      )}
       {chat ? (
         <ThreadTitle key={chat.id} chat={chat} onError={onError} />
       ) : (

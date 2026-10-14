@@ -98,6 +98,8 @@ export interface ChatSummary {
   workspaceMoves?: WorkspaceMove[];
   /** A deep review's own checkout of the reviewed code; its Git, files and agent work there. */
   reviewFolder?: ReviewFolder;
+  /** A deep review whose reviewers are at work, the lead waiting for them. */
+  reviewing?: true;
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
@@ -118,7 +120,10 @@ export interface ChatSummary {
   limitResume?: LimitResume;
   /** The main conversation's native `/goal`, as its agent last reported it; see shared/goal. */
   goal?: ThreadGoal;
-  /** A deep review's reviewer; its thread shows inside the review, never on its own. */
+  /**
+   * A deep review's reviewer. It is listed under the review like a started
+   * thread (`startedBy`), works in the review's checkout and never edits.
+   */
   reviewer?: ReviewerTask;
   /** Started by another thread's agent through Relay's tools; listed under that thread. */
   startedBy?: StartedBy;

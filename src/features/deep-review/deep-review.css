@@ -506,7 +506,33 @@
   margin-right: -6px;
   color: var(--muted);
 }
+.deep-review-pane-stop:not(:last-child) {
+  margin-right: 0;
+}
 .deep-review-pane-stop:hover {
+  color: var(--text);
+}
+.deep-review-pane-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.deep-review-pane-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.deep-review-pane-open {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  color: var(--muted);
+}
+.deep-review-pane-open:hover {
   color: var(--text);
 }
 .deep-review-pane-status.done {

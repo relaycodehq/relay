@@ -5,6 +5,7 @@ import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
 import {
   deepReviewStartSchema,
+  MAX_REVIEWERS,
   reviewSetupSchema,
 } from "../../shared/deep-review";
 import {
@@ -349,8 +350,25 @@ export function chatHandlers(ctx: ApiContext) {
     nameReviewSetup: takes([reviewSetupSchema], (setup) =>
       nameReviewSetup(setup, store.aiSettings(), AbortSignal.timeout(60_000)),
     ),
-    resumeDeepReview: takes([idSchema], (id) =>
-      projectChats.resumeDeepReview(id),
+    resumeDeepReview: takes(
+      [
+        idSchema,
+        z
+          .union([
+            z
+              .object({
+                slot: z
+                  .number()
+                  .int()
+                  .min(0)
+                  .max(MAX_REVIEWERS - 1),
+              })
+              .strict(),
+            z.object({ lead: z.literal(true) }).strict(),
+          ])
+          .optional(),
+      ],
+      (id, only) => projectChats.resumeDeepReview(id, only),
     ),
     setFinding: takes(
       [idSchema, z.string().regex(/^F\d{1,6}$/), z.enum(["open", "dismissed"])],

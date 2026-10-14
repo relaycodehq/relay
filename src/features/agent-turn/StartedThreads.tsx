@@ -105,6 +105,8 @@ export function StartedChip({
     .filter(
       (c) =>
         c.startedBy?.chatId === lead &&
+        // A deep review's reviewers show in its council instead.
+        !c.reviewer &&
         (!ids || ids.includes(c.id)) &&
         !chatSettled(c),
     )

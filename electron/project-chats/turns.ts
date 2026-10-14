@@ -99,6 +99,9 @@ export class ChatTurns {
       .control(chat.id, async () => {
         await stepped;
         await this.queue.drain(chat.id);
+        // A reviewer's step waited for its queue; nothing went out after all.
+        if (chat.reviewer && !this.core.active.has(chat.id))
+          await this.councils.step(chat.id, {});
         await this.ended(chat.id);
         // A review that stopped or failed has no lead turn whose end would look at it.
         if (chat.reviewer) await this.ended(chat.reviewer.parent);
@@ -304,6 +307,8 @@ export class ChatTurns {
         this.core.active.release(id, active);
         return;
       }
+      // A reviewer's review that stopped before its lead waits for it again.
+      if (chat.reviewer) await this.councils.memberStarting(chat);
       // The message is in. A handoff note can take minutes; the answer
       // starts after it without holding up the send.
       const starting = this.start(chat, active, input, {
@@ -356,6 +361,7 @@ export class ChatTurns {
         );
       if (active.abort.signal.aborted) {
         this.core.active.release(id, active);
+        this.unstarted(chat, input);
         return;
       }
       // A side conversation continues the main one as it stood at its message.
@@ -413,6 +419,7 @@ export class ChatTurns {
       // Stopped while the outgoing agent wrote its note: no note from Relay, no answer.
       if (active.abort.signal.aborted) {
         this.core.active.release(id, active);
+        this.unstarted(chat, input);
         return;
       }
       if (switchedFrom && !(note?.status === "complete" && note.body.trim()))
@@ -477,7 +484,23 @@ export class ChatTurns {
         .save(chat)
         .catch((e) => console.warn("Could not save the failed send:", e));
       this.core.emit({ chatId: id, message: failed });
+      this.unstarted(chat, input, failed.id);
     }
+  }
+  /**
+   * A turn stopped or failed before its agent ran, so no run ends to move a
+   * review on: a reviewer's review takes its step here, or would wait for good.
+   */
+  private unstarted(
+    chat: ProjectChat,
+    input: ProjectChatSend,
+    answer?: string,
+  ) {
+    if (chat.reviewer)
+      void this.councils.step(chat.id, {
+        request: input.id,
+        ...(answer ? { answer } : {}),
+      });
   }
   /**
    * Runs `answer` as the thread's reply to `input`. When it ends the thread
