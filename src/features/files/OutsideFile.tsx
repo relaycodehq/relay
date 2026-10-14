@@ -5,7 +5,13 @@ import { splitOutsidePath } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import type { ChecksController } from "../checks/useProjectChecks";
 import { ErrorBox, Loading } from "../../ui/ui";
-import { FileBar, ImageFile, OtherFile, RevealButtons } from "./FileViews";
+import {
+  FileBar,
+  ImageFile,
+  OtherFile,
+  RevealButtons,
+  VideoFile,
+} from "./FileViews";
 const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
 
 const noBuffer = async () => {};
@@ -60,6 +66,10 @@ export function OutsideFile({
   if (info.data.kind === "image")
     return (
       <ImageFile where={folder} info={info.data} lead={lead} shownPath={path} />
+    );
+  if (info.data.kind === "video")
+    return (
+      <VideoFile where={folder} info={info.data} lead={lead} shownPath={path} />
     );
   if (info.data.kind === "other")
     return (

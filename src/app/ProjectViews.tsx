@@ -22,6 +22,7 @@ import {
   FolderView,
   ImageFile,
   OtherFile,
+  VideoFile,
   RevealButtons,
 } from "../features/files/FileViews";
 import { PaneResizer } from "../ui/PaneResizer";
@@ -306,6 +307,8 @@ export function ProjectFiles({
           <Loading text="Opening…" />
         ) : info.data.kind === "image" ? (
           <ImageFile where={where} info={info.data} lead={listToggle} />
+        ) : info.data.kind === "video" ? (
+          <VideoFile where={where} info={info.data} lead={listToggle} />
         ) : info.data.kind === "other" ? (
           <OtherFile where={where} info={info.data} lead={listToggle} />
         ) : editorReady ? (

@@ -334,6 +334,72 @@ export function ImageFile({
   );
 }
 
+/** A video in the file's own place, played as it streams from disk. */
+export function VideoFile({
+  where,
+  info,
+  lead,
+  shownPath = info.path,
+}: {
+  where: string;
+  info: FileInfo;
+  lead?: ReactNode;
+  /** What the bar shows instead of the path, like a file's full path outside the project. */
+  shownPath?: string;
+}) {
+  const [error, setError] = useState<unknown>();
+  const [size, setSize] = useState<{ width: number; height: number }>();
+  const video = useQuery({
+    queryKey: ["project-video", where, info.path, info.mtime],
+    queryFn: () => api.projectVideo(where, info.path),
+    staleTime: Infinity,
+    retry: false,
+  });
+  return (
+    <section className="image-file" aria-label="Video">
+      <FileBar
+        lead={lead}
+        path={shownPath}
+        detail={[
+          size && `${size.width} × ${size.height}`,
+          formatSize(info.size),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        <RevealButtons
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
+      {!!(error || video.error) && <ErrorBox error={error || video.error} />}
+      <div className="image-file-stage">
+        {video.data ? (
+          <video
+            src={video.data}
+            controls
+            onLoadedMetadata={(e) =>
+              setSize({
+                width: e.currentTarget.videoWidth,
+                height: e.currentTarget.videoHeight,
+              })
+            }
+            onError={() =>
+              setError(
+                new Error("This video won't play here; try the default app."),
+              )
+            }
+          />
+        ) : (
+          !video.error && <Loading text="Opening video…" />
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** A file that can't be edited here: what it is, and the ways to open it elsewhere. */
 export function OtherFile({
   where,

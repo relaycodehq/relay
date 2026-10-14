@@ -9,6 +9,7 @@ import {
 import {
   answerImagePaths,
   localImagePath,
+  localVideoPath,
 } from "../../../shared/answer-images";
 import { stoppedNote } from "../../../shared/agent-trace";
 import { parseCodeReferences } from "../../../shared/code-references";
@@ -40,6 +41,7 @@ import {
   useWorkingImages,
   type PreviewImage,
 } from "../images/ImagePreview";
+import { AnswerVideo } from "../images/AnswerVideo";
 import { ImageViewer } from "../images/ImageViewer";
 import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
@@ -258,6 +260,16 @@ export const Message = memo(function Message({
   );
   const answerImage = useCallback(
     (src: string, alt: string) => {
+      const video = chatId && localVideoPath(src, projectRoot);
+      if (video)
+        return (
+          <AnswerVideo
+            chatId={chatId}
+            messageId={m.id}
+            path={video}
+            alt={alt}
+          />
+        );
       const path = chatId && localImagePath(src, projectRoot);
       if (!path) return undefined;
       const image = readImage(chatId, m.id, path, projectRoot);
