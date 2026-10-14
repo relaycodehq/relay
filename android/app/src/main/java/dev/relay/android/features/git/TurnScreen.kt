@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Remote
+import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.model.RemoteDiffSource
 import dev.relay.android.remote.model.TurnFileChange
 import dev.relay.android.ui.Button
@@ -49,9 +50,9 @@ import java.util.Locale
  * [worktree] everything the thread's worktree has that the branch it came
  * from doesn't yet (mobile/src/app/turn.tsx).
  *
- * [onAskAgent] sends the thread's agent a message when a merge conflicts; the
- * thread screen can pass its composer's send. Left null, the model sends one
- * on the thread's settings.
+ * [onAskAgent] sends the thread's agent a message when a merge conflicts, on
+ * the thread's last settings (null before it has any), the way its composer
+ * sends: through the outbox.
  */
 @Composable
 fun TurnScreen(
@@ -59,7 +60,7 @@ fun TurnScreen(
     chatId: String,
     messageId: String?,
     worktree: Boolean,
-    onAskAgent: (suspend (String) -> Unit)? = null,
+    onAskAgent: suspend (text: String, settings: ResumeSettings?) -> Unit,
 ) {
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
@@ -148,7 +149,7 @@ fun TurnScreen(
         onDismiss = { merging = false },
         onMerged = { scope.launch { model.loadStatus() } },
         onAskAgent = { text ->
-            (onAskAgent ?: model::askAgent)(text)
+            onAskAgent(text, model.thread.value?.settings)
             nav.pop()
         },
     )

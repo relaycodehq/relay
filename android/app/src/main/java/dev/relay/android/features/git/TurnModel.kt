@@ -6,15 +6,12 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.chat
 import dev.relay.android.remote.client.projectWorktree
 import dev.relay.android.remote.client.rewindProjectTurn
-import dev.relay.android.remote.client.sendProjectChat
-import dev.relay.android.remote.model.ProjectChatSend
 import dev.relay.android.remote.model.RemoteChat
 import dev.relay.android.remote.model.TurnFileChange
 import dev.relay.android.remote.model.WorktreeStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 private val agentNames = mapOf(
     "codex" to "Codex", "claude" to "Claude", "opencode" to "OpenCode", "cursor" to "Cursor",
@@ -102,26 +99,5 @@ class TurnModel(
                 busy.value = null
             }
         }
-    }
-
-    /**
-     * Sends the thread's agent [text] on the thread's own settings.
-     * TODO: swap for the composer's composeSend (fastFor, windowFor, mentions)
-     * and the outbox once features/composer has them; this sends directly.
-     */
-    suspend fun askAgent(text: String) {
-        val settings = thread.value?.settings ?: throw IllegalStateException("This thread has no agent settings to send with yet.")
-        val body = text.trim()
-        val send = ProjectChatSend(
-            id = UUID.randomUUID().toString(),
-            body = "@${settings.provider} $body",
-            choice = settings.choice,
-            provider = settings.provider,
-            runtimeMode = settings.runtimeMode,
-            interactionMode = settings.interactionMode,
-            contextWindow = settings.contextWindow,
-            to = settings.provider,
-        )
-        remote.call { sendProjectChat(chatId, send) }
     }
 }

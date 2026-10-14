@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import dev.relay.android.app.gallery.GalleryScreen
 import dev.relay.android.app.screens.PaneEmpty
 import dev.relay.android.app.screens.PlaceholderScreen
+import dev.relay.android.features.composer.sendToThread
 import dev.relay.android.features.files.FileScreen
 import dev.relay.android.features.files.FilesScreen
 import dev.relay.android.features.git.BranchesScreen
@@ -43,7 +44,11 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Reply> { ThreadScreen(it.id, container.remote, rootId = it.rootId, onSeen = seen) }
     entry<Route.SubagentRun> { SubagentRunScreen(it.chatId, it.agentId, it.rootId, container.remote) }
     entry<Route.Project> { ProjectScreen(it.id, container.remote, container.home) }
-    entry<Route.Turn> { TurnScreen(container.remote, it.chatId, it.messageId, !it.worktree.isNullOrEmpty()) }
+    entry<Route.Turn> { route ->
+        TurnScreen(container.remote, route.chatId, route.messageId, !route.worktree.isNullOrEmpty()) { text, settings ->
+            sendToThread(container.remote, container.app.filesDir, route.chatId, text, settings)
+        }
+    }
     entry<Route.Diff> { DiffScreen(container.remote, it.source) }
     entry<Route.Changes> { ChangesScreen(container.remote, it.where) }
     entry<Route.Branches> { BranchesScreen(container.remote, it.where) }
