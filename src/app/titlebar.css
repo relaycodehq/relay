@@ -137,10 +137,12 @@
 .breadcrumb-slash {
   opacity: 0.5;
 }
-/* A reviewer's review, between the project and the reviewer. */
+/* A reviewer's review, between the project and the reviewer. Capped, so a
+   long review title can't push the reviewer's own name out. */
 .project-window-title > .breadcrumb-link {
   flex-shrink: 1;
   min-width: 0;
+  max-width: 16em;
   overflow: hidden;
   padding: 0;
   border: 0;

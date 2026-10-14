@@ -98,6 +98,7 @@ export function ProjectChat({
   opens,
   onDraftWorkspace,
   onStartThread,
+  onBackToReview,
   viewing,
   ref,
 }: {
@@ -132,6 +133,8 @@ export function ProjectChat({
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
   onStartThread?: (text: string, send: boolean) => Promise<void>;
+  /** Opens the deep review this thread is a reviewer of. */
+  onBackToReview?: () => void;
   viewing: Viewing;
   /** The thread's composer, while it shows one. */
   ref?: Ref<ComposerControls>;
@@ -377,7 +380,11 @@ export function ProjectChat({
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
-      <ThreadHeader onBack={root ? () => setRootId(null) : undefined} />
+      {root ? (
+        <ThreadHeader onBack={() => setRootId(null)} />
+      ) : (
+        <ThreadHeader onBack={onBackToReview} label="Back to review" />
+      )}
       {!isEmpty && (
         <RunCommand.Provider value={runCommand}>
           <KeepBlock.Provider value={keeper}>

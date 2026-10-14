@@ -187,6 +187,9 @@ export function ThreadWorkspace({
   onLinkProject?: () => void;
 }) {
   const { chat, chats, draftId, panes, pull, navigate } = nav;
+  const review =
+    chat?.reviewer &&
+    chats.data?.find((c) => c.id === chat.reviewer?.parent);
   const codeOpen =
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
@@ -251,6 +254,9 @@ export function ThreadWorkspace({
                 onCommand={onCommand}
                 onDraftWorkspace={nav.setDraftWorkspace}
                 onStartThread={onStartThread}
+                onBackToReview={
+                  review ? () => void navigate(project, review) : undefined
+                }
                 onCreated={onCreated}
                 onForked={onOpened}
                 onOpenThread={onOpened}
