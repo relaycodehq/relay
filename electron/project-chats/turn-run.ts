@@ -26,6 +26,7 @@ import { projectTasks } from "../terminal/tasks";
 import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
+import { outsideEdits } from "../git/elsewhere";
 import { commitWatch } from "./turn-commit";
 import { publishFindings, settleFixes } from "../findings";
 import { relayToolsFor } from "../relay-mcp";
@@ -418,6 +419,17 @@ export class TurnRunner {
             counted,
             chat,
           ));
+        }
+        // Also where nothing is snapshotted, such as a Scratchpad thread
+        // working in a clone elsewhere.
+        if (rules.records && edited.size) {
+          const elsewhere = await outsideEdits(counted, [...edited]).catch(
+            (e) => {
+              console.warn("Could not list the files edited elsewhere:", e);
+              return [];
+            },
+          );
+          if (elsewhere.length) answer.message.elsewhere = elsewhere;
         }
         // The agent's session started in the folder it left; the next turn
         // starts it again in the worktree.

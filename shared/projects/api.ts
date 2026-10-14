@@ -14,6 +14,7 @@ import type { ContextReport } from "../context-report";
 import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type { HelperPick } from "../settings";
+import type { ElsewhereChanges } from "../elsewhere";
 import type {
   DeepReviewStart,
   ResumeReview,
@@ -428,6 +429,21 @@ export interface ProjectGitApi {
   ): Promise<FilePair>;
   /** A gitignored file an agent wrote, against how it was before the agent's first write. */
   projectIgnoredDiff(where: string, path: string): Promise<FilePair>;
+  /** What a thread and the threads it started changed in other repositories, and which of its own folder's files the started ones changed. */
+  threadElsewhere(chatId: string): Promise<ElsewhereChanges>;
+  /** A file changed in another repository, against its HEAD. */
+  threadElsewhereDiff(
+    chatId: string,
+    root: string,
+    path: string,
+  ): Promise<FilePair>;
+  /** Commits what the thread's agents changed in another repository; `revision` is the tree it was listed at. */
+  threadElsewhereCommit(
+    chatId: string,
+    root: string,
+    revision: string,
+    message: string,
+  ): Promise<ElsewhereChanges>;
   /** Takes gitignored files off the Changes list. */
   projectDismissIgnored(where: string, paths: string[]): Promise<WorkingTree>;
   projectGitAction(where: string, action: GitAction): Promise<WorkingTree>;

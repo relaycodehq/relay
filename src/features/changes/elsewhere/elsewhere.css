@@ -1,0 +1,100 @@
+/* Other repositories the thread's agents changed, under the thread's own lists. */
+.elsewhere-group {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.local-changes .working-file-list .elsewhere-group > header {
+  padding-top: 12px;
+}
+.elsewhere-group > header strong {
+  flex: 0 1 auto;
+  min-width: 3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The branch gives way before the repository's name does. */
+.elsewhere-branch {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.elsewhere-lines {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.elsewhere-lines .added {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.elsewhere-lines .deleted {
+  color: light-dark(#c4323f, #f0707a);
+}
+.elsewhere-group > header .elsewhere-commit-open {
+  flex: none;
+  border: 0;
+  padding: 2px 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.elsewhere-group > header .elsewhere-commit-open:hover {
+  color: var(--text);
+}
+.elsewhere-commit {
+  display: flex;
+  gap: 6px;
+  padding: 4px 12px 6px 23px;
+}
+.elsewhere-commit input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.elsewhere-error {
+  margin: 0;
+  padding: 2px 12px 6px 23px;
+  color: var(--danger);
+  font-size: 11px;
+}
+/* No checkbox: its commit takes every file listed. */
+.local-changes .working-file.elsewhere-file {
+  padding-left: 23px;
+}
+
+/* Who changed a file, on a line of its own under the name. */
+.local-changes .working-file:has(> .change-by) {
+  flex-wrap: wrap;
+}
+.change-by {
+  flex-basis: 100%;
+  min-width: 0;
+  margin-top: -4px;
+  padding: 0 8px 5px 27px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.local-changes .working-file:has(> input) > .change-by {
+  padding-left: 40px;
+}
+.change-by button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.change-by button:hover {
+  color: var(--text);
+}

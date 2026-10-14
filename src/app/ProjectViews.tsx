@@ -49,6 +49,9 @@ export function ProjectChanges({
   turn,
   onCloseTurn,
   reveals,
+  chatId,
+  onOpenThread,
+  onOpenOutside,
 }: {
   /** Workspace id: the checkout, or the thread's worktree. */
   where: string;
@@ -59,6 +62,10 @@ export function ProjectChanges({
   turn?: (TurnDiffTarget & { request: number }) | null;
   onCloseTurn: () => void;
   reveals: RequestChannel<ProjectFileLink>;
+  /** The thread, whose agents' changes in other repositories list here too. */
+  chatId?: string;
+  onOpenThread?: (chatId: string) => void;
+  onOpenOutside?: (path: string) => void;
 }) {
   if (turn)
     return (
@@ -78,6 +85,9 @@ export function ProjectChanges({
       onAsk={onAsk}
       onSelection={(path) => onViewing({ path, viewed: 0, total: 0 })}
       reveals={reveals}
+      chatId={chatId}
+      onOpenThread={onOpenThread}
+      onOpenOutside={onOpenOutside}
     />
   );
 }

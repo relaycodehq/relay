@@ -8,11 +8,7 @@ import type { CodeReference } from "../../../shared/code-references";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import type { RequestChannel } from "../../lib/request-channel";
-import {
-  changeSections,
-  gitBlockedReason,
-  folderKey,
-} from "./working-changes";
+import { changeSections, gitBlockedReason, folderKey } from "./working-changes";
 import { parentOf } from "../../lib/file-tree";
 import { useSavedChanges } from "./useSavedChanges";
 import { useWorkingDiff, useWorkingTree } from "./useWorkingTree";
@@ -27,6 +23,9 @@ import { ChangeReview } from "./local/ChangeReview";
 import { PushDialog } from "./local/PushDialog";
 import { useSplitDiff } from "../diff/WorkingDiff";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
+import { ElsewhereGroups } from "./elsewhere/ElsewhereGroups";
+import { ElsewhereReview } from "./elsewhere/ElsewhereReview";
+import { useElsewhere, type ElsewherePick } from "./elsewhere/useElsewhere";
 import "./working-tree.css";
 
 export function LocalChanges({
@@ -37,6 +36,9 @@ export function LocalChanges({
   onOpenFile,
   onAsk,
   reveals,
+  chatId,
+  onOpenThread,
+  onOpenOutside,
 }: {
   pull?: Pull;
   projectId?: string;
@@ -48,6 +50,11 @@ export function LocalChanges({
   onAsk?: (ref: CodeReference) => void;
   /** Files to select, such as ones clicked in the chat. */
   reveals?: RequestChannel<ProjectFileLink>;
+  /** The thread whose agents' changes in other repositories list under its own. */
+  chatId?: string;
+  onOpenThread?: (chatId: string) => void;
+  /** Opens a file outside the folder by its absolute path. */
+  onOpenOutside?: (path: string) => void;
 }) {
   const [split, setSplit] = useSplitDiff();
   const { selected, setSelected, message, setMessage, grouped, setGrouped } =
@@ -76,6 +83,22 @@ export function LocalChanges({
     list: fileList,
   });
   const sections = tree ? changeSections(tree.changes) : [];
+  const elsewhere = useElsewhere(chatId).data;
+  const [away, setAway] = useState<ElsewherePick | null>(null);
+  // A file picked in this folder, by a click or from the chat, takes over the diff.
+  useEffect(() => {
+    if (selected) setAway(null);
+  }, [selected]);
+  const awayGroup =
+    away && elsewhere?.groups.find((g) => g.root === away.root);
+  // Committed or reverted there, it has no diff left to show.
+  const awayGone =
+    !!away &&
+    !!elsewhere &&
+    !awayGroup?.files.some((f) => f.path === away.path);
+  useEffect(() => {
+    if (awayGone) setAway(null);
+  }, [awayGone]);
   return (
     <section className="local-changes" aria-label="Local changes">
       <ChangesToolbar
@@ -164,6 +187,23 @@ export function LocalChanges({
                 onOpenFile={onOpenFile}
                 onTrashed={() => void state.refetch()}
                 onError={working.setError}
+                authors={elsewhere?.here}
+                onOpenThread={onOpenThread}
+                after={
+                  chatId &&
+                  !!elsewhere?.groups.length && (
+                    <ElsewhereGroups
+                      chatId={chatId}
+                      groups={elsewhere.groups}
+                      selected={away}
+                      onPick={(pick) => {
+                        setSelected(null);
+                        setAway(pick);
+                      }}
+                      onOpenThread={onOpenThread}
+                    />
+                  )
+                }
               />
               <CommitForm
                 message={message}
@@ -183,26 +223,35 @@ export function LocalChanges({
                 onSplit={projectId ? () => setSplitting(true) : undefined}
               />
             </aside>
-            <ChangeReview
-              tree={tree}
-              selected={selected}
-              diff={diff}
-              missing={missing}
-              split={split}
-              onSplit={setSplit}
-              line={line}
-              onLineShown={() => setLine(undefined)}
-              onOpenFile={onOpenFile}
-              onReveal={
-                projectId
-                  ? (path) =>
-                      void api
-                        .revealProjectPath(projectId, path)
-                        .catch(working.setError)
-                  : undefined
-              }
-              onAsk={onAsk}
-            />
+            {chatId && away ? (
+              <ElsewhereReview
+                chatId={chatId}
+                pick={away}
+                revision={awayGroup?.revision}
+                onOpenOutside={onOpenOutside}
+              />
+            ) : (
+              <ChangeReview
+                tree={tree}
+                selected={selected}
+                diff={diff}
+                missing={missing}
+                split={split}
+                onSplit={setSplit}
+                line={line}
+                onLineShown={() => setLine(undefined)}
+                onOpenFile={onOpenFile}
+                onReveal={
+                  projectId
+                    ? (path) =>
+                        void api
+                          .revealProjectPath(projectId, path)
+                          .catch(working.setError)
+                    : undefined
+                }
+                onAsk={onAsk}
+              />
+            )}
           </div>
         )
       )}

@@ -14,6 +14,7 @@ import { desktopHandlers } from "./desktop";
 import { draftHandlers } from "./drafts";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
+import { elsewhereHandlers } from "./elsewhere";
 import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
 import { renderHandlers } from "./renders";
@@ -40,6 +41,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     checkHandlers(ctx),
     projectHandlers(ctx),
     gitHandlers(ctx),
+    elsewhereHandlers(ctx),
     chatHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),

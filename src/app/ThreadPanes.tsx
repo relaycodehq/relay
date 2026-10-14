@@ -63,6 +63,8 @@ export function ThreadChanges({
   view,
   opens,
   review,
+  chatId,
+  onOpenThread,
 }: {
   project: Project;
   pull: PullRef | null;
@@ -79,6 +81,9 @@ export function ThreadChanges({
     /** Absent while Gitea is off in Settings → Integrations. */
     onConnect?: () => void;
   };
+  chatId?: string;
+  /** Opens a thread this one started, from a file it changed. */
+  onOpenThread?: (chatId: string) => void;
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
   const editFile = (path: string, line?: number) =>
@@ -164,6 +169,11 @@ export function ThreadChanges({
           onCloseTurn={() => view.closeTurn()}
           reveals={opens.changeReveals}
           onAsk={(code) => opens.ask({ text: "", code })}
+          chatId={chatId}
+          onOpenThread={onOpenThread}
+          onOpenOutside={(path) =>
+            opens.openInEditor({ path, outside: true, directory: false })
+          }
         />
       )}
     </>

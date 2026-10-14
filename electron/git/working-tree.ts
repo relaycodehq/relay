@@ -709,6 +709,15 @@ export async function workingDiff(
       : c.worktree === "D"
         ? null
         : { name: path, disk: true };
+  return filePair(root, oldSource, nextSource);
+}
+
+/** The file as `oldSource` and `nextSource` have it, side by side; null for a side that doesn't exist. */
+async function filePair(
+  root: string,
+  oldSource: FileSource | null,
+  nextSource: FileSource | null,
+): Promise<FilePair> {
   const read = async (source: FileSource | null) => {
     if (!source) return null;
     if ("spec" in source)
@@ -734,4 +743,29 @@ export async function workingDiff(
   }
   for (const f of [old, next]) if (f) f.cacheKey ||= digest(f.contents);
   return { old, next, binary: false };
+}
+
+/**
+ * A changed file against HEAD, staged and unstaged changes together: what a
+ * thread's agent left in a repository other than its own.
+ */
+export async function headDiff(root: string, path: string): Promise<FilePair> {
+  workingPathSchema.parse(path);
+  const state = await workingTree(root),
+    c = state.changes.find((c) => c.path === path);
+  if (!c) throw new Error("This file no longer has local changes.");
+  if (c.conflict)
+    throw new Error(
+      "This file has merge conflicts. Resolve them in your editor first.",
+    );
+  const oldName = c.previousPath ?? path;
+  return filePair(
+    root,
+    c.index === "A" || c.index === "?"
+      ? null
+      : { name: oldName, spec: `HEAD:${oldName}` },
+    c.worktree === "D" || (c.index === "D" && c.worktree === " ")
+      ? null
+      : { name: path, disk: true },
+  );
 }

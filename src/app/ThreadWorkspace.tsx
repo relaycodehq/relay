@@ -280,6 +280,15 @@ export function ThreadWorkspace({
               pull={pull}
               folder={folder}
               view={view}
+              chatId={chat?.id}
+              onOpenThread={(id) => {
+                const c = everyThread.find((t) => t.id === id);
+                if (c)
+                  navigate(
+                    allProjects.find((p) => p.id === c.projectId) ?? project,
+                    c,
+                  );
+              }}
               opens={opens}
               review={{
                 account: host.account,

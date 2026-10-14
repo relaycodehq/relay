@@ -9,6 +9,7 @@ import type { HtmlRender } from "../html-render";
 import type { TurnPreview } from "../preview";
 import type { Streamed } from "../usage";
 import type { ResumeSettings } from "./send";
+import type { ElsewhereEdits } from "../elsewhere";
 
 export interface PageAnswer {
   title: string;
@@ -144,6 +145,8 @@ export interface ChatMessage {
   preview?: TurnPreview;
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
+  /** Local: files its file tools wrote in other repositories, which `changes` can't see. */
+  elsewhere?: ElsewhereEdits[];
   /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */
   forkPoint?: ForkPoint;
   /** Local: the turn failed because this agent's login is missing, expired or was revoked. */

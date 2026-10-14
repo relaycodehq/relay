@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { ChevronRight, EyeOff } from "lucide-react";
 import { agentName } from "../../../../shared/agents";
 import {
@@ -19,6 +19,8 @@ import {
 import { FileEntryIcon } from "../../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { IgnoredChangeMenu, LocalChangeMenu } from "../LocalChangeMenu";
+import type { ElsewhereAuthor } from "../../../../shared/elsewhere";
+import { ChangedBy } from "../elsewhere/ElsewhereGroups";
 
 interface Props {
   sections: ChangeSection[];
@@ -41,20 +43,26 @@ interface Props {
   onOpenFile?: (path: string, line?: number) => void;
   onTrashed: () => void;
   onError: (e: unknown) => void;
+  /** Files threads this one started changed, by path. */
+  authors?: Record<string, ElsewhereAuthor[]>;
+  onOpenThread?: (chatId: string) => void;
+  /** Under the lists, in the same scroll: other repositories the thread changed. */
+  after?: ReactNode;
 }
 
 /** The staged and working lists, each flat or under its folders. */
-export function ChangeList({ sections, listRef, ...props }: Props) {
+export function ChangeList({ sections, listRef, after, ...props }: Props) {
   return (
     <div className="working-file-list" ref={listRef}>
       {sections.map((s) => (
         <Section key={s.area} section={s} {...props} />
       ))}
+      {after}
     </div>
   );
 }
 
-type SectionProps = Omit<Props, "sections" | "listRef"> & {
+type SectionProps = Omit<Props, "sections" | "listRef" | "after"> & {
   section: ChangeSection;
 };
 
@@ -209,6 +217,8 @@ function ChangeRow({
   onOpenFile,
   onTrashed,
   onError,
+  authors,
+  onOpenThread,
 }: SectionProps & { change: WorkingChange; nested: boolean }) {
   const staged = s.area === "staged",
     kind = changeKind(staged ? c.index : c.worktree, c.conflict),
@@ -248,6 +258,7 @@ function ChangeRow({
               <span className="change-dir">{c.path.slice(0, slash)}</span>
             )}
           </button>
+          <ChangedBy by={authors?.[c.path] ?? []} onOpenThread={onOpenThread} />
         </div>
       }
       onStage={() => onAct({ kind: s.kind, revision, paths: [c.path] })}
