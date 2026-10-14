@@ -51,6 +51,7 @@ import {
   type SidebarRows,
 } from "./SidebarThread";
 import { SnoozeMenu } from "./SnoozeMenu";
+import { useCardLabelFit } from "./useCardLabelFit";
 import { CardAgents, CardState, isLive, StatusMark } from "./ThreadStatus";
 import { rowKeys } from "../../ui/ui";
 import { useStoredState } from "../../lib/persisted-store";
@@ -247,6 +248,7 @@ function ThreadCard({
     () => actions.open(c),
     onSendOpen,
   );
+  const top = useCardLabelFit();
   const state = (
     <CardState
       chat={asking ? { ...c, waiting: true } : c}
@@ -278,7 +280,7 @@ function ThreadCard({
           onKeyDown={rowKeys(() => actions.open(c))}
         >
           {!compact && (
-            <div className="sb-card-top">
+            <div className="sb-card-top" ref={top}>
               <ProjectBadge project={p} />
               <span className="sb-card-name">
                 <span className="sb-card-project">{p?.name}</span>
