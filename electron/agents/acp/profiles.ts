@@ -2,11 +2,12 @@ import { access, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { InteractionMode, RuntimeMode } from "../../../shared/agent-modes";
-import type { RegistryProvider } from "../../../shared/agents";
+import type { AgentModel, RegistryProvider } from "../../../shared/agents";
 import { findExecutable, runExecutable } from "../../platform/executables";
 import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
 import { discoverAntigravitySkills } from "./antigravity-skills";
+import { openCode2Models } from "../opencode/model-ids";
 import type { AgentSkill } from "../skill-presentation";
 
 /** The agents Relay runs over ACP: its own, and those installed from the ACP registry. */
@@ -63,6 +64,8 @@ export interface AcpProfile {
   compact?: string;
   /** Skills it doesn't list over ACP, read from its folders for `cwd`. */
   skills?(cwd: string): Promise<AgentSkill[]>;
+  /** Its models as Relay offers them, from the list a session sends. */
+  models?(listed: AgentModel[]): AgentModel[];
   /** What to tell someone it can't find. */
   install: string;
   /** An answer that is really the agent reporting a failure. */
@@ -193,6 +196,7 @@ const opencode: AcpProfile = {
     { option: "mode", value: readOnly || interaction === "plan" ? "plan" : "build" },
   ],
   compact: "/compact",
+  models: openCode2Models,
   install: "Install OpenCode from opencode.ai, or in Settings → AI models → Agents.",
 };
 

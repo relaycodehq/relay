@@ -49,7 +49,8 @@ import {
 } from "./events";
 import { editedPaths, openCodeActivity } from "./activity";
 import { openCodeFailure } from "./failure";
-import { openCodeModels, splitModel } from "./catalog";
+import { openCodeModels } from "./catalog";
+import { splitModel } from "./model-ids";
 import { markOpenCodeTurn } from "./server";
 import { rememberWorktreeEnv } from "./worktree-env";
 import { answerLimitError, guardSteer } from "../turn-kit";

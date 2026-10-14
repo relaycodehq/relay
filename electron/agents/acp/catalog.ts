@@ -34,7 +34,11 @@ async function probe(profile: AcpProfile, cwd: string) {
     const settings = agent.session!.settings;
     if (!heardCommands(profile.provider))
       await new Promise((resolve) => setTimeout(resolve, commandsWait));
-    return { models: modelsOf(settings), current: currentOf(settings) };
+    const listed = modelsOf(settings);
+    return {
+      models: profile.models?.(listed) ?? listed,
+      current: currentOf(settings),
+    };
   } finally {
     agent.close();
   }

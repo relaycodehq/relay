@@ -259,9 +259,14 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
   });
   const { app, page, root, capture } = await launchWithOpenCode({
     configOptions: [
+      // Named as OpenCode 2 names them, its provider first.
       select("model", "opencode/big-pickle", [
-        ["opencode/big-pickle", "Big Pickle"],
-        ["opencode/wonder", "Wonder"],
+        ["opencode/big-pickle", "opencode/Big Pickle"],
+        ["opencode/wonder", "opencode/Wonder"],
+        [
+          "openrouter/~anthropic/claude-opus-latest",
+          "openrouter/Claude Opus Latest",
+        ],
       ]),
       select("mode", "build", [
         ["build", "Build"],
@@ -304,7 +309,12 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
       .getByRole("toolbar", { name: "Model providers" })
       .getByRole("button", { name: "OpenCode", exact: true })
       .click();
-    const wonder = page.getByRole("option", { name: "Wonder" });
+    await expect(
+      page
+        .getByRole("navigation", { name: "OpenCode providers" })
+        .getByRole("button"),
+    ).toHaveText([/^All/, /^OpenCode Zen/, /^OpenRouter/]);
+    const wonder = page.getByRole("option", { name: "Wonder", exact: true });
     await expect(wonder).toBeVisible();
     await wonder.click();
     await page

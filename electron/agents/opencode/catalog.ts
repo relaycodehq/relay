@@ -8,6 +8,7 @@ import {
   type ReasoningEffort,
 } from "../../../shared/settings";
 import { disposeOpenCode, openCode } from "./client";
+import { hiddenProviders, makerOf } from "./model-ids";
 import { skillCommands } from "../skill-presentation";
 import {
   commandListSchema,
@@ -21,23 +22,6 @@ import {
 const byName = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
-/** OpenCode names a model `provider/model`, e.g. `openrouter/anthropic/claude-opus-5`. */
-export function splitModel(
-  id: string,
-): { providerID: string; modelID: string } | undefined {
-  const slash = id.indexOf("/");
-  return slash > 0 && slash < id.length - 1
-    ? { providerID: id.slice(0, slash), modelID: id.slice(slash + 1) }
-    : undefined;
-}
-
-/**
- * Anthropic's own models run through Relay's Claude agent, with its sign-in
- * and features; through OpenCode a Claude subscription is refused. Claude
- * models other providers resell, e.g. OpenRouter's, stay.
- */
-const hidden = new Set(["anthropic"]);
-
 /**
  * The models of the upstream providers OpenCode is signed in to. Asked again
  * after a minute, since connecting a provider in OpenCode adds its models.
@@ -50,7 +34,7 @@ export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
   );
   const signedIn = new Set(connected);
   return all
-    .filter((entry) => signedIn.has(entry.id) && !hidden.has(entry.id))
+    .filter((entry) => signedIn.has(entry.id) && !hiddenProviders.has(entry.id))
     .map((entry) =>
       parseOpenCodeResponse(`${entry.id} provider`, providerSchema, entry),
     )
@@ -68,10 +52,7 @@ export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
           {
             id,
             name: model.name || model.id,
-            // A reseller's model id names its maker, e.g. `anthropic/…`.
-            description: model.id.includes("/")
-              ? model.id.slice(0, model.id.indexOf("/")).replace(/^~/, "")
-              : "",
+            description: makerOf(model.id),
             group: provider.name ?? provider.id,
             efforts: Object.keys(model.variants ?? {}).flatMap(
               (v): ReasoningEffort[] => {
