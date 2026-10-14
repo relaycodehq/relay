@@ -6,7 +6,27 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import dev.relay.android.ui.ButtonSize
+import dev.relay.android.ui.Icon
+import dev.relay.android.ui.pressable
+import dev.relay.android.ui.ring
+import io.github.lyxnx.compose.ui.tablericons.outline.DeviceDesktop
+import io.github.lyxnx.compose.ui.tablericons.outline.Qrcode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -38,14 +58,12 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.remote.parsePairingUrl
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonVariant
-import dev.relay.android.ui.Divider
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Camera
 import io.github.lyxnx.compose.ui.tablericons.outline.Clipboard
 import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
 import kotlinx.coroutines.delay
@@ -112,88 +130,172 @@ fun PairScreen(remote: Remote, link: String?) {
 
     val c = RelayTheme.colors
     val hint = RelayTheme.type.sm.copy(lineHeight = 20.sp)
-    Screen("Pair", onBack = nav.backAction) {
+    val firstRun = computers.isEmpty()
+    val pending = busy
+    // The first computer: nothing behind this screen but leaving the app, so no bar and no arrow.
+    Screen("Pair another computer", onBack = nav.backAction, topBar = !firstRun) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                when {
-                    linked != null -> "Pair this phone with ${linked.name}?"
-                    computers.isNotEmpty() -> "Pair another computer"
-                    else -> "Pair with your computer"
-                },
-                style = RelayTheme.type.base.copy(fontSize = 20.sp, fontWeight = FontWeight.SemiBold),
-            )
-            Text(
-                if (linked != null) "On the same Wi-Fi as your computer, this phone connects to it directly."
-                else "On your computer, open Relay → Settings → Phone and choose Show pairing code, then scan it here. On the same Wi-Fi the phone connects to it directly.",
-                style = hint,
-                color = c.mutedForeground,
-            )
-            val pending = busy
-            when {
-                pending != null -> Column(
-                    Modifier.fillMaxWidth().padding(vertical = 30.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Spinner(size = 20.dp, color = c.mutedForeground)
-                    Text(pending, style = hint, color = c.mutedForeground)
-                }
-                linked != null -> Button("Pair", { pair(linked) })
-                camera -> QrScanner(
-                    onCode = { data ->
-                        if (!scanned) {
-                            scanned = true
-                            val parsed = parsePairingUrl(data)
-                            if (parsed != null) pair(parsed)
-                            else {
-                                error = NOT_A_CODE
-                                rescan++
-                            }
-                        }
+            Column(
+                Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(horizontal = 24.dp)
+                    .padding(top = if (firstRun) 40.dp else 12.dp, bottom = 24.dp),
+            ) {
+                Text(
+                    when {
+                        linked != null -> "Pair with ${linked.name}?"
+                        firstRun -> "Pair with your computer"
+                        else -> "Scan its pairing code"
                     },
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                        .clip(Radii.xlShape).border(1.dp, c.border, Radii.xlShape),
+                    style = RelayTheme.type.xxl,
                 )
-                else -> Button("Use the camera", { ask.launch(Manifest.permission.CAMERA) }, leadingIcon = TablerIcons.Outline.Camera)
-            }
-            if (cameraRefused && !camera && busy == null && linked == null) Text(
-                "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the link instead.",
-                style = hint,
-                color = c.mutedForeground,
-            )
-            if (busy == null && linked == null) Button(
-                "Paste pairing link",
-                { read(clipboardText(context)) },
-                variant = ButtonVariant.Outline,
-                leadingIcon = TablerIcons.Outline.Clipboard,
-            )
-            error?.let { message ->
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    message + if (message.startsWith("That isn't")) ""
-                    else " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here.",
-                    style = hint,
-                    color = c.destructive,
-                )
-            }
-            Divider()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Away from home too", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold))
-                Text(
-                    "Optional: with Tailscale on this phone and your computer, signed in to the same account, Relay reaches it from anywhere.",
+                    if (linked != null) "On the same Wi-Fi this phone connects to it directly."
+                    else "Relay on your computer shows a code. Scan it and this phone drives its agents.",
                     style = hint,
                     color = c.mutedForeground,
                 )
-                Button(
-                    "Get Tailscale",
-                    { uri.openUri(TAILSCALE_PLAY) },
-                    variant = ButtonVariant.Outline,
-                    trailingIcon = TablerIcons.Outline.ExternalLink,
-                )
+                Spacer(Modifier.height(28.dp))
+                Viewfinder(
+                    onClick = if (!camera && pending == null && linked == null) ({ ask.launch(Manifest.permission.CAMERA) }) else null,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 340.dp).fillMaxWidth(),
+                ) {
+                    when {
+                        pending != null -> Centered {
+                            Spinner(size = 20.dp, color = c.mutedForeground)
+                            Text(pending, style = hint, color = c.mutedForeground)
+                        }
+                        linked != null -> Centered {
+                            Icon(TablerIcons.Outline.DeviceDesktop, null, tint = c.mutedForeground, size = 36.dp)
+                            Text(linked.name, style = RelayTheme.type.label)
+                        }
+                        camera -> QrScanner(
+                            onCode = { data ->
+                                if (!scanned) {
+                                    scanned = true
+                                    val parsed = parsePairingUrl(data)
+                                    if (parsed != null) pair(parsed)
+                                    else {
+                                        error = NOT_A_CODE
+                                        rescan++
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        else -> Centered {
+                            Icon(TablerIcons.Outline.Qrcode, null, tint = c.mutedForeground, size = 36.dp)
+                            Text("Tap to scan", style = RelayTheme.type.label)
+                            Text("Relay asks for the camera once", style = RelayTheme.type.xs, color = c.mutedForeground)
+                        }
+                    }
+                }
+                val problem = error ?: if (cameraRefused && !camera && pending == null && linked == null)
+                    "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the link instead." else null
+                if (problem != null) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        problem + if (error == null || problem.startsWith("That isn't")) ""
+                        else " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here.",
+                        style = hint,
+                        color = if (error != null) c.destructive else c.mutedForeground,
+                    )
+                }
+                if (linked == null) {
+                    Spacer(Modifier.height(28.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Step(1, "Open Relay on your computer")
+                        Step(2, "Settings → Phone → Show pairing code")
+                        Step(3, "Point this phone at the code")
+                    }
+                }
             }
         }
+        Column(
+            Modifier.align(Alignment.CenterHorizontally).widthIn(max = 440.dp).fillMaxWidth()
+                .padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            when {
+                linked != null -> Button("Pair", { pair(linked) }, Modifier.fillMaxWidth(), size = ButtonSize.Lg, loading = pending != null)
+                pending == null -> Button(
+                    "Paste pairing link",
+                    { read(clipboardText(context)) },
+                    Modifier.fillMaxWidth(),
+                    variant = ButtonVariant.Outline,
+                    size = ButtonSize.Lg,
+                    leadingIcon = TablerIcons.Outline.Clipboard,
+                )
+            }
+            Row(
+                Modifier.pressable({ uri.openUri(TAILSCALE_PLAY) }, role = Role.Button).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Away from home? ", style = RelayTheme.type.xs, color = c.mutedForeground)
+                Text("Get Tailscale", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium))
+                Icon(TablerIcons.Outline.ExternalLink, null, tint = c.mutedForeground, size = 12.dp)
+            }
+        }
+    }
+}
+
+/** A square card with scanner corner marks; the camera, or what stands in for it, goes inside. */
+@Composable
+private fun Viewfinder(onClick: (() -> Unit)?, modifier: Modifier, content: @Composable () -> Unit) {
+    val c = RelayTheme.colors
+    val mark = c.foreground.copy(alpha = 0.55f)
+    Box(
+        modifier
+            .aspectRatio(1f)
+            .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
+            .clip(Radii.xxlShape)
+            .background(c.card)
+            .ring(shape = Radii.xxlShape)
+            .drawWithContent {
+                drawContent()
+                val inset = 20.dp.toPx()
+                val arm = 26.dp.toPx()
+                val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                for (x in listOf(0, 1)) for (y in listOf(0, 1)) {
+                    val cx = if (x == 0) inset else size.width - inset
+                    val cy = if (y == 0) inset else size.height - inset
+                    val dx = if (x == 0) arm else -arm
+                    val dy = if (y == 0) arm else -arm
+                    drawPath(
+                        Path().apply {
+                            moveTo(cx, cy + dy)
+                            lineTo(cx, cy)
+                            lineTo(cx + dx, cy)
+                        },
+                        mark,
+                        style = stroke,
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+@Composable
+private fun Centered(content: @Composable ColumnScope.() -> Unit) = Column(
+    Modifier.padding(32.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+    content = content,
+)
+
+@Composable
+private fun Step(n: Int, text: String) {
+    val c = RelayTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(24.dp).clip(CircleShape).background(c.muted), contentAlignment = Alignment.Center) {
+            Text("$n", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground)
+        }
+        Text(text, style = RelayTheme.type.sm)
     }
 }
 
