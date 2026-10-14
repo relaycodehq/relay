@@ -61,6 +61,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.bouncycastle)
     implementation(libs.tabler.icons)
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.gfm.tables)
+    implementation(libs.commonmark.gfm.strikethrough)
+    implementation(libs.commonmark.task.list.items)
+    implementation(libs.commonmark.autolink)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
