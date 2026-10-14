@@ -123,7 +123,7 @@ export function CardState({
     return (
       <span className="sb-card-state waiting">
         <i />
-        Needs input
+        <span className="sb-card-label">Needs input</span>
       </span>
     );
   const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
@@ -142,8 +142,10 @@ export function CardState({
         }
       >
         <Spinner size={11} steady />
-        {goal ? "Goal" : "Working"}
-        {chat.waiting && " · needs input"}
+        <span className="sb-card-label">
+          {goal ? "Goal" : "Working"}
+          {chat.waiting && " · needs input"}
+        </span>
         {since && <Elapsed since={since} />}
       </span>
     );
@@ -151,7 +153,7 @@ export function CardState({
     return (
       <span className="sb-card-state stopped">
         <CircleAlert size={12} />
-        Stopped
+        <span className="sb-card-label">Stopped</span>
       </span>
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
@@ -163,7 +165,7 @@ export function CardState({
         title={pendingTitle(chat.pending)}
       >
         <i />
-        Waiting
+        <span className="sb-card-label">Waiting</span>
       </span>
     );
   if (chat.nextSend && !unread)

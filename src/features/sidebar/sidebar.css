@@ -825,6 +825,7 @@
   align-items: center;
   gap: 7px;
   min-height: 22px;
+  container: sb-card-top / inline-size;
 }
 .sb-project-badge {
   flex: none;
@@ -1020,6 +1021,13 @@
 }
 .sb-card-state.waiting i {
   background: var(--sb-waiting);
+}
+/* A narrow sidebar keeps the project name and lets the spinner, dot or
+   icon (and the elapsed time) speak for the state. */
+@container sb-card-top (width < 250px) {
+  .sb-card-label {
+    display: none;
+  }
 }
 .sb-card-provider {
   display: inline-flex;
