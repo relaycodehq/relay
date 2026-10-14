@@ -59,20 +59,17 @@ function autoSettleLabel(days: number | null | undefined, onCommit?: boolean) {
  * and copying, plus Fork from its latest answer on that answer's agent and
  * reloading the agent holding the conversation.
  */
-export function ThreadMenu({
-  chat,
-  projectName,
-  projectPath,
-  now,
-  unread,
-  regenerating,
-  reloading,
-  autoSettleDays,
-  settleOnCommit,
-  settleKeys,
-  canMove,
-  onAction,
-}: {
+export function ThreadMenu(props: ThreadMenuProps) {
+  // Every sidebar row has one; its items, dates and all, are only worked
+  // out while it's open.
+  return (
+    <MenuPopup side="bottom" align="start">
+      <ThreadMenuItems {...props} />
+    </MenuPopup>
+  );
+}
+
+interface ThreadMenuProps {
   chat: ChatSummary;
   projectName?: string;
   projectPath?: string;
@@ -88,7 +85,22 @@ export function ThreadMenu({
   /** A Git project's thread working in the project folder. */
   canMove?: boolean;
   onAction: (action: ThreadMenuAction) => void;
-}) {
+}
+
+function ThreadMenuItems({
+  chat,
+  projectName,
+  projectPath,
+  now,
+  unread,
+  regenerating,
+  reloading,
+  autoSettleDays,
+  settleOnCommit,
+  settleKeys,
+  canMove,
+  onAction,
+}: ThreadMenuProps) {
   const section = chatActivitySection(chat, now);
   const busy = chat.running || chat.waiting;
   const review = chat.scope.kind === "review";
@@ -99,7 +111,7 @@ export function ThreadMenu({
   const ownWindow = useHasOwnWindow(chat.id);
   const windowKeys = useShortcutLabel("thread-window");
   return (
-    <MenuPopup side="bottom" align="start">
+    <>
       <MenuAction
         icon={<SquarePen size={13} />}
         onClick={() => onAction({ kind: "new" })}
@@ -344,6 +356,6 @@ export function ThreadMenu({
       >
         Archive thread
       </MenuAction>
-    </MenuPopup>
+    </>
   );
 }

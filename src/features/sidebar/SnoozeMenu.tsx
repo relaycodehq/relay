@@ -1,6 +1,6 @@
 import { Popover } from "@base-ui/react/popover";
 import { CalendarClock, ChevronRight, Clock } from "lucide-react";
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { PickTime } from "../../ui/PickTime";
 import { Modal } from "../../ui/ui";
@@ -34,7 +34,6 @@ export function SnoozeMenu({
   // out in the window's corner.
   const [shown, setShown] = useState(false);
   const more = useRef<HTMLButtonElement>(null);
-  const presets = useMemo(() => snoozePresets(new Date(now)), [now]);
   const snooze = (until: number) => {
     setOpen(false);
     onSnooze(until);
@@ -85,16 +84,7 @@ export function SnoozeMenu({
             ) : (
               <div className="sb-snooze-presets" onKeyDown={presetKeys}>
                 <div className="sb-menu-heading">Snooze until…</div>
-                {presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    className="sb-menu-item"
-                    onClick={() => snooze(preset.until)}
-                  >
-                    <span>{preset.label}</span>
-                    <small>{wakeLabel(preset.until, new Date(now))}</small>
-                  </button>
-                ))}
+                <SnoozePresets now={now} onSnooze={snooze} />
                 <div className="sb-menu-separator" />
                 <button
                   ref={more}
@@ -114,6 +104,26 @@ export function SnoozeMenu({
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/** Its own component so the closed popup, one per card, works out no dates. */
+function SnoozePresets({
+  now,
+  onSnooze,
+}: {
+  now: number;
+  onSnooze: (until: number) => void;
+}) {
+  return snoozePresets(new Date(now)).map((preset) => (
+    <button
+      key={preset.id}
+      className="sb-menu-item"
+      onClick={() => onSnooze(preset.until)}
+    >
+      <span>{preset.label}</span>
+      <small>{wakeLabel(preset.until, new Date(now))}</small>
+    </button>
+  ));
 }
 
 /** The right-click menu's "Pick a time…", which a menu can't hold. */
