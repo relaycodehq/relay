@@ -79,6 +79,7 @@ export function LocalChanges({
   return (
     <section className="local-changes" aria-label="Local changes">
       <ChangesToolbar
+        projectId={projectId}
         slots={slots}
         tree={tree}
         busy={busy}

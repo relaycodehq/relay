@@ -13,20 +13,12 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import { workingTreeKey } from "../../lib/working-tree-key";
 import { Spinner } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
-import {
-  RebaseConflictCard,
-  resolvePrompt,
-  type RebaseConflict,
-} from "./RebaseConflict";
+import { RebaseConflictCard, resolvePrompt } from "./RebaseConflict";
+import { everythingButFetch, useBranchSync } from "./useBranchSync";
 import type { BranchAction } from "../../../shared/branches";
-import {
-  checkoutChanged,
-  isGitMissing,
-  type WorkingTree,
-} from "../../../shared/working-tree";
+import { isGitMissing } from "../../../shared/working-tree";
 import "../projects/projects.css";
 import "./branch-picker.css";
 export const ProjectBranchPicker = memo(function ProjectBranchPicker({
@@ -53,103 +45,20 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
     enabled: open,
     staleTime: 0,
   });
-  const treeKey = workingTreeKey(projectId);
-  // A branch change can touch anything shown, but it just talked to the
-  // upstream (or didn't need to), so the periodic fetch can wait its turn.
-  const everythingButFetch = {
-    predicate: (q: { queryKey: readonly unknown[] }) =>
-      q.queryKey[0] !== "project-fetch",
-  };
-  const tree = useQuery({
-    queryKey: treeKey,
-    queryFn: () => api.projectWorkingTree(projectId),
-  });
-  // Keep "behind" honest: refresh the upstream on focus and every few minutes.
-  const remote = useQuery({
-    queryKey: ["project-fetch", projectId],
-    queryFn: async () => {
-      qc.setQueryData<WorkingTree>(
-        treeKey,
-        await api.projectGitAction(projectId, { kind: "fetch" }),
-      );
-      return Date.now();
-    },
-    enabled: !!tree.data?.upstream,
-    staleTime: 60_000,
-    refetchInterval: 180_000,
-    refetchOnWindowFocus: true,
-    retry: false,
-  });
-  const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string>();
-  const [conflict, setConflict] = useState<RebaseConflict>();
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const t = tree.data;
+  const {
+    tree,
+    t,
+    remote,
+    sync,
+    clash,
+    syncing,
+    syncError,
+    conflictOpen,
+    setConflictOpen,
+    runSync,
+  } = useBranchSync(projectId);
   // Without it the label would say it's loading forever.
   const branchError = branch === undefined ? tree.error : null;
-  // A branch never pushed has no upstream, but its commits still go somewhere.
-  const sync =
-    !t?.branch ||
-    t.operation ||
-    !(t.upstream || t.pushTarget) ||
-    (!t.ahead && !t.behind)
-      ? null
-      : t.ahead && t.behind
-        ? "rebase"
-        : t.behind
-          ? "pull"
-          : "push";
-  // A conflict stands until either side moves.
-  const clash =
-    sync === "rebase" &&
-    conflict?.tree.head === t?.head &&
-    conflict?.tree.behind === t?.behind
-      ? conflict
-      : undefined;
-  async function runSync() {
-    if (!t || syncing || !sync || clash) return;
-    setSyncing(true);
-    setSyncError(undefined);
-    const run = async (current: WorkingTree) => {
-      if (sync !== "rebase")
-        return api.projectGitAction(projectId, {
-          kind: sync,
-          revision: current.revision,
-        });
-      const result = await api.projectRebase(projectId, current.head);
-      if (!result.rebased) {
-        setConflict(result);
-        setConflictOpen(true);
-      }
-      return result.tree;
-    };
-    try {
-      let next: WorkingTree;
-      try {
-        next = await run(t);
-      } catch (e) {
-        // The view can be a poll behind the checkout. Look again, and go on
-        // only if it still calls for the very same pull or push.
-        const fresh = (await tree.refetch()).data;
-        if (
-          !(e instanceof Error && e.message.startsWith(checkoutChanged)) ||
-          !fresh ||
-          fresh.branch !== t.branch ||
-          fresh.ahead !== t.ahead ||
-          fresh.behind !== t.behind
-        )
-          throw e;
-        next = await run(fresh);
-      }
-      qc.setQueryData<WorkingTree>(treeKey, next);
-      void qc.invalidateQueries(everythingButFetch);
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : String(e));
-      await tree.refetch();
-    } finally {
-      setSyncing(false);
-    }
-  }
   const query = search.trim();
   const allMatches =
     refs.data?.branches.filter((b) =>

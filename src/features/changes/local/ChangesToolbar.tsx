@@ -1,19 +1,32 @@
 import { createPortal } from "react-dom";
-import { ArrowUp, FolderTree, GitBranch, List, RefreshCw } from "lucide-react";
+import { Popover } from "@base-ui/react/popover";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  FolderTree,
+  GitBranch,
+  List,
+  RefreshCw,
+} from "lucide-react";
 import {
   checkoutLabel,
   type WorkingTree,
 } from "../../../../shared/working-tree";
 import { gitBlockedReason } from "../working-changes";
-import { IconButton } from "../../../ui/ui";
+import { RebaseConflictCard } from "../RebaseConflict";
+import { useBranchSync } from "../useBranchSync";
+import { IconButton, Spinner } from "../../../ui/ui";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
+import "../../agents/composer-model-picker.css";
 
 /**
  * The branch, how far it is from its upstream, and the list's actions: in
  * the workspace pane's header when hosted there, else in its own toolbar.
  */
 export function ChangesToolbar({
+  projectId,
   slots,
   tree,
   busy,
@@ -22,6 +35,8 @@ export function ChangesToolbar({
   onRefresh,
   onPush,
 }: {
+  /** Set for a project's checkout, which can also pull and rebase from here. */
+  projectId?: string;
   slots?: PaneSlots;
   tree?: WorkingTree;
   busy: boolean;
@@ -31,24 +46,36 @@ export function ChangesToolbar({
   onPush: () => void;
 }) {
   const blocked = tree && gitBlockedReason(tree, "push");
+  const view = (
+    <IconButton
+      label={
+        grouped ? "Folders: show a flat list" : "Flat list: group by folder"
+      }
+      onClick={() => onGrouped(!grouped)}
+    >
+      {grouped ? <FolderTree size={14} /> : <List size={14} />}
+    </IconButton>
+  );
+  // Nothing to push once the upstream has every commit.
+  const push = tree && (tree.ahead > 0 || !tree.upstream) && (
+    <button
+      className="primary"
+      disabled={busy || !!blocked}
+      title={blocked}
+      onClick={onPush}
+    >
+      <ArrowUp size={15} />
+      Push{tree.ahead > 0 && ` ${tree.ahead}`}…
+    </button>
+  );
+  const level = projectId ? (
+    <SyncButton projectId={projectId} busy={busy} push={push} />
+  ) : (
+    push
+  );
   const actions = (
     <>
-      <span className="change-list-view">
-        <IconButton
-          label="Group by folder"
-          active={grouped}
-          onClick={() => onGrouped(true)}
-        >
-          <FolderTree size={14} />
-        </IconButton>
-        <IconButton
-          label="Flat list"
-          active={!grouped}
-          onClick={() => onGrouped(false)}
-        >
-          <List size={14} />
-        </IconButton>
-      </span>
+      {view}
       <IconButton
         label="Refresh local changes"
         disabled={busy}
@@ -56,14 +83,7 @@ export function ChangesToolbar({
       >
         <RefreshCw size={15} />
       </IconButton>
-      <button
-        disabled={busy || !tree || !!blocked}
-        title={blocked}
-        onClick={onPush}
-      >
-        <ArrowUp size={15} />
-        Push…
-      </button>
+      {level}
     </>
   );
   if (slots)
@@ -92,19 +112,97 @@ export function ChangesToolbar({
         {slots.actions && createPortal(actions, slots.actions)}
       </>
     );
+  const away =
+    tree &&
+    [
+      tree.ahead > 0 && `${tree.ahead} to push`,
+      tree.behind > 0 && `${tree.behind} to pull`,
+    ].filter(Boolean);
   return (
     <header className="working-toolbar">
+      {view}
       <GitBranch size={15} />
       <strong>{tree ? checkoutLabel(tree) : "Local checkout"}</strong>
-      {tree?.upstream ? (
-        <span className="muted">
-          {tree.ahead} ahead · {tree.behind} behind
-        </span>
-      ) : (
-        !!tree?.ahead && <span className="muted">{tree.ahead} not pushed</span>
-      )}
+      {tree &&
+        (!tree.upstream ? (
+          <span className="muted">not on a remote yet</span>
+        ) : away?.length ? (
+          <span className="muted">{away.join(" · ")}</span>
+        ) : (
+          <span className="muted working-synced">
+            <Check size={12} />
+            in sync with {tree.upstream}
+          </span>
+        ))}
       <span className="spacer" />
-      {actions}
+      {level}
     </header>
+  );
+}
+
+/** The one step that levels the branch with its upstream: push, pull or rebase. */
+function SyncButton({
+  projectId,
+  busy,
+  push,
+}: {
+  projectId: string;
+  busy: boolean;
+  push: React.ReactNode;
+}) {
+  const {
+    t,
+    sync,
+    clash,
+    syncing,
+    syncError,
+    conflictOpen,
+    setConflictOpen,
+    runSync,
+  } = useBranchSync(projectId);
+  if (!t || (sync !== "pull" && sync !== "rebase")) return push;
+  const n = (count: number) => `${count} commit${count === 1 ? "" : "s"}`;
+  return (
+    <>
+      {syncError && (
+        <span className="working-sync-error" role="alert" title={syncError}>
+          {syncError}
+        </span>
+      )}
+      <Popover.Root
+        open={conflictOpen && !!clash}
+        onOpenChange={(next) => setConflictOpen(next && !!clash)}
+      >
+        <Popover.Trigger
+          className="primary"
+          disabled={busy || syncing}
+          title={
+            clash
+              ? `Couldn’t rebase onto ${t.upstream}`
+              : sync === "pull"
+                ? `Pull ${n(t.behind)} from ${t.upstream}`
+                : `Pull ${n(t.behind)} from ${t.upstream} and put your ${n(t.ahead)} on top`
+          }
+          onClick={() => void runSync()}
+        >
+          {syncing ? <Spinner size={13} /> : <ArrowDown size={15} />}
+          {sync === "pull" ? `Pull ${t.behind}` : `Pull ${t.behind} & rebase`}
+        </Popover.Trigger>
+        {clash && (
+          <Popover.Portal>
+            <Popover.Positioner
+              className="composer-popup-positioner"
+              side="bottom"
+              align="end"
+              sideOffset={6}
+            >
+              <Popover.Popup className="composer-select-popup rebase-conflict-card">
+                <RebaseConflictCard conflict={clash} />
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        )}
+      </Popover.Root>
+    </>
   );
 }

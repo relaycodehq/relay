@@ -19,6 +19,21 @@
   align-items: center;
   gap: 5px;
 }
+.working-toolbar > .icon-button:first-child {
+  margin-left: -8px;
+}
+.working-synced {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.working-sync-error {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+}
 .working-toolbar .spacer {
   flex: 1;
 }
@@ -323,10 +338,6 @@
 }
 .image-diff-canvas img {
   max-width: 100%;
-}
-.change-list-view {
-  display: flex;
-  gap: 1px;
 }
 .working-folder {
   display: flex;
