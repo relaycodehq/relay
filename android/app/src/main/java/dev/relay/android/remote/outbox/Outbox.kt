@@ -160,5 +160,6 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
     fun of(computer: String, chatId: String) = _items.value.filter { it.computer == computer && it.chatId == chatId }
 
     /** A pasted image of one still on its way, which the desktop can't hand back yet. */
+    // TODO(merge): features.images' PendingImages.lookup should point here; set in Sends.attach.
     fun outgoingImage(id: String, index: Int) = _items.value.find { it.send.id == id }?.send?.images?.getOrNull(index)?.dataUrl
 }

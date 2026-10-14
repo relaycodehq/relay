@@ -52,6 +52,9 @@ object Sends {
     fun attach(remote: Remote, filesDir: File) {
         if (!attached.add(remote)) return
         val (drafts, outbox) = stores(filesDir)
+        // TODO(merge): show unsent pasted images in the thread from the outbox:
+        //   dev.relay.android.features.images.PendingImages.lookup = { messageId, index -> outbox.outgoingImage(messageId, index) }
+        // (features.images landed on kotlin-phone after this branch split off.)
         // The overview's drafts list held when the link came up: the cached copy, not a fresh one.
         var stale: Any? = null
         var handled: Any? = null
