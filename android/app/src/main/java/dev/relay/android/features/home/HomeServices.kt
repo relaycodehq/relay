@@ -34,7 +34,7 @@ class FamilyFoldStore(private val file: File) {
 
 /** What Home keeps beside the connection: seen marks, folds, icons and the missing-projects refetch. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class HomeServices(context: Context, val remote: Remote, val seen: ThreadSeen, val drafts: DraftSource = OverviewDrafts) {
+class HomeServices(context: Context, val remote: Remote, val seen: ThreadSeen, val drafts: DraftSource) {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
     val folds = FamilyFoldStore(File(app.filesDir, "relay-family-folds.json"))

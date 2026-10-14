@@ -6,6 +6,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dev.relay.android.features.home.HomeServices
+import dev.relay.android.features.home.StoreDrafts
+import dev.relay.android.features.images.PendingImages
 import dev.relay.android.features.dictation.Dictation
 import dev.relay.android.features.notifications.ThreadNotifications
 import dev.relay.android.features.readaloud.ReadAloud
@@ -13,6 +15,7 @@ import dev.relay.android.features.updates.Updates
 import dev.relay.android.remote.OfflineCache
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.ThreadSeen
+import dev.relay.android.remote.drafts.Sends
 import dev.relay.android.remote.credentials.ComputerSeen
 import dev.relay.android.remote.credentials.CredentialStore
 import kotlinx.coroutines.CoroutineScope
@@ -55,7 +58,13 @@ class AppContainer(context: Context) {
     }
 
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))
-    val home = HomeServices(app, remote, threadSeen)
+    val home = HomeServices(app, remote, threadSeen, StoreDrafts(Sends.drafts(app.filesDir), remote))
+
+    init {
+        // The drafts and outbox follow the connection from the start, not from the first composer.
+        Sends.attach(remote, app.filesDir)
+        PendingImages.lookup = { messageId, index -> Sends.outbox(app.filesDir).outgoingImage(messageId, index) }
+    }
 
     init {
         // Once per process, not per activity: a rotation or fold mustn't reconnect.

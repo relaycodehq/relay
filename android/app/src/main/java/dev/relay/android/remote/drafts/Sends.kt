@@ -52,9 +52,6 @@ object Sends {
     fun attach(remote: Remote, filesDir: File) {
         if (!attached.add(remote)) return
         val (drafts, outbox) = stores(filesDir)
-        // TODO(merge): show unsent pasted images in the thread from the outbox:
-        //   dev.relay.android.features.images.PendingImages.lookup = { messageId, index -> outbox.outgoingImage(messageId, index) }
-        // (features.images landed on kotlin-phone after this branch split off.)
         // The overview's drafts list held when the link came up: the cached copy, not a fresh one.
         var stale: Any? = null
         var handled: Any? = null
@@ -84,6 +81,8 @@ object Sends {
                 drafts.online(computer, draftLink(client), overview)
             }
         }
+        // The active computer's copies come off disk, so lists show them before any composer opens.
+        scope.launch { remote.active.collect { computer -> computer?.let { drafts.load(it) } } }
         scope.launch {
             remote.events.filterIsInstance<RemoteEvent.Draft>().collect { event ->
                 remote.active.value?.let { drafts.heard(it, event.change) }

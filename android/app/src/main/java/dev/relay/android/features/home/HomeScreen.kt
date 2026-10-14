@@ -145,7 +145,8 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
         Spinner(color = c.mutedForeground)
     }
 
-    val drafts = remember(o) { home.drafts.list(o) }
+    val draftsVersion by home.drafts.version.collectAsState()
+    val drafts = remember(o, draftsVersion) { home.drafts.list(o) }
     val names = remember(o.projects) { o.projects.associate { it.id to it.name } }
     val openChat = { chat: RemoteChatSummary -> open(Route.Thread(chat.id)) }
     val triage: Triage = triage@{ chat, action ->

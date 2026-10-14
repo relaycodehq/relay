@@ -1,7 +1,10 @@
 package dev.relay.android.features.home
 
+import dev.relay.android.remote.Remote
+import dev.relay.android.remote.drafts.DraftStore
 import dev.relay.android.remote.model.DraftExtras
 import dev.relay.android.remote.model.RemoteOverview
+import kotlinx.coroutines.flow.StateFlow
 
 /** Where a draft was started, from this phone's point of view. */
 enum class DraftFrom { Here, Computer, Phone }
@@ -16,26 +19,23 @@ data class ListedDraft(
     val at: Long,
 )
 
-/** Every draft of the active computer worth listing, by key. */
-fun interface DraftSource {
+/** Every draft of the active computer worth listing, by key; [version] moves when that list may have changed. */
+interface DraftSource {
+    val version: StateFlow<Long>
     fun list(overview: RemoteOverview?): Map<String, ListedDraft>
 }
 
-/** Any key set counts, as shared/drafts.ts's hasExtras. */
-private fun DraftExtras.any() = screenshots != null || codeRefs != null || selection != null ||
-    workItem != null || links != null || scope != null || branch != null
-
-/**
- * Until the phone keeps its own draft copies (remote/drafts), list what the desktop holds.
- * TODO: swap for the drafts store once it lands, so local unsynced text and "here" show.
- */
-val OverviewDrafts = DraftSource { overview ->
-    overview?.drafts.orEmpty()
-        .filter { it.text.isNotBlank() || it.extras?.any() == true }
-        .associate { d ->
-            val from = if (d.origin == "desktop") DraftFrom.Computer else DraftFrom.Phone
-            d.key to ListedDraft(d.key, d.text, from, d.extras, d.at)
+/** The phone's own draft copies (remote/drafts), so text not synced yet and drafts started here show too. */
+class StoreDrafts(private val store: DraftStore, private val remote: Remote) : DraftSource {
+    override val version get() = store.version
+    override fun list(overview: RemoteOverview?) = store.listed(remote.active.value).mapValues { (_, d) ->
+        val from = when (d.from) {
+            "here" -> DraftFrom.Here
+            "computer" -> DraftFrom.Computer
+            else -> DraftFrom.Phone
         }
+        ListedDraft(d.key, d.text, from, d.extras, d.at)
+    }
 }
 
 /** The draft a thread's row shows: its main conversation's, else a side one's. */
