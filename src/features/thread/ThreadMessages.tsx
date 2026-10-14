@@ -313,6 +313,7 @@ export function ThreadMessages({
                         report={reportUnder(m.id)!}
                         statuses={findings?.statuses}
                         reviewers={review?.reviewers}
+                        lead={review?.lead}
                         // A fix asked for while the agent works would wait in the
                         // queue, its findings still open to ask for again.
                         busy={busy || running}

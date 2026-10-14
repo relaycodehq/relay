@@ -1,4 +1,4 @@
-import { ChevronRight, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import type { DeepReviewState } from "../../../shared/deep-review";
 import type {
   Finding,
@@ -9,6 +9,7 @@ import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { findingStatus, fixAllLabel } from "./finding-picks";
 import { useFindingPicks } from "./useFindingPicks";
 import { FindingRow } from "./FindingRow";
+import { DroppedFindings } from "./DroppedFindings";
 import { reviewerLabel } from "./reviewer-label";
 import { useAgentName } from "./useAgentName";
 
@@ -18,6 +19,7 @@ export function FindingsTray({
   report,
   statuses,
   reviewers = [],
+  lead,
   busy,
   onFix,
   onStatus,
@@ -28,6 +30,8 @@ export function FindingsTray({
   statuses?: Record<string, FindingStatus>;
   /** A deep review's reviewers, whom each finding names by number. */
   reviewers?: DeepReviewState["reviewers"];
+  /** The deep review's lead, who ruled out what's not kept. */
+  lead?: DeepReviewState["lead"];
   busy: boolean;
   onFix: (findings: Finding[]) => void;
   onStatus: (id: string, status: "open" | "dismissed") => void;
@@ -87,19 +91,13 @@ export function FindingsTray({
         </section>
       )}
       {dropped.length > 0 && (
-        <details className="deep-review-dropped">
-          <summary>
-            <ChevronRight size={13} /> Not kept · {dropped.length}
-          </summary>
-          <ul>
-            {dropped.map((d, i) => (
-              <li key={i}>
-                <span className="deep-review-dropped-title">{d.title}</span>
-                {d.reason && <span className="muted">{d.reason}</span>}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <DroppedFindings
+          dropped={dropped}
+          reviewers={reviewers}
+          reviewerLabels={reviewerLabels}
+          lead={lead}
+          leadName={lead && name(lead)}
+        />
       )}
     </div>
   );

@@ -2,9 +2,9 @@ import { CircleCheck, Undo2, X } from "lucide-react";
 import type { DeepReviewState } from "../../../shared/deep-review";
 import type { Finding, FindingStatus } from "../../../shared/findings";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
-import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { PriorityTag, findingRowId } from "./PriorityTag";
+import { FoundBy } from "./FoundBy";
 
 /** One finding: its tick, priority, title and status, who found it, and its files. */
 export function FindingRow({
@@ -73,25 +73,11 @@ export function FindingRow({
             </button>
           </span>
         )}
-        {/* Outside a deep review there's no one to credit. */}
-        {reviewers.length > 0 && (
-          <span
-            className="deep-review-found-by"
-            title={[
-              "Found by",
-              ...f.reviewers.map((n) => reviewerLabels[n - 1] ?? `${n}.`),
-            ].join("\n")}
-          >
-            {f.reviewers.map((n) => {
-              const reviewer = reviewers[n - 1];
-              return reviewer ? (
-                <ProviderIcon key={n} provider={reviewer.provider} />
-              ) : null;
-            })}
-            {f.reviewers.length > 0 &&
-              `${f.reviewers.length}/${reviewers.length}`}
-          </span>
-        )}
+        <FoundBy
+          numbers={f.reviewers}
+          reviewers={reviewers}
+          labels={reviewerLabels}
+        />
         {status === "open" && (
           <button
             type="button"

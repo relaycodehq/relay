@@ -727,32 +727,56 @@ button.deep-review-priority:hover {
   font-size: 12px;
 }
 .deep-review-dropped summary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border-radius: 6px;
   cursor: pointer;
   list-style: none;
+}
+.deep-review-dropped summary:hover {
+  color: var(--text);
 }
 .deep-review-dropped summary::-webkit-details-marker {
   display: none;
 }
-.deep-review-dropped[open] summary svg {
+.deep-review-dropped[open] .deep-review-dropped-chevron {
   transform: rotate(90deg);
 }
-.deep-review-dropped ul {
-  display: grid;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding: 0 0 0 18px;
-  list-style: none;
+.deep-review-dropped-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.8;
 }
-.deep-review-dropped li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.deep-review-dropped-by::before {
+  content: "·";
+  margin-right: 2px;
 }
-.deep-review-dropped-title {
-  color: var(--text);
-  text-decoration: line-through;
-  text-decoration-color: var(--muted);
+.deep-review-dropped-by .provider-glyph {
+  width: 12px;
+  height: 12px;
+}
+.deep-review-dropped .deep-review-tray {
+  margin-top: 8px;
+}
+.deep-review-dropped-row .deep-review-task-head {
+  cursor: default;
+}
+.deep-review-dropped-row .deep-review-task-title {
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+}
+.deep-review-dropped-mark {
+  flex: none;
+  opacity: 0.7;
+}
+/* The reason sits under the title, lined up with it. */
+.deep-review-dropped-reason {
+  margin: 2px 0 0 24px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
