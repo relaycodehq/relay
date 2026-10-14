@@ -92,6 +92,8 @@ export interface ChatMessage {
   compactSummary?: string;
   /** Local: how full the context was when a compaction started; `context` is what it left. */
   compactedFrom?: number;
+  /** Local: Relay compacted before a message because the prompt cache had gone cold. */
+  compactedCold?: true;
   handoff?: AgentHandoff;
   reload?: SessionReload;
   worktreeCommand?: WorktreeCommandRun;

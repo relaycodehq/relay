@@ -77,9 +77,13 @@ export function CompactionRow({
       <span className="compaction-note">
         <Minimize2 size={12} aria-hidden />
         {m.status === "streaming"
-          ? "Compacting context…"
+          ? m.compactedCold
+            ? "Cache went cold, compacting context first…"
+            : "Compacting context…"
           : m.status === "complete"
-            ? "Context compacted"
+            ? m.compactedCold
+              ? "Cache went cold, context compacted"
+              : "Context compacted"
             : m.status === "cancelled"
               ? "Compaction stopped"
               : (m.error ?? "Compaction failed")}

@@ -19,3 +19,20 @@ export function latestContext(
     if (m.compaction && m.status === "complete") return;
   }
 }
+
+/**
+ * Past this, a message that finds the prompt cache cold compacts first. The
+ * agent reads the whole context again either way; compacting adds a summary
+ * and then every request carries far less. Tokens rather than a share of the
+ * window, since what a cold read costs grows with the tokens alone.
+ */
+export const COLD_COMPACT_TOKENS = 120_000;
+
+/** The conversation is big enough, and its cache cold, to compact before the next message. */
+export function compactsCold(usage: ContextUsage, now: number) {
+  return (
+    !!usage.cache &&
+    now >= usage.cache.at + usage.cache.ttlMs &&
+    usage.usedTokens >= COLD_COMPACT_TOKENS
+  );
+}

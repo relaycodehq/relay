@@ -737,6 +737,8 @@ export class ProjectChats {
       !this.active.has(id) &&
       !this.councils.busy(await this.storage.load(id))
     ) {
+      if (await this.turns.compactFirstIfCold(id, input))
+        return this.queue.sentNow(id, input, fromRelay);
       await this.turns.sendNow(id, input);
       return this.queue.sentNow(id, input, fromRelay);
     }

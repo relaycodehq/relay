@@ -15,7 +15,7 @@ import {
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agentInfo } from "../../shared/agents";
-import { latestContext } from "../../shared/context-usage";
+import { compactsCold, latestContext } from "../../shared/context-usage";
 import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
@@ -818,8 +818,53 @@ export class ChatTurns {
       });
     });
   }
+  /**
+   * Compacts before a message that finds a big conversation's prompt cache
+   * cold, for a caller holding the thread's control. The message waits in
+   * the queue behind the compaction; false leaves sending it to the caller.
+   */
+  async compactFirstIfCold(id: string, input: ProjectChatSend) {
+    const chat = await this.core.storage.load(id);
+    const asked = agentAsked(input);
+    // Behind other queued messages it would jump their order; a command
+    // like /compact or /goal means what it says.
+    if (
+      !asked ||
+      chat.queue?.length ||
+      chat.queuePaused ||
+      /^\s*\//.test(asked.question)
+    )
+      return false;
+    const parentId = input.parentId
+      ? replyRoot(chat.messages, input.parentId).id
+      : undefined;
+    const held = latestContext(
+      chat.messages.filter((m) => (m.parentId ?? undefined) === parentId),
+    );
+    if (
+      !held ||
+      held.provider !== asked.provider ||
+      latestAnswer(chat, parentId)?.provider !== asked.provider ||
+      !agentSession(chat, asked.provider, parentId).thread ||
+      !compactsCold(held.usage, Date.now())
+    )
+      return false;
+    await this.queue.add(id, { ...input, delivery: undefined });
+    try {
+      await this.compactNow(id, parentId, undefined, true);
+    } catch (e) {
+      console.warn("Could not compact the cold conversation first:", e);
+      await this.queue.drain(id);
+    }
+    return true;
+  }
   /** Compacts now, for a caller already holding the thread's control. */
-  async compactNow(id: string, parentId?: string, instructions?: string) {
+  async compactNow(
+    id: string,
+    parentId?: string,
+    instructions?: string,
+    cold = false,
+  ) {
     if (this.core.active.has(id))
       throw new Error("Wait for the current answer before compacting.");
     const chat = await this.core.storage.load(id);
@@ -841,6 +886,7 @@ export class ChatTurns {
     const message = streamingAnswer(provider, {
       compaction: true,
       ...(before ? { compactedFrom: before } : {}),
+      ...(cold && { compactedCold: true as const }),
       ...(parentId ? { parentId } : {}),
     });
     chat.messages.push(message);

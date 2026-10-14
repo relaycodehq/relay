@@ -741,6 +741,65 @@ it("compacts when the running answer is done, ahead of what was already queued",
     expect.stringMatching(/^assistant:/),
   ]);
 });
+/** A thread with one Codex answer, saved as if its context was `cacheAge` ms past its last request. */
+const answeredLongAgo = async (cacheAge: number) => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
+  await chats.dispose();
+  const file = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  saved.messages.at(-1).context = {
+    usedTokens: 130_000,
+    cache: { at: Date.now() - cacheAge, ttlMs: 60 * 60_000 },
+  };
+  await writeFile(file, JSON.stringify(saved));
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  return chat;
+};
+const shape = async (id: string) =>
+  (await chats.get(id)).messages.map((m) =>
+    m.compaction
+      ? `compaction${m.compactedCold ? " (cold)" : ""}`
+      : `${m.role}:${m.body.slice(0, 12)}`,
+  );
+it("compacts a big conversation whose cache went cold before the next message", async () => {
+  const chat = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(chat.id, input("@codex Go on"));
+  await vi.waitFor(
+    async () => {
+      expect(await shape(chat.id)).toEqual([
+        "user:@codex Expla",
+        expect.stringMatching(/^assistant:/),
+        "compaction (cold)",
+        "user:@codex Go on",
+        expect.stringMatching(/^assistant:/),
+      ]);
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+    },
+    { timeout: 10_000 },
+  );
+});
+it("sends straight away while the conversation's cache is still warm", async () => {
+  const chat = await answeredLongAgo(10 * 60_000);
+  await chats.send(chat.id, input("@codex Go on"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  expect(await shape(chat.id)).toEqual([
+    "user:@codex Expla",
+    expect.stringMatching(/^assistant:/),
+    "user:@codex Go on",
+    expect.stringMatching(/^assistant:/),
+  ]);
+});
 it("takes a repeated compact's instructions in place of the queued one's", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
   const chat = await chats.create(projectId, { kind: "project" });
