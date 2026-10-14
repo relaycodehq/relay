@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -263,8 +264,10 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
         ) {
             if (t == null && listed.isEmpty()) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
             else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, reverseLayout = true) {
+                // Never zero high: an empty item isn't "visible", so the newest message would
+                // become the anchor and new ones would land below the fold instead of pinning.
                 item("head") {
-                    Column {
+                    Column(Modifier.heightIn(min = 1.dp)) {
                         if (canResume) Row(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.Center,
