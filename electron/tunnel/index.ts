@@ -5,3 +5,4 @@
  */
 export { Tunnel, type TunnelOptions } from "./tunnel";
 export { listSites, type SiteSource } from "./sites";
+export { TunnelPorts } from "./ports";

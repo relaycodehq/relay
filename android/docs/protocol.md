@@ -387,6 +387,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
 - Flow control: per stream and direction at most 256 KiB unconsumed (written to the receiver's socket); the receiver credits consumed bytes back once ≥ 64 KiB. More than the window drops the stream.
 - Lifecycle: the phone opens; `opened` or `close(reason)`; data both ways; each side sends `end` as its socket's read side ends; the desktop sends `close("")` once its socket has fully closed, and `close(reason)` on errors. A `close` from either side ends the stream; frames for unknown streams are ignored. At most 24 streams per phone. Every stream ends with the connection.
 - `sites()`: `[{port, title, command, projectId, project, chatId?, worktree?}]`, projects' tasks with a listening port, one per port, the bridge's own left out.
+- `tunnelAllow(port)`: a port typed into the phone's address bar. The desktop opens a stream only to a port Sites lists (looked up again, at most every 2 s, when it's missing) or one this phone allowed since the desktop started; anything else is refused with `close`. The phone keeps its typed ports and allows them again before loading one.
 - Vectors: `shared/remote-tunnel.test.ts` and `TunnelFrameTest.kt` hold the same bytes.
 
 ---

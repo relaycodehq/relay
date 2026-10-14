@@ -16,6 +16,8 @@ const packFrom = 1024;
 export interface TunnelOptions {
   /** Ports a phone may not reach: the bridge's own. */
   refused(): number[];
+  /** Whether the phone may reach `port`: one Sites lists, or one typed into its address bar. */
+  allowed?(port: number): Promise<boolean>;
   /** Smaller in tests; both ends must agree on it. */
   window?: number;
   maxStreams?: number;
@@ -127,6 +129,21 @@ export class Tunnel {
       consumed: 0,
     };
     this.streams.set(id, s);
+    if (!this.options.allowed) return this.connect(s, refuse);
+    this.options.allowed(port).then((ok) => {
+      if (this.streams.get(id) !== s) return;
+      if (ok) return this.connect(s, refuse);
+      this.streams.delete(id);
+      refuse(`Port ${port} isn't one of your sites. Type it into the address bar to open it.`);
+    }, (e: Error) => {
+      if (this.streams.get(id) !== s) return;
+      this.streams.delete(id);
+      refuse(`Couldn't check port ${port}: ${e.message}`);
+    });
+  }
+
+  private connect(s: Stream, refuse: (reason: string) => void) {
+    const { id, port } = s;
     connectLoopback(port).then(
       (socket) => {
         // The phone gave up meanwhile, or went away.

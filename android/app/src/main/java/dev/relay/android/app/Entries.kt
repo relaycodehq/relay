@@ -64,5 +64,5 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.File> { FileScreen(container.remote, it.where, it.path) }
     entry<Route.History> { HistoryScreen(container.remote, it.where) }
     entry<Route.Tasks> { TasksScreen(container.remote, it.where) }
-    entry<Route.Browser> { BrowserScreen(container.remote, container.tunnels, it.url) }
+    entry<Route.Browser> { BrowserScreen(container.remote, container.tunnels, container.tunnelPorts, it.url) }
 }

@@ -193,6 +193,7 @@ export class RemoteBridge {
     | "readAloud"
     | "saveDraft"
     | "sites"
+    | "tunnelAllow"
     | ComputerMethod
   > = {
     overview: async () => {

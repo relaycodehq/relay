@@ -66,6 +66,12 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnectedX
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.Dispatchers
+import dev.relay.android.features.git.call
+import dev.relay.android.remote.client.tunnelAllow
+import dev.relay.android.remote.client.sites
+import dev.relay.android.remote.tunnel.TunnelPorts
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.withContext
 
 /**
@@ -75,7 +81,7 @@ import kotlinx.coroutines.withContext
  * edited, it lists what runs there.
  */
 @Composable
-fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
+fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, url: String?) {
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
     val focus = LocalFocusManager.current
@@ -99,8 +105,12 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
     var canBack by remember { mutableStateOf(false) }
     var canForward by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
+    // A link to a port that's neither a site nor typed, waiting for a yes.
+    var asking by remember { mutableStateOf<SiteAddress?>(null) }
+    val scope = rememberCoroutineScope()
 
-    fun open(address: SiteAddress) {
+    fun go(address: SiteAddress) {
+        asking = null
         wanted = address
         href = address.href
         text = address.shown
@@ -109,7 +119,19 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
         loads++
         focus.clearFocus()
     }
-    val opener by rememberUpdatedState(::open)
+
+    /** Opens [address] if Sites lists its port or it was typed; [typed] says this one is. */
+    fun open(address: SiteAddress, typed: Boolean = false) {
+        if (typed) ports.type(address.port)
+        if (ports.allowed(address.port)) return go(address)
+        focus.clearFocus()
+        scope.launch {
+            // Sites may not have been asked yet in this run.
+            runCatching { remote.call { sites() } }.onSuccess { list -> ports.sawSites(list.map { it.port }) }
+            if (ports.allowed(address.port)) go(address) else asking = address
+        }
+    }
+    val opener by rememberUpdatedState({ address: SiteAddress -> open(address) })
 
     // Connections reach the computer only while a browser is open.
     DisposableEffect(tunnels) {
@@ -119,6 +141,8 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
     LaunchedEffect(view, loads) {
         val web = view ?: return@LaunchedEffect
         val address = wanted ?: return@LaunchedEffect
+        // The computer lets the tunnel reach a typed port once it's told; it forgets on restart.
+        if (ports.typed(address.port)) runCatching { remote.call { tunnelAllow(address.port) } }
         val local = withContext(Dispatchers.IO) { runCatching { tunnels.listen(address.port) } }
         local.onSuccess { web.loadUrl(LocalUrls.local(address, it)) }
             .onFailure { failed = "The phone couldn't listen for localhost:${address.port}: ${it.message}" }
@@ -126,7 +150,11 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
     // Every stream ended with the link; what was on screen came back as "Not connected".
     var wasOnline by remember { mutableStateOf(online) }
     LaunchedEffect(online) {
-        if (online && !wasOnline && wanted != null) view?.reload()
+        val back = wanted
+        if (online && !wasOnline && back != null) {
+            if (ports.typed(back.port)) runCatching { remote.call { tunnelAllow(back.port) } }
+            view?.reload()
+        }
         wasOnline = online
     }
     val inFront by rememberInFront()
@@ -153,7 +181,7 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
                 placeholder = "localhost:port",
                 mono = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go, autoCorrectEnabled = false),
-                keyboardActions = KeyboardActions(onGo = { LocalUrls.typed(text)?.let(::open) }),
+                keyboardActions = KeyboardActions(onGo = { LocalUrls.typed(text)?.let { open(it, typed = true) } }),
             )
             if (!editing && page != null) {
                 IconButton(TablerIcons.Outline.ArrowLeft, "Back", { view?.goBack() }, size = ButtonSize.Sm, enabled = canBack)
@@ -225,8 +253,19 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, url: String?) {
                     }
                 }
             }
-            if (supported && (editing || page == null)) {
-                SitesPanel(remote, name, text, ::open)
+            asking?.let { address ->
+                EmptyState(
+                    "${address.shown} isn't one of your sites",
+                    Modifier.fillMaxSize().background(c.background),
+                    description = "The phone only opens ports Sites lists or ones you type here, so a link can't reach " +
+                        "everything else running on $name.",
+                    action = {
+                        Button("Open it", { open(address, typed = true) }, variant = ButtonVariant.Outline, size = ButtonSize.Sm)
+                    },
+                )
+            }
+            if (supported && asking == null && (editing || page == null)) {
+                SitesPanel(remote, name, text, { open(it) })
             }
         }
     }

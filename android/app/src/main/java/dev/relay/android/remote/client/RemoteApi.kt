@@ -79,6 +79,11 @@ suspend fun RemoteClient.renderPage(chatId: String, renderId: String, page: Int)
 /** Projects' tasks listening on a port, one per port. From Bridge.TUNNEL. */
 suspend fun RemoteClient.sites(): List<RemoteSite> = call("sites").to()
 
+/** Lets the tunnel reach a port typed into the address bar, besides Sites'. From Bridge.TUNNEL. */
+suspend fun RemoteClient.tunnelAllow(port: Int) {
+    call("tunnelAllow", args(n(port)))
+}
+
 /** The draft as it stands after, null once gone. From Bridge.DRAFTS. */
 suspend fun RemoteClient.saveDraft(write: DraftWrite): SharedDraft? =
     call("saveDraft", args(j(write))).takeUnless { it is JsonNull }?.to()

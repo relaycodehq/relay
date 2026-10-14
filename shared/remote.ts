@@ -566,6 +566,8 @@ export interface RemoteApi {
   renderPage(chatId: string, renderId: string, page: number): Promise<string>;
   /** Projects' tasks listening on a port, one per port; from `tunnelBridge`. */
   sites(): Promise<RemoteSite[]>;
+  /** A port typed into the phone's address bar, which the tunnel may then reach besides Sites'; from `tunnelBridge`. */
+  tunnelAllow(port: number): Promise<void>;
   /** The phone's edit of a draft; the draft as it stands after, null once gone. From `draftsBridge`. */
   saveDraft(write: DraftWrite): Promise<SharedDraft | null>;
   /** Swaps in the version a clash kept, or with `drop` lets it go. From `draftsBridge`. */
@@ -646,6 +648,7 @@ export const remoteMethods = [
   "image",
   "renderPage",
   "sites",
+  "tunnelAllow",
   "saveDraft",
   "draftOther",
   "sendDraft",

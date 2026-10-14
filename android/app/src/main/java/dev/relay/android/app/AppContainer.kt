@@ -19,6 +19,7 @@ import dev.relay.android.remote.drafts.Sends
 import dev.relay.android.remote.credentials.ComputerSeen
 import dev.relay.android.remote.credentials.CredentialStore
 import dev.relay.android.remote.tunnel.TunnelListeners
+import dev.relay.android.remote.tunnel.TunnelPorts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,11 @@ class AppContainer(context: Context) {
 
     /** Loopback listeners that carry the browser's connections to the computer's own ports. */
     val tunnels = TunnelListeners { remote.client.value?.tunnel }
+    val tunnelPorts = TunnelPorts(object : TunnelPorts.Storage {
+        private val prefs = app.getSharedPreferences("relay-tunnel", Context.MODE_PRIVATE)
+        override fun read() = prefs.getString("typed", null)
+        override fun write(text: String) = prefs.edit().putString("typed", text).apply()
+    })
 
     /** For work that outlives a screen: a switch or unpair that navigates away. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

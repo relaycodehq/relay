@@ -315,6 +315,22 @@ it.skipIf(!lanAddress)(
   },
 );
 
+it("refuses a port that's neither a site nor typed, without touching it", async () => {
+  const server = await serve(() => {});
+  const d = desktop({ allowed: async (port) => port !== server.port });
+  d.tunnel.receive({ op: "open", stream: 1, port: server.port });
+  await vi.waitFor(() =>
+    expect(d.of(1)).toEqual([
+      {
+        op: "close",
+        stream: 1,
+        reason: `Port ${server.port} isn't one of your sites. Type it into the address bar to open it.`,
+      },
+    ]),
+  );
+  expect(server.sockets).toHaveLength(0);
+});
+
 it("reaches a server that listens on ::1 alone", async (ctx) => {
   let v6: Awaited<ReturnType<typeof serve>>;
   try {
