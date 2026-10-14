@@ -25,6 +25,7 @@ import { soundHandlers } from "./sounds";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
 import { previewHandlers } from "./previews";
+import { processHandlers } from "./processes";
 import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
@@ -53,6 +54,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     draftHandlers(ctx),
     computerHandlers(ctx),
     usageHandlers(ctx),
+    processHandlers(ctx),
     bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   ]) satisfies Required<Handlers>;

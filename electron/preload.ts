@@ -258,6 +258,7 @@ const methods = [
   "providerUsage",
   "redeemCodexReset",
   "usageSummary",
+  "processOverview",
   "saveUsageImage",
   "exportRenderImage",
   "saveRenderHtml",

@@ -23,7 +23,7 @@ import { useWorkspacePanes } from "../lib/workspace-panes";
 import type { ThreadWindow } from "../../shared/thread-windows";
 
 /** What the main pane shows: a project, the Pull requests page or Usage. */
-export type Surface = "project" | "inbox" | "usage";
+export type Surface = "project" | "inbox" | "usage" | "processes";
 
 export type ShellNavigation = ReturnType<typeof useShellNavigation>;
 
@@ -61,11 +61,13 @@ export function useShellNavigation(
   /** Where the unsent thread will work, as its picker changes. */
   const [draftWorkspace, setDraftWorkspace] =
     useState<ChatWorkspace>("checkout");
-  /** A page shown instead of a project: Pull requests or Usage. */
+  /** A page shown instead of a project: Pull requests, Usage or Processes. */
   const [surface, setSurface] = useState<Surface>(() => {
     if (pinned) return "project";
     const saved = localStorage.getItem("relay-surface");
-    return saved === "inbox" || saved === "usage" ? saved : "project";
+    return saved === "inbox" || saved === "usage" || saved === "processes"
+      ? saved
+      : "project";
   });
   const inbox = surface === "inbox";
   const setInbox = (on: boolean) => setSurface(on ? "inbox" : "project");

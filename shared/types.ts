@@ -4,6 +4,7 @@ import type { DevOpsApi } from "./devops";
 import type { ClockifyApi } from "./clockify";
 import type { PluginsApi } from "./plugins";
 import type { TaskApi } from "./tasks";
+import type { ProcessesApi } from "./processes";
 import type { TerminalApi } from "./terminals";
 import type { PreviewApi } from "./preview";
 import type { DevicesApi } from "./devices";
@@ -272,6 +273,7 @@ export interface Api
     PluginsApi,
     ClockifyApi,
     TaskApi,
+    ProcessesApi,
     TerminalApi,
     PreviewApi,
     DevicesApi,

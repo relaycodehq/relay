@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ChartColumn, GitPullRequest, Plus, Search } from "lucide-react";
+import {
+  Bell,
+  ChartColumn,
+  Cpu,
+  GitPullRequest,
+  Plus,
+  Search,
+} from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type {
   AgentProvider,
@@ -54,12 +61,13 @@ interface SidebarShowing {
   /** The Pull requests page. */
   inbox?: boolean;
   usage?: boolean;
+  processes?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox, usage },
+  showing: { projectId, chatId, draftId, inbox, usage, processes },
   onOpen,
   onPickNew,
   onNewScratch,
@@ -67,6 +75,7 @@ export function ProjectSidebar({
   onAdd,
   onInbox,
   onUsage,
+  onProcesses,
   onSettings,
   onAttention,
 }: {
@@ -86,6 +95,7 @@ export function ProjectSidebar({
   onAdd: () => void;
   onInbox: () => void;
   onUsage?: () => void;
+  onProcesses?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -306,6 +316,14 @@ export function ProjectSidebar({
               >
                 <ChartColumn size={15} />
                 Usage
+              </button>
+              <button
+                className={`sb-nav-item ${processes ? "selected" : ""}`}
+                aria-current={processes ? "page" : undefined}
+                onClick={onProcesses}
+              >
+                <Cpu size={15} />
+                Processes
               </button>
             </nav>
             {takesProject(filter, SCRATCHPAD) && (

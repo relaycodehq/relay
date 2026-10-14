@@ -44,6 +44,10 @@ import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
 import { PullsTitle } from "../features/pulls/PullRequestsPage";
 import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
+import {
+  ProcessesPage,
+  ProcessesTitle,
+} from "../features/processes/ProcessesPage";
 import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import {
@@ -94,15 +98,19 @@ export default function ProjectShell() {
       : undefined;
   };
   const usage = nav.surface === "usage";
-  // Leaving Usage goes back to the page it was opened from.
-  const usageFrom = useRef<Surface>("project");
-  function toggleUsage() {
+  const processes = nav.surface === "processes";
+  // Leaving Usage or Processes goes back to the page it was opened from.
+  const pageFrom = useRef<Surface>("project");
+  function togglePage(page: "usage" | "processes") {
     if (lock.blocked()) return;
-    if (usage) return nav.setSurface(usageFrom.current);
-    usageFrom.current = nav.surface;
-    nav.setSurface("usage");
+    if (nav.surface === page) return nav.setSurface(pageFrom.current);
+    if (nav.surface !== "usage" && nav.surface !== "processes")
+      pageFrom.current = nav.surface;
+    nav.setSurface(page);
   }
-  // Pull requests or Usage instead of a project.
+  const toggleUsage = () => togglePage("usage");
+  const toggleProcesses = () => togglePage("processes");
+  // Pull requests, Usage or Processes instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
   const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
@@ -247,6 +255,8 @@ export default function ProjectShell() {
             <PullsTitle where={pullsPage.where} onNav={pullsPage.go} />
           ) : usage ? (
             <UsageTitle onBack={toggleUsage} />
+          ) : processes ? (
+            <ProcessesTitle onBack={toggleProcesses} />
           ) : (
             <ProjectTitle
               project={project}
@@ -290,7 +300,7 @@ export default function ProjectShell() {
             projects={projects.data ?? []}
             showing={
               elsewhere
-                ? { inbox, usage }
+                ? { inbox, usage, processes }
                 : {
                     projectId: project?.id,
                     chatId: chat?.id,
@@ -312,6 +322,7 @@ export default function ProjectShell() {
               else nav.setInbox(true);
             }}
             onUsage={toggleUsage}
+            onProcesses={toggleProcesses}
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
@@ -353,6 +364,10 @@ export default function ProjectShell() {
         ) : usage ? (
           <div className="project-legacy" hidden={settings.open}>
             <UsagePage onOpenChat={openChatById} />
+          </div>
+        ) : processes ? (
+          <div className="project-legacy" hidden={settings.open}>
+            <ProcessesPage onOpenChat={openChatById} />
           </div>
         ) : !project ? (
           <NoProject

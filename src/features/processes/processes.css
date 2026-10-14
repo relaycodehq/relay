@@ -1,0 +1,181 @@
+/* The Processes page: one table per project, Relay's own share last. */
+.pr-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 30px 36px 48px;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.pr-page > * {
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.pr-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 10px;
+}
+.pr-head h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pr-head p {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pr-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pr-order {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.pr-order button {
+  border: 0;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pr-order button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px #0000001a;
+}
+.pr-stop-all {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.pr-empty,
+.pr-note {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pr-note {
+  margin-top: 22px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.pr-group {
+  padding-top: 22px;
+}
+.pr-group table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.pr-group thead th {
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pr-group td,
+.pr-folder th {
+  padding: 0;
+  height: 30px;
+}
+.pr-num {
+  width: 72px;
+  text-align: right;
+  white-space: nowrap;
+}
+.pr-group thead th.pr-num {
+  text-align: right;
+}
+.pr-act {
+  width: 40px;
+  text-align: right;
+}
+.pr-folder th {
+  padding-top: 8px;
+  height: 26px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+tbody + tbody .pr-folder th {
+  padding-top: 14px;
+}
+.pr-row td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.pr-row td.pr-num {
+  color: var(--muted);
+}
+.pr-row:hover td.pr-num {
+  color: var(--text);
+}
+.pr-row.stopping {
+  opacity: 0.5;
+}
+.pr-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.pr-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  color: var(--muted);
+}
+.pr-icon .provider-glyph {
+  width: 14px;
+  height: 14px;
+}
+.pr-title {
+  flex: none;
+}
+.pr-thread {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.pr-thread:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.pr-folder .pr-thread {
+  font-weight: 500;
+}
+.pr-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.pr-detail.left-behind {
+  color: color-mix(in srgb, var(--danger) 55%, var(--muted));
+}
