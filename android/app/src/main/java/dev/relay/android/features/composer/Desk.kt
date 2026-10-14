@@ -97,28 +97,50 @@ suspend fun RemoteClient.reloadChatSession(chatId: String) {
 
 /**
  * Model lists, held per connection (mobile's model-catalogs): the toolbar
- * names the model at once, and a reconnect asks again.
+ * names the model at once, and a reconnect asks again. Until this
+ * connection's own arrive, the copy saved last time stands in.
  */
 object ModelLists {
     private val lists = ConcurrentHashMap<String, List<AgentModel>>()
+    /** The last lists saved per computer, by agent. */
+    private val saved = ConcurrentHashMap<String, ModelCatalogs>()
+    private val read = ConcurrentHashMap.newKeySet<String>()
     private var connection = -1
 
     private fun key(computer: String, provider: String) = "$computer:$provider"
 
-    /** What this connection already listed, by agent. */
+    /** What this connection already listed, by agent, over the saved copy. */
     fun known(computer: String?, connection: Int): ModelCatalogs {
         if (computer == null) return emptyMap()
         startOver(connection)
         val prefix = "$computer:"
-        return lists.filterKeys { it.startsWith(prefix) }.mapKeys { it.key.removePrefix(prefix) }
+        return saved[computer].orEmpty() + lists.filterKeys { it.startsWith(prefix) }.mapKeys { it.key.removePrefix(prefix) }
     }
 
-    /** Lists [wanted] not yet asked this connection; a failed one stays missing. */
-    suspend fun load(client: RemoteClient, computer: String, connection: Int, wanted: List<String>): ModelCatalogs {
+    /** Reads the saved copy once per computer; true when it brought something. */
+    suspend fun readSaved(saves: ComposerSaves, computer: String): Boolean {
+        if (!read.add(computer)) return false
+        val lists = saves.models(computer)?.takeIf { it.isNotEmpty() } ?: return false
+        saved.merge(computer, lists) { mine, disk -> disk + mine }
+        return true
+    }
+
+    /**
+     * Lists [wanted] not yet asked this connection. One the desktop couldn't
+     * list, or listed empty while its CLI starts, is asked again next time.
+     */
+    suspend fun load(client: RemoteClient, computer: String, connection: Int, wanted: List<String>, saves: ComposerSaves? = null): ModelCatalogs {
         startOver(connection)
         coroutineScope {
             wanted.filter { !lists.containsKey(key(computer, it)) }.map { provider ->
-                async { runCatching { client.agentModels(provider) }.getOrNull()?.let { lists[key(computer, provider)] = it } }
+                async {
+                    val list = runCatching { client.agentModels(provider) }.getOrNull()
+                    // A previous connection can finish after its replacement.
+                    if (list.isNullOrEmpty() || connection != this@ModelLists.connection) return@async
+                    lists[key(computer, provider)] = list
+                    val next = saved.merge(computer, mapOf(provider to list)) { old, new -> old + new }!!
+                    saves?.saveModels(computer, next)
+                }
             }.forEach { it.await() }
         }
         return known(computer, connection)

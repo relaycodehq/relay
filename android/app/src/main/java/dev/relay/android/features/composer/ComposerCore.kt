@@ -288,10 +288,15 @@ internal fun ComposerCore(
 
     // Held for the connection, so the toolbar names the model at once.
     var catalogs by remember(computer, connection) { mutableStateOf(ModelLists.known(computer, connection)) }
+    val saves = remember { ComposerSaves.of(appContext.cacheDir) }
+    LaunchedEffect(computer) {
+        val pc = computer ?: return@LaunchedEffect
+        if (ModelLists.readSaved(saves, pc)) catalogs = ModelLists.known(pc, connection)
+    }
     suspend fun loadCatalogs(wanted: List<String>): ModelCatalogs {
         val cl = client ?: return catalogs
         val pc = computer ?: return catalogs
-        return ModelLists.load(cl, pc, connection, wanted).also { catalogs = it }
+        return ModelLists.load(cl, pc, connection, wanted, saves).also { catalogs = it }
     }
     LaunchedEffect(client, computer, provider, online, connection) { runCatching { loadCatalogs(listOf(provider)) } }
     val modelLabel = if (settings.choice.model.isNotEmpty()) modelName(provider, catalogs[provider], settings.choice.model) else "Default"

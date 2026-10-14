@@ -51,7 +51,7 @@ fun chatSettled(chat: RemoteChatSummary): Boolean {
     return chat.running != true && settled >= chat.updated
 }
 
-/** What the last new thread opened on, per computer, until the computer answers again. */
+/** What the last new thread opened on, per computer, until the computer answers again; ComposerSaves keeps it across launches. */
 internal object LastNewThread {
     private val saved = ConcurrentHashMap<String, Pair<ResumeSettings, NewThreadModels>>()
     fun of(computer: String?) = computer?.let { saved[it] }

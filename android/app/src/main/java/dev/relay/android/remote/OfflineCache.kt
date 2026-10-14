@@ -30,5 +30,10 @@ class OfflineCache(private val dir: File) {
         Unit
     }
 
-    suspend fun forget(id: String) = withContext(Dispatchers.IO) { file(id).delete(); Unit }
+    /** The overview and the computer's folder beside it (the composer's saved model lists and new-thread start). */
+    suspend fun forget(id: String) = withContext(Dispatchers.IO) {
+        file(id).delete()
+        File(dir, fileSafe(id)).deleteRecursively()
+        Unit
+    }
 }

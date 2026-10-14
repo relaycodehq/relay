@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.relay.android.features.composer.ComposerCore
+import dev.relay.android.features.composer.ComposerSaves
+import dev.relay.android.features.composer.SavedNewThread
 import dev.relay.android.features.composer.Made
 import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Composed
@@ -161,11 +163,22 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
 
     // The composer is there at once, on what the computer said last time; its
     // answer replaces that unless a pick here came first.
+    val saves = remember { ComposerSaves.of(appContext.cacheDir) }
     val saved = remember { LastNewThread.of(active) }
     var settings by remember { mutableStateOf(saved?.first ?: newThreadSettings(null)) }
     var models by remember { mutableStateOf<NewThreadModels>(saved?.second.orEmpty()) }
     var chose by remember { mutableStateOf(false) }
     var askedDesktop by remember { mutableStateOf(false) }
+    var answered by remember { mutableStateOf(false) }
+    // A cold start has nothing in memory: the copy saved last time stands in until the computer answers.
+    LaunchedEffect(active) {
+        if (saved != null || active == null) return@LaunchedEffect
+        val disk = saves.newThread(active) ?: return@LaunchedEffect
+        LastNewThread.save(active, disk.settings, disk.models)
+        if (answered) return@LaunchedEffect
+        if (!chose) settings = disk.settings
+        models = disk.models
+    }
     LaunchedEffect(online, client) {
         // Offline, each of its calls would fall back to a default.
         val cl = client
@@ -175,7 +188,9 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
             val (s, m) = cl.desktopNewThread()
             if (!chose) settings = s
             models = m
+            answered = true
             LastNewThread.save(active, s, m)
+            active?.let { saves.saveNewThread(it, SavedNewThread(s, m)) }
         } catch (e: Exception) {
             askedDesktop = false
             throw e
