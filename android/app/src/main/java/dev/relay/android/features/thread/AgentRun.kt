@@ -42,12 +42,16 @@ import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.thread.logic.TracePart
 import dev.relay.android.features.thread.logic.TurnHeading
+import dev.relay.android.features.thread.logic.askedQuestions
 import dev.relay.android.features.thread.logic.batchHead
+import dev.relay.android.features.thread.logic.callLabel
 import dev.relay.android.features.thread.logic.doneLabel
 import dev.relay.android.features.thread.logic.duration
 import dev.relay.android.features.thread.logic.groupTrace
+import dev.relay.android.features.thread.logic.isQuestionCall
 import dev.relay.android.features.thread.logic.isStartThreads
 import dev.relay.android.features.thread.logic.liveLabel
+import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.readTurn
 import dev.relay.android.features.thread.logic.summarizeActivity
 import dev.relay.android.features.thread.logic.thinkingWord
@@ -55,6 +59,7 @@ import dev.relay.android.features.thread.logic.turnHeading
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.client.activityDetail
 import dev.relay.android.remote.model.AgentActivity
+import dev.relay.android.remote.model.AskedQuestion
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Spinner
@@ -66,8 +71,10 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Clock
+import io.github.lyxnx.compose.ui.tablericons.outline.CornerDownRight
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePencil
 import io.github.lyxnx.compose.ui.tablericons.outline.FileText
+import io.github.lyxnx.compose.ui.tablericons.outline.MessageCircleQuestion
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
@@ -83,6 +90,8 @@ fun kindIcon(kind: String): ImageVector = when (kind) {
     "agent" -> TablerIcons.Outline.Robot
     else -> TablerIcons.Outline.Tool
 }
+
+private fun iconOf(a: AgentActivity) = if (isQuestionCall(a)) TablerIcons.Outline.MessageCircleQuestion else kindIcon(a.kind)
 
 /**
  * True while the reader is scrolled back in the thread. A turn that ends then
@@ -150,8 +159,8 @@ fun AgentRun(
         ) {
             val icon = when (heading) {
                 TurnHeading.Working -> TablerIcons.Outline.Clock
-                is TurnHeading.Call -> kindIcon(heading.activity.kind)
-                is TurnHeading.Done -> heading.last?.let { kindIcon(it.kind) } ?: TablerIcons.Outline.Brain
+                is TurnHeading.Call -> iconOf(heading.activity)
+                is TurnHeading.Done -> heading.last?.let(::iconOf) ?: TablerIcons.Outline.Brain
                 else -> null
             }
             if (icon != null) Icon(icon, null, size = 14.dp, tint = muted) else ThinkingGlyph(message.provider)
@@ -185,10 +194,10 @@ fun AgentRun(
                             part is TracePart.Commentary ->
                                 Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true)
                             part !is TracePart.Run -> Unit
-                            live && index == parts.lastIndex -> OpenBatch(part.activity)
+                            live && index == parts.lastIndex && !isQuestionCall(part.activity.first()) -> OpenBatch(part.activity)
                             // The only run's summary is already the turn's heading.
                             part.activity.size == 1 || parts.all { it === part || it is TracePart.Commentary } ->
-                                part.activity.forEach { ToolRow(it, display(it.label)) }
+                                part.activity.forEach { ToolRow(it) }
                             else -> ActivityGroup(part.activity)
                         }
                     }
@@ -245,12 +254,18 @@ private fun Preview(a: AgentActivity, name: String) {
 @Composable
 private fun CallIcon(a: AgentActivity) {
     if (a.status == "running") Spinner(size = 14.dp, color = RelayTheme.colors.mutedForeground)
-    else Icon(kindIcon(a.kind), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
+    else Icon(iconOf(a), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
 }
 
 @Composable
-private fun ToolRow(a: AgentActivity, label: String) {
+private fun ToolRow(a: AgentActivity) {
     val trace = LocalTrace.current
+    askedQuestions(a)?.let { return AnsweredQuestions(it) }
+    val label = when {
+        !isQuestionCall(a) -> trace.display(callLabel(a))
+        a.status == "running" -> liveLabel(a)
+        else -> doneLabel(a)
+    }
     val calls = trace.calls[a.id].orEmpty()
     // A failed call looks like any other: commands fail as part of the work.
     val heading: @Composable RowScope.() -> Unit = {
@@ -274,6 +289,28 @@ private fun ToolRow(a: AgentActivity, label: String) {
     Fold(heading, under = { under() }) {
         if (calls.isNotEmpty()) SubagentRows(calls)
         if (a.detail != null) Detail(a)
+    }
+}
+
+/** A finished question call, folded to "Asked you 2 questions": each question and the answer it got. */
+@Composable
+private fun AnsweredQuestions(questions: List<AskedQuestion>) {
+    val c = RelayTheme.colors
+    Fold({
+        Icon(TablerIcons.Outline.MessageCircleQuestion, null, Modifier.alpha(0.75f), size = 14.dp, tint = c.mutedForeground)
+        Text("Asked you ${plural(questions.size, "question")}", Modifier.weight(1f), maxLines = 1, color = c.mutedForeground)
+    }) {
+        SelectionContainer(Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (q in questions) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(q.question, color = c.mutedForeground)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(TablerIcons.Outline.CornerDownRight, null, Modifier.padding(top = 3.dp).alpha(0.6f), size = 12.dp, tint = c.foreground)
+                        Text(q.answer, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -303,8 +340,7 @@ private fun Detail(a: AgentActivity) {
 
 @Composable
 private fun SubagentRows(calls: List<AgentActivity>) {
-    val display = LocalTrace.current.display
-    Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { calls.forEach { ToolRow(it, display(it.label)) } }
+    Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { calls.forEach { ToolRow(it) } }
 }
 
 /** A run of tool calls between two commentary lines, folded into "Ran 6 commands". */
@@ -326,7 +362,7 @@ private fun ActivityGroup(activity: List<AgentActivity>) {
             looked.forEach { a -> key(a.id) { Preview(a, display(a.label)) } }
         }
     }) {
-        Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { activity.forEach { ToolRow(it, display(it.label)) } }
+        Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { activity.forEach { ToolRow(it) } }
     }
 }
 
@@ -367,7 +403,7 @@ private fun OpenBatch(activity: List<AgentActivity>) {
         }
         if (open && calls.isNotEmpty()) SubagentRows(calls)
         if (open && earlier.isNotEmpty())
-            Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { earlier.forEach { ToolRow(it, trace.display(it.label)) } }
+            Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { earlier.forEach { ToolRow(it) } }
     }
 }
 
@@ -398,6 +434,6 @@ private fun ThinkingWord(seed: String) {
 fun TraceRows(calls: List<AgentActivity>, root: String?) {
     val display = displayIn(root)
     CompositionLocalProvider(LocalTrace provides TraceScope(emptyMap(), display, "", "")) {
-        Column { calls.forEach { ToolRow(it, display(it.label)) } }
+        Column { calls.forEach { ToolRow(it) } }
     }
 }
