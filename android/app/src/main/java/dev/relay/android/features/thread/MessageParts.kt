@@ -102,12 +102,14 @@ private fun NoteBox(content: @Composable () -> Unit) {
 fun HandoffRow(m: ChatMessage) {
     val handoff = m.handoff ?: return
     var open by rememberSaveable(m.id) { mutableStateOf(false) }
-    val switched = "Switched from ${agentName(handoff.from)} to ${agentName(handoff.to)}"
+    val from = agentName(handoff.from)
+    val switched = if (handoff.computer != null) "Continued on ${handoff.computer} · ${Clock().clock(m.created)}"
+    else "Switched from $from to ${agentName(handoff.to)}${if (handoff.byRelay == true) " · $from couldn't write a note, Relay did" else ""}"
     val note = m.body.trim().takeIf { m.status == "complete" && it.isNotEmpty() }
     Column {
         StatusRow(
             when {
-                m.status == "streaming" -> "${agentName(handoff.from)} is writing a handoff note for ${agentName(handoff.to)}…"
+                m.status == "streaming" -> "$from is writing a handoff note for ${handoff.computer ?: agentName(handoff.to)}…"
                 note != null -> switched
                 else -> "$switched · no handoff note"
             },

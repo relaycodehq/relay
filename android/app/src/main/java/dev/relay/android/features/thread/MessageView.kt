@@ -134,6 +134,8 @@ fun MessageView(
         }
         show
     }
+    // Relay's own prompt that starts a handed-over thread here; the "Continued on" row stands for it.
+    if (m.handedOver == true) return
     if (m.handoff != null) return HandoffRow(m)
     if (m.worktreeCommand != null) return WorktreeCommandRow(
         m, on.onRerunSetup?.takeIf { setupCanRerun(m) }?.let { rerun -> { rerun(m) } },
