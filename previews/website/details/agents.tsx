@@ -1,17 +1,8 @@
 // Demo tiles about agents: what happens when one hits a limit, when you
-// switch, when one fans out, and the small cards it puts in front of you.
-import {
-  ArrowUp,
-  Check,
-  ChevronDown,
-  Clock3,
-  Eye,
-  GitBranch,
-  Hourglass,
-  PanelTop,
-  X,
-} from "lucide-react";
-import { Cursor, Cycle, Kbd, PLACEHOLDER, Placeholder, Type, on, within } from "./kit";
+// switch, what it can do in Relay for you, voice, and the cards it puts in
+// front of you.
+import { ArrowUp, Check, Eye, Hourglass, Mic, Square, Volume2, X } from "lucide-react";
+import { Cursor, Cycle, PLACEHOLDER, Placeholder, Type, on, within } from "./kit";
 import type { Loop } from "./kit";
 
 /* ---- Limit hit, resumes itself ---- */
@@ -97,166 +88,108 @@ export function SwitchTile({ s }: { s: number }) {
   );
 }
 
-/* ---- An agent starts threads under its own ---- */
-export const fanLoop: Loop = { times: [0, 1000, 2200, 3600, 6000], still: 3 };
-export function FanTile({ s }: { s: number }) {
-  const line = Math.min(s, 3);
-  const children = [
-    ["Update the login tests", "auth/login-tests"],
-    ["Port the token refresh", "auth/token-refresh"],
-  ];
-  return (
-    <div className="a-fan">
-      <div className="dt-card">
-        <div className="dt-card-top">
-          <span className="dt-badge" style={{ ["--hue" as string]: 262 }}>R</span>
-          <span className="dt-card-project">Relay</span>
-          <span className="dt-card-state" data-kind="working">
-            <i /> Working
-          </span>
-        </div>
-        <span className="dt-card-title">Move auth to the new SDK</span>
-        <div className="dt-card-meta">
-          <span className="a-family dt-in" data-on={on(s, 1)}>
-            <ChevronDown size={11} />
-            <Cycle
-              at={line}
-              items={[
-                "",
-                "1 thread · 1 working",
-                "2 threads · 2 working",
-                "2 threads · 1 working · 1 needs you",
-              ]}
-            />
-          </span>
-        </div>
-      </div>
-      <div className="a-started">
-        {children.map(([title, branch], i) => {
-          const waiting = i === 1 && s >= 3;
-          return (
-            <div className="dt-card compact dt-in" data-on={on(s, i + 1)} key={title}>
-              <div className="dt-card-top">
-                <span className="dt-card-title">{title}</span>
-                <span className="dt-card-state" data-kind={waiting ? "waiting" : "working"}>
-                  {waiting ? "Needs input" : <><i /> Working</>}
-                </span>
-              </div>
-              <div className="dt-card-meta">
-                <GitBranch size={11} /> <span>{branch}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ---- Steer while it works ---- */
-export const steerLoop: Loop = { times: [0, 700, 2200, 3300, 4300, 5600, 7000], still: 5 };
-export function SteerTile({ s }: { s: number }) {
-  return (
-    <div className="a-steer">
-      <div className="dt-ui a-trace">
-        <div className="a-step">
-          <Check size={12} /> <span className="dt-muted">Read db/config.ts</span>
-        </div>
-        <div className="a-step" data-live>
-          <span className="dt-spin" />
-          <Cycle
-            at={s >= 4 ? 1 : 0}
-            items={["Running the migration on production", "Running the migration on staging"]}
-          />
-        </div>
-        <p className="dt-say a-reply dt-in" data-on={on(s, 4)}>
-          Switched to the staging database.
-        </p>
-      </div>
-      <div className="a-bubble dt-in" data-on={on(s, 4)}>
-        Use the staging database
-      </div>
-      <section className="a-queued dt-in" data-on={within(s, 2, 4)}>
-        <header>
-          <Clock3 size={13} /> Queued · sends after this answer
-        </header>
-        <div className="a-qrow">
-          <span className="a-qtext">Use the staging database</span>
-          <span className="a-qbtn" data-hot={within(s, 3, 4)}>
-            <ArrowUp size={13} />
-          </span>
-          <span className="a-qbtn">
-            <X size={13} />
-          </span>
-        </div>
-        <p className="a-qhint">
-          <Kbd>↵</Kbd> to queue · <Kbd>⌘↵</Kbd> to steer
-        </p>
-      </section>
-      <div className="dt-composer a-steer-composer">
-        <span className="a-typed dt-swap" data-on={on(s, 2)}>
-          <span>
-            <Type text="Use the staging database" go={s >= 1} ms={1300} />
-          </span>
-          <Placeholder>{PLACEHOLDER.working}</Placeholder>
-        </span>
-      </div>
-      <Cursor x={s >= 2 ? 248 : 170} y={s >= 2 ? 140 : 170} show={s >= 2 && s < 4} press={within(s, 3, 4) !== undefined} />
-    </div>
-  );
-}
-
-/* ---- The agent asks with its own page ---- */
-export const askLoop: Loop = { times: [0, 1000, 1700, 2600, 3100, 3700, 6000], still: 3 };
-const layouts: [string, string][] = [
-  ["Tabs", "One section at a time"],
-  ["Sidebar", "All sections in a list"],
-  ["One long page", "Scroll through everything"],
+/* ---- Ask the agent to run Relay through its tools ---- */
+export const driveLoop: Loop = {
+  times: [0, 300, 900, 1800, 2700, 3200, 4000, 4900, 5400, 6200, 8600],
+  still: 9,
+};
+const asks: [ask: string, tool: string, result: string][] = [
+  ["Give each failing test its own thread", "start_threads", "Started 3 threads"],
+  ["How much of my week is left?", "usage_limits", "Claude 62% · Codex 81%"],
+  ["Hand this thread to the Mac mini", "hand_off_thread", "Continued on macmini"],
 ];
-export function AskTile({ s }: { s: number }) {
-  const picked = s >= 2 ? 1 : -1;
+export function DriveTile({ s }: { s: number }) {
   return (
-    <div className="a-ask">
-      <div className="dt-swap a-stack" data-on={on(s, 5)}>
-      <div className="dt-ui a-req">
-        <header>
-          <PanelTop size={14} />
-          <strong>Which layout for the settings page?</strong>
-        </header>
-        <div className="a-page">
-          {layouts.map(([name, hint], i) => (
-            <div className="a-opt" data-on={picked === i || undefined} key={name}>
-              <i />
-              <span>
-                <b>{name}</b>
-                <small>{hint}</small>
+    <div className="a-drive">
+      {asks.map(([ask, tool, result], i) => {
+        const start = 1 + i * 3;
+        const done = s >= start + 2;
+        return (
+          <div className="a-ex" key={tool}>
+            <p className="dt-bubble dt-in" data-on={on(s, start)}>
+              {ask}
+            </p>
+            <div className="a-call dt-in" data-on={on(s, start + 1)}>
+              {done ? <Check size={12} className="a-tick" /> : <span className="dt-spin" />}
+              <code>{tool}</code>
+              <span className="a-call-out dt-in" data-on={done ? "" : undefined}>
+                {result}
               </span>
             </div>
-          ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---- Dictate, then hear the answer, all on this computer ---- */
+export const voiceLoop: Loop = {
+  times: [0, 700, 1300, 2700, 3900, 4500, 5300, 6000, 8400],
+  still: 7,
+};
+export function VoiceTile({ s }: { s: number }) {
+  const listening = s >= 1 && s < 4;
+  const sent = s >= 5;
+  const reading = s >= 7;
+  return (
+    <div className="a-voice">
+      <div className="a-vthread">
+        <p className="dt-bubble dt-in" data-on={on(s, 5)}>
+          Rename the worker, fix tests
+        </p>
+        <div className="a-vans dt-in" data-on={on(s, 6)}>
+          <p className="dt-say">
+            <Check size={12} className="a-tick" /> Renamed it to <code>queueWorker</code>. Tests pass.
+          </p>
+          <div className="a-vread">
+            <span className="a-vbtn" data-on={reading || undefined} data-press={within(s, 6, 7)}>
+              {reading ? <Square size={10} /> : <Volume2 size={13} />}
+            </span>
+            <span className="dt-swap a-vstate" data-on={reading ? "" : undefined}>
+              <span className="dt-muted">Read aloud</span>
+              <span>
+                <i className="a-eq" data-on={reading || undefined}>
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <b key={i} className="dt-loop-eq" style={{ animationDelay: `${-i * 0.23}s` }} />
+                  ))}
+                </i>
+                Reading with Pocket, on this Mac
+              </span>
+            </span>
+          </div>
         </div>
-        <footer>
-          <span className="dt-btn">Skip</span>
-          <span
-            className="dt-btn primary"
-            data-off={s < 2 || undefined}
-            data-press={within(s, 4, 5)}
-          >
-            Send answer
-          </span>
-        </footer>
       </div>
-      <div className="a-answered">
-        <div className="dt-divider">
-          <span>You answered “Layout for the settings page”</span>
-        </div>
+      <p className="a-vlabel dt-in" data-on={listening ? "" : undefined}>
+        Parakeet, on this Mac · nothing leaves it
+      </p>
+      <div className="dt-composer a-vcomposer">
+        <span className="a-vdraft">
+          {sent ? (
+            <Placeholder>{PLACEHOLDER.working}</Placeholder>
+          ) : (
+            <span className="dt-swap" data-on={s >= 2 ? "" : undefined}>
+              <Placeholder>{PLACEHOLDER.idle}</Placeholder>
+              <span>
+                <Type text="Rename the worker" go={s >= 2} ms={900} />
+                <Type text={",\u00a0fix tests"} go={s >= 3} ms={600} />
+              </span>
+            </span>
+          )}
+        </span>
+        <span className="a-mic" data-live={listening || undefined}>
+          <Mic size={13} />
+          <i className="a-wave">
+            {Array.from({ length: 7 }, (_, i) => (
+              <b key={i} className="dt-loop-wave" style={{ animationDelay: `${-((i * 0.37) % 1.2)}s` }} />
+            ))}
+          </i>
+        </span>
+        <span className="dt-send" data-press={within(s, 4, 5)}>
+          <ArrowUp size={13} strokeWidth={2.5} />
+        </span>
       </div>
-      </div>
-      <Cursor
-        x={s >= 3 ? 226 : s >= 1 ? 120 : 90}
-        y={s >= 3 ? 188 : s >= 1 ? 112 : 70}
-        show={s >= 1 && s < 5}
-        press={within(s, 4, 5) !== undefined}
-      />
+      <Cursor x={s >= 6 ? 14 : 262} y={s >= 6 ? 80 : 196} show={s >= 4 && s < 8} press={within(s, 4, 5) !== undefined || within(s, 6, 7) !== undefined} />
     </div>
   );
 }

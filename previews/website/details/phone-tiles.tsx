@@ -1,6 +1,6 @@
 // Demo tiles about the phone app, drawn in the same dp-scaled screens as the
 // site's phone section.
-import { AlarmClock, ArrowUp, Check, ChevronLeft, X } from "lucide-react";
+import { ArrowUp, ChevronLeft, X } from "lucide-react";
 import "../phone.css";
 import { PhoneStatus } from "../phone";
 import { Cycle, Finger, on, within } from "./kit";
@@ -18,82 +18,6 @@ function Phone({ children }: { children: ReactNode }) {
           {children}
         </div>
       </div>
-    </div>
-  );
-}
-
-const cards = [
-  ["Fix flaky sync test", "Relay", "unread", "4 min"],
-  ["Rename the sync worker", "Relay", "working", "Working"],
-  ["Draft the release notes", "Relay", "unread", "1 h"],
-] as const;
-
-function PhoneCard({ title, project, kind, state }: { title: string; project: string; kind: string; state: string }) {
-  return (
-    <div className="ph-card">
-      <div className="ph-card-top">
-        <span className="ph-badge" style={{ background: "hsl(262 45% 48%)", color: "#fff" }}>R</span>
-        <span>{project}</span>
-        <span className="ph-state" data-kind={kind}>
-          {kind === "working" ? <span className="ph-spin" /> : <i className="ph-dot" />}
-          {state}
-        </span>
-      </div>
-      <strong>{title}</strong>
-    </div>
-  );
-}
-
-/* ---- Swipe to settle or snooze ---- */
-export const swipeLoop: Loop = { times: [0, 700, 1500, 2600, 3900, 4800, 5900, 7600], still: 3 };
-export function SwipeTile({ s }: { s: number }) {
-  const settle = s >= 2 && s < 3;
-  const gone = s >= 3;
-  const snooze = s >= 5 && s < 6;
-  const gone2 = s >= 6;
-  return (
-    <div className="p-tile">
-      <Phone>
-        <div className="p-list">
-          <div className="p-head"><b>Activity</b><span>{gone2 ? "1 open" : gone ? "2 open" : "3 open"}</span></div>
-          <div className="p-rows">
-            {cards.map(([title, project, kind, state], i) => {
-              const dx = i === 0 ? (settle ? 150 : 0) : i === 2 ? (snooze ? -150 : 0) : 0;
-              const hidden = (i === 0 && gone) || (i === 2 && gone2);
-              const place = i === 1 ? (gone ? 0 : 1) : i === 2 ? (gone ? 1 : 2) : 0;
-              const dy = place * 66;
-              return (
-                <div className="p-swipe" style={{ transform: `translateY(${dy}px)` }} data-hidden={hidden ? "" : undefined} key={title}>
-                  {i === 0 && (
-                    <div className="p-behind settle" data-on={on(s, 2)}><Check size={18} /> Settle</div>
-                  )}
-                  {i === 2 && (
-                    <div className="p-behind snooze" data-on={on(s, 5)}><AlarmClock size={18} /> Snooze · 15 minutes</div>
-                  )}
-                  <div className="p-cardwrap" style={{ transform: `translateX(${dx}px)` }}>
-                    <PhoneCard title={title} project={project} kind={kind} state={state} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="p-undo" data-on={is(within(s, 3, 5)) || is(within(s, 6, 8)) ? "" : undefined}>
-            <Cycle
-              at={s >= 6 ? 1 : 0}
-              items={[
-                <span key="a">Settled <i>· Fix flaky sync test</i> <b>Undo</b></span>,
-                <span key="b">Snoozed until 17:30 <b>Undo</b></span>,
-              ]}
-            />
-          </div>
-        </div>
-      </Phone>
-      <Finger
-        x={s >= 4 ? (s >= 5 ? 110 : 215) : s >= 2 ? 190 : 90}
-        y={s >= 4 ? 137 : 100}
-        show={(s >= 1 && s < 3) || (s >= 4 && s < 6)}
-        press={settle || snooze || s === 4}
-      />
     </div>
   );
 }

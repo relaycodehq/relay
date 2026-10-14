@@ -1,74 +1,17 @@
-// Demo tiles about your code, part two: the Git button, worktrees, drawing
-// on a screenshot, tables, windows and Clip.
+// Demo tiles about your code, part two: worktrees, drawing on a screenshot
+// and tables.
 import {
   ArrowRight,
   Check,
-  ChevronDown,
-  CloudUpload,
   Copy,
   Droplet,
   FolderGit2,
-  GitBranch,
-  GitCommitHorizontal,
   PenLine,
-  SquareArrowOutUpRight,
 } from "lucide-react";
-import { Clip } from "../../../src/features/tips/Clip";
-import "../../../src/features/tips/tips.css";
-import { Cursor, Cycle, Kbd, PLACEHOLDER, Placeholder, on, within } from "./kit";
+import { Cursor, Cycle, on, within } from "./kit";
 import type { Loop } from "./kit";
 
 const is = (v: string | undefined) => v !== undefined;
-
-/* ---- A greyed Git menu item says why ---- */
-export const greyLoop: Loop = { times: [0, 900, 1500, 3000, 4300, 6400], still: 4 };
-export function GreyTile({ s }: { s: number }) {
-  const ready = s >= 4;
-  return (
-    <div className="m-grey">
-      <div className="m-toolbar">
-        <span className="c-branch"><FolderGit2 size={12} /> main</span>
-        <span className="m-git" data-ready={ready || undefined} data-hot={within(s, 1, 5)}>
-          <Cycle
-            at={ready ? 1 : 0}
-            items={[
-              <span key="a" className="c-row"><GitBranch size={14} /> <ChevronDown size={11} /></span>,
-              <span key="b" className="c-row"><GitCommitHorizontal size={13} /> Commit <ChevronDown size={12} /></span>,
-            ]}
-          />
-        </span>
-      </div>
-      <div className="dt-menu m-menu" data-open={within(s, 2, 5)}>
-        <div className="dt-menu-item" data-off={ready ? undefined : ""}>
-          <GitCommitHorizontal size={14} /> Commit
-        </div>
-        <div className="dt-menu-item" data-off={ready ? undefined : ""}>
-          <CloudUpload size={14} /> Commit &amp; push
-        </div>
-        <div className="dt-menu-item" data-off="">
-          <CloudUpload size={14} /> Push
-        </div>
-      </div>
-      <div className="m-tip dt-in" data-on={within(s, 2, 3)} style={{ top: 92 }}>Nothing to commit.</div>
-      <div className="m-tip dt-in" data-on={within(s, 3, 5)} style={{ top: 148 }}>
-        <Cycle at={ready ? 1 : 0} items={["Nothing to push.", "Commit the changed files first."]} />
-      </div>
-      <div className="dt-ui m-changes dt-in" data-on={on(s, 4)}>
-        <header className="dt-muted">Changes</header>
-        <span className="m-file">
-          <span>src/queue.ts</span>
-          <span className="c-stat"><b className="add">+12</b> <b className="del">−2</b></span>
-        </span>
-      </div>
-      <Cursor
-        x={s >= 3 ? 214 : s >= 2 ? 214 : 252}
-        y={s >= 3 ? 130 : s >= 2 ? 74 : s >= 1 ? 32 : 90}
-        show={s >= 1 && s < 5}
-        press={false}
-      />
-    </div>
-  );
-}
 
 /* ---- Move a thread to a worktree ---- */
 export const worktreeLoop: Loop = { times: [0, 800, 2000, 2700, 3500, 6200], still: 4 };
@@ -190,65 +133,6 @@ export function TableTile({ s }: { s: number }) {
         ))}
       </div>
       <Cursor x={s >= 2 ? 250 : 200} y={s >= 1 ? 30 : 100} show={s >= 1 && s < 3} press={is(within(s, 2, 3))} />
-    </div>
-  );
-}
-
-/* ---- Pop a thread into its own window ---- */
-export const popLoop: Loop = { times: [0, 800, 1800, 2400, 3400, 6000], still: 4 };
-export function PopTile({ s }: { s: number }) {
-  return (
-    <div className="m-pop">
-      <div className="dt-ui m-main">
-        <header>
-          <b>Rename the sync worker</b>
-          <span className="m-popbtn" data-hot={within(s, 1, 3)}><SquareArrowOutUpRight size={14} /></span>
-        </header>
-        <div className="dt-swap m-body" data-on={on(s, 3)}>
-          <div>
-            <p className="dt-say">Renamed the worker and moved its tests.</p>
-            <p className="dt-say dt-muted">Now checking the docs for old names…</p>
-          </div>
-          <div className="m-elsewhere">
-            <div className="m-win m-win-inline">
-              <div className="m-winbar"><i /><i /><i /><span>Relay <u>/</u> <b>Rename the sync worker</b></span></div>
-              <div className="m-winbody">
-                <b>Working in its own window</b>
-                <span className="dt-muted">Checking the docs for old names</span>
-              </div>
-            </div>
-            <p className="m-foot"><span className="dt-link">Bring it back here</span> <Kbd>⌘⇧O</Kbd></p>
-          </div>
-        </div>
-      </div>
-      <Cursor x={s >= 1 ? 250 : 160} y={s >= 1 ? 30 : 120} show={s >= 1 && s < 3} press={is(within(s, 2, 3))} />
-    </div>
-  );
-}
-
-/* ---- Clip ---- */
-export const clipLoop: Loop = { times: [0, 1200, 2600, 3300, 5300, 6800], still: 3 };
-export function ClipTile({ s }: { s: number }) {
-  const out = s >= 1 && s < 4;
-  return (
-    <div className="m-clip">
-      <p className="dt-say">Reading the migration and the tests around it.</p>
-      <div className="m-think">
-        <span className="dt-spin" /> <span className="m-word">Thinking</span>
-      </div>
-      <div className="m-peekrow">
-        <span className={`tip-peek${out ? "" : " gone"}`} data-s={s}>
-          <span className="tip-say m-say">
-            <span className="tip-ask">
-              Select part of an answer, <span className="tip-keys">⌘L</span> quotes it in your reply
-            </span>
-          </span>
-          <span className="tip-clip">
-            <Clip up={s >= 2 && s < 4} sly={s >= 2 && s < 4} waggle={s >= 3 ? 1 : 0} />
-          </span>
-        </span>
-      </div>
-      <div className="dt-composer m-clip-composer"><Placeholder>{PLACEHOLDER.working}</Placeholder></div>
     </div>
   );
 }

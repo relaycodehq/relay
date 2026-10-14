@@ -22,34 +22,23 @@ export interface TileDef {
 }
 
 const demos: Record<Id, Pick<TileDef, "loop" | "Tile">> = {
+  handoff: { loop: threads.handoffLoop, Tile: threads.HandoffTile },
+  drive: { loop: agents.driveLoop, Tile: agents.DriveTile },
+  voice: { loop: agents.voiceLoop, Tile: agents.VoiceTile },
   limit: { loop: agents.limitLoop, Tile: agents.LimitTile },
   switch: { loop: agents.switchLoop, Tile: agents.SwitchTile },
-  fan: { loop: agents.fanLoop, Tile: agents.FanTile },
-  steer: { loop: agents.steerLoop, Tile: agents.SteerTile },
-  ask: { loop: agents.askLoop, Tile: agents.AskTile },
   know: { loop: agents.knowLoop, Tile: agents.KnowTile },
   btw: { loop: agents.btwLoop, Tile: agents.BtwTile },
   snooze: { loop: threads.snoozeLoop, Tile: threads.SnoozeTile },
   later: { loop: threads.laterLoop, Tile: threads.LaterTile },
-  settle: { loop: threads.settleLoop, Tile: threads.SettleTile },
   notes: { loop: threads.notesLoop, Tile: threads.NotesTile },
-  queue: { loop: threads.queueLoop, Tile: threads.QueueTile },
-  quote: { loop: threads.quoteLoop, Tile: threads.QuoteTile },
-  split: { loop: code.splitLoop, Tile: code.SplitTile },
-  message: { loop: code.messageLoop, Tile: code.MessageTile },
   rollback: { loop: code.rollbackLoop, Tile: code.RollbackTile },
-  refresh: { loop: code.refreshLoop, Tile: code.RefreshTile },
-  image: { loop: code.imageLoop, Tile: code.ImageTile },
   sync: { loop: code.syncLoop, Tile: code.SyncTile },
-  grey: { loop: more.greyLoop, Tile: more.GreyTile },
   worktree: { loop: more.worktreeLoop, Tile: more.WorktreeTile },
   draw: { loop: more.drawLoop, Tile: more.DrawTile },
   table: { loop: more.tableLoop, Tile: more.TableTile },
-  pop: { loop: more.popLoop, Tile: more.PopTile },
-  swipe: { loop: phone.swipeLoop, Tile: phone.SwipeTile },
   banner: { loop: phone.bannerLoop, Tile: phone.BannerTile },
   hold: { loop: phone.holdLoop, Tile: phone.HoldTile },
-  clip: { loop: more.clipLoop, Tile: more.ClipTile },
 };
 
 export const tiles: TileDef[] = words.map((w) => ({ ...w, ...demos[w.id] }));

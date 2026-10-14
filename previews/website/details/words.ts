@@ -4,6 +4,24 @@ import type { Category } from "./kit";
 
 export const words = [
   {
+    id: "handoff",
+    category: "threads",
+    title: "Hand a running thread to another computer",
+    text: "Send it to your Mac mini mid-answer. You keep chatting from the laptop while it runs there, then bring it back.",
+  },
+  {
+    id: "drive",
+    category: "agents",
+    title: "Ask the agent to run Relay",
+    text: "Every thread gets Relay's own tools. Ask it to split work into threads and wait for them, add a project, check your limits or hand itself off.",
+  },
+  {
+    id: "voice",
+    category: "agents",
+    title: "Voice that stays on your computer",
+    text: "Dictate a prompt and hear answers read aloud, both with models running on your machine. The phone borrows them too.",
+  },
+  {
     id: "limit",
     category: "agents",
     title: "A limit doesn't end the answer",
@@ -14,24 +32,6 @@ export const words = [
     category: "agents",
     title: "Switch agent when one runs dry",
     text: "The first agent writes a handoff note and the second picks up from it.",
-  },
-  {
-    id: "fan",
-    category: "agents",
-    title: "Agents can start more threads",
-    text: "Threads an agent starts sit under the one that asked, with a line on how they're doing.",
-  },
-  {
-    id: "steer",
-    category: "agents",
-    title: "Steer in the middle of an answer",
-    text: "Send a correction while the agent works, without stopping it.",
-  },
-  {
-    id: "ask",
-    category: "agents",
-    title: "Agents can ask with a page",
-    text: "Instead of a wall of questions, the agent shows a small page and you answer on it.",
   },
   {
     id: "know",
@@ -58,40 +58,10 @@ export const words = [
     text: "Right-click Send, pick a time, and it waits in the thread until then.",
   },
   {
-    id: "settle",
-    category: "threads",
-    title: "Threads settle on their own",
-    text: "After a few quiet days, or once its pull request merges, a thread moves out of your way.",
-  },
-  {
     id: "notes",
     category: "threads",
     title: "Keep a list as a checklist",
     text: "Pin a list or a whole answer to the thread's notes, then tick items off as you go.",
-  },
-  {
-    id: "queue",
-    category: "threads",
-    title: "Queue messages, reorder them",
-    text: "Line up what comes next while the agent works, and drag it into the order you want.",
-  },
-  {
-    id: "quote",
-    category: "threads",
-    title: "Quote part of an answer",
-    text: "Select a few words and add them to your reply, or keep them in the notes.",
-  },
-  {
-    id: "split",
-    category: "code",
-    title: "Split one pile into commits",
-    text: "Relay groups your edits into separate commits you can tick, edit and make one by one.",
-  },
-  {
-    id: "message",
-    category: "code",
-    title: "Commit messages that sound like you",
-    text: "The message is drafted from the change, with a count so the subject stays short.",
   },
   {
     id: "rollback",
@@ -100,28 +70,10 @@ export const words = [
     text: "Undo what an agent did in a turn, and redo it if you change your mind.",
   },
   {
-    id: "refresh",
-    category: "code",
-    title: "The open file follows the agent",
-    text: "A file you have open updates when the agent edits it, and warns you if you have unsaved changes.",
-  },
-  {
-    id: "image",
-    category: "code",
-    title: "See images change side by side",
-    text: "A changed image shows before and after next to each other, not as a binary blob.",
-  },
-  {
     id: "sync",
     category: "code",
     title: "Rebase from one button",
     text: "See what's behind and ahead, rebase in one click, and hand a conflict to a new thread.",
-  },
-  {
-    id: "grey",
-    category: "code",
-    title: "A greyed button says why",
-    text: "Hover a greyed-out item in the Git menu and it says why it can't run.",
   },
   {
     id: "worktree",
@@ -142,18 +94,6 @@ export const words = [
     text: "Copy a table from an answer and it lands in a spreadsheet as a grid, not a block of text.",
   },
   {
-    id: "pop",
-    category: "code",
-    title: "Pop a thread into its own window",
-    text: "Give a thread a window of its own, and bring it back with one click.",
-  },
-  {
-    id: "swipe",
-    category: "phone",
-    title: "Swipe to settle or snooze",
-    text: "Clear your Activity list from the couch: one swipe settles a thread, the other snoozes it.",
-  },
-  {
     id: "banner",
     category: "phone",
     title: "A banner when a thread needs you",
@@ -164,12 +104,6 @@ export const words = [
     category: "phone",
     title: "Hold Send to send later",
     text: "Press and hold the send button, pick a time, and the message waits for it.",
-  },
-  {
-    id: "clip",
-    category: "agents",
-    title: "A paperclip that gives you hints",
-    text: "While an agent thinks, Clip peeks over the edge with a tip. It's easy to send away.",
   },
 ] as const satisfies readonly {
   id: string;

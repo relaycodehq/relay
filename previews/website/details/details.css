@@ -519,6 +519,19 @@
   font-size: 12px;
   line-height: 1.55;
 }
+/* A message you sent. */
+.dt-canvas .dt-bubble {
+  width: fit-content;
+  max-width: 88%;
+  margin: 0;
+  align-self: flex-end;
+  justify-self: end;
+  padding: 5px 11px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .dt-composer {
   display: flex;
   align-items: center;
