@@ -249,6 +249,53 @@ it("gives a process back after a restart with what it said meanwhile, and keeps 
   await echoed;
 });
 
+it("starts a new host when the one of its own build was told to drain by another build", async () => {
+  const echo = `require("node:readline").createInterface({ input: process.stdin })
+    .on("line", (line) => console.log(line.toUpperCase()));`;
+  const openEcho = (hosts: AgentHosts) =>
+    hosts.openProcess({
+      key: "server",
+      meta: {},
+      process: {
+        command: process.execPath,
+        args: ["-e", echo],
+        cwd: root,
+        env: { ...process.env } as Record<string, string>,
+        group: false,
+      },
+    });
+  const first = hostsFor();
+  // The drained host stays up only while it still has a session.
+  await openEcho(first);
+  const [drainedPid] = first.pids();
+  first.detach();
+
+  const otherBuild = join(root, "agent-host-other.mjs");
+  await writeFile(
+    otherBuild,
+    (await readFile(script, "utf8")) + "\n// other build\n",
+  );
+  const other = new AgentHosts(join(root, "hosts"), otherBuild);
+  opened.push(other);
+  await other.discover();
+  other.detach();
+
+  // Back on the first build, which trusts a host of its own version.
+  const back = hostsFor();
+  const running = await openEcho(back);
+  const answered = new Promise<string>((resolve) =>
+    running.read({
+      entry: (e) => {
+        if (e.kind === "end") resolve(`ended: ${e.failure}`);
+        if (e.kind === "line" && e.text === "HELLO") resolve("echoed");
+      },
+    }),
+  );
+  running.write("hello");
+  expect(await answered).toBe("echoed");
+  expect(back.pids()).not.toEqual([drainedPid]);
+});
+
 it("reports a process that died while Relay was away as ended", async () => {
   const first = hostsFor();
   const release = join(root, "exit-process");

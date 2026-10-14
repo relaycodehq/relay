@@ -8,6 +8,7 @@ import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  closingFailure,
   protocolVersion,
   readLines,
   writeLine,
@@ -309,6 +310,7 @@ class HostConnection {
           connection.version = message.version;
           connection.pid = message.pid;
           connection.sessions = message.sessions;
+          connection.draining = message.draining === true;
           resolve(connection);
         } else if (message.t === "refused") {
           clearTimeout(timer);
@@ -416,6 +418,11 @@ class HostConnection {
   private receive(message: HostMessage) {
     switch (message.t) {
       case "entry":
+        if (
+          message.entry.kind === "end" &&
+          message.entry.failure === closingFailure
+        )
+          this.draining = true;
         this.endpoints.get(message.session)?.entry(message.entry);
         return;
       case "attached":

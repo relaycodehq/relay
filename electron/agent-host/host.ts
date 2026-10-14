@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  closingFailure,
   protocolVersion,
   readLines,
   writeLine,
@@ -234,7 +235,7 @@ function resendTools() {
 }
 
 function open(message: Extract<ClientMessage, { t: "open" }>) {
-  if (draining) throw new Error("This agent host is closing.");
+  if (draining) throw new Error(closingFailure);
   if (sessions.has(message.session))
     throw new Error("That session is already open.");
   const { session: id, key, meta } = message;
@@ -396,6 +397,7 @@ function greet(socket: Socket, message: ClientMessage) {
     version,
     pid: process.pid,
     sessions: [...sessions.values()].map((s) => s.info()),
+    draining,
   });
   log("client connected");
   resendTools();

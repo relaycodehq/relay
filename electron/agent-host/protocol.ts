@@ -14,6 +14,9 @@ import type {
  */
 export const protocolVersion = 1;
 
+/** How a draining host refuses a session; older hosts only say it this way. */
+export const closingFailure = "This agent host is closing.";
+
 /** Where a host can be found; written by the host once it listens. */
 export interface HostRecord {
   pid: number;
@@ -115,7 +118,14 @@ export type ClientMessage =
   | { t: "toolResult"; id: number; result: ToolResult };
 
 export type HostMessage =
-  | { t: "welcome"; version: string; pid: number; sessions: SessionInfo[] }
+  | {
+      t: "welcome";
+      version: string;
+      pid: number;
+      sessions: SessionInfo[];
+      /** Told to drain by another build; hosts before it don't say. */
+      draining?: boolean;
+    }
   | { t: "entry"; session: string; entry: Entry }
   /** Everything logged so far was sent; what follows is live. */
   | { t: "attached"; session: string }
