@@ -252,9 +252,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
 
     val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: made?.title ?: ""
     CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned) {
+        val line = composer.line
         Screen(
             title,
+            subtitle = line?.let { l -> listOfNotNull(l.model, l.contextPercent?.let { "$it% context" }, if (l.plan) "Plan" else null).joinToString(" · ") },
             onBack = nav.backAction,
+            onTitleClick = if (line != null) composer::openSettings else null,
             actions = {
                 if (rootId == null) {
                     if (projectId != null) CiStatusButton(remote, projectId, id, running)
@@ -344,7 +347,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            if (projectId != null) Composer(remote, id, composer, rootId = rootId)
+            if (projectId != null) Composer(remote, id, composer, rootId = rootId, settingsUp = true)
         }
 
         when (sheet) {

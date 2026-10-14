@@ -21,6 +21,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import dev.relay.android.ui.ListRow
+import dev.relay.android.ui.Sheet as SheetView
+import dev.relay.android.ui.Switch
+import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
+import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
+import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
+import kotlin.math.roundToInt
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -124,6 +131,10 @@ class ComposerHandle {
     internal var onCompose: (String, String?) -> Unit = { _, _ -> }
     internal var onFocus: () -> Unit = {}
     internal var onSettingsOn: (String) -> ResumeSettings? = { null }
+    internal var onOpenSettings: () -> Unit = {}
+    /** What the composer sends with, in a line, for a header to show when the controls aren't in the composer. */
+    var line: ComposerLine? by mutableStateOf(null)
+        internal set
     fun quote(markdown: String) = onQuote(markdown)
     /**
      * Puts a taken-back message after what's there, its images too; returns
@@ -137,9 +148,14 @@ class ComposerHandle {
     fun focus() = onFocus()
     /** The settings on agent `to`, with the model this composer kept for it. */
     fun settingsOn(to: String) = onSettingsOn(to)
+    /** Model, permissions, plan and usage in one sheet. */
+    fun openSettings() = onOpenSettings()
 }
 
-private enum class Sheet { Model, Mode, Attach, Later, Usage }
+/** The model with its effort, the permissions, plan mode, and how full the context is. */
+data class ComposerLine(val model: String, val mode: String, val plan: Boolean, val contextPercent: Int?)
+
+private enum class Sheet { Model, Mode, Attach, Later, Usage, Settings }
 
 private data class Pick(val model: String, val fast: Boolean, val effort: String, val contextWindow: String?)
 
@@ -174,6 +190,12 @@ internal fun ComposerCore(
     /** A new thread's models, per agent, for switching to one not picked here yet. */
     remembered: NewThreadModels = emptyMap(),
     autoFocus: Boolean = false,
+    /**
+     * The model, permissions, plan and usage live up in the screen's header
+     * (through [handle]) instead of around the message box, where they took
+     * stray taps aimed at the keyboard and the send button.
+     */
+    settingsUp: Boolean = false,
     /** Over the message box, inside the dock. */
     above: @Composable ColumnScope.() -> Unit = {},
 ) {
@@ -336,6 +358,14 @@ internal fun ComposerCore(
             onCompose = { page, earlier -> setText(composeInto(value.text, page, earlier)) }
             onFocus = { runCatching { focus.requestFocus() } }
             onSettingsOn = { to -> switched(settings, to) }
+            onOpenSettings = { sheet = Sheet.Settings }
+            line = ComposerLine(
+                modelLabel + (if (settings.choice.reasoningEffort.isNotEmpty()) " · ${effortLabel(settings.choice.reasoningEffort)}" else "") +
+                    (if (agentInfo(provider)?.fast == true && settings.choice.fast) " · Fast" else ""),
+                modeLabel(settings.runtimeMode),
+                settings.interactionMode == "plan",
+                context?.maxTokens?.takeIf { it > 0 }?.let { minOf(100, (context.usedTokens * 100.0 / it).roundToInt()) },
+            )
         }
     }
     if (autoFocus) LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -523,7 +553,7 @@ internal fun ComposerCore(
                 Tool("Attach a photo", enabled = images.size < MAX_IMAGES, onClick = { sheet = Sheet.Attach }) {
                     Icon(TablerIcons.Outline.PhotoPlus, null, size = 17.dp, tint = c.mutedForeground)
                 }
-                Tool("Agent and model", Modifier.weight(2f, fill = false), onClick = { sheet = Sheet.Model }) {
+                if (!settingsUp) Tool("Agent and model", Modifier.weight(2f, fill = false), onClick = { sheet = Sheet.Model }) {
                     Text(
                         modelLabel +
                             (if (settings.choice.reasoningEffort.isNotEmpty()) " · ${effortLabel(settings.choice.reasoningEffort)}" else "") +
@@ -534,7 +564,7 @@ internal fun ComposerCore(
                     Icon(TablerIcons.Outline.ChevronDown, null, size = 12.dp, tint = c.faint)
                 }
                 // Room for the waveform on a narrow phone.
-                if (!dictating && !shrinking) {
+                if (!dictating && !shrinking && !settingsUp) {
                     if (!steering) Tool("Permissions", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Mode }) {
                         Text(modeLabel(settings.runtimeMode), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -586,7 +616,7 @@ internal fun ComposerCore(
                 }
             }
         }
-        UsageBar(provider, usage.usage, context, cost, onClick = { sheet = Sheet.Usage })
+        if (!settingsUp) UsageBar(provider, usage.usage, context, cost, onClick = { sheet = Sheet.Usage })
     }
 
     when (sheet) {
@@ -624,6 +654,24 @@ internal fun ComposerCore(
                 }
             },
         )
+        Sheet.Settings -> SheetView({ sheet = null }, title = "Thread settings") {
+            Column {
+                ListRow(
+                    "Model", subtitle = handle?.line?.model ?: modelLabel, leadingIcon = TablerIcons.Outline.Sparkles, chevron = true,
+                    onClick = { sheet = Sheet.Model },
+                )
+                ListRow(
+                    "Permissions", subtitle = modeLabel(settings.runtimeMode), leadingIcon = TablerIcons.Outline.ShieldCheck, chevron = true,
+                    onClick = { sheet = Sheet.Mode },
+                )
+                ListRow(
+                    "Plan mode", subtitle = "Plans before it changes anything", leadingIcon = TablerIcons.Outline.ListCheck,
+                    trailing = { Switch(plan, { onSettings(settings.copy(interactionMode = if (it) "plan" else "default")) }) },
+                    onClick = { onSettings(settings.copy(interactionMode = if (plan) "default" else "plan")) },
+                )
+            }
+            UsageBar(provider, usage.usage, context, cost, onClick = { sheet = Sheet.Usage })
+        }
         null -> {}
     }
 }

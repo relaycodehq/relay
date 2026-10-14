@@ -49,6 +49,7 @@ fun TopBar(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
+    onTitleClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
@@ -60,7 +61,11 @@ fun TopBar(
         toggle?.invoke()
         if (onBack != null) IconButton(TablerIcons.Outline.ChevronLeft, "Back", onBack)
         if (leading != null) leading()
-        Column(Modifier.weight(1f).padding(start = if (onBack == null && leading == null && toggle == null) 8.dp else 4.dp)) {
+        Column(
+            Modifier.weight(1f)
+                .then(if (onTitleClick != null) Modifier.pressable(onClick = onTitleClick, scale = false) else Modifier)
+                .padding(start = if (onBack == null && leading == null && toggle == null) 8.dp else 4.dp),
+        ) {
             Text(title, style = RelayTheme.type.base.copy(fontWeight = RelayTheme.type.label.fontWeight), maxLines = 1)
             if (subtitle != null) Text(subtitle, style = RelayTheme.type.xs, color = RelayTheme.colors.mutedForeground, maxLines = 1)
         }
@@ -78,6 +83,7 @@ fun Screen(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    onTitleClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     topBar: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
@@ -88,7 +94,7 @@ fun Screen(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(sides)),
     ) {
         if (topBar) {
-            TopBar(title, subtitle = subtitle, onBack = onBack, actions = actions)
+            TopBar(title, subtitle = subtitle, onBack = onBack, onTitleClick = onTitleClick, actions = actions)
             LocalScreenNotice.current?.invoke()
         }
         Box(Modifier.weight(1f).fillMaxWidth()) { Column(Modifier.fillMaxSize(), content = content) }

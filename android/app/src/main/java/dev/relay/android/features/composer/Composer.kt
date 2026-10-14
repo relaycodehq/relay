@@ -48,6 +48,8 @@ fun Composer(
     state: ComposerState,
     modifier: Modifier = Modifier,
     rootId: String? = null,
+    /** Model, permissions, plan and usage in the screen's header ([ComposerState.line]) instead of the composer. */
+    settingsUp: Boolean = false,
 ) {
     val appContext = LocalContext.current
     val outbox = remember { Sends.outbox(appContext.filesDir) }
@@ -117,6 +119,7 @@ fun Composer(
         context = latestContext(listed),
         cost = chat?.cost ?: threadCost(all),
         draftKey = draftKey,
+        settingsUp = settingsUp,
         onStop = {
             scope.launch {
                 runCatching { client?.cancelChat(chatId) ?: error("Not connected") }
@@ -199,7 +202,10 @@ private fun sideConversation(messages: List<ChatMessage>, rootId: String): List<
  * [chat], so the composer doesn't fetch it a second time.
  */
 class ComposerState(val screenFollows: Boolean = false) {
-    internal var handle: ComposerHandle? = null
+    internal var handle: ComposerHandle? by mutableStateOf(null)
+    /** What it sends with, once it's up; for a header that holds the settings. */
+    val line: ComposerLine? get() = handle?.line
+    fun openSettings() { handle?.openSettings() }
     fun quote(markdown: String) { handle?.quote(markdown) }
     /** Puts [back] after the draft and returns its undo; throws when it won't fit or the composer isn't up. */
     fun restore(back: Returned): () -> Unit =
