@@ -1155,7 +1155,15 @@
   color: var(--danger);
 }
 
-/* Snoozed / settled shelves. */
+/* Snoozed / settled shelves, on the sidebar's floor while the cards leave
+   room and right after them once they don't. */
+.sb-activity {
+  display: flex;
+  flex-direction: column;
+}
+.sb-shelves {
+  margin-top: auto;
+}
 .sb-shelf {
   margin-top: 14px;
 }

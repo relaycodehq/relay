@@ -1,5 +1,5 @@
 // The sidebar's Activity view: drafts and open threads as cards, Snoozed
-// and Settled folded away below.
+// and Settled folded away at the bottom.
 import { Fragment } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
@@ -185,20 +185,22 @@ export function ActivityView({
           <p>Threads come back here when an agent replies or needs you.</p>
         </div>
       )}
-      <Shelf
-        kind="snoozed"
-        label="Snoozed"
-        items={sections.snoozed}
-        rows={rows}
-        shelves={shelves}
-      />
-      <Shelf
-        kind="settled"
-        label="Settled"
-        items={sections.settled.filter((c) => !families.headers.has(c.id))}
-        rows={rows}
-        shelves={shelves}
-      />
+      <div className="sb-shelves">
+        <Shelf
+          kind="snoozed"
+          label="Snoozed"
+          items={sections.snoozed}
+          rows={rows}
+          shelves={shelves}
+        />
+        <Shelf
+          kind="settled"
+          label="Settled"
+          items={sections.settled.filter((c) => !families.headers.has(c.id))}
+          rows={rows}
+          shelves={shelves}
+        />
+      </div>
     </>
   );
 }
