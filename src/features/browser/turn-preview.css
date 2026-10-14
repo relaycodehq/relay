@@ -7,6 +7,10 @@
   --turn-preview-border: color-mix(in srgb, var(--text) 14%, transparent);
   max-width: 720px;
 }
+/* The same gap as between two messages (two .project-message paddings). */
+.html-render.turn-preview {
+  margin-top: 44px;
+}
 .turn-preview-bar {
   display: flex;
   align-items: center;
