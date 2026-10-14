@@ -141,13 +141,14 @@ internal fun CodeBlock(language: String, code: String, modifier: Modifier = Modi
                 haptic = Haptic.Selection,
             )
         }
-        SelectionContainer {
+        val lines = @Composable {
             Box(Modifier.horizontalScroll(rememberScrollState()).padding(start = if (numbered) 0.dp else 12.dp, end = 12.dp, bottom = 10.dp)) {
                 Column {
                     shown.forEachIndexed { i, line -> CodeLine(i, line, if (numbered) gutter else null, c) }
                 }
             }
         }
+        if (LocalInSelection.current) lines() else SelectionContainer { lines() }
         if (folded) {
             Box(
                 Modifier

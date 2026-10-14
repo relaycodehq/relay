@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
@@ -91,8 +93,11 @@ fun Markdown(
             for (block in blocks) Block(block, context)
         }
     }
-    if (selectable) SelectionContainer { content() } else content()
+    if (selectable) SelectionContainer { CompositionLocalProvider(LocalInSelection provides true, content) } else content()
 }
+
+/** Inside a selectable answer: a code block mustn't open a selection of its own within it. */
+internal val LocalInSelection = staticCompositionLocalOf { false }
 
 @Composable
 internal fun bodyStyle(small: Boolean): TextStyle =
