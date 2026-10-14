@@ -293,7 +293,11 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     }
                 }
                 items(shown, key = { it.id }) { m ->
-                    MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                    // One child, so the reversed list keeps the line under its message.
+                    Column {
+                        MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                        if (rootId == null) WorkspaceMoveLine(t?.workspaceMoves, m.id)
+                    }
                 }
                 if (t != null && t.earlier > 0 && rootId == null) item("earlier") { Earlier(t.earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
             }
