@@ -178,36 +178,37 @@ fun ActivityList(
         }
     }
 
-    LazyColumn(modifier, contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottom)) {
-        item("heading") {
-            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Activity", Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground)
-                Text(if (families.top.isNotEmpty()) "${families.top.size} open" else "All settled", style = RelayTheme.type.xs, color = c.mutedForeground)
+    @Composable
+    fun family(chat: RemoteChatSummary) {
+        val started = families.started[chat.id].orEmpty()
+        if (chat.id in families.headers) {
+            Column {
+                ShelfRow(
+                    chat, name(chat), "Settled", chat.id == selected, UnsettleIcon, "Move back to activity",
+                    onClick = { onOpen(chat) }, onAction = { triage(chat, TriageAction.Unsettle) },
+                )
+                startedUnder(started)
             }
+            return
         }
+        // A family's fold as the user left it; until then open while any of it needs a look.
+        val open = started.isNotEmpty() && (folds[chat.id] ?: !familySettled(started, unread))
+        Column {
+            card(chat, 12.dp, family = if (started.isNotEmpty()) CardFamily(started, open) { onFold(chat.id, !open) } else null)
+            if (open) startedUnder(started)
+        }
+    }
+
+    LazyColumn(modifier, contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottom)) {
         items(fresh, key = { it.key }) { draft ->
             val projectId = newDraftProject(draft.key)!!
             val project = byId.getValue(projectId)
             NewDraftCard(draft, project) { onOpenDraft(draft, projectId) }
         }
-        items(families.top, key = { it.id }) { chat ->
-            val started = families.started[chat.id].orEmpty()
-            if (chat.id in families.headers) {
-                Column {
-                    ShelfRow(
-                        chat, name(chat), "Settled", chat.id == selected, UnsettleIcon, "Move back to activity",
-                        onClick = { onOpen(chat) }, onAction = { triage(chat, TriageAction.Unsettle) },
-                    )
-                    startedUnder(started)
-                }
-                return@items
-            }
-            // A family's fold as the user left it; until then open while any of it needs a look.
-            val open = started.isNotEmpty() && (folds[chat.id] ?: !familySettled(started, unread))
-            Column {
-                card(chat, 12.dp, family = if (started.isNotEmpty()) CardFamily(started, open) { onFold(chat.id, !open) } else null)
-                if (open) startedUnder(started)
-            }
+        for ((label, group) in groupByState(families.top, families.started)) {
+            if (group.isEmpty()) continue
+            item("section-$label") { SectionLabel(label, group.size) }
+            items(group, key = { it.id }) { chat -> family(chat) }
         }
         if (sections.active.isEmpty() && fresh.isEmpty()) item("empty") { InboxZero() }
         shelf("snoozed", "Snoozed", sections.snoozed)
@@ -222,6 +223,38 @@ fun ActivityList(
             onCopy = { branch -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Branch", branch))) } },
         ) { acting = null }
     }
+}
+
+@Composable
+private fun SectionLabel(label: String, count: Int) {
+    val c = RelayTheme.colors
+    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground)
+        Text("$count", style = RelayTheme.type.xs, color = c.faint)
+    }
+}
+
+/**
+ * Open threads split as you'd triage them: the ones waiting on you, the ones
+ * still working, then the rest. A lead counts as needing you when a thread it
+ * started does.
+ */
+internal fun groupByState(
+    top: List<RemoteChatSummary>,
+    started: Map<String, List<RemoteChatSummary>>,
+): List<Pair<String, List<RemoteChatSummary>>> {
+    val needs = mutableListOf<RemoteChatSummary>()
+    val running = mutableListOf<RemoteChatSummary>()
+    val rest = mutableListOf<RemoteChatSummary>()
+    for (chat in top) {
+        val family = listOf(chat) + started[chat.id].orEmpty()
+        when {
+            family.any { inputBlocksThread(it) || it.waiting == true } -> needs += chat
+            family.any { it.running == true || agentsSince(it.pending) != null } -> running += chat
+            else -> rest += chat
+        }
+    }
+    return listOf("Needs you" to needs, "Running" to running, "Recent" to rest)
 }
 
 @Composable

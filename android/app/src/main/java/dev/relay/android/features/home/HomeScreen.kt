@@ -1,19 +1,19 @@
 package dev.relay.android.features.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -27,8 +27,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,20 +41,21 @@ import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.credentials.ComputerSeen
 import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.ui.Button
+import dev.relay.android.ui.Divider
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.LocalToasts
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.SearchField
-import dev.relay.android.ui.SegmentedTabs
 import dev.relay.android.ui.Spinner
-import dev.relay.android.ui.TabOption
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.Tone
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.rememberInFront
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Inbox
+import io.github.lyxnx.compose.ui.tablericons.outline.LayoutGrid
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Settings2
 import kotlinx.coroutines.CancellationException
@@ -60,8 +63,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Room under the lists for the New thread button. */
-private val LIST_BOTTOM = 110.dp
+private val LIST_BOTTOM = 16.dp
 
 private enum class Tab { Activity, Projects }
 
@@ -96,7 +98,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ComputerSwitch(remote, computerSeen, Modifier.weight(1f), computerRows)
-                IconButton(TablerIcons.Outline.Settings2, "Settings", { open(Route.Settings) })
+                IconButton(TablerIcons.Outline.Plus, "New thread", { open(Route.NewThread()) })
             }
             ConnectionLine(remote)
             banners()
@@ -202,12 +204,6 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                     }
                 }
             } else {
-                SegmentedTabs(
-                    listOf(TabOption(Tab.Activity, "Activity"), TabOption(Tab.Projects, "Projects")),
-                    tab,
-                    { tab = it },
-                    Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 4.dp),
-                )
                 PullToRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
                     when (tab) {
                         Tab.Activity -> ActivityList(
@@ -235,25 +231,35 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                 }
             }
         }
-        // Where the thumb is, not up in the header.
-        NewThreadButton(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 20.dp)) { open(Route.NewThread()) }
+    }
+    TabBar(tab, { tab = it }, onSettings = { open(Route.Settings) })
+}
+
+/** Threads and Projects switch in place; Settings opens over them. */
+@Composable
+private fun TabBar(tab: Tab, onTab: (Tab) -> Unit, onSettings: () -> Unit) {
+    val c = RelayTheme.colors
+    Column(Modifier.fillMaxWidth()) {
+        Divider()
+        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TabItem(TablerIcons.Outline.Inbox, "Threads", tab == Tab.Activity) { onTab(Tab.Activity) }
+            TabItem(TablerIcons.Outline.LayoutGrid, "Projects", tab == Tab.Projects) { onTab(Tab.Projects) }
+            TabItem(TablerIcons.Outline.Settings2, "Settings", false, onSettings)
+        }
     }
 }
 
 @Composable
-private fun NewThreadButton(modifier: Modifier, onClick: () -> Unit) {
+private fun RowScope.TabItem(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
     val c = RelayTheme.colors
-    val shape = RoundedCornerShape(16.dp)
-    Box(modifier) {
-        Row(
-            Modifier.shadow(3.dp, shape).background(c.accent, shape)
-                .pressable(onClick = onClick, role = Role.Button)
-                .height(48.dp).padding(horizontal = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(TablerIcons.Outline.Plus, null, tint = c.onAccent, size = 18.dp)
-            Text("New thread", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold), color = c.onAccent)
-        }
+    val tint = if (on) c.foreground else c.mutedForeground
+    Column(
+        Modifier.weight(1f).fillMaxHeight().pressable(onClick = onClick, role = Role.Tab, scale = false)
+            .semantics { selected = on },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+    ) {
+        Icon(icon, null, tint = tint, size = 20.dp)
+        Text(label, style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = tint)
     }
 }

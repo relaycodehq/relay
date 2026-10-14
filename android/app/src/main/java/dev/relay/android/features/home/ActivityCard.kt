@@ -23,7 +23,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ProviderIcon
@@ -35,6 +37,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.CalendarClock
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.Pencil
 import io.github.lyxnx.compose.ui.tablericons.outline.Rotate
 
 /** The threads a lead's agent started, listed under it unless folded. */
@@ -52,7 +55,7 @@ private fun cardLook(selected: Boolean, draft: Boolean, bright: Boolean, press: 
         else -> c.background
     }
     // Only the open thread, unread news and questions stay bright.
-    return fill to if (bright || pressed) 1f else 0.45f
+    return fill to if (bright || pressed) 1f else 0.6f
 }
 
 /** One open thread in Activity (mobile/src/ui/ActivityList.tsx's Card). */
@@ -92,15 +95,15 @@ fun ActivityCard(
         }
         return
     }
-    Column(base.padding(horizontal = 12.dp, vertical = 10.dp).alpha(alpha), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.heightIn(min = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ProjectCardBadge(projectId, projectName)
-            Text(projectName, Modifier.weight(1f), color = c.mutedForeground, maxLines = 1)
-            CardState(shown, unread, now)
-        }
-        Text(chat.title, style = RelayTheme.type.base.copy(fontWeight = FontWeight.Medium), maxLines = 1)
-        if (family != null || draft != null || chat.branch != null || chat.provider != null || chat.scope == "pr") {
-            Row(Modifier.heightIn(min = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        base.heightIn(min = 56.dp).padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 9.dp).alpha(alpha),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { StateGlyph(shown, unread, draft != null) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(chat.title, style = RelayTheme.type.base.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.heightIn(min = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 when {
                     draft != null && family == null -> DraftLine(draft, Modifier.weight(1f))
                     family != null -> Row(
@@ -108,6 +111,7 @@ fun ActivityCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Text("$projectName · ", style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
                         Icon(
                             if (family.open) TablerIcons.Outline.ChevronDown else TablerIcons.Outline.ChevronRight,
                             if (family.open) "Fold the threads it started" else "Show the threads it started",
@@ -117,17 +121,44 @@ fun ActivityCard(
                         Text(familyLine(family.started), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
                     }
                     else -> Text(
-                        (if (chat.scope == "pr") "Pull request · " else "") + (chat.branch ?: ""),
+                        listOfNotNull(projectName, stateLine(shown, now), if (chat.scope == "pr") "Pull request" else chat.branch).joinToString(" · "),
                         Modifier.weight(1f),
                         style = RelayTheme.type.xs,
-                        color = mix(c.mutedForeground, c.background, 0.7f),
+                        color = c.mutedForeground,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (chat.provider != null) ProviderIcon(chat.provider, c.mutedForeground, Modifier.alpha(0.75f), size = 13.dp)
             }
         }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            CardState(shown, unread, now)
+            if (chat.provider != null) ProviderIcon(chat.provider, c.faint, size = 12.dp)
+        }
     }
+}
+
+/** The row's leading mark: working, needs you, unread, or nothing new. */
+@Composable
+private fun StateGlyph(chat: RemoteChatSummary, unread: Boolean, draft: Boolean) {
+    val c = RelayTheme.colors
+    when {
+        inputBlocksThread(chat) -> Dot(c.waiting, 8.dp)
+        chat.running == true || agentsSince(chat.pending) != null -> Spinner(size = 13.dp, color = c.foreground)
+        draft -> Icon(TablerIcons.Outline.Pencil, null, tint = c.waiting, size = 14.dp)
+        unread -> Dot(c.accent, 8.dp)
+        else -> Dot(c.faint, 6.dp)
+    }
+}
+
+/** What's going on, for the line under the title; the time column says how long. */
+private fun stateLine(chat: RemoteChatSummary, now: Long): String? = when {
+    inputBlocksThread(chat) -> "needs input"
+    chat.running == true -> if (chat.goal?.status == "active") "working on its goal" else "working"
+    chat.snoozedUntil != null && chat.snoozedUntil <= now -> "woke up"
+    !chat.pending.isNullOrEmpty() -> "waiting on agents"
+    chat.nextSend != null -> "sends ${wakeLabel(chat.nextSend, now)}"
+    else -> null
 }
 
 /** A compact faded row: a shelf's thread, or a settled lead whose started threads still show. */
@@ -161,38 +192,16 @@ fun ShelfRow(
     }
 }
 
-/** The top row's right side: what it's doing now, else how old it is. */
+/** The time column: how long it's been working, else how old it is. */
 @Composable
 private fun CardState(chat: RemoteChatSummary, unread: Boolean, now: Long) {
     val c = RelayTheme.colors
-    val style = RelayTheme.type.sm.copy(fontFeatureSettings = "tnum")
+    val style = RelayTheme.type.xs.copy(fontFeatureSettings = "tnum")
     val since = if (chat.running == true) chat.runningSince else agentsSince(chat.pending)
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        when {
-            inputBlocksThread(chat) -> {
-                Dot(c.waiting)
-                Text("Needs input", style = style, color = c.waiting)
-            }
-            chat.running == true || since != null -> {
-                Spinner(size = 12.dp, color = c.accent)
-                val what = (if (chat.running == true && chat.goal?.status == "active") "Goal" else "Working") +
-                    (if (chat.waiting == true) " · needs input" else "")
-                if (since != null) Elapsed(what, since, style, c.accent) else Text(what, style = style, color = c.accent)
-            }
-            chat.snoozedUntil != null && chat.snoozedUntil <= now -> Text("Woke up", style = style, color = c.accent)
-            !chat.pending.isNullOrEmpty() -> {
-                Box(Modifier.size(6.dp).border(1.5.dp, c.accent, CircleShape))
-                Text("Waiting", style = style, color = if (unread) c.accent else c.mutedForeground)
-            }
-            chat.nextSend != null && !unread -> {
-                Icon(TablerIcons.Outline.CalendarClock, null, tint = c.mutedForeground, size = 12.dp)
-                Text("Sends ${wakeLabel(chat.nextSend, now)}", style = style, color = c.mutedForeground)
-            }
-            else -> {
-                if (unread) Dot(c.accent)
-                Text(shortAge(chat.updated, now), style = style, color = if (unread) c.accent else c.mutedForeground)
-            }
-        }
+    when {
+        since != null -> Elapsed("", since, style, c.mutedForeground)
+        chat.nextSend != null && !unread -> Icon(TablerIcons.Outline.CalendarClock, "Sends later", tint = c.mutedForeground, size = 12.dp)
+        else -> Text(shortAge(chat.updated, now), style = style, color = if (unread) c.foreground else c.faint)
     }
 }
 
@@ -200,11 +209,11 @@ private fun CardState(chat: RemoteChatSummary, unread: Boolean, now: Long) {
 @Composable
 private fun Elapsed(what: String, since: Long, style: androidx.compose.ui.text.TextStyle, color: Color) {
     val now = rememberNow(1_000)
-    Text("$what ${elapsedLabel(since, now)}", style = style, color = color, maxLines = 1)
+    Text(if (what.isEmpty()) elapsedLabel(since, now) else "$what ${elapsedLabel(since, now)}", style = style, color = color, maxLines = 1)
 }
 
 @Composable
-private fun Dot(color: Color) = Box(Modifier.size(6.dp).background(color, CircleShape))
+private fun Dot(color: Color, size: androidx.compose.ui.unit.Dp = 6.dp) = Box(Modifier.size(size).background(color, CircleShape))
 
 /** The unsettle button's glyph, Lucide's RotateCcw. */
 val UnsettleIcon get() = TablerIcons.Outline.Rotate
