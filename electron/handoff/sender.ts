@@ -534,6 +534,10 @@ export class Handoffs {
     return info;
   }
   async handOff(chatId: string, computerId: string) {
+    // A thread that just came back is here already while its job still tells
+    // the other computer so.
+    if (this.jobs.has(chatId) && !this.summary(chatId).sentTo)
+      await this.jobs.get(chatId);
     if (this.jobs.has(chatId))
       throw new Error("This thread is already on its way.");
     const chat = this.summary(chatId);
