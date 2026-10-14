@@ -70,8 +70,9 @@ class ThreadActions(
         false
     }
 
-    fun resume(settings: ResumeSettings?) = act("Couldn't resume") {
-        // TODO(composer): confirmAgentSwitch once the composer's model choice can differ from the thread's.
+    /** On the composer's settings, after [confirm] asks before another agent takes over. */
+    fun resume(settings: ResumeSettings?, confirm: suspend (String) -> Boolean) = act("Couldn't resume") {
+        if (settings != null && !confirm(settings.provider)) return@act
         remote.desktop("resumeProjectChat", id, settings?.let { RemoteJson.encodeToJsonElement(it) })
     }
 

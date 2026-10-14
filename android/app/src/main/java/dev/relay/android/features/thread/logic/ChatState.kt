@@ -73,3 +73,29 @@ fun replyCounts(messages: List<ChatMessage>): Map<String, Int> {
     for (root in replyRoots(messages).values) counts[root] = (counts[root] ?: 0) + 1
     return counts
 }
+
+/** Thread order: by the desktop's sequence where both have one, else by time. */
+fun threadOrder(a: ChatMessage, b: ChatMessage): Long = when {
+    a.seq != null && a.seq != 0L && b.seq != null && b.seq != 0L -> a.seq - b.seq
+    a.seq != null && a.seq != 0L -> -1
+    b.seq != null && b.seq != 0L -> 1
+    else -> a.created - b.created
+}
+
+/**
+ * shared/open-plan.ts: the agent whose proposed plan still waits for a
+ * go-ahead in the open conversation. [view] is what that conversation shows,
+ * [messages] the whole thread. Nothing may have followed the plan in its own
+ * conversation or in the replies under it.
+ */
+fun openPlan(messages: List<ChatMessage>, view: List<ChatMessage>): String? {
+    val plan = view.lastOrNull() ?: return null
+    if (plan.status != "complete" || plan.proposedPlan != true) return null
+    val roots = replyRoots(messages)
+    fun line(m: ChatMessage) = roots[m.id]
+    val planLine = line(plan)
+    val followed = messages.any { m ->
+        m.id != plan.id && threadOrder(m, plan) > 0 && (line(m) == planLine || line(m) == plan.id)
+    }
+    return if (followed) null else plan.provider
+}

@@ -47,6 +47,7 @@ import dev.relay.android.remote.model.ChatPending
 import dev.relay.android.remote.model.LimitResume
 import dev.relay.android.remote.model.RemoteQueued
 import dev.relay.android.remote.model.ThreadGoal
+import dev.relay.android.remote.outbox.Outgoing
 import dev.relay.android.ui.ConfirmDialog
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
@@ -196,6 +197,45 @@ fun StoppedStrip(items: List<ChatPending>, onResolve: suspend (String) -> Unit) 
             Action("Dismiss", failed = "Couldn't dismiss it", unsure = "Dismiss may still go through") { onResolve("dismiss") }
             Action("Pick it back up", primary = true, failed = "Couldn't pick it back up", unsure = "It may still pick back up") {
                 onResolve("resume")
+            }
+        }
+    }
+}
+
+/** What the desktop answers a send whose thread's worktree is gone (agentWorktreeUnavailableError). */
+const val AGENT_WORKTREE_UNAVAILABLE = "The selected worktree is unavailable. Choose another workspace."
+
+/**
+ * Messages the desktop didn't take: send again, or back into the composer.
+ * One refused because the thread's worktree is gone would only fail again,
+ * so it offers the project folder instead, the way out the desktop's
+ * workspace menu gives. [onUseProjectFolder] is null when the computer can't
+ * switch workspace for a phone.
+ */
+@Composable
+fun UnsentStrip(
+    unsent: List<Outgoing>,
+    /** Offline, Edit waits for the computer before it can tell whether one arrived. */
+    online: Boolean,
+    onRetry: (Outgoing) -> Unit,
+    onEdit: suspend (Outgoing) -> Unit,
+    onUseProjectFolder: (suspend (Outgoing) -> Unit)?,
+) {
+    if (unsent.isEmpty()) return
+    Strip {
+        unsent.forEach { o ->
+            androidx.compose.runtime.key(o.send.id) {
+                Item {
+                    Line(withoutMention(o.send.body), "", maxLines = 1)
+                    Action(
+                        "Edit",
+                        busyLabel = if (o.unsure == true && !online) "Connecting…" else null,
+                        failed = "Couldn't take it back yet",
+                    ) { onEdit(o) }
+                    if (onUseProjectFolder != null && o.error == AGENT_WORKTREE_UNAVAILABLE)
+                        Action("Use project folder", primary = true, failed = "Couldn't switch to the project folder") { onUseProjectFolder(o) }
+                    else Action("Try again", primary = true) { onRetry(o) }
+                }
             }
         }
     }

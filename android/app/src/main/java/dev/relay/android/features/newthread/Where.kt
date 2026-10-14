@@ -51,18 +51,6 @@ fun chatSettled(chat: RemoteChatSummary): Boolean {
     return chat.running != true && settled >= chat.updated
 }
 
-data class Made(val id: String, val projectId: String, val title: String)
-
-/**
- * Threads made on this phone, for their screen to open on a title and a
- * composer: the computer lists a thread only once its first message is in.
- */
-object MadeHere {
-    private val made = ConcurrentHashMap<String, Made>()
-    fun add(chat: Made) { made[chat.id] = chat }
-    fun of(id: String): Made? = made[id]
-}
-
 /** What the last new thread opened on, per computer, until the computer answers again. */
 internal object LastNewThread {
     private val saved = ConcurrentHashMap<String, Pair<ResumeSettings, NewThreadModels>>()

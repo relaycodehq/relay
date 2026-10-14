@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +64,13 @@ import dev.relay.android.features.composer.logic.switchAgent
 import dev.relay.android.features.composer.logic.wakeLabel
 import dev.relay.android.features.composer.logic.withComposerChange
 import dev.relay.android.features.composer.logic.withRememberedModel
+import dev.relay.android.features.dictation.DICTATION_SHRINK_MS
+import dev.relay.android.features.dictation.Dictation
+import dev.relay.android.features.dictation.DictationButton
+import dev.relay.android.features.dictation.DictationInput
+import dev.relay.android.features.dictation.DictationState
+import dev.relay.android.features.dictation.canDictate
+import dev.relay.android.features.renders.composeInto
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.drafts.Sends
@@ -85,7 +93,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.PhotoPlus
 import io.github.lyxnx.compose.ui.tablericons.outline.PlaylistAdd
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -109,12 +120,20 @@ sealed interface RunResult {
 /** What a screen can do to its composer: quote into it, put a send back, focus it, ask its pick on another agent. */
 class ComposerHandle {
     internal var onQuote: (String) -> Unit = {}
-    internal var onRestore: (String) -> Unit = {}
+    internal var onRestore: ((Returned) -> (() -> Unit))? = null
+    internal var onCompose: (String, String?) -> Unit = { _, _ -> }
     internal var onFocus: () -> Unit = {}
     internal var onSettingsOn: (String) -> ResumeSettings? = { null }
     fun quote(markdown: String) = onQuote(markdown)
-    /** Puts a taken-back message's text after what's there. */
-    fun restore(body: String) = onRestore(body)
+    /**
+     * Puts a taken-back message after what's there, its images too; returns
+     * how to undo that. Throws when the two won't fit in one message or the
+     * composer isn't up yet.
+     */
+    fun restore(back: Returned): () -> Unit =
+        (onRestore ?: throw IllegalStateException("The composer isn't ready yet."))(back)
+    /** A page's text, in place of what it put in before ([earlier]), else after the draft. */
+    fun compose(text: String, earlier: String?) = onCompose(text, earlier)
     fun focus() = onFocus()
     /** The settings on agent `to`, with the model this composer kept for it. */
     fun settingsOn(to: String) = onSettingsOn(to)
@@ -187,6 +206,42 @@ internal fun ComposerCore(
     var dismissed by remember { mutableStateOf<String?>(null) }
     val provider = settings.provider
 
+    val dictation = remember(remote) { Dictation.of(remote, appContext) }
+    val dictationOwner = remember { Any() }
+    val dictationNow by dictation.state.collectAsState()
+    val dictating = dictationNow.owner === dictationOwner && dictationNow.phase != DictationState.Phase.Idle
+    val dictationError = if (dictationNow.owner === dictationOwner) dictationNow.error else null
+    val input = remember { DictationInput({ value }, { value = it }, { typing }) }
+    // The waveform shrinks back before Permissions and Plan return, so the row doesn't jump.
+    var shrinking by remember { mutableStateOf(false) }
+    val wasDictating = remember { booleanArrayOf(false) }
+    LaunchedEffect(dictating) {
+        val ended = wasDictating[0] && !dictating
+        wasDictating[0] = dictating
+        if (ended) {
+            shrinking = true
+            delay(DICTATION_SHRINK_MS.toLong())
+            shrinking = false
+        }
+    }
+    // Leaving the thread, or its draft, takes unfinished words back out.
+    DisposableEffect(draftKey) {
+        onDispose {
+            val now = dictation.state.value
+            if (now.owner === dictationOwner && now.phase != DictationState.Phase.Idle) dictation.cancel()
+        }
+    }
+    /** Lets this composer's dictation finish; false when it can't yet (still starting). */
+    suspend fun finishDictation(): Boolean {
+        val now = dictation.state.value
+        if (now.owner !== dictationOwner || now.phase == DictationState.Phase.Idle) return true
+        val listening = now.phase == DictationState.Phase.Listening
+        dictation.stop()
+        if (!listening) return false
+        dictation.state.first { it.phase == DictationState.Phase.Idle }
+        return true
+    }
+
     // The draft: saved text first, anything put in before it arrived after; then it follows the computer.
     var loaded by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(computer, draftKey) {
@@ -253,15 +308,27 @@ internal fun ComposerCore(
     SideEffect {
         handle?.apply {
             onQuote = { md ->
-                val next = appendQuote(value.text, md)
-                value = TextFieldValue(next.text, TextRange(next.end))
-                runCatching { focus.requestFocus() }
+                scope.launch {
+                    // Keep the words already spoken; a dictation update mustn't overwrite the quote.
+                    if (!finishDictation()) return@launch
+                    val next = appendQuote(value.text, md)
+                    value = TextFieldValue(next.text, TextRange(next.end))
+                    runCatching { focus.requestFocus() }
+                }
             }
-            onRestore = { body ->
+            onRestore = { back ->
+                val before = value
+                val beforeImages = images
+                val merged = returnedDraft(before.text, beforeImages, back)
                 error = null
-                val typed = value.text.trim()
-                setText(if (typed.isEmpty()) body else "$typed\n\n$body")
+                setText(merged.first)
+                images = merged.second
+                ({
+                    value = before
+                    images = beforeImages
+                })
             }
+            onCompose = { page, earlier -> setText(composeInto(value.text, page, earlier)) }
             onFocus = { runCatching { focus.requestFocus() } }
             onSettingsOn = { to -> switched(settings, to) }
         }
@@ -323,12 +390,17 @@ internal fun ComposerCore(
     val target = "${computer.orEmpty()}:${sendTarget ?: draftKey ?: projectId}"
     val retryingScheduled = failedSend?.let { it.sendAt != null && sameDraft(it.draft, ComposeDraft(target, text.trim(), settings, images)) } == true
 
-    fun send(delivery: String? = null, sendAt: Long? = null) {
-        // TODO(merge): dictation — when this composer's dictation is still running, stop it and send
-        //   what it left (DictationInput.active / .dictated) instead of `text`.
-        if ((text.isBlank() && images.isEmpty() && computerShots.isEmpty()) || busy) return
+    /** `written` is the draft when it hasn't reached `text` yet. */
+    fun send(delivery: String? = null, sendAt: Long? = null, written: String = text) {
+        // Sending mid-dictation waits for the last words to land in the draft.
+        val now = dictation.state.value
+        if (now.owner === dictationOwner && now.phase != DictationState.Phase.Idle) {
+            scope.launch { if (finishDictation()) send(delivery, sendAt, input.dictated) }
+            return
+        }
+        if ((written.isBlank() && images.isEmpty() && computerShots.isEmpty()) || busy) return
         val held = (overview?.bridge ?: 1) >= Bridge.DRAFTS && hasExtras(shared?.extras)
-        val draft = text.trim()
+        val draft = written.trim()
         if (startsWithCommand(draft)) {
             val command = relayCommand(draft)
             // The agent runs `/goal` itself; it goes out as a message.
@@ -407,10 +479,11 @@ internal fun ComposerCore(
         if (items != null) CommandMenu(items, commands.loading, commands.failed, ::pick)
         val pc = computer
         if (pc != null && draftKey != null) DraftNotes(drafts, pc, draftKey, shared)
-        error?.let { e ->
+        (error ?: dictationError)?.let { e ->
             Text(
-                e + if (retryingScheduled) " Tap send to retry at the original time." else "",
+                e + if (error != null && retryingScheduled) " Tap send to retry at the original time." else "",
                 Modifier.padding(horizontal = 6.dp).pressable(onClick = {
+                    if (error == null) return@pressable dictation.clearError()
                     error = null
                     dismissed = text
                 }, scale = false),
@@ -455,24 +528,27 @@ internal fun ComposerCore(
                     )
                     Icon(TablerIcons.Outline.ChevronDown, null, size = 12.dp, tint = c.faint)
                 }
-                if (!steering) Tool("Permissions", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Mode }) {
-                    Text(modeLabel(settings.runtimeMode), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Room for the waveform on a narrow phone.
+                if (!dictating && !shrinking) {
+                    if (!steering) Tool("Permissions", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Mode }) {
+                        Text(modeLabel(settings.runtimeMode), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Tool(if (plan) "Plan mode on" else "Plan mode off", onClick = { onSettings(settings.copy(interactionMode = if (plan) "default" else "plan")) }) {
+                        Text("Plan", style = RelayTheme.type.xs, color = if (plan) c.accent else c.mutedForeground)
+                    }
                 }
-                Tool(if (plan) "Plan mode on" else "Plan mode off", onClick = { onSettings(settings.copy(interactionMode = if (plan) "default" else "plan")) }) {
-                    Text("Plan", style = RelayTheme.type.xs, color = if (plan) c.accent else c.mutedForeground)
                 }
+                if (dictating && dictationNow.phase == DictationState.Phase.Listening) Tool("Discard dictation", onClick = { dictation.cancel() }) {
+                    Icon(TablerIcons.Outline.X, null, size = 16.dp, tint = c.mutedForeground)
                 }
-                if (text.isEmpty()) Tool("Commands", onClick = {
+                if (text.isEmpty() && !dictating) Tool("Commands", onClick = {
                     edit("/")
                     runCatching { focus.requestFocus() }
                 }) {
                     Text("/", Modifier.widthIn(min = 18.dp), style = RelayTheme.type.mono, color = c.mutedForeground)
                 }
-                // TODO(merge): dictation goes here, between "/" and the sends (kotlin-phone has it):
-                //   val input = remember { DictationInput(value, setValue, focused) }
-                //   if (canDictate(remote)) DictationButton(remote, owner, target = { input })
-                //   and hold Send while input.active / input.dictated (container.dictation owns the session);
-                //   hide Permissions/Plan while it records, as Composer.tsx does for the waveform.
+                // The two sends stay side by side, as on the desktop.
+                if (canDictate(remote)) DictationButton(remote, dictationOwner, target = { input }, enabled = !disabled && !busy)
                 if (steering) {
                     Box(
                         Modifier.padding(start = 4.dp).size(34.dp).ring(c.accent, CircleShape)

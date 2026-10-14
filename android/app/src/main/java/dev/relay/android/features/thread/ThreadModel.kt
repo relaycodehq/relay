@@ -9,6 +9,7 @@ import dev.relay.android.remote.client.chat
 import dev.relay.android.remote.delta.MissingMessage
 import dev.relay.android.remote.model.RemoteChat
 import dev.relay.android.remote.model.RemoteChatSummary
+import dev.relay.android.remote.outbox.stamp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,9 @@ class ThreadModel(
     /** How many of the latest messages to hold; "Load earlier" asks for a page more. */
     val history: StateFlow<Int> = _history.asStateFlow()
     val canLoadEarlier get() = _history.value < Bridge.MAX_REMOTE_HISTORY
+    private val _fetched = MutableStateFlow(0L)
+    /** The outbox [stamp] taken as the latest fetch went out, for telling which sends it covers. */
+    val fetched: StateFlow<Long> = _fetched.asStateFlow()
 
     // One fetch at a time; asked during one, it runs once more after it.
     private val fetching = Mutex()
@@ -67,12 +71,14 @@ class ThreadModel(
         val client = remote.client.value ?: return
         try {
             val history = _history.value
+            val started = stamp()
             val next = try {
                 client.chat(id, _thread.value, history)
             } catch (_: MissingMessage) {
                 client.chat(id, null, history)
             }
             _thread.value = keepNewer(next, _thread.value)
+            _fetched.value = started
             cache.save(computer, id, next)
             _error.value = null
         } catch (e: CancellationException) {

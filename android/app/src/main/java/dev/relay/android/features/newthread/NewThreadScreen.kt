@@ -19,6 +19,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.relay.android.features.composer.ComposerCore
+import dev.relay.android.features.composer.Made
+import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Composed
 import dev.relay.android.features.composer.createProjectChat
 import dev.relay.android.features.composer.createScratch

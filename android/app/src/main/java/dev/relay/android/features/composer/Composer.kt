@@ -2,6 +2,7 @@ package dev.relay.android.features.composer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,12 +60,11 @@ fun Composer(
     val overview by remote.overview.collectAsState()
     val queued by outbox.items.collectAsState()
 
-    // The screen's copy when it hands one over; otherwise the composer follows the thread itself.
-    val fed = state.chat
-    val followed by produceState<RemoteChat?>(null, chatId, fed == null) {
-        if (fed == null) remote.chat(chatId).collect { value = it }
+    // The screen's copy when it follows the thread itself; otherwise the composer does.
+    val followed by produceState<RemoteChat?>(null, chatId, state.screenFollows) {
+        if (!state.screenFollows) remote.chat(chatId).collect { value = it }
     }
-    val chat = fed ?: followed
+    val chat = if (state.screenFollows) state.chat else followed
     val summary = overview?.chats?.find { it.id == chatId }
     val all = chat?.messages.orEmpty()
     val listed = remember(all, rootId) { if (rootId != null) sideConversation(all, rootId) else mainConversation(all) }
@@ -84,7 +84,7 @@ fun Composer(
     }
 
     val running = if (rootId != null) listed.any { it.status == "streaming" } else chat?.running ?: summary?.running ?: false
-    val projectId = chat?.projectId ?: summary?.projectId ?: dev.relay.android.features.newthread.MadeHere.of(chatId)?.projectId
+    val projectId = chat?.projectId ?: summary?.projectId ?: MadeHere.of(chatId)?.projectId
     val draftKey = if (rootId != null) "$chatId:$rootId" else chatId
     val where = chat?.let { if (it.worktree?.path != null) "${it.projectId}/$chatId" else it.projectId }
 
@@ -97,10 +97,10 @@ fun Composer(
     }
 
     val handle = remember { ComposerHandle() }
-    state.quote = handle::quote
-    state.restore = handle::restore
-    state.focus = handle::focus
-    state.settingsOn = handle::settingsOn
+    state.handle = handle
+    SideEffect { state.settings = settings }
+    state.setSettings = { settings = it }
+    state.confirmSwitch = ::confirmSwitch
 
     val using = settings ?: return
     if (projectId == null) return
@@ -194,16 +194,30 @@ private fun sideConversation(messages: List<ChatMessage>, rootId: String): List<
 
 /**
  * What the thread screen does with its composer: quote into it, put a
- * taken-back send back, focus it. [chat] hands over the thread the screen
- * already follows, so the composer doesn't fetch it a second time.
+ * taken-back send back, focus it, read and set its settings. With
+ * [screenFollows] the screen hands over the thread it already follows as
+ * [chat], so the composer doesn't fetch it a second time.
  */
-class ComposerState {
-    var quote: (String) -> Unit = {}
-    var restore: (String) -> Unit = {}
-    var focus: () -> Unit = {}
+class ComposerState(val screenFollows: Boolean = false) {
+    internal var handle: ComposerHandle? = null
+    fun quote(markdown: String) { handle?.quote(markdown) }
+    /** Puts [back] after the draft and returns its undo; throws when it won't fit or the composer isn't up. */
+    fun restore(back: Returned): () -> Unit =
+        (handle ?: throw IllegalStateException("The composer isn't ready yet.")).restore(back)
+    /** A page's relay.compose(): its text in place of what it put in before. */
+    fun compose(text: String, earlier: String?) { handle?.compose(text, earlier) }
+    fun focus() { handle?.focus() }
     /** The composer's settings on agent `to`, with the model it kept for it (the plan go-ahead uses it). */
-    var settingsOn: (String) -> ResumeSettings? = { null }
+    fun settingsOn(to: String): ResumeSettings? = handle?.settingsOn(to)
     /** Called as a message goes, before it's out: the screen scrolls to the bottom. */
     var onSent: () -> Unit = {}
     var chat: RemoteChat? by mutableStateOf(null)
+    /** What the composer sends with, once it knows. */
+    var settings: ResumeSettings? by mutableStateOf(null)
+        internal set
+    var setSettings: (ResumeSettings) -> Unit = {}
+        internal set
+    /** Asks before agent `to` takes over from the one holding the conversation; true to go ahead. */
+    var confirmSwitch: suspend (to: String) -> Boolean = { true }
+        internal set
 }

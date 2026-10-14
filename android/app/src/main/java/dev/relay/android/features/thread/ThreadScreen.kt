@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -35,11 +36,23 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import dev.relay.android.features.composer.Composer
 import dev.relay.android.features.composer.ComposerState
+import dev.relay.android.features.composer.MadeHere
+import dev.relay.android.features.composer.Returned
+import dev.relay.android.features.composer.logic.remotePlanGoAhead
+import dev.relay.android.remote.drafts.Sends
+import dev.relay.android.remote.model.PastedImage
+import dev.relay.android.remote.model.RemoteJson
+import dev.relay.android.remote.outbox.heldIds
+import dev.relay.android.remote.outbox.outboxLink
+import dev.relay.android.remote.outbox.outgoingMessage
+import java.util.UUID
+import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
 import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.thread.logic.chainRoot
 import dev.relay.android.features.thread.logic.latestSetup
 import dev.relay.android.features.thread.logic.mainMessages
+import dev.relay.android.features.thread.logic.openPlan
 import dev.relay.android.features.thread.logic.replyCounts
 import dev.relay.android.features.thread.logic.sideConversation
 import dev.relay.android.features.thread.logic.withoutMention
@@ -102,11 +115,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     val online = remote.status.collectAsState().value.state == LinkState.Online
     val summary = overview?.chats?.find { it.id == id }
     val bridge = overview?.bridge ?: 1
+    val computerLabel = computerName(remote)
     val inFront by rememberInFront()
     val failures = rememberFailures()
     val scope = rememberCoroutineScope()
     val actions = remember { ThreadActions(remote, id, model, scope, failures, nav) }
-    val composer = remember { ComposerState() }
+    val composer = remember { ComposerState(screenFollows = true) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
     var selecting by remember { mutableStateOf<ChatMessage?>(null) }
@@ -122,9 +136,27 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
         if (online) runCatching { remote.desktop("markProjectChatSeen", id, updated) }
     }
 
+    SideEffect { composer.chat = thread }
     val all = thread?.messages.orEmpty()
-    // TODO(outbox): sends from here not in the thread yet show in their place, and the unsent strip.
-    val listed = remember(all, rootId) { rootId?.let { sideConversation(all, it) } ?: mainMessages(all) }
+    // Sent from here and not in the thread yet: shown at once, in their place.
+    val outbox = remember { Sends.outbox(context.filesDir) }
+    val computer by remote.active.collectAsState()
+    val outboxItems by outbox.items.collectAsState()
+    val fetched by model.fetched.collectAsState()
+    // Queued and scheduled ones show in the queue instead; those it lost go.
+    val held = remember(thread) { heldIds(thread) }
+    LaunchedEffect(computer, held, fetched) { computer?.let { outbox.arrived(it, id, held, fetched) } }
+    val outgoing = remember(outboxItems, computer, held) {
+        outboxItems.filter { it.computer == computer && it.chatId == id && it.send.id !in held }
+    }
+    val listed = remember(all, rootId, outgoing) {
+        val own = rootId?.let { sideConversation(all, it) } ?: mainMessages(all)
+        val mine = outgoing.map(::outgoingMessage).filter { it.parentId == rootId }
+        if (mine.isEmpty()) own else own + mine
+    }
+    // The desktop took one the thread doesn't show yet: ask for it, again on each acknowledgement.
+    val fetchSent = outgoing.mapNotNull { it.sent }.joinToString(":")
+    LaunchedEffect(fetchSent) { if (fetchSent.isNotEmpty()) runCatching { model.load() } }
     val shown = remember(listed) { listed.asReversed() }
     val counts = remember(all) { replyCounts(all) }
     val byId = remember(all) { all.associateBy { it.id } }
@@ -137,7 +169,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     val t = thread
     val canResume = !running && lastAnswer != null && lastAnswer.status in setOf("cancelled", "failed") &&
         t?.settings != null && t.lastParentId == rootId
-    val projectId = t?.projectId ?: summary?.projectId
+    // One made here has no summary until its first message is in.
+    val made = MadeHere.of(id)
+    val projectId = t?.projectId ?: summary?.projectId ?: made?.projectId
+    val planProvider = if (running) null else remember(all, outgoing, listed) { openPlan(all + outgoing.map(::outgoingMessage), listed) }
+    // The go-ahead's send: its bubble hides the button once rendered, but a double tap lands before that.
+    var goingAhead by remember { mutableStateOf<String?>(null) }
     val where = t?.let { if (it.worktree?.path != null) "${it.projectId}/$id" else it.projectId }
     // The pushed summary's copy, which a turn's ending doesn't wait for.
     val pending = if (summary != null) summary.pending else t?.pending
@@ -176,13 +213,43 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             onOpenTurn = actions::openTurn,
             onRewind = actions::rewind,
             onRerunSetup = if (!running) { m -> if (m.id == setupId) actions.rerunSetup(m) } else null,
-            onSteer = if (rootId == null) { text -> composer.restore(text) } else null,
-            // TODO(composer): a compose(text, earlier) hook, so a page's text replaces what it put in before.
-            onCompose = if (projectId != null) { text, _ -> composer.quote(text) } else null,
+            onSteer = if (rootId == null) { text ->
+                runCatching { composer.restore(Returned(text)) }.onFailure { failures.alert(it, "Couldn't add it") }
+            } else null,
+            // A page's relay.compose() goes into the composer that shows, without taking focus from the page.
+            onCompose = if (projectId != null) { text, earlier -> composer.compose(text, earlier) } else null,
         )
     }
 
-    val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: ""
+    val draftKey = if (rootId != null) "$id:$rootId" else id
+    /** The composer gets the message before the queue loses it, so nothing is lost if either step fails. */
+    suspend fun takeBack(taken: TakenBack, messageId: String) {
+        val undo = composer.restore(taken.back)
+        if (!actions.queue("remove", messageId)) return undo()
+        taken.settings?.let { composer.setSettings(it) }
+    }
+    suspend fun editQueued(item: RemoteQueued) = attempt({ failures.alert(it, "Couldn't take it back") }) {
+        // Only a desktop that sends `settings` can hand the screenshots over; older ones get the text alone.
+        val images = if ((item.images ?: 0) > 0 && item.settings != null)
+            RemoteJson.decodeFromJsonElement<List<PastedImage>>(remote.desktop("projectChatQueuedImages", id, item.id))
+        else emptyList()
+        val taken = takenBack(item, images)
+        if (taken.parentId != null && rootId == null) {
+            HandedBacks.hand("$id:${taken.parentId}", HandedBack(taken, item.id))
+            nav.push(Route.Reply(id, taken.parentId))
+        } else takeBack(taken, item.id)
+    }
+    // A queued reply taken back on the main screen arrives here, in its side conversation.
+    val handedBack = remember { HandedBacks.peek(draftKey) }
+    var tookBack by remember { mutableStateOf(false) }
+    LaunchedEffect(handedBack, composer.settings != null, t != null) {
+        if (handedBack == null || tookBack || composer.settings == null || t == null) return@LaunchedEffect
+        tookBack = true
+        HandedBacks.clear(draftKey)
+        attempt({ failures.alert(it, "Couldn't take it back") }) { takeBack(handedBack.taken, handedBack.messageId) }
+    }
+
+    val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: made?.title ?: ""
     CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned) {
         Screen(
             title,
@@ -194,7 +261,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                 }
             },
         ) {
-            if (t == null) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
+            if (t == null && listed.isEmpty()) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
             else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, reverseLayout = true) {
                 item("head") {
                     Column {
@@ -203,7 +270,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             Row(
-                                Modifier.pressable(onClick = { actions.resume(t.settings) }, scale = false).padding(10.dp),
+                                Modifier.pressable(onClick = { actions.resume(composer.settings ?: t?.settings, composer.confirmSwitch) }, scale = false).padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
@@ -211,13 +278,13 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                                 Text("Resume answer", style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold), color = c.accent)
                             }
                         }
-                        if (rootId == null) Queue(t, running, actions, composer, rootId, nav)
+                        if (rootId == null && t != null) Queue(t, running, actions, ::editQueued)
                     }
                 }
                 items(shown, key = { it.id }) { m ->
-                    MessageView(id, m, t.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                    MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
                 }
-                if (t.earlier > 0 && rootId == null) item("earlier") { Earlier(t.earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
+                if (t != null && t.earlier > 0 && rootId == null) item("earlier") { Earlier(t.earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
             }
             Strips(t, summary, rootId, running, actions)
             if (rootId == null) SubagentStrip(
@@ -231,9 +298,50 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     RequestCard(request, (t.requests.size) - 1, onRespond = { actions.respond(request.id, it) })
                 }
             }
-            // TODO(composer): the Implement plan button (openPlan + remotePlanGoAhead) needs the composer's settings and send.
-            // TODO(composer): a reply's composer sends with parentId = rootId; the stub takes only the thread.
-            if (projectId != null) Composer(remote, id, composer)
+            UnsentStrip(
+                unsent = outgoing.filter { it.error != null && it.send.parentId == rootId },
+                online = online,
+                onRetry = { outbox.retry(outboxLink(remote.client.value), it.send.id) },
+                onEdit = { o ->
+                    // Unanswered, it may be on the computer already: sent again it would go twice.
+                    if (o.unsure == true && !remote.whenOnline(20_000)) throw IllegalStateException(
+                        "$computerLabel isn't connected yet, so the phone can't tell whether this one arrived. " +
+                            "It isn't lost: once connected, the phone checks and it arrives only once.",
+                    )
+                    if (o.unsure == true && outbox.reached(outboxLink(remote.client.value), o)) {
+                        scope.launchLoad(model)
+                        failures.show(
+                            "The computer received it",
+                            "$computerLabel already accepted this send or is still processing it, so it can't be taken back here.",
+                        )
+                    } else {
+                        composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty()))
+                        outbox.drop(o.send.id)
+                    }
+                },
+                onUseProjectFolder = if (bridge >= Bridge.WORKSPACE) { o ->
+                    remote.desktop("selectAgentWorktree", id, null)
+                    outbox.retry(outboxLink(remote.client.value), o.send.id)
+                } else null,
+            )
+            val planSettings = composer.settings
+            if (planProvider != null && planSettings != null) Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
+                Button(
+                    "Implement plan",
+                    onClick = click@{
+                        if (goingAhead?.let(outbox::isOut) == true) return@click
+                        val pc = computer ?: return@click
+                        // On the planner's own model, as the composer would switch to it.
+                        val on = composer.settingsOn(planProvider) ?: planSettings
+                        val (message, next) = remotePlanGoAhead(on, planProvider, UUID.randomUUID().toString())
+                        goingAhead = message.id
+                        outbox.deliver(outboxLink(remote.client.value), pc, id, message.copy(parentId = rootId))
+                        composer.setSettings(next)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (projectId != null) Composer(remote, id, composer, rootId = rootId)
         }
 
         when (sheet) {
@@ -294,7 +402,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     onSelect = { selecting = m },
                     onReply = if (rootId == null) ({ actions.openReplies(chainRoot(byId, m)) }) else null,
                     onFork = { actions.fork(m) },
-                    onQuote = if (projectId != null) composer.quote else null,
+                    onQuote = if (projectId != null) ({ composer.quote(it) }) else null,
                     onShare = { runCatching { shareText(context, it) }.onFailure { e -> failures.alert(e, "Couldn't share it") } },
                 ),
                 onClose = { acting = null },
@@ -354,24 +462,13 @@ private fun Earlier(earlier: Int, canLoad: Boolean, onLoad: () -> Unit) {
 }
 
 @Composable
-private fun Queue(t: RemoteChat, running: Boolean, actions: ThreadActions, composer: ComposerState, rootId: String?, nav: dev.relay.android.lib.navigation.Navigator) {
-    /** The composer gets the message before the queue loses it, so nothing is lost if either step fails. */
-    suspend fun edit(item: RemoteQueued) {
-        if (item.parentId != null && rootId == null) {
-            // TODO(composer): hand the taken-back reply to its side conversation's composer (taken-back.ts).
-            nav.push(Route.Reply(t.id, item.parentId))
-            return
-        }
-        // TODO(composer): queued images (projectChatQueuedImages) and its settings come back with it.
-        composer.restore(withoutMention(item.body))
-        actions.queue("remove", item.id)
-    }
+private fun Queue(t: RemoteChat, running: Boolean, actions: ThreadActions, onEdit: suspend (RemoteQueued) -> Unit) {
     QueueList(
         t.queue, t.scheduled, running,
         compacting = t.messages.any { it.compaction == true && it.status == "streaming" },
         paused = t.queuePaused == true,
         onSteer = { actions.queue("steer", it) },
-        onEdit = ::edit,
+        onEdit = onEdit,
         onRemove = { actions.queue("remove", it) },
         onMove = { messageId, index -> actions.queue("move", messageId, index) },
     )
