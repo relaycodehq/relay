@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -24,6 +25,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.home.HomeScreen
+import dev.relay.android.features.updates.ComputerUpdateRow
+import dev.relay.android.features.updates.UpdateBanners
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.ui.Divider
@@ -51,7 +54,17 @@ fun HomeSidebar(container: AppContainer) {
         is Route.Project -> open.id
         else -> null
     }
-    HomeScreen(container.remote, container.home, container.computerSeen, pane = true, selected = selected)
+    AppHome(container, pane = true, selected = selected)
+}
+
+/** Home with what other features put on it: the update banners and the computers sheet's update row. */
+@Composable
+fun AppHome(container: AppContainer, pane: Boolean, selected: String?) {
+    HomeScreen(
+        container.remote, container.home, container.computerSeen, pane = pane, selected = selected,
+        banners = { UpdateBanners(container.updates, container.remote, Modifier.padding(horizontal = 16.dp)) },
+        computerRows = { close -> ComputerUpdateRow(container.updates, container.remote, close) },
+    )
 }
 
 /**

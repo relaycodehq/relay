@@ -12,6 +12,10 @@ import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.ui.Banner
+import dev.relay.android.ui.Icon
+import dev.relay.android.ui.ListRow
+import dev.relay.android.ui.RowSize
+import dev.relay.android.ui.theme.RelayTheme
 import dev.relay.android.ui.Tone
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Download
@@ -138,6 +142,23 @@ fun rememberComputerUpdateAction(updates: Updates, remote: Remote): ComputerUpda
             if (id != null && running != null && c != null) updates.computers.updateComputer(id, running, c)
         },
         dismiss = { active?.let { updates.computers.dismiss(it, running) } },
+    )
+}
+
+/** The computers sheet's "Update {computer}" row, while the banner hasn't started one. */
+@Composable
+fun ComputerUpdateRow(updates: Updates, remote: Remote, onPicked: () -> Unit) {
+    val action = rememberComputerUpdateAction(updates, remote)
+    if (!action.can || action.update != null) return
+    ListRow(
+        "Update ${computerName(remote)}",
+        subtitle = "${action.hint} It restarts into the new version; its agents keep going.",
+        size = RowSize.Sm,
+        leading = { Icon(TablerIcons.Outline.Refresh, null, tint = RelayTheme.colors.foreground, size = 17.dp) },
+        onClick = {
+            onPicked()
+            action.start()
+        },
     )
 }
 

@@ -14,7 +14,6 @@ import dev.relay.android.features.git.DiffScreen
 import dev.relay.android.features.git.HistoryScreen
 import dev.relay.android.features.git.TurnScreen
 import dev.relay.android.features.tasks.TasksScreen
-import dev.relay.android.features.home.HomeScreen
 import dev.relay.android.features.project.ProjectScreen
 import dev.relay.android.features.pairing.PairScreen
 import dev.relay.android.features.settings.SettingsScreen
@@ -29,7 +28,7 @@ import dev.relay.android.lib.navigation.Route
  *     entry<Route.Thread> { ThreadScreen(it.id, container.remote) }
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
-    entry<Route.Home> { if (wide()) PaneEmpty() else HomeScreen(container.remote, container.home, container.computerSeen, pane = false, selected = null) }
+    entry<Route.Home> { if (wide()) PaneEmpty() else AppHome(container, pane = false, selected = null) }
     entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
     entry<Route.Gallery> { GalleryScreen() }
 

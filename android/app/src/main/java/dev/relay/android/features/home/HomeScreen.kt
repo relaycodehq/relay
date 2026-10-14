@@ -80,6 +80,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     /** Update banners, from features that own them. */
     banners: @Composable ColumnScope.() -> Unit = {},
+    /** Extra rows for the computers sheet, from features that own them; `close` puts the sheet away. */
+    computerRows: @Composable (close: () -> Unit) -> Unit = {},
 ) {
     val navigator = LocalNavigator.current
     val active by remote.active.collectAsState()
@@ -93,7 +95,7 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ComputerSwitch(remote, computerSeen, Modifier.weight(1f))
+                ComputerSwitch(remote, computerSeen, Modifier.weight(1f), computerRows)
                 IconButton(TablerIcons.Outline.Settings2, "Settings", { open(Route.Settings) })
             }
             ConnectionLine(remote)

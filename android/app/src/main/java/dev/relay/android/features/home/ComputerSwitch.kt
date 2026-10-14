@@ -81,7 +81,12 @@ internal class ComputerLines(
 
 /** The computer's name atop the lists; tapping it opens the computers sheet. */
 @Composable
-fun ComputerSwitch(remote: Remote, seen: ComputerSeen, modifier: Modifier = Modifier) {
+fun ComputerSwitch(
+    remote: Remote,
+    seen: ComputerSeen,
+    modifier: Modifier = Modifier,
+    extraRows: @Composable (close: () -> Unit) -> Unit = {},
+) {
     val c = RelayTheme.colors
     val name = computerName(remote)
     var open by remember { mutableStateOf(false) }
@@ -101,15 +106,21 @@ fun ComputerSwitch(remote: Remote, seen: ComputerSeen, modifier: Modifier = Modi
         )
         Icon(TablerIcons.Outline.ChevronDown, null, tint = c.mutedForeground, size = 15.dp)
     }
-    if (open) ComputerSheet(remote, seen, scope) { open = false }
+    if (open) ComputerSheet(remote, seen, scope, extraRows) { open = false }
 }
 
 /**
- * The paired computers to switch to, and pairing another; the phone talks to one at a time.
- * Updating the computer is features/updates' row and isn't offered here yet.
+ * The paired computers to switch to, [extraRows] (updating the one in use), and pairing
+ * another; the phone talks to one at a time.
  */
 @Composable
-private fun ComputerSheet(remote: Remote, seen: ComputerSeen, scope: CoroutineScope, onDismiss: () -> Unit) {
+private fun ComputerSheet(
+    remote: Remote,
+    seen: ComputerSeen,
+    scope: CoroutineScope,
+    extraRows: @Composable (close: () -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val c = RelayTheme.colors
     val navigator = LocalNavigator.current
     val computers by remote.computers.collectAsState()
@@ -149,6 +160,7 @@ private fun ComputerSheet(remote: Remote, seen: ComputerSeen, scope: CoroutineSc
                     },
                 )
             }
+            extraRows(onDismiss)
             ListRow(
                 "Pair another computer",
                 subtitle = "Scan the code in Relay's Settings → Phone there.",
