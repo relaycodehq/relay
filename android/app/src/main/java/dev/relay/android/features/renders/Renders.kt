@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,13 +35,16 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.renderPage
 import dev.relay.android.remote.model.HtmlRender
+import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.ring
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AppWindow
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowsDiagonal
 import java.util.concurrent.ConcurrentHashMap
 
 // A page never changes once saved, so the HTML is kept by identity; scrolling
@@ -128,46 +133,8 @@ private fun RenderNote(render: HtmlRender, computer: String) {
 private fun RenderCard(remote: Remote, chatId: String, render: HtmlRender, onCompose: RenderCompose?) {
     val c = RelayTheme.colors
     var index by rememberSaveable(render.id) { mutableIntStateOf(0) }
+    var expanded by rememberSaveable(render.id) { mutableStateOf(false) }
     val shape = RoundedCornerShape(10.dp)
-    val tiny = RelayTheme.type.xs.copy(fontSize = 12.sp)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(render.title, Modifier.weight(1f), style = tiny, color = c.mutedForeground, maxLines = 1)
-            if (render.pages.size > 1) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    render.pages.forEachIndexed { i, page ->
-                        val on = i == index
-                        Text(
-                            page.label?.takeIf(String::isNotEmpty) ?: "${i + 1}",
-                            Modifier.pressable({ index = i }, role = Role.Tab, scale = false),
-                            style = if (on) tiny.copy(fontWeight = FontWeight.SemiBold) else tiny,
-                            color = if (on) c.foreground else c.mutedForeground,
-                        )
-                    }
-                }
-            }
-        }
-        Box(Modifier.fillMaxWidth().clip(shape).ring(c.border, shape)) {
-            // Another variant is another page, not a redraw of this one.
-            key(index) { RenderPage(remote, chatId, render, index, onCompose) }
-        }
-    }
-}
-
-@Composable
-private fun RenderPage(remote: Remote, chatId: String, render: HtmlRender, index: Int, onCompose: RenderCompose?) {
-    val c = RelayTheme.colors
-    val loaded = rememberPage(remote, chatId, render.id, index)
-    val width = LocalConfiguration.current.screenWidthDp - 34
-    val settledKey = "${render.id}:$index:$width"
-    val estimate = settled[settledKey]
-        ?: renderHeightAt(render.pages.getOrNull(index)?.heights, width.toDouble())
-        ?: clampRenderHeight(RENDER_MIN_HEIGHT * 2.0)
-    val theme = remember(c) { renderTheme(c) }
     val compose: ((String) -> Unit)? = remember(onCompose, chatId, render.id) {
         onCompose?.let { send ->
             val from = "$chatId:${render.id}"
@@ -177,6 +144,57 @@ private fun RenderPage(remote: Remote, chatId: String, render: HtmlRender, index
             }
         }
     }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(render.title, Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontSize = 12.sp), color = c.mutedForeground, maxLines = 1)
+            if (render.pages.size > 1) Variants(render, index, { index = it })
+            IconButton(TablerIcons.Outline.ArrowsDiagonal, "Expand", { expanded = true }, size = ButtonSize.Xs, tint = c.mutedForeground)
+        }
+        Box(Modifier.fillMaxWidth().clip(shape).ring(c.border, shape)) {
+            // Another variant is another page, not a redraw of this one.
+            key(index) { RenderPage(remote, chatId, render, index, compose) }
+        }
+    }
+    if (expanded) RenderStage(remote, chatId, render, index, { index = it }, compose) { expanded = false }
+}
+
+/** A render's variants as tabs, by their labels or numbered. */
+@Composable
+internal fun Variants(
+    render: HtmlRender,
+    index: Int,
+    onIndex: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    style: TextStyle = RelayTheme.type.xs.copy(fontSize = 12.sp),
+) {
+    val c = RelayTheme.colors
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        render.pages.forEachIndexed { i, page ->
+            val on = i == index
+            Text(
+                page.label?.takeIf(String::isNotEmpty) ?: "${i + 1}",
+                Modifier.pressable({ onIndex(i) }, role = Role.Tab, scale = false),
+                style = if (on) style.copy(fontWeight = FontWeight.SemiBold) else style,
+                color = if (on) c.foreground else c.mutedForeground,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RenderPage(remote: Remote, chatId: String, render: HtmlRender, index: Int, compose: ((String) -> Unit)?) {
+    val c = RelayTheme.colors
+    val loaded = rememberPage(remote, chatId, render.id, index)
+    val width = LocalConfiguration.current.screenWidthDp - 34
+    val settledKey = "${render.id}:$index:$width"
+    val estimate = settled[settledKey]
+        ?: renderHeightAt(render.pages.getOrNull(index)?.heights, width.toDouble())
+        ?: clampRenderHeight(RENDER_MIN_HEIGHT * 2.0)
+    val theme = remember(c) { renderTheme(c) }
     val page = remember(loaded.html, theme) { loaded.html?.let { phoneRenderDocument(it, theme) } }
     val note = @Composable {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

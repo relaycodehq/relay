@@ -23,6 +23,14 @@ class HtmlRenderTest {
         assertTrue("ReactNativeWebView.postMessage" in html)
     }
 
+    @Test fun realSizePageScrollsAndZoomsItself() {
+        val fitted = phoneRenderDocument("<p>hi</p>", light)
+        val real = phoneRenderDocument("<p>hi</p>", light, fit = false)
+        assertTrue("maximum-scale=1\"" in fitted && "html{overflow:hidden}" in fitted && "relayRender: \"size\"" in fitted)
+        assertFalse("maximum-scale=1\"" in real || "overflow:hidden" in real || "relayRender: \"size\"" in real)
+        assertTrue("relayRender: \"compose\"" in real && "relayRender: \"link\"" in real)
+    }
+
     @Test fun addsDoctype() {
         assertTrue(phoneRenderDocument("<p>hi</p>", light).startsWith("<!doctype html><head><meta charset=\"utf-8\">"))
     }

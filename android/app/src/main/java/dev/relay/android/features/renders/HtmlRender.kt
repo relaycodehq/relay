@@ -82,22 +82,16 @@ val PHONE_RENDER_CSP = listOf(
 /** The name of the JavaScript interface the bootstrap posts through, as React Native's. */
 const val RENDER_BRIDGE = "ReactNativeWebView"
 
-private fun bootstrap(theme: RenderTheme): String {
+private fun bootstrap(theme: RenderTheme, fit: Boolean): String {
     val t = withSeries(theme)
     val json = buildJsonObject {
         put("scheme", t.scheme)
         put("vars", JsonObject(t.vars.mapValues { JsonPrimitive(it.value) }))
     }.toString().replace("<", "\\u003c")
-    return """(() => {
-  const root = document.documentElement;
-  const post = (m) => window.$RENDER_BRIDGE.postMessage(JSON.stringify(m));
-  const style = document.createElement("style");
-  style.textContent = ":root{color-scheme:light dark;font-family:var(--font-sans,system-ui,sans-serif);font-size:14px;color:var(--text,CanvasText)}html,body{margin:0;background:transparent}html{overflow:hidden}html[data-relay-fit] body{width:var(--relay-w);transform:scale(var(--relay-s));transform-origin:0 0}";
-  (document.head || root).prepend(style);
-  const t = $json;
-  for (const [k, v] of Object.entries(t.vars)) root.style.setProperty(k, v);
-  root.style.colorScheme = t.scheme;
-  root.dataset.theme = t.scheme;
+    // Fitted into the thread, a page shrinks to the phone's width and says how tall it is;
+    // at its real size it scrolls and zooms by itself.
+    val fitRules = if (fit) "html{overflow:hidden}html[data-relay-fit] body{width:var(--relay-w);transform:scale(var(--relay-s));transform-origin:0 0}" else ""
+    val sizing = if (!fit) "" else """
   let last = 0, queued = 0;
   const measure = () => {
     queued = 0;
@@ -123,7 +117,17 @@ private fun bootstrap(theme: RenderTheme): String {
   document.addEventListener("DOMContentLoaded", () => {
     if (document.body) new ResizeObserver(schedule).observe(document.body);
     schedule();
-  });
+  });"""
+    return """(() => {
+  const root = document.documentElement;
+  const post = (m) => window.$RENDER_BRIDGE.postMessage(JSON.stringify(m));
+  const style = document.createElement("style");
+  style.textContent = ":root{color-scheme:light dark;font-family:var(--font-sans,system-ui,sans-serif);font-size:14px;color:var(--text,CanvasText)}html,body{margin:0;background:transparent}$fitRules";
+  (document.head || root).prepend(style);
+  const t = $json;
+  for (const [k, v] of Object.entries(t.vars)) root.style.setProperty(k, v);
+  root.style.colorScheme = t.scheme;
+  root.dataset.theme = t.scheme;$sizing
   document.addEventListener("click", (e) => {
     const a = e.target instanceof Element && e.target.closest("a[href]");
     if (!a || (a.getAttribute("href") || "").startsWith("#")) return;
@@ -159,13 +163,16 @@ fun prependToHead(html: String, tag: String): String {
 
 private val DOCTYPE = Regex("^\\s*<!doctype", RegexOption.IGNORE_CASE)
 
-/** `html` with the rules and the bootstrap first in its head; a doctype keeps it out of quirks mode. */
-fun phoneRenderDocument(html: String, theme: RenderTheme): String = prependToHead(
+/**
+ * `html` with the rules and the bootstrap first in its head; a doctype keeps it out of quirks mode.
+ * [fit] shrinks it into a frame in the thread; without, it opens at its real size and pinches to zoom.
+ */
+fun phoneRenderDocument(html: String, theme: RenderTheme, fit: Boolean = true): String = prependToHead(
     if (DOCTYPE.containsMatchIn(html)) html else "<!doctype html>$html",
     // Without a viewport an Android WebView lays a page out at about 980 px.
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1\">" +
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,${if (fit) "minimum-scale=1,maximum-scale=1" else "minimum-scale=0.25,maximum-scale=5"}\">" +
         "<meta http-equiv=\"Content-Security-Policy\" content=\"$PHONE_RENDER_CSP\">" +
-        "<script>${bootstrap(theme)}</script>",
+        "<script>${bootstrap(theme, fit)}</script>",
 )
 
 /** What a page said: only the four messages Relay speaks pass, cut to what they may carry. */
