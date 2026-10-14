@@ -9,16 +9,13 @@ import {
   taskNote,
   lastingTask,
   tidyCommand,
+  windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
+import { processTable, type ProcessRow } from "../platform/processes";
 
-interface Proc {
-  pid: number;
-  ppid: number;
-  pgid: number;
-  started: number;
-  line: string;
-}
+type Proc = ProcessRow;
+const windows = process.platform === "win32";
 /** A thread's worktree, whose processes list with the project's. */
 interface Worktree {
   path: string;
@@ -40,18 +37,20 @@ interface Tracked {
   restarted?: boolean;
   /** Started from this terminal shell in Relay. */
   shell?: number;
+  /** Where it runs when the OS can't say (Windows): the folder of the thread or terminal that started it. */
+  hint?: string;
   pids: Map<number, number>;
 }
 
 function run(file: string, args: string[]) {
   return new Promise<string>((resolve) => {
-    // `lstart` is printed in the user's locale otherwise.
     execFile(
       file,
       args,
       {
         maxBuffer: 16 << 20,
         timeout: 5000,
+        windowsHide: true,
         env: { ...process.env, LC_ALL: "C" },
       },
       (_e, out) => resolve(out ?? ""),
@@ -62,18 +61,21 @@ function run(file: string, args: string[]) {
 export const liveCwd = (link: string) => link.replace(/ \(deleted\)$/, "");
 const within = (path: string, root: string) =>
   path === root || path.startsWith(root + sep);
+/** Which agent's CLI a command line runs, if any. */
 const agentName = (line: string) => {
-  const [bin, arg] = line.split(/\s+/);
-  const name = (/[^/]+$/.exec(bin ?? "")?.[0] ?? "").replace(/\.exe$/, "");
+  const [bin, arg] = windows ? windowsArgs(line) : line.split(/\s+/);
+  const name = (/[^/\\]+$/.exec(bin ?? "")?.[0] ?? "")
+    .replace(/\.exe$/i, "")
+    .toLowerCase();
   // Each agent's CLI is named after it; Codex may also run as a Node script.
   if (agentProviders.some((p) => p === name)) return name as AgentProvider;
-  if (name === "node" && /\/codex(\.js)?$/.test(arg ?? ""))
+  if (name === "node" && /[/\\]codex(\.js)?$/.test(arg ?? ""))
     return "codex" as const;
 };
 // Processes that are only incidentally in a project folder: installed apps, system daemons,
 // Git's own helpers and other editors' agents.
 const ignoredOrphans =
-  /^(\/System\/|\/Applications\/|\/Users\/[^/]+\/Applications\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/)|\bgit fsmonitor--daemon\b|\bwatchman\b|\bgitstatusd\b|\bcursor-agent\b|--relay-agent-host\b/;
+  /^(\/System\/|\/Applications\/|\/Users\/[^/]+\/Applications\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/)|\bgit fsmonitor--daemon\b|\bwatchman\b|\bgitstatusd\b|\bcursor-agent\b|--relay-agent-host\b|\bchrome_crashpad_handler\b/;
 // Skip the agent's quick commands: the list is for things that keep running.
 const minimumAge = 3000;
 /** A process's command line as something a shell can run: `ps` loses the quoting of an executable path with spaces. */
@@ -107,6 +109,8 @@ class ProjectTasks {
   private last: Proc[] = [];
   /** Relay's terminal shells, and the thread each belongs to. */
   private terminals = new Map<number, string | undefined>();
+  /** Where each terminal shell started, for Windows, which can't tell. */
+  private terminalFolders = new Map<number, string>();
   /** Shells Relay started to restart a task, adopted on the next scan. */
   private adopting = new Map<
     number,
@@ -122,11 +126,13 @@ class ProjectTasks {
   }
 
   /** What runs in this shell counts as the thread's; a draft's has no thread yet. */
-  trackTerminal(pid: number, chatId: string | undefined) {
+  trackTerminal(pid: number, chatId: string | undefined, cwd?: string) {
     this.terminals.set(pid, chatId);
+    if (cwd) this.terminalFolders.set(pid, cwd);
   }
   untrackTerminal(pid: number) {
     this.terminals.delete(pid);
+    this.terminalFolders.delete(pid);
   }
 
   /** Dev commands Relay starts directly, outside an agent or terminal shell. */
@@ -141,7 +147,6 @@ class ProjectTasks {
     worktrees: Worktree[] = [],
     options: { fresh?: boolean; includeNewServers?: boolean } = {},
   ): Promise<ProjectTask[]> {
-    if (process.platform === "win32") return [];
     this.watch(root);
     for (const w of worktrees) this.watch(w.path);
     if (options.fresh) this.scanned = 0;
@@ -217,15 +222,21 @@ class ProjectTasks {
       throw new Error("Restart it from its terminal.");
     const { task, exited } = await this.terminate(root, id, worktrees);
     await exited;
-    const child = spawn(
-      process.env.SHELL || "/bin/sh",
-      ["-lc", task.rerun ?? task.command],
-      {
-        cwd: task.cwd ?? root,
-        detached: true,
-        stdio: "ignore",
-      },
-    );
+    const options = {
+      cwd: task.cwd ?? root,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    } as const;
+    // On Windows `rerun` is the shell's own command line, Git Bash's or
+    // PowerShell's, which cmd starts as it is.
+    const child = windows
+      ? spawn(task.rerun ?? task.command, { ...options, shell: true })
+      : spawn(
+          process.env.SHELL || "/bin/sh",
+          ["-lc", task.rerun ?? task.command],
+          options,
+        );
     // A folder deleted meanwhile fails the spawn asynchronously.
     child.on("error", () => {});
     child.unref();
@@ -334,26 +345,7 @@ class ProjectTasks {
   }
 
   private async read() {
-    const out = await run("ps", [
-      "-axww",
-      "-o",
-      "pid=,ppid=,pgid=,lstart=,command=",
-    ]);
-    const procs: Proc[] = [];
-    for (const row of out.split("\n")) {
-      const m =
-        /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w{3} \w{3}\s+\d+ [\d:]{8} \d{4})\s+(.*)$/.exec(
-          row,
-        );
-      if (m)
-        procs.push({
-          pid: +m[1],
-          ppid: +m[2],
-          pgid: +m[3],
-          started: Date.parse(m[4]) || 0,
-          line: m[5],
-        });
-    }
+    const procs = await processTable();
     this.last = procs;
     const byPid = new Map(procs.map((p) => [p.pid, p]));
     const children = new Map<number, Proc[]>();
@@ -401,7 +393,9 @@ class ProjectTasks {
           origin: relay ? "relay" : "external",
           root: child.pid,
           started: child.started,
-          ...(match ? { chatId: match } : {}),
+          ...(match ? { chatId: match.chatId, hint: match.root } : {}),
+          // Run again as the agent's shell ran it.
+          ...(windows ? { rerun: child.line } : {}),
           pids: new Map(),
         });
         fresh.push(child.pid);
@@ -413,6 +407,7 @@ class ProjectTasks {
         const id = `${child.pid}:${child.started}`;
         if (this.tracked.has(id) || agentName(child.line)) continue;
         firstSight(child);
+        const hint = this.terminalFolders.get(shell);
         this.tracked.set(id, {
           id,
           command: tidyCommand(child.line),
@@ -421,6 +416,7 @@ class ProjectTasks {
           started: child.started,
           shell,
           ...(chatId ? { chatId } : {}),
+          ...(hint ? { hint } : {}),
           pids: new Map(),
         });
         fresh.push(child.pid);
@@ -463,8 +459,9 @@ class ProjectTasks {
       else if (!task.pids.has(task.root) && task.origin !== "external")
         task.origin = "detached";
     }
-    // `nohup … &` and `(cmd &)` leave launchd as the parent before any scan sees them.
-    for (const p of procs) {
+    // `nohup … &` and `(cmd &)` leave launchd as the parent before any scan
+    // sees them. Windows doesn't hand orphans on, and can't say where one runs.
+    for (const p of windows ? [] : procs) {
       if (p.ppid !== 1 || owner.has(p.pid) || !firstSight(p)) continue;
       if (ignoredOrphans.test(p.line) || agentName(p.line)) continue;
       const id = `${p.pid}:${p.started}`;
@@ -481,7 +478,9 @@ class ProjectTasks {
     }
     await this.placeFolders(fresh);
     for (const task of this.tracked.values()) {
-      const cwd = this.cwds.get(`${task.root}:${task.started}`);
+      const cwd = windows
+        ? (task.cwd ?? task.hint)
+        : this.cwds.get(`${task.root}:${task.started}`);
       if (
         cwd &&
         (task.origin === "relay" ||
@@ -499,20 +498,23 @@ class ProjectTasks {
   }
 
   private findChat(key: string, started: number) {
-    let best: { chatId: string; at: number } | undefined;
-    for (const list of this.commands.values())
+    let best: { chatId: string; at: number; root: string } | undefined;
+    for (const [root, list] of this.commands)
       for (const c of list)
         if (
           (c.key === key || c.key.includes(key) || key.includes(c.key)) &&
           Math.abs(c.at - started) < 120000 &&
           (!best || Math.abs(c.at - started) < Math.abs(best.at - started))
         )
-          best = c;
-    return best?.chatId;
+          best = { ...c, root };
+    return best && { chatId: best.chatId, root: best.root };
   }
 
   /** Working folders decide the project. One `lsof` call for everything not placed yet. */
   private async placeFolders(pids: number[]) {
+    // Windows keeps a process's folder where only a debugger reads it; tasks
+    // go by the thread that started them instead.
+    if (windows) return;
     const pending = pids.filter((pid) => {
       const started = this.seen.get(pid);
       return !this.cwds.has(`${pid}:${started}`);
@@ -537,11 +539,7 @@ class ProjectTasks {
       "-p",
       pending.join(","),
     ]);
-    const found = new Map<number, string>();
-    let pid = 0;
-    for (const line of out.split("\n"))
-      if (line[0] === "p") pid = +line.slice(1);
-      else if (line[0] === "n" && pid) found.set(pid, line.slice(1));
+    const found = lsofFolders(out);
     for (const pid of pending)
       this.cwds.set(`${pid}:${this.seen.get(pid)}`, found.get(pid) ?? null);
   }
@@ -549,6 +547,15 @@ class ProjectTasks {
   private async ports(pids: number[]) {
     const ports = new Map<number, number[]>();
     if (!pids.length) return ports;
+    if (windows) {
+      const wanted = new Set(pids);
+      for (const [pid, port] of netstatListening(
+        await run("netstat", ["-ano"]),
+      ))
+        if (wanted.has(pid)) ports.set(pid, [...(ports.get(pid) ?? []), port]);
+      for (const [pid, list] of ports) ports.set(pid, [...new Set(list)]);
+      return ports;
+    }
     const out = await run("lsof", [
       "-nP",
       "-a",
@@ -567,6 +574,28 @@ class ProjectTasks {
       }
     return ports;
   }
+}
+
+/** `lsof -d cwd -Fn`'s answer, by pid. */
+function lsofFolders(out: string) {
+  const found = new Map<number, string>();
+  let pid = 0;
+  for (const line of out.split("\n"))
+    if (line[0] === "p") pid = +line.slice(1);
+    else if (line[0] === "n" && pid) found.set(pid, line.slice(1));
+  return found;
+}
+
+/**
+ * `netstat -ano` rows listening for connections, as [pid, port]. The state's
+ * name is translated on non-English Windows; a listening socket is the one
+ * whose remote end is port 0.
+ */
+export function netstatListening(out: string): [number, number][] {
+  return out.split(/\r?\n/).flatMap((row) => {
+    const m = /^\s*TCP\s+\S*:(\d+)\s+\S*:0\s+\S+\s+(\d+)\s*$/i.exec(row);
+    return m ? [[+m[2], +m[1]] as [number, number]] : [];
+  });
 }
 
 export const projectTasks = new ProjectTasks();

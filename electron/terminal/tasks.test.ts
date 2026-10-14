@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveCwd } from "./tasks";
+import { liveCwd, netstatListening } from "./tasks";
 import {
   commandKey,
   describeTask,
@@ -7,6 +7,7 @@ import {
   taskNote,
   lastingTask,
   tidyCommand,
+  windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
 
@@ -26,6 +27,51 @@ describe("shellCommand", () => {
   it("ignores processes that aren't shell commands", () => {
     expect(shellCommand("/opt/homebrew/bin/rg --files")).toBeUndefined();
     expect(shellCommand("/bin/zsh -l")).toBeUndefined();
+  });
+});
+
+describe("Windows command lines", () => {
+  it("splits them as Windows programs do", () => {
+    expect(
+      windowsArgs(String.raw`"C:\Program Files\Git\bin\bash.exe" -c "echo \"hi\" a\\b"`),
+    ).toEqual([String.raw`C:\Program Files\Git\bin\bash.exe`, "-c", String.raw`echo "hi" a\\b`]);
+    expect(windowsArgs(String.raw`a "b c"d  e\\"f g"`)).toEqual(["a", "b cd", String.raw`e\f g`]);
+  });
+  it("reads what Git Bash, PowerShell and cmd run", () => {
+    expect(
+      shellCommand(
+        String.raw`"C:\Program Files\Git\bin\bash.exe" -c -l "source C:/Users/me/.claude/shell-snapshots/s.sh && eval 'npm run dev' < /dev/null"`,
+      ),
+    ).toBe("npm run dev");
+    expect(
+      shellCommand(
+        String.raw`C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -Command "pnpm test --watch"`,
+      ),
+    ).toBe("pnpm test --watch");
+    expect(shellCommand(String.raw`C:\WINDOWS\system32\cmd.exe /d /s /c "npm start"`)).toBe(
+      "npm start",
+    );
+    expect(shellCommand(String.raw`"C:\Program Files\nodejs\node.exe" server.js`)).toBeUndefined();
+  });
+  it("shortens their executables", () => {
+    expect(
+      tidyCommand(
+        String.raw`"C:\Program Files\nodejs\node.exe" C:\app\node_modules\vite\bin\vite.js --port 5173`,
+      ),
+    ).toBe("node vite --port 5173");
+  });
+  it("finds listening ports in netstat's table, whatever the state is called", () => {
+    const out = [
+      "  Proto  Local Address          Foreign Address        State           PID",
+      "  TCP    0.0.0.0:5173           0.0.0.0:0              NASLOUCHÁNÍ     4120",
+      "  TCP    127.0.0.1:5173         127.0.0.1:51234        ESTABLISHED     4120",
+      "  TCP    [::]:3000              [::]:0                 LISTENING       880",
+      "  UDP    0.0.0.0:5353           *:*                                    880",
+    ].join("\r\n");
+    expect(netstatListening(out)).toEqual([
+      [4120, 5173],
+      [880, 3000],
+    ]);
   });
 });
 

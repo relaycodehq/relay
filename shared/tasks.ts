@@ -42,8 +42,8 @@ export function shellCommand(line: string): string | undefined {
   const text = wrapped ? `${wrapped[2]} ${wrapped[3]}` : line;
   const shell =
     /^(\S*\/)?-?(zsh|bash|sh|fish|dash) (?:-\w+ )*-\w*c\w* (.*)$/s.exec(text);
-  if (!shell) return;
-  const body = shell[3];
+  const body = shell ? shell[3] : windowsShellBody(line);
+  if (body === undefined) return;
   // Claude Code sources a shell snapshot, then evals the command in single quotes.
   const claude =
     /&& eval '((?:[^']|'"'"')*)'(?: < \/dev\/null)?(?: && pwd -P >\| \S+)?$/s.exec(
@@ -51,6 +51,81 @@ export function shellCommand(line: string): string | undefined {
     );
   if (claude) return claude[1].replaceAll(`'"'"'`, "'").trim();
   return body.trim();
+}
+
+/** Whether a command line starts with a Windows path: `C:\\…`, `"C:\\…"` or `\\\\server\\…`. */
+const windowsLine = (line: string) => /^"?(?:[A-Za-z]:\\|\\\\)/.test(line.trim());
+
+/** The program a Windows command line names, e.g. "bash" for `"C:\\Program Files\\Git\\bin\\bash.exe"`. */
+const windowsProgram = (arg = "") =>
+  (/[^\\/]+$/.exec(arg)?.[0] ?? arg).replace(/\.exe$/i, "").toLowerCase();
+
+/** What Git Bash (Claude Code's shell), PowerShell (Codex's) or cmd runs on Windows. */
+function windowsShellBody(line: string): string | undefined {
+  if (!windowsLine(line)) return;
+  const args = windowsArgs(line);
+  const program = windowsProgram(args[0]);
+  if (program === "bash" || program === "sh" || program === "zsh") {
+    const flag = args.findIndex((a, i) => i > 0 && /^-\w*c\w*$/.test(a));
+    if (flag < 0) return;
+    // `-c -l "cmd"`: the command is the first argument that isn't an option.
+    return args.slice(flag + 1).find((a) => !a.startsWith("-"));
+  }
+  if (program === "powershell" || program === "pwsh") {
+    const flag = args.findIndex((a, i) => i > 0 && /^-(c|command)$/i.test(a));
+    // PowerShell joins what follows -Command into one script.
+    return flag < 0 ? undefined : args.slice(flag + 1).join(" ");
+  }
+  if (program === "cmd") {
+    // cmd reads the rest of its own command line as is.
+    const rest = /\s\/[ck]\s+(.*)$/is.exec(line)?.[1]?.trim();
+    return rest?.replace(/^"(.*)"$/s, "$1");
+  }
+}
+
+/** A Windows command line split as programs read theirs (CommandLineToArgvW's rules). */
+export function windowsArgs(line: string): string[] {
+  const args: string[] = [];
+  let arg = "";
+  let quoted = false;
+  let started = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "\\") {
+      let slashes = 0;
+      while (line[i] === "\\") {
+        slashes++;
+        i++;
+      }
+      if (line[i] === '"') {
+        // 2n backslashes and a quote: n backslashes, then the quote toggles;
+        // 2n+1: n backslashes and a literal quote.
+        arg += "\\".repeat(slashes >> 1);
+        if (slashes % 2) arg += '"';
+        else quoted = !quoted;
+      } else {
+        arg += "\\".repeat(slashes);
+        i--;
+      }
+      started = true;
+    } else if (c === '"') {
+      // `""` inside quotes is a literal quote.
+      if (quoted && line[i + 1] === '"') {
+        arg += '"';
+        i++;
+      } else quoted = !quoted;
+      started = true;
+    } else if (!quoted && (c === " " || c === "\t")) {
+      if (started) args.push(arg);
+      arg = "";
+      started = false;
+    } else {
+      arg += c;
+      started = true;
+    }
+  }
+  if (started) args.push(arg);
+  return args;
 }
 
 const runners = new Set([
@@ -66,6 +141,7 @@ const runners = new Set([
 ]);
 /** `/usr/local/bin/node /app/node_modules/.bin/vite --port 5173` → `node vite --port 5173`. */
 export function tidyCommand(line: string): string {
+  if (windowsLine(line)) return tidyWindowsCommand(line);
   // Executable paths can hold spaces ("Application Support"); the path ends where the next argument starts.
   const path = /^(\/.*?)(?= -| \/|$)/.exec(line.trim())?.[1] ?? "";
   const parts = [
@@ -85,6 +161,28 @@ export function tidyCommand(line: string): string {
   if (runners.has(parts[0]) && parts[1]?.includes("/"))
     parts[1] = name(parts[1]);
   return parts.join(" ");
+}
+
+/** `"C:\\Program Files\\nodejs\\node.exe" C:\\app\\node_modules\\vite\\bin\\vite.js` → `node vite`. */
+function tidyWindowsCommand(line: string): string {
+  const parts = windowsArgs(line);
+  const name = (part: string) => {
+    const path = part.replaceAll("\\", "/");
+    const bin = /node_modules\/(?:\.bin\/([^/]+)|((?:@[^/]+\/)?[^/]+)\/)/.exec(
+      path,
+    );
+    return (bin ? (bin[1] ?? bin[2]) : windowsProgram(path)).replace(
+      /\.(cmd|ps1)$/i,
+      "",
+    );
+  };
+  if (!parts[0]) return line.trim();
+  parts[0] = windowsProgram(parts[0]);
+  if (runners.has(parts[0]) && /[\\/]/.test(parts[1] ?? ""))
+    parts[1] = name(parts[1]);
+  return parts
+    .map((p) => (/\s/.test(p) ? `"${p}"` : p))
+    .join(" ");
 }
 
 /** Drop what's around the actual work: `cd dir &&`, env assignments, output plumbing, `&`. */

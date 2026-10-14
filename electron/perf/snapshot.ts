@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { cpus, freemem, totalmem } from "node:os";
 import { promisify } from "node:util";
+import { processTable } from "../platform/processes";
 
 const exec = promisify(execFile);
 
@@ -257,23 +258,11 @@ async function procTimes() {
 
 /** Windows' own counters: already a rate, per core. */
 async function windowsProcesses(): Promise<Proc[]> {
-  const out = await run(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Object { $_.Name -ne '_Total' -and $_.Name -ne 'Idle' } | Sort-Object PercentProcessorTime -Descending | Select-Object -First 15 | ForEach-Object { \"$($_.IDProcess)`t$($_.PercentProcessorTime)`t$($_.Name)\" }",
-    ],
-    8000,
+  return (await processTable({ usage: true })).flatMap((p) =>
+    p.name && p.cpu !== undefined
+      ? [{ pid: p.pid, cpu: p.cpu, name: p.name }]
+      : [],
   );
-  return (out ?? "").split(/\r?\n/).flatMap((line) => {
-    const [pid, cpu, name] = line.split("\t");
-    // Second copies show up as "chrome#2".
-    return name
-      ? [{ pid: Number(pid), cpu: Number(cpu), name: name.replace(/#\d+$/, "") }]
-      : [];
-  });
 }
 
 async function run(file: string, args: string[], timeout = 3000) {

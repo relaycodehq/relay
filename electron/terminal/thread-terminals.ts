@@ -126,7 +126,7 @@ class ThreadTerminals {
       outputTail: "",
     };
     this.sessions.set(key, created);
-    projectTasks.trackTerminal(proc.pid, chatOf(key));
+    projectTasks.trackTerminal(proc.pid, chatOf(key), cwd);
     proc.onData((data) => this.output(created, data));
     proc.onExit(({ exitCode }) => {
       projectTasks.untrackTerminal(proc.pid);
@@ -210,7 +210,7 @@ class ThreadTerminals {
       session.key = next;
       this.sessions.set(next, session);
       if (session.exitCode === undefined)
-        projectTasks.trackTerminal(session.pty.pid, chatOf(next));
+        projectTasks.trackTerminal(session.pty.pid, chatOf(next), session.cwd);
     }
   }
 
