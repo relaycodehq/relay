@@ -52,6 +52,7 @@ import { ComposerToolbar } from "./ComposerToolbar";
 import { useToolbarFit } from "./useToolbarFit";
 import { DictationButton } from "../dictation/DictationButton";
 import { SketchEditor } from "../images/ImageSketch";
+import { carriesImage } from "../images/image-drag";
 import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "../quick-switch/QuickSwitchHud";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
@@ -435,7 +436,10 @@ export function ProjectComposer({
           onPasteCapture={draft.paste}
           onDrop={draft.drop}
           onDragOver={(event) => {
-            if (event.dataTransfer.types.includes("Files"))
+            if (
+              event.dataTransfer.types.includes("Files") ||
+              carriesImage(event.dataTransfer)
+            )
               event.preventDefault();
           }}
         />

@@ -73,6 +73,13 @@ test("an answer shows the local images it embeds and drops the ones that don't l
     await expect(answer.locator(".message-images")).toHaveCount(0);
     await page.screenshot({ path: "test-results/answer-images.png" });
 
+    // Dragged into the composer, it attaches like a pasted screenshot.
+    await image.dragTo(page.getByLabel("Message project"));
+    await expect(page.locator(".composer-image")).toHaveCount(1);
+    await expect(
+      page.locator(".composer-image").getByRole("img"),
+    ).toHaveJSProperty("complete", true);
+
     await image.click();
     await expect(
       page.getByRole("dialog").getByRole("img", { name: "after.png" }),

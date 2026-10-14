@@ -34,6 +34,7 @@ import {
   nextImageNumber,
   onlyImageTokens,
 } from "../../../shared/image-refs";
+import { droppedImage } from "../images/image-drag";
 import { useImagePills } from "../images/image-pills";
 import type { Sketch, SketchHistory } from "../images/sketch";
 
@@ -328,7 +329,8 @@ export function useComposerDraft(
       );
     },
     drop(event: DragEvent) {
-      const files = Array.from(event.dataTransfer.files);
+      const image = droppedImage(event.dataTransfer);
+      const files = image ? [image] : Array.from(event.dataTransfer.files);
       if (!files.length) return;
       event.preventDefault();
       event.stopPropagation();

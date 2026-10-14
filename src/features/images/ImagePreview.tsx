@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { CopyImageMenu } from "./CopyImageMenu";
+import { startImageDrag } from "./image-drag";
 import "./image-tiles.css";
 
 /** An image in the thread, fetched as a data URL the first time something shows it. */
@@ -74,6 +75,8 @@ export function ImageThumbnail({
           <button
             type="button"
             onClick={onOpen}
+            draggable
+            onDragStart={(e) => startImageDrag(e, source, image.name)}
             aria-label={`Open ${image.name}`}
             title={image.location ?? image.name}
           >
@@ -104,6 +107,8 @@ export function AnswerImage({
       <button
         type="button"
         onClick={onOpen}
+        draggable
+        onDragStart={(e) => startImageDrag(e, source, image.name)}
         aria-label={`Open ${alt || image.name}`}
         title={image.location ?? image.name}
       >
