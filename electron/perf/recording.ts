@@ -30,27 +30,28 @@ export interface RecordingDeps {
   log(): Promise<string>;
 }
 
-// What DevTools' Performance panel records, JavaScript samples included.
+// What DevTools' Performance panel shows, JavaScript samples included, but
+// not the compositor's and GPU's own steps, "toplevel", which repeats every
+// task the timeline already has, or the stack of whatever set each timer or
+// layout off, ~4 KB an event. Those were most of a trace.
 const traceConfig = {
   recording_mode: "record-continuously",
-  // The newest ~100 MB: a longer recording keeps its end, where the user
-  // reproduced the slowness.
+  // A minute of a thread streaming on screen just fits and zips to ~11 MB.
+  // A busier minute keeps its end, where the user reproduced the slowness.
   trace_buffer_size_in_kb: 100_000,
   included_categories: [
     "devtools.timeline",
     "disabled-by-default-devtools.timeline",
     "disabled-by-default-devtools.timeline.frame",
-    "disabled-by-default-devtools.timeline.stack",
     "disabled-by-default-v8.cpu_profiler",
     "v8.execute",
     "blink.user_timing",
-    "toplevel",
-    "latencyInfo",
-    "gpu",
-    "viz",
-    "cc",
   ],
 };
+
+/** Images the window loaded, data URLs and all: the thread's own pictures. */
+export const withoutImages = (trace: string) =>
+  trace.replace(/"data:(?:[^"\\]|\\.){64,}"/g, '"data:(left out)"');
 
 /**
  * Records Relay for `seconds` or until `signal` stops it: a Chrome trace of
@@ -115,7 +116,7 @@ export async function recordPerformance(
 
   const files: Zippable = {
     "README.txt": strToU8(readme(before, after, at, ended)),
-    "trace.json": strToU8(deps.anonymize(trace)),
+    "trace.json": strToU8(deps.anonymize(withoutImages(trace))),
     "readings.json": strToU8(
       JSON.stringify({ before, after, everySecond: readings }, null, 1),
     ),
