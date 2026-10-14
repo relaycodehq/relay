@@ -13,10 +13,13 @@ import {
 const runs: (AgentOptions & { provider: string })[] = [];
 const plainReply = '{"subject":"Raise the limit","body":""}';
 let reply = plainReply;
+const failing = new Map<string, string>();
 vi.mock("../agents", () => ({
   agentRuntime: (provider: string) => ({
     run: async (options: AgentOptions) => {
       runs.push({ ...options, provider });
+      const failure = failing.get(provider);
+      if (failure) throw new Error(failure);
       return reply;
     },
   }),
@@ -26,6 +29,7 @@ const { generateCommitMessage } = await import("./commit-messages");
 let root: string;
 afterEach(async () => {
   runs.length = 0;
+  failing.clear();
   reply = plainReply;
   await rm(root, { recursive: true, force: true });
 });
@@ -97,5 +101,22 @@ it("drops the attribution lines agents like to sign off with", async () => {
   });
   expect(await write(defaultAISettings)).toBe(
     "Raise the limit\n\nTwo was enough for the new importer.",
+  );
+});
+
+it("falls back to Claude on its own model when Codex can't run, not on Codex's", async () => {
+  await changedRepo();
+  failing.set("codex", "Codex is not signed in");
+  expect(await write(defaultAISettings)).toBe("Raise the limit");
+  expect(runs.map((r) => r.provider)).toEqual(["codex", "claude"]);
+  expect(runs[1].choice).toMatchObject({ model: "", reasoningEffort: "" });
+});
+
+it("says why the user's own agent failed, not only the fallback's", async () => {
+  await changedRepo();
+  failing.set("codex", "Codex is not signed in");
+  failing.set("claude", "Claude could not complete this question");
+  await expect(write(defaultAISettings)).rejects.toThrow(
+    /^Codex: Codex is not signed in\. Claude: Claude could not/,
   );
 });

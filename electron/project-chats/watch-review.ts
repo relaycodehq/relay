@@ -1,8 +1,6 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { helperFallbacks } from "../../shared/agents";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
-import { defaultAISettings } from "../../shared/settings";
 import type {
   WatchNote,
   WatchReview,
@@ -11,6 +9,7 @@ import type {
 } from "../../shared/watch";
 import { agentRuntime } from "../agents";
 import { emptyCwd } from "../agents/helper-output";
+import { helperAttempts } from "../agents/helper-fallback";
 import {
   judgePrompt,
   parseVerdicts,
@@ -163,10 +162,7 @@ export class WatchReviews {
 
   private async ask(prompt: string) {
     const settings = this.store.aiSettings();
-    const first = settings.questionsProvider;
-    for (const provider of helperFallbacks(first)) {
-      const choice =
-        provider === first ? settings.questions : defaultAISettings.questions;
+    for (const { provider, choice } of helperAttempts(settings, "questions")) {
       try {
         return await agentRuntime(provider).run({
           cwd: await emptyCwd(),

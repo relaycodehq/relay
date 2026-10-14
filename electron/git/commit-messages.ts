@@ -3,8 +3,9 @@ import { readWorkingFile } from "./working-files";
 import { workingTree } from "./working-tree";
 import { agentRuntime } from "../agents";
 import { emptyCwd, unfence } from "../agents/helper-output";
-import { helperFallbacks } from "../../shared/agents";
-import { defaultAISettings, type AISettings } from "../../shared/settings";
+import { helperAttempts, helperFailure } from "../agents/helper-fallback";
+import type { AgentProvider } from "../../shared/agents";
+import type { AISettings } from "../../shared/settings";
 
 const SUMMARY_LIMIT = 6_000;
 const PATCH_LIMIT = 40_000;
@@ -107,13 +108,11 @@ export async function generateCommitMessage(
     "Patch:",
     limitSection(context.patch, PATCH_LIMIT),
   ].join("\n");
-  const first = settings.commitMessageProvider;
-  let lastError: unknown;
-  for (const provider of helperFallbacks(first)) {
-    const choice =
-      provider === first
-        ? settings.commitMessage
-        : defaultAISettings.commitMessage;
+  const failures: { provider: AgentProvider; error: unknown }[] = [];
+  for (const { provider, choice } of helperAttempts(
+    settings,
+    "commitMessage",
+  )) {
     const options = {
       cwd: await emptyCwd(),
       prompt,
@@ -131,13 +130,14 @@ export async function generateCommitMessage(
       const output = await agentRuntime(provider).run(options);
       const message = parseCommitMessage(output);
       if (message) return message;
-      lastError = new Error(`${provider} returned no usable commit message.`);
-    } catch (e) {
+      failures.push({
+        provider,
+        error: new Error("It returned no usable commit message."),
+      });
+    } catch (error) {
       signal.throwIfAborted();
-      lastError = e;
+      failures.push({ provider, error });
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Could not write a commit message.");
+  throw helperFailure(failures, "Could not write a commit message.");
 }

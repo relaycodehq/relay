@@ -8,12 +8,9 @@ import { readWorkingFile } from "./working-files";
 import { serializeRepo, workingTree } from "./working-tree";
 import { agentRuntime } from "../agents";
 import { emptyCwd, unfence } from "../agents/helper-output";
-import { helperFallbacks } from "../../shared/agents";
-import {
-  choiceLabel,
-  defaultAISettings,
-  type AISettings,
-} from "../../shared/settings";
+import { helperAttempts, helperFailure } from "../agents/helper-fallback";
+import type { AgentProvider } from "../../shared/agents";
+import { choiceLabel, type AISettings } from "../../shared/settings";
 import {
   MAX_SPLIT_COMMITS,
   type ApplyCommitSplit,
@@ -319,11 +316,8 @@ export async function planCommitSplit(
     ),
   ].join("\n");
   const ids = units.map((u) => u.id);
-  const first = settings.splitProvider;
-  let lastError: unknown;
-  for (const provider of helperFallbacks(first)) {
-    const choice =
-      provider === first ? settings.split : defaultAISettings.split;
+  const failures: { provider: AgentProvider; error: unknown }[] = [];
+  for (const { provider, choice } of helperAttempts(settings, "split")) {
     try {
       const output = await agentRuntime(provider).run({
         cwd: await emptyCwd(),
@@ -346,15 +340,16 @@ export async function planCommitSplit(
           commits,
           plannedBy: choiceLabel(choice, provider),
         };
-      lastError = new Error(`${provider} returned no usable commit plan.`);
-    } catch (e) {
+      failures.push({
+        provider,
+        error: new Error("It returned no usable commit plan."),
+      });
+    } catch (error) {
       signal.throwIfAborted();
-      lastError = e;
+      failures.push({ provider, error });
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Could not plan the commits.");
+  throw helperFailure(failures, "Could not plan the commits.");
 }
 
 /**

@@ -1,10 +1,11 @@
 import { agentRuntime } from "../../agents";
 import { emptyCwd, unfence } from "../../agents/helper-output";
-import { helperFallbacks } from "../../../shared/agents";
+import { helperAttempts, helperFailure } from "../../agents/helper-fallback";
+import type { AgentProvider } from "../../../shared/agents";
 import type { ClockifyBlock } from "../../../shared/clockify";
 import type { ProjectChat } from "../../../shared/projects";
 import { redacted } from "../../../shared/redact-secrets";
-import { defaultAISettings, type AISettings } from "../../../shared/settings";
+import type { AISettings } from "../../../shared/settings";
 
 const PROMPT_EXCERPT = 280;
 const PROMPTS_PER_THREAD = 4;
@@ -92,11 +93,8 @@ export async function describeBlocks(
     "",
     evidence,
   ].join("\n");
-  const first = settings.timesheetProvider;
-  let lastError: unknown;
-  for (const provider of helperFallbacks(first)) {
-    const choice =
-      provider === first ? settings.timesheet : defaultAISettings.timesheet;
+  const failures: { provider: AgentProvider; error: unknown }[] = [];
+  for (const { provider, choice } of helperAttempts(settings, "timesheet")) {
     try {
       const output = await agentRuntime(provider).run({
         cwd: await emptyCwd(),
@@ -113,13 +111,14 @@ export async function describeBlocks(
       });
       const descriptions = parseDescriptions(output, ids);
       if (descriptions) return descriptions;
-      lastError = new Error(`${provider} returned no usable descriptions.`);
-    } catch (e) {
+      failures.push({
+        provider,
+        error: new Error("It returned no usable descriptions."),
+      });
+    } catch (error) {
       signal.throwIfAborted();
-      lastError = e;
+      failures.push({ provider, error });
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Could not describe the day.");
+  throw helperFailure(failures, "Could not describe the day.");
 }
