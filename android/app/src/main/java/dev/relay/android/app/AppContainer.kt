@@ -1,16 +1,23 @@
 package dev.relay.android.app
 
+import android.app.Application
 import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dev.relay.android.features.home.HomeServices
+import dev.relay.android.features.dictation.Dictation
+import dev.relay.android.features.notifications.ThreadNotifications
+import dev.relay.android.features.readaloud.ReadAloud
+import dev.relay.android.features.updates.Updates
 import dev.relay.android.remote.OfflineCache
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.ThreadSeen
 import dev.relay.android.remote.credentials.ComputerSeen
 import dev.relay.android.remote.credentials.CredentialStore
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -21,7 +28,6 @@ import java.io.File
 class AppContainer(context: Context) {
     val app: Context = context.applicationContext
     val prefs = ShellPrefs(app)
-    private val scope = MainScope()
 
     /** When the phone last reached each computer; the computers sheet reads it. */
     val computerSeen = ComputerSeen(File(app.filesDir, "computers-seen.json"))
@@ -32,6 +38,21 @@ class AppContainer(context: Context) {
         seen = computerSeen,
         appVersion = app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "0.0.0",
     )
+
+    /** For work that outlives a screen: a switch or unpair that navigates away. */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    val updates = Updates(app, remote, scope).also { it.start() }
+    val notifications = ThreadNotifications(app as Application, remote, scope).also { it.start() }
+
+    // One voice at a time: dictating stops a reading and the other way round.
+    val dictation = Dictation.of(remote, app)
+    val readAloud = ReadAloud.of(remote).also { r ->
+        r.hold = { notifications.hold(ThreadNotifications.Reason.Read) }
+        r.release = { notifications.release(ThreadNotifications.Reason.Read) }
+        r.beforeStart = { dictation.stop() }
+        dictation.beforeStart = { r.stop() }
+    }
 
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))
     val home = HomeServices(app, remote, threadSeen)

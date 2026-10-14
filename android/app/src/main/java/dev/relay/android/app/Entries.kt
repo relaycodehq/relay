@@ -5,7 +5,6 @@ import androidx.navigation3.runtime.NavKey
 import dev.relay.android.app.gallery.GalleryScreen
 import dev.relay.android.app.screens.PaneEmpty
 import dev.relay.android.app.screens.PlaceholderScreen
-import dev.relay.android.app.screens.SettingsScreen
 import dev.relay.android.features.files.FileScreen
 import dev.relay.android.features.files.FilesScreen
 import dev.relay.android.features.git.BranchesScreen
@@ -17,6 +16,8 @@ import dev.relay.android.features.git.TurnScreen
 import dev.relay.android.features.tasks.TasksScreen
 import dev.relay.android.features.home.HomeScreen
 import dev.relay.android.features.project.ProjectScreen
+import dev.relay.android.features.pairing.PairScreen
+import dev.relay.android.features.settings.SettingsScreen
 import dev.relay.android.lib.navigation.Route
 
 /**
@@ -27,10 +28,10 @@ import dev.relay.android.lib.navigation.Route
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
     entry<Route.Home> { if (wide()) PaneEmpty() else HomeScreen(container.remote, container.home, container.computerSeen, pane = false, selected = null) }
-    entry<Route.Settings> { SettingsScreen(container.prefs) }
+    entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
     entry<Route.Gallery> { GalleryScreen() }
 
-    entry<Route.Pair> { PlaceholderScreen("Pair a computer", it) }
+    entry<Route.Pair> { PairScreen(container.remote, it.link) }
     entry<Route.NewThread> { PlaceholderScreen("New thread", it) }
     entry<Route.Thread> { PlaceholderScreen("Thread", it) }
     entry<Route.Reply> { PlaceholderScreen("Reply", it) }
