@@ -136,20 +136,29 @@ function parseStatus(raw: string): WorkingChange[] {
  */
 export async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
-  const config = (key: string) =>
-    git(root, ["config", "--get", key]).then(
-      (out) => out.trim(),
-      () => "",
-    );
-  const [fetched, pushTo, pushDefault, merge, mode, remotes] =
-    await Promise.all([
-      config(`branch.${branch}.remote`).then((value) => value || "origin"),
-      config(`branch.${branch}.pushRemote`),
-      config("remote.pushDefault"),
-      config(`branch.${branch}.merge`),
-      config("push.default"),
-      git(root, ["remote"]).then((out) => out.trim().split("\n")),
-    ]);
+  // Every working-tree refresh asks, so one read of all settings rather than
+  // a Git run per key. Section and key names come lowercased, branch and
+  // remote names as written; a later value wins, as with `config --get`.
+  const settings = new Map<string, string>();
+  const listed = await git(root, ["config", "-z", "--list"]).catch(() => "");
+  for (const entry of listed.split("\0")) {
+    const at = entry.indexOf("\n");
+    if (entry)
+      settings.set(
+        at < 0 ? entry : entry.slice(0, at),
+        at < 0 ? "" : entry.slice(at + 1).trim(),
+      );
+  }
+  const config = (key: string) => settings.get(key) ?? "";
+  const fetched = config(`branch.${branch}.remote`) || "origin",
+    pushTo = config(`branch.${branch}.pushremote`),
+    pushDefault = config("remote.pushdefault"),
+    merge = config(`branch.${branch}.merge`),
+    mode = config("push.default");
+  const remotes = [...settings.keys()]
+    .filter((key) => key.startsWith("remote."))
+    .map((key) => key.slice(7, key.lastIndexOf(".")))
+    .filter(Boolean);
   const remote = pushTo || pushDefault || fetched;
   const tracks = remote === fetched;
   const followsUpstream = mode === "upstream" || mode === "tracking";

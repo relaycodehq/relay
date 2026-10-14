@@ -602,6 +602,24 @@ it("pushes to the branch's push remote and keeps tracking the remote it fetches 
     await rm(fork, { recursive: true, force: true });
   }
 });
+it("reads push settings as Git does: dotted remotes, branch case, a remote gone", async () => {
+  const fork = await mkdtemp(join(tmpdir(), "relay-fork-"));
+  try {
+    execFileSync("git", ["init", "--bare", "-q", fork]);
+    git("remote", "add", "my.fork", fork);
+    git("checkout", "-q", "-b", "Feature", "--track", "origin/review");
+    git("config", "branch.Feature.pushRemote", "my.fork");
+    expect((await workingTree(root)).pushTarget).toBe("my.fork/Feature");
+    // A setting for the same name in another case belongs to another branch.
+    git("config", "--unset", "branch.Feature.pushRemote");
+    git("config", "branch.feature.pushRemote", "my.fork");
+    expect((await workingTree(root)).pushTarget).toBe("origin/Feature");
+    git("config", "branch.Feature.pushRemote", "gone");
+    expect((await workingTree(root)).pushTarget).toBeNull();
+  } finally {
+    await rm(fork, { recursive: true, force: true });
+  }
+});
 it("pushes a branch tracking another name under its own name, as git push would", async () => {
   const onRemote = (ref: string) =>
     execFileSync("git", ["-C", remote, "rev-parse", ref], {
