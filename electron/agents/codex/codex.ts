@@ -5,6 +5,7 @@ import {
 } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { CodexRequestSpeed } from "./codex-speed";
+import { CodexCacheClock } from "./codex-cache";
 import { CodexSubagents, codexSubagentBooks } from "./codex-subagents";
 import { acquireCodexConnection } from "./codex-connection";
 import { codexHelperSandbox } from "./codex-helper-sandbox";
@@ -23,7 +24,7 @@ import { CodexAnswerStream } from "./answer-stream";
 import { CodexGoalHold, codexGoal, codexGoals, goalReply } from "./codex-goal";
 import { withTimeout } from "../../util/timeout";
 import { ANSWER_LIMIT, guardSteer } from "../turn-kit";
-import type { ContextUsage } from "../../../shared/projects";
+import type { ContextUsage, PromptCache } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
 import {
   codexFailure,
@@ -171,6 +172,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     !!options.session &&
     (job.kind === "prompt" || job.kind === "adopt" || job.kind === "goal");
   const speed = new CodexRequestSpeed();
+  const cacheClock = new CodexCacheClock();
   const goals = new CodexGoalHold(
     connection.goal,
     (goal) => options.onGoal?.(goal),
@@ -207,18 +209,23 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     if (n.method === "account/rateLimits/updated")
       spentUntil = codexSpentUntil(n.params.rateLimits) ?? spentUntil;
     if (n.method === "thread/tokenUsage/updated") {
-      const usage = codexContextUsage(n.params.tokenUsage);
-      if (usage) options.onContext?.(usage);
-      watcher?.requested(n.params.tokenUsage);
       // `last` is the one request that just finished.
       const last = (
         n.params.tokenUsage as {
           last?: { outputTokens?: number; reasoningOutputTokens?: number };
         } | null
       )?.last;
+      const tokens = last && codexTokens(last);
+      // A compaction's report carries no request, and its summary replaces
+      // the conversation the cache held.
+      const usage = codexContextUsage(
+        n.params.tokenUsage,
+        tokens && requested(tokens) ? cacheClock.reported() : undefined,
+      );
+      if (usage) options.onContext?.(usage);
+      watcher?.requested(n.params.tokenUsage);
       const model = options.choice.model || connection.started?.model;
       const streamed = last && speed.finish(last);
-      const tokens = last && codexTokens(last);
       if (tokens && model && requested(tokens))
         options.onUsage?.({
           model,
@@ -321,6 +328,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         options.session?.onPoint?.(n.params.turn.id);
       }
       goals.started();
+      cacheClock.turnStarted();
       turnId = n.params.turn.id;
     }
     if (n.method === "turn/completed") {
@@ -774,7 +782,10 @@ const requested = (t: ReturnType<typeof codexTokens>) =>
   t.input + t.cacheRead + t.cacheWrite + t.output > 0;
 
 /** Codex reports the newest request's size as `last`; that is what fills the window. */
-export function codexContextUsage(value: unknown): ContextUsage | undefined {
+export function codexContextUsage(
+  value: unknown,
+  cache?: PromptCache,
+): ContextUsage | undefined {
   const usage = readTokenUsage(value);
   const used = usage?.last?.totalTokens;
   if (!usage || typeof used !== "number" || !Number.isFinite(used) || used <= 0)
@@ -787,6 +798,7 @@ export function codexContextUsage(value: unknown): ContextUsage | undefined {
     ...(typeof total === "number" && total > used
       ? { totalTokens: total }
       : {}),
+    ...(cache ? { cache } : {}),
   };
 }
 

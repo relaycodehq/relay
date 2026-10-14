@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { codexContextUsage } from "../../electron/agents/codex/codex";
 import {
+  CODEX_CACHE_TTL,
+  CodexCacheClock,
+} from "../../electron/agents/codex/codex-cache";
+import {
   claudeCacheTtl,
   claudeContextTokens,
 } from "../../electron/agents/claude/project";
@@ -120,6 +124,26 @@ describe("context window", () => {
     expect(claudeCacheTtl({ cache_read_input_tokens: 30_000 })).toBe(five);
     expect(claudeCacheTtl({ input_tokens: 12 })).toBeUndefined();
     expect(claudeCacheTtl(null, hour)).toBe(hour);
+  });
+
+  it("dates a Codex request's cache read from when it went out, not when it reported", () => {
+    let now = 1_000;
+    const clock = new CodexCacheClock(() => now);
+    clock.turnStarted();
+    // The first request's tools ran for four minutes before Codex reported it.
+    now += 4 * 60_000;
+    expect(clock.reported()).toEqual({ at: 1_000, ttlMs: CODEX_CACHE_TTL });
+    now += 30_000;
+    expect(clock.reported().at).toBe(1_000 + 4 * 60_000);
+    // Hours later the next message starts the clock afresh.
+    now += 3 * 60 * 60_000;
+    clock.turnStarted();
+    const sent = now;
+    now += 5_000;
+    expect(clock.reported().at).toBe(sent);
+    expect(
+      codexContextUsage({ last: { totalTokens: 42_000 } }, { at: 9, ttlMs: 1 }),
+    ).toEqual({ usedTokens: 42_000, cache: { at: 9, ttlMs: 1 } });
   });
 
   it("burns for the first quarter of the cache's life and freezes when it expires", () => {
