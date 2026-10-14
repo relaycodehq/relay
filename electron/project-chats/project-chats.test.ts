@@ -2734,9 +2734,21 @@ it("uses native Plan mode and answers harness questions without adding answers t
   expect(calls.find((c) => c.response).response.result).toEqual({
     answers: { approach: { answers: ["Small change"] } },
   });
-  expect(
-    await readFile(join(root, "chats", chat.id + ".json"), "utf8"),
-  ).not.toContain("Small change");
+  const { messages } = await chats.get(chat.id);
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+  expect(messages.some((m) => m.body.includes("Small change"))).toBe(false);
+  expect(messages[1].trace).toContainEqual(
+    expect.objectContaining({
+      activity: expect.objectContaining({
+        questionAnswers: [
+          {
+            question: "Which approach should the plan use?",
+            answer: "Small change",
+          },
+        ],
+      }),
+    }),
+  );
 });
 
 it("replaces automatic review policy when returning to Full access in a saved thread", async () => {

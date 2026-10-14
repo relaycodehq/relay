@@ -733,7 +733,7 @@ test("usage limits read each agent on the account the thread pinned for it", asy
             ],
             message: null,
           }
-        : { provider, windows: [], message: "Sign in with codex" };
+        : { provider, windows: [], message: `Sign in with ${provider}` };
     },
   });
   expect(parse(await call(threads, lead.id, "usage_limits", {}))).toEqual([
@@ -747,10 +747,12 @@ test("usage limits read each agent on the account the thread pinned for it", asy
       },
       weekly: { usedPercent: 12 },
     },
+    { agent: "muse", note: "Sign in with muse" },
   ]);
   expect(reads).toEqual([
     ["codex", false, "work"],
     ["claude", false, undefined],
+    ["muse", false, undefined],
   ]);
 });
 
