@@ -843,6 +843,11 @@
   object-fit: contain;
   background: none;
 }
+.sb-project-badge.scratchpad {
+  border-radius: 0;
+  background: var(--accent);
+  mask: url("../../../assets/scratchpad-mark.svg") center / contain no-repeat;
+}
 .sb-card-name {
   flex: 1;
   min-width: 0;

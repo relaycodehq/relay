@@ -69,7 +69,7 @@ function Person({ login, size = 18 }: { login: string; size?: number }) {
 /** A project's badge, or an outline for a repository with no clone here. */
 export function RepoMark({ project }: { project?: Project }) {
   return project ? (
-    <ProjectBadge id={project.id} name={project.name} />
+    <ProjectBadge project={project} />
   ) : (
     <span className="pulls-remote-mark" aria-hidden>
       <FolderGit2 size={10} />

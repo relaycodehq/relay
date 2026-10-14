@@ -94,11 +94,11 @@ export function ProjectTitle({
     <div className="project-window-title">
       {project?.plain ? (
         <span className="ci-plain">
-          <ProjectBadge id={project.id} name={project.name} />
+          <ProjectBadge project={project} />
         </span>
       ) : project ? (
         <CiStatusIcon projectId={project.id} chatId={chat?.id}>
-          <ProjectBadge id={project.id} name={project.name} />
+          <ProjectBadge project={project} />
         </CiStatusIcon>
       ) : (
         <FolderGit2 size={14} />

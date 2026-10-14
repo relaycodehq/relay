@@ -125,7 +125,7 @@ export function ProjectSearch({
                   if (item.id === current) onSelect(item);
                 }}
               >
-                <ProjectBadge id={item.id} name={item.name} />
+                <ProjectBadge project={item} />
                 <span className="headline-project-row-label">
                   <strong>{item.name}</strong>
                   <MiddleTruncate

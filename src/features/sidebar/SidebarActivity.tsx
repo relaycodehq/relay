@@ -279,7 +279,7 @@ function ThreadCard({
         >
           {!compact && (
             <div className="sb-card-top">
-              <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+              <ProjectBadge project={p} />
               <span className="sb-card-name">
                 <span className="sb-card-project">{p?.name}</span>
                 {jump && (
@@ -462,7 +462,7 @@ function SettledLead({
         onClick={() => actions.open(c)}
         onKeyDown={rowKeys(() => actions.open(c))}
       >
-        <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+        <ProjectBadge project={p} />
         <ThreadTitle
           className="sb-compact-title"
           title={c.title}
@@ -559,7 +559,7 @@ function CompactRow({
         onClick={() => actions.open(c)}
         onKeyDown={rowKeys(() => actions.open(c))}
       >
-        <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+        <ProjectBadge project={p} />
         {actions.renaming === c.id ? (
           <ThreadRename
             chat={c}

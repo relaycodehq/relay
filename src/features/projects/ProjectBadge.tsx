@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 
 /** Stable hue per project so the activity cards are scannable by colour. */
@@ -20,12 +21,15 @@ export function useProjectIcon(id: string | undefined) {
   );
 }
 
-export function ProjectBadge({ id, name }: { id?: string; name: string }) {
-  const icon = useProjectIcon(id);
+export function ProjectBadge({ project }: { project: Project | undefined }) {
+  const icon = useProjectIcon(project?.scratch ? undefined : project?.id);
+  if (project?.scratch)
+    return <span className="sb-project-badge scratchpad" aria-hidden />;
   if (icon)
     return (
       <img className="sb-project-badge icon" src={icon} alt="" aria-hidden />
     );
+  const name = project?.name ?? "?";
   return (
     <span
       className="sb-project-badge"

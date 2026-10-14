@@ -51,7 +51,7 @@ export function DraftCard({
       onKeyDown={rowKeys(open)}
     >
       <div className="sb-card-top">
-        <ProjectBadge id={project.id} name={project.name} />
+        <ProjectBadge project={project} />
         <span className="sb-card-name">
           <span className="sb-card-project">{project.name}</span>
         </span>
