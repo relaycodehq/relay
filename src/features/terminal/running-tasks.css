@@ -16,9 +16,72 @@
   color: var(--text);
   box-shadow: 0 8px 24px -12px #0006;
   overflow: hidden;
+  view-transition-name: running-tasks;
 }
+/* Folded, it floats over the text where a pane has no room beside it, so it
+   frosts what's behind instead of hiding it or letting it clash. */
 .running-tasks.collapsed {
   width: auto;
+  height: 30px;
+  padding: 0;
+  border-color: color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--inbox) 55%, transparent);
+  backdrop-filter: blur(10px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent),
+    0 6px 18px -8px #0008;
+  transition: background 0.15s;
+}
+.running-tasks.collapsed:hover,
+.running-tasks.collapsed:focus-within {
+  background: color-mix(in srgb, var(--inbox) 80%, transparent);
+}
+/* The pill grows into the card from the corner they share: both shapes keep
+   to the top right, the group's size carries the morph, and only the pill
+   fades, so the card never shows the text through it. */
+::view-transition-group(running-tasks) {
+  overflow: clip;
+  border-radius: 14px;
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+::view-transition-old(running-tasks),
+::view-transition-new(running-tasks) {
+  height: 100%;
+  object-fit: none;
+  object-position: right top;
+  mix-blend-mode: normal;
+}
+:active-view-transition-type(running-tasks-open)::view-transition-old(
+  running-tasks
+) {
+  z-index: 1;
+  animation-duration: 140ms;
+}
+:active-view-transition-type(running-tasks-open)::view-transition-new(
+  running-tasks
+),
+:active-view-transition-type(running-tasks-close)::view-transition-old(
+  running-tasks
+) {
+  animation: none;
+}
+:active-view-transition-type(running-tasks-close)::view-transition-new(
+  running-tasks
+) {
+  animation-duration: 160ms;
+  animation-delay: 40ms;
+  animation-fill-mode: backwards;
+}
+/* Nothing else in the window takes part. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+/* A selection dragged under it would otherwise end in its text. */
+.workspace-pane:has(.project-messages:active) .running-tasks {
+  pointer-events: none;
 }
 .running-tasks-header {
   display: flex;
@@ -35,7 +98,11 @@
   cursor: pointer;
 }
 .running-tasks.collapsed .running-tasks-header {
-  padding-bottom: 4px;
+  gap: 7px;
+  height: 100%;
+  padding: 0 9px 0 12px;
+  border-radius: inherit;
+  font-size: 12.5px;
 }
 .running-tasks-header:hover {
   background: transparent;
@@ -46,6 +113,10 @@
 }
 .running-tasks-count {
   font-variant-numeric: tabular-nums;
+}
+.running-tasks.collapsed .running-tasks-count {
+  color: var(--text);
+  font-weight: 600;
 }
 .running-tasks-chevron {
   flex-shrink: 0;

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -19,6 +20,7 @@ import { agentName } from "../../../shared/agents";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import type { ProjectTask, TaskKind } from "../../../shared/tasks";
 import { api } from "../../lib/api";
+import { useChatWidth } from "../../lib/chat-width";
 import "./running-tasks.css";
 
 const icons: Record<TaskKind, typeof Globe> = {
@@ -51,6 +53,39 @@ function elapsed(started: number, now: number) {
   return `${Math.floor(s / 86400)}d`;
 }
 
+/** The open card's width and inset from the pane's edge (running-tasks.css), and the gap it keeps from the text. */
+const CARD = 280 + 14 + 8;
+
+/** Whether the open card fits beside the thread's column, which centres in
+ * the pane at --thread-width, instead of over its text. */
+function useRoomBeside(card: HTMLElement | null) {
+  const column = useChatWidth();
+  const [pane, setPane] = useState(0);
+  // Measured before paint, so the card doesn't open for a frame and fold.
+  useLayoutEffect(() => {
+    const parent = card?.parentElement;
+    if (!parent) return;
+    setPane(parent.clientWidth);
+    const observer = new ResizeObserver(() => setPane(parent.clientWidth));
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [card]);
+  return pane - column >= 2 * CARD;
+}
+
+/** Runs `change` as a morph between the card's two shapes (running-tasks.css). */
+function morph(way: "open" | "close", change: () => void) {
+  if (
+    !document.startViewTransition ||
+    matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+    return change();
+  document.startViewTransition({
+    update: () => flushSync(change),
+    types: [`running-tasks-${way}`],
+  });
+}
+
 /** Shell processes Claude and Codex left running in this project, from any conversation. */
 export function RunningTasks({
   project,
@@ -62,7 +97,14 @@ export function RunningTasks({
   onOpenChat: (chat: ChatSummary) => void;
 }) {
   const qc = useQueryClient();
-  const [collapsed, setCollapsed] = useStoredFlag("relay-tasks-collapsed");
+  const [folded, setFolded] = useStoredFlag("relay-tasks-collapsed");
+  const [card, setCard] = useState<HTMLElement | null>(null);
+  const roomy = useRoomBeside(card);
+  // Without room it stays folded, and opens only until it's closed or the
+  // room comes back; the choice saved for a roomy pane stays as it was.
+  const [peeking, setPeeking] = useState(false);
+  if (roomy && peeking) setPeeking(false);
+  const collapsed = roomy ? folded : !peeking;
   const [busy, setBusy] = useState<Map<string, "stop" | "restart">>(new Map());
   const [error, setError] = useState<string>();
   const tasks = useQuery({
@@ -73,7 +115,10 @@ export function RunningTasks({
   const list = tasks.data ?? [];
   if (!list.length) return null;
   const now = Date.now();
-  const toggle = () => setCollapsed((v) => !v);
+  const toggle = () =>
+    morph(collapsed ? "open" : "close", () =>
+      roomy ? setFolded(!folded) : setPeeking(!peeking),
+    );
   const act = async (task: ProjectTask, action: "stop" | "restart") => {
     setBusy((b) => new Map(b).set(task.id, action));
     setError(undefined);
@@ -100,7 +145,8 @@ export function RunningTasks({
   const seen = new Set<string>();
   return (
     <aside
-      className={`running-tasks ${collapsed ? "collapsed" : ""}`}
+      ref={setCard}
+      className={`running-tasks${collapsed ? " collapsed" : ""}`}
       aria-label="Running processes"
     >
       <button
