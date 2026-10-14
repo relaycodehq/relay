@@ -29,17 +29,20 @@ export function AgentQuestionForm({
   const select = (label: string) => {
     if (busy || !question) return;
     const current = answers[question.id] ?? [];
+    const unpick = current.includes(label);
     const next = {
       ...answers,
       [question.id]: question.multiple
-        ? current.includes(label)
+        ? unpick
           ? current.filter((v) => v !== label)
           : [...current, label]
-        : [label],
+        : unpick
+          ? []
+          : [label],
     };
     setAnswers(next);
     clearTimeout(timer.current);
-    if (!question.multiple && !deferred)
+    if (!question.multiple && !deferred && !unpick)
       timer.current = setTimeout(() => advance(next), 200);
   };
   const pick = useRef(select);
