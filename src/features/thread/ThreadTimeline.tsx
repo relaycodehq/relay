@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type RefObject,
+  type WheelEvent,
 } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
@@ -129,6 +130,15 @@ export function ThreadTimeline({
       onJump(turns[pointer]!.id);
     } else if (e.key === "Escape") setPointer(null);
   };
+  // The strip lies over the view but isn't inside it, so a wheel over it
+  // would otherwise scroll nothing.
+  const onWheel = (e: WheelEvent<HTMLElement>) => {
+    const view = scroll.current;
+    if (!view) return;
+    const unit =
+      e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.clientHeight : 1;
+    view.scrollBy(e.deltaX * unit, e.deltaY * unit);
+  };
   const turn = pointer === null ? undefined : turns[pointer];
   return (
     // The nav is the whole strip down the view's edge, so the rail shows as
@@ -136,6 +146,7 @@ export function ThreadTimeline({
     <nav
       className="thread-timeline"
       aria-label="Prompts in this thread"
+      onWheel={onWheel}
       style={
         {
           "--timeline-top": `${room.top}px`,
