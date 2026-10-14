@@ -7,6 +7,7 @@ import { codexRequest } from "./codex-requests";
 import { CodexRequestSpeed } from "./codex-speed";
 import { CodexSubagents, codexSubagentBooks } from "./codex-subagents";
 import { acquireCodexConnection } from "./codex-connection";
+import { codexHelperSandbox } from "./codex-helper-sandbox";
 import {
   codexTokens,
   codexTurnWatcher,
@@ -55,12 +56,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   const oneOff = job.kind === "helper";
   const executable = await findExecutable("codex");
   options.signal.throwIfAborted();
-  const filesystem: Record<string, string> = {
-    ":root": "deny",
-    ":minimal": "read",
-    [options.cwd]: "deny",
-  };
-  for (const image of options.images ?? []) filesystem[image.path] = "read";
+  const helper = oneOff
+    ? await codexHelperSandbox(executable, options.cwd, options.images)
+    : undefined;
+  const cwd = helper?.cwd ?? options.cwd;
   options.signal.throwIfAborted();
   const policy = oneOff
     ? undefined
@@ -74,11 +73,12 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     executable,
     [
       "app-server",
-      ...(policy
-        ? []
-        : [
+      ...(helper
+        ? [
             "-c",
-            `permissions.relay-one-off.filesystem={ ${Object.entries(filesystem)
+            `permissions.relay-one-off.filesystem={ ${Object.entries(
+              helper.filesystem,
+            )
               .map(
                 ([path, access]) =>
                   `${JSON.stringify(path)}=${JSON.stringify(access)}`,
@@ -88,7 +88,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             "permissions.relay-one-off.network.enabled=false",
             "-c",
             'default_permissions="relay-one-off"',
-          ]),
+          ]
+        : []),
       ...codexModelArgs(options.choice).filter(
         (_, i, a) => !(a[i] === "--model" || a[i - 1] === "--model"),
       ),
@@ -97,7 +98,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         ? ["-c", `review_model=${JSON.stringify(options.choice.model)}`]
         : []),
     ],
-    options.cwd,
+    cwd,
     {
       ...account,
       env: withWorktreeEnv(account.env, {
@@ -535,7 +536,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         const fork = options.session?.id ? undefined : options.session?.fork;
         // A side check's fork repeats these exactly, or it misses the thread's cache.
         const settings = {
-          cwd: options.cwd,
+          cwd,
           model: options.choice.model || null,
           ...(policy
             ? {
@@ -680,7 +681,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         "turn/start",
         {
           threadId,
-          cwd: options.cwd,
+          cwd,
           input: [
             ...(note ? [{ type: "text", text: note, text_elements: [] }] : []),
             ...((goalTurn ?? options.prompt)
