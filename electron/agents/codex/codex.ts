@@ -59,7 +59,6 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   const helper = oneOff
     ? await codexHelperSandbox(executable, options.cwd, options.images)
     : undefined;
-  const cwd = helper?.cwd ?? options.cwd;
   options.signal.throwIfAborted();
   const policy = oneOff
     ? undefined
@@ -98,7 +97,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         ? ["-c", `review_model=${JSON.stringify(options.choice.model)}`]
         : []),
     ],
-    cwd,
+    options.cwd,
     {
       ...account,
       env: withWorktreeEnv(account.env, {
@@ -536,7 +535,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         const fork = options.session?.id ? undefined : options.session?.fork;
         // A side check's fork repeats these exactly, or it misses the thread's cache.
         const settings = {
-          cwd,
+          cwd: options.cwd,
           model: options.choice.model || null,
           ...(policy
             ? {
@@ -681,7 +680,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         "turn/start",
         {
           threadId,
-          cwd,
+          cwd: options.cwd,
           input: [
             ...(note ? [{ type: "text", text: note, text_elements: [] }] : []),
             ...((goalTurn ?? options.prompt)
