@@ -1837,6 +1837,27 @@ it("steers an active Codex turn natively, and resumes its saved session with the
   ]);
 });
 
+it("queues a currency-prefixed skill instead of steering the active turn", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture codex steer"));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
+    ).toBeGreaterThan(0),
+  );
+  const followup = {
+    ...input("@codex use €review src/a.ts"),
+    delivery: "steer" as const,
+  };
+  await chats.send(chat.id, followup);
+  const saved = await chats.get(chat.id);
+  expect(saved.queue?.map((q) => q.input.id)).toEqual([followup.id]);
+  expect(saved.messages.some((m) => m.id === followup.id)).toBe(false);
+  expect(await agentCalls()).not.toContain('"steer"');
+  await chats.queueAction(chat.id, "remove", followup.id);
+  await chats.cancel(chat.id);
+});
+
 it("steers an active Codex turn with a screenshot", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));

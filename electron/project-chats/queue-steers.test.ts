@@ -54,3 +54,17 @@ it("waits for what an agent only takes at the start of a turn", () => {
   // A screenshot can steer.
   expect(steers(send("@codex look", { images: [image] }), running)).toBe(true);
 });
+
+it("queues skills with every supported currency prefix instead of steering", () => {
+  const cursor = send("@cursor Review the project", { provider: "cursor" });
+  for (const prefix of ["$", "€", "£", "¥"])
+    expect(
+      steers(
+        send(`@cursor use ${prefix}review src/a.ts`, { provider: "cursor" }),
+        cursor,
+      ),
+    ).toBe(false);
+  expect(
+    steers(send("@cursor costs €20", { provider: "cursor" }), cursor),
+  ).toBe(true);
+});

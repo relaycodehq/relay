@@ -7,6 +7,7 @@ import type {
 import { replyRoot, sentBy, sentSettingsOf } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
 import { compactInstructions } from "../../shared/commands";
+import { mayMentionSkill } from "../../shared/skill-mentions";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
@@ -43,7 +44,8 @@ export function steers(
     JSON.stringify(next.choice) !== JSON.stringify(prior.choice) ||
     next.contextWindow !== prior.contextWindow ||
     next.selection ||
-    /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
+    mayMentionSkill(asked.question) ||
+    /(?:^|\s)\/skill:/.test(asked.question) ||
     /^\s*\//.test(asked.question)
   );
 }
