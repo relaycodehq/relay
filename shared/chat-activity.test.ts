@@ -322,6 +322,17 @@ describe("unread divider", () => {
     ).toBeUndefined();
   });
 
+  it("separates nothing in a thread whose first answer is new", () => {
+    // A thread you just started, or never opened: before you first read it,
+    // it counts as read up to when this device started keeping track.
+    const thread = [
+      { ...m("ask", 100, 100), role: "user" as const },
+      { ...m("reloaded", 102, 102), reload: { skills: [] } as never },
+      m("a1", 105, 200),
+    ];
+    expect(unreadStart(thread, [{ from: 1, to: 400 }])).toBeUndefined();
+  });
+
   it("never goes above your own message or a note about the session", () => {
     const thread = [
       m("ask", 100, 100),

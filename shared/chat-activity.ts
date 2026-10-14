@@ -275,7 +275,8 @@ export function awayDuring(
  * A message that started and ended while you watched is not new, even below
  * the divider. Your own messages and Relay's notes about the session (a
  * compaction, a reload, a worktree's setup) are never what's new. None when nothing is new, or
- * when the divider would sit above the first message and so separate nothing.
+ * when only those sit above it, so it would separate nothing you had read: a
+ * thread you just started, or one you had never opened.
  */
 export function unreadStart(
   messages: (Pick<ChatMessage, "id" | "created" | "ended"> &
@@ -287,7 +288,8 @@ export function unreadStart(
     >)[],
   away: AwayWindow[],
 ): { id: string; since: number } | undefined {
-  for (const [index, m] of messages.entries()) {
+  let readSome = false;
+  for (const m of messages) {
     if (
       (m.role === "user" && !m.author) ||
       m.compaction ||
@@ -296,7 +298,8 @@ export function unreadStart(
     )
       continue;
     const gap = awayDuring(m, away);
-    if (gap) return index ? { id: m.id, since: gap.from } : undefined;
+    if (gap) return readSome ? { id: m.id, since: gap.from } : undefined;
+    readSome = true;
   }
 }
 
