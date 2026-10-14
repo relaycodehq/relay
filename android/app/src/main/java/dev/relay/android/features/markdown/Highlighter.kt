@@ -173,7 +173,7 @@ private val GRAMMARS: Map<String, List<Rule>> = mapOf(
         Rule("(?<![\\w$])#.*", TokenKind.Comment),
         Rule(DOUBLE, TokenKind.Text),
         Rule("'[^']*'?", TokenKind.Text),
-        Rule("\\$\\{[^}\\n]*}?|\\$[\\w@#?$!*-]", TokenKind.Property),
+        Rule("\\$\\{[^}\\n]*\\}?|\\$[\\w@#?$!*-]", TokenKind.Property),
         Rule(keywords("if then else elif fi for in do done while until case esac function return local export"), TokenKind.Keyword),
         Rule("(?m)(?<=^|[|;&]\\s{0,8})[A-Za-z_][\\w.-]*", TokenKind.Function),
         Rule("(?<=\\s)--?[\\w-]+", TokenKind.Attribute),
