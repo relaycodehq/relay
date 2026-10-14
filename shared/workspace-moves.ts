@@ -45,7 +45,8 @@ export function shownWorkspaceMoves(moves: WorkspaceMove[] = []) {
   let before: string | undefined;
   for (let i = 0; i < moves.length;) {
     let end = i;
-    while (moves[end + 1]?.after === moves[i].after) end++;
+    // Bounded: a move with no message before it has `after` undefined, as has the slot past the end.
+    while (end + 1 < moves.length && moves[end + 1].after === moves[i].after) end++;
     const group = moves.slice(i, end + 1);
     const last = group[group.length - 1];
     if (last.to !== before || group.some((m) => m.how !== "switched"))
