@@ -31,6 +31,7 @@ import { savedThreadWindows } from "../shared/thread-windows";
 import {
   offerCrashReport,
   offerWindowReport,
+  draftBugReport,
   reportBug,
   setUpBugReports,
   watchForCrashes,
@@ -637,6 +638,7 @@ app
             ),
           handoffs: handoffs.sender,
           agents: threadAgents(agentUpdates),
+          reportProblem: draftBugReport,
           ...(process.env.RELAY_DEV_STALE
             ? { restart: () => devBuild.restart() }
             : {}),

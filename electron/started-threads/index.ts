@@ -230,6 +230,10 @@ export interface AgentProjects {
   rules(): Promise<Omit<FolderRules, "projects">>;
 }
 
+export type ReportProblem = (
+  fields: Required<RelayToolArgs<"report_relay_problem">>,
+) => Promise<void>;
+
 /** How long restart_relay waits for its answer to leave before Relay quits. */
 const RESTART_DELAY_MS = 1000;
 
@@ -240,6 +244,7 @@ export class StartedThreads {
   private look: RenderTools["look"];
   private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
+  private reportProblem: ReportProblem | undefined;
   private agentChoices: AgentChoices;
   private failureWatchMs: number;
   constructor(
@@ -257,6 +262,8 @@ export class StartedThreads {
       failureWatchMs?: number;
       /** Restarts Relay as its footer's Restart does; only under npm run dev. */
       restart?: () => void;
+      /** Fills in and shows Relay's Report a problem page; absent without windows. */
+      reportProblem?: ReportProblem;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -265,6 +272,7 @@ export class StartedThreads {
     this.look = options.look;
     this.handoffs = options.handoffs;
     this.restart = options.restart;
+    this.reportProblem = options.reportProblem;
     this.agentChoices = new AgentChoices(options.agents);
     this.failureWatchMs = options.failureWatchMs ?? 0;
   }
@@ -340,6 +348,13 @@ export class StartedThreads {
         return this.addProject(lead, input, signal);
       case "restart_relay":
         return this.restartRelay(lead, input, signal);
+      case "report_relay_problem":
+        if (!this.reportProblem)
+          return toolText("This Relay has no window to report from.", true);
+        await this.reportProblem({ kind: "bug", ...input });
+        return toolText(
+          "Relay's Report a problem page is open with your write-up, its version, system, agents and anonymized log. The user looks it over, can add screenshots, and sends it to GitHub themselves; tell them that. Nothing was sent.",
+        );
       case "open_preview":
       case "screenshot":
       case "console_errors":

@@ -66,6 +66,23 @@ export function ReportProblem() {
       setFields(fieldsOf(p));
     }, setError);
   }, []);
+  const draftId = useRef<string>(undefined);
+  draftId.current = preview?.draft.id;
+  // An agent filled in a new report while this page was open.
+  useEffect(
+    () =>
+      api.onBugReport(() =>
+        api.openBugReport().then((p) => {
+          if (p.draft.id === draftId.current) return;
+          rev.current = { typed: 0, saved: 0 };
+          setDirty(false);
+          setPreviewing(false);
+          setPreview(p);
+          setFields(fieldsOf(p));
+        }, setError),
+      ),
+    [],
+  );
 
   function update(change: Partial<BugReportFields>) {
     rev.current.typed++;

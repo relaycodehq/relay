@@ -208,6 +208,21 @@ export class BugReports {
     this.forget();
   }
 
+  /**
+   * An agent's write-up of what the user asked it to report. Starts a new
+   * report, so it never overwrites one the user is still writing.
+   */
+  async prefill(fields: Pick<BugReportDraft, "kind" | "title" | "description">) {
+    await this.change((draft) => {
+      if (draft.submission?.status !== "sent" && !isEmpty(draft))
+        throw new Error(
+          "The user is already writing a report on Relay's Report a problem page. Ask them to send or discard it first, or give them your write-up to paste in.",
+        );
+      Object.assign(draft, this.fresh({ kind: "asked" }), fields);
+    });
+    this.forget();
+  }
+
   /** The page opened: looks at the system, the log and the `gh` login again. */
   open() {
     this.forget();

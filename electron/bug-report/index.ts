@@ -14,7 +14,10 @@ import {
 } from "electron";
 import { agentName } from "../../shared/agents";
 import type { AgentVersion } from "../../shared/agent-updates";
-import type { BugReportOccasion } from "../../shared/bug-report";
+import type {
+  BugReportFields,
+  BugReportOccasion,
+} from "../../shared/bug-report";
 import type { Project } from "../../shared/projects";
 import type { AISettings } from "../../shared/settings";
 import { releasesRepo } from "../../shared/updates";
@@ -126,6 +129,16 @@ export async function reportBug(
 ) {
   if (!reports) throw new Error("Relay is still starting.");
   await reports.begin(occasion);
+  reports.want();
+  show?.();
+}
+
+/** Fills a new report with an agent's write-up and shows the page. */
+export async function draftBugReport(
+  fields: Pick<BugReportFields, "kind" | "title" | "description">,
+) {
+  if (!reports) throw new Error("Relay is still starting.");
+  await reports.prefill(fields);
   reports.want();
   show?.();
 }

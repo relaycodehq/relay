@@ -104,6 +104,7 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
     "show_html",
     "ask_html",
     "preview_html",
+    "report_relay_problem",
   ]);
   expect(list.result.tools[0].inputSchema.properties.threads.type).toBe(
     "array",
@@ -118,6 +119,39 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
   ).json();
   expect(called.result).toEqual(toolText("ok"));
   expect(calls).toEqual([{ chatId: "chat-1", name: "list_threads", args: {} }]);
+});
+
+test("offers the report prompt with the user's words in it", async () => {
+  const url = await serve(async () => toolText("never"));
+  const list = await (
+    await post(url, { jsonrpc: "2.0", id: 1, method: "prompts/list" })
+  ).json();
+  expect(list.result.prompts.map((p: { name: string }) => p.name)).toEqual([
+    "report_relay_problem",
+  ]);
+  const got = await (
+    await post(url, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "prompts/get",
+      params: {
+        name: "report_relay_problem",
+        arguments: { what: "the diff pane went blank" },
+      },
+    })
+  ).json();
+  expect(got.result.messages[0].content.text).toContain(
+    "In my words: the diff pane went blank",
+  );
+  const missing = await (
+    await post(url, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "prompts/get",
+      params: { name: "nope" },
+    })
+  ).json();
+  expect(missing.error.code).toBe(-32602);
 });
 
 test("turns away a caller without a thread's token", async () => {
@@ -163,6 +197,7 @@ test("a started thread's path lists and answers only the tools that drive no oth
     "show_html",
     "ask_html",
     "preview_html",
+    "report_relay_problem",
   ]);
   const refused = await (
     await post(started, {

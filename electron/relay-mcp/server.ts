@@ -3,6 +3,7 @@
 // call outlives a restart of Relay; Relay serves it itself when there's no host.
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
+import { relayPrompt, relayPromptList } from "./prompts";
 import {
   DEV_PARAM,
   PAGES_PARAM,
@@ -93,7 +94,10 @@ async function answer(
       const asked = request.params?.protocolVersion;
       return reply({
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
-        capabilities: { tools: { listChanged: false } },
+        capabilities: {
+          tools: { listChanged: false },
+          prompts: { listChanged: false },
+        },
         serverInfo: { name: "relay", version: "1" },
       });
     }
@@ -101,6 +105,24 @@ async function answer(
       return reply({});
     case "tools/list":
       return reply({ tools });
+    case "prompts/list":
+      return reply({
+        prompts: tools.some((t) => t.name === "report_relay_problem")
+          ? relayPromptList
+          : [],
+      });
+    case "prompts/get": {
+      const prompt = tools.some((t) => t.name === "report_relay_problem")
+        ? relayPrompt(request.params?.name, request.params?.arguments)
+        : undefined;
+      return prompt
+        ? reply(prompt)
+        : failure(
+            request.id,
+            -32602,
+            `There is no prompt ${String(request.params?.name)}.`,
+          );
+    }
     case "tools/call": {
       const name = request.params?.name;
       if (!tools.some((t) => t.name === name))

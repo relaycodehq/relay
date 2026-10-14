@@ -197,6 +197,7 @@ const relayToolLabels: Record<string, string> = {
   list_projects: "Listed projects",
   add_project: "Added a project",
   restart_relay: "Restarted Relay",
+  report_relay_problem: "Drafted a report about Relay",
   show_html: "Showed a page",
   preview_html: "Looked at a page",
   ask_html: "Asked with a page",

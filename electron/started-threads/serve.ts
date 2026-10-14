@@ -18,6 +18,7 @@ import {
   EARLY_FAILURE_MS,
   StartedThreads,
   type AgentProjects,
+  type ReportProblem,
   type ThreadHandoffs,
 } from ".";
 import type { ThreadAgents } from "./thread-agents";
@@ -80,6 +81,7 @@ export async function answerRelayTools(
     handoffs?: ThreadHandoffs;
     agents?: ThreadAgents;
     restart?: () => void;
+    reportProblem?: ReportProblem;
   } = {},
 ) {
   const started = new StartedThreads(chats, {

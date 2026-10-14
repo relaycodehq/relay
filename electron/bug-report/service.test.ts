@@ -425,3 +425,19 @@ it("keeps what the user wrote, so a tidy-up can be undone", async () => {
   });
   expect(undone.draft.beforeTidy).toBeUndefined();
 });
+
+it("fills a new report from an agent but never over one being written", async () => {
+  const reports = service(fakeHost().host);
+  await reports.prefill({
+    kind: "bug",
+    title: "Diff pane goes blank",
+    description: "Clicked a file, the pane went white.",
+  });
+  const filled = await reports.open();
+  expect(filled.title).toBe("Diff pane goes blank");
+  expect(filled.draft.includeLog).toBe(true);
+  await expect(
+    reports.prefill({ kind: "feature", title: "Other", description: "x" }),
+  ).rejects.toThrow(/already writing a report/);
+  expect((await reports.open()).title).toBe("Diff pane goes blank");
+});
