@@ -95,8 +95,9 @@ fun <T> SegmentedTabs(
         Box((if (fill) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState())).fillMaxHeight()) {
         if (w > 0.dp) Box(
             Modifier.offset(x = x).width(w).fillMaxHeight()
-                .background(if (c.isDark) c.input.copy(alpha = 0.3f) else c.background, pill)
-                .ring(c.foreground.copy(alpha = 0.05f), pill),
+                // Tailwind's `bg-input/30` scales the colour's own alpha, it doesn't replace it.
+                .background(if (c.isDark) c.input.copy(alpha = c.input.alpha * 0.3f) else c.background, pill)
+                .ring(if (c.isDark) c.input else c.foreground.copy(alpha = 0.05f), pill),
         )
         Row(
             (if (fill) Modifier.fillMaxWidth() else Modifier).fillMaxHeight(),

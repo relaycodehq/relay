@@ -134,7 +134,7 @@ internal fun GallerySections() {
             CardHeader("relay", description = "3 threads running", action = { Button("Open", {}, variant = ButtonVariant.Outline, size = ButtonSize.Sm) })
             Text("Cards hold a hairline ring instead of a shadow.", color = c.mutedForeground)
         }
-        Card(variant = CardVariant.Muted, padding = 16.dp) { Text("Muted card") }
+        Card(Modifier.fillMaxWidth(), variant = CardVariant.Muted, padding = 16.dp) { Text("Muted card") }
     }
     Section("Banners") {
         Banner("Computer asleep", message = "It will catch up when it wakes.", tone = Tone.Info)

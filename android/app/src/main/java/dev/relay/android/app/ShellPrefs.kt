@@ -37,7 +37,7 @@ class ShellPrefs(context: Context) {
     var sidebarHidden by mutableStateOf(prefs.getBoolean(SIDEBAR_HIDDEN, false))
         private set
 
-    fun setSidebarHidden(hidden: Boolean) {
+    fun hideSidebar(hidden: Boolean) {
         sidebarHidden = hidden
         prefs.edit { putBoolean(SIDEBAR_HIDDEN, hidden) }
     }

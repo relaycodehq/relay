@@ -95,7 +95,9 @@ fun RelayTheme(colors: RelayColors, content: @Composable () -> Unit) {
         LocalRelayType provides DefaultType,
         LocalHairline provides hairline(density),
     ) {
-        MaterialTheme(colorScheme = material, typography = materialTypography, content = content)
+        MaterialTheme(colorScheme = material, typography = materialTypography) {
+            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.foreground, content = content)
+        }
     }
 }
 

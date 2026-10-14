@@ -92,7 +92,7 @@ fun WideLayout(
                     IconButton(
                         TablerIcons.Outline.LayoutSidebar,
                         if (prefs.sidebarHidden) "Show sidebar" else "Hide sidebar",
-                        { prefs.setSidebarHidden(!prefs.sidebarHidden) },
+                        { prefs.hideSidebar(!prefs.sidebarHidden) },
                         tint = RelayTheme.colors.mutedForeground,
                     )
                 }
