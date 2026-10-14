@@ -84,13 +84,14 @@ export async function openSurface(
     await toggle.click();
   const panel = page.locator('[data-pane="panel"]');
   await expect(panel.locator(".pane-header")).toBeVisible();
+  // Browser and Files tabs are named after what they show.
   const tab =
-    name === "Browser"
+    name === "Browser" || name === "Files"
       ? panel
           .locator(".pane-tab-host")
           .filter({
             has: page.getByRole("button", {
-              name: "Close browser",
+              name: `Close ${name.toLowerCase()}`,
               exact: true,
             }),
           })

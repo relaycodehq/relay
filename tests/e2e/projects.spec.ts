@@ -311,7 +311,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .getByRole("button", { name: "Close files", exact: true })
       .click();
     await expect(
-      page.getByRole("tab", { name: "Files", exact: true }),
+      page.getByRole("button", { name: "Close files", exact: true }),
     ).toHaveCount(0);
     await openSurface(page, "Files");
     await expect(

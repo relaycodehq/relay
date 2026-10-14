@@ -12,7 +12,10 @@ import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
 import type { ThreadFolder } from "./useThreadFolder";
-import type { ThreadView } from "../features/thread/useThreadView";
+import type {
+  ThreadView,
+  Viewing,
+} from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
@@ -203,6 +206,16 @@ export function ThreadPanel({
         setHistorySlots((s) => ({ ...s, actions })),
       [],
     );
+  // The Files tab names the file it shows, as an editor tab would.
+  const [filesPath, setFilesPath] = useState<string | null>(null);
+  const { setViewing } = view;
+  const filesViewing = useCallback(
+    (v: Viewing) => {
+      setFilesPath(v.path);
+      setViewing(v);
+    },
+    [setViewing],
+  );
   const front = panel.front;
   const preview = usePreviewState(previewKey(project.id, chatId));
   let terminals = 0;
@@ -217,13 +230,20 @@ export function ThreadPanel({
       ) : (
         SURFACE_ICONS[tab.surface]
       ),
-    closeLabel: tab.surface === "browser" ? "Close browser" : undefined,
+    closeLabel:
+      tab.surface === "browser"
+        ? "Close browser"
+        : tab.surface === "files"
+          ? "Close files"
+          : undefined,
     label:
       tab.surface === "terminal"
         ? terminalLabel(terminals++)
         : tab.surface === "browser"
           ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
-          : SURFACE_LABELS[tab.surface],
+          : tab.surface === "files" && filesPath
+            ? filesPath.split("/").pop() || SURFACE_LABELS.files
+            : SURFACE_LABELS[tab.surface],
     closeDisabled: tab.surface === "files" && locked,
     unseen: tab.key === panel.unseen,
   }));
@@ -301,7 +321,7 @@ export function ThreadPanel({
               project={project}
               where={where}
               checks={checks}
-              onViewing={view.setViewing}
+              onViewing={filesViewing}
               opens={opens.fileOpens}
             />
           )}
