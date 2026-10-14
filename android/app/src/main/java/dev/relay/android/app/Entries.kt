@@ -18,6 +18,8 @@ import dev.relay.android.features.home.HomeScreen
 import dev.relay.android.features.project.ProjectScreen
 import dev.relay.android.features.pairing.PairScreen
 import dev.relay.android.features.settings.SettingsScreen
+import dev.relay.android.features.thread.SubagentRunScreen
+import dev.relay.android.features.thread.ThreadScreen
 import dev.relay.android.lib.navigation.Route
 
 /**
@@ -33,9 +35,9 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
 
     entry<Route.Pair> { PairScreen(container.remote, it.link) }
     entry<Route.NewThread> { PlaceholderScreen("New thread", it) }
-    entry<Route.Thread> { PlaceholderScreen("Thread", it) }
-    entry<Route.Reply> { PlaceholderScreen("Reply", it) }
-    entry<Route.SubagentRun> { PlaceholderScreen("Subagent", it) }
+    entry<Route.Thread> { ThreadScreen(it.id, container.remote) }
+    entry<Route.Reply> { ThreadScreen(it.id, container.remote, rootId = it.rootId) }
+    entry<Route.SubagentRun> { SubagentRunScreen(it.chatId, it.agentId, it.rootId, container.remote) }
     entry<Route.Project> { ProjectScreen(it.id, container.remote, container.home) }
     entry<Route.Turn> { TurnScreen(container.remote, it.chatId, it.messageId, !it.worktree.isNullOrEmpty()) }
     entry<Route.Diff> { DiffScreen(container.remote, it.source) }
