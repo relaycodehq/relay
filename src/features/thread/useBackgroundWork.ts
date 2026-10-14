@@ -1,8 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ChatSummary } from "../../../shared/projects";
 import { outsideBatch, subagentFanOuts } from "../../../shared/subagents";
 import { api } from "../../lib/api";
+import { readJson, writeJson } from "../../lib/persisted-store";
+
+const CLEARED = "subagents-cleared:";
 
 export type BackgroundWork = ReturnType<typeof useBackgroundWork>;
 
@@ -33,11 +36,29 @@ export function useBackgroundWork(
     if (chat) void agents.refetch();
   }, [running, chat?.pending?.length]);
   const runs = agents.data ?? [];
-  const { latest: agentBatch, earlier: earlierBatches } = subagentFanOuts(runs);
+  // Cleared agents leave the indicator, not the thread: their rows in the
+  // transcript still open them.
+  const clearedKey = CLEARED + chat?.id;
+  const [saved, setSaved] = useState(() => ({
+    key: clearedKey,
+    at: readJson(clearedKey),
+  }));
+  const cleared = saved.key === clearedKey ? saved.at : readJson(clearedKey);
+  const { latest: agentBatch, earlier: earlierBatches } = subagentFanOuts(
+    typeof cleared === "number"
+      ? runs.filter((r) => r.started > cleared)
+      : runs,
+  );
   return {
     agents: runs,
     agentBatch,
     earlierBatches,
+    /** Hides every agent so far; the next fan-out brings the indicator back. */
+    clearAgents() {
+      const at = Math.max(...runs.map((r) => r.started));
+      writeJson(clearedKey, at);
+      setSaved({ key: clearedKey, at });
+    },
     pending,
     stopped,
     // The indicator shows the batch's agents, and stops them; the strip keeps the rest.

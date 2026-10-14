@@ -174,7 +174,14 @@ export function ThreadComposer({
   scope,
   thread: { history, root, messages, shown, running, mainRunning },
   councils: { reviewing },
-  background: { agentBatch, earlierBatches, pending, stopped, leftBehind },
+  background: {
+    agentBatch,
+    earlierBatches,
+    clearAgents,
+    pending,
+    stopped,
+    leftBehind,
+  },
   session: {
     runCommand,
     context,
@@ -312,6 +319,7 @@ export function ThreadComposer({
               earlier={earlierBatches}
               projectRoot={worktree.folder}
               onOpen={onOpenAgent}
+              onClear={clearAgents}
               onStop={async (id) => {
                 if (!chat) return;
                 try {

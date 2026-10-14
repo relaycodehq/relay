@@ -68,6 +68,7 @@ export function SubagentsIndicator({
   earlier,
   projectRoot,
   onOpen,
+  onClear,
   onStop,
 }: {
   /** The latest fan-out: every agent that overlapped another in it. */
@@ -76,6 +77,7 @@ export function SubagentsIndicator({
   earlier: SubagentRun[][];
   projectRoot: string;
   onOpen: (id: string) => void;
+  onClear: () => void;
   onStop: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -115,6 +117,10 @@ export function SubagentsIndicator({
                 setOpen(false);
                 onOpen(id);
               }}
+              onClear={() => {
+                setOpen(false);
+                onClear();
+              }}
               onStop={onStop}
             />
           </Popover.Popup>
@@ -130,12 +136,14 @@ function Peek({
   earlier,
   projectRoot,
   onOpen,
+  onClear,
   onStop,
 }: {
   batch: SubagentRun[];
   earlier: SubagentRun[][];
   projectRoot: string;
   onOpen: (id: string) => void;
+  onClear: () => void;
   onStop: (id: string) => Promise<void>;
 }) {
   const now = useNow(1000);
@@ -175,6 +183,15 @@ function Peek({
           <span>
             {batch.length - working.length} of {batch.length} done
           </span>
+          {working.length === 0 && (
+            <button
+              type="button"
+              className="text-button subagents-clear"
+              onClick={onClear}
+            >
+              Clear
+            </button>
+          )}
         </div>
         {[...batch].sort(bySubagentStanding).map(row)}
         {earlier.length > 0 && (

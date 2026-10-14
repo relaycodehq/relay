@@ -151,8 +151,17 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
       page.getByText("Three agents are on it.", { exact: true }),
     ).toBeVisible();
     await expect(chip).toHaveText("2/3");
-    // Once the last one reports, the indicator goes.
-    await expect(chip).toHaveCount(0, { timeout: 30_000 });
+    // Once the last one reports, the card clears them away.
+    await expect(chip).toHaveText("3 done", { timeout: 30_000 });
+    await chip.hover();
+    await card.getByRole("button", { name: "Clear" }).click();
+    await expect(chip).toHaveCount(0);
+    // It stays cleared after a reload.
+    await page.reload();
+    await expect(
+      page.getByText("Three agents are on it.", { exact: true }),
+    ).toBeVisible();
+    await expect(chip).toHaveCount(0);
   } finally {
     await app?.close();
     await fixture.close();

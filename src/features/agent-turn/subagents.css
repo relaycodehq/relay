@@ -88,6 +88,12 @@
   color: var(--muted);
   font-size: 11px;
 }
+.subagents-card-head > span {
+  margin-left: auto;
+}
+.subagents-clear {
+  font-size: 11px;
+}
 .subagents-card-head b {
   color: var(--text);
   font-size: 12px;
