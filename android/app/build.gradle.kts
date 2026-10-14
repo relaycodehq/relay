@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.okhttp)
     implementation(libs.bouncycastle)
+    implementation(libs.tabler.icons)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
