@@ -181,7 +181,12 @@ export class RemoteBridge {
   /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
   private api: Omit<
     RemoteApi,
-    "reportApp" | "dictate" | "readAloud" | "saveDraft" | ComputerMethod
+    | "reportApp"
+    | "dictate"
+    | "readAloud"
+    | "saveDraft"
+    | "sites"
+    | ComputerMethod
   > = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
