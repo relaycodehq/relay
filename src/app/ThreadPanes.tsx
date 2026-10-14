@@ -21,7 +21,6 @@ import { WORKTREE_DELETED } from "./thread-folder";
 import {
   NO_SLOTS,
   PaneHeader,
-  paneDrag,
   type PaneSlots,
 } from "../ui/WorkspacePanes";
 import { PaneTabs } from "../ui/PaneTabs";
@@ -87,7 +86,6 @@ export function ThreadChanges({
   return (
     <>
       <PaneHeader
-        id="changes"
         icon={
           pull ? <GitPullRequest size={14} /> : <GitCompareArrows size={14} />
         }
@@ -241,7 +239,7 @@ export function ThreadPanel({
     front?.surface === "files" || front?.surface === "history";
   return (
     <>
-      <header className="pane-header panel-header" {...paneDrag("panel")}>
+      <header className="pane-header panel-header">
         <PaneTabs
           tabs={tabs}
           front={front?.key ?? null}

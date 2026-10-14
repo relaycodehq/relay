@@ -2,7 +2,6 @@ import {
   useCallback,
   useState,
   type DragEvent,
-  type PointerEvent,
   type ReactNode,
 } from "react";
 import { X } from "lucide-react";
@@ -55,21 +54,6 @@ function dragSource(id: PaneId) {
     onDragStart: (e: DragEvent<HTMLElement>) => {
       e.dataTransfer.setData(DRAG_TYPE, id);
       e.dataTransfer.effectAllowed = "move";
-    },
-  };
-}
-
-/**
- * Makes a pane's whole header drag the pane. Text fields portaled into it
- * still select text: the header lets go of dragging while one is pressed.
- */
-export function paneDrag(id: PaneId) {
-  return {
-    ...dragSource(id),
-    onPointerDown: (e: PointerEvent<HTMLElement>) => {
-      e.currentTarget.draggable = !(e.target as Element).closest(
-        "input, textarea, select, [contenteditable]",
-      );
     },
   };
 }
@@ -253,7 +237,6 @@ function PaneSplitter({
  * the title and action slots, so a pane never stacks a second toolbar.
  */
 export function PaneHeader({
-  id,
   icon,
   title,
   onClose,
@@ -261,7 +244,6 @@ export function PaneHeader({
   onSlots,
   detail,
 }: {
-  id: PaneId;
   icon: ReactNode;
   title: string;
   /** Muted text after the title, like which folder the pane shows. */
@@ -279,7 +261,7 @@ export function PaneHeader({
       [onSlots],
     );
   return (
-    <header className="pane-header" {...paneDrag(id)}>
+    <header className="pane-header">
       <div className="pane-header-title">
         {icon}
         <strong>{title}</strong>

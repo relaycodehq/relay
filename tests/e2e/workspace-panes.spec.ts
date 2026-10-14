@@ -138,12 +138,13 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await expect(toggles).toBeVisible();
     await expect.poll(order).toEqual(["panel", "chat", "changes"]);
 
-    // So does dragging a pane by its header, anywhere along it.
-    await page
-      .locator('[data-pane="changes"] .pane-header')
-      .dragTo(page.locator('[data-pane="panel"] .pane-header'), {
-        targetPosition: { x: 4, y: 20 },
-      });
+    // Only the toggles drag; a pane's header stays put.
+    await expect(
+      page.locator('[data-pane="changes"] .pane-header'),
+    ).not.toHaveAttribute("draggable", "true");
+    await toggle("Changes").dragTo(toggle("Panel"), {
+      targetPosition: { x: 2, y: 5 },
+    });
     await expect.poll(order).toEqual(["changes", "panel", "chat"]);
 
     // Terminals stack as tabs; everything else opens once.
