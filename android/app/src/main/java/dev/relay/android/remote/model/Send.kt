@@ -1,10 +1,18 @@
 package dev.relay.android.remote.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
+/** The desktop's `choiceSchema` requires `fast`, and a missing effort reads as "medium", not "". */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
-data class ModelChoice(val model: String, val fast: Boolean = false, val reasoningEffort: String = "")
+data class ModelChoice(
+    val model: String,
+    @EncodeDefault val fast: Boolean = false,
+    @EncodeDefault val reasoningEffort: String = "",
+)
 
 /** Which agent carries a message, and how (`resumeSettingsSchema`). Also the queue's `RemoteSettings`. */
 @Serializable
