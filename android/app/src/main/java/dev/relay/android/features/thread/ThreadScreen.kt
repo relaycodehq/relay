@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import dev.relay.android.ui.dismissKeyboardOnTap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -266,7 +267,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             },
         ) {
             if (t == null && listed.isEmpty()) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
-            else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, reverseLayout = true) {
+            else LazyColumn(Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap(), state = list, reverseLayout = true) {
                 // Never zero high: an empty item isn't "visible", so the newest message would
                 // become the anchor and new ones would land below the fold instead of pinning.
                 item("head") {
