@@ -272,6 +272,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                 // become the anchor and new ones would land below the fold instead of pinning.
                 item("head") {
                     Column(Modifier.heightIn(min = 1.dp)) {
+                        val newest = shown.firstOrNull()
+                        if (running && newest?.role == "user") AwaitingAnswer(composer.settings?.provider ?: t?.settings?.provider ?: "claude", newest.id)
                         if (canResume) Row(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.Center,

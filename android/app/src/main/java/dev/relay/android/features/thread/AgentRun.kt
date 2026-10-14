@@ -378,6 +378,15 @@ private fun Progress(a: AgentActivity) {
     Text("· ${a.progress}", Modifier.alpha(0.6f), maxLines = 1, color = RelayTheme.colors.mutedForeground)
 }
 
+/** Under your newest message (a steer, or a send not picked up yet) while the agent is still at it. */
+@Composable
+fun AwaitingAnswer(provider: String, seed: String, modifier: Modifier = Modifier) {
+    Row(modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ThinkingGlyph(provider)
+        ThinkingWord(seed)
+    }
+}
+
 /** A thinking verb that changes every few seconds, so a long pause still looks alive. */
 @Composable
 private fun ThinkingWord(seed: String) {

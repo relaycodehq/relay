@@ -100,12 +100,10 @@ class ImagePickers internal constructor(
     val paste: () -> Unit,
     /** Images handed over by the keyboard or a paste into the text field. */
     val receive: (List<Uri>) -> Unit,
-    /** The clipboard holds an image, asked while watching; hidden after a paste until the next copy. */
-    val offered: Boolean,
 )
 
 @Composable
-fun rememberImagePickers(watching: Boolean, onPicked: (List<Attachment>) -> Unit, onError: (String) -> Unit): ImagePickers {
+fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String) -> Unit): ImagePickers {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     fun prepareAll(uris: List<Uri>, name: String = "photo", after: () -> Unit = {}) {
@@ -113,6 +111,10 @@ fun rememberImagePickers(watching: Boolean, onPicked: (List<Attachment>) -> Unit
         scope.launch {
             try {
                 onPicked(uris.map { prepareImage(context, it, name) })
+            } catch (e: java.io.FileNotFoundException) {
+                onError("That image isn't there anymore. Copy or pick it again.")
+            } catch (e: SecurityException) {
+                onError("Relay isn't allowed to read that image.")
             } catch (e: Exception) {
                 onError(e.message ?: e.toString())
             } finally {
@@ -149,24 +151,6 @@ fun rememberImagePickers(watching: Boolean, onPicked: (List<Attachment>) -> Unit
         if (granted) openCamera() else onError("Relay needs the camera to take a photo.")
     }
 
-    var has by remember { mutableStateOf(false) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(watching, lifecycle) {
-        if (!watching) return@DisposableEffect onDispose {}
-        val clipboard = context.getSystemService(ClipboardManager::class.java)
-        // The description says what's there without reading it, so Android shows no paste notice.
-        fun ask() { has = clipboard?.primaryClipDescription?.hasMimeType("image/*") == true }
-        ask()
-        val copied = ClipboardManager.OnPrimaryClipChangedListener { ask() }
-        clipboard?.addPrimaryClipChangedListener(copied)
-        val back = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) ask() }
-        lifecycle.addObserver(back)
-        onDispose {
-            clipboard?.removePrimaryClipChangedListener(copied)
-            lifecycle.removeObserver(back)
-        }
-    }
-
     return ImagePickers(
         library = { limit ->
             val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -178,14 +162,11 @@ fun rememberImagePickers(watching: Boolean, onPicked: (List<Attachment>) -> Unit
             if (needs) permission.launch(Manifest.permission.CAMERA) else openCamera()
         },
         paste = {
-            has = false
             val uri = clipboardImageUri(context)
             if (uri == null) onError("There's no image to paste.") else prepareAll(listOf(uri), "pasted")
         },
         receive = { uris ->
-            has = false
             prepareAll(uris, "pasted")
         },
-        offered = watching && has,
     )
 }

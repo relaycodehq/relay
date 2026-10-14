@@ -35,15 +35,14 @@ import dev.relay.android.ui.ring
 import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Clipboard
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceLaptop
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** The photos going with the message, the computer's screenshots in this draft, and a paste tile when the clipboard holds an image. */
+/** The photos going with the message and the computer's screenshots in this draft. */
 @Composable
-internal fun ImageStrip(images: List<Attachment>, computerShots: List<Int>, offered: Boolean, onRemove: (Int) -> Unit, onPaste: () -> Unit) {
+internal fun ImageStrip(images: List<Attachment>, computerShots: List<Int>, onRemove: (Int) -> Unit) {
     val c = RelayTheme.colors
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         images.forEachIndexed { i, image ->
@@ -62,10 +61,6 @@ internal fun ImageStrip(images: List<Attachment>, computerShots: List<Int>, offe
                 Icon(TablerIcons.Outline.DeviceLaptop, null, size = 16.dp, tint = c.mutedForeground)
                 Text("On computer", style = RelayTheme.type.xs.copy(fontSize = 10.sp, lineHeight = 12.sp), color = c.mutedForeground, textAlign = TextAlign.Center, maxLines = 2)
             }
-        }
-        if (offered) Tile("Paste the copied image", Modifier.pressable(onClick = onPaste)) {
-            Icon(TablerIcons.Outline.Clipboard, null, size = 16.dp, tint = c.mutedForeground)
-            Text("Paste", style = RelayTheme.type.xs, color = c.mutedForeground)
         }
     }
 }

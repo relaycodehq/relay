@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -507,7 +508,6 @@ internal fun ComposerCore(
     }
 
     val pickers = rememberImagePickers(
-        watching = typing && images.size < MAX_IMAGES,
         onPicked = { picked -> images = (images + picked).take(MAX_IMAGES) },
         onError = { error = it },
     )
@@ -537,8 +537,8 @@ internal fun ComposerCore(
             Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).ring(c.border, RoundedCornerShape(18.dp))
                 .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
         ) {
-            if (images.isNotEmpty() || pickers.offered || computerShots.isNotEmpty()) {
-                ImageStrip(images, computerShots, pickers.offered, onRemove = { i -> images = images.filterIndexed { j, _ -> j != i } }, onPaste = pickers.paste)
+            if (images.isNotEmpty() || computerShots.isNotEmpty()) {
+                ImageStrip(images, computerShots, onRemove = { i -> images = images.filterIndexed { j, _ -> j != i } })
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
                 if (text.isEmpty()) Text(placeholder ?: "Message ${agentName(provider)}", color = c.faint, style = RelayTheme.type.base)
@@ -618,11 +618,11 @@ internal fun ComposerCore(
                             onLongClick = if (empty) null else ({ sheet = Sheet.Later }),
                         )
                         .size(SEND_SIZE).alpha(if (disabled || busy) 0.5f else 1f)
-                        .background(if (stop || !empty) c.primary else c.muted, SEND_SHAPE)
+                        .background(if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center,
                 ) {
-                    val tint = if (stop || !empty) c.onPrimary else c.faint
+                    val tint = if (stop) Color.White else if (!empty) c.onSend else c.faint
                     when {
                         stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 14.dp, tint = tint)
                         running -> Icon(TablerIcons.Outline.PlaylistAdd, null, size = 16.dp, tint = tint)
@@ -708,3 +708,5 @@ private fun Tool(label: String, modifier: Modifier = Modifier, enabled: Boolean 
 private val SEND_SIZE = 32.dp
 // The card's 18dp corner less its 6dp inset, so the corners nest.
 private val SEND_SHAPE = RoundedCornerShape(12.dp)
+// The desktop's .composer-stop red; the same on light and dark.
+private val STOP_RED = Color(0xFFED3949)

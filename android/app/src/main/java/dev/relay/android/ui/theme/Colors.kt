@@ -40,6 +40,9 @@ data class RelayColors(
     val accent: Color,
     val accentSoft: Color,
     val onAccent: Color,
+    /** The desktop's Send colour; its default theme's lavender until a desktop sends its own. */
+    val send: Color,
+    val onSend: Color,
     val diffAddition: Color,
     val diffDeletion: Color,
     val additionText: Color,
@@ -77,6 +80,8 @@ val HextaLight = RelayColors(
     accent = Color(0xFF171717),
     accentSoft = Color(0xFFF5F5F5),
     onAccent = Color(0xFFFAFAFA),
+    send = Color(0xFFAAA8E5),
+    onSend = Color(0xFF1B1B22),
     diffAddition = Color(0xFFDCF5E3),
     diffDeletion = Color(0xFFFBE0E0),
     additionText = Color(0xFF008235),
@@ -109,6 +114,8 @@ val HextaDark = RelayColors(
     accent = Color(0xFFE5E5E5),
     accentSoft = Color(0xFF262626),
     onAccent = Color(0xFF171717),
+    send = Color(0xFFAAA8E5),
+    onSend = Color(0xFF1B1B22),
     diffAddition = Color(0xFF12321F),
     diffDeletion = Color(0xFF3A1719),
     additionText = Color(0xFF4ADE80),
@@ -132,7 +139,7 @@ fun parseHex(value: String?): Color? {
 /**
  * The desktop's PhonePalette (shared/remote.ts: kind, sidebar, surface,
  * toolbar, inbox, text, muted, border, hover, selected, accent, accentSoft,
- * onAccent, diffAddition, diffDeletion) laid onto Hexta's tokens. Keys it
+ * onAccent, send, onSend, diffAddition, diffDeletion) laid onto Hexta's tokens. Keys it
  * doesn't send keep Hexta's value for that kind.
  */
 fun colorsFromDesktop(palette: Map<String, String>): RelayColors {
@@ -161,6 +168,8 @@ fun colorsFromDesktop(palette: Map<String, String>): RelayColors {
         accent = pick("accent") ?: base.accent,
         accentSoft = pick("accentSoft") ?: base.accentSoft,
         onAccent = pick("onAccent") ?: base.onAccent,
+        send = pick("send") ?: pick("accent") ?: base.send,
+        onSend = pick("onSend") ?: pick("onAccent") ?: base.onSend,
         diffAddition = pick("diffAddition") ?: base.diffAddition,
         diffDeletion = pick("diffDeletion") ?: base.diffDeletion,
         code = lerp(if (dark) Color.Black else text, surface, 0.9f),

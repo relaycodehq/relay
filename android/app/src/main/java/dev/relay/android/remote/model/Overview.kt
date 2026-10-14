@@ -124,6 +124,9 @@ data class PhonePalette(
     val accent: String,
     val accentSoft: String,
     val onAccent: String,
+    /** The Send button's colour; older desktops leave it out. */
+    val send: String? = null,
+    val onSend: String? = null,
     val diffAddition: String,
     val diffDeletion: String,
 )

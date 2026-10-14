@@ -271,6 +271,9 @@ export interface PhonePalette {
   accent: string;
   accentSoft: string;
   onAccent: string;
+  /** The Send button's own colour; desktops before it was sent leave it out. */
+  send?: string;
+  onSend?: string;
   diffAddition: string;
   diffDeletion: string;
 }

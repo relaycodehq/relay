@@ -191,10 +191,10 @@ fun MessageView(
         val renders = m.renders
         if (!renders.isNullOrEmpty() && remote != null) MessageRenders(remote, chatId, renders, onCompose = on.onCompose)
         // Your images sit above what you wrote, as on the desktop; the agent's come after its answer.
-        val strip = @Composable {
-            if (remote != null) MessageImages(remote, if (traceOpen) images.pasted else images.strip, openImage)
+        val strip = @Composable { at: Modifier ->
+            if (remote != null) MessageImages(remote, if (traceOpen) images.pasted else images.strip, openImage, at)
         }
-        if (user) strip()
+        if (user) strip(Modifier.align(Alignment.End))
         if (user) {
             val body = withoutMention(m.body)
             // A screenshot sent on its own leaves nothing for the bubble to hold.
@@ -211,7 +211,7 @@ fun MessageView(
                 image = if (m.status == "streaming") hideImage else showImage,
             )
         }
-        if (!user) strip()
+        if (!user) strip(Modifier)
         viewing?.let { v -> if (remote != null) Lightbox(remote, v.images, v.index) { viewing = null } }
         if (!user) AsyncQuestions(chatId, m)
         if (!user) WatchNotes(chatId, m.id, m.notes, agentName(m.provider), openPath, on.onSteer)

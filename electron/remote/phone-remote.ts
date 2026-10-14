@@ -90,6 +90,8 @@ const paletteSchema = z
     accent: color,
     accentSoft: color,
     onAccent: color,
+    send: color.optional(),
+    onSend: color.optional(),
     diffAddition: color,
     diffDeletion: color,
   })
