@@ -254,6 +254,8 @@ export function ThreadPanel({
       closePreview(previewKey(project.id, chatId));
     if (tab?.surface === "device") closeDeviceView();
     panel.close(key);
+    // The last tab gone leaves only the picker, so the panel goes with it.
+    if (panel.tabs.length === 1 && tab) opens.togglePane("panel");
   };
   const folderShown =
     front?.surface === "files" || front?.surface === "history";

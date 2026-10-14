@@ -153,7 +153,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await openSurface(page, "Files");
     const panel = page.locator('[data-pane="panel"]');
     await expect(panel.getByRole("tab")).toHaveText([
-      "Files",
+      "a.ts",
       "Terminal",
       "Terminal 2",
     ]);
@@ -162,7 +162,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await panel
       .getByRole("button", { name: "Close terminal 2", exact: true })
       .click();
-    await expect(panel.getByRole("tab")).toHaveText(["Files", "Terminal"]);
+    await expect(panel.getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
 
     // Zooming the panel hides the other panes and the sidebar without closing
     // them; asking for another pane brings everything back.
@@ -171,13 +171,22 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       .click();
     expect(await order()).toEqual(["panel"]);
     await expect(collapsed).toHaveCount(1);
-    await expect(panel.getByRole("tab")).toHaveText(["Files", "Terminal"]);
+    await expect(panel.getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
     await toggle("Chat").click();
     await expect.poll(order).toEqual(["changes", "panel", "chat"]);
     await expect(collapsed).toHaveCount(0);
 
+    // Closing its last tab closes the panel, instead of leaving the picker.
+    await panel
+      .getByRole("button", { name: "Close files", exact: true })
+      .click();
+    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
+    await panel
+      .getByRole("button", { name: "Close terminal", exact: true })
+      .click();
+    await expect.poll(order).toEqual(["changes", "chat"]);
+
     // The last visible pane cannot be hidden.
-    await toggle("Panel").click();
     await toggle("Changes").click();
     await expect(toggle("Chat")).toBeDisabled();
   } finally {
