@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { Store } from "../app/store";
 import { chatSummary, ChatStorage, queueMark } from "./storage";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
@@ -201,6 +203,40 @@ it("flush reports a failed cached write and retries it after storage is repaired
   await storage.flush();
   expect(JSON.parse(await readFile(path, "utf8")).title).toBe(chat.title);
   expect(listed(chat).title).toBe(chat.title);
+});
+
+const others = async (count: number) => {
+  for (let i = 0; i < count; i++) {
+    const other = thread();
+    await storage.add(other);
+    await storage.load(other.id);
+  }
+};
+
+it("keeps a thread let go of as the one copy while something still holds it", async () => {
+  const held = thread();
+  await storage.add(held);
+  await others(20);
+  held.title = "Not saved yet";
+  // A second copy read from disk would lose the title on its next save.
+  expect(await storage.load(held.id)).toBe(held);
+});
+
+it("reads a thread back from disk once nothing holds it, with what was saved", async () => {
+  const id = await (async () => {
+    const chat = thread();
+    await storage.add(chat);
+    chat.title = "Saved title";
+    await storage.save(chat);
+    return chat.id;
+  })();
+  await others(20);
+  // WeakRefs keep their target until the current job ends.
+  await new Promise((r) => setImmediate(r));
+  setFlagsFromString("--expose-gc");
+  (runInNewContext("gc") as () => void)();
+  expect(storage.cached(id)).toBeUndefined();
+  expect((await storage.load(id)).title).toBe("Saved title");
 });
 
 it("puts right a summary a crash left behind its thread", async () => {

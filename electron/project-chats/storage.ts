@@ -118,6 +118,12 @@ function same(a: ChatSummary, b: ChatSummary) {
   return isDeepStrictEqual(plain(a), plain(b));
 }
 
+/**
+ * Threads used lately stay loaded; older ones are let go of, at ~1MB of heap
+ * per MB of thread file.
+ */
+const KEEP_LOADED = 12;
+
 /** Threads saved this long before the store was are read back too, in case other store writes queued ahead of theirs. */
 const RECONCILE_MARGIN_MS = 5000;
 
@@ -126,10 +132,18 @@ const RECONCILE_MARGIN_MS = 5000;
  * under `images/<id>/` and copies of the images their answers show under
  * `images/<id>/shown/<message id>/`), the one cached copy of each, and their
  * summaries in the store, with whoever listens for a list reading differently.
+ *
+ * A thread let go of stays the one copy while anything still holds it, like a
+ * running turn, so no two copies of a thread ever take turns writing it.
  */
 export class ChatStorage {
+  /** The threads used lately, least recent first. */
   private cache = new Map<string, ProjectChat>();
-  private loading = new Map<string, Promise<void>>();
+  private released = new Map<string, WeakRef<ProjectChat>>();
+  /** Saves still writing, and threads whose last save failed: kept until on disk. */
+  private saving = new Map<string, number>();
+  private unsaved = new Set<string>();
+  private loading = new Map<string, Promise<ProjectChat>>();
   private writes = keyedQueue();
   /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
   private ready: Promise<void> = Promise.resolve();
@@ -161,13 +175,17 @@ export class ChatStorage {
   async load(id: string): Promise<ProjectChat> {
     await this.ready;
     if (!this.has(id)) throw new Error("Chat not found.");
-    if (!this.cache.has(id)) {
+    let chat = this.cached(id);
+    if (chat) this.use(chat);
+    else {
       let pending = this.loading.get(id);
       if (!pending) {
         pending = (async () => {
-          const chat = JSON.parse(
-            await readFile(join(this.dir, id + ".json"), "utf8"),
-          ) as ProjectChat;
+          // Behind the writes, which a copy let go of may have left queued.
+          const text = await this.writes(id, () =>
+            readFile(join(this.dir, id + ".json"), "utf8"),
+          );
+          const chat = JSON.parse(text) as ProjectChat;
           if (chat.id !== id)
             throw new Error("Saved chat identity does not match.");
           this.readLinks(chat);
@@ -175,17 +193,17 @@ export class ChatStorage {
             this.resuming(chat.id, m.parentId ?? undefined),
           );
           if (changed) await this.save(chat);
-          this.cache.set(id, chat);
+          this.use(chat);
+          return chat;
         })();
         this.loading.set(id, pending);
       }
       try {
-        await pending;
+        chat = await pending;
       } finally {
         if (this.loading.get(id) === pending) this.loading.delete(id);
       }
     }
-    const chat = this.cache.get(id)!;
     this.readLinks(chat);
     return chat;
   }
@@ -200,23 +218,43 @@ export class ChatStorage {
 
   /** The chat if it's loaded already. */
   cached(id: string) {
-    return this.cache.get(id);
+    const chat = this.cache.get(id) ?? this.released.get(id)?.deref();
+    if (!chat) this.released.delete(id);
+    return chat;
   }
 
   keep(chat: ProjectChat) {
+    this.use(chat);
+  }
+
+  /** Marks the thread used now, letting go of the least recent past the limit. */
+  private use(chat: ProjectChat) {
+    this.released.delete(chat.id);
+    this.cache.delete(chat.id);
     this.cache.set(chat.id, chat);
+    for (const [id, old] of this.cache) {
+      if (this.cache.size <= KEEP_LOADED) break;
+      if (this.saving.has(id) || this.unsaved.has(id)) continue;
+      this.cache.delete(id);
+      this.released.set(id, new WeakRef(old));
+    }
+  }
+
+  private forget(id: string) {
+    this.cache.delete(id);
+    this.released.delete(id);
   }
 
   /** A new thread: saved, listed, and cached. */
   async add(chat: ProjectChat) {
     await this.save(chat);
     await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
+    this.use(chat);
   }
 
   /** Takes back a thread that was added but never shown, like a reviewer whose review didn't start. */
   async remove(chat: ProjectChat) {
-    this.cache.delete(chat.id);
+    this.forget(chat.id);
     await this.writes(chat.id, () =>
       rm(join(this.dir, chat.id + ".json"), { force: true }),
     );
@@ -247,12 +285,26 @@ export class ChatStorage {
     const { links: _, ...record } = chat;
     const value = JSON.stringify(record),
       path = join(this.dir, chat.id + ".json");
-    await this.writes(chat.id, async () => {
-      await mkdir(this.dir, { recursive: true, mode: 0o700 });
-      const tmp = path + "." + randomUUID() + ".tmp";
-      await writeFile(tmp, value, { mode: 0o600 });
-      await rename(tmp, path);
-    });
+    const id = chat.id;
+    this.saving.set(id, (this.saving.get(id) ?? 0) + 1);
+    try {
+      await this.writes(id, async () => {
+        await mkdir(this.dir, { recursive: true, mode: 0o700 });
+        const tmp = path + "." + randomUUID() + ".tmp";
+        await writeFile(tmp, value, { mode: 0o600 });
+        await rename(tmp, path);
+      });
+      this.unsaved.delete(id);
+    } catch (e) {
+      // Kept loaded, so flush can retry what only lives in memory.
+      this.unsaved.add(id);
+      if (this.cached(id) === chat) this.use(chat);
+      throw e;
+    } finally {
+      const left = this.saving.get(id)! - 1;
+      if (left) this.saving.set(id, left);
+      else this.saving.delete(id);
+    }
     if (!holdSummary) await this.syncSummary(chat);
   }
 
@@ -312,7 +364,7 @@ export class ChatStorage {
     const strays = (this.store.get().chats ?? []).filter(isThinker);
     if (!strays.length) return;
     for (const { id } of strays) {
-      this.cache.delete(id);
+      this.forget(id);
       await rm(join(this.dir, id + ".json"), { force: true }).catch((e) =>
         console.warn("Could not remove a retired thinker thread:", e),
       );
@@ -334,7 +386,7 @@ export class ChatStorage {
     const byId = new Map(listed.map((c) => [c.id, c]));
     // Read without caching: a long history of reviews needn't sit in memory.
     const read = async (id: string) =>
-      this.cache.get(id) ??
+      this.cached(id) ??
       (JSON.parse(
         await readFile(join(this.dir, id + ".json"), "utf8"),
       ) as ProjectChat);
@@ -379,8 +431,13 @@ export class ChatStorage {
   /** Retry cached data too: a failed write may already have left the queue. */
   async flush() {
     await Promise.all(this.busy().loads);
+    const loaded = [...this.cache.values()];
+    for (const ref of this.released.values()) {
+      const chat = ref.deref();
+      if (chat) loaded.push(chat);
+    }
     const saved = await Promise.allSettled(
-      [...this.cache.values()].map((chat) => this.save(chat)),
+      loaded.map((chat) => this.save(chat)),
     );
     const failed = saved.find((result) => result.status === "rejected");
     if (failed?.status === "rejected") throw failed.reason;
@@ -402,7 +459,7 @@ export class ChatStorage {
 
   chatChanged(id: string) {
     const projectId =
-      this.cache.get(id)?.projectId ??
+      this.cached(id)?.projectId ??
       this.store.get().chats?.find((c) => c.id === id)?.projectId;
     if (projectId) this.summariesChanged(projectId);
   }
