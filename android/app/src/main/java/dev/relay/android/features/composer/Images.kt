@@ -98,6 +98,8 @@ class ImagePickers internal constructor(
     val library: (limit: Int) -> Unit,
     val camera: () -> Unit,
     val paste: () -> Unit,
+    /** Images handed over by the keyboard or a paste into the text field. */
+    val receive: (List<Uri>) -> Unit,
     /** The clipboard holds an image, asked while watching; hidden after a paste until the next copy. */
     val offered: Boolean,
 )
@@ -179,6 +181,10 @@ fun rememberImagePickers(watching: Boolean, onPicked: (List<Attachment>) -> Unit
             has = false
             val uri = clipboardImageUri(context)
             if (uri == null) onError("There's no image to paste.") else prepareAll(listOf(uri), "pasted")
+        },
+        receive = { uris ->
+            has = false
+            prepareAll(uris, "pasted")
         },
         offered = watching && has,
     )

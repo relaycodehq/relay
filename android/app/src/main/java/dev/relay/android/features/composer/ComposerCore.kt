@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.relay.android.features.composer
 
 import androidx.compose.foundation.background
@@ -13,7 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.content.MediaType
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -213,7 +220,8 @@ internal fun ComposerCore(
     drafts.version.collectAsState().value // Recompose as the shared draft changes.
     val online = status.state == LinkState.Online
 
-    var value by remember { mutableStateOf(TextFieldValue("")) }
+    val field = rememberTextFieldState()
+    var value by field.asValue()
     val text = value.text
     fun setText(next: String) {
         if (next != value.text) value = TextFieldValue(next, TextRange(next.length))
@@ -535,16 +543,21 @@ internal fun ComposerCore(
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
                 if (text.isEmpty()) Text(placeholder ?: "Message ${agentName(provider)}", color = c.faint, style = RelayTheme.type.base)
                 BasicTextField(
-                    value,
-                    { next ->
-                        if (next.text != value.text) error = null
-                        value = next
-                    },
+                    field,
                     Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 132.dp).focusRequester(focus)
                         .onFocusChanged { typing = it.isFocused }
+                        // Images from the keyboard's clipboard or a long-press Paste; text goes on into the field.
+                        .contentReceiver { content ->
+                            if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
+                            val uris = mutableListOf<android.net.Uri>()
+                            val rest = content.consume { item -> item.uri?.also { uris += it } != null }
+                            pickers.receive(uris.take(MAX_IMAGES - images.size))
+                            rest
+                        }
                         .semantics { contentDescription = "Message" },
                     textStyle = RelayTheme.type.base.copy(color = c.foreground),
                     cursorBrush = SolidColor(c.accent),
+                    inputTransformation = { error = null },
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
