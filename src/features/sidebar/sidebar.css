@@ -1390,7 +1390,10 @@
   color: var(--text);
 }
 
-/* Footer. */
+/* Footer, with the update toasts rising from its top edge. */
+.sb-footer-area {
+  position: relative;
+}
 .sb-footer {
   display: flex;
   align-items: center;
@@ -1401,13 +1404,8 @@
 }
 /* Fit steps: useFooterFit lists the steps it took in data-fit until the row
    fits. The tooltips keep the full words. */
-.sb-footer[data-fit~="1"] .sb-version,
-.sb-footer[data-fit~="2"] .sb-agent-update > span,
-.sb-footer[data-fit~="3"] .sb-update .fit-word {
+.sb-footer[data-fit~="1"] .sb-version {
   display: none;
-}
-.sb-footer[data-fit~="2"] .sb-agent-update {
-  padding: 0 6px;
 }
 /* Pushes the rest of the footer right, even before the version is known. */
 .sb .sb-version {
@@ -1476,7 +1474,7 @@
   opacity: 1;
   transform: none;
 }
-/* Plain text like the agent update beside it; the background only answers hover. */
+/* Plain text in the footer; the background only answers hover. */
 .sb .sb-update {
   display: inline-flex;
   flex: none;
@@ -1506,13 +1504,6 @@
 }
 .sb .sb-update:hover:not(:disabled) {
   background: var(--hover);
-}
-.sb .sb-update.busy {
-  cursor: default;
-  opacity: 1;
-}
-.sb .sb-update.failed {
-  color: var(--muted);
 }
 /* ease-out sampled at 25% and 50%, stepped at 20 updates a second. */
 @keyframes sb-pulse {

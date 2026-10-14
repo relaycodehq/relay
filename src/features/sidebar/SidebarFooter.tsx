@@ -1,15 +1,18 @@
 import { useRef } from "react";
 import { ChartColumn, Settings2 } from "lucide-react";
-import { AgentUpdateButton } from "../updates/AgentUpdates";
 import { DevRestartButton } from "../updates/DevRestartButton";
 import { DevCheckoutLabel } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
 import type { SettingsCategory } from "../settings/Settings";
 import { IconButton } from "../../ui/ui";
-import { RunningVersion, UpdateButton } from "../updates/UpdateButton";
+import { RunningVersion } from "../updates/RunningVersion";
+import { UpdateToasts } from "../updates/UpdateToasts";
 import { useFooterFit } from "./useFooterFit";
 
-/** The version, the time tracker, updates, Usage and Settings, under the sidebar. */
+/**
+ * The version, the time tracker, Usage and Settings under the sidebar, with
+ * Relay's and the agents' updates rising above them.
+ */
 export function SidebarFooter({
   projectId,
   projectName,
@@ -31,24 +34,25 @@ export function SidebarFooter({
   const row = useRef<HTMLDivElement>(null);
   useFooterFit(row);
   return (
-    <div className="sb-footer" ref={row}>
-      <RunningVersion onAbout={() => onSettings("about")} />
-      <DevCheckoutLabel />
-      <DevRestartButton />
-      <UpdateButton />
-      <AgentUpdateButton onDetails={() => onSettings("agents")} />
-      <ClockifyTimer
-        projectId={projectId}
-        projectName={projectName}
-        chatId={chatId}
-        onSetUp={() => onSettings("integrations")}
-      />
-      <IconButton label="Usage" active={usage} onClick={onUsage}>
-        <ChartColumn size={15} />
-      </IconButton>
-      <IconButton label="Open settings" onClick={() => onSettings()}>
-        <Settings2 size={15} />
-      </IconButton>
+    <div className="sb-footer-area">
+      <UpdateToasts onAgentDetails={() => onSettings("agents")} />
+      <div className="sb-footer" ref={row}>
+        <RunningVersion onAbout={() => onSettings("about")} />
+        <DevCheckoutLabel />
+        <DevRestartButton />
+        <ClockifyTimer
+          projectId={projectId}
+          projectName={projectName}
+          chatId={chatId}
+          onSetUp={() => onSettings("integrations")}
+        />
+        <IconButton label="Usage" active={usage} onClick={onUsage}>
+          <ChartColumn size={15} />
+        </IconButton>
+        <IconButton label="Open settings" onClick={() => onSettings()}>
+          <Settings2 size={15} />
+        </IconButton>
+      </div>
     </div>
   );
 }

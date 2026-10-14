@@ -111,7 +111,7 @@ export const agentUpdateChecksQuery = {
 
 /**
  * Whether Relay looks for newer agent releases on its own and offers them
- * under the sidebar; Settings still shows them and checks when asked.
+ * above the sidebar footer; Settings still shows them and checks when asked.
  * Undefined until it's known, so a turned-off notice never flashes.
  */
 export const useAgentUpdateChecks = () => useQuery(agentUpdateChecksQuery).data;

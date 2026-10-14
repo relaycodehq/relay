@@ -1,0 +1,216 @@
+/* Just above the sidebar footer and no wider than the sidebar, so it never
+   covers the composer. */
+.update-toasts {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  outline: 0;
+}
+
+/* Base UI's stack: collapsed, each toast behind peeks out above the front
+   one, a little smaller; hovering the viewport fans them out. */
+.update-toast {
+  --gap: 6px;
+  --peek: 6px;
+  --scale: calc(max(0, 1 - (var(--toast-index) * 0.05)));
+  --shrink: calc(1 - var(--scale));
+  --height: var(--toast-frontmost-height, var(--toast-height));
+  --offset-y: calc(
+    var(--toast-offset-y) * -1 + (var(--toast-index) * var(--gap) * -1) + var(--toast-swipe-movement-y)
+  );
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--height);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow:
+    0 12px 28px -12px rgb(0 0 0 / 0.28),
+    0 2px 6px rgb(0 0 0 / 0.06);
+  z-index: calc(1000 - var(--toast-index));
+  transform-origin: bottom center;
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(var(--toast-swipe-movement-y) - (var(--toast-index) * var(--peek)) - (var(--shrink) * var(--height)))
+    )
+    scale(var(--scale));
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.35s,
+    height 0.15s;
+  user-select: none;
+}
+:root[data-theme="dark"] .update-toast {
+  box-shadow:
+    0 14px 32px -10px rgb(0 0 0 / 0.65),
+    0 2px 6px rgb(0 0 0 / 0.3);
+}
+/* Keeps the hover alive across the gaps while fanned out. */
+.update-toast::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--gap) + 1px);
+}
+.update-toast[data-expanded] {
+  height: var(--toast-height);
+  transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--offset-y));
+}
+.update-toast[data-starting-style] {
+  opacity: 0;
+  transform: translateY(24px) scale(0.96);
+}
+.update-toast[data-limited],
+.update-toast[data-ending-style] {
+  opacity: 0;
+}
+.update-toast[data-ending-style] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 40px)) translateY(var(--offset-y));
+}
+.update-toast[data-ending-style][data-swipe-direction="down"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 120%));
+}
+
+/* One line: the mark, the name, its version in grey by the button. */
+.update-toast-content {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 10px;
+  transition: opacity 0.25s;
+}
+.update-toast-content[data-behind] {
+  opacity: 0;
+}
+.update-toast-content[data-expanded] {
+  opacity: 1;
+}
+.update-toast-content :is(.provider-glyph, .relay-mark) {
+  width: 15px;
+  height: 15px;
+}
+/* Base UI's title is an h2, which the sidebar mutes as a heading. */
+.sb .update-toast-title {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+}
+.update-toast-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.update-toast-version {
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.update-toast-version.failed {
+  color: var(--danger);
+}
+
+/* A soft accent button; busy or done it turns grey with only the spinner or
+   check in the accent, keeping its width so nothing beside it moves. */
+.sb .update-toast-action {
+  position: relative;
+  min-width: 60px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 550;
+}
+.sb .update-toast-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.sb .update-toast-action:disabled {
+  opacity: 1;
+}
+.sb .update-toast-action:not([data-phase="idle"]) {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.update-toast-action:not([data-phase="idle"]) .update-toast-label {
+  visibility: hidden;
+}
+.update-toast-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* × as a badge on the corner while hovered, so it holds no room of its own. */
+.sb .update-toast-close {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.sb .update-toast-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.update-toast:is(:hover, :focus-within) .update-toast-close {
+  opacity: 1;
+}
+
+/* What's left once they're all put off: a round button with a dot. */
+.sb .update-toasts-later {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.3);
+}
+.sb .update-toasts-later:hover {
+  background: var(--hover);
+}
+.update-toasts-later i {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+}

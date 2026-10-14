@@ -1,14 +1,13 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 /** How many steps sidebar.css can take, see the footer's "fit steps". */
-const FIT_STEPS = 3;
+const FIT_STEPS = 1;
 
 /**
  * Sheds the sidebar footer one step at a time until it fits its width,
- * listing the steps taken in the row's `data-fit` ("1 2"): the version goes
- * first, then the agent update's words, then the word before the app
- * update's version. Every check starts again from the full row, so widening
- * gives them back.
+ * listing the steps taken in the row's `data-fit` ("1"): the version goes
+ * first. Every check starts again from the full row, so widening gives it
+ * back.
  */
 export function useFooterFit(row: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
@@ -50,7 +49,7 @@ export function useFooterFit(row: RefObject<HTMLElement | null>) {
     fit();
     const resize = new ResizeObserver(fit);
     resize.observe(el);
-    // An update button showing up or relabelling doesn't resize the row.
+    // A button showing up or relabelling doesn't resize the row.
     const changes = new MutationObserver(fit);
     changes.observe(el, {
       childList: true,
