@@ -133,6 +133,24 @@ class DraftStoreTest {
         assertFalse(chat in main)
     }
 
+    @Test fun `keeps the next message typed while a send was going out`() = runTest {
+        val drafts = store()
+        drafts.online(pc, link, overview())
+        drafts.editText(pc, chat, "Ship it")
+        advanceTimeBy(450)
+        drafts.hold(pc, chat)
+        // Typed during the send: the held draft ignores it, as the composer's edits are.
+        drafts.editText(pc, chat, "And the docs")
+        drafts.went(pc, chat, "Ship it", false)
+        // What the composer does once the send settles.
+        drafts.editText(pc, chat, "And the docs")
+        assertEquals("And the docs", drafts.text(pc, chat))
+        advanceTimeBy(450)
+        runCurrent()
+        assertEquals("And the docs", main[chat]?.text)
+        assertEquals("And the docs", drafts.text(pc, chat))
+    }
+
     @Test fun `hides a draft sent through the computer until it drops it`() = runTest {
         val drafts = store()
         drafts.online(pc, link, overview())

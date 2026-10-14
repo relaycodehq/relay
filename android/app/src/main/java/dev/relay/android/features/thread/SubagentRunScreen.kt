@@ -170,7 +170,7 @@ private fun Run(run: SubagentRun, root: String?) {
     val report = run.report
     if (!live && !report.isNullOrEmpty()) {
         Label("Reported to ${leadName(run)}", Modifier.padding(top = 14.dp, bottom = 4.dp))
-        Markdown(report)
+        Markdown(report, selectable = true)
     }
     if (run.status == "stopped") Text(
         "Stopped. ${leadName(run)} hears it was and carries on without it.",

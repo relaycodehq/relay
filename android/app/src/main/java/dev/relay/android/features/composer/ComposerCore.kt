@@ -485,14 +485,22 @@ internal fun ComposerCore(
         val key = draftKey
         if (pc != null && key != null) drafts.hold(pc, key)
         setText("")
+        val sentImages = images
+        // The draft ignored edits while the send held it: what was typed meanwhile goes in now,
+        // before the draft's own update reaches the composer and would clear it.
+        fun keepTyped() {
+            if (pc != null && key != null) drafts.editText(pc, key, value.text)
+        }
         scope.launch {
             try {
                 if (!onSend(Composed(attempt, held))) {
                     if (pc != null && key != null) drafts.release(pc, key)
                     if (value.text.isEmpty()) setText(draft)
+                    keepTyped()
                 } else {
-                    images = emptyList()
+                    images = images.filter { it !in sentImages }
                     if (pc != null && key != null) drafts.went(pc, key, draft, held)
+                    keepTyped()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -500,6 +508,7 @@ internal fun ComposerCore(
                 if (pc != null && key != null) drafts.release(pc, key)
                 failedSend = attempt
                 if (value.text.isEmpty()) setText(draft)
+                keepTyped()
                 error = e.message ?: e.toString()
             } finally {
                 busy = false

@@ -127,7 +127,6 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     val composer = remember { ComposerState(screenFollows = true) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
-    var selecting by remember { mutableStateOf<ChatMessage?>(null) }
 
     // Open on the phone counts as read, but only while the app is in front:
     // answers that land in the background are marked when it comes back.
@@ -420,7 +419,6 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                 messageMenu(
                     m,
                     onCopy = { copyText(context, it) },
-                    onSelect = { selecting = m },
                     onReply = if (rootId == null) ({ actions.openReplies(chainRoot(byId, m)) }) else null,
                     onFork = { actions.fork(m) },
                     onQuote = if (projectId != null) ({ composer.quote(it) }) else null,
@@ -429,7 +427,6 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                 onClose = { acting = null },
             )
         }
-        selecting?.let { SelectTextSheet(it, t?.root) { selecting = null } }
         FailureDialog(failures)
     }
 }

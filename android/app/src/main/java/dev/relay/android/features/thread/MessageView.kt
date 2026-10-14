@@ -204,6 +204,8 @@ fun MessageView(
             Markdown(
                 m.body, folder = root, openPath = openPath,
                 image = if (m.status == "streaming") hideImage else showImage,
+                // Held text selects at once; the message's menu stays on the row's icons and its edges.
+                selectable = m.status != "streaming",
             )
         }
         if (!user && m.status != "streaming") m.preview?.let { TurnPreviewCard(chatId, m.id, it) }

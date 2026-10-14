@@ -1,7 +1,7 @@
 package dev.relay.android.features.thread
 
 // The thread's menus and sheets: its own actions, snoozing, side
-// conversations, a message's hold menu, renaming and selecting text.
+// conversations, a message's hold menu and renaming.
 
 import android.content.Context
 import android.content.Intent
@@ -103,7 +103,6 @@ fun readText(m: ChatMessage) = if (m.role == "user") withoutMention(m.body) else
 fun messageMenu(
     m: ChatMessage,
     onCopy: (String) -> Unit,
-    onSelect: (String) -> Unit,
     /** Only on the main conversation. */
     onReply: (() -> Unit)?,
     onFork: (() -> Unit)?,
@@ -113,7 +112,6 @@ fun messageMenu(
 ): List<MenuItem> = buildList {
     val text = readText(m)
     add(MenuItem("Copy") { onCopy(text) })
-    add(MenuItem("Select text", "The whole message, to copy any part of it") { onSelect(text) })
     onReply?.let { add(MenuItem("Reply", "A side conversation that leaves this one as it is.", onPress = it)) }
     if (onFork != null && m.role == "assistant" && m.status == "complete" && m.parentId == null && m.side != true)
         add(MenuItem("Fork from here", "A new thread with the conversation up to this answer.", onPress = onFork))
@@ -195,18 +193,3 @@ fun RenameSheet(title: String, onSave: suspend (String) -> Unit, onClose: () -> 
     }
 }
 
-/**
- * The whole message, to copy any part of it. An answer keeps its formatting:
- * unlike React Native's, Compose's selection crosses the Markdown's blocks.
- */
-@Composable
-fun SelectTextSheet(m: ChatMessage, root: String?, onClose: () -> Unit) {
-    val text = readText(m)
-    Sheet(onDismiss = onClose, title = "Select text") {
-        val padding = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)
-        if (m.role == "assistant") Markdown(text, padding, folder = root, selectable = true)
-        else SelectionContainer(padding) {
-            Text(text, style = RelayTheme.type.base)
-        }
-    }
-}

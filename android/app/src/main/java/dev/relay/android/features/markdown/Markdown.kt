@@ -60,7 +60,7 @@ internal class MdContext(
  * An agent's answer: the markdown agents actually write, drawn natively.
  * Web links go to [onLink] (the browser when null). Paths in the thread open
  * through [openPath]; without it, paths inside [folder] go to [onLink] too.
- * [selectable] turns on text selection ("Select text"); a streaming answer
+ * [selectable] lets held text select, across blocks; a streaming answer
  * re-parses only its last blocks.
  */
 @Composable

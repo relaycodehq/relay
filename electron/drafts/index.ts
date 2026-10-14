@@ -76,6 +76,8 @@ export class Drafts {
       ...(chatId ? { chatId } : {}),
       send,
     };
+    // The version that went: a phone may type the next message before this one is out.
+    const base = this.store.get(key)?.rev ?? 0;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
         () =>
@@ -89,11 +91,11 @@ export class Drafts {
         this.held.delete(request.id);
         if ("error" in result) reject(new Error(result.error));
         else {
-          // What went out goes from the draft, and with it the desktop's part.
-          const now = this.store.get(key);
-          if (now)
+          // What went out goes from the draft, and with it the desktop's part;
+          // anything written after it was sent stays.
+          if (this.store.get(key))
             this.write(
-              { key, text: "", base: now.rev, at: Date.now(), sent: send.body },
+              { key, text: "", base, at: Date.now(), sent: send.body },
               "desktop",
             );
           resolve(result);
