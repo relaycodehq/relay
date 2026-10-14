@@ -7,6 +7,15 @@ import dev.relay.android.app.screens.HomeScreen
 import dev.relay.android.app.screens.PaneEmpty
 import dev.relay.android.app.screens.PlaceholderScreen
 import dev.relay.android.app.screens.SettingsScreen
+import dev.relay.android.features.files.FileScreen
+import dev.relay.android.features.files.FilesScreen
+import dev.relay.android.features.git.BranchesScreen
+import dev.relay.android.features.git.ChangesScreen
+import dev.relay.android.features.git.CommitScreen
+import dev.relay.android.features.git.DiffScreen
+import dev.relay.android.features.git.HistoryScreen
+import dev.relay.android.features.git.TurnScreen
+import dev.relay.android.features.tasks.TasksScreen
 import dev.relay.android.lib.navigation.Route
 
 /**
@@ -26,13 +35,13 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Reply> { PlaceholderScreen("Reply", it) }
     entry<Route.SubagentRun> { PlaceholderScreen("Subagent", it) }
     entry<Route.Project> { PlaceholderScreen("Project", it) }
-    entry<Route.Turn> { PlaceholderScreen("Turn", it) }
-    entry<Route.Diff> { PlaceholderScreen("Diff", it) }
-    entry<Route.Changes> { PlaceholderScreen("Changes", it) }
-    entry<Route.Branches> { PlaceholderScreen("Branches", it) }
-    entry<Route.Commit> { PlaceholderScreen("Commit", it) }
-    entry<Route.Files> { PlaceholderScreen("Files", it) }
-    entry<Route.File> { PlaceholderScreen("File", it) }
-    entry<Route.History> { PlaceholderScreen("History", it) }
-    entry<Route.Tasks> { PlaceholderScreen("Tasks", it) }
+    entry<Route.Turn> { TurnScreen(container.remote, it.chatId, it.messageId, !it.worktree.isNullOrEmpty()) }
+    entry<Route.Diff> { DiffScreen(container.remote, it.source) }
+    entry<Route.Changes> { ChangesScreen(container.remote, it.where) }
+    entry<Route.Branches> { BranchesScreen(container.remote, it.where) }
+    entry<Route.Commit> { CommitScreen(container.remote, it.where, it.sha) }
+    entry<Route.Files> { FilesScreen(container.remote, it.where, it.dir) }
+    entry<Route.File> { FileScreen(container.remote, it.where, it.path) }
+    entry<Route.History> { HistoryScreen(container.remote, it.where) }
+    entry<Route.Tasks> { TasksScreen(container.remote, it.where) }
 }
