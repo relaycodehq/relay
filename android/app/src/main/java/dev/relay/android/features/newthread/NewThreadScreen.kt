@@ -3,6 +3,8 @@ package dev.relay.android.features.newthread
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +41,7 @@ import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Remote
+import dev.relay.android.remote.model.RemoteProject
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.sendDraft
@@ -60,9 +63,17 @@ import kotlinx.coroutines.launch
  * from the line over it.
  */
 @Composable
-fun NewThreadScreen(route: Route.NewThread, remote: Remote) {
+fun NewThreadScreen(
+    route: Route.NewThread,
+    remote: Remote,
+    /** How a project's badge shows; plain initials unless the app hands in one with icons. */
+    projectBadge: (@Composable (RemoteProject, Dp) -> Unit)? = null,
+) {
     val active by remote.active.collectAsState()
-    key(active) { NewThreadComposer(route, remote, active) }
+    val provided = projectBadge?.let { arrayOf(LocalProjectBadge provides it) }.orEmpty()
+    CompositionLocalProvider(*provided) {
+        key(active) { NewThreadComposer(route, remote, active) }
+    }
 }
 
 @Composable

@@ -3,6 +3,8 @@ package dev.relay.android.features.home
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +27,14 @@ import java.io.File
 
 /** The saved icon file of a project on the active computer, or null; Home provides it. */
 val LocalProjectIconPath = compositionLocalOf<(String) -> String?> { { null } }
+
+/** Lets [content] outside Home show the active computer's project icons. */
+@Composable
+fun ProvideProjectIcons(home: HomeServices, content: @Composable () -> Unit) {
+    val active by home.remote.active.collectAsState()
+    val index by home.icons.index.collectAsState()
+    CompositionLocalProvider(LocalProjectIconPath provides { id -> projectIconPath(index, active, id) }, content = content)
+}
 
 /** The project's own icon, as the desktop's sidebar shows it; its folder otherwise. */
 @Composable

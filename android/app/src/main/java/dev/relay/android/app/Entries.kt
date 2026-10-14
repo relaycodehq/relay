@@ -16,6 +16,8 @@ import dev.relay.android.features.git.HistoryScreen
 import dev.relay.android.features.git.TurnScreen
 import dev.relay.android.features.tasks.TasksScreen
 import dev.relay.android.features.project.ProjectScreen
+import dev.relay.android.features.home.ProjectCardBadge
+import dev.relay.android.features.home.ProvideProjectIcons
 import dev.relay.android.features.newthread.NewThreadScreen
 import dev.relay.android.features.pairing.PairScreen
 import dev.relay.android.features.settings.SettingsScreen
@@ -35,7 +37,11 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Gallery> { GalleryScreen() }
 
     entry<Route.Pair> { PairScreen(container.remote, it.link) }
-    entry<Route.NewThread> { NewThreadScreen(it, container.remote) }
+    entry<Route.NewThread> { route ->
+        ProvideProjectIcons(container.home) {
+            NewThreadScreen(route, container.remote) { project, size -> ProjectCardBadge(project.id, project.name, size = size) }
+        }
+    }
     val seen = { id: String, updated: Long ->
         container.threadSeen.markSeen(id, updated)
         container.notifications.clearThread(id)

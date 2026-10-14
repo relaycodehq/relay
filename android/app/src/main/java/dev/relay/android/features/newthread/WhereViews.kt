@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -57,6 +59,11 @@ private const val SCRATCH_HINT = "A chat of its own, outside your projects"
  * Over a new thread's composer, in reach of the thumb: the project it starts
  * in and, for a Git project, where it works. Each opens a sheet.
  */
+/** A project's badge here; the app hands in Home's, which shows the project's own icon. */
+val LocalProjectBadge = staticCompositionLocalOf<@Composable (RemoteProject, Dp) -> Unit> {
+    { project, size -> ProjectBadge(project.name, size = size) }
+}
+
 @Composable
 fun WhereLine(project: RemoteProject?, picked: Where?, workspace: String, onOpen: (WhereSheet) -> Unit) {
     val c = RelayTheme.colors
@@ -71,7 +78,7 @@ fun WhereLine(project: RemoteProject?, picked: Where?, workspace: String, onOpen
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (picked == SCRATCH) Icon(TablerIcons.Outline.Notebook, null, size = 15.dp, tint = c.mutedForeground)
-            else if (project != null) ProjectBadge(project.name, size = 15.dp)
+            else if (project != null) LocalProjectBadge.current(project, 15.dp)
             Text(
                 name, Modifier.weight(1f, fill = false),
                 style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -123,7 +130,7 @@ fun ColumnScope.WhereIntro(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (scratch) Icon(TablerIcons.Outline.Notebook, null, size = 28.dp, tint = c.mutedForeground)
-        else if (project != null) ProjectBadge(project.name, size = 28.dp)
+        else if (project != null) LocalProjectBadge.current(project, 28.dp)
         Text(if (scratch) "Scratchpad" else project?.name.orEmpty(), style = RelayTheme.type.lg.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (!scratch && !project?.folder.isNullOrEmpty()) {
             Text(project.folder, style = RelayTheme.type.xs, color = c.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -184,7 +191,7 @@ fun WhereSheets(
                 projects.forEach { p ->
                     ListRow(
                         p.name, subtitle = p.folder, selected = p.id == picked,
-                        leading = { ProjectBadge(p.name, size = 17.dp) },
+                        leading = { LocalProjectBadge.current(p, 17.dp) },
                         trailing = check(p.id == picked),
                         onClick = { onClose(); onPick(p.id) },
                     )
