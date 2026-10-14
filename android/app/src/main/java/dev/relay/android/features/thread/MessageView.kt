@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -166,16 +167,20 @@ fun MessageView(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            if (!user) ProviderIcon(m.provider, c.foreground)
-            Text(if (user) m.author ?: "You" else agentName(m.provider), style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold))
-            // Only the phone's own sends are pending; see the outbox.
-            if (user) Text(
-                if (m.pending == true && m.error == null) "Sending…" else Clock().clock(m.created),
-                style = RelayTheme.type.xs, color = c.mutedForeground,
+        // Yours are bubbles on the right with nothing over them; the agent is named quietly above its answer.
+        if (!user || m.author != null || m.unprompted == true) Row(
+            if (user) Modifier.align(Alignment.End) else Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (!user) ProviderIcon(m.provider, c.mutedForeground, size = 13.dp)
+            Text(
+                if (user) m.author ?: "You" else agentName(m.provider),
+                style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium),
+                color = c.mutedForeground,
             )
-            if (!user && m.author != null) Text("via ${m.author}", style = RelayTheme.type.xs, color = c.mutedForeground)
-            if (m.unprompted == true) Text("started on its own", style = RelayTheme.type.xs, color = c.mutedForeground)
+            if (!user && m.author != null) Text("via ${m.author}", style = RelayTheme.type.xs, color = c.faint)
+            if (m.unprompted == true) Text("started on its own", style = RelayTheme.type.xs, color = c.faint)
         }
         if (!user) AgentRun(
             chatId, m, root,
@@ -194,6 +199,12 @@ fun MessageView(
             val body = withoutMention(m.body)
             // A screenshot sent on its own leaves nothing for the bubble to hold.
             if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
+            // Only the phone's own sends are pending; see the outbox.
+            Text(
+                if (m.pending == true && m.error == null) "Sending…" else Clock().clock(m.created),
+                Modifier.align(Alignment.End),
+                style = RelayTheme.type.xs, color = c.faint,
+            )
         } else if (m.body.isNotBlank()) {
             Markdown(
                 m.body, folder = root, openPath = openPath,
@@ -235,17 +246,18 @@ fun MessageView(
 @Composable
 private fun UserBubble(text: String, side: Boolean, pending: Boolean) {
     val c = RelayTheme.colors
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(18.dp)
     // A /btw question: a dashed outline and nothing else, as on the desktop.
     val frame = if (side) Modifier.drawBehind {
         drawRoundRect(
             c.mutedForeground,
-            cornerRadius = CornerRadius(12.dp.toPx()),
+            cornerRadius = CornerRadius(18.dp.toPx()),
             style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
         )
-    } else Modifier.border(RelayTheme.hairline, c.border, shape).background(c.card, shape)
+    } else Modifier.background(c.muted, shape)
     SelectionContainer(
-        Modifier.fillMaxWidth().then(frame).alpha(if (pending) 0.6f else 1f).padding(horizontal = 14.dp, vertical = 11.dp),
+        Modifier.fillMaxWidth().wrapContentWidth(Alignment.End).fillMaxWidth(0.85f).wrapContentWidth(Alignment.End)
+            .then(frame).alpha(if (pending) 0.6f else 1f).padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(text, style = RelayTheme.type.base.copy(lineHeight = 22.sp))
     }
