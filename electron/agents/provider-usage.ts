@@ -10,9 +10,11 @@ import { promisify } from "node:util";
 import {
   mapClaudeUsage,
   mapCodexCredits,
+  mapCodexResets,
   mapCodexUsage,
   providerUsageSchema,
   type ProviderUsage,
+  type SavedResets,
   type UsageCredits,
   type UsageWindow,
 } from "../../shared/provider-usage";
@@ -158,6 +160,7 @@ async function loadCodex(account: string): Promise<ProviderUsage> {
       headers,
     );
     const body = await jsonBody(response);
+    const counted = response.ok ? mapCodexResets(body) : null;
     return {
       response,
       windows: mapCodexUsage(body, Date.now(), {
@@ -165,8 +168,25 @@ async function loadCodex(account: string): Promise<ProviderUsage> {
         secondary: headerNumber(response, "x-codex-secondary-used-percent"),
       }),
       credits: mapCodexCredits(body),
+      resets: counted && mapCodexResets(body, await listResets(headers)),
     };
   });
+}
+
+/**
+ * Codex's list of saved resets, with when each lapses. Only asked for when
+ * the usage reading counts some; without it the count still shows.
+ */
+async function listResets(headers: Record<string, string>) {
+  try {
+    const response = await request(
+      "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+      headers,
+    );
+    return response.ok ? await jsonBody(response) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function probe(
@@ -178,6 +198,7 @@ async function probe(
     response: Response;
     windows: UsageWindow[];
     credits: UsageCredits | null;
+    resets: SavedResets | null;
   }>,
 ): Promise<ProviderUsage> {
   let message = "Sign in with codex";
@@ -212,6 +233,7 @@ async function probe(
         windows: result.windows,
         message: result.windows.length ? null : "No usage limits reported",
         credits: result.credits,
+        resets: result.resets,
       };
     } catch {
       message = "Couldn't reach the usage service";

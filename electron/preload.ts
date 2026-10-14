@@ -255,6 +255,7 @@ const methods = [
   "submitClockifyReview",
   "discardClockifyReview",
   "providerUsage",
+  "redeemCodexReset",
   "usageSummary",
   "saveUsageImage",
   "exportRenderImage",

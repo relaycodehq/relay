@@ -154,16 +154,19 @@ export const codexDefaults = memoByKey<CodexDefaults>((cwd) =>
     };
   }),
 );
-/** Runs one exchange with a short-lived `codex app-server`. */
-async function withAppServer<T>(
+/**
+ * Runs one exchange with a short-lived `codex app-server`, signed in as the
+ * account in use unless `env` names another.
+ */
+export async function withAppServer<T>(
   cwd: string,
   task: string,
   run: (wire: CodexTransport) => Promise<T>,
+  options: { env?: Record<string, string>; timeoutMs?: number } = {},
 ): Promise<T> {
   const child = spawnExecutable(await findExecutable("codex"), ["app-server"], {
     cwd,
-    // The account in use's models and settings.
-    env: (await runAccount("codex")).env,
+    env: options.env ?? (await runAccount("codex")).env,
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stderr.resume();
@@ -176,7 +179,7 @@ async function withAppServer<T>(
   child.on("close", () => fail(new Error(`Codex stopped while ${task}.`)));
   const timer = setTimeout(
     () => fail(new Error(`Codex timed out while ${task}.`)),
-    12000,
+    options.timeoutMs ?? 12000,
   );
   try {
     return await Promise.race([

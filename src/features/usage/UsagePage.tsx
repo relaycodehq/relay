@@ -13,6 +13,8 @@ import { api } from "../../lib/api";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { columnsOf, dayLabel, hours, measured } from "./format";
 import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
+import { RoomLeft } from "./room/RoomLeft";
+import { useRoom } from "./room/useRoom";
 import { ShareDialog } from "./ShareDialog";
 import {
   DayColumns,
@@ -196,6 +198,8 @@ function Block({
 }
 
 const OTHERS_AFTER = 4;
+/** Accounts that fit beside the rhythm charts; more get a row of their own. */
+const ROOM_BESIDE = 4;
 
 function Rhythmic({
   summary,
@@ -226,6 +230,8 @@ function Rhythmic({
     .sort((a, b) => b[m] - a[m])
     .slice(0, 3);
   const relay = m === "usd" ? totals.relayUsd : totals.relayFresh;
+  const room = useRoom();
+  const rooms = room.accounts.length;
   return (
     <div className="us-rhythmic">
       <p className="us-lede">
@@ -256,7 +262,13 @@ function Rhythmic({
         answers · {hours(totals.agentMs)} of agents working
       </p>
 
-      <div className="us-rhythm">
+      <div
+        className={
+          rooms
+            ? `us-rhythm with-room${rooms > ROOM_BESIDE ? " wide-room" : ""}`
+            : "us-rhythm"
+        }
+      >
         <div>
           <h3>An average day</h3>
           <HourColumns
@@ -281,6 +293,7 @@ function Rhythmic({
             </p>
           )}
         </div>
+        {rooms > 0 && <RoomLeft room={room} />}
       </div>
 
       <Block title="Day by day">

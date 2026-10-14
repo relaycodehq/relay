@@ -20,6 +20,20 @@ const usageCreditsSchema = z.object({
   /** Codex's guess at how many local messages the balance buys, low to high. */
   messages: z.tuple([z.number(), z.number()]).nullish(),
 });
+const savedResetsSchema = z.object({
+  count: z.number().int().min(1),
+  /** How many Codex would apply right now; null when it didn't say. */
+  usable: z.number().int().min(0).nullable(),
+  /** The ones Codex listed, first to lapse first; empty when only the count is known. */
+  credits: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(200),
+        expiresAt: z.number().nullable(),
+      }),
+    )
+    .max(50),
+});
 export const providerUsageSchema = z
   .object({
     provider: usageProviderSchema,
@@ -29,12 +43,27 @@ export const providerUsageSchema = z
     activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
     /** Bought credits that carry turns once the windows run out; Codex only. */
     credits: usageCreditsSchema.nullish(),
+    /** Resets saved up that refill the windows when spent; Codex only. */
+    resets: savedResetsSchema.nullish(),
   })
   .strict();
 type UsageKind = "session" | "weekly";
 export type UsageWindow = z.infer<typeof usageWindowSchema>;
 export type ProviderUsage = z.infer<typeof providerUsageSchema>;
 export type UsageCredits = z.infer<typeof usageCreditsSchema>;
+export type SavedResets = z.infer<typeof savedResetsSchema>;
+/** What Codex answered when asked to spend a saved reset. */
+export type CodexResetOutcome =
+  | "reset"
+  | "nothingToReset"
+  | "noCredit"
+  | "alreadyRedeemed"
+  | "unknown";
+export type CodexResetResult = {
+  outcome: CodexResetOutcome;
+  /** The account's limits read again afterwards. */
+  usage: ProviderUsage;
+};
 export type MeterPace = "ok" | "warn" | "hot" | "spent";
 export type UsageMeter = {
   kind: UsageKind;
@@ -403,6 +432,46 @@ export function mapCodexCredits(body: unknown): UsageCredits | null {
     unlimited,
     messages:
       range.length === 2 && low != null && high != null ? [low, high] : null,
+  };
+}
+
+/**
+ * Saved resets from the usage reading's count and, when Relay asked for them,
+ * the listed ones; null when there are none.
+ */
+export function mapCodexResets(
+  usage: unknown,
+  listed?: unknown,
+): SavedResets | null {
+  const summary = asRecord(asRecord(usage)?.rate_limit_reset_credits);
+  const list = asRecord(listed);
+  const credits = (Array.isArray(list?.credits) ? list.credits : [])
+    .flatMap((value) => {
+      const credit = asRecord(value);
+      const id = typeof credit?.id === "string" ? credit.id : "";
+      if (
+        !id ||
+        id.length > 200 ||
+        credit?.status !== "available" ||
+        credit.is_supported_by_plan === false
+      )
+        return [];
+      return [{ id, expiresAt: parseReset(credit.expires_at) }];
+    })
+    .sort((a, b) => (a.expiresAt ?? Infinity) - (b.expiresAt ?? Infinity))
+    .slice(0, 50);
+  const count = Math.max(
+    Math.round(
+      num(list?.available_count) ?? num(summary?.available_count) ?? 0,
+    ),
+    credits.length,
+  );
+  if (count < 1) return null;
+  const usable = num(summary?.applicable_available_count);
+  return {
+    count,
+    usable: usable == null ? null : Math.max(0, Math.round(usable)),
+    credits,
   };
 }
 

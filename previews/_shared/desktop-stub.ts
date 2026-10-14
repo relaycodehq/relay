@@ -163,6 +163,19 @@ const stub: Partial<Api> = {
       },
     ],
   }),
+  agentAccounts: async () => ({
+    accounts: (["claude", "codex"] as const).map((provider) => ({
+      provider,
+      id: "default",
+      label: "Default",
+      system: true,
+      signedIn: true,
+    })),
+    inUse: { claude: "default", codex: "default" },
+    signingIn: null,
+    signInError: null,
+  }),
+  onAgentAccounts: () => () => {},
 };
 
 window.relay = new Proxy(stub as Api, {

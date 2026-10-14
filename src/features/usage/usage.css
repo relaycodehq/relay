@@ -261,10 +261,33 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
+.us-rhythmic {
+  container-type: inline-size;
+}
 .us-rhythm {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 0 40px;
+}
+/* What's left right now sits beside the rhythm, or below it once it'd be cramped. */
+.us-rhythm.with-room {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.us-rhythm.with-room.wide-room > .us-room {
+  grid-column: 1 / -1;
+  margin-top: 28px;
+}
+.us-rhythm.with-room.wide-room {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+@container (max-width: 860px) {
+  .us-rhythm.with-room {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+  .us-rhythm.with-room > .us-room {
+    grid-column: 1 / -1;
+    margin-top: 28px;
+  }
 }
 .us-rhythm h3 {
   display: flex;

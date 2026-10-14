@@ -6,6 +6,7 @@ import {
   creditsReach,
   mapClaudeUsage,
   mapCodexCredits,
+  mapCodexResets,
   mapCodexUsage,
   paceGap,
   presentWindow,
@@ -201,5 +202,58 @@ describe("Codex credits", () => {
     )!;
     expect(creditsLabel(credits)).toBe("Unlimited credits");
     expect(creditsReach(credits)).toBeNull();
+  });
+});
+
+describe("Codex saved resets", () => {
+  // As wham/usage and wham/rate-limit-reset-credits answered on 2026-10-14.
+  const usage = (count: number, applicable?: number) => ({
+    rate_limit_reset_credits: {
+      available_count: count,
+      ...(applicable == null ? {} : { applicable_available_count: applicable }),
+    },
+  });
+  const credit = (id: string, expires: string | null, extra = {}) => ({
+    id,
+    reset_type: "codex_rate_limits",
+    is_supported_by_plan: true,
+    status: "available",
+    granted_at: "2026-09-22T20:52:53.813010Z",
+    expires_at: expires,
+    title: "Full reset",
+    ...extra,
+  });
+
+  it("lists the available ones, first to lapse first, and those without an end last", () => {
+    expect(
+      mapCodexResets(usage(3, 0), {
+        available_count: 3,
+        credits: [
+          credit("never", null),
+          credit("late", "2026-10-30T10:00:00.000000Z"),
+          credit("soon", "2026-10-22T20:52:53.813010Z"),
+          credit("spent", null, { status: "redeemed" }),
+          credit("other-plan", null, { is_supported_by_plan: false }),
+        ],
+      }),
+    ).toEqual({
+      count: 3,
+      usable: 0,
+      credits: [
+        { id: "soon", expiresAt: Date.parse("2026-10-22T20:52:53.813Z") },
+        { id: "late", expiresAt: Date.parse("2026-10-30T10:00:00Z") },
+        { id: "never", expiresAt: null },
+      ],
+    });
+  });
+
+  it("keeps the count when the list couldn't be read, and says nothing without any", () => {
+    expect(mapCodexResets(usage(2))).toEqual({
+      count: 2,
+      usable: null,
+      credits: [],
+    });
+    expect(mapCodexResets(usage(0, 0))).toBeNull();
+    expect(mapCodexResets({ rate_limit: {} })).toBeNull();
   });
 });

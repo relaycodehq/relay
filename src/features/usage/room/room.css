@@ -1,0 +1,190 @@
+/* "Room left now": the track is the whole limit, the fill what's left of it.
+   Greys like the rhythm charts, the roomiest account in the accent. */
+.us-room {
+  position: relative;
+  min-width: 0;
+}
+.us-room h3 .us-room-recheck {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: -4px 0 -4px auto;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+}
+.us-room-recheck:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.us-room-recheck:disabled svg {
+  opacity: 0.4;
+}
+.us-room-accounts {
+  display: grid;
+  gap: 0 10px;
+}
+.us-room-account {
+  position: relative;
+  min-width: 0;
+}
+.us-room-tanks {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 170px;
+  border-bottom: 1px solid var(--border);
+}
+.us-room-tank {
+  display: flex;
+  align-items: flex-end;
+  width: 18px;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.us-room-tank > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: bottom;
+  background: color-mix(in srgb, var(--text) 24%, var(--surface));
+  transition: transform 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.us-room-tank.on > span {
+  background: var(--accent);
+}
+.us-room-ticks {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.us-room-ticks span {
+  width: 18px;
+  color: var(--muted);
+  font-size: 9.5px;
+  text-align: center;
+  white-space: nowrap;
+  display: flex;
+  justify-content: center;
+}
+.us-room-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.us-room-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.us-room-tip {
+  bottom: calc(100% - 24px);
+  left: 50%;
+  min-width: 200px;
+  transform: translateX(-50%);
+}
+
+/* Saved resets */
+.us-room-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+  margin-top: 12px;
+}
+.us-room-saved-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+}
+.us-room-saved-row > .us-mark {
+  align-self: start;
+  margin-top: 2px;
+}
+.us-room-saved-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.us-room-saved-text small {
+  color: var(--muted);
+  font-size: 11px;
+}
+/* Quiet while there's room; the accent once the account is low. */
+.us-room-refill {
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.us-room-refill:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.us-room-refill[data-low] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.us-room-refill[data-low]:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.us-room-positioner {
+  z-index: 150;
+  max-width: calc(100vw - 24px);
+}
+.us-room-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px #0000001f;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  outline: none;
+}
+.us-room-ask p {
+  margin: 0;
+}
+.us-room-ask small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.us-room-ask .us-room-note {
+  color: var(--muted);
+}
+.us-room-ask-actions {
+  display: flex;
+  gap: 6px;
+}
+.us-room-ask-actions button {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}

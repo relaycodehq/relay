@@ -413,6 +413,16 @@ export interface Api
     force?: boolean,
     account?: string,
   ): Promise<ProviderUsage>;
+  /**
+   * Spends one of a Codex account's saved resets, `creditId` or the next one
+   * Codex picks. Retrying the same attempt sends the same `attempt` id, so it
+   * can't spend two.
+   */
+  redeemCodexReset(
+    account: string,
+    creditId: string | null,
+    attempt: string,
+  ): Promise<import("./provider-usage").CodexResetResult>;
   /** What the agents used, as this computer counted it; see shared/usage. */
   usageSummary(
     range: import("./usage").UsageRange,
