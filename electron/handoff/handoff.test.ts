@@ -55,6 +55,9 @@ beforeEach(async () => {
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  // Nothing here needs a turn to last; at the fixture's 300 ms the file took
+  // half a minute longer.
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "20");
   // The shared remote both computers cloned; `me/app` is how they match.
   const origin = join(root, "remote", "me", "app.git");
   await mkdir(origin, { recursive: true });
@@ -71,6 +74,10 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
+
+// The sender reuses the other computer's answers for a few seconds; waiting
+// that out made every test here seconds slower.
+const askEveryTime = { statusMs: 0, infoMs: 0 };
 
 /** One computer running Relay: its own data, and its own clone of the app. */
 async function computer(name: string) {
@@ -180,6 +187,7 @@ async function pairedComputers() {
     laptop.chats,
     laptop.projects,
     join(laptop.dir, "handoffs"),
+    askEveryTime,
   );
   return {
     laptop,
@@ -1055,6 +1063,7 @@ it("catches up on what a live handoff wrote while the computers were apart, with
     laptop.chats,
     laptop.projects,
     join(laptop.dir, "handoffs"),
+    askEveryTime,
   );
   await again.start();
   await vi.waitFor(async () =>
@@ -1092,6 +1101,7 @@ it("holds what's sent while a live thread's computer is away, and sends it once 
     laptop.chats,
     laptop.projects,
     join(laptop.dir, "handoffs"),
+    askEveryTime,
   );
   await again.start();
   await vi.waitFor(async () =>

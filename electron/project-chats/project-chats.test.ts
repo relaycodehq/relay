@@ -102,6 +102,8 @@ beforeEach(async () => {
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
+  // Quick turns; a test that watches one run sets its own length.
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "20");
   store = new Store(join(root, "state"));
   await store.load();
   projects = new Projects(store);

@@ -101,6 +101,8 @@ export class Handoffs {
     private projects: Projects,
     /** Scratch space for bundles on their way, a folder per handoff. */
     private dir: string,
+    /** How long the other computer's answers are reused; tests ask every time. */
+    private reuse = { statusMs: 4000, infoMs: 3000 },
   ) {
     computers.onOnline((id) => {
       void this.acknowledge(id);
@@ -525,7 +527,8 @@ export class Handoffs {
   }
   private async info(computerId: string, client: RemoteClient, fresh = false) {
     const cached = this.infos.get(computerId);
-    if (!fresh && cached && Date.now() - cached.at < 3000) return cached.info;
+    if (!fresh && cached && Date.now() - cached.at < this.reuse.infoMs)
+      return cached.info;
     const info = await client.call("computerInfo").catch((e) => {
       if (message(e) === unknownCall) return null;
       throw e;
@@ -655,7 +658,8 @@ export class Handoffs {
     fresh = false,
   ) {
     const cached = this.statuses.get(sentTo.id);
-    if (!fresh && cached && Date.now() - cached.at < 4000) return cached.status;
+    if (!fresh && cached && Date.now() - cached.at < this.reuse.statusMs)
+      return cached.status;
     const client = await this.computers.connected(sentTo.computerId);
     return this.remember(
       sentTo.id,
