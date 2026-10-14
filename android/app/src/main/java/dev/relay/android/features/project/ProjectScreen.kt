@@ -32,6 +32,9 @@ import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteClient
+import dev.relay.android.remote.client.projectTasks
+import dev.relay.android.remote.client.projectWorkingTree
+import dev.relay.android.remote.model.WorkingTree
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.RowSize
@@ -50,41 +53,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
-
-/**
- * The bits of the desktop's WorkingTree (shared/working-tree.ts) this screen shows. Read off the
- * JSON here rather than through the git screens' model, so the two features don't lean on each other.
- */
-internal data class TreeGlance(
-    val branch: String,
-    val changed: Int,
-    val additions: Int,
-    val deletions: Int,
-    val ahead: Int,
-    val behind: Int,
-    val operation: String?,
-)
-
-internal fun treeGlance(json: JsonElement?): TreeGlance? {
-    val o = json as? JsonObject ?: return null
-    fun int(obj: JsonObject?, key: String) = (obj?.get(key) as? JsonPrimitive)?.intOrNull ?: 0
-    fun str(key: String) = (o[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    val lines = o["lines"] as? JsonObject
-    return TreeGlance(
-        branch = str("branch").orEmpty(),
-        changed = (o["changes"] as? JsonArray)?.size ?: 0,
-        additions = int(lines, "additions"),
-        deletions = int(lines, "deletions"),
-        ahead = int(o, "ahead"),
-        behind = int(o, "behind"),
-        operation = str("operation"),
-    )
-}
 
 private val operationNames = mapOf(
     "MERGE_HEAD" to "merge",
@@ -99,14 +67,14 @@ internal fun operationInProgress(operation: String) =
     (operationNames[operation] ?: operation).replaceFirstChar { it.uppercase() } + " in progress"
 
 /** "3 changed · +40 −2 · 1 to push". */
-internal fun changesLine(tree: TreeGlance) = listOfNotNull(
-    if (tree.changed > 0) "${tree.changed} changed" else "No changes",
-    if (tree.additions > 0 || tree.deletions > 0) "+${tree.additions} −${tree.deletions}" else null,
+internal fun changesLine(tree: WorkingTree) = listOfNotNull(
+    if (tree.changes.isNotEmpty()) "${tree.changes.size} changed" else "No changes",
+    if (tree.lines.additions > 0 || tree.lines.deletions > 0) "+${tree.lines.additions} −${tree.lines.deletions}" else null,
     if (tree.ahead > 0) "${tree.ahead} to push" else null,
     if (tree.behind > 0) "${tree.behind} to pull" else null,
 ).joinToString(" · ")
 
-private class Glance(val tree: TreeGlance?, val tasks: Int?)
+private class Glance(val tree: WorkingTree?, val tasks: Int?)
 
 /** The working tree (git projects only) and how many tasks run; a failed half is left out. */
 private suspend fun RemoteClient.glance(id: String, git: Boolean): Glance = coroutineScope {
@@ -117,8 +85,8 @@ private suspend fun RemoteClient.glance(id: String, git: Boolean): Glance = coro
     } catch (_: Exception) {
         null
     }
-    val tree = async { if (git) quiet { treeGlance(desktop("projectWorkingTree", listOf(JsonPrimitive(id)))) } else null }
-    val tasks = async { quiet { (desktop("projectTasks", listOf(JsonPrimitive(id))) as? JsonArray)?.size } }
+    val tree = async { if (git) quiet { projectWorkingTree(id) } else null }
+    val tasks = async { quiet { projectTasks(id).size } }
     Glance(tree.await(), tasks.await())
 }
 
