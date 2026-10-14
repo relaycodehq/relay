@@ -64,6 +64,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ArrowForwardUp
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowsSplit
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
+import io.github.lyxnx.compose.ui.tablericons.outline.Dots
 import io.github.lyxnx.compose.ui.tablericons.outline.CornerUpLeft
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -296,7 +297,7 @@ private fun Counts(add: Int, del: Int) {
 
 /** The desktop's MessageActions: when it was sent, how fast it wrote, what it cost, copy, fork, reply. */
 @Composable
-fun MessageActions(message: ChatMessage, onReply: (() -> Unit)?, onFork: (() -> Unit)?) {
+fun MessageActions(message: ChatMessage, onReply: (() -> Unit)?, onFork: (() -> Unit)?, onMore: (() -> Unit)? = null) {
     val c = RelayTheme.colors
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
@@ -329,5 +330,6 @@ fun MessageActions(message: ChatMessage, onReply: (() -> Unit)?, onFork: (() -> 
             ReadAloudButton(remote, message.id, message.body)
         if (onFork != null) Icon(TablerIcons.Outline.ArrowsSplit, "Fork into a new thread", Modifier.pressable(onClick = onFork), tint = c.mutedForeground)
         if (onReply != null) Icon(TablerIcons.Outline.CornerUpLeft, "Reply to message", Modifier.pressable(onClick = onReply), tint = c.mutedForeground)
+        if (onMore != null) Icon(TablerIcons.Outline.Dots, "More for this answer", Modifier.pressable(onClick = onMore), tint = c.mutedForeground)
     }
 }

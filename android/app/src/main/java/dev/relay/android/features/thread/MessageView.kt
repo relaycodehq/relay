@@ -152,7 +152,8 @@ fun MessageView(
     val c = RelayTheme.colors
     Column(
         Modifier.fillMaxWidth()
-            .then(on.onActions?.let { act -> Modifier.pointerInput(m.id) { detectTapGestures(onLongPress = { act(m) }) } } ?: Modifier)
+            // An answer's held text selects, so its menu is the ••• under it; yours opens on a hold.
+            .then(on.onActions?.takeIf { user }?.let { act -> Modifier.pointerInput(m.id) { detectTapGestures(onLongPress = { act(m) }) } } ?: Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -228,6 +229,7 @@ fun MessageView(
             m,
             onReply = on.onReply?.let { reply -> { reply(m) } },
             onFork = on.onFork?.takeIf { m.status == "complete" && m.parentId == null && m.side != true }?.let { fork -> { fork(m) } },
+            onMore = on.onActions?.let { more -> { more(m) } },
         )
         val openReplies = on.onReplies
         if (replies > 0 && openReplies != null) Row(
