@@ -33,6 +33,7 @@ export function EditCode({
         unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-diff], [data-file] {opacity:1 !important;} [data-code] {tab-size:2;}`}
         options={{
           ...symbols,
+          onPostRender: view.onPostRender,
           useTokenTransformer: true,
           theme: syntaxThemes,
           themeType: theme,

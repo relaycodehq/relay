@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
 import type { EditorViewState, Marker } from "@pierre/diffs/edit";
 import type { CodeViewHandle, CodeViewProps } from "@pierre/diffs/react";
@@ -45,6 +45,34 @@ export function useEditableDiff(
   );
   const diff = compared.diff;
   const viewer = useRef<Handle>(null);
+  // Pierre colours an editable file on the main thread, all of it before any
+  // of it shows: ~0.8 s for 500 lines of TypeScript. Read-only, the worker
+  // pool shows it at once and colours it off the thread; the editor then
+  // takes those colours over. A path stays editable, so a save or reload
+  // keeps its caret.
+  const [editablePath, setEditablePath] = useState<string>();
+  const editable = editablePath === path;
+  const startEditing = () => setEditablePath(path);
+  useEffect(() => {
+    if (!diff || editable) return;
+    // A click starts it at once; this covers a worker that never answers.
+    const fallback = setTimeout(() => setEditablePath(path), 3000);
+    // A line the editor's caret would bring into view.
+    const scroll = requestAnimationFrame(() => {
+      if (line)
+        viewer.current?.scrollTo({
+          type: "line",
+          id: path,
+          lineNumber: line,
+          side: "additions",
+          align: "center",
+        });
+    });
+    return () => {
+      clearTimeout(fallback);
+      cancelAnimationFrame(scroll);
+    };
+  }, [diff, editable, path, line]);
   // Read while the old editor is still there, before the new text replaces it.
   const kept = useRef<{
     source?: LocalFile;
@@ -117,12 +145,12 @@ export function useEditableDiff(
               id: path,
               type: "diff",
               fileDiff: diff,
-              edit: true,
+              edit: editable,
               version: Date.now(),
             },
           ]
         : [],
-    [diff],
+    [diff, editable],
   );
   return {
     viewer,
@@ -130,6 +158,24 @@ export function useEditableDiff(
     error: compared.error,
     items,
     editorOptions,
+    editable,
+    startEditing,
+    /** Once the worker has coloured the read-only file, the editor takes over. */
+    onPostRender: (_node: HTMLElement, rendered: unknown) => {
+      if (!editable && coloured(rendered)) startEditing();
+    },
     editor: (): FileEditor | undefined => viewer.current?.getEditor(path),
   };
+}
+
+/**
+ * Whether Pierre's render of a diff carries the worker's colours. Pierre
+ * doesn't say so publicly; should this field go, the fallback timer starts
+ * editing instead.
+ */
+function coloured(rendered: unknown) {
+  const view = rendered as {
+    hunksRenderer?: { renderCache?: { highlighted?: boolean } };
+  };
+  return view.hunksRenderer?.renderCache?.highlighted === true;
 }

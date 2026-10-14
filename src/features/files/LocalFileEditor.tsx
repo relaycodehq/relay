@@ -119,6 +119,7 @@ export default function LocalFileEditor({
         inert={file.loading}
         aria-busy={file.loading}
         onKeyDownCapture={editorKeys(view.editor, symbols.at)}
+        onPointerDownCapture={view.editable ? undefined : view.startEditing}
       >
         {!view.diff ? (
           <Loading text="Preparing editable diff…" />
