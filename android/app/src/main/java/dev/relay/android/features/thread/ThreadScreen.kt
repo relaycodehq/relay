@@ -221,6 +221,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             } else null,
             // A page's relay.compose() goes into the composer that shows, without taking focus from the page.
             onCompose = if (projectId != null) { text, earlier -> composer.compose(text, earlier) } else null,
+            onOpenThread = { nav.push(Route.Thread(it)) },
         )
     }
 

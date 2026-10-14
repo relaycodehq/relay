@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
@@ -83,6 +84,8 @@ class MessageCallbacks(
     val onSteer: ((String) -> Unit)? = null,
     /** Puts what a page's relay.compose() says in the composer. */
     val onCompose: RenderCompose? = null,
+    /** Opens another thread, the one whose agent sent a message here. */
+    val onOpenThread: ((String) -> Unit)? = null,
 )
 
 /** The desktop only reads an answer's image once the saved answer names it. */
@@ -169,16 +172,22 @@ fun MessageView(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Another thread's agent wrote it: its name opens that thread, while the phone knows it.
+        val sender = m.fromThread?.takeIf { user && on.onOpenThread != null }?.let { id ->
+            remote?.overview?.collectAsState()?.value?.chats?.find { it.id == id }
+        }
         // Yours are bubbles on the right with nothing over them; the agent is named quietly above its answer.
         if (!user || m.author != null || m.unprompted == true) Row(
-            if (user) Modifier.align(Alignment.End) else Modifier,
+            (if (user) Modifier.align(Alignment.End) else Modifier)
+                .then(sender?.let { chat -> Modifier.pressable(onClick = { on.onOpenThread?.invoke(chat.id) }, scale = false) } ?: Modifier),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (!user) ProviderIcon(m.provider, c.mutedForeground, size = 13.dp)
+            val name = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium)
             Text(
                 if (user) m.author ?: "You" else agentName(m.provider),
-                style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium),
+                style = if (sender != null) name.copy(textDecoration = TextDecoration.Underline) else name,
                 color = c.mutedForeground,
             )
             if (!user && m.author != null) Text("via ${m.author}", style = RelayTheme.type.xs, color = c.faint)
