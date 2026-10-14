@@ -136,7 +136,7 @@ fun BranchesScreen(remote: Remote, projectId: String) {
                         name = ""
                     }
                 },
-                Modifier.fillMaxWidth().padding(top = 12.dp),
+                Modifier.fillMaxWidth(),
                 enabled = !busy && name.isNotBlank(),
             )
         }
