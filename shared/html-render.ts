@@ -293,6 +293,6 @@ export const RENDER_GUIDE = `The page sits in the chat column between your tool 
 - No outer background, card, border or big padding: the page's background shows the thread behind it. Let width be fluid, never fixed wider than 320 px.
 - Use the app's theme through CSS variables, which follow light and dark: var(--text), var(--muted), var(--surface), var(--background), var(--border), var(--hover), var(--accent), var(--accent-soft), var(--danger), var(--code-background), var(--font-sans), var(--font-mono), and --series-1 … --series-6 for chart series. :root[data-theme="dark"] matches the dark theme.
 - Give charts and canvases a fixed height (like 280px); never 100vh or height:100% on html/body, which leave the frame no content height to fit.
-- Self-contained: inline CSS, JS and data. Libraries may load from https CDNs (like https://cdn.jsdelivr.net/npm/chart.js, or KaTeX for math); local files and Relay can't be reached. Links open in the user's browser.
+- Self-contained: inline CSS, JS and data. Libraries may load from https CDNs (like https://cdn.jsdelivr.net/npm/chart.js, or KaTeX for math); local files and Relay can't be reached, so a <video> or <img> of a file on this computer stays blank: embed that file in your reply as ![short description](/absolute/path) instead. Links open in the user's browser.
 - window.relay.compose(text) puts text in the user's message box, for pages that let them pick or adjust something. Each call replaces what the page put there before.
 For a whole app or a page that needs a dev server, use a preview page instead.`;

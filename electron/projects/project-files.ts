@@ -14,6 +14,7 @@ import { decodeText, NotText, textLimit } from "../git/working-files";
 import { workingPathSchema } from "../../shared/working-tree";
 import {
   imageMime,
+  videoMime,
   maxDirEntries,
   maxImageBytes,
   type DirEntry,
@@ -137,6 +138,8 @@ export async function fileInfo(root: string, path: string): Promise<FileInfo> {
       reason: "This image is too large to preview here.",
     };
   }
+  const video = videoMime(path);
+  if (video) return { ...base, kind: "video", mime: video };
   if (stat.size > textLimit)
     return {
       ...base,

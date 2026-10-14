@@ -49,6 +49,7 @@ import { gitExecutable, setGitPath } from "./git/git";
 import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { ProjectChats } from "./project-chats";
+import { registerMediaScheme, serveMedia } from "./media";
 import {
   appRenderTheme,
   lookAtPage,
@@ -301,6 +302,7 @@ const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();
 registerRenderScheme();
+registerMediaScheme();
 app
   .whenReady()
   .then(async () => {
@@ -422,6 +424,7 @@ app
       },
     );
     projectChats = chats;
+    serveMedia();
     serveRenders((chatId, renderId, page) =>
       chats.renderPage(chatId, renderId, page),
     );

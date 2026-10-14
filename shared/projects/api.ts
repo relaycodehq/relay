@@ -269,6 +269,12 @@ export interface ProjectChatApi {
     messageId: string,
     path: string,
   ): Promise<string>;
+  /** Where the player streams a video the answer `messageId` embeds from. */
+  projectChatVideo(
+    id: string,
+    messageId: string,
+    path: string,
+  ): Promise<string>;
   /** The thread's preview as the turn `messageId` left it, as a JPEG data URL. */
   projectChatPreviewShot(id: string, messageId: string): Promise<string>;
   /** Shows that image file in Finder. */
@@ -370,6 +376,8 @@ export interface ProjectFilesApi {
   projectFileInfo(where: string, path: string): Promise<FileInfo>;
   /** An image file as a data URL. */
   projectImage(where: string, path: string): Promise<string>;
+  /** Where the player streams a video file from. */
+  projectVideo(where: string, path: string): Promise<string>;
   /** An image scaled down for a grid; small ones and vector ones as they are. */
   projectThumbnail(where: string, path: string): Promise<string>;
   /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */

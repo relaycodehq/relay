@@ -6,7 +6,11 @@ import {
   type ChatMessage,
   type ProjectChat,
 } from "../../shared/projects";
-import { answerImagePaths, embedsImages } from "../../shared/answer-images";
+import {
+  answerImagePaths,
+  answerVideoPaths,
+  embedsImages,
+} from "../../shared/answer-images";
 import {
   dropRevert,
   redoRevert,
@@ -60,6 +64,23 @@ export class TurnFiles {
       !answerImagePaths(message.body, root).includes(path)
     )
       throw new Error("This turn didn't read or show that image.");
+    return path;
+  }
+
+  /** A video the answer `messageId` plays; never kept, since videos run large. */
+  async turnVideoPath(chatId: string, messageId: string, path: string) {
+    const chat = await this.core.storage.load(chatId);
+    const message = chat.messages.find((m) => m.id === messageId);
+    const root = await this.worktrees
+      .terminalFolder(chat.projectId, chatId)
+      .catch(() => null);
+    if (
+      message?.role !== "assistant" ||
+      !message.body ||
+      !root ||
+      !answerVideoPaths(message.body, root).includes(path)
+    )
+      throw new Error("This answer doesn't play that video.");
     return path;
   }
 

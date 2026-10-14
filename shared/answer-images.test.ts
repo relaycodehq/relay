@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { answerImagePaths, localImagePath } from "./answer-images";
+import {
+  answerImagePaths,
+  answerVideoPaths,
+  localImagePath,
+} from "./answer-images";
 
 const root = "/work/relay";
 
@@ -34,5 +38,15 @@ it("lists only images, not links or code that mention a path", () => {
   expect(answerImagePaths(body, root)).toEqual([
     "/tmp/before.png",
     "/work/relay/shots/after.png",
+  ]);
+});
+
+it("keeps videos apart from images, so each is read only its own way", () => {
+  const body =
+    "![shot](</tmp/my shot.png>) and the run: ![demo](out/demo.MP4) ![](/tmp/x.mov)";
+  expect(answerImagePaths(body, root)).toEqual(["/tmp/my shot.png"]);
+  expect(answerVideoPaths(body, root)).toEqual([
+    "/work/relay/out/demo.MP4",
+    "/tmp/x.mov",
   ]);
 });

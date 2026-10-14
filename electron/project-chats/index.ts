@@ -640,6 +640,9 @@ export class ProjectChats {
   readImage(chatId: string, messageId: string, path: string) {
     return this.files.readImage(chatId, messageId, path);
   }
+  videoPath(chatId: string, messageId: string, path: string) {
+    return this.files.turnVideoPath(chatId, messageId, path);
+  }
   revealImagePath(chatId: string, messageId: string, path: string) {
     return this.files.revealImagePath(chatId, messageId, path);
   }

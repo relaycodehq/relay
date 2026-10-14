@@ -20,7 +20,7 @@ export const maxDirEntries = 5000;
 /** How the pane opens a file: the editor, a picture, or a card with the way out. */
 export interface FileInfo {
   path: string;
-  kind: "text" | "image" | "other";
+  kind: "text" | "image" | "video" | "other";
   size: number;
   mtime: number;
   mime?: string;
@@ -42,6 +42,16 @@ const imageMimes: Record<string, string> = {
 
 export const imageMime = (path: string) =>
   imageMimes[path.split(".").pop()?.toLowerCase() ?? ""];
+
+const videoMimes: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+};
+
+export const videoMime = (path: string) =>
+  videoMimes[path.split(".").pop()?.toLowerCase() ?? ""];
 
 export const maxImageBytes = 25 * 1024 * 1024;
 

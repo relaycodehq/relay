@@ -32,7 +32,8 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
-import { imageMime } from "../../shared/project-files";
+import { imageMime, videoMime } from "../../shared/project-files";
+import { mediaUrl } from "../media";
 import { agentRuntime } from "../agents";
 import {
   createEntry,
@@ -270,6 +271,14 @@ export function projectHandlers(ctx: ApiContext) {
     projectImage: takes(
       [fileRootSchema, workingPathSchema],
       async (where, path) => readImage((await fileRoot(where)).root, path),
+    ),
+    projectVideo: takes(
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => {
+        const full = await entryPath((await fileRoot(where)).root, path);
+        if (!videoMime(full)) throw new Error("That is not a video.");
+        return mediaUrl(full);
+      },
     ),
     projectThumbnail: takes(
       [workspaceIdSchema, workingPathSchema],

@@ -24,6 +24,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
+import { mediaUrl } from "../media";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** A missing optional argument reaches the handler as undefined from the page and as null over the phone's JSON. */
@@ -246,6 +247,11 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, idSchema, imagePathSchema],
       (id, messageId, path) => projectChats.readImage(id, messageId, path),
     ),
+    projectChatVideo: takes(
+      [idSchema, idSchema, imagePathSchema],
+      async (id, messageId, path) =>
+        mediaUrl(await projectChats.videoPath(id, messageId, path)),
+    ),
     projectChatPreviewShot: takes(
       [idSchema, messageIdSchema],
       (id, messageId) => projectChats.previewShot(id, messageId),
@@ -348,8 +354,7 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     setFinding: takes(
       [idSchema, z.string().regex(/^F\d{1,6}$/), z.enum(["open", "dismissed"])],
-      (id, findingId, status) =>
-        projectChats.setFinding(id, findingId, status),
+      (id, findingId, status) => projectChats.setFinding(id, findingId, status),
     ),
     closeWatchNote: takes(
       [idSchema, idSchema, idSchema, z.enum(watchCloses), z.boolean()],
