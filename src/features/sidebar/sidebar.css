@@ -594,6 +594,18 @@
 .sb-thread-row:has(.sb-thread-action:focus-visible) .sb-thread {
   padding-right: 54px;
 }
+/* A running thread keeps its spinner where it was; Pin takes the room before it. */
+.sb-thread-row:hover:not(:has(.sb-thread-archive)) .sb-thread,
+.sb-thread-row:has(.sb-thread-action:focus-visible):not(:has(.sb-thread-archive))
+  .sb-thread {
+  padding-right: 10px;
+}
+.sb-thread-row:hover:not(:has(.sb-thread-archive)) .sb-thread > .sb-status,
+.sb-thread-row:has(.sb-thread-action:focus-visible):not(:has(.sb-thread-archive))
+  .sb-thread
+  > .sb-status {
+  margin-left: 26px;
+}
 /* Only where Archive takes its place; a running thread keeps its spinner. */
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-age,
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status,
