@@ -3,7 +3,7 @@ package dev.relay.android.remote
 /** `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes. */
 object Bridge {
     /** This app's own bridge, sent with `pair`/`auth`. */
-    const val VERSION = 21
+    const val VERSION = 22
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11
@@ -24,6 +24,9 @@ object Bridge {
     const val FOLDER_HANDOFF = 20
     const val START_HANDOFF = 20
     const val SKILLS = 21
+    const val PREVIEW = 22
+    const val NOTES = 22
+    const val WORKSPACE_MOVES = 22
 
     const val PHONE_DETAIL_PREVIEW = 600
     const val REMOTE_HISTORY = 100
@@ -51,7 +54,7 @@ object Bridge {
         "projectChatAgent", "stopProjectChatAgent", "triageProjectChat", "renameProjectChat",
         "regenerateProjectChatTitle", "markProjectChatSeen", "forkProjectChat", "rewindProjectTurn",
         "setLimitResume", "closeWatchNote", "projectChatImage", "projectChatReadImage",
-        "projectChatQueuedImages", "agentModels", "agentDefaults", "aiSettings", "newThreadAgent",
+        "projectChatQueuedImages", "threadNotes", "tickThreadNote", "removeThreadNote", "agentModels", "agentDefaults", "aiSettings", "newThreadAgent",
         "saveNewThreadAgent", "newThreadModels", "saveNewThreadModel", "projectWorktree",
         "projectCommands", "providerUsage", "projectWorkingTree", "projectGitAction", "projectCiStatus",
         "projectMergePlan", "projectMergeBranch", "projectCommitMessage", "projectBranches",
