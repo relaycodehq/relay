@@ -32,6 +32,8 @@ type Run = {
   summary?: string;
   /** Tool calls the SDK counted, in case some never came through. */
   toolUses: number;
+  /** Tokens it has used, as the SDK last counted them. */
+  tokens?: number;
   background?: boolean;
   /** Seen in the SDK's live set, so leaving it means it ended. */
   listed?: boolean;
@@ -138,6 +140,7 @@ export class SubagentTracker {
       ended: run.ended,
       summary: run.summary,
       calls: Math.max(calls.length, run.toolUses),
+      ...(run.tokens ? { tokens: run.tokens } : {}),
       // The card lists them; their output stays in the side thread.
       recent: calls.slice(-5).map(({ detail, ...call }) => call),
       outcome: report?.replace(/\s+/g, " ").slice(0, 240),
@@ -217,6 +220,7 @@ export class SubagentTracker {
         const summary = message.summary?.trim();
         if (summary) run.summary = summary.slice(0, 300);
         run.toolUses = Math.max(run.toolUses, message.usage.tool_uses);
+        this.used(run, message.usage.total_tokens);
         return;
       }
       case "task_updated": {
@@ -236,6 +240,7 @@ export class SubagentTracker {
         const summary = message.summary?.trim();
         if (summary && !run.returned && message.status !== "stopped")
           run.returned = summary.slice(0, limits.text);
+        this.used(run, message.usage?.total_tokens);
         this.end(run, message.status, "task");
         return;
       }
@@ -321,8 +326,10 @@ export class SubagentTracker {
       resolvedModel?: unknown;
       prompt?: unknown;
       content?: unknown;
+      totalTokens?: unknown;
     };
     if (typeof out.resolvedModel === "string") run.model = out.resolvedModel;
+    if (typeof out.totalTokens === "number") this.used(run, out.totalTokens);
     if (!run.brief && typeof out.prompt === "string")
       run.brief = out.prompt.slice(0, limits.brief);
     if (
@@ -336,6 +343,11 @@ export class SubagentTracker {
     const answer = (textOf(out.content) || output).trim();
     if (answer) run.returned = answer.slice(0, limits.text);
     this.end(run, failed ? "failed" : "completed", "result");
+  }
+
+  /** Counts only grow, so a late or partial report can't shrink it. */
+  private used(run: Run, tokens: number | undefined) {
+    if (tokens && tokens > (run.tokens ?? 0)) run.tokens = tokens;
   }
 
   private end(run: Run, status: SubagentStatus, source: Source) {

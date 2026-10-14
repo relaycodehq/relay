@@ -132,6 +132,7 @@ it("follows a foreground agent to its answer", () => {
       status: "running",
       summary: "Reading the SDK types",
       calls: 1,
+      tokens: 10,
       recent: [{ kind: "read", label: "/p/sdk.d.ts", status: "running" }],
     },
   ]);
@@ -148,6 +149,7 @@ it("follows a foreground agent to its answer", () => {
         status: "completed",
         resolvedModel: "claude-sonnet-5",
         content: [{ type: "text", text: "Three task messages…" }],
+        totalTokens: 2400,
       },
     }),
   );
@@ -156,6 +158,7 @@ it("follows a foreground agent to its answer", () => {
     status: "completed",
     ended: 6000,
     model: "claude-sonnet-5",
+    tokens: 2400,
     summary: undefined,
     // Its own last word, not the copy that carries ids for the model.
     report: "Three task messages start, update and end an agent.",

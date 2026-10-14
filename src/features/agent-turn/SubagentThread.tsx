@@ -7,13 +7,13 @@ import { ArrowLeft, Bot } from "lucide-react";
 import { api } from "../../lib/api";
 import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
-import { plural } from "../../../shared/activity-labels";
 import {
   agentKind,
   batchOf,
   bySubagentStanding,
   leadName,
   modelName,
+  subagentUse,
   type SubagentDetail,
   type SubagentRun,
 } from "../../../shared/subagents";
@@ -197,7 +197,7 @@ function Run({
           {[
             agentKind(run),
             run.model && modelName(run.model),
-            plural(run.calls, "call"),
+            ...subagentUse(run),
             run.status === "failed" && "failed",
           ]
             .filter(Boolean)

@@ -24,6 +24,7 @@ import {
   bySubagentStanding,
   modelName,
   subagentNow,
+  subagentUse,
   took,
   type SubagentRun,
 } from "../../../shared/subagents";
@@ -207,7 +208,7 @@ function Peek({
             {[
               run.type !== "general-purpose" && run.type,
               run.model && modelName(run.model),
-              plural(run.calls, "call"),
+              ...subagentUse(run),
             ]
               .filter(Boolean)
               .join(" · ")}

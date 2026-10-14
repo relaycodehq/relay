@@ -6,11 +6,11 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ChatMessage } from "../../../shared/projects";
-import { plural } from "../../../shared/activity-labels";
 import {
   agentKind,
   leadName,
   modelName,
+  subagentUse,
   type SubagentDetail,
 } from "../../../shared/subagents";
 import { useSubagentRun } from "../remote/subagents";
@@ -142,7 +142,7 @@ function Run({ run, root }: { run: SubagentDetail; root?: string }) {
         {[
           agentKind(run),
           run.model && modelName(run.model),
-          plural(run.calls, "call"),
+          ...subagentUse(run),
           run.status === "failed" && "failed",
         ]
           .filter(Boolean)

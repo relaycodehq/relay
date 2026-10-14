@@ -8,8 +8,9 @@ import type {
   AgentTrace,
   ChatPending,
 } from "./projects";
-import { liveLabel } from "./activity-labels";
+import { liveLabel, plural } from "./activity-labels";
 import { agentName } from "./agents";
+import { formatTokens } from "./tokens";
 
 export type SubagentStatus = "running" | "completed" | "failed" | "stopped";
 
@@ -31,6 +32,8 @@ export interface SubagentRun {
   summary?: string;
   /** Tool calls so far. */
   calls: number;
+  /** Tokens used so far, where its agent reports them. */
+  tokens?: number;
   /** The last few, newest last. */
   recent: AgentActivity[];
   /** The start of what it reported back, once it's done. */
@@ -114,6 +117,12 @@ export function modelName(model: string) {
   if (id) return `${cap(id[1]!)} ${id[2]}${id[3] ? `.${id[3]}` : ""}`;
   return /^[a-z]+$/.test(model) ? cap(model) : model;
 }
+
+/** "26 calls" and "48k tokens", when it reports them. */
+export const subagentUse = (run: SubagentRun) => [
+  plural(run.calls, "call"),
+  run.tokens ? `${formatTokens(run.tokens)} tokens` : undefined,
+];
 
 /** "26s", "4m 05s", "1h 03m". */
 export function took(ms: number) {

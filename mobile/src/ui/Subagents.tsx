@@ -13,6 +13,7 @@ import {
   leadName,
   modelName,
   subagentNow,
+  subagentUse,
   took,
   type SubagentRun,
 } from "../../../shared/subagents";
@@ -323,7 +324,7 @@ function Row({
 }) {
   const t = useTheme();
   const now = useNow(1000);
-  const about = [agentKind(run), run.model && modelName(run.model), plural(run.calls, "call")]
+  const about = [agentKind(run), run.model && modelName(run.model), ...subagentUse(run)]
     .filter(Boolean)
     .join(" · ");
   return (
