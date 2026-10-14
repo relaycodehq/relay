@@ -47,9 +47,7 @@ import dev.relay.android.features.renders.MessageRenders
 import dev.relay.android.features.renders.RenderCompose
 import dev.relay.android.ui.ProviderIcon
 import dev.relay.android.features.thread.logic.Clock
-import dev.relay.android.features.thread.logic.agentError
 import dev.relay.android.features.thread.logic.agentName
-import dev.relay.android.features.thread.logic.compactedTokens
 import dev.relay.android.features.thread.logic.reloadNote
 import dev.relay.android.features.thread.logic.setupCanRerun
 import dev.relay.android.features.thread.logic.startCalls
@@ -149,21 +147,7 @@ fun MessageView(
         return StatusRow("${if (skipped) "You skipped" else "You answered"} “${page.title}”${if (skipped) " and left it to the agent" else ""}")
     }
     m.reload?.let { return StatusRow(reloadNote(it, m.status == "streaming")) }
-    if (m.compaction == true) {
-        StatusRow(
-            when {
-                m.status == "streaming" -> "Compacting context…"
-                m.status == "complete" ->
-                    "Context compacted ${compactedTokens(m.compactedFrom, m.context?.usedTokens?.toDouble())}".trim()
-                m.status == "cancelled" -> "Compaction stopped"
-                m.error != null && m.signIn == null -> agentError(m.error).message
-                else -> "Compaction failed"
-            },
-            failed = m.status == "failed",
-        )
-        m.signIn?.let { SignInNote(it) }
-        return
-    }
+    if (m.compaction == true) return CompactionRow(m)
     val user = m.role == "user"
     val c = RelayTheme.colors
     Column(

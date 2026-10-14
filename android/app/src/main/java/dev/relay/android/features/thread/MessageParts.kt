@@ -41,8 +41,10 @@ import androidx.compose.material3.Text as MaterialText
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.readaloud.ReadAloudButton
 import dev.relay.android.features.thread.logic.Clock
+import dev.relay.android.features.thread.logic.agentError
 import dev.relay.android.features.thread.logic.agentName
 import dev.relay.android.features.thread.logic.answerSpeed
+import dev.relay.android.features.thread.logic.compactedTokens
 import dev.relay.android.features.thread.logic.copiedNote
 import dev.relay.android.features.thread.logic.formatCost
 import dev.relay.android.features.thread.logic.formatTokens
@@ -116,6 +118,34 @@ fun HandoffRow(m: ChatMessage) {
             action = note?.let { (if (open) "Hide note" else "Show note") to { open = !open } },
         )
         if (open && note != null) NoteBox { Markdown(note, small = true) }
+    }
+}
+
+/** The desktop's CompactionRow: where a session was compacted, and the summary the agent kept from it. */
+@Composable
+fun CompactionRow(m: ChatMessage) {
+    var open by rememberSaveable(m.id) { mutableStateOf(false) }
+    val summary = m.compactSummary?.takeIf { m.status == "complete" && it.isNotBlank() }
+    Column {
+        StatusRow(
+            when {
+                m.status == "streaming" -> "Compacting context…"
+                m.status == "complete" ->
+                    "Context compacted ${compactedTokens(m.compactedFrom, m.context?.usedTokens?.toDouble())}".trim()
+                m.status == "cancelled" -> "Compaction stopped"
+                m.error != null && m.signIn == null -> agentError(m.error).message
+                else -> "Compaction failed"
+            },
+            failed = m.status == "failed",
+            action = summary?.let { (if (open) "Hide summary" else "Show summary") to { open = !open } },
+        )
+        if (open && summary != null) NoteBox {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${agentName(m.provider)} kept this after compacting", style = RelayTheme.type.xs, color = RelayTheme.colors.mutedForeground)
+                Markdown(summary, small = true)
+            }
+        }
+        m.signIn?.let { SignInNote(it) }
     }
 }
 
