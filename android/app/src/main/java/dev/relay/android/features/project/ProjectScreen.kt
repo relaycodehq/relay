@@ -160,7 +160,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
                             running?.let { if (it > 0) "$it running" else "Nothing running" },
                         ) { navigator.push(Route.Tasks(id)) }
                     }
-                    item(key = "threads-head") { SectionHeader("Threads") }
+                    item(key = "threads-head") { SectionHeader("Threads", Modifier.padding(horizontal = 12.dp)) }
                     items(chats, key = { it.id }) { chat ->
                         ThreadRow(chat, threadDraft(drafts, chat.id), { navigator.push(Route.Thread(chat.id)) })
                     }
