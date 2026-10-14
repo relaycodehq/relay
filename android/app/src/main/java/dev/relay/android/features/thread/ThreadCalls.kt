@@ -1,6 +1,7 @@
 package dev.relay.android.features.thread
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,4 +82,16 @@ suspend inline fun attempt(onError: (Throwable) -> Unit, job: () -> Unit) {
     } catch (e: Exception) {
         onError(e)
     }
+}
+
+fun copyText(context: android.content.Context, text: String) {
+    val board = context.getSystemService(android.content.ClipboardManager::class.java) ?: return
+    board.setPrimaryClip(android.content.ClipData.newPlainText("Relay", text))
+}
+
+/** The paired computer's name, as the thread's notes say it. */
+@Composable
+fun computerName(remote: Remote?): String {
+    val overview = remote?.overview?.collectAsState()?.value
+    return overview?.name ?: "your computer"
 }

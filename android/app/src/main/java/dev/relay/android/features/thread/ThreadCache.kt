@@ -49,8 +49,14 @@ class ThreadCache(private val root: File) {
         }
     }
 
-    private companion object {
-        const val KEEP = 20
-        const val REMEMBERED = 8
+    companion object {
+        private const val KEEP = 20
+        private const val REMEMBERED = 8
+        @Volatile private var shared: ThreadCache? = null
+
+        /** One per app, so the thread screen and the started peeks share what's remembered. */
+        fun of(context: android.content.Context): ThreadCache = shared ?: synchronized(this) {
+            shared ?: ThreadCache(File(context.applicationContext.cacheDir, "relay-offline")).also { shared = it }
+        }
     }
 }
