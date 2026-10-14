@@ -127,7 +127,8 @@ class Remote(
         // One paired while the read went on stays beside the ones read.
         _saved.value = saved.computers + _saved.value.filter { now -> saved.computers.none { it.key == now.key } }
         loaded = true
-        val start = saved.computers.find { it.key == saved.paired.active }
+        // A pairing cut off midway can leave no active one saved: the first computer then.
+        val start = saved.computers.find { it.key == saved.paired.active } ?: saved.computers.firstOrNull()
         if (start != null && wanted == null) attach(start.key, RemoteStart.Saved(start))
         _ready.value = true
         persist()

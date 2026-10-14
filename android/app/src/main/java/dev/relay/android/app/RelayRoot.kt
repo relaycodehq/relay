@@ -58,6 +58,9 @@ private fun PhonePalette.toMap(): Map<String, String> =
 
 private fun PhoneAppearance.toDesktop() = DesktopAppearance(mode, light.toMap(), dark.toMap())
 
+/** Whether this process has looked at the back stack it started with. */
+private var stackRestored = false
+
 /**
  * The whole app: theme, navigator, toasts, and either one stack (phone) or
  * Home in a sidebar beside a detail pane (600dp and wider).
@@ -86,6 +89,15 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
         val sidebar = panes && !prefs.sidebarHidden
         val activity = LocalView.current.context as? Activity
 
+        // A new process (an update, or Android reclaiming the app) gets back the stack the old one
+        // saved, pairing screen and all. Nobody means to wake up there: it goes, and comes back
+        // below if the phone really has no computer. A fold or unfold keeps the process, and a
+        // pairing in progress with it.
+        LaunchedEffect(backStack) {
+            if (stackRestored) return@LaunchedEffect
+            stackRestored = true
+            backStack.removeAll { it is Route.Pair }
+        }
         LaunchedEffect(navigator) { for (route in links) navigator.open(route) }
         LaunchedEffect(ready, paired, top) {
             if (ready && !paired && top == Route.Home) navigator.push(Route.Pair())
