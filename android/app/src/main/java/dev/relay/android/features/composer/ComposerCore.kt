@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
@@ -34,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -586,30 +586,32 @@ internal fun ComposerCore(
                 if (canDictate(remote)) DictationButton(remote, dictationOwner, target = { input }, enabled = !disabled && !busy)
                 if (steering) {
                     Box(
-                        Modifier.padding(start = 4.dp).size(34.dp).ring(c.accent, CircleShape)
+                        Modifier.padding(start = 4.dp)
                             .pressable(onClick = {
                                 haptics.perform(Haptic.Medium)
                                 send("steer")
                             }, enabled = !disabled && !busy)
+                            .size(SEND_SIZE).clip(SEND_SHAPE).ring(c.border, SEND_SHAPE)
                             .semantics { contentDescription = "Steer now" },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(TablerIcons.Outline.Bolt, null, size = 15.dp, tint = c.accent) }
+                    ) { Icon(TablerIcons.Outline.Bolt, null, size = 16.dp, tint = c.foreground) }
                 }
                 val label = if (stop) "Stop" else if (retryingScheduled) "Retry scheduled send" else if (running) "Queue" else "Send"
                 Box(
-                    Modifier.padding(start = 4.dp).size(34.dp).alpha(if (disabled || busy) 0.5f else 1f)
-                        .background(if (stop || !empty) c.accent else c.hover, CircleShape)
+                    Modifier.padding(start = 4.dp)
                         .pressable(
                             onClick = { if (stop) onStop?.invoke() else send() },
                             enabled = !disabled && !busy && (stop || !empty),
                             onLongClick = if (empty) null else ({ sheet = Sheet.Later }),
                         )
+                        .size(SEND_SIZE).alpha(if (disabled || busy) 0.5f else 1f)
+                        .background(if (stop || !empty) c.primary else c.muted, SEND_SHAPE)
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center,
                 ) {
-                    val tint = if (stop || !empty) c.onAccent else c.faint
+                    val tint = if (stop || !empty) c.onPrimary else c.faint
                     when {
-                        stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 13.dp, tint = tint)
+                        stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 14.dp, tint = tint)
                         running -> Icon(TablerIcons.Outline.PlaylistAdd, null, size = 16.dp, tint = tint)
                         else -> Icon(TablerIcons.Outline.ArrowUp, null, size = 18.dp, tint = tint)
                     }
@@ -689,3 +691,7 @@ private fun Tool(label: String, modifier: Modifier = Modifier, enabled: Boolean 
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) { content() }
 }
+
+private val SEND_SIZE = 32.dp
+// The card's 18dp corner less its 6dp inset, so the corners nest.
+private val SEND_SHAPE = RoundedCornerShape(12.dp)
