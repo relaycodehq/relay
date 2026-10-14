@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { encode } from "uqr";
 import {
   tailscaleAndroid,
   tailscaleDownload,
@@ -21,6 +20,7 @@ import {
   SettingsRow,
   Switch,
 } from "../../ui/SettingsCard";
+import { QrCode } from "./qr/QrCode";
 
 /**
  * Phone access runs over Tailscale, and over the local network when that's
@@ -373,31 +373,6 @@ function CodePanel({
       <QrCode text={text} label={label} />
       <div>{children}</div>
     </div>
-  );
-}
-
-function QrCode({ text, label }: { text: string; label: string }) {
-  const path = useMemo(() => {
-    const { data } = encode(text, { ecc: "M", border: 2 });
-    let d = "";
-    data.forEach((row, y) =>
-      row.forEach((on, x) => {
-        if (on) d += `M${x} ${y}h1v1h-1z`;
-      }),
-    );
-    return { d, size: data.length };
-  }, [text]);
-  return (
-    <svg
-      className="phone-qr"
-      role="img"
-      aria-label={label}
-      viewBox={`0 0 ${path.size} ${path.size}`}
-      shapeRendering="crispEdges"
-    >
-      <rect width={path.size} height={path.size} fill="#fff" />
-      <path d={path.d} fill="#000" />
-    </svg>
   );
 }
 

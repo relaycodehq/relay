@@ -1085,12 +1085,6 @@
   margin: 0 0 10px;
   line-height: 1.5;
 }
-.phone-qr {
-  flex: none;
-  width: 168px;
-  height: 168px;
-  border-radius: 6px;
-}
 .phone-remote {
   --phone-done: light-dark(#1a7f37, #3fb950);
 }

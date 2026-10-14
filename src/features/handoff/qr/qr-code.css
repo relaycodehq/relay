@@ -1,0 +1,94 @@
+.phone-qr {
+  position: relative;
+  flex: none;
+  width: 168px;
+  height: 168px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: zoom-in;
+}
+.phone-qr > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* Hangs off the plate's corner; the bit it covers is mostly the code's white
+   margin, and error correction absorbs the rest. */
+.phone-qr-expand {
+  position: absolute;
+  right: -9px;
+  bottom: -9px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: 0 1px 3px #0003;
+  transition:
+    color 120ms,
+    transform 120ms;
+}
+.phone-qr:hover .phone-qr-expand,
+.phone-qr:focus-visible .phone-qr-expand {
+  color: var(--text);
+  transform: scale(1.1);
+}
+
+.qr-enlarged {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  cursor: zoom-out;
+  outline: none;
+}
+.qr-enlarged::backdrop {
+  background: transparent;
+}
+.qr-enlarged-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--background) 78%, transparent);
+  backdrop-filter: blur(10px);
+  animation: qr-enlarged-fade 320ms ease-out both;
+  transition: opacity 380ms ease-in;
+}
+.qr-enlarged[data-phase="closing"] .qr-enlarged-backdrop {
+  opacity: 0;
+}
+.qr-enlarged-layer {
+  position: absolute;
+  inset: 0;
+}
+.qr-enlarged-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 250ms;
+}
+.qr-enlarged[data-phase="open"] .qr-enlarged-hint {
+  opacity: 1;
+}
+@keyframes qr-enlarged-fade {
+  from {
+    opacity: 0;
+  }
+}
