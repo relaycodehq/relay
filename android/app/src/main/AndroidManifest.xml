@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Pairing scans the desktop's QR code; pasting the link works without a camera. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:name=".RelayApp"
         android:label="Relay"
@@ -28,5 +38,12 @@
                 <data android:host="chat" />
             </intent-filter>
         </activity>
+        <!-- Keeps the link up while a thread runs or a reply is read aloud. -->
+        <service
+            android:name=".features.notifications.WatchService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging|mediaPlayback" />
+        <!-- Not exported: only the system, through Relay's own PendingIntent, reports an install. -->
+        <receiver android:name=".features.updates.InstallReceiver" android:exported="false" />
     </application>
 </manifest>

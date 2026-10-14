@@ -17,10 +17,10 @@ import dev.relay.android.lib.navigation.Route
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
     entry<Route.Home> { if (wide()) PaneEmpty() else HomeScreen() }
-    entry<Route.Settings> { SettingsScreen(container.prefs) }
+    entry<Route.Settings> { dev.relay.android.features.settings.SettingsScreen(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
     entry<Route.Gallery> { GalleryScreen() }
 
-    entry<Route.Pair> { PlaceholderScreen("Pair a computer", it) }
+    entry<Route.Pair> { dev.relay.android.features.pairing.PairScreen(container.remote, it.link) }
     entry<Route.NewThread> { PlaceholderScreen("New thread", it) }
     entry<Route.Thread> { PlaceholderScreen("Thread", it) }
     entry<Route.Reply> { PlaceholderScreen("Reply", it) }
