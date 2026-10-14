@@ -43,8 +43,14 @@ interface ApkNative {
     /** Answers the downloaded APK's path; a second call for the same version reuses it. */
     suspend fun download(url: String, version: String, sha512: String, onProgress: (Float) -> Unit): String
 
-    /** Shows Android's update prompt; on success Android replaces the process. */
-    suspend fun install(path: String): InstallOutcome
+    /**
+     * Hands the APK to Android; on success Android replaces the process. With `quiet`, an
+     * install that would need the user's OK is called off instead of prompting.
+     */
+    suspend fun install(path: String, quiet: Boolean = false): InstallOutcome
+
+    /** Whether Android installs this app's updates without asking: it installed itself last time. */
+    fun installsSilently(): Boolean
 
     /** Whether the network costs by the byte. */
     fun metered(): Boolean?
@@ -57,8 +63,9 @@ interface ApkNative {
 
 /**
  * mobile/src/remote/apk-install.ts: downloads a new APK and asks Android to
- * install it. Android still asks the user to allow installs from Relay once,
- * and to confirm each update. All calls come from the main thread.
+ * install it. Android asks the user to allow installs from Relay once and to
+ * confirm the first update; once Relay installed itself, later updates go in
+ * without a prompt (Android 12+). All calls come from the main thread.
  */
 class ApkInstaller(
     private val native: ApkNative,
@@ -183,6 +190,29 @@ class ApkInstaller(
             throw e
         } catch (e: Exception) {
             current = ApkInstall.Failed(version, message(e))
+        }
+    }
+
+    /**
+     * Installs an update already downloaded, without asking: only when Android won't prompt,
+     * so it can run with the app in the background. Android closes the app to do it.
+     */
+    suspend fun installQuietly(offer: ApkOffer) {
+        val s = current
+        if (s !is ApkInstall.Downloaded || s.version != offer.version) return
+        if (requested != null || !native.canInstall() || !native.installsSilently()) return
+        val path = download(offer, true) ?: return
+        try {
+            checkVersion(offer.version)
+            current = ApkInstall.Installing(offer.version)
+            native.install(path, quiet = true)
+            current = ApkInstall.Downloaded(offer.version)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Unasked, so it stays quiet; the banner still offers it.
+            warn("Couldn't update Relay to ${offer.version} in the background", e)
+            current = ApkInstall.Downloaded(offer.version)
         }
     }
 

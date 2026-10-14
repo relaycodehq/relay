@@ -160,13 +160,23 @@ class AndroidApk(private val context: Context, private val http: OkHttpClient) :
         }
     }
 
-    override suspend fun install(path: String): InstallOutcome = withContext(Dispatchers.IO) {
+    override fun installsSilently(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        val source = runCatching { context.packageManager.getInstallSourceInfo(context.packageName) }.getOrNull()
+        return source?.installingPackageName == context.packageName
+    }
+
+    override suspend fun install(path: String, quiet: Boolean): InstallOutcome = withContext(Dispatchers.IO) {
         val apk = File(path)
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(context.packageName)
+        // Relay updating itself: after the first update Android needs no prompt.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = installer.createSession(params)
         val answer = CompletableDeferred<InstallOutcome>()
+        InstallReceiver.quiet = quiet
         InstallReceiver.waiting = { status, message ->
             when (status) {
                 PackageInstaller.STATUS_SUCCESS -> answer.complete(InstallOutcome.Installed)
@@ -204,6 +214,14 @@ class InstallReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            // A background install never puts a prompt up out of nowhere.
+            if (quiet) {
+                val id = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+                if (id != -1) runCatching { context.packageManager.packageInstaller.abandonSession(id) }
+                waiting?.invoke(PackageInstaller.STATUS_FAILURE_ABORTED, null)
+                waiting = null
+                return
+            }
             val confirm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                 intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
             else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_INTENT)
@@ -217,5 +235,6 @@ class InstallReceiver : BroadcastReceiver() {
 
     companion object {
         @Volatile var waiting: ((Int, String?) -> Unit)? = null
+        @Volatile var quiet = false
     }
 }

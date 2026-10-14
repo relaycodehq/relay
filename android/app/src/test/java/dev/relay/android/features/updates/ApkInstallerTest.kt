@@ -37,7 +37,14 @@ class ApkInstallerTest {
             downloadFails?.let { downloadFails = null; throw it }
             return held.removeFirstOrNull()?.await() ?: "/cache/Relay.apk"
         }
-        override suspend fun install(path: String): InstallOutcome { installs++; return InstallOutcome.Cancelled }
+        var silent = false
+        val quietInstalls = mutableListOf<Boolean>()
+        override suspend fun install(path: String, quiet: Boolean): InstallOutcome {
+            installs++
+            quietInstalls += quiet
+            return InstallOutcome.Cancelled
+        }
+        override fun installsSilently() = silent
         override fun metered(): Boolean? = false
         override fun openUrl(url: String) {
             opened += url
@@ -161,5 +168,33 @@ class ApkInstallerTest {
         assertEquals(Triple(feed.url, feed.version, "checksum"), native.downloads.last())
         assertEquals(2, native.downloads.size)
         assertEquals(1, native.foreground.size)
+    }
+
+    @Test fun installsQuietlyOnlyADownloadedUpdateAndOnlyWhenAndroidWontAsk() = runTest(UnconfinedTestDispatcher()) {
+        val i = installer()
+        native.can = true
+        // Nothing downloaded yet: leaving the app does nothing.
+        i.installQuietly(feed)
+        assertEquals(0, native.installs)
+        i.prefetch(feed)
+        assertEquals(ApkInstall.Downloaded("0.10.0"), i.state.value)
+        // Android would still prompt (the first update), so it waits for a tap.
+        i.installQuietly(feed)
+        assertEquals(0, native.installs)
+        native.silent = true
+        i.installQuietly(feed.copy(version = "0.11.0"))
+        assertEquals(0, native.installs)
+        i.installQuietly(feed)
+        assertEquals(listOf(true), native.quietInstalls)
+    }
+
+    @Test fun neverInstallsQuietlyOverNewerCode() = runTest(UnconfinedTestDispatcher()) {
+        val i = installer()
+        native.can = true
+        native.silent = true
+        i.prefetch(feed)
+        pending = "0.12.0"
+        i.installQuietly(feed)
+        assertEquals(0, native.installs)
     }
 }

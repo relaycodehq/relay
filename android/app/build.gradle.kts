@@ -1,3 +1,15 @@
+import java.util.Properties
+
+// Relay's release key: from the environment on the mini (signing.env sourced), else
+// the same file on this Mac. Without either, release builds fall back to the debug key.
+val signing: Map<String, String> = run {
+    val file = File(System.getProperty("user.home"), ".config/relay-android/signing.env")
+    val fromFile = if (file.isFile) Properties().apply { file.reader().use { load(it) } }
+        .entries.associate { (k, v) -> k.toString() to v.toString().trim('"', '\'') } else emptyMap()
+    listOf("RELAY_ANDROID_KEYSTORE", "RELAY_ANDROID_KEYSTORE_PASSWORD", "RELAY_ANDROID_KEY_ALIAS", "RELAY_ANDROID_KEY_PASSWORD")
+        .mapNotNull { key -> (System.getenv(key) ?: fromFile[key])?.let { key to it } }.toMap()
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,8 +25,18 @@ android {
         applicationId = "dev.relay.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // The release's own version on the mini; versionCode grows as major*1e6+minor*1e3+patch.
+        versionCode = System.getenv("RELAY_VERSION_CODE")?.toInt() ?: 1
+        versionName = System.getenv("RELAY_VERSION") ?: "0.1.0"
+    }
+
+    signingConfigs {
+        if (signing.size == 4) create("relay") {
+            storeFile = file(signing.getValue("RELAY_ANDROID_KEYSTORE"))
+            storePassword = signing.getValue("RELAY_ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = signing.getValue("RELAY_ANDROID_KEY_ALIAS")
+            keyPassword = signing.getValue("RELAY_ANDROID_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -22,7 +44,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            // Updates must keep one key forever: Android refuses an APK signed differently.
+            signingConfig = signingConfigs.findByName("relay") ?: signingConfigs.getByName("debug")
         }
     }
     buildFeatures { compose = true }

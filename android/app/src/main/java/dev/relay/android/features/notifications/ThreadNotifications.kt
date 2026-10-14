@@ -58,6 +58,9 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
 
     private val foreground get() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
+    /** Something keeps the app in the foreground: a running thread or a reply read aloud. */
+    val busy get() = holding.isNotEmpty()
+
     private fun notice() = notices.getValue(if (Reason.Read in holding) Reason.Read else Reason.Watch)
 
     /** Keeps the app in the foreground for `reason` until released. */

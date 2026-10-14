@@ -27,7 +27,13 @@ import java.util.concurrent.TimeUnit
  * new APK from the signed release feed. It reports itself to the desktop as
  * not taking the desktop's updates.
  */
-class Updates(context: Context, private val remote: Remote, private val scope: CoroutineScope) {
+class Updates(
+    context: Context,
+    private val remote: Remote,
+    private val scope: CoroutineScope,
+    /** The app is holding the foreground for a running thread or read-aloud; an update would cut it off. */
+    private val busy: () -> Boolean = { false },
+) {
     private val app = context.applicationContext
     val installed: String = app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "0.0.0"
     val packageName: String = app.packageName
@@ -76,6 +82,13 @@ class Updates(context: Context, private val remote: Remote, private val scope: C
             override fun onStart(owner: LifecycleOwner) {
                 scope.launch { latest.check() }
             }
+
+            // Leaving the app is when a downloaded update goes in, silently, unless something is running.
+            override fun onStop(owner: LifecycleOwner) {
+                if (!releaseBuild || busy()) return
+                val offer = latest.installableOffer() ?: return
+                scope.launch { installer.installQuietly(offer.apkOffer()) }
+            }
         })
         scope.launch {
             combine(remote.status, remote.client) { s, c -> if (s.state == LinkState.Online) c else null }
@@ -90,6 +103,9 @@ class Updates(context: Context, private val remote: Remote, private val scope: C
     fun install(offer: NewestApp) = scope.launch {
         installer.install(offer.apkOffer(), browser = !releaseBuild)
     }
+
+    /** Updates go in by themselves when the app is left: Relay installed its last update itself. */
+    val installsSilently get() = releaseBuild && native.installsSilently()
 
     fun checkNow() = scope.launch { latest.check(force = true) }
 

@@ -45,8 +45,8 @@ class AppContainer(context: Context) {
     /** For work that outlives a screen: a switch or unpair that navigates away. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val updates = Updates(app, remote, scope).also { it.start() }
     val notifications = ThreadNotifications(app as Application, remote, scope).also { it.start() }
+    val updates = Updates(app, remote, scope, busy = { notifications.busy }).also { it.start() }
 
     // One voice at a time: dictating stops a reading and the other way round.
     val dictation = Dictation.of(remote, app)

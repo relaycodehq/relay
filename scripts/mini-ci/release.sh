@@ -209,6 +209,23 @@ else
 fi
 rm -rf "$previous_apk"
 
+# The Kotlin app (android/, dev.relay.android). Off until it ships: RELAY_ANDROID_NATIVE=1
+# builds it, signed with the same key, at the release's version. Needs a JDK 21 in
+# $ROOT/jdk21 and SDK platform 37 in $ROOT/android-sdk.
+if [[ "${RELAY_ANDROID_NATIVE:-0}" == 1 ]]; then
+  step "Android (native)"
+  [[ -x "$ROOT/jdk21/Contents/Home/bin/java" ]] || { echo "No JDK 21 in $ROOT/jdk21." >&2; exit 1; }
+  set -a && . "$SIGNING" && set +a
+  (
+    cd android
+    export JAVA_HOME="$ROOT/jdk21/Contents/Home"
+    export RELAY_VERSION="$version" RELAY_VERSION_CODE="$((major * 1000000 + minor * 1000 + patch))"
+    ./gradlew :app:assembleRelease --console=plain --no-daemon --max-workers=2 \
+      -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g" -Pkotlin.daemon.jvmargs=-Xmx1g
+  )
+  cp android/app/build/outputs/apk/release/app-release.apk "$out/Relay-Android-Native.apk"
+fi
+
 node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$(cat "$ROOT/notes.md")"
 if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
   node scripts/sign-update-feed.mjs "$out/latest.json" --key "$UPDATE_KEY"

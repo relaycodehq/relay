@@ -73,7 +73,8 @@ fun LatestAppRows(updates: Updates) {
                 "Downloading Relay ${offer.version}… ${Math.round(mine.done * 100)}%" to null
             mine is ApkInstall.Installing -> "Installing Relay ${offer.version}…" to "It closes when it's done; open it again."
             else -> "Update to Relay ${offer.version}" to
-                if (mine != null && mine !is ApkInstall.Downloading) apkPrompt(offer.version, mine)
+                if (mine is ApkInstall.Downloaded && updates.installsSilently) "Ready. It installs itself the next time you leave Relay, or now with a tap."
+                else if (mine != null && mine !is ApkInstall.Downloading) apkPrompt(offer.version, mine)
                 else "Downloads it from GitHub$size and asks Android to install it. Pairings and settings stay."
         }
         ListRow(
