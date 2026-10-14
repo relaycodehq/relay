@@ -264,10 +264,12 @@
 .thread-bottom-composer {
   position: absolute;
   left: 0;
-  right: 0;
+  /* Stop short of the scrollbar so the backdrop doesn't fade it; the right
+     padding gives the 6px back to keep the composer centred on the thread. */
+  right: 6px;
   bottom: 0;
   z-index: 2;
-  padding: 28px 28px 22px;
+  padding: 28px 22px 22px 28px;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
@@ -365,7 +367,7 @@
     padding: 24px 22px 9vh;
   }
   .thread-bottom-composer {
-    padding: 28px 15px 18px;
+    padding: 28px 9px 18px 15px;
   }
   .project-messages {
     padding: 10px 20px;
