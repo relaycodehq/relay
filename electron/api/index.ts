@@ -23,6 +23,7 @@ import { reviewHandlers } from "./reviews";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { soundHandlers } from "./sounds";
+import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
 import { previewHandlers } from "./previews";
@@ -51,6 +52,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     readAloudHandlers(ctx),
     renderHandlers(ctx),
     soundHandlers(ctx),
+    memeHandlers(ctx),
     pluginHandlers(ctx),
     desktopHandlers(ctx),
     draftHandlers(ctx),

@@ -65,6 +65,11 @@ export const relayCommands = [
     description: "Continue a Claude Code or Codex session from a terminal",
     args: "<session>",
   },
+  {
+    name: "meme",
+    description: "Answer with a reaction meme; the agent gets a line of text",
+    args: "<meme>",
+  },
 ] as const;
 export type RelayCommand = (typeof relayCommands)[number]["name"];
 /** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */

@@ -1,4 +1,4 @@
-// relay-media://: plays video files the renderer was allowed to, streamed
+// relay-media://: serves video and picture files the renderer was allowed to, streamed
 // with byte ranges so a player can seek without reading the whole file.
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -6,9 +6,15 @@ import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { Readable } from "node:stream";
 import { protocol, session } from "electron";
-import { videoMime } from "../../shared/project-files";
+import { imageMime, videoMime } from "../../shared/project-files";
 
 const SCHEME = "relay-media";
+
+/** A raster picture's type; an SVG stays a download, since one opened as a page runs its scripts. */
+const picture = (path: string) => {
+  const mime = imageMime(path);
+  return mime && mime !== "image/svg+xml" ? mime : undefined;
+};
 
 /** Before the app is ready: a player needs a streaming, fetchable scheme. */
 export function registerMediaScheme() {
@@ -64,7 +70,8 @@ export function serveMedia() {
     if (!full || !info?.isFile())
       return new Response("Not found", { status: 404 });
     const headers = {
-      "content-type": videoMime(full) ?? "application/octet-stream",
+      "content-type":
+        videoMime(full) ?? picture(full) ?? "application/octet-stream",
       "accept-ranges": "bytes",
       "cache-control": "no-store",
     };

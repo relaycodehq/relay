@@ -1,3 +1,4 @@
+import type { MemesState } from "./memes";
 import type { ExtensionRef, ThemeSearchPage, VsCodeTheme } from "./open-vsx";
 import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
@@ -337,6 +338,13 @@ export interface Api
   ): Promise<CustomSound>;
   customSoundBytes(id: string): Promise<Uint8Array>;
   removeCustomSound(id: string): Promise<void>;
+  /** `/meme`: the list, and which memes have their picture yet. */
+  memes(): Promise<MemesState>;
+  /** Makes memes.json, or adds built-ins new since, for an agent to download. */
+  prepareMemes(): Promise<MemesState>;
+  openMemesFolder(): Promise<void>;
+  /** Opens memes.json in the app that edits JSON, making it first if need be. */
+  openMemesList(): Promise<void>;
   /** Only the menubar's hidden sound player hears these. */
   onPlaySound(callback: (event: PlaySoundEvent) => void): () => void;
   /** The problem report, looked at afresh: the system, the log and the `gh` login. */

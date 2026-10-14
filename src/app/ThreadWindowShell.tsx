@@ -74,6 +74,8 @@ export default function ThreadWindowShell({
     if (command === "openpr") gitActions.current?.openPr();
     else if (command === "files" || command === "changes")
       tools.opens.openCode(command);
+    // Memes are set up in a Scratchpad thread, which opens in the main window.
+    else if (command === "meme") toMain();
     else return false;
     return true;
   }

@@ -1,6 +1,7 @@
 import { pastedTexts, replacePastedTexts } from "./pasted-texts";
 import { agentMentionPattern } from "./agents";
 import { sliceWhole } from "./truncate";
+import { memesAsMeanings } from "./memes";
 
 /**
  * What a thread is called from its first message until a generated title
@@ -8,7 +9,7 @@ import { sliceWhole } from "./truncate";
  */
 export function promptTitle(body: string): string {
   const pastes = pastedTexts(body);
-  const text = replacePastedTexts(body, () => "\n\n");
+  const text = memesAsMeanings(replacePastedTexts(body, () => "\n\n"));
   // A message that is only a paste is named after the paste's first line;
   // one that is only screenshots waits for a generated title as "Screenshot".
   const title = (

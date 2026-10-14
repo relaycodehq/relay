@@ -169,6 +169,20 @@ export function useComposerSend({
       }
     },
     /**
+     * A line Relay wrote, like a meme's, sent as if typed here: queued
+     * behind an answer that runs. The draft is the caller's to clear.
+     */
+    sendLine(text: string) {
+      if (busy || !runs.codex) return Promise.resolve(false);
+      return onSend(
+        buildSend(
+          runs.sendSettings(to)!,
+          text,
+          running ? { running: { steer: false } } : {},
+        ),
+      );
+    },
+    /**
      * The goal row's Pause, Resume and Clear, as `/goal …` typed here would
      * go: to the agent holding the goal, on this composer's settings for it.
      * The draft stays.

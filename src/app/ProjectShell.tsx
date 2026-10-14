@@ -18,6 +18,7 @@ import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
 import { useOpenedFolders } from "./useOpenedFolders";
 import { useNewThreads } from "./useNewThreads";
+import { memeSetupDraft } from "../features/memes/meme-setup";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
 import { usePullsAccount } from "../features/pulls/usePullsAccount";
@@ -171,6 +172,7 @@ export default function ProjectShell() {
       navigate(project, undefined, true);
     else if (command === "files" || command === "changes")
       opens.openCode(command);
+    else if (command === "meme") void starts.scratchDraft(memeSetupDraft);
     else return false;
     return true;
   }

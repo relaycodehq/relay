@@ -38,6 +38,8 @@ import { useSettingCommands } from "./useSettingCommands";
 import { useStopKeys } from "./useStopKeys";
 import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
 import { useComposerCommands } from "./ComposerCommands";
+import { MemePicker } from "../memes/MemePicker";
+import { useMemePicker } from "../memes/useMemePicker";
 import { FileMentionMenu } from "../file-mentions/FileMentionMenu";
 import { useFileMentions } from "../file-mentions/useFileMentions";
 import { ComposerEffortControl } from "./ComposerEffortControl";
@@ -239,12 +241,23 @@ export function ProjectComposer({
     to,
     onCommand,
   });
+  // `sending` is set up below; a meme is only sent once both exist.
+  const memes = useMemePicker({
+    draft: draft.text,
+    disabled: busy,
+    send: (line) =>
+      void sending.sendLine(line).then((sent) => sent && draft.set("")),
+    setUp: () => {
+      if (onCommand("meme", "") === true) draft.set("");
+    },
+  });
   const commands = useComposerCommands({
     draft: draft.text,
     onDraft: draft.set,
     projectId,
     provider: to,
-    onCommand: settingCommands.run,
+    onCommand: (command, args) =>
+      memes.command(command, args) ?? settingCommands.run(command, args),
     options: (command, query) =>
       settingCommands.options(command) ?? commandOptions?.(command, query),
     input,
@@ -260,7 +273,11 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
   });
   // One menu at a time; the files' wins where both could open.
-  const menu = mentions.visible ? mentions : commands;
+  const menu = memes.visible
+    ? memes
+    : mentions.visible
+      ? mentions
+      : commands;
   const sending = useComposerSend({
     draft,
     state: composer,
@@ -304,7 +321,9 @@ export function ProjectComposer({
           </button>
         </div>
       )}
-      {mentions.visible ? (
+      {memes.visible ? (
+        <MemePicker picker={memes} input={input} />
+      ) : mentions.visible ? (
         <FileMentionMenu mentions={mentions} input={input} />
       ) : (
         commands.menu
@@ -369,6 +388,7 @@ export function ProjectComposer({
           onBlur={() => {
             commands.dismiss();
             mentions.dismiss();
+            memes.dismiss();
           }}
           value={draft.text}
           onChange={(value) => {
@@ -394,7 +414,12 @@ export function ProjectComposer({
           onKeyDownCapture={(e) => {
             // A recalled message takes ↑/↓ even from a menu it opened.
             if (recall.keyDown(e, draft.text)) return;
-            if (mentions.onKeyDown(e) || commands.onKeyDown(e)) return;
+            if (
+              memes.onKeyDown(e) ||
+              mentions.onKeyDown(e) ||
+              commands.onKeyDown(e)
+            )
+              return;
             if (e.nativeEvent.isComposing) return;
             if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
               const at = promptInput.current?.caret();

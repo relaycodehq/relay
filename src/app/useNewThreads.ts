@@ -6,10 +6,16 @@ import { sendDraft } from "../features/composer/draft-send";
 import {
   clearDraftScope,
   freshNewThread,
+  newThreadId,
   writeDraft,
 } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
-import { threadDraftKey } from "../lib/thread-storage";
+import { threadDraftKey, threadStorage } from "../lib/thread-storage";
+import {
+  loadComposerSettings,
+  saveComposerSettings,
+} from "../features/agents/composer-settings";
+import type { PreparedDraft } from "../features/memes/meme-setup";
 import { sameSpot, useShellSpot } from "./shell-spot";
 import type { ShellNavigation } from "./useShellNavigation";
 
@@ -76,6 +82,34 @@ export function useNewThreads(
       onError(e);
     }
   }
+  /**
+   * A Scratchpad thread on a draft written for it, its folders linked and its
+   * agent and model picked, left for the user to read and send.
+   */
+  async function scratchDraft(prepare: () => Promise<PreparedDraft>) {
+    if (lock.blocked()) return;
+    try {
+      const draft = await prepare();
+      const p = await api.createScratch();
+      await projects.refetch();
+      // A slot of its own: the open draft, empty or not, keeps its composer.
+      const id = newThreadId(p.id, Date.now().toString(36));
+      clearDraftScope(id);
+      writeDraft(threadDraftKey(id), draft.text);
+      threadStorage(id).links.save(draft.links);
+      const settings = loadComposerSettings(id);
+      saveComposerSettings(id, {
+        ...settings,
+        provider: draft.provider,
+        models: { ...settings.models, [draft.provider]: { choice: draft.choice } },
+        frozen: true,
+      });
+      if (nav.navigate(p, undefined, id))
+        requestAnimationFrame(() => requestAnimationFrame(() => focus()));
+    } catch (e) {
+      onError(e);
+    }
+  }
   function open(p: Project) {
     if (!nav.navigate(p, undefined, true)) return;
     // After the new thread's composer mounts and a closing picker hands focus back.
@@ -120,6 +154,7 @@ export function useNewThreads(
     added,
     pick,
     scratch,
+    scratchDraft,
     open,
     start,
   };

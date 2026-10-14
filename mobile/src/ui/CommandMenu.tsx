@@ -32,7 +32,7 @@ export type CommandItem =
     };
 
 // Relay's actions that have no phone counterpart yet.
-const unavailable: RelayCommand[] = ["openpr"];
+const unavailable: RelayCommand[] = ["openpr", "meme"];
 const sources: Record<NonNullable<ProviderCommand["source"]>, string> = {
   app: "App",
   repo: "Repo",

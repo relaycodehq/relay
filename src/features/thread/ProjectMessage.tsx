@@ -49,6 +49,7 @@ import { useStartedThreads } from "../agent-turn/StartedThreads";
 import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { pilledImages, UserText, type SentImage } from "./UserText";
+import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
 import { LineDivider } from "../../ui/LineDivider";
@@ -243,6 +244,7 @@ export const Message = memo(function Message({
       ? parsed.body?.replace(agentMentionPattern, "")
       : parsed.body;
   const text = m.role === "user" && said && onlyImageTokens(said) ? "" : said;
+  const memes = useSentMemes(m.role === "user" ? text : undefined);
   const images = useWorkingImages(allImages, viewing);
   // A screenshot with a pill in the text needs no second copy below it.
   const pilled = useMemo(() => {
@@ -446,12 +448,17 @@ export const Message = memo(function Message({
       )}
       {text?.trim() ? (
         m.role === "user" ? (
-          <UserText
-            text={text}
-            skills={m.skills}
-            images={sentImages}
-            onOpenImage={setViewing}
-          />
+          <>
+            {!!memes.memes.length && <SentMemes memes={memes.memes} />}
+            {!!memes.rest && (
+              <UserText
+                text={memes.rest}
+                skills={m.skills}
+                images={sentImages}
+                onOpenImage={setViewing}
+              />
+            )}
+          </>
         ) : contextReport ? (
           <ContextReportCard report={contextReport} raw={answer} />
         ) : (
