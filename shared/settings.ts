@@ -199,6 +199,15 @@ const claudeEffortCheck = (
   provider !== "claude" ||
   !choice.reasoningEffort ||
   claudeEfforts.includes(choice.reasoningEffort);
+/** The agent and model one project runs a helper job on instead of the app's. */
+export const helperPickSchema = z
+  .object({ provider: agentProviderSchema, choice: questionChoiceSchema })
+  .strict()
+  .refine((p) => claudeEffortCheck(p.provider, p.choice), {
+    ...effortCheck,
+    path: ["choice", "reasoningEffort"],
+  });
+export type HelperPick = z.infer<typeof helperPickSchema>;
 // Settings saved before Claude was offered used Codex for both.
 export const aiSettingsSchema = z
   .object({

@@ -185,6 +185,14 @@
 .commit-message-label > span:first-child {
   flex: 1;
 }
+.commit-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.commit-model .model-field {
+  font-size: 12px;
+}
 .commit-subject-length {
   font-size: 11px;
   color: var(--muted);

@@ -6,10 +6,12 @@ import {
   type GitAction,
   type WorkingTree,
 } from "../../../shared/working-tree";
+import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { keys } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { CommitFileList } from "./CommitFileList";
+import { CommitModel, useCommitModel } from "./CommitModel";
 import { ErrorBox, IconButton, Modal, Spinner } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./commit-sheet.css";
@@ -19,11 +21,13 @@ import "./create-pull.css";
 const SUBJECT_LIMIT = 72;
 
 export function CommitSheet({
+  project,
   where,
   tree,
   push,
   onClose,
 }: {
+  project: Project;
   where: string;
   /** Kept current by the poll, so the commit checks the latest revision. */
   tree: WorkingTree;
@@ -54,14 +58,15 @@ export function CommitSheet({
       : [...listed.current].filter((p) => !live.has(p));
   const allCommitted = !files.length && committed.length > 0;
   const headSubject = tree.outgoing.find((c) => c.sha === tree.head)?.subject;
+  const model = useCommitModel(project);
   const generation = useRef(0);
-  async function write(paths: string[]) {
+  async function write(paths: string[], pick = model.own) {
     if (!paths.length) return;
     const id = ++generation.current;
     setWriting(true);
     setError(undefined);
     try {
-      const next = await api.projectCommitMessage(where, paths);
+      const next = await api.projectCommitMessage(where, paths, pick);
       if (id === generation.current && !typed.current) setMessage(next);
     } catch (e) {
       if (id === generation.current) setError(e);
@@ -224,6 +229,14 @@ export function CommitSheet({
                     {subject}/{SUBJECT_LIMIT}
                   </span>
                 )}
+                <CommitModel
+                  model={model}
+                  onPick={(pick) => {
+                    typed.current = false;
+                    void write(selected, pick);
+                  }}
+                  onSettings={onClose}
+                />
                 <IconButton
                   label="Write the message again"
                   onClick={() => {
@@ -254,7 +267,9 @@ export function CommitSheet({
                 disabled={busy}
               />
             </div>
-            {!!error && <ErrorBox error={error} />}
+            {!!(error ?? model.error) && (
+              <ErrorBox error={error ?? model.error} />
+            )}
             <button
               className="primary commit-submit"
               aria-keyshortcuts={keys("Meta+Enter", "Control+Enter")}

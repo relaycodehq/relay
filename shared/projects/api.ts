@@ -13,6 +13,7 @@ import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
 import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
+import type { HelperPick } from "../settings";
 import type { DeepReviewStart, ReviewSetup } from "../deep-review";
 import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
@@ -417,7 +418,12 @@ export interface ProjectGitApi {
   projectDismissIgnored(where: string, paths: string[]): Promise<WorkingTree>;
   projectGitAction(where: string, action: GitAction): Promise<WorkingTree>;
   /** A generated message for committing just these changed files. */
-  projectCommitMessage(where: string, paths: string[]): Promise<string>;
+  /** `pick` overrides the project's saved one; null asks for the app's. */
+  projectCommitMessage(
+    where: string,
+    paths: string[],
+    pick?: HelperPick | null,
+  ): Promise<string>;
   /** A model's split of every uncommitted change into commits, not yet made. */
   projectPlanCommitSplit(
     where: string,

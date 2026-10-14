@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Repo } from "../types";
 import { projectSoundsSchema } from "../sounds";
+import { helperPickSchema } from "../settings";
 import { linkedFoldersSchema } from "./links";
 import { chatWorkspaceSchema } from "./threads";
 
@@ -72,6 +73,8 @@ export const projectSettingsSchema = z
     checksMemoryMb: z.number().int().min(256).max(16384).optional(),
     /** Sounds for its threads; see shared/sounds. */
     sounds: projectSoundsSchema.optional(),
+    /** Writes its Commit sheets' messages, picked in the sheet. */
+    commitMessage: helperPickSchema.optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;

@@ -11,6 +11,7 @@ import {
   historyLimitSchema,
   historyScopeSchema,
 } from "../../shared/history";
+import { helperPickSchema } from "../../shared/settings";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
@@ -122,14 +123,32 @@ export function gitHandlers(ctx: ApiContext) {
       async (where, name) => deleteMergedBranch(await placeRoot(where), name),
     ),
     projectCommitMessage: takes(
-      [workspaceIdSchema, z.array(workingPathSchema).min(1).max(1000)],
-      async (where, paths) =>
-        generateCommitMessage(
-          await placeRoot(where),
+      [
+        workspaceIdSchema,
+        z.array(workingPathSchema).min(1).max(1000),
+        // The sheet's own pick, which may not have finished saving yet.
+        helperPickSchema.nullable().optional(),
+      ],
+      async (where, paths, picked) => {
+        const root = await placeRoot(where);
+        const pick =
+          picked === undefined
+            ? projects.get(parseWorkspaceId(where).projectId).settings
+                ?.commitMessage
+            : picked;
+        return generateCommitMessage(
+          root,
           paths,
-          store.aiSettings(),
+          pick
+            ? {
+                ...store.aiSettings(),
+                commitMessage: pick.choice,
+                commitMessageProvider: pick.provider,
+              }
+            : store.aiSettings(),
           AbortSignal.timeout(120_000),
-        ),
+        );
+      },
     ),
     projectPlanCommitSplit: takes(
       [workspaceIdSchema, commitSplitNoteSchema.optional()],

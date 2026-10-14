@@ -255,6 +255,7 @@ export function GitActions({
       </div>
       {committing && (
         <CommitSheet
+          project={project}
           where={where}
           tree={t}
           push={committing === "commit_push"}
