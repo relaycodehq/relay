@@ -120,6 +120,12 @@ class ThreadActions(
         model.load()
     }
 
+    suspend fun unsettle() {
+        remote.desktop("triageProjectChat", id, mapOf("kind" to "unsettle"))
+        // The strip reads the thread list's copy.
+        runCatching { remote.refresh() }
+    }
+
     suspend fun resolveStopped(action: String) {
         remote.desktop("resolveStoppedWork", id, action)
         model.load()

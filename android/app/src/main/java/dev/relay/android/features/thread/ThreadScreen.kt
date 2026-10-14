@@ -50,6 +50,7 @@ import dev.relay.android.remote.outbox.outgoingMessage
 import java.util.UUID
 import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
+import dev.relay.android.features.home.chatSettled
 import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.thread.logic.chainRoot
 import dev.relay.android.features.thread.logic.latestSetup
@@ -193,7 +194,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     val display = remember(t?.root) { displayIn(t?.root) }
     // The strip shows the fan-out's agents and stops them; the waiting strip keeps the rest.
     val waiting = pending?.let { outsideBatch(it, agentBatch) }
-    val settled = summary?.settledAt?.let { it >= summary.updated } == true
+    val settled = summary != null && chatSettled(summary)
     val snoozed = summary?.snoozedUntil?.let { it > System.currentTimeMillis() } == true
 
     val callbacks = remember(rootId, setupId, running, where, projectId) {
@@ -300,7 +301,11 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                 agentBatch, display, onPress = { sheet = Sheet.Agents }, error = agents.error,
                 onRetry = { agents.refresh() }, started = if (started.shown) started.family else emptyList(),
             )
-            if (rootId == null && !waiting.isNullOrEmpty() && !running) WaitingStrip(waiting) { actions.stopPending(it.id) }
+            val waitingShown = rootId == null && !waiting.isNullOrEmpty() && !running
+            if (waitingShown) WaitingStrip(waiting.orEmpty()) { actions.stopPending(it.id) }
+            // Last of the desktop's strips: one that asks for something comes first.
+            val pressing = waitingShown || (summary?.limitResume != null && !running) || !t?.stopped?.items.isNullOrEmpty()
+            if (rootId == null && settled && !pressing) SettledStrip(summary?.settleWhenDone != null, actions::unsettle)
             // Questions and approvals belong to the whole thread, replies included.
             t?.requests?.firstOrNull()?.let { request ->
                 key(request.id) {
@@ -357,7 +362,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             Sheet.Thread -> MenuSheet(
                 threadMenu(
                     ThreadMenuActions(
-                        settled, snoozed,
+                        settled, running, snoozed,
                         branch = t?.worktree?.branch ?: summary?.branch,
                         worktree = t?.worktree?.takeIf { it.path != null },
                         sides = sides.size,

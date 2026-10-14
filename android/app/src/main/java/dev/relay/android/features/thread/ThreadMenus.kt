@@ -40,6 +40,8 @@ import kotlinx.coroutines.launch
 /** What the thread menu acts with; null leaves an item out. */
 class ThreadMenuActions(
     val settled: Boolean,
+    /** Settling it now waits for the answer to end. */
+    val running: Boolean,
     val snoozed: Boolean,
     val branch: String?,
     /** Its own worktree, while it has one. */
@@ -64,8 +66,11 @@ class ThreadMenuActions(
 fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
     add(MenuItem("Rename", onPress = a.onRename))
     add(
-        if (a.settled) MenuItem("Move back to active") { a.onTriage("unsettle", "Couldn't move it") }
-        else MenuItem("Mark as done") { a.onTriage("settle", "Couldn't mark it done") },
+        when {
+            a.settled -> MenuItem("Move back to active") { a.onTriage("unsettle", "Couldn't move it") }
+            a.running -> MenuItem("Mark as done when it ends") { a.onTriage("settle-when-done", "Couldn't mark it done") }
+            else -> MenuItem("Mark as done") { a.onTriage("settle", "Couldn't mark it done") }
+        },
     )
     add(
         if (a.snoozed) MenuItem("Wake up now") { a.onTriage("wake", "Couldn't wake it") }

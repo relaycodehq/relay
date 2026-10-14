@@ -55,6 +55,7 @@ import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Alarm
+import io.github.lyxnx.compose.ui.tablericons.outline.Checks
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Hourglass
@@ -198,6 +199,18 @@ fun StoppedStrip(items: List<ChatPending>, onResolve: suspend (String) -> Unit) 
             Action("Pick it back up", primary = true, failed = "Couldn't pick it back up", unsure = "It may still pick back up") {
                 onResolve("resume")
             }
+        }
+    }
+}
+
+/** A settled thread, opened: the next message moves it back to Activity. [whenDone]: settled while its answer runs. */
+@Composable
+fun SettledStrip(whenDone: Boolean, onUnsettle: suspend () -> Unit) {
+    Strip {
+        Item {
+            StripIcon(TablerIcons.Outline.Checks)
+            Line(if (whenDone) "Settles when done" else "Settled", " · replying moves it back to Activity", maxLines = 2)
+            Action("Unsettle", failed = "Couldn't move it back", unsure = "It may still move back") { onUnsettle() }
         }
     }
 }
