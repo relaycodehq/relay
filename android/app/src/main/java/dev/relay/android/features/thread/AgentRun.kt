@@ -31,6 +31,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.key
+import dev.relay.android.features.images.ImageSource
+import dev.relay.android.features.images.ReadPreview
+import dev.relay.android.features.images.ReadSwatch
+import dev.relay.android.features.images.imagePath
+import dev.relay.android.features.images.imageRead
+import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.thread.logic.TracePart
 import dev.relay.android.features.thread.logic.TurnHeading
@@ -89,7 +97,11 @@ private class TraceScope(
     val display: (String) -> String,
     val chatId: String,
     val messageId: String,
-)
+    /** Opens a picture a call looked at, among the turn's. */
+    val openImage: ((String) -> Unit)? = null,
+) {
+    fun read(path: String) = ImageSource.Read(chatId, messageId, path)
+}
 
 private val LocalTrace = staticCompositionLocalOf { TraceScope(emptyMap(), { it }, "", "") }
 
@@ -108,6 +120,8 @@ fun AgentRun(
     /** Starts unfolded even once it's ended, e.g. as a subagent's whole run. */
     open: Boolean = false,
     onExpanded: (Boolean) -> Unit = {},
+    /** Opens a picture one of its calls looked at, by path. */
+    onOpenImage: ((String) -> Unit)? = null,
 ) {
     val turn = readTurn(message)
     val live = turn.live
@@ -163,7 +177,7 @@ fun AgentRun(
             )
         }
         if (expanded && (turn.entries.isNotEmpty() || turn.thinking)) {
-            CompositionLocalProvider(LocalTrace provides TraceScope(turn.calls, display, chatId, message.id)) {
+            CompositionLocalProvider(LocalTrace provides TraceScope(turn.calls, display, chatId, message.id, onOpenImage)) {
                 Column(Modifier.padding(top = 6.dp)) {
                     val parts = groupTrace(turn.shown)
                     parts.forEachIndexed { index, part ->
@@ -201,13 +215,30 @@ private fun Step(modifier: Modifier = Modifier, content: @Composable RowScope.()
     )
 }
 
-/** A fold that builds its body the first time it opens. */
+/** A fold that builds its body the first time it opens; [under] shows below the heading either way. */
 @Composable
-private fun Fold(heading: @Composable RowScope.() -> Unit, body: @Composable () -> Unit) {
+private fun Fold(
+    heading: @Composable RowScope.() -> Unit,
+    under: @Composable (open: Boolean) -> Unit = {},
+    body: @Composable () -> Unit,
+) {
     var open by rememberSaveable { mutableStateOf(false) }
     Column {
         Step(Modifier.pressable(onClick = { open = !open }, scale = false), content = heading)
+        under(open)
         if (open) body()
+    }
+}
+
+/** The picture a call looked at, under its row. */
+@Composable
+private fun Preview(a: AgentActivity, name: String) {
+    val trace = LocalTrace.current
+    val remote = LocalThreadRemote.current ?: return
+    val path = imagePath(a) ?: return
+    val open = trace.openImage
+    key(path) {
+        ReadPreview(remote, trace.read(path), name, done = a.status == "complete", onOpen = open?.let { { it(path) } })
     }
 }
 
@@ -230,13 +261,17 @@ private fun ToolRow(a: AgentActivity, label: String) {
         )
         Progress(a)
     }
-    // TODO(images): the picture a call looked at (ReadPreview) goes under its row once images land.
+    val preview = trace.chatId.isNotEmpty() && looksAtImage(a)
+    val under = @Composable { if (preview) Box(Modifier.padding(start = 21.dp)) { Preview(a, label) } }
     // Its threads list under the turn; the ids it returned say nothing to a reader.
     if ((a.detail == null || isStartThreads(a)) && calls.isEmpty()) {
-        Step(content = heading)
+        Column {
+            Step(content = heading)
+            under()
+        }
         return
     }
-    Fold(heading) {
+    Fold(heading, under = { under() }) {
         if (calls.isNotEmpty()) SubagentRows(calls)
         if (a.detail != null) Detail(a)
     }
@@ -277,10 +312,19 @@ private fun SubagentRows(calls: List<AgentActivity>) {
 private fun ActivityGroup(activity: List<AgentActivity>) {
     val display = LocalTrace.current.display
     val icon = if (activity.map { it.kind }.toSet().size == 1) kindIcon(activity.first().kind) else TablerIcons.Outline.Tool
-    // TODO(images): closed, the pictures its calls looked at show in a row under the heading.
+    val trace = LocalTrace.current
+    // Closed, the pictures its calls looked at still show; open, each sits under its own row.
+    val looked = if (trace.chatId.isNotEmpty()) activity.filter(::looksAtImage) else emptyList()
     Fold({
         Icon(icon, null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
         Text(summarizeActivity(activity), Modifier.weight(1f), maxLines = 1, color = RelayTheme.colors.mutedForeground)
+    }, under = { open ->
+        if (!open && looked.isNotEmpty()) Row(
+            Modifier.padding(start = 21.dp).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            looked.forEach { a -> key(a.id) { Preview(a, display(a.label)) } }
+        }
     }) {
         Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { activity.forEach { ToolRow(it, display(it.label)) } }
     }
@@ -296,10 +340,22 @@ private fun OpenBatch(activity: List<AgentActivity>) {
     val calls = trace.calls[head.id].orEmpty()
     val folded = earlier.isNotEmpty() || calls.isNotEmpty()
     val text = trace.display(if (running) liveLabel(head) else doneLabel(head))
+    // This row changes with every call, so a picture it looked at stays icon-sized
+    // here; with nothing folded behind the row, tapping it opens the picture.
+    val looked = if (trace.chatId.isNotEmpty()) imageRead(head) else null
+    val openImage = trace.openImage
+    val view = if (!folded && looked != null && openImage != null) ({ openImage(looked) }) else null
+    val remote = LocalThreadRemote.current
     Column {
-        Step(if (folded) Modifier.pressable(onClick = { open = !open }, scale = false) else Modifier) {
-            // TODO(images): a picture this call looked at shows as a swatch here (ReadSwatch).
-            Icon(kindIcon(head.kind), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
+        Step(
+            when {
+                view != null -> Modifier.pressable(onClick = view, scale = false)
+                folded -> Modifier.pressable(onClick = { open = !open }, scale = false)
+                else -> Modifier
+            },
+        ) {
+            if (looked != null && remote != null) ReadSwatch(remote, trace.read(looked))
+            else Icon(kindIcon(head.kind), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
             Row(Modifier.weight(1f, fill = false)) {
                 if (running) ShineText(text) else Text(text, maxLines = 1, color = RelayTheme.colors.mutedForeground)
             }

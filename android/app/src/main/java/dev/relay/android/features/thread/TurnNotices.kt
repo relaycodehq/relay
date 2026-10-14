@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.relay.android.features.thread.logic.agentError
 import dev.relay.android.features.thread.logic.agentName
-import dev.relay.android.remote.model.HtmlRender
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
@@ -33,7 +32,6 @@ import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertCircle
-import io.github.lyxnx.compose.ui.tablericons.outline.AppWindow
 import io.github.lyxnx.compose.ui.tablericons.outline.Login
 
 /** The desktop's AgentError: the provider's message out of its envelope, the envelope on request. */
@@ -94,16 +92,3 @@ fun SignInNote(provider: String) {
     )
 }
 
-/** Pages the agent showed with show_html, until the phone draws them; the answer may refer to them. */
-@Composable
-fun RenderNotes(renders: List<HtmlRender>) {
-    val name = computerName(LocalThreadRemote.current)
-    for (render in renders) {
-        val variants = render.pages.mapNotNull { it.label }
-        val versions = if (variants.size > 1) "${variants.size} versions: ${variants.joinToString(", ")}. " else ""
-        NoteBox(
-            TablerIcons.Outline.AppWindow, RelayTheme.colors.mutedForeground, render.title,
-            "${versions}Open this thread on $name to see ${if (variants.size > 1) "them" else "it"}.",
-        )
-    }
-}

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text as MaterialText
 import dev.relay.android.features.markdown.Markdown
+import dev.relay.android.features.readaloud.ReadAloudButton
 import dev.relay.android.features.thread.logic.Clock
 import dev.relay.android.features.thread.logic.agentName
 import dev.relay.android.features.thread.logic.answerSpeed
@@ -291,7 +292,9 @@ fun MessageActions(message: ChatMessage, onReply: (() -> Unit)?, onFork: (() -> 
             }),
             tint = c.mutedForeground,
         )
-        // TODO(read-aloud): features.readaloud.ReadAloudButton(remote, message.id, message.body) for a complete answer with text.
+        val remote = LocalThreadRemote.current
+        if (remote != null && message.status == "complete" && message.body.isNotBlank())
+            ReadAloudButton(remote, message.id, message.body)
         if (onFork != null) Icon(TablerIcons.Outline.ArrowsSplit, "Fork into a new thread", Modifier.pressable(onClick = onFork), tint = c.mutedForeground)
         if (onReply != null) Icon(TablerIcons.Outline.CornerUpLeft, "Reply to message", Modifier.pressable(onClick = onReply), tint = c.mutedForeground)
     }

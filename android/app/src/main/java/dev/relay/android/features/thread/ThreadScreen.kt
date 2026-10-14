@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import dev.relay.android.features.composer.Composer
 import dev.relay.android.features.composer.ComposerState
+import dev.relay.android.features.git.CiStatusButton
+import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.thread.logic.chainRoot
 import dev.relay.android.features.thread.logic.latestSetup
 import dev.relay.android.features.thread.logic.mainMessages
@@ -74,14 +76,20 @@ private enum class Sheet { Thread, Snooze, Rename, Sides, Agents, Archive }
 private val PIN_SLACK = 48.dp
 
 @Composable
-fun ThreadScreen(id: String, remote: Remote, rootId: String? = null) {
+fun ThreadScreen(
+    id: String,
+    remote: Remote,
+    rootId: String? = null,
+    /** Marks the thread read on this phone up to its `updated`, and puts away its notification. */
+    onSeen: (id: String, updated: Long) -> Unit = { _, _ -> },
+) {
     val active by remote.active.collectAsState()
     // A handed-over thread keeps its id on another computer; none of the old screen's state follows it.
-    key(active, id, rootId) { ThreadBody(id, rootId, remote) }
+    key(active, id, rootId) { ThreadBody(id, rootId, remote, onSeen) }
 }
 
 @Composable
-private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
+private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (String, Long) -> Unit) {
     val context = LocalContext.current
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
@@ -101,7 +109,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
     val composer = remember { ComposerState() }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
-    var selecting by remember { mutableStateOf<String?>(null) }
+    var selecting by remember { mutableStateOf<ChatMessage?>(null) }
 
     // Open on the phone counts as read, but only while the app is in front:
     // answers that land in the background are marked when it comes back.
@@ -109,7 +117,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
     val updated = summary?.updated
     LaunchedEffect(updated, inFront, online, leavingUnread) {
         if (updated == null || !inFront || leavingUnread) return@LaunchedEffect
-        // TODO(seen): the phone's own seen store and clearing the thread's notification belong to the Home feature.
+        onSeen(id, updated)
         // The desktop keeps the shared mark; an older one just doesn't know the call.
         if (online) runCatching { remote.desktop("markProjectChatSeen", id, updated) }
     }
@@ -149,10 +157,18 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
     val settled = summary?.settledAt?.let { it >= summary.updated } == true
     val snoozed = summary?.snoozedUntil?.let { it > System.currentTimeMillis() } == true
 
-    val callbacks = remember(rootId, setupId, running, where) {
+    val callbacks = remember(rootId, setupId, running, where, projectId) {
         MessageCallbacks(
             onOpenFile = { file, messageId -> actions.openFile(file.path, messageId) },
-            onOpenPath = where?.let { w -> { path: String -> nav.push(Route.File(w, path)) } },
+            onOpenPath = where?.let { w ->
+                { target: FileLinkTarget ->
+                    when (target) {
+                        is FileLinkTarget.Folder -> nav.push(Route.Files(w, target.path))
+                        is FileLinkTarget.File -> nav.push(Route.File(w, target.path))
+                        is FileLinkTarget.Diff -> Unit
+                    }
+                }
+            },
             onActions = { acting = it },
             onReplies = actions::openReplies,
             onReply = if (rootId == null) { m -> actions.openReplies(chainRoot(byIdOf(model), m)) } else null,
@@ -161,6 +177,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
             onRewind = actions::rewind,
             onRerunSetup = if (!running) { m -> if (m.id == setupId) actions.rerunSetup(m) } else null,
             onSteer = if (rootId == null) { text -> composer.restore(text) } else null,
+            // TODO(composer): a compose(text, earlier) hook, so a page's text replaces what it put in before.
+            onCompose = if (projectId != null) { text, _ -> composer.quote(text) } else null,
         )
     }
 
@@ -171,7 +189,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
             onBack = nav.backAction,
             actions = {
                 if (rootId == null) {
-                    // TODO(git): features.git.CiStatusButton(remote, projectId, id, running = false) once merged.
+                    if (projectId != null) CiStatusButton(remote, projectId, id, running)
                     IconButton(TablerIcons.Outline.Dots, "Thread actions", { sheet = Sheet.Thread }, enabled = where != null)
                 }
             },
@@ -273,7 +291,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
                 messageMenu(
                     m,
                     onCopy = { copyText(context, it) },
-                    onSelect = { selecting = it },
+                    onSelect = { selecting = m },
                     onReply = if (rootId == null) ({ actions.openReplies(chainRoot(byId, m)) }) else null,
                     onFork = { actions.fork(m) },
                     onQuote = if (projectId != null) composer.quote else null,
@@ -282,7 +300,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote) {
                 onClose = { acting = null },
             )
         }
-        selecting?.let { SelectTextSheet(it) { selecting = null } }
+        selecting?.let { SelectTextSheet(it, t?.root) { selecting = null } }
         FailureDialog(failures)
     }
 }

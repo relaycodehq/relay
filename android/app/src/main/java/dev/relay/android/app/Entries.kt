@@ -34,8 +34,12 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
 
     entry<Route.Pair> { PairScreen(container.remote, it.link) }
     entry<Route.NewThread> { PlaceholderScreen("New thread", it) }
-    entry<Route.Thread> { ThreadScreen(it.id, container.remote) }
-    entry<Route.Reply> { ThreadScreen(it.id, container.remote, rootId = it.rootId) }
+    val seen = { id: String, updated: Long ->
+        container.threadSeen.markSeen(id, updated)
+        container.notifications.clearThread(id)
+    }
+    entry<Route.Thread> { ThreadScreen(it.id, container.remote, onSeen = seen) }
+    entry<Route.Reply> { ThreadScreen(it.id, container.remote, rootId = it.rootId, onSeen = seen) }
     entry<Route.SubagentRun> { SubagentRunScreen(it.chatId, it.agentId, it.rootId, container.remote) }
     entry<Route.Project> { ProjectScreen(it.id, container.remote, container.home) }
     entry<Route.Turn> { TurnScreen(container.remote, it.chatId, it.messageId, !it.worktree.isNullOrEmpty()) }

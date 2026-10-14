@@ -20,11 +20,30 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import dev.relay.android.features.images.AnswerImage
+import dev.relay.android.features.images.ImageSource
+import dev.relay.android.features.images.LightboxImage
+import dev.relay.android.features.images.Lightbox
+import dev.relay.android.features.images.MessageImages
+import dev.relay.android.features.images.imageFailed
+import dev.relay.android.features.images.localImagePath
+import dev.relay.android.features.images.messageImages
+import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.markdown.Markdown
+import dev.relay.android.features.markdown.OpenLink
+import dev.relay.android.features.markdown.ShowImage
+import dev.relay.android.features.markdown.fileLinkTarget
+import dev.relay.android.features.renders.MessageRenders
+import dev.relay.android.features.renders.RenderCompose
+import dev.relay.android.ui.ProviderIcon
 import dev.relay.android.features.thread.logic.Clock
 import dev.relay.android.features.thread.logic.agentError
 import dev.relay.android.features.thread.logic.agentName
@@ -47,8 +66,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.CornerUpLeft
 @Stable
 class MessageCallbacks(
     val onOpenFile: (TurnFileChange, String) -> Unit,
-    /** A path the answer links to that the turn didn't change; null when the thread has no folder to read. */
-    val onOpenPath: ((String) -> Unit)? = null,
+    /** A file or folder the answer links to that the turn didn't change; null when the thread has no folder to read. */
+    val onOpenPath: ((FileLinkTarget) -> Unit)? = null,
     val onActions: ((ChatMessage) -> Unit)? = null,
     val onReplies: ((ChatMessage) -> Unit)? = null,
     /** Starts or opens a side conversation on this answer. */
@@ -61,9 +80,14 @@ class MessageCallbacks(
     val onRerunSetup: ((ChatMessage) -> Unit)? = null,
     /** Puts a message for the agent in the composer, for a watch note's Tell. */
     val onSteer: ((String) -> Unit)? = null,
+    /** Puts what a page's relay.compose() says in the composer. */
+    val onCompose: RenderCompose? = null,
 )
 
-private val webLink = Regex("^[a-z][a-z0-9+.-]*:", RegexOption.IGNORE_CASE)
+/** The desktop only reads an answer's image once the saved answer names it. */
+private val hideImage: ShowImage = { _, _ -> }
+
+private class Viewing(val images: List<LightboxImage>, val index: Int)
 
 /** A message laid out like the desktop's (src/features/thread/ProjectChat.tsx). */
 @Composable
@@ -77,16 +101,37 @@ fun MessageView(
     on: MessageCallbacks,
     failures: FailureState,
 ) {
-    val uri = LocalUriHandler.current
-    // TODO(markdown): pass Markdown(..., folder = root, openPath = callbacks.onOpenPath, image = ...) once the real signature lands.
-    val openLink: (String) -> Unit = link@{ value ->
-        if (webLink.containsMatchIn(value)) {
-            runCatching { uri.openUri(value) }
-            return@link
+    val remote = LocalThreadRemote.current
+    val changes = m.changes
+    // A changed file opens its diff; anything else needs the thread's folder to be read from.
+    val openPath: OpenLink? = remember(root, changes, m.id, on) {
+        val folder = root ?: return@remember null
+        val links: OpenLink = { value, inline ->
+            when (val target = fileLinkTarget(value, inline, folder, changes.orEmpty())) {
+                null -> null
+                is FileLinkTarget.Diff -> ({ on.onOpenFile(target.change, m.id) })
+                else -> on.onOpenPath?.let { open -> { open(target) } }
+            }
         }
-        val path = value.removePrefix(root?.trimEnd('/')?.plus("/") ?: "").substringBefore('#').substringBefore(":")
-        val change = m.changes?.find { it.path == path || it.path.endsWith("/$path") }
-        if (change != null) on.onOpenFile(change, m.id) else on.onOpenPath?.invoke(path)
+        links
+    }
+    val images = remember(chatId, m, root) { messageImages(chatId, m, root) }
+    var traceOpen by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<Viewing?>(null) }
+    val computer = remote?.active?.collectAsState()?.value
+    fun view(among: List<LightboxImage>, source: ImageSource) {
+        // The list is fixed while it's open; ones that failed to load are left out.
+        val shown = among.filter { it.source == source || !imageFailed(it.source, computer) }
+        val index = shown.indexOfFirst { it.source == source }
+        if (index >= 0) viewing = Viewing(shown, index)
+    }
+    val openImage = { source: ImageSource -> view(images.all, source) }
+    val showImage: ShowImage = remember(chatId, m.id, root, remote, images, computer) {
+        val show: ShowImage = { src, alt ->
+            val path = root?.let { localImagePath(src, it) }
+            if (path != null && remote != null) AnswerImage(remote, ImageSource.Read(chatId, m.id, path), alt, openImage)
+        }
+        show
     }
     if (m.handoff != null) return HandoffRow(m)
     if (m.worktreeCommand != null) return WorktreeCommandRow(
@@ -122,7 +167,7 @@ fun MessageView(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            // TODO(provider-icon): the agent's ProviderIcon before its name, once the shared one lands.
+            if (!user) ProviderIcon(m.provider, c.foreground)
             Text(if (user) m.author ?: "You" else agentName(m.provider), style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold))
             // Only the phone's own sends are pending; see the outbox.
             if (user) Text(
@@ -132,22 +177,33 @@ fun MessageView(
             if (!user && m.author != null) Text("via ${m.author}", style = RelayTheme.type.xs, color = c.mutedForeground)
             if (m.unprompted == true) Text("started on its own", style = RelayTheme.type.xs, color = c.mutedForeground)
         }
-        if (!user) AgentRun(chatId, m, root)
+        if (!user) AgentRun(
+            chatId, m, root,
+            onExpanded = { traceOpen = it },
+            onOpenImage = { path -> view(images.looked, ImageSource.Read(chatId, m.id, path)) },
+        )
         if (!user && startCalls(m).isNotEmpty()) StartedInTurn(chatId, m)
-        // TODO(renders): features.renders.MessageRenders(remote, chatId, m.renders, Modifier, onCompose) draws the pages; until then they're named.
-        if (!m.renders.isNullOrEmpty()) RenderNotes(m.renders)
-        // TODO(images): features.images.MessageImages(remote, messageImages(chatId, m, root), onOpen, Modifier): pasted images above what you wrote, the agent's after its answer.
+        val renders = m.renders
+        if (!renders.isNullOrEmpty() && remote != null) MessageRenders(remote, chatId, renders, onCompose = on.onCompose)
+        // Your images sit above what you wrote, as on the desktop; the agent's come after its answer.
+        val strip = @Composable {
+            if (remote != null) MessageImages(remote, if (traceOpen) images.pasted else images.strip, openImage)
+        }
+        if (user) strip()
         if (user) {
             val body = withoutMention(m.body)
             // A screenshot sent on its own leaves nothing for the bubble to hold.
             if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
         } else if (m.body.isNotBlank()) {
-            // TODO(images): the desktop only reads an answer's image once the saved answer names it.
-            Markdown(m.body, onLink = openLink)
+            Markdown(
+                m.body, folder = root, openPath = openPath,
+                image = if (m.status == "streaming") hideImage else showImage,
+            )
         }
+        if (!user) strip()
+        viewing?.let { v -> if (remote != null) Lightbox(remote, v.images, v.index) { viewing = null } }
         if (!user) AsyncQuestions(chatId, m)
-        if (!user) WatchNotes(chatId, m.id, m.notes, agentName(m.provider), openLink, on.onSteer)
-        val changes = m.changes
+        if (!user) WatchNotes(chatId, m.id, m.notes, agentName(m.provider), openPath, on.onSteer)
         if (!changes.isNullOrEmpty() && m.status != "streaming") ChangedFiles(
             changes,
             onOpen = { on.onOpenFile(it, m.id) },

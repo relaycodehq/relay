@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.thread.logic.Clock
 import dev.relay.android.features.thread.logic.preview
 import dev.relay.android.features.thread.logic.quoteExcerpt
@@ -189,11 +190,17 @@ fun RenameSheet(title: String, onSave: suspend (String) -> Unit, onClose: () -> 
     }
 }
 
-/** The whole message, to copy any part of it. */
+/**
+ * The whole message, to copy any part of it. An answer keeps its formatting:
+ * unlike React Native's, Compose's selection crosses the Markdown's blocks.
+ */
 @Composable
-fun SelectTextSheet(text: String, onClose: () -> Unit) {
+fun SelectTextSheet(m: ChatMessage, root: String?, onClose: () -> Unit) {
+    val text = readText(m)
     Sheet(onDismiss = onClose, title = "Select text") {
-        SelectionContainer(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
+        val padding = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)
+        if (m.role == "assistant") Markdown(text, padding, folder = root, selectable = true)
+        else SelectionContainer(padding) {
             Text(text, style = RelayTheme.type.base)
         }
     }

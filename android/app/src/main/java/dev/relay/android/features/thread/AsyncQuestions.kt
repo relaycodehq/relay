@@ -25,7 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
+import dev.relay.android.features.renders.AskPage
 import dev.relay.android.features.thread.logic.agentName
 import dev.relay.android.remote.model.AsyncAgentQuestions
 import dev.relay.android.remote.model.ChatMessage
@@ -82,7 +85,6 @@ private fun Open(chatId: String, message: ChatMessage, group: AsyncAgentQuestion
     fun dismiss(dismissed: Boolean) =
         run({ remote.desktop("setProjectChatQuestionDismissed", chatId, message.id, group.id, dismissed) })
     val c = RelayTheme.colors
-    // TODO(renders): a group with a page answers through AskPage once renders land; until then its questions show.
     if (group.dismissed != true) Column(
         Modifier.fillMaxWidth().border(1.dp, c.accent, RoundedCornerShape(14.dp)).background(c.card, RoundedCornerShape(14.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -96,7 +98,18 @@ private fun Open(chatId: String, message: ChatMessage, group: AsyncAgentQuestion
             )
         }
         Hint("Answer whenever you're ready.")
-        if (group.questions.isNotEmpty()) Questions(group.questions, busy, deferred = true) { answers ->
+        val page = group.page
+        // AskPage shares out the height it's given; in the thread's list that has to be bounded.
+        if (page != null) Column(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp)) {
+            AskPage(remote, chatId, page, busy, onAnswer = { answer ->
+                run({
+                    remote.desktop(
+                        "answerProjectChatQuestion", chatId, message.id, group.id,
+                        mapOf("kind" to "page", "answer" to answer),
+                    )
+                }, sent)
+            })
+        } else if (group.questions.isNotEmpty()) Questions(group.questions, busy, deferred = true) { answers ->
             run({
                 remote.desktop(
                     "answerProjectChatQuestion", chatId, message.id, group.id,

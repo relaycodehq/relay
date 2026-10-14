@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.relay.android.features.markdown.Markdown
+import dev.relay.android.features.markdown.OpenLink
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.model.RemoteJson
 import dev.relay.android.ui.Icon
@@ -71,7 +72,8 @@ fun WatchNotes(
     notes: List<JsonElement>?,
     /** Who Tell puts the message in front of. */
     agent: String,
-    onLink: (String) -> Unit,
+    /** Paths in the notes, opened as the answer's are. */
+    openPath: OpenLink?,
     /** Puts a message for the agent in the composer. */
     onSteer: ((String) -> Unit)?,
 ) {
@@ -119,7 +121,7 @@ fun WatchNotes(
             Text(note.line)
             if (reading) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(note.title, style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold))
-                if (note.points.isNotEmpty()) Markdown(note.points.joinToString("\n") { "- $it" }, small = true, onLink = onLink)
+                if (note.points.isNotEmpty()) Markdown(note.points.joinToString("\n") { "- $it" }, small = true, openPath = openPath)
                 note.diff?.let { diff ->
                     Column(Modifier.padding(top = 4.dp).fillMaxWidth().background(c.code, Radii.smShape).padding(8.dp)) {
                         Text(diff.file, Modifier.padding(bottom = 4.dp), style = RelayTheme.type.xs, color = c.mutedForeground)
