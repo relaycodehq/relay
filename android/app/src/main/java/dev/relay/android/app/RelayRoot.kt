@@ -8,6 +8,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -15,19 +18,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.relay.android.features.home.ConnectionLine
+import dev.relay.android.features.home.NeedsYou
 import dev.relay.android.lib.navigation.LocalNavigator
+import dev.relay.android.remote.model.PhoneAppearance
+import dev.relay.android.remote.model.PhonePalette
+import dev.relay.android.remote.model.RemoteJson
+import dev.relay.android.ui.LocalScreenNotice
+import dev.relay.android.ui.theme.DesktopAppearance
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.ui.LocalToasts
 import dev.relay.android.ui.ToastHost
@@ -38,6 +50,13 @@ import dev.relay.android.ui.theme.RelayTheme
 import dev.relay.android.ui.theme.resolveColors
 import androidx.compose.foundation.isSystemInDarkTheme
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+private fun PhonePalette.toMap(): Map<String, String> =
+    RemoteJson.encodeToJsonElement(PhonePalette.serializer(), this).jsonObject.mapValues { it.value.jsonPrimitive.content }
+
+private fun PhoneAppearance.toDesktop() = DesktopAppearance(mode, light.toMap(), dark.toMap())
 
 /**
  * The whole app: theme, navigator, toasts, and either one stack (phone) or
@@ -46,44 +65,74 @@ import kotlinx.coroutines.channels.ReceiveChannel
 @Composable
 fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
     val prefs = container.prefs
+    val remote = container.remote
     val systemDark = isSystemInDarkTheme()
-    // The desktop's palette joins here once the bridge delivers it.
-    val colors = remember(prefs.themeMode, systemDark) { resolveColors(prefs.themeMode, null, systemDark) }
+    val overview by remote.overview.collectAsState()
+    val ready by remote.ready.collectAsState()
+    val client by remote.client.collectAsState()
+    val paired = client != null
+    // The desktop's palette, kept in the offline overview so it's there before it connects.
+    val appearance = overview?.appearance
+    val colors = remember(prefs.themeMode, systemDark, appearance) { resolveColors(prefs.themeMode, appearance?.toDesktop(), systemDark) }
     RelayTheme(colors) {
         SystemBars(dark = colors.isDark)
-        val wide = rememberIsWide()
-        val isWide by rememberUpdatedState(wide)
         val backStack = rememberNavBackStack(Route.Home)
+        val top = backStack.lastOrNull() as? Route
+        // Panes only once there's a computer to list; pairing is one whole screen.
+        val panes = rememberIsWide() && ready && paired && top !is Route.Pair
+        val isWide by rememberUpdatedState(panes)
         val navigator = remember(backStack) { AppNavigator(backStack) { isWide } }
         val toasts = remember { ToastState() }
+        val sidebar = panes && !prefs.sidebarHidden
+        val activity = LocalView.current.context as? Activity
 
         LaunchedEffect(navigator) { for (route in links) navigator.open(route) }
+        LaunchedEffect(ready, paired, top) {
+            if (ready && !paired && top == Route.Home) navigator.push(Route.Pair())
+        }
+        // Home and the sidebar carry their own line; Settings and pairing say it themselves.
+        val notice: (@Composable () -> Unit)? =
+            if (sidebar || top is Route.Settings || top is Route.Pair || (top == Route.Home && !panes)) null
+            else ({ ConnectionLine(remote) })
 
         CompositionLocalProvider(LocalNavigator provides navigator, LocalToasts provides toasts) {
             Box(Modifier.fillMaxSize().background(RelayTheme.colors.background)) {
-                WideLayout(wide, prefs, sidebar = { HomeSidebar() }) {
-                    NavDisplay(
-                        backStack = backStack,
-                        onBack = { navigator.pop() },
-                        entryDecorators = listOf(
-                            rememberSaveableStateHolderNavEntryDecorator(),
-                            rememberViewModelStoreNavEntryDecorator(),
-                        ),
-                        transitionSpec = {
-                            slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it } togetherWith
-                                slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 }
-                        },
-                        popTransitionSpec = {
-                            slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
-                                slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
-                        },
-                        predictivePopTransitionSpec = {
-                            slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
-                                slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
-                        },
-                        entryProvider = entryProvider { appEntries(container) { isWide } },
-                    )
+                WideLayout(panes, prefs, sidebar = { HomeSidebar(container) }) {
+                    CompositionLocalProvider(LocalScreenNotice provides notice) {
+                        NavDisplay(
+                            backStack = backStack,
+                            // Nothing paired: Home behind pairing is only a redirect, so back leaves the app.
+                            onBack = { if (!paired && top is Route.Pair && backStack.size == 2) activity?.finish() else navigator.pop() },
+                            entryDecorators = listOf(
+                                rememberSaveableStateHolderNavEntryDecorator(),
+                                rememberViewModelStoreNavEntryDecorator(),
+                            ),
+                            transitionSpec = {
+                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it } togetherWith
+                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 }
+                            },
+                            popTransitionSpec = {
+                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
+                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
+                            },
+                            predictivePopTransitionSpec = {
+                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
+                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
+                            },
+                            entryProvider = entryProvider { appEntries(container) { isWide } },
+                        )
+                    }
                 }
+                NeedsYou(
+                    remote,
+                    openId = (top as? Route.Thread)?.id,
+                    hidden = sidebar || top == Route.Home,
+                    pane = panes,
+                    // Below a TopBar.
+                    modifier = Modifier.align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                        .padding(top = 60.dp),
+                )
                 ToastHost(toasts, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing))
             }
         }

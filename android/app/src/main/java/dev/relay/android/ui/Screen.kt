@@ -38,6 +38,9 @@ val LocalScreenInsets = compositionLocalOf { WindowInsetsSides.Horizontal + Wind
  */
 val LocalPaneToggle = compositionLocalOf<(@Composable () -> Unit)?> { null }
 
+/** Set by the shell: a line under every TopBar, e.g. that the computer can't be reached. */
+val LocalScreenNotice = compositionLocalOf<(@Composable () -> Unit)?> { null }
+
 /** A 52dp header: back, a 15sp/500 title with an optional muted line, actions on the right. */
 @Composable
 fun TopBar(
@@ -84,7 +87,10 @@ fun Screen(
         modifier.fillMaxSize().background(RelayTheme.colors.background)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(sides)),
     ) {
-        if (topBar) TopBar(title, subtitle = subtitle, onBack = onBack, actions = actions)
+        if (topBar) {
+            TopBar(title, subtitle = subtitle, onBack = onBack, actions = actions)
+            LocalScreenNotice.current?.invoke()
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) { Column(Modifier.fillMaxSize(), content = content) }
     }
 }
