@@ -126,9 +126,10 @@ export function CardState({
         <span className="sb-card-label">Needs input</span>
       </span>
     );
-  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
   // A native /goal keeps the agent going across turns until it's met.
   const goal = chat.running && chat.goal?.status === "active";
+  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
+  // Working is the time and the spinner; the title says what it's doing on hover.
   if (chat.running || since)
     return (
       <span
@@ -137,16 +138,15 @@ export function CardState({
           goal
             ? `Goal: ${chat.goal!.objective}`
             : chat.running
-              ? undefined
+              ? chat.waiting
+                ? "Working · needs your input"
+                : "Working"
               : pendingTitle(chat.pending!)
         }
       >
-        <Spinner size={11} steady />
-        <span className="sb-card-label">
-          {goal ? "Goal" : "Working"}
-          {chat.waiting && " · needs input"}
-        </span>
         {since && <Elapsed since={since} />}
+        <Spinner size={11} steady />
+        {chat.waiting && <span className="sb-card-label">Needs input</span>}
       </span>
     );
   if (stopped)

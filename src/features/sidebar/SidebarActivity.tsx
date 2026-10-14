@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   FolderGit2,
-  GitBranch,
   GitCommitHorizontal,
   GitPullRequest,
   RotateCcw,
@@ -423,11 +422,7 @@ function CardRef({ chat }: { chat: ChatSummary }) {
       className="sb-card-ref"
       title={worktree ? `Worktree on ${chat.branch}` : chat.branch}
     >
-      {worktree ? (
-        <FolderGit2 size={11} aria-hidden />
-      ) : (
-        <GitBranch size={11} aria-hidden />
-      )}
+      {worktree && <FolderGit2 size={11} aria-hidden />}
       <MiddleTruncate
         className="sb-card-branch"
         text={chat.branch}

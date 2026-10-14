@@ -94,7 +94,10 @@ test("shows a Codex goal above the composer and on its card, and pauses, resumes
       /Working on its goal: all three fixture files/,
     );
     await page.getByRole("button", { name: "View activity" }).click();
-    await expect(page.locator(".sb-card-state.running")).toContainText("Goal");
+    await expect(page.locator(".sb-card-state.running")).toHaveAttribute(
+      "title",
+      /^Goal: all three fixture files/,
+    );
     await expect(page.locator(".sb-card-goal")).toContainText(
       "all three fixture files",
     );

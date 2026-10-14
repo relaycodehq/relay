@@ -25,7 +25,7 @@ it("keeps the working spinner and the input notice together for async questions"
   expect(mark).toContain("sb-status running");
   expect(mark).toContain("needs your input");
   expect(card).toContain("spinner");
-  expect(card).toContain("Working · needs input");
+  expect(card).toContain("Needs input");
   for (const chat of [
     { ...thread, blocked: true as const },
     { ...thread, running: false },
