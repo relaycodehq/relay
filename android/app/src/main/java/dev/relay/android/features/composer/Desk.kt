@@ -57,7 +57,7 @@ suspend fun RemoteClient.saveNewThreadModel(provider: String, model: NewThreadMo
     desktop("saveNewThreadModel", listOf(p(provider), RemoteJson.encodeToJsonElement(model)))
 }
 
-@Serializable data class CreatedChat(val id: String)
+@Serializable data class CreatedChat(val id: String, val title: String = "")
 
 /** A thread in [projectId]; [workspace] "checkout" | "worktree", left out for plain folders. */
 suspend fun RemoteClient.createProjectChat(projectId: String, workspace: String?): CreatedChat {

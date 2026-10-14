@@ -21,7 +21,7 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Gallery> { GalleryScreen() }
 
     entry<Route.Pair> { PlaceholderScreen("Pair a computer", it) }
-    entry<Route.NewThread> { PlaceholderScreen("New thread", it) }
+    entry<Route.NewThread> { dev.relay.android.features.newthread.NewThreadScreen(it, container.remote) }
     entry<Route.Thread> { PlaceholderScreen("Thread", it) }
     entry<Route.Reply> { PlaceholderScreen("Reply", it) }
     entry<Route.SubagentRun> { PlaceholderScreen("Subagent", it) }
