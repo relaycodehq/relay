@@ -244,14 +244,16 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
 private fun NewThreadButton(modifier: Modifier, onClick: () -> Unit) {
     val c = RelayTheme.colors
     val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier.shadow(3.dp, shape).background(c.accent, shape)
-            .pressable(onClick = onClick, role = Role.Button)
-            .height(48.dp).padding(horizontal = 18.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(TablerIcons.Outline.Plus, null, tint = c.onAccent, size = 18.dp)
-        Text("New thread", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold), color = c.onAccent)
+    Box(modifier) {
+        Row(
+            Modifier.shadow(3.dp, shape).background(c.accent, shape)
+                .pressable(onClick = onClick, role = Role.Button)
+                .height(48.dp).padding(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(TablerIcons.Outline.Plus, null, tint = c.onAccent, size = 18.dp)
+            Text("New thread", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold), color = c.onAccent)
+        }
     }
 }
