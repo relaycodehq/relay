@@ -2,6 +2,9 @@ package dev.relay.android.features.composer.logic
 
 import kotlinx.serialization.Serializable
 import java.text.NumberFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
@@ -9,8 +12,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-// shared/provider-usage.ts, on the wall clock only: the learned active hours
-// the desktop may send for the weekly pace aren't applied on the phone.
+// shared/provider-usage.ts. The desktop learns the active hours
+// (shared/usage-history.ts); the phone only paces the week by them.
 
 @Serializable
 data class UsageWindow(val kind: String, val usedPercent: Double, val resetsAt: Long? = null, val periodMs: Long)
@@ -39,6 +42,7 @@ data class UsageMeter(
 )
 
 private const val FIVE_MINUTES = 5 * 60 * 1000L
+private const val HOUR = 60 * 60 * 1000L
 private const val BEHIND_HOT = 10
 
 /** Rounded up to the minute, two units at most: "7m", "3h", "3h 20m", "2d 5h". */
@@ -64,8 +68,46 @@ private fun outIn(ms: Long): String? {
 
 private fun clamp(v: Double, lo: Double, hi: Double) = min(hi, max(lo, v))
 
-/** Whole-percent meter for one usage window, including the pace warning. */
-fun presentWindow(window: UsageWindow, now: Long): UsageMeter {
+/** Start of the next local hour, which half-hour time zones don't align. */
+fun nextHour(t: Long, zone: ZoneId = ZoneId.systemDefault()): Long {
+    val next = Instant.ofEpochMilli(t).atZone(zone).truncatedTo(ChronoUnit.HOURS).plusHours(1).toInstant().toEpochMilli()
+    return if (next > t) next else t + HOUR
+}
+
+/** Hours of usual work between two moments, each local hour weighted by the profile. */
+fun activeWeight(profile: List<Double>, from: Long, to: Long, zone: ZoneId = ZoneId.systemDefault()): Double {
+    var total = 0.0
+    var t = from
+    while (t < to) {
+        val next = min(to, nextHour(t, zone))
+        total += (profile.getOrElse(Instant.ofEpochMilli(t).atZone(zone).hour) { 0.0 }) * (next - t) / HOUR
+        t = next
+    }
+    return total
+}
+
+/** Time that counts toward a limit's burn between two moments. */
+private typealias Clock = (from: Long, to: Long) -> Double
+
+private val wallClock: Clock = { from, to -> (to - from).toDouble() }
+
+private fun clockFor(window: UsageWindow, activeHours: List<Double>?): Clock? {
+    // Only the week spans nights and weekends; a session is all working time.
+    if (window.kind != "weekly" || activeHours == null || activeHours.size != 24) return null
+    return { from, to -> activeWeight(activeHours, from, to) * HOUR }
+}
+
+private fun paceLeft(clock: Clock, start: Long, end: Long, now: Long): Double? {
+    val total = clock(start, end)
+    if (total <= 0) return null
+    return clamp(clock(max(now, start), end) / total * 100, 0.0, 100.0)
+}
+
+/**
+ * Whole-percent meter for one usage window, including the pace warning. With
+ * the hours someone usually works, the week's burn and pace only count those.
+ */
+fun presentWindow(window: UsageWindow, now: Long, activeHours: List<Double>? = null): UsageMeter {
     val used = clamp(window.usedPercent, 0.0, 100.0)
     val left = clamp((100 - used).roundToInt().toDouble(), 0.0, 100.0).toInt()
     val label = if (window.kind == "session") "Session" else "Weekly"
@@ -75,14 +117,12 @@ fun presentWindow(window: UsageWindow, now: Long): UsageMeter {
         window.resetsAt == null -> null
         else -> resetsIn(window.resetsAt, now)
     }
-    val paceLeft = window.resetsAt?.let { end ->
-        val start = end - window.periodMs
-        val total = (end - start).toDouble()
-        if (total <= 0) null else clamp((end - max(now, start)) / total * 100, 0.0, 100.0)
-    }
+    val active = clockFor(window, activeHours)
+    val clock = active ?: wallClock
+    val paceLeft = window.resetsAt?.let { paceLeft(clock, it - window.periodMs, it, now) }
     if (fresh) return UsageMeter(window.kind, label, 100, null, "ok", null, resetLabel)
     if (left <= 0) return UsageMeter(window.kind, label, 0, paceLeft, "spent", "Limit reached", resetLabel)
-    val p = project(used, window, now)
+    val p = project(used, window, now, clock, active != null)
     return when (p?.status) {
         "ahead" -> UsageMeter(window.kind, label, left, paceLeft, "ok", null, resetLabel)
         "onTrack" -> {
@@ -103,24 +143,41 @@ fun presentWindow(window: UsageWindow, now: Long): UsageMeter {
 
 private class Projection(val status: String, val projected: Double, val eta: Long?)
 
-private fun project(used: Double, window: UsageWindow, now: Long): Projection? {
+private fun project(used: Double, window: UsageWindow, now: Long, clock: Clock, learned: Boolean): Projection? {
     val resetsAt = window.resetsAt ?: return null
     val period = window.periodMs
     if (used <= 0 || period <= 0 || now >= resetsAt) return null
-    val elapsed = (now - (resetsAt - period)).toDouble()
-    if (elapsed < max(60_000.0, period * 0.01)) return null
+    val elapsed = clock(resetsAt - period, now)
+    // Learned hours already skip nights, so an hour of real work is enough.
+    val minElapsed = if (learned) HOUR.toDouble() else max(60_000.0, period * 0.01)
+    if (elapsed < minElapsed) return null
     val rate = used / elapsed
-    val projected = used + rate * (resetsAt - now)
+    val projected = used + rate * clock(now, resetsAt)
     val status = if (used >= 100 || projected > 100) "behind" else if (projected <= 90) "ahead" else "onTrack"
     if (status != "ahead" && used < 5) return null
     if (status != "behind") return Projection(status, projected, null)
+    return Projection(status, projected, runsOutIn(used, rate, now, resetsAt, clock))
+}
+
+/** Wall time until the limit is hit at this rate, if before the reset. */
+private fun runsOutIn(used: Double, rate: Double, now: Long, resetsAt: Long, clock: Clock): Long? {
     val need = 100 - used
-    val eta = when {
-        rate <= 0 -> null
-        need <= 0 -> 0L
-        else -> (need / rate).let { if (now + it < resetsAt) (it / 1000).roundToLong() * 1000 else null }
+    if (rate <= 0) return null
+    if (need <= 0) return 0
+    // Both clocks run evenly within an hour, so solve one hour at a time.
+    var spent = 0.0
+    var t = now
+    while (t < resetsAt) {
+        val next = min(resetsAt, nextHour(t))
+        val burn = rate * clock(t, next)
+        if (spent + burn >= need) {
+            val at = t + (need - spent) / burn * (next - t)
+            return ((at - now) / 1000).roundToLong() * 1000
+        }
+        spent += burn
+        t = next
     }
-    return Projection(status, projected, eta)
+    return null
 }
 
 /** "5% ahead" with more left than an even burn would leave, "3% behind" running hot. */

@@ -98,7 +98,7 @@ fun rememberUsage(client: RemoteClient?, computer: String?, online: Boolean, pro
 
 private fun meters(usage: ProviderUsage?): List<UsageMeter> {
     val now = System.currentTimeMillis()
-    return usage?.windows?.map { presentWindow(it, now) }.orEmpty()
+    return usage?.windows?.map { presentWindow(it, now, usage.activeHours) }.orEmpty()
 }
 
 private fun usageLabel(usage: ProviderUsage?): String? {
