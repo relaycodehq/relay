@@ -8,6 +8,8 @@ import {
 export type ProjectFileLink = {
   path: string;
   line?: number;
+  /** The last line of a cited range, after `line`. */
+  endLine?: number;
   directory: boolean;
   /** `path` is absolute (or from `~`), a file outside the project. */
   outside?: boolean;
@@ -52,6 +54,9 @@ export function projectFileLink(
   return {
     path,
     ...("line" in target && target.line ? { line: target.line } : {}),
+    ...("endLine" in target && target.endLine
+      ? { endLine: target.endLine }
+      : {}),
     directory,
   };
 }
@@ -75,6 +80,7 @@ export function chatFileLink(
   return {
     path: target.path,
     ...(target.line ? { line: target.line } : {}),
+    ...(target.endLine ? { endLine: target.endLine } : {}),
     directory: false,
     outside: true,
   };

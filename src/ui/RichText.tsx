@@ -235,7 +235,12 @@ function linkedProjectFiles(text: string, root: string): string[] {
   return [...paths];
 }
 
-/** File chip: type icon, file name, and a line when there is one. */
+/** `223`, or `223–226` for a range. */
+function linesOf({ line, endLine }: ProjectFileLink, dash: string) {
+  return line ? `${line}${endLine ? `${dash}${endLine}` : ""}` : "";
+}
+
+/** File chip: type icon, file name, and its line or lines when there are some. */
 function FileLinkChip({
   target,
   onOpen,
@@ -247,13 +252,13 @@ function FileLinkChip({
   const label = [
     target.path.split("/").at(-1) || target.path,
     ...(suffix ? [suffix] : []),
-    ...(target.line ? [`L${target.line}`] : []),
+    ...(target.line ? [`L${linesOf(target, "–")}`] : []),
   ].join(" · ");
   return (
     <button
       type="button"
       className="chat-file-link"
-      title={`${target.path}${target.line ? `:${target.line}` : ""}`}
+      title={`${target.path}${target.line ? `:${linesOf(target, "-")}` : ""}`}
       onClick={() => onOpen(target)}
     >
       <FileEntryIcon path={target.path} directory={target.directory} />
@@ -300,7 +305,8 @@ const typedSyntax: Plugin<[], Root> = function () {
     },
   });
 };
-const typedFence = /((?<![^\n])[ \t]{0,3}```[\s\S]*?(?:\n[ \t]{0,3}```[^\n]*|$))/;
+const typedFence =
+  /((?<![^\n])[ \t]{0,3}```[\s\S]*?(?:\n[ \t]{0,3}```[^\n]*|$))/;
 /** The parser drops the spaces a line starts with; no-break ones survive it. */
 const keepIndent = (text: string) =>
   text

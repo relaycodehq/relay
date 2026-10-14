@@ -6,15 +6,18 @@ export type LinkPosition = {
   path: string;
   line?: number;
   column?: number;
+  /** The last line of a range like `:12-20`, after `line`. */
+  endLine?: number;
 };
 
-const POSITION = /:(\d+)(?::(\d+))?$/;
+// `:12`, `:12:5`, or a range `:12-20`.
+const POSITION = /:(\d+)(?::(\d+)|[-–](\d+))?$/;
 const WINDOWS_ABSOLUTE = /^[A-Za-z]:[/\\]/;
 const EXPLICIT_RELATIVE = /^(?:~\/|\.\/|\.\.\/)/;
 const EXTENSION = /\.[\w-]+$/;
 const WORDS = "[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)*";
 const RELATIVE_WITH_DIRECTORIES = new RegExp(
-  `^${WORDS}(?:/${WORDS})+(?::\\d+){0,2}$`,
+  `^${WORDS}(?:/${WORDS})+(?::\\d+(?::\\d+|[-–]\\d+)?)?$`,
 );
 const BARE_NAME = new RegExp(`^${WORDS}$`);
 
@@ -109,15 +112,18 @@ export function resolveFileLink(href: string): LinkPosition | null {
   const written = path;
   let line: number | undefined;
   let column: number | undefined;
+  let endLine: number | undefined;
   const suffix = POSITION.exec(path);
   if (suffix) {
     path = path.slice(0, suffix.index);
     line = positive(suffix[1]);
     column = positive(suffix[2]);
+    endLine = positive(suffix[3]);
   } else {
-    const anchor = /^#L(\d+)(?:C(\d+))?$/i.exec(hash);
+    const anchor = /^#L(\d+)(?:C(\d+))?(?:-L(\d+)(?:C\d+)?)?$/i.exec(hash);
     line = positive(anchor?.[1]);
     column = positive(anchor?.[2]);
+    endLine = positive(anchor?.[3]);
   }
   if (!isFilePath(path, written)) return null;
   return {
@@ -125,6 +131,8 @@ export function resolveFileLink(href: string): LinkPosition | null {
     ...(line ? { line } : {}),
     // A column means nothing without its line.
     ...(line && column ? { column } : {}),
+    // A backwards or one-line range is just its first line.
+    ...(line && endLine && endLine > line ? { endLine } : {}),
   };
 }
 
@@ -183,7 +191,7 @@ function isExternal(path: string) {
   const rest = scheme[1]!;
   if (WINDOWS_ABSOLUTE.test(path)) return false;
   if (rest.startsWith("//")) return true;
-  return !/^\d+(?::\d+)?$/.test(rest);
+  return !/^\d+(?::\d+|[-–]\d+)?$/.test(rest);
 }
 
 /** Lines and columns above the safe-integer range are noise, not positions. */

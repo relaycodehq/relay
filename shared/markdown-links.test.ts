@@ -8,6 +8,9 @@ describe("inline code candidates", () => {
     ["node.meta", null],
     ["a.ts:3", "a.ts:3"],
     ["a.ts:3:4:5", "a.ts:3:4:5"],
+    ["src/a.ts:223-226", "src/a.ts:223-226"],
+    ["a.ts:3–5", "a.ts:3–5"],
+    ["port:3000-4000", "port:3000-4000"],
     ["Makefile:3", "Makefile:3"],
     ["src/a.ts", "src/a.ts"],
     ["  src/a.ts  ", "src/a.ts"],
@@ -55,7 +58,13 @@ describe("inline code candidates", () => {
   });
 
   it("leaves positions and odd shapes for the link parser to reject", () => {
-    for (const text of ["a.ts:3:4:5", "port:3000", "error:1", "http://a/b.ts"])
+    for (const text of [
+      "a.ts:3:4:5",
+      "port:3000",
+      "port:3000-4000",
+      "error:1",
+      "http://a/b.ts",
+    ])
       expect(resolveFileLink(filePathInInlineCode(text)!)).toBe(null);
   });
 });
@@ -72,7 +81,18 @@ describe("link destinations", () => {
     ["src/a.ts?x=1#L3", { path: "src/a.ts", line: 3 }],
     ["src/a.ts:007", { path: "src/a.ts", line: 7 }],
     ["src/a.ts#L0", { path: "src/a.ts" }],
-    ["src/a.ts#L3-L5", { path: "src/a.ts" }],
+    ["src/a.ts#L3-L5", { path: "src/a.ts", line: 3, endLine: 5 }],
+    [
+      "src/a.ts#L3C2-L5C1",
+      { path: "src/a.ts", line: 3, column: 2, endLine: 5 },
+    ],
+    ["src/a.ts:223-226", { path: "src/a.ts", line: 223, endLine: 226 }],
+    ["src/a.ts:9-3", { path: "src/a.ts", line: 9 }],
+    ["src/a.ts:9-9", { path: "src/a.ts", line: 9 }],
+    ["src/a.ts:0-3", { path: "src/a.ts" }],
+    ["a.ts:3–5", { path: "a.ts", line: 3, endLine: 5 }],
+    ["/Users/me/a.ts:3-5", { path: "/Users/me/a.ts", line: 3, endLine: 5 }],
+    ["src/a.ts:3-", null],
     ["src/a.ts#L3C", { path: "src/a.ts" }],
     ["src/a.ts#frag", { path: "src/a.ts" }],
     ["a.ts:0", { path: "a.ts" }],

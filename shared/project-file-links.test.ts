@@ -21,6 +21,14 @@ it("resolves markdown links and inline code file references into the linked proj
     directory: true,
   });
   expect(projectFileLink("src/app/main.ts:42", root, true)?.line).toBe(42);
+  expect(
+    projectFileLink("electron/git/turn-changes.ts:223-226", root, true),
+  ).toEqual({
+    path: "electron/git/turn-changes.ts",
+    line: 223,
+    endLine: 226,
+    directory: false,
+  });
 });
 it("rejects paths outside the clone and ambiguous prose", () => {
   for (const value of [

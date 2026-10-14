@@ -59,6 +59,18 @@ it("labels file chips with a type icon, file name, line, and parents only on a c
   expect(html).toContain(">index.ts · src/lib · L4</span>");
 });
 
+it("keeps a cited range on the file chip", () => {
+  const html = renderToStaticMarkup(
+    <RichText
+      text="`electron/git/turn-changes.ts:223-226`"
+      projectRoot="/Users/test/workspace"
+      onOpenFile={() => {}}
+    />,
+  );
+  expect(html).toContain(">turn-changes.ts · L223–226</span>");
+  expect(html).toContain('title="electron/git/turn-changes.ts:223-226"');
+});
+
 it("renders an active turn, then folds its trace after completion", () => {
   const message: ChatMessage = {
     id: "answer",
