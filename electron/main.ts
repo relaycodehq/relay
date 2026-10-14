@@ -32,6 +32,7 @@ import {
   offerCrashReport,
   offerWindowReport,
   draftBugReport,
+  dragTray,
   reportBug,
   setUpBugReports,
   watchForCrashes,
@@ -321,6 +322,7 @@ app
         window.open();
         window.send("relay:bug-report", null);
       },
+      trustHelper: (win) => window.trustHelper(win),
     });
     if (crash)
       void reportBug(crash).catch((e) =>
@@ -536,6 +538,7 @@ app
       devices,
       drafts: sharedDrafts,
       bugReports,
+      dragTray: dragTray(),
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

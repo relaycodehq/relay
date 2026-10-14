@@ -30,7 +30,11 @@ export function ReportIncluded({
         ? fields.removedFacts.filter((id) => !facts.some((f) => f.id === id))
         : [...new Set([...fields.removedFacts, ...facts.map((f) => f.id)])],
     });
-  const factsPart = (label: string, facts: BugReportFact[]) =>
+  const factsPart = (
+    label: string,
+    facts: BugReportFact[],
+    extra?: React.ReactNode,
+  ) =>
     facts.length > 0 && (
       <Include
         label={label}
@@ -60,12 +64,26 @@ export function ReportIncluded({
             </li>
           ))}
         </ul>
+        {extra}
       </Include>
     );
   return (
     <div className="report-included">
       {factsPart("Include my system information", group("system"))}
       {factsPart("Include the agents I have installed", group("agents"))}
+      {factsPart(
+        "Include how Relay and this computer have been running",
+        group("performance"),
+        <label className="report-perf-file">
+          <input
+            type="checkbox"
+            disabled={locked}
+            checked={!!fields.attachPerfLog}
+            onChange={(e) => onChange({ attachPerfLog: e.target.checked })}
+          />
+          Also attach the whole last day of it as a file (you drag it in)
+        </label>,
+      )}
       <Include
         label={
           log.total === 0

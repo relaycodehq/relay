@@ -24,7 +24,9 @@ import { releasesRepo } from "../../shared/updates";
 import { computerName } from "../platform/computer-name";
 import { findExecutable } from "../platform/executables";
 import type { GithubLogin } from "../pull-requests/github-login";
+import { performanceFacts, setUpPerformance } from "../perf";
 import { keepCrashedRunLog } from "./crash-log";
+import { DragTray } from "./drag-tray";
 import { trackRun, type LastRun } from "./last-run";
 import { BugReports } from "./service";
 import { execGh, issueHost } from "./submit";
@@ -35,6 +37,7 @@ export { BugReports };
 
 const exec = promisify(execFile);
 let reports: BugReports | undefined;
+let tray: DragTray | undefined;
 let show: (() => void) | undefined;
 
 /**
@@ -75,8 +78,12 @@ export function setUpBugReports(deps: {
   aiSettings: () => AISettings;
   /** Brings a window up on the report page. */
   show: () => void;
+  /** Lets a helper window of Relay's own call the API. */
+  trustHelper: (win: BrowserWindow) => void;
 }) {
   show = deps.show;
+  tray = new DragTray(deps.trustHelper);
+  const performance = setUpPerformance();
   reports = new BugReports(
     {
       dir: join(app.getPath("userData"), "bug-report"),
@@ -112,15 +119,34 @@ export function setUpBugReports(deps: {
           { provider: ai.commitMessageProvider, choice: ai.commitMessage },
         );
       },
+      performance: {
+        facts: async () =>
+          performanceFacts(
+            await performance.samples(),
+            await performance.snapshot().catch(() => undefined),
+          ),
+        logText: performance.logText,
+        record: performance.record,
+      },
     },
     {
       openExternal: (url) => shell.openExternal(url),
       reveal: (path) => shell.showItemInFolder(path),
+      offerDrag: (files) =>
+        void tray
+          ?.offer(files)
+          .catch((e) => console.warn("Could not show the files to drag:", e)),
       copy: (text) => clipboard.writeText(text),
       downloads: app.getPath("downloads"),
     },
   );
   return reports;
+}
+
+/** The tray of files to drag into GitHub, while Relay's window is up. */
+export function dragTray() {
+  if (!tray) throw new Error("Relay is still starting.");
+  return tray;
 }
 
 /** Shows the report page, noting what made Relay offer it. */

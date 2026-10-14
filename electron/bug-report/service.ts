@@ -6,6 +6,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,6 +16,7 @@ import type {
   BugReportFields,
   BugReportOccasion,
   BugReportPreview,
+  BugReportRecording,
   BugReportSent,
   BugReportSubmission,
   BugReportWriter,
@@ -23,9 +25,12 @@ import { anonymizer, type Identity } from "./anonymize";
 import { crashedRunLog } from "./crash-log";
 import { cleanPng } from "./png";
 import {
+  attachments,
   buildReport,
   digestOf,
   occasionText,
+  perfLogName,
+  recordingName,
   reportMarker,
   screenshotFile,
   systemFacts,
@@ -66,13 +71,31 @@ export interface BugReportDeps {
   ): Promise<Pick<BugReportDraft, "title" | "description">>;
   /** The agent that writes reports up until the user picks one. */
   defaultWriter(): BugReportWriter;
+  /** Relay's performance log and recordings; left out where there are none. */
+  performance?: PerformanceSource;
   now?: () => number;
+}
+
+export interface PerformanceSource {
+  /** The performance log summed up, and the machine now. */
+  facts(): Promise<BugReportFact[]>;
+  /** The whole performance log, for a file. */
+  logText(): Promise<string>;
+  /** Records into `dir`'s `performance.zip`. */
+  record(
+    dir: string,
+    anonymize: (text: string) => string,
+    options: { seconds: number; others: boolean },
+    signal: AbortSignal,
+  ): Promise<BugReportRecording>;
 }
 
 /** Things only a desktop Relay can do with a finished report. */
 export interface DesktopActions {
   openExternal(url: string): Promise<void>;
   reveal(path: string): void;
+  /** Floats the files over everything, to drag into GitHub's page. */
+  offerDrag(files: string[]): void;
   copy(text: string): void;
   /** Where saved reports go. */
   downloads: string;
@@ -107,6 +130,7 @@ export class BugReports {
   >;
   /** A prompt asked for the report before a window could show it. */
   private wanted = false;
+  private recording?: { startedAt: number; endsAt: number; stop: AbortController };
 
   constructor(
     private deps: BugReportDeps,
@@ -121,6 +145,9 @@ export class BugReports {
   }
   private shot(id: string) {
     return join(this.deps.dir, "screenshots", `${id}.png`);
+  }
+  private get recordingPath() {
+    return join(this.deps.dir, recordingName);
   }
 
   /** Runs one change at a time, each on the draft as the last left it. */
@@ -157,6 +184,8 @@ export class BugReports {
       saved.screenshots = (saved.screenshots ?? []).filter((s) =>
         present.has(`${s.id}.png`),
       );
+      if (saved.recording && !(await exists(this.recordingPath)))
+        delete saved.recording;
       return saved;
     } catch {
       return this.fresh({ kind: "asked" });
@@ -326,8 +355,55 @@ export class BugReports {
     return new Uint8Array(await readFile(this.shot(id)));
   }
 
+  /**
+   * Records Relay's performance while the user reproduces the problem,
+   * replacing any earlier recording. Resolves once it's saved.
+   */
+  async record(seconds: number) {
+    const performance = this.deps.performance;
+    if (!performance) throw new Error("This Relay can't record its performance.");
+    if (this.recording) throw new Error("Relay is recording already.");
+    const draft = await this.load();
+    if (locked(draft)) throw new Error("This report was already sent.");
+    const stop = new AbortController();
+    const startedAt = this.now;
+    this.recording = { startedAt, endsAt: startedAt + seconds * 1000, stop };
+    try {
+      const recording = await performance.record(
+        this.deps.dir,
+        anonymizer(this.deps.identity()),
+        {
+          seconds,
+          others: !draft.removedFacts.includes("perf-others"),
+        },
+        stop.signal,
+      );
+      await this.change((next) => {
+        next.recording = recording;
+      });
+    } finally {
+      this.recording = undefined;
+    }
+    return this.preview();
+  }
+
+  /** Ends a recording early; what it caught so far is kept. */
+  stopRecording() {
+    this.recording?.stop.abort();
+  }
+
+  async removeRecording() {
+    await this.change((draft) => {
+      if (locked(draft)) throw new Error("This report was already sent.");
+      delete draft.recording;
+    });
+    await rm(this.recordingPath, { force: true });
+    return this.preview();
+  }
+
   /** Throws the draft away, screenshots and all, and starts a blank one. */
   async discard() {
+    this.recording?.stop.abort();
     await this.queue;
     await rm(this.deps.dir, { recursive: true, force: true });
     this.draft = Promise.resolve(this.fresh({ kind: "asked" }));
@@ -339,11 +415,16 @@ export class BugReports {
     this.gathered ??= (async () => {
       const draft = await this.load();
       const anonymize = anonymizer(this.deps.identity());
-      const system = await this.deps.system();
-      const facts = systemFacts(system, draft.occasion).map((f) => ({
-        ...f,
-        value: anonymize(f.value),
-      }));
+      const [system, performance] = await Promise.all([
+        this.deps.system(),
+        this.deps.performance?.facts().catch((e: unknown) => {
+          console.warn("Could not read the performance log:", e);
+          return [];
+        }) ?? [],
+      ]);
+      const facts = [...systemFacts(system, draft.occasion), ...performance].map(
+        (f) => ({ ...f, value: anonymize(f.value) }),
+      );
       return { facts, log: anonymize(await this.readLog(draft.occasion)) };
     })();
     // A failed look is tried again next time rather than kept.
@@ -410,6 +491,15 @@ export class BugReports {
       account,
       ...(accountError ? { accountError } : {}),
       via: sendVia,
+      ...(this.recording
+        ? {
+            recordingNow: {
+              startedAt: this.recording.startedAt,
+              endsAt: this.recording.endsAt,
+            },
+          }
+        : {}),
+      dragFiles: byHand(draft, sendVia),
       digest: digestOf({
         title: report.title,
         body: report.body,
@@ -577,8 +667,8 @@ export class BugReports {
       `${base}?${new URLSearchParams({ title: shown.title, body })}`;
     const fits = link(shown.body).length <= urlBudget;
     if (!fits) desktop.copy(shown.body);
-    if (shown.draft.screenshots.length) await this.saveBundle();
     await desktop.openExternal(link(fits ? shown.body : pasteHere));
+    await this.offerFiles(shown.dragFiles);
     await this.setSubmission({ status: "browser", at: this.now });
     return {
       preview: await this.preview(),
@@ -586,11 +676,31 @@ export class BugReports {
     };
   }
 
+  /** Floats the files that go in by hand, saved as files first. */
+  private async offerFiles(names: string[]) {
+    if (!names.length) return;
+    const folder = await this.writeBundle();
+    this.requireDesktop().offerDrag(names.map((n) => join(folder, n)));
+  }
+
+  /** Shows the files that go in by hand again, as Send showed them. */
+  async offerDrag() {
+    const shown = await this.preview();
+    if (!shown.dragFiles.length) throw new Error("Nothing needs dragging in.");
+    await this.offerFiles(shown.dragFiles);
+  }
+
   /**
    * Writes the report as files: the text with the whole log in it, the log
    * on its own, and the screenshots. Works offline and without a login.
    */
   async saveBundle() {
+    const folder = await this.writeBundle();
+    this.requireDesktop().reveal(join(folder, "report.md"));
+    return folder;
+  }
+
+  private async writeBundle() {
     const desktop = this.requireDesktop();
     const shown = await this.preview();
     const { facts, log } = await this.gather();
@@ -607,12 +717,21 @@ export class BugReports {
       `# ${full.title}\n\n${full.body}\n`,
     );
     if (draft.includeLog) await writeFile(join(folder, "log.txt"), log);
-    await Promise.all(
-      draft.screenshots.map((s, i) =>
+    await Promise.all([
+      ...draft.screenshots.map((s, i) =>
         copyFile(this.shot(s.id), join(folder, screenshotFile(i))),
       ),
-    );
-    desktop.reveal(join(folder, "report.md"));
+      ...(draft.recording
+        ? [copyFile(this.recordingPath, join(folder, recordingName))]
+        : []),
+      ...(draft.attachPerfLog && this.deps.performance
+        ? [
+            this.deps.performance
+              .logText()
+              .then((text) => writeFile(join(folder, perfLogName), text)),
+          ]
+        : []),
+    ]);
     return folder;
   }
 
@@ -620,12 +739,8 @@ export class BugReports {
     const submission = (await this.load()).submission;
     if (submission?.status !== "sent")
       throw new Error("This report wasn't sent yet.");
-    if (
-      submission.screenshots === "browser" ||
-      submission.screenshots === "partial"
-    )
-      await this.saveBundle();
     await this.requireDesktop().openExternal(submission.url);
+    await this.offerFiles((await this.preview()).dragFiles);
   }
 
   private requireDesktop() {
@@ -639,8 +754,29 @@ export class BugReports {
 const locked = (d: BugReportDraft) =>
   d.submission?.status === "sent" || d.submission?.status === "sending";
 
+/** The files a send leaves for the user to drag into GitHub's page. */
+function byHand(draft: BugReportDraft, via: BugReportPreview["via"]) {
+  const sent = draft.submission?.status === "sent" ? draft.submission : null;
+  const shotsByHand = sent
+    ? sent.screenshots === "browser" || sent.screenshots === "partial"
+    : via !== "gh";
+  return [
+    ...(shotsByHand ? draft.screenshots.map((_, i) => screenshotFile(i)) : []),
+    ...attachments(draft),
+  ];
+}
+
+const exists = (path: string) =>
+  stat(path).then(
+    () => true,
+    () => false,
+  );
+
 const isEmpty = (d: BugReportDraft) =>
-  !d.title.trim() && !d.description.trim() && !d.screenshots.length;
+  !d.title.trim() &&
+  !d.description.trim() &&
+  !d.screenshots.length &&
+  !d.recording;
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);

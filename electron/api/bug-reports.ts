@@ -15,6 +15,7 @@ const fieldsSchema = z
       .strict()
       .optional(),
     includeLog: z.boolean(),
+    attachPerfLog: z.boolean().optional(),
     removedFacts: z.array(text(40)).max(60),
   })
   .strict();
@@ -33,6 +34,10 @@ export function bugReportHandlers(ctx: ApiContext) {
     if (!ctx.bugReports)
       throw new Error("Reporting a problem needs Relay's window.");
     return ctx.bugReports;
+  };
+  const tray = () => {
+    if (!ctx.dragTray) throw new Error("Dragging files needs Relay's window.");
+    return ctx.dragTray;
   };
   return {
     openBugReport: () => reports().open(),
@@ -54,5 +59,14 @@ export function bugReportHandlers(ctx: ApiContext) {
     openBugReportIssue: () => reports().openIssue(),
     discardBugReport: () => reports().discard(),
     takeBugReportWanted: () => ctx.bugReports?.takeWanted() ?? false,
+    recordBugReportPerformance: takes([z.int().min(5).max(120)], (seconds) =>
+      reports().record(seconds),
+    ),
+    stopBugReportRecording: () => reports().stopRecording(),
+    removeBugReportRecording: () => reports().removeRecording(),
+    offerBugReportFiles: () => reports().offerDrag(),
+    dragTrayFiles: () => tray().list(),
+    dragTrayFile: takes([z.string().max(8)], (id) => tray().drag(id)),
+    closeDragTray: () => tray().close(),
   } satisfies Handlers;
 }

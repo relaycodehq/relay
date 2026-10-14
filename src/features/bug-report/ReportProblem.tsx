@@ -7,6 +7,7 @@ import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
 import { ReportIncluded } from "./ReportIncluded";
 import { ReportPreview } from "./ReportPreview";
+import { ReportRecording } from "./ReportRecording";
 import { ReportScreenshots } from "./ReportScreenshots";
 import { ReportTidyUp } from "./ReportTidyUp";
 import "./bug-report.css";
@@ -18,6 +19,7 @@ const fieldsOf = ({ draft }: BugReportPreview): BugReportFields => ({
   ...(draft.writer ? { writer: draft.writer } : {}),
   includeLog: draft.includeLog,
   removedFacts: draft.removedFacts,
+  attachPerfLog: !!draft.attachPerfLog,
 });
 
 const describe = {
@@ -148,7 +150,6 @@ export function ReportProblem() {
   const submission = draft.submission;
   const sent = submission?.status === "sent";
   const locked = sent || submission?.status === "sending";
-  const shots = draft.screenshots.length;
   const browser = preview.via === "browser";
   const text = describe[fields.kind];
   // A crash suggests its own title; otherwise one is needed, as on GitHub.
@@ -163,10 +164,10 @@ export function ReportProblem() {
         <div className="report-banner done" role="status">
           <p>
             <strong>Created issue #{submission.number}.</strong> Thanks!
-            {submission.screenshots === "browser" &&
-              ` GitHub's API takes text only: open the issue and drag the ${shots === 1 ? "screenshot" : "screenshots"} from the folder Relay shows into a comment.`}
             {submission.screenshots === "partial" &&
-              " Some screenshots may not have uploaded; Relay shows the folder with them so you can add any that are missing."}
+              " Some screenshots may not have uploaded."}
+            {preview.dragFiles.length > 0 &&
+              ` ${dragNames(preview.dragFiles)} still ${preview.dragFiles.length === 1 ? "needs" : "need"} adding: Open issue floats ${preview.dragFiles.length === 1 ? "it" : "them"} over GitHub, to drag into a comment.`}
           </p>
           <div className="report-actions">
             <button
@@ -194,8 +195,22 @@ export function ReportProblem() {
         </p>
       ) : submission?.status === "browser" ? (
         <p className="report-banner" role="status">
-          GitHub's form is open in your browser. Once you've submitted it there,
-          you're done;{" "}
+          GitHub's form is open in your browser.{" "}
+          {preview.dragFiles.length > 0 && (
+            <>
+              Drag the files from the window Relay floats over it into the
+              comment box (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => act(undefined, () => api.offerBugReportFiles())}
+              >
+                show it again
+              </button>
+              ).{" "}
+            </>
+          )}
+          Once you've submitted it there, you're done;{" "}
           <button
             type="button"
             className="text-button"
@@ -290,6 +305,13 @@ export function ReportProblem() {
 
       <ReportScreenshots
         screenshots={draft.screenshots}
+        locked={locked}
+        onChange={show}
+        onError={setError}
+      />
+
+      <ReportRecording
+        preview={preview}
         locked={locked}
         onChange={show}
         onError={setError}
@@ -409,4 +431,15 @@ export function ReportProblem() {
       </footer>
     </div>
   );
+}
+
+function dragNames(files: string[]) {
+  const shots = files.filter((f) => f.startsWith("screenshot-")).length;
+  const parts = [
+    ...(shots ? [shots === 1 ? "The screenshot" : `${shots} screenshots`] : []),
+    ...files.filter((f) => !f.startsWith("screenshot-")),
+  ];
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+    : parts[0];
 }

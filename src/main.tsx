@@ -25,12 +25,25 @@ import { followThreadWindows } from "./features/thread-windows/thread-windows";
 import { threadWindowOf } from "../shared/thread-windows";
 import { startDraftSync } from "./features/composer/draft-sync";
 import { followHeldSends } from "./features/composer/held-sends";
+import { DragTray } from "./features/bug-report/DragTray";
 const search = new URLSearchParams(location.search);
 // The menubar's hidden sound player loads this page too, for its sounds
 // alone, and so does the hidden one that sends a phone's draft.
 if (window.relay && search.has("sounds")) playPushedSounds();
 else if (window.relay && search.has("drafts")) followHeldSends();
+else if (window.relay && search.has("drag-tray")) startDragTray();
 else startApp();
+
+/** The tray of report files Relay floats over GitHub, to drag in. */
+function startDragTray() {
+  initAppearance();
+  document.documentElement.classList.add("drag-tray-page");
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <DragTray />
+    </StrictMode>,
+  );
+}
 
 function startApp() {
   // A thread popped out of the main window, in a window of its own.

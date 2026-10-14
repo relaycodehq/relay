@@ -189,6 +189,7 @@ it("without a gh login, Send opens GitHub's form with exactly the preview", asyn
   const desktop: DesktopActions = {
     openExternal: async (url) => void opened.push(url),
     reveal: () => {},
+    offerDrag: () => {},
     copy: (text) => void copied.push(text),
     downloads: join(root, "downloads"),
   };
@@ -220,6 +221,65 @@ it("without a gh login, Send opens GitHub's form with exactly the preview", asyn
   expect(again.opened).toBe("clipboard");
   expect(copied).toEqual([long.body]);
   expect(new URL(opened[1]).searchParams.get("body")).toMatch(/clipboard/);
+});
+
+it("records performance and floats the files GitHub only takes dragged in", async () => {
+  const offered: string[][] = [];
+  const desktop: DesktopActions = {
+    openExternal: async () => {},
+    reveal: () => {},
+    offerDrag: (files) => void offered.push(files),
+    copy: () => {},
+    downloads: join(root, "downloads"),
+  };
+  const reports = service(
+    async () => {
+      throw new Error("Sign in to GitHub with `gh auth login`");
+    },
+    {
+      performance: {
+        facts: async () => [
+          {
+            id: "perf-others",
+            group: "performance",
+            label: "Busiest other programs",
+            value: "Blender 310% in /Users/jana/render",
+          },
+        ],
+        logText: async () => '{"t":1}\n',
+        record: async (dir, anonymize, options) => {
+          writeFileSync(join(dir, "performance.zip"), anonymize("/Users/jana"));
+          return { at: 1, seconds: options.seconds, bytes: 11 };
+        },
+      },
+    },
+    desktop,
+  );
+  const opened = await reports.open();
+  expect(opened.facts.find((f) => f.id === "perf-others")?.value).toBe(
+    "Blender 310% in ~/render",
+  );
+  expect(opened.body).toContain("<summary>Performance</summary>");
+  await reports.save({ ...fields, attachPerfLog: true });
+  const recorded = await reports.record(30);
+  expect(recorded.draft.recording).toMatchObject({ seconds: 30 });
+  expect(recorded.dragFiles).toEqual([
+    "performance.zip",
+    "performance-log.txt",
+  ]);
+  expect(recorded.body).toMatch(
+    /Drag the `performance.zip` and `performance-log.txt` from the window/,
+  );
+  await reports.send(recorded.digest);
+  expect(offered).toHaveLength(1);
+  expect(offered[0].map((f) => readFileSync(f, "utf8"))).toEqual([
+    "~",
+    '{"t":1}\n',
+  ]);
+
+  const removed = await reports.removeRecording().catch((e: Error) => e);
+  // Sent through the browser isn't locked: GitHub's form may not be submitted.
+  expect(removed).not.toBeInstanceOf(Error);
 });
 
 it("keeps the draft when GitHub refuses", async () => {

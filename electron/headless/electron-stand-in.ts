@@ -230,6 +230,14 @@ export const systemPreferences = {
 
 export const crashReporter = { start: () => {} };
 
+// Problem reports live in the desktop window; nothing headless records.
+export const contentTracing = {
+  startRecording: () =>
+    Promise.reject(new Error("Recording needs Relay's window.")),
+  stopRecording: () =>
+    Promise.reject(new Error("Recording needs Relay's window.")),
+};
+
 export const utilityProcess = {
   fork: (modulePath: string, args?: string[]) =>
     new HeadlessUtilityProcess(modulePath, args),

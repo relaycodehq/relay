@@ -363,8 +363,21 @@ export interface Api
   sendBugReport(digest: string): Promise<import("./bug-report").BugReportSent>;
   /** Writes the report, the whole log and the screenshots to a folder; its path. */
   saveBugReportFiles(): Promise<string>;
-  /** Opens the sent issue, with the screenshots' folder when they still need adding. */
+  /** Opens the sent issue, with the files that still need adding in a tray to drag. */
   openBugReportIssue(): Promise<void>;
+  /** Records Relay's performance for `seconds`; resolves once it's in the report. */
+  recordBugReportPerformance(
+    seconds: number,
+  ): Promise<import("./bug-report").BugReportPreview>;
+  /** Ends a recording early, keeping what it caught. */
+  stopBugReportRecording(): Promise<void>;
+  removeBugReportRecording(): Promise<import("./bug-report").BugReportPreview>;
+  /** Floats the files that go in by hand again, to drag into GitHub. */
+  offerBugReportFiles(): Promise<void>;
+  /** The drag tray's own page: its files, a drag, and closing it. */
+  dragTrayFiles(): Promise<import("./bug-report").DragTrayFile[]>;
+  dragTrayFile(id: string): Promise<void>;
+  closeDragTray(): Promise<void>;
   discardBugReport(): Promise<import("./bug-report").BugReportPreview>;
   /** Whether a menu or crash prompt asked for the report page since last asked. */
   takeBugReportWanted(): Promise<boolean>;

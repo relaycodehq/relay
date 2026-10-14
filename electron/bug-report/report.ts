@@ -120,6 +120,16 @@ export function defaultTitle(occasion: BugReportOccasion) {
 
 /** The screenshot's file name in the issue and the saved bundle. */
 export const screenshotFile = (i: number) => `screenshot-${i + 1}.png`;
+export const recordingName = "performance.zip";
+export const perfLogName = "performance-log.txt";
+
+/** Files no route can post: GitHub takes them only dragged into its page. */
+export function attachments(draft: BugReportDraft) {
+  return [
+    ...(draft.recording ? [recordingName] : []),
+    ...(draft.attachPerfLog ? [perfLogName] : []),
+  ];
+}
 
 export interface ReportInput {
   draft: BugReportDraft;
@@ -201,6 +211,16 @@ function tail(lines: string[], n: number) {
   return first > 0 ? kept.slice(first) : kept;
 }
 
+function byHand(shots: number, files: string[]) {
+  const parts = [
+    ...(shots ? [shots === 1 ? "screenshot" : `${shots} screenshots`] : []),
+    ...files.map((f) => `\`${f}\``),
+  ];
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+    : parts[0];
+}
+
 /** Placeholders like `<user>` would vanish as HTML outside code. */
 const code = (value: string) => {
   const fence = "`".repeat(longestRun(value) + 1);
@@ -213,6 +233,7 @@ const longestRun = (text: string) =>
 const groupTitles: Record<BugReportFact["group"], string> = {
   system: "System information",
   agents: "Agents",
+  performance: "Performance",
 };
 
 /** Laid out as VS Code's reporter posts: the description, then each part folded. */
@@ -224,6 +245,7 @@ function body(
   via: "gh" | "api" | "browser",
 ) {
   const shots = draft.screenshots.length;
+  const files = attachments(draft);
   const logText = log?.join("\n") ?? "";
   const fence = "`".repeat(Math.max(3, longestRun(logText) + 1));
   const version = facts.find((f) => f.id === "relay");
@@ -235,7 +257,7 @@ function body(
     "",
     "</details>",
   ];
-  const groups = (["system", "agents"] as const).flatMap((group) => {
+  const groups = (["system", "agents", "performance"] as const).flatMap((group) => {
     const rows = facts.filter((f) => f.group === group);
     return rows.length
       ? fold(groupTitles[group], [
@@ -249,16 +271,28 @@ function body(
     reportMarker(draft.id),
     draft.description.trim() || "_Not described._",
     "",
-    ...(shots
+    ...(shots || files.length
       ? [
-          via === "gh"
-            ? draft.screenshots
-                .map((_, i) => `![Screenshot ${i + 1}](./${screenshotFile(i)})`)
-                .join("\n")
-            : via === "browser"
-              ? // Only the form shows it: GitHub hides comments once posted.
-                `<!-- Drag the ${shots === 1 ? "screenshot" : `${shots} screenshots`} from the folder Relay opened into this box. -->`
-              : `_${shots === 1 ? "A screenshot follows" : `${shots} screenshots follow`} in a comment: GitHub's API takes text only._`,
+          via === "browser"
+            ? // Only the form shows it: GitHub hides comments once posted.
+              `<!-- Drag the ${byHand(shots, files)} from the window Relay opened into this box. -->`
+            : [
+                ...(via === "gh"
+                  ? draft.screenshots.map(
+                      (_, i) => `![Screenshot ${i + 1}](./${screenshotFile(i)})`,
+                    )
+                  : []),
+                ...(via === "api" && shots
+                  ? [
+                      `_${shots === 1 ? "A screenshot follows" : `${shots} screenshots follow`} in a comment: GitHub's API takes text only._`,
+                    ]
+                  : []),
+                ...(files.length
+                  ? [
+                      `_${files.map((f) => `\`${f}\``).join(" and ")} ${files.length === 1 ? "follows" : "follow"} in a comment: GitHub takes files only dragged into its page._`,
+                    ]
+                  : []),
+              ].join("\n\n"),
           "",
         ]
       : []),

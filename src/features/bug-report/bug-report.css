@@ -358,3 +358,30 @@
 .report-banner.warn {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
+
+/* Record performance, under the screenshots. */
+.report-recording {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.report-recording-kept {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.report-recording select {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+.report-perf-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12.5px;
+}

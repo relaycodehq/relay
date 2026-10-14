@@ -51,6 +51,10 @@ export interface BugReportDraft {
   /** Facts the user took out of the report, by id. */
   removedFacts: string[];
   screenshots: BugReportScreenshot[];
+  /** A recording of Relay's performance, zipped beside the draft. */
+  recording?: BugReportRecording;
+  /** Also attach the whole day of the performance log as a file. */
+  attachPerfLog?: boolean;
   submission?: BugReportSubmission;
   /** The last send that failed in a way that surely posted nothing. */
   error?: string;
@@ -58,6 +62,12 @@ export interface BugReportDraft {
 }
 
 export type BugReportKind = "bug" | "feature";
+
+export interface BugReportRecording {
+  at: number;
+  seconds: number;
+  bytes: number;
+}
 
 export interface BugReportWriter {
   provider: AgentProvider;
@@ -67,12 +77,12 @@ export interface BugReportWriter {
 export type BugReportFields = Pick<
   BugReportDraft,
   "kind" | "title" | "description" | "includeLog" | "removedFacts"
-> & { writer?: BugReportWriter };
+> & { writer?: BugReportWriter; attachPerfLog?: boolean };
 
 export interface BugReportFact {
   id: string;
   /** The "Include …" box it's under. */
-  group: "system" | "agents";
+  group: "system" | "agents" | "performance";
   label: string;
   value: string;
 }
@@ -109,6 +119,10 @@ export interface BugReportPreview {
    * "browser": no `gh` login, so Send opens GitHub's own form with it.
    */
   via: "gh" | "api" | "browser";
+  /** A performance recording under way, while Relay records. */
+  recordingNow?: { startedAt: number; endsAt: number };
+  /** The files that go in by hand, by dragging them from Relay's tray. */
+  dragFiles: string[];
   /** Matches the payload a send would post; a send with another one is refused. */
   digest: string;
 }
@@ -118,4 +132,13 @@ export interface BugReportSent {
   preview: BugReportPreview;
   /** Opened GitHub's form: with the report in the link, or on the clipboard. */
   opened?: "prefilled" | "clipboard";
+}
+
+/** A file in the tray Relay floats over GitHub's page, to drag in. */
+export interface DragTrayFile {
+  id: string;
+  name: string;
+  bytes: number;
+  /** A data URL: the screenshot itself, or the system's icon for the file. */
+  thumb: string;
 }

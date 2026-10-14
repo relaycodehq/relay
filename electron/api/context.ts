@@ -34,6 +34,7 @@ import type { ProjectAdding } from "../project-add";
 import type { Devices } from "../devices";
 import type { ThreadPreviews } from "../preview";
 import type { Drafts } from "../drafts";
+import type { DragTray } from "../bug-report/drag-tray";
 import type { BugReports } from "../bug-report/service";
 
 export interface Services {
@@ -71,6 +72,8 @@ export interface Services {
   devices?: Devices;
   /** The problem report; absent when Relay runs headless. */
   bugReports?: BugReports;
+  /** The report's files floated over GitHub to drag in; absent headless. */
+  dragTray?: DragTray;
 }
 
 /** What a method's promise resolves to in the page. */
