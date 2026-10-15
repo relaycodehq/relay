@@ -105,3 +105,50 @@ it("plans nothing after a compaction, or once the Mac slept past the cache", asy
   await vi.advanceTimersByTimeAsync(25 * MINUTE);
   expect(compact).not.toHaveBeenCalled();
 });
+
+it("waits out a usage limit instead of compacting into it", async () => {
+  chat = answered(56 * MINUTE, {
+    limitResume: { messageId: "a", provider: "codex", at: Date.now() + 1 },
+  } as Partial<ProjectChat>);
+  const { idle, compact } = planner();
+  await idle.arm("chat");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(compact).not.toHaveBeenCalled();
+});
+
+it("keeps one plan when arms overlap, and none once stopped", async () => {
+  chat = answered(56 * MINUTE);
+  const { idle, compact } = planner();
+  // Only arm()'s loads wait; the compaction's own load goes straight through.
+  const loads: (() => void)[] = [];
+  const core = (idle as unknown as { core: ChatCore }).core;
+  const gated = () => {
+    let release!: () => void;
+    const loaded = new Promise<void>((resolve) => (release = resolve));
+    loads.push(release);
+    core.storage.load = async () => {
+      core.storage.load = async () => chat;
+      await loaded;
+      return chat;
+    };
+  };
+  gated();
+  const first = idle.arm("chat");
+  gated();
+  const second = idle.arm("chat");
+  // The older load finishes last.
+  loads[1]!();
+  loads[0]!();
+  await Promise.all([first, second]);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(compact).toHaveBeenCalledTimes(1);
+
+  compact.mockClear();
+  gated();
+  const late = idle.arm("chat");
+  idle.stop();
+  loads.at(-1)!();
+  await late;
+  await vi.advanceTimersByTimeAsync(60 * MINUTE);
+  expect(compact).not.toHaveBeenCalled();
+});

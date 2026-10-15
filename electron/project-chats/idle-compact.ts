@@ -37,6 +37,9 @@ function comingBack(c: ChatSummary) {
  */
 export class IdleCompactions {
   private timers = new Map<string, NodeJS.Timeout>();
+  /** The newest arm() per thread: an older one's load can finish after it. */
+  private arming = new Map<string, symbol>();
+  private stopped = false;
   constructor(
     private core: ChatCore,
     private host: IdleCompactHost,
@@ -44,12 +47,15 @@ export class IdleCompactions {
 
   /** After launch: threads whose cache may still be warm. */
   armAll() {
+    this.stopped = false;
     const since = Date.now() - LOOK_BACK;
     for (const c of this.core.store.get().chats ?? [])
       if (c.updated >= since) void this.arm(c.id);
   }
 
   stop() {
+    this.stopped = true;
+    this.arming.clear();
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
   }
@@ -58,13 +64,13 @@ export class IdleCompactions {
   async arm(id: string) {
     clearTimeout(this.timers.get(id));
     this.timers.delete(id);
-    if (this.core.closing()) return;
-    let chat;
-    try {
-      chat = await this.core.storage.load(id);
-    } catch {
-      return;
-    }
+    if (this.stopped || this.core.closing()) return;
+    const mine = Symbol();
+    this.arming.set(id, mine);
+    const chat = await this.core.storage.load(id).catch(() => undefined);
+    if (this.arming.get(id) !== mine) return;
+    this.arming.delete(id);
+    if (!chat || this.stopped) return;
     const at = idleCompactAt(main(chat), Date.now());
     if (at === undefined) return;
     this.timers.set(
@@ -105,6 +111,8 @@ export class IdleCompactions {
         listed.waiting ||
         listed.asking ||
         listed.pending?.length ||
+        // Its account is still out of usage until the limit lifts.
+        listed.limitResume ||
         chatSettled(listed) ||
         !comingBack(listed) ||
         !agentSession(chat, provider).thread
