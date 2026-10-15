@@ -69,6 +69,9 @@ class TurnWordsTest {
         assertEquals("sed", programName("/bin/zsh -lc 'sed -n 1,80p electron/main.ts'"))
         assertEquals("git", programName("bash -c \"cd app && git status\""))
         assertNull(programName("cd /repo"))
+        assertEquals("wc", programName("cd /repo && for f in a b; do wc -l \$f; done"))
+        assertEquals("cat", programName("if [ -f x ]; then cat x; fi"))
+        assertEquals("read", programName("while read line; do echo \$line; done < f"))
     }
 
     @Test fun readsQuestionAnswersFromClaudesResult() {

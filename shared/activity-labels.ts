@@ -115,7 +115,28 @@ const commandSetup = new Set([
   "source",
   ".",
   "true",
+  "[",
+  "[[",
+  "test",
+  "done",
+  "fi",
+  "esac",
+  "}",
 ]);
+// Shell grammar around the commands: `if` and `do` lead into one, while the
+// headers of `for f in …` or `case $x in` run nothing themselves.
+const shellLeads = new Set([
+  "if",
+  "elif",
+  "while",
+  "until",
+  "then",
+  "do",
+  "else",
+  "!",
+  "{",
+]);
+const shellHeaders = new Set(["for", "case", "select", "function"]);
 
 /** The program a command line is about: "cd app && npx vitest run" is
  *  vitest, and Codex's "/bin/zsh -lc 'rg foo'" is rg. */
@@ -128,11 +149,13 @@ export function programName(command: string): string | undefined {
     const words = segment.trim().split(/\s+/);
     while (
       words[0] &&
-      (commandWrappers.has(words[0]) || /^\w+=/.test(words[0]))
+      (commandWrappers.has(words[0]) ||
+        shellLeads.has(words[0]) ||
+        /^\w+=/.test(words[0]))
     )
       words.shift();
     const word = words[0]?.replace(/^["'(]+|["')]+$/g, "");
-    if (!word || commandSetup.has(word)) continue;
+    if (!word || commandSetup.has(word) || shellHeaders.has(word)) continue;
     return word.split("/").at(-1) || word;
   }
 }

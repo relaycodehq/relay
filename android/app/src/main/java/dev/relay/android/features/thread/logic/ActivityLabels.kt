@@ -130,7 +130,14 @@ fun summarizeActivity(activity: List<AgentActivity>, dropped: Map<String, Int>? 
 private fun baseName(path: String) = path.split("/").lastOrNull { it.isNotEmpty() } ?: path
 
 private val commandWrappers = setOf("sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx")
-private val commandSetup = setOf("cd", "pushd", "popd", "export", "unset", "set", "source", ".", "true")
+private val commandSetup = setOf(
+    "cd", "pushd", "popd", "export", "unset", "set", "source", ".", "true",
+    "[", "[[", "test", "done", "fi", "esac", "}",
+)
+// Shell grammar around the commands: `if` and `do` lead into one, while the
+// headers of `for f in …` or `case $x in` run nothing themselves.
+private val shellLeads = setOf("if", "elif", "while", "until", "then", "do", "else", "!", "{")
+private val shellHeaders = setOf("for", "case", "select", "function")
 private val SHELL = Regex("^\\s*(?:\\S*/)?(?:ba|z|fi)?sh\\s+-\\w*c\\s+(['\"])([\\s\\S]*)\\1\\s*$")
 private val SEGMENTS = Regex("&&|\\|\\||[;|\\n]")
 private val ASSIGN = Regex("^\\w+=")
@@ -141,9 +148,9 @@ fun programName(command: String): String? {
     SHELL.find(command)?.let { return programName(it.groupValues[2]) }
     for (segment in command.split(SEGMENTS)) {
         val words = segment.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.toMutableList()
-        while (words.isNotEmpty() && (words[0] in commandWrappers || ASSIGN.containsMatchIn(words[0]))) words.removeAt(0)
+        while (words.isNotEmpty() && (words[0] in commandWrappers || words[0] in shellLeads || ASSIGN.containsMatchIn(words[0]))) words.removeAt(0)
         val word = words.firstOrNull()?.replace(QUOTES, "")
-        if (word.isNullOrEmpty() || word in commandSetup) continue
+        if (word.isNullOrEmpty() || word in commandSetup || word in shellHeaders) continue
         return word.split("/").last().ifEmpty { word }
     }
     return null
