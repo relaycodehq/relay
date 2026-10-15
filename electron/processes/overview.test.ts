@@ -89,6 +89,8 @@ describe("buildOverview", () => {
     const [project] = o.projects;
     const [checkout, worktree] = project.folders;
     expect(checkout.path).toBe("/p");
+    expect(checkout.checkout).toBe(true);
+    expect(worktree.checkout).toBeUndefined();
     expect(worktree.thread).toEqual({ id: "c1", title: "Checkout flow" });
     const byTitle = Object.fromEntries(
       [...worktree.entries, ...checkout.entries, ...o.relay.entries].map(

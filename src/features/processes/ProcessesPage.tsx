@@ -217,12 +217,14 @@ export function ProcessesPage({
             <Group key={p.projectId} title={p.name} cost={p}>
               {sorted(p.folders, order)
                 // The checkout leads; worktrees follow by cost.
-                .sort((a, b) => Number(!!a.thread) - Number(!!b.thread))
+                .sort((a, b) => Number(!b.checkout) - Number(!a.checkout))
                 .map((f) => (
                   <tbody key={f.path}>
                     <tr className="pr-folder">
                       <th colSpan={4} title={f.path}>
-                        {f.thread ? (
+                        {f.checkout ? (
+                          "Checkout"
+                        ) : f.thread ? (
                           <>
                             Worktree ·{" "}
                             <ThreadLink
@@ -233,7 +235,7 @@ export function ProcessesPage({
                             />
                           </>
                         ) : (
-                          "Checkout"
+                          "Worktree"
                         )}
                       </th>
                     </tr>

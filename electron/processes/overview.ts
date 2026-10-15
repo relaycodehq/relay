@@ -226,6 +226,7 @@ export function buildOverview(input: OverviewInput): ProcessOverview {
       return [
         {
           path: f.path,
+          ...(f.path === p.root ? { checkout: true as const } : {}),
           ...(thread(f.chatId) ? { thread: thread(f.chatId)! } : {}),
           entries,
           ...addCosts(entries),

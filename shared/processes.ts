@@ -31,7 +31,9 @@ export interface ProcessEntry extends ProcessCost {
 
 export interface ProcessFolder extends ProcessCost {
   path: string;
-  /** The thread whose worktree this is; missing for the project's own checkout. */
+  /** The project's own checkout, rather than a thread's worktree. */
+  checkout?: true;
+  /** The thread whose worktree this is, when it's still listed. */
   thread?: { id: string; title: string };
   entries: ProcessEntry[];
 }
