@@ -164,6 +164,30 @@ export function tankWords(t: RoomTank, now: number) {
   };
 }
 
+/** One click's request: Codex's idempotency key and the reset it asked for. */
+export type RefillAttempt = { key: string; creditId: string | null };
+
+/**
+ * The attempt to send again on the next click: none once Codex gave a clear
+ * answer, the same one when it didn't, because an answer Relay doesn't know
+ * may have spent the reset and only the same key can't spend a second. The
+ * reset asked for stays too: the reading after a spent one lists the next.
+ */
+export function attemptAfter(
+  attempt: RefillAttempt,
+  outcome: CodexResetOutcome,
+): RefillAttempt | null {
+  switch (outcome) {
+    case "reset":
+    case "nothingToReset":
+    case "noCredit":
+    case "alreadyRedeemed":
+      return null;
+    default:
+      return attempt;
+  }
+}
+
 /** What to say when Codex didn't spend the reset; null when it did. */
 export function outcomeWords(outcome: CodexResetOutcome) {
   switch (outcome) {

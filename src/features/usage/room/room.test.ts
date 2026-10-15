@@ -7,6 +7,7 @@ import {
   type SavedResets,
 } from "../../../../shared/provider-usage";
 import {
+  attemptAfter,
   canRefill,
   expiryWords,
   roomAccounts,
@@ -148,4 +149,17 @@ it("says an empty limit is back at its reset, and one with room refills then", (
     end: "back at 17:20",
   });
   expect(tankWords(a!.tanks[1]!, now).end).toBe("refills Sat 14:20");
+});
+
+it("keeps a refill's key and reset until Codex answers clearly, so a retry can't spend two", () => {
+  const sent = { key: "attempt-1", creditId: "r0" };
+  // An answer Relay doesn't know may have spent it: the retry sends the same.
+  expect(attemptAfter(sent, "unknown")).toBe(sent);
+  for (const clear of [
+    "reset",
+    "nothingToReset",
+    "noCredit",
+    "alreadyRedeemed",
+  ] as const)
+    expect(attemptAfter(sent, clear)).toBeNull();
 });

@@ -8,6 +8,7 @@ import { errorMessage } from "../../../lib/error-message";
 import { HarnessMark } from "../usage-charts";
 import { dayLabel } from "../format";
 import {
+  attemptAfter,
   canRefill,
   expiryWords,
   firstToLapse,
@@ -18,6 +19,7 @@ import {
   tankWords,
   windowName,
   windowTitle,
+  type RefillAttempt,
   type RoomAccount,
   type RoomTank,
 } from "./room";
@@ -127,24 +129,28 @@ function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // Kept until Codex gives a clear answer: after an unclear failure, trying
-  // again sends the same attempt, which can't spend a second reset.
-  const [attempt, setAttempt] = useState<string | null>(null);
+  // Kept until Codex gives a clear answer: after a failure or an answer Relay
+  // doesn't know, trying again sends the same attempt, which can't spend a
+  // second reset.
+  const [attempt, setAttempt] = useState<RefillAttempt | null>(null);
   const resets = a.resets!;
   const credit = firstToLapse(resets);
   const stays = resets.count - 1;
   const refill = async () => {
-    const id = attempt ?? crypto.randomUUID();
-    setAttempt(id);
+    const sent = attempt ?? {
+      key: crypto.randomUUID(),
+      creditId: credit?.id ?? null,
+    };
+    setAttempt(sent);
     setBusy(true);
     setNote(null);
     try {
       const { outcome, usage } = await api.redeemCodexReset(
         a.id,
-        credit?.id ?? null,
-        id,
+        sent.creditId,
+        sent.key,
       );
-      setAttempt(null);
+      setAttempt(attemptAfter(sent, outcome));
       room.put(a.provider, a.id, usage);
       const words = outcomeWords(outcome);
       if (words) setNote(words);
