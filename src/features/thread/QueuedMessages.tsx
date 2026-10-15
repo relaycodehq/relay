@@ -31,6 +31,7 @@ import {
 } from "../../lib/send-key";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { Spinner } from "../../ui/ui";
+import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { useDragSort } from "../../lib/useDragSort";
 import "./queued-messages.css";
 
@@ -44,12 +45,16 @@ function QueuedBody({
 }) {
   const code = parseCodeReferences(input.body);
   const pastes = pastedTexts(code.body);
-  const body = replacePastedTexts(code.body, () => "\n\n")
-    .trim()
-    .replace(agentMentionPattern, "");
+  const memes = useSentMemes(
+    replacePastedTexts(code.body, () => "\n\n")
+      .trim()
+      .replace(agentMentionPattern, ""),
+  );
+  const body = memes.rest?.trim() ?? "";
   return (
     <>
-      <p>{folded ? body.replace(/\n\s*\n+/g, "\n") : body}</p>
+      {!!memes.memes.length && <SentMemes memes={memes.memes} />}
+      {body && <p>{folded ? body.replace(/\n\s*\n+/g, "\n") : body}</p>}
       {!!code.refs.length && (
         <small>{code.refs.length} code reference(s)</small>
       )}

@@ -96,6 +96,19 @@
   gap: 7px;
   color: var(--muted);
 }
+/* A queued meme is a reminder of what's going out, not the reply itself. */
+.queued-bubble .sent-meme {
+  max-width: 140px;
+}
+.queued-bubble .sent-meme :is(img, canvas) {
+  max-height: 100px;
+}
+.queued-bubble .sent-meme .meme-caption {
+  font-size: 11px;
+}
+.queued-bubble .sent-memes + p {
+  margin-top: 6px;
+}
 .queued-bubble small {
   margin-right: 10px;
   color: var(--muted);
