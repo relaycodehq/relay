@@ -85,9 +85,23 @@ function searchPaths() {
  * JavaScript entry that `spawnExecutable` runs with Node.
  */
 async function unwrapShim(path: string) {
-  const text = await readFile(path, "utf8").catch(() => "");
-  const target = /"%~?dp0%?\\([^"%]+\.(?:exe|js|cjs|mjs))"/i.exec(text)?.[1];
+  const target = shimTarget(await readFile(path, "utf8").catch(() => ""));
   return target ? join(dirname(path), target) : path;
+}
+
+/**
+ * The file a `.cmd` shim runs, relative to the shim. npm's and npx's own name
+ * it in `NPM_CLI_JS` or `NPX_CLI_JS`; packages' shims quote it on the command
+ * line. Both first check for a `node.exe` beside the shim, which is the
+ * interpreter, never the target.
+ */
+export function shimTarget(text: string) {
+  const npm = /^SET "NP[MX]_CLI_JS=%~dp0\\([^"%]+\.js)"/im.exec(text)?.[1];
+  if (npm) return npm;
+  for (const [, target] of text.matchAll(
+    /"%~?dp0%?\\([^"%]+\.(?:exe|js|cjs|mjs))"/gi,
+  ))
+    if (!/^node\.exe$/i.test(target)) return target;
 }
 
 /** No program by that name is installed or on PATH, as opposed to one that's there but failed. */
@@ -197,7 +211,9 @@ async function locate(name: string) {
     await access(chosen).catch(() => {
       throw new Error(`The ${name} you linked in Settings is gone: ${chosen}`);
     });
-    return chosen;
+    return windows && /\.(?:cmd|bat)$/i.test(chosen)
+      ? unwrapShim(chosen)
+      : chosen;
   }
   const found: string[] = [];
   const search = async () => {

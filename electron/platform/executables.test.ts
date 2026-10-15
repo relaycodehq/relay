@@ -21,6 +21,7 @@ import {
   runExecutable,
   setLinkedAgents,
   setLinkedTools,
+  shimTarget,
 } from "./executables";
 
 const posix = process.platform !== "win32";
@@ -247,4 +248,39 @@ it.skipIf(!posix)("cancels subprocesses spawned by an executable", async () => {
   stop.abort();
   await failed;
   expect(await readFile(done, "utf8")).toBe("stopped");
+});
+
+// Shims as npm 11 and cmd-shim write them, copied from a Windows install.
+describe("reading a Windows .cmd shim", () => {
+  it("takes npm's and npx's CLI script, not the node.exe they check for first", () => {
+    const npm = [
+      'SET "NODE_EXE=%~dp0\\node.exe"',
+      'SET "NPM_PREFIX_JS=%~dp0\\node_modules\\npm\\bin\\npm-prefix.js"',
+      'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+      '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
+    ].join("\r\n");
+    expect(shimTarget(npm)).toBe("node_modules\\npm\\bin\\npm-cli.js");
+    expect(shimTarget(npm.replaceAll("NPM_CLI_JS", "NPX_CLI_JS").replace("npm-cli", "npx-cli")))
+      .toBe("node_modules\\npm\\bin\\npx-cli.js");
+  });
+
+  it("takes a package's script past the node.exe check", () => {
+    const codex = [
+      'IF EXIST "%dp0%\\node.exe" (',
+      '  SET "_prog=%dp0%\\node.exe"',
+      ")",
+      'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
+    ].join("\r\n");
+    expect(shimTarget(codex)).toBe("node_modules\\@openai\\codex\\bin\\codex.js");
+    const corepack = [
+      '@IF EXIST "%~dp0\\node.exe" (',
+      '  "%~dp0\\node.exe"  "%~dp0\\node_modules\\corepack\\dist\\corepack.js" %*',
+      ")",
+    ].join("\r\n");
+    expect(shimTarget(corepack)).toBe("node_modules\\corepack\\dist\\corepack.js");
+  });
+
+  it("finds nothing in a script that names no target", () => {
+    expect(shimTarget('@echo off\r\n"%~dp0\\node.exe" %*')).toBeUndefined();
+  });
 });
