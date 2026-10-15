@@ -103,8 +103,12 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
             backStack.removeAll { it is Route.Pair }
         }
         LaunchedEffect(navigator) { for (route in links) navigator.open(route) }
-        LaunchedEffect(ready, paired, top) {
-            if (ready && !paired && top == Route.Home) navigator.push(Route.Pair())
+        // Decided here, from one composition's reads: inside the effect, `ready` would be read live
+        // while `paired` stayed as composed, and a launch that drew before the saved computer was
+        // read saw it ready and unpaired at once, and opened pairing over a paired phone.
+        val unpaired = ready && !paired && top == Route.Home
+        LaunchedEffect(unpaired) {
+            if (unpaired) navigator.push(Route.Pair())
         }
         // Home and the sidebar carry their own line; Settings and pairing say it themselves.
         val notice: (@Composable () -> Unit)? =
