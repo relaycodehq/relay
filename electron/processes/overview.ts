@@ -293,6 +293,9 @@ function tokenThread(line: string) {
 /** "Checks", "node server.js", "zsh": what a helper is, from its command line. */
 function helperTitle(line: string) {
   if (/[/\\]relay-checks-[^/\\]+[/\\]worker\.mjs\b/.test(line)) return "Checks";
+  // The PowerShell that reads the process table on Windows (platform/processes).
+  if (/\bpowershell(?:\.exe)?"?\s.*-EncodedCommand\b/i.test(line))
+    return "Process monitor";
   const [program, ...args] = tidyCommand(line).split(/\s+/);
   const subject = args.find((a) => !a.startsWith("-"));
   return [program, subject && /[/\\]/.test(subject) ? subject.split(/[/\\]/).pop() : subject]
