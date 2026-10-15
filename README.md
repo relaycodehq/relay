@@ -29,7 +29,6 @@ Relay is an **early preview**. Grab your build from the [latest release](https:/
 | Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` | Cross-built, thinly tested on real distributions. |
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then `python3 install.py` inside it (no sudo) | As Linux. |
 | Android | `Relay-Android.apk`, or **Settings → Phone → Get the app** on the desktop | Companion app; needs a running desktop or headless Relay. |
-| iPhone / iPad | [Build from source](docs/phone.md#try-it-from-source) | Experimental; simulator-tested, no published iOS build yet. |
 
 1. Set up at least one agent under **Settings → AI models → Agents**. Relay can install missing CLIs and uses existing sign-ins for [Claude Code](https://code.claude.com/docs/en/overview), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai) and [Amp](https://ampcode.com). Cursor, Antigravity and ACP registry agents can be installed and signed in there too.
 2. Add a project folder, use **Scratchpad** for work without a project, or run `relay .` in a folder (choose **Relay → Install "relay" Command…** once on macOS or Linux).
@@ -94,7 +93,7 @@ Relay combines thread handoffs between your own computers with deep reviews wher
 
 For remote work, both computers need the repository cloned and added to Relay with a matching Git remote. **Settings → Computers** pairs them. A live handed-off thread's **Files**, **Changes** and diffs still show this computer's checkout. If the other computer goes offline, messages wait for it; **Run here instead** continues with the conversation available here, leaving that computer's later code changes there. Bringing work back normally transfers those changes too.
 
-Phone access starts in **Settings → Phone**. Tailscale is the default; **Local network** is off until you enable it for devices on the same network. The computer must remain running and reachable. Android builds can notify you in the background; iOS background notifications are not implemented. See the [phone guide](docs/phone.md) for setup and platform limits.
+Phone access starts in **Settings → Phone**. Tailscale is the default; **Local network** is off until you enable it for devices on the same network. The computer must remain running and reachable. The Android app can notify you in the background; there is no iPhone app yet. See the [phone guide](docs/phone.md) for setup.
 
 ## Good to know
 
@@ -122,7 +121,7 @@ npm ci
 npm run dev
 ```
 
-You need Node.js 22+ and Git. Packaging the Omarchy bundle also needs Python 3; building the phone app needs its [platform toolchain](docs/phone.md#try-it-from-source).
+You need Node.js 22+ and Git. Packaging the Omarchy bundle also needs Python 3; building the Android app needs JDK 21 and the Android SDK ([phone guide](docs/phone.md#try-it-from-source)).
 
 Run `npm run typecheck` for all TypeScript projects and `npm run test:setup` once before `npm test` to install the isolated language-test toolchain. `npm run test:e2e` drives the real Electron app with hidden windows. `npm run package:mac` (or `win`, `linux`, `omarchy`, `headless`) writes packages into `release/`; cross-platform packaging has additional dependencies described in [development and releases](docs/development.md). An annotated `v<major>.<minor>.<patch>` tag on `main` triggers the Mac mini's release build; pushing to `main` alone ships nothing.
 
@@ -147,7 +146,7 @@ Copy the teaser to `docs/media/relay-teaser.mp4` when the UI changes.
 - **macOS keeps asking for Keychain access:** ad-hoc signed builds can ask again after an update. Denying access can prevent Relay from unlocking saved integration credentials or device pairing secrets.
 - **The update doesn't install on macOS:** move `Relay.app` into **Applications** (or any writable folder) and try again.
 - **Linux won't start:** check that user namespaces are enabled for Chromium's sandbox. Don't disable the sandbox instead.
-- **A phone can't connect:** keep its computer awake and Relay running. Use the same Tailscale network, or enable **Settings → Phone → Local network** and join the same LAN. Check the phone's local-network permission on iOS.
+- **A phone can't connect:** keep its computer awake and Relay running. Use the same Tailscale network, or enable **Settings → Phone → Local network** and join the same LAN.
 - **A thread's selected agent worktree was deleted:** use **Recreate worktree** if its branch still exists, or **Continue in checkout**. Recreating restores committed files from the branch, not lost uncommitted edits.
 - **Corrupt state:** Relay keeps the unreadable file and reports an error rather than overwriting it. Back up the data folder before repairing it.
 

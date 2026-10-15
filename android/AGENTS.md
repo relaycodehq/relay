@@ -1,18 +1,20 @@
 # Relay for Android (native)
 
-A from-scratch Kotlin + Jetpack Compose rewrite of the Expo phone app in
-`../mobile`. Goal: 1:1 feature parity with it, a HextaUI-inspired look that
-differs from the Expo app. It talks to the desktop over the same encrypted
-bridge, so the desktop needs no changes.
+Relay's phone app: Kotlin + Jetpack Compose, rewritten from scratch from the
+Expo app it replaced, with a HextaUI-inspired look. It talks to the desktop
+over the encrypted bridge. The Expo app is gone; `mobile/...` paths in these
+docs and in comments name its files as of commit aa514caa
+(`git show aa514caa:mobile/src/...`).
 
 Specs (read the ones your task touches before writing code):
 - `docs/protocol.md`: byte-exact bridge protocol, every method and event.
-- `docs/parity-checklist.md`: every feature of the Expo app, with source refs.
+- `docs/parity-checklist.md`: every feature of the Expo app, with source refs
+  (the porting list; kept for what the Expo app did).
 - `docs/design-hextaui.md`: design tokens and component look. Screenshots in
   `/tmp/hextaui/*.png`.
 - `docs/stack.md`: library choices and versions.
-When the spec and the TS source disagree, the TS source wins (`../shared`,
-`../mobile/src`, `../electron/remote`).
+When the spec and the desktop's TS disagree, the TS wins (`../shared`,
+`../electron/remote`): the bridge is defined there.
 
 ## Build
 

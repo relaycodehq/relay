@@ -1,4 +1,5 @@
-/* The phone app's screens. Lengths are the app's dp values from mobile/src/ui;
+/* The phone app's screens, as the retired Expo app drew them (see phone.tsx).
+   Lengths are the app's dp values from mobile/src/ui;
    `zoom` brings them down to the drawn device. Colours are the app's built-in
    dark palette (mobile/src/ui/theme.ts). */
 .ph {

@@ -83,7 +83,8 @@ For a new built-in provider:
    `electron/agents/agent-updates.ts`, or SDK setup and `signIn`/`signOut` hooks.
    Describe permission limitations in `shared/agent-modes.ts`.
 3. Add branding in `src/features/agents/ComposerModelPicker.tsx`,
-   `src/features/agents/ProviderLogos.tsx` and `mobile/src/ui/ProviderIcon.tsx`.
+   `src/features/agents/ProviderLogos.tsx` and
+   `android/app/src/main/java/dev/relay/android/ui/ProviderIcon.kt`.
    Check existing catalog/settings paths before adding provider-specific IPC.
 4. For a new worker, declare its bundle in `scripts/electron-bundles.mjs`,
    include it in `scripts/build-headless.mjs`, and check `package.json`'s

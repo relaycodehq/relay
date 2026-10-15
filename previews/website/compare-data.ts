@@ -192,7 +192,7 @@ export const groups: { title: string; rows: Row[] }[] = [
       {
         label: "Phone app",
         cells: {
-          relay: part("Android; iOS built from source"),
+          relay: part("Android only"),
           "t3-code": yes("iOS and Android"),
           conductor: part("iOS, Pro, cloud workspaces only"),
           superset: part("iPhone and iPad, Pro"),
@@ -367,7 +367,7 @@ export const ahead: { title: string; text: string }[] = [
   },
   {
     title: "An iPhone app in the App Store",
-    text: "T3 Code, Orca, Claude, ChatGPT, Cursor and Conductor have one. Relay's iOS app is a build from source for now; Android is ready.",
+    text: "T3 Code, Orca, Claude, ChatGPT, Cursor and Conductor have one. Relay has none yet; Android is ready.",
   },
   {
     title: "Work that starts itself",

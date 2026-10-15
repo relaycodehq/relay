@@ -1,6 +1,7 @@
-// The phone app's screens, redrawn for the web from mobile/src/ui: the same
-// structure, sizes (in dp, scaled by --dp) and wording, and the same shared
-// logic for a turn's heading and a card's state.
+// The phone app's screens, redrawn for the web from the retired Expo app's
+// mobile/src/ui (in git history, gone after aa514caa): the same structure,
+// sizes (in dp, scaled by --dp) and wording, and the same shared logic for a
+// turn's heading and a card's state. The Kotlin app in android/ looks different.
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeft,

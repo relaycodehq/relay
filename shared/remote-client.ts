@@ -1,6 +1,6 @@
 /**
- * The phone's connection to the desktop bridge. No React Native here: the
- * desktop's tests drive this exact client against the real bridge.
+ * A connection to a desktop's bridge, as another computer handing a thread
+ * over makes it. The desktop's tests drive this exact client against the real bridge.
  */
 import type { ChatMessage } from "./projects";
 import { clientHandshake, fromBase64Url, type Channel } from "./remote-crypto";

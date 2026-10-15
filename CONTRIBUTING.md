@@ -34,9 +34,9 @@ those flows. Development runs use local Relay data; see
 [development and releases](docs/development.md) for snapshots and worktree
 switching.
 
-For phone changes, read [mobile/AGENTS.md](mobile/AGENTS.md) and the
-[phone development guide](docs/phone.md). The Expo app has its own dependencies
-and checks in `mobile/package.json`.
+For phone changes, read [android/AGENTS.md](android/AGENTS.md) and the
+[phone development guide](docs/phone.md). The Android app is a Gradle project
+of its own in `android/`.
 
 ## Code layout and conventions
 
