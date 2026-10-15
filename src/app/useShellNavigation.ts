@@ -174,6 +174,12 @@ export function useShellNavigation(
     setDraftScope(next);
   }
   return {
+    /**
+     * Whether it has come back to where it was last time. Until then a page
+     * opened over it, as Settings, closes again as the thread comes back.
+     */
+    restored:
+      !!pinned || (!!projects && (!project || project.id === restoredProject)),
     /** The project last chosen, which `project` falls back from while it's gone. */
     selected,
     setSelected,

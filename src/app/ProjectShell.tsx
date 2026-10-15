@@ -134,7 +134,7 @@ export default function ProjectShell() {
   const showSettings = useStableCallback(settings.show);
   useEffect(() => onOpenSettings(showSettings), [showSettings]);
   const showReport = useStableCallback(() => settings.show("report"));
-  useReportRequests(showReport);
+  useReportRequests(showReport, nav.restored);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   // Scratchpad chats have their own sidebar section and never show as projects.
