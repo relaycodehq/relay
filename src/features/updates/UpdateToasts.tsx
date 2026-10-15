@@ -13,7 +13,7 @@ import {
   useAgentVersions,
 } from "./agent-updates";
 import { useRecent } from "./useRecent";
-import { doneFor, updateItems, type UpdateItem } from "./update-items";
+import { doneFor, shortVersion, updateItems, type UpdateItem } from "./update-items";
 import "./update-toasts.css";
 
 /**
@@ -110,7 +110,7 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
                 <Toast.Title className="update-toast-title" title={item.title}>
                   <span className="update-toast-name">{item.name}</span>
                   <span className={item.failed ? "update-toast-version failed" : "update-toast-version"}>
-                    {item.failed ? "Failed" : item.version}
+                    {item.failed ? "Failed" : item.version && shortVersion(item.version)}
                   </span>
                 </Toast.Title>
                 <UpdateAction item={item} onRun={() => run(item)} />

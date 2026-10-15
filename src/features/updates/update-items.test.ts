@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentVersion } from "../../../shared/agent-updates";
-import { agentItem, doneFor, relayItem, updateItems } from "./update-items";
+import { agentItem, doneFor, relayItem, shortVersion, updateItems } from "./update-items";
 
 const claude = (over: Partial<AgentVersion> = {}): AgentVersion => ({
   provider: "claude",
@@ -68,4 +68,11 @@ it("puts Relay's toast first", () => {
     0,
   );
   expect(items.map((i) => i.id)).toEqual(["relay", "agent:claude"]);
+});
+
+describe("shortVersion", () => {
+  it("drops Amp's git hash but leaves prereleases alone", () => {
+    expect(shortVersion("0.0.1792022479-gc1a2b3d")).toBe("0.0.1792022479");
+    expect(shortVersion("2.4.0-beta.1")).toBe("2.4.0-beta.1");
+  });
 });

@@ -108,13 +108,18 @@
   color: inherit;
 }
 .update-toast-name {
-  min-width: 0;
+  flex: none;
+  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .update-toast-version {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin-left: auto;
   padding-left: 8px;
   font-size: 11px;

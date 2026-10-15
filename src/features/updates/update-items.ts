@@ -35,6 +35,11 @@ export interface UpdateItem {
   title?: string;
 }
 
+/** Drops a git describe suffix (`-g1a2b3c`), which tells nobody anything. */
+export function shortVersion(version: string): string {
+  return version.replace(/-g[0-9a-f]{6,}$/, "");
+}
+
 /** How long an agent's toast shows its check before it goes. */
 export const doneFor = 4000;
 
@@ -165,7 +170,7 @@ export function agentItem(
           phase: "idle",
           label: "Update",
           run: "update-agent",
-          title: `You're on ${agent.current}`,
+          title: `Latest is ${agent.latest}. You're on ${agent.current}`,
         }
       : {
           ...base,
@@ -174,7 +179,7 @@ export function agentItem(
           phase: "idle",
           label: "Details",
           run: "agent-details",
-          title: `You're on ${agent.current}. Relay can't update it; Settings says how.`,
+          title: `Latest is ${agent.latest}. You're on ${agent.current}. Relay can't update it; Settings says how.`,
         };
   return undefined;
 }
