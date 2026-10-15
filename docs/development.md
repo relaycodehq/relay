@@ -32,8 +32,8 @@ Switching and restoring ask Relay to quit over IPC on macOS, Linux and Windows. 
 
 Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
 
-See the [browser preview guide](previews.md) for existing-server discovery,
-isolated pane sessions and named worktree links in external browsers.
+See the [browser preview guide](previews.md) for existing-server discovery
+and isolated pane sessions.
 
 See [adding an agent adapter](agent-adapters.md) for the runtime boundary,
 session lifecycle, integration checklist and previous additions.

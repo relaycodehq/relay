@@ -7,7 +7,6 @@ import type { Projects } from "../projects/projects";
 import { projectTasks } from "../terminal/tasks";
 import { localPort } from "./local-urls";
 import { runningServerPorts } from "./running-server";
-import type { ServerLinks } from "./server-links";
 import type { PreviewTarget } from "./thread-previews";
 
 /** The configured port in this worktree, validated before any socket is opened. */
@@ -80,7 +79,6 @@ export class PreviewProjects {
     projectId: string,
     chatId: string | null,
     url: string | undefined,
-    links: ServerLinks,
     preferredFolder?: string,
   ): Promise<PreviewTarget> {
     const chat = chatId
@@ -173,7 +171,6 @@ export class PreviewProjects {
             },
           }
         : {}),
-      external: (port) => links.route(chat, folder, port),
     };
   }
 }

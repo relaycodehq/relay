@@ -5,7 +5,6 @@ import {
   Bug,
   ExternalLink,
   Globe,
-  LayoutGrid,
   PictureInPicture2,
   RotateCw,
   SquareDashedMousePointer,
@@ -217,13 +216,6 @@ function AddressBar({
         onClick={() => onAct("openExternal")}
       >
         <ExternalLink size={14} />
-      </IconButton>
-      <IconButton
-        label="All previews in browser"
-        disabled={!state}
-        onClick={() => onAct("previewIndex")}
-      >
-        <LayoutGrid size={14} />
       </IconButton>
     </form>
   );

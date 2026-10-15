@@ -94,15 +94,10 @@ export function consoleText(entries: ConsoleEntry[], now: number) {
   );
 }
 
-const describeState = (
-  state: PreviewState,
-  errors: number,
-  browser: { browserUrl?: string; browserUrlError?: string },
-) =>
+const describeState = (state: PreviewState, errors: number) =>
   JSON.stringify(
     {
       url: state.url,
-      ...browser,
       title: state.title,
       server: serverLine(state.server),
       ...(state.error ? { loadError: state.error } : {}),
@@ -157,16 +152,7 @@ export async function answerPreviewTool(
       const errors = (previews.consoleErrors(key) ?? []).filter(
         (e) => e.level === "error" && e.at >= started,
       ).length;
-      const browser: { browserUrl?: string; browserUrlError?: string } = {};
-      if (state.url && !state.error) {
-        try {
-          browser.browserUrl = await previews.browserUrl(key);
-        } catch (error) {
-          browser.browserUrlError =
-            error instanceof Error ? error.message : String(error);
-        }
-      }
-      return toolText(describeState(state, errors, browser), !!state.error);
+      return toolText(describeState(state, errors), !!state.error);
     }
     case "screenshot": {
       if (!previews.current(key)?.url) return toolText(NO_PAGE, true);

@@ -110,7 +110,7 @@ Phone access starts in **Settings → Phone**. Tailscale is the default; **Local
 - [Phone app](docs/phone.md): pairing, what the phone can do, and how the connection is secured.
 - [Headless Relay](docs/headless.md): Relay without its window on a server or a spare computer.
 - [Pull request review](docs/pr-review.md): the review workflow, grouping and live checks.
-- [Browser previews](docs/previews.md): preview sessions, existing dev servers and worktree links.
+- [Browser previews](docs/previews.md): preview sessions and existing dev servers.
 - [Development and releases](docs/development.md): tests, packaging, updates and release status.
 
 ## For contributors

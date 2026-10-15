@@ -4,7 +4,6 @@ import type { ProjectTask } from "../../shared/tasks";
 import { projectTasks } from "../terminal/tasks";
 import { PreviewProjects, worktreeDevPort } from "./projects";
 import * as runningServers from "./running-server";
-import type { ServerLinks } from "./server-links";
 
 vi.mock("../git/git", () => ({
   currentBranchOr: async (folder: string) => folder.split("/").at(-1),
@@ -24,13 +23,6 @@ function setup(
   vi.spyOn(runningServers, "runningServerPorts").mockImplementation(
     async (tasks) => tasks.flatMap((t) => t.ports),
   );
-  const route = vi.fn(async () => ({
-    folder: "/repo",
-    project: "repo",
-    port: 4000,
-    wake: async () => {},
-  }));
-  const links = { route } as unknown as ServerLinks;
   const resolver = new PreviewProjects(
     {
       root: async () => "/repo",
@@ -48,14 +40,14 @@ function setup(
     },
     () => [],
   );
-  return { resolver, links, route, scan, own };
+  return { resolver, scan };
 }
 
 it("gives checkout threads their own storage while retaining the checkout as the cookie seed", async () => {
-  const { resolver, links } = setup({}, { "/repo": [3000] });
-  const a = await resolver.target("project", "one", undefined, links);
-  const b = await resolver.target("project", "two", undefined, links);
-  const draft = await resolver.target("project", null, undefined, links);
+  const { resolver } = setup({}, { "/repo": [3000] });
+  const a = await resolver.target("project", "one", undefined);
+  const b = await resolver.target("project", "two", undefined);
+  const draft = await resolver.target("project", null, undefined);
   expect(a.partition).toBe("persist:thread-one");
   expect(b.partition).toBe("persist:thread-two");
   expect(a.checkoutPartition).toBe(draft.partition);
@@ -63,11 +55,11 @@ it("gives checkout threads their own storage while retaining the checkout as the
 });
 
 it("selects an agent-created worktree ahead of the checkout and ignores neighbours", async () => {
-  const { resolver, links, route, scan, own } = setup(
+  const { resolver, scan } = setup(
     { agentWorktrees: [{ path: "/repo/manual", branch: "manual", at: 1 }] },
     { "/repo": [3000], "/repo/manual": [5173], "/repo/neighbour": [8080] },
   );
-  const target = await resolver.target("project", "one", undefined, links);
+  const target = await resolver.target("project", "one", undefined);
   expect(target).toMatchObject({
     folder: "/repo/manual",
     branch: "manual",
@@ -80,8 +72,6 @@ it("selects an agent-created worktree ahead of the checkout and ignores neighbou
     RELAY_WORKTREE: "/repo/manual",
     RELAY_PROJECT_ROOT: "/repo",
   });
-  await target.external(5173);
-  expect(route).toHaveBeenCalledWith(own, "/repo/manual", 5173);
   expect(scan.mock.calls[0]![1]).toContainEqual({
     path: "/repo/manual",
     chatId: "one",
@@ -89,7 +79,7 @@ it("selects an agent-created worktree ahead of the checkout and ignores neighbou
 });
 
 it("requires an explicit URL between two live agent worktrees and selects its owner", async () => {
-  const { resolver, links } = setup(
+  const { resolver } = setup(
     {
       agentWorktrees: [
         { path: "/repo/a", branch: "a", at: 1 },
@@ -99,23 +89,22 @@ it("requires an explicit URL between two live agent worktrees and selects its ow
     { "/repo/a": [5173], "/repo/b": [8080] },
   );
   await expect(
-    resolver.target("project", "one", undefined, links),
+    resolver.target("project", "one", undefined),
   ).rejects.toThrow("Several");
   expect(
     await resolver.target(
       "project",
       "one",
       "http://localhost:8080/settings",
-      links,
     ),
   ).toMatchObject({ folder: "/repo/b", worktree: "b", dev: { port: 8080 } });
   expect(
-    await resolver.target("project", "one", undefined, links, "/repo/b"),
+    await resolver.target("project", "one", undefined, "/repo/b"),
   ).toMatchObject({ folder: "/repo/b" });
 });
 
 it("retains the managed worktree and its saved port offset", async () => {
-  const { resolver, links } = setup(
+  const { resolver } = setup(
     {
       worktree: {
         path: "/repo/managed",
@@ -125,7 +114,7 @@ it("retains the managed worktree and its saved port offset", async () => {
     { "/repo": [3000], "/repo/managed": [3010] },
   );
   expect(
-    await resolver.target("project", "one", undefined, links),
+    await resolver.target("project", "one", undefined),
   ).toMatchObject({
     folder: "/repo/managed",
     partition: "persist:thread-one",
@@ -134,11 +123,11 @@ it("retains the managed worktree and its saved port offset", async () => {
 });
 
 it("does not load the checkout's configured port when a manual worktree has several services", async () => {
-  const { resolver, links } = setup(
+  const { resolver } = setup(
     { agentWorktrees: [{ path: "/repo/manual", branch: "manual", at: 1 }] },
     { "/repo": [3000], "/repo/manual": [5173, 8080] },
   );
-  const target = await resolver.target("project", "one", undefined, links);
+  const target = await resolver.target("project", "one", undefined);
   expect(target.folder).toBe("/repo/manual");
   expect(target.dev).toBeUndefined();
 });
@@ -157,7 +146,7 @@ it("validates worktree offsets before returning a configured dev target", async 
 });
 
 it("opens an explicit remote page even when local worktree selection is ambiguous", async () => {
-  const { resolver, links } = setup(
+  const { resolver } = setup(
     {
       agentWorktrees: [
         { path: "/repo/a", branch: "a", at: 1 },
@@ -170,14 +159,13 @@ it("opens an explicit remote page even when local worktree selection is ambiguou
     "project",
     "one",
     "https://example.com/",
-    links,
   );
   expect(target.folder).toBe("/repo");
   expect(target.dev).toBeUndefined();
 });
 
 it("rejects an overflowing configured port during target resolution", async () => {
-  const { resolver, links } = setup(
+  const { resolver } = setup(
     {
       worktree: {
         path: "/repo/managed",
@@ -188,6 +176,6 @@ it("rejects an overflowing configured port during target resolution", async () =
     65530,
   );
   await expect(
-    resolver.target("project", "one", undefined, links),
+    resolver.target("project", "one", undefined),
   ).rejects.toThrow("dev port 65530 plus worktree offset 10");
 });

@@ -431,7 +431,7 @@ const descriptions: Record<RelayToolName, string> = {
   list_projects:
     "The projects the user has in Relay: id, name, folder, and whether it's a Git repository; `current` marks the one you work in. Check here before add_project.",
   open_preview:
-    "Open this thread's preview in Relay's side panel, with its own cookies. Use this after starting a dev server to check the page and get its named worktree link. Without a url it discovers a single HTTP server already running in this folder, or starts the saved dev command if needed. Pass a full localhost URL when several servers run. Returns url (the pane's direct address), browserUrl (the named URL to share in user-facing links), title, server state and console error count. Use browserUrl for the user's page link; if unavailable, browserUrlError explains why and the in-app preview still works.",
+    "Open this thread's preview in Relay's side panel, with its own cookies. Use this after starting a dev server to check the page. Without a url it discovers a single HTTP server already running in this folder, or starts the saved dev command if needed. Pass a full localhost URL when several servers run. Returns url (the page's address, also the link to give the user), title, server state and console error count.",
   screenshot:
     "A picture of this thread's preview as the page looks now, also while the user isn't looking at it. Call open_preview first. Use it to check a change you made to a page. It also returns the file it saved the picture to, for showing it in your answer.",
   console_errors:

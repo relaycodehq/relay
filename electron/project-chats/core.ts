@@ -6,7 +6,6 @@ import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";
 import type { ChatStorage } from "./storage";
 import type { WatchSpendLog } from "./watch-spend";
-import type { ProjectChat } from "../../shared/projects";
 import type { HandoffLive } from "../../shared/handoff";
 
 /** A live handoff's state as the other computer last said it, its running turn's start on this clock. */
@@ -29,8 +28,4 @@ export interface ChatCore {
   away?: Map<string, AwayLive>;
   /** What "Flag what I'd miss" spent; absent in tests. */
   watchSpend?: WatchSpendLog;
-  previewLinks?: {
-    note(chat: ProjectChat): Promise<string | undefined>;
-    answer(chat: ProjectChat, body: string): Promise<string>;
-  };
 }

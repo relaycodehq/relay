@@ -108,12 +108,6 @@ function target(chatId: string | null, port = 3000): PreviewTarget {
     checkoutPartition: "checkout",
     env: {},
     dev: { port },
-    external: async (port) => ({
-      folder: "/repo",
-      project: "repo",
-      port,
-      wake: async () => {},
-    }),
   };
 }
 function setup(

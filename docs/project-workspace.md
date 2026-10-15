@@ -53,7 +53,7 @@ These operations do change Git state. Agents can also run Git within their permi
 
 **Files** provides a file tree, file-name search, an inline editor, Markdown previews and comparison with HEAD. Clean buffers update when files change on disk; unsaved buffers are protected from silent overwrites. Supported TypeScript/JavaScript and Angular projects get diagnostics, definitions and usages from their language services. Install the project's dependencies first. This is not a full IDE; semantic rename and debugging are not implemented.
 
-Each thread has a terminal. **Tasks** lists background processes and offers stop and restart controls. **Browser** opens a live app preview with a separate session for each thread; see [browser previews](previews.md) for server discovery and named worktree links. **Device** downloads and embeds Expo Device Hub to interact with local Android emulators or iOS simulators; those need the Android SDK or Xcode respectively.
+Each thread has a terminal. **Tasks** lists background processes and offers stop and restart controls. **Browser** opens a live app preview with a separate session for each thread; see [browser previews](previews.md) for server discovery and sessions. **Device** downloads and embeds Expo Device Hub to interact with local Android emulators or iOS simulators; those need the Android SDK or Xcode respectively.
 
 Agents can show self-contained interactive pages, charts and choices inline, as well as images, code, math and diagrams. Scripted pages are checked for errors before display; they run in a restricted frame, separate from the app's own UI.
 

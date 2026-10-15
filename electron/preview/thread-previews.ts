@@ -19,7 +19,7 @@ import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
 import { pickElement } from "./element-pick";
-import { LocalUrls, localPort, type LocalPreview } from "./local-urls";
+import { localPort } from "./local-urls";
 
 /** Where a thread's preview runs and what it loads. */
 export interface PreviewTarget {
@@ -39,8 +39,6 @@ export interface PreviewTarget {
   env: Record<string, string>;
   /** The project's dev command and port, the port already moved by the worktree's offset. */
   dev?: { command?: string; port: number };
-  /** Shares routing with automatically named agent answers. */
-  external: (port: number) => Promise<LocalPreview>;
 }
 
 interface Preview {
@@ -105,16 +103,10 @@ function prepare(ses: Session) {
  */
 export class ThreadPreviews {
   private previews = new Map<string, Preview>();
-  private thumbnails = new Map<string, Buffer>();
   private opening = new Map<
     string,
     { result: Promise<PreviewState>; controller: AbortController }
   >();
-  readonly external = new LocalUrls(
-    process.env.RELAY_TEST_DATA
-      ? Number(process.env.RELAY_TEST_PREVIEW_PROXY_PORT || 0)
-      : undefined,
-  );
   readonly servers = new DevServers((folder, state) => {
     for (const preview of this.previews.values())
       if (
@@ -206,28 +198,8 @@ export class ThreadPreviews {
     if (url && webUrl(url)) preview.selectedUrl = url;
     this.revive(preview);
     this.wake(preview);
-    if (!url) await this.registerExternal(preview);
     signal.throwIfAborted();
     return this.state(preview);
-  }
-
-  private async externalTarget(preview: Preview, port: number) {
-    const route = await preview.target.external(port);
-    route.screenshot = () => this.thumbnails.get(route.folder);
-    route.active = () =>
-      [...this.previews.values()].some((p) => p.target.folder === route.folder);
-    return route;
-  }
-
-  /** Register in memory; a direct in-app preview never needs a proxy listener. */
-  private async registerExternal(preview: Preview) {
-    const port = localPort(this.page(preview).url) ?? preview.target.dev?.port;
-    if (!port) return;
-    try {
-      this.external.register(await this.externalTarget(preview, port));
-    } catch {
-      /* A conflicting proxy port must not prevent the pane loading. */
-    }
   }
 
   /** Starts the dev server if it isn't up, and loads its page once it is. */
@@ -488,11 +460,6 @@ export class ThreadPreviews {
       if (call !== preview.placed) return;
       if (frame && !frame.isEmpty())
         preview.snapshot = `data:image/jpeg;base64,${frame.toJPEG(70).toString("base64")}`;
-      if (frame && !frame.isEmpty())
-        this.thumbnails.set(
-          preview.target.folder,
-          frame.resize({ width: 640 }).toJPEG(70),
-        );
     }
     this.hide(preview);
     this.emit(preview);
@@ -524,15 +491,12 @@ export class ThreadPreviews {
     await this.revive(preview)
       .loadURL(url)
       .catch(() => {});
-    await this.registerExternal(preview);
   }
 
   act(key: string, action: PreviewAction) {
     const preview = this.previews.get(key);
     if (!preview) return;
     if (action === "openExternal") return this.openExternal(preview);
-    if (action === "previewIndex")
-      return this.external.indexUrl().then((url) => shell.openExternal(url));
     const wc = this.revive(preview);
     const history = wc.navigationHistory;
     switch (action) {
@@ -568,30 +532,9 @@ export class ThreadPreviews {
     }
   }
 
-  /** A named browser link to the page's actual port, including manually started servers. */
-  async browserUrl(key: string): Promise<string | undefined> {
-    const preview = this.previews.get(key);
-    if (!preview) return;
-    const page = this.page(preview).url;
-    if (!page || !webUrl(page)) return;
-    const port = localPort(page);
-    if (!port) return page;
-    const named = new URL(
-      await this.external.url(await this.externalTarget(preview, port)),
-    );
-    const original = new URL(page);
-    named.pathname = original.pathname;
-    named.search = original.search;
-    named.hash = original.hash;
-    return named.href;
-  }
-
   private async openExternal(preview: Preview) {
-    const url = await this.browserUrl(preview.target.key);
-    if (!url) return;
-    if (preview.shown && localPort(this.page(preview).url))
-      await this.capture(preview.target.key).catch(() => {});
-    await shell.openExternal(url);
+    const url = this.page(preview).url;
+    if (url && webUrl(url)) await shell.openExternal(url);
   }
 
   private popOut(preview: Preview) {
@@ -703,13 +646,7 @@ export class ThreadPreviews {
     // Chromium has no frame for a view just taken off a window at first.
     for (let attempt = 1; ; attempt++) {
       const image = await wc.capturePage().catch(() => null);
-      if (image && !image.isEmpty()) {
-        this.thumbnails.set(
-          preview.target.folder,
-          image.resize({ width: 640 }).toJPEG(70),
-        );
-        return image;
-      }
+      if (image && !image.isEmpty()) return image;
       if (attempt === 10) throw new Error("The preview could not be drawn.");
       if (attempt === 4 && !preview.shown && !preview.popOut)
         await this.prime(preview);
@@ -773,8 +710,6 @@ export class ThreadPreviews {
     ]))
       this.close(key);
     this.servers.dispose();
-    this.external.dispose();
-    this.thumbnails.clear();
   }
 
   /** Where the page is, live or parked. */

@@ -64,7 +64,6 @@
     "diff": "9.0.0",
     "dompurify": "3.4.16",
     "fflate": "0.8.3",
-    "httpxy": "0.5.5",
     "jsonc-parser": "3.3.1",
     "katex": "0.19.0",
     "lucide-react": "1.47.0",

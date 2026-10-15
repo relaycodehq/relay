@@ -102,12 +102,7 @@ import { TerminalSessions } from "./terminal-sessions";
 import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
-import {
-  ThreadPreviews,
-  PreviewProjects,
-  ServerLinks,
-  worktreeDevPort,
-} from "./preview";
+import { ThreadPreviews, PreviewProjects } from "./preview";
 import { Devices } from "./devices";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
@@ -485,20 +480,8 @@ app
       (url, init) => net.fetch(url, init),
     );
     previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
-      previewProjects.target(projectId, chatId, url, serverLinks, folder),
+      previewProjects.target(projectId, chatId, url, folder),
     );
-    const serverLinks = new ServerLinks(
-      previews.external,
-      (chat) => previewProjects.folders(chat),
-      async (chat, folder, port) => {
-        const settings = projects.get(chat.projectId).settings;
-        if (!settings?.devCommand || !settings.devPort) return;
-        const env = await previewProjects.env(chat, folder);
-        if (port !== worktreeDevPort(settings.devPort, env)) return;
-        return previews?.servers.ensure(folder, settings.devCommand, port, env);
-      },
-    );
-    chats.setPreviewLinks(serverLinks);
     const draftStore = new DraftStore(
       join(app.getPath("userData"), "drafts.json"),
     );

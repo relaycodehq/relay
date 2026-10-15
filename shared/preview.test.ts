@@ -6,8 +6,8 @@ describe("previewUrl", () => {
     expect(previewUrl("localhost:5173")).toBe("http://localhost:5173/");
     expect(previewUrl(":3000/login")).toBe("http://localhost:3000/login");
     expect(previewUrl("127.0.0.1:8080")).toBe("http://127.0.0.1:8080/");
-    expect(previewUrl("fix-login.relay.localhost:7352")).toBe(
-      "http://fix-login.relay.localhost:7352/",
+    expect(previewUrl("fix-login.localhost:7352")).toBe(
+      "http://fix-login.localhost:7352/",
     );
     expect(previewUrl("mac-mini:7352")).toBe("http://mac-mini:7352/");
     expect(previewUrl("nas.lan:3000")).toBe("http://nas.lan:3000/");

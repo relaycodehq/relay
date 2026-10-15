@@ -30,9 +30,7 @@ async function stop(child: { pid: number }) {
     if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
   }
 }
-test("discovers manual servers and keeps issued named links bound to their original ports", async ({
-  browser,
-}) => {
+test("discovers manual servers and opens them at their own localhost address", async () => {
   test.setTimeout(90_000);
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-manual-preview-")),
@@ -102,7 +100,7 @@ test("discovers manual servers and keeps issued named links bound to their origi
     return { pid };
   };
   const firstPort = await port();
-  let server = await launch(firstPort);
+  const server = await launch(firstPort);
   let worktreeServer: { pid: number } | undefined;
   const extraServers: { pid: number }[] = [];
   const env = Object.fromEntries(
@@ -123,7 +121,6 @@ test("discovers manual servers and keeps issued named links bound to their origi
       RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
-  const external = await browser.newPage();
   try {
     const page = await app.firstWindow();
     await app.evaluate(({ dialog, shell }, repo) => {
@@ -137,9 +134,13 @@ test("discovers manual servers and keeps issued named links bound to their origi
         ).externalUrl = url;
       };
     }, repo);
+    const externalUrl = () =>
+      app.evaluate(
+        () =>
+          (globalThis as typeof globalThis & { externalUrl?: string })
+            .externalUrl ?? "",
+      );
     const project = await page.evaluate(() => window.relay.addProject());
-    // A normal chat answer names the server without opening a Browser surface
-    // or calling an MCP preview tool. This is the shell-only workflow.
     await expect
       .poll(
         () =>
@@ -151,47 +152,6 @@ test("discovers manual servers and keeps issued named links bound to their origi
         { timeout: 20_000 },
       )
       .toContain(firstPort);
-    const ordinary = await page.evaluate(
-      (id) => window.relay.createProjectChat(id, { kind: "project" }),
-      project!.id,
-    );
-    await page.evaluate(
-      ({ id, port }) =>
-        window.relay.sendProjectChat(id, {
-          id: crypto.randomUUID(),
-          body: `@codex fixture echo: [How-it-works page](http://127.0.0.1:${port}/how-it-works?q=1#details)`,
-          provider: "codex",
-          choice: { model: "", fast: false, reasoningEffort: "" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-        }),
-      { id: ordinary.id, port: firstPort },
-    );
-    const answer = () =>
-      page.evaluate(async (id) => {
-        const chat = await window.relay.projectChat(id);
-        return chat.messages
-          .filter((m): m is Exclude<typeof m, string> => typeof m !== "string")
-          .filter((m) => m.role === "assistant")
-          .at(-1);
-      }, ordinary.id);
-    await expect
-      .poll(async () => (await answer())?.status, { timeout: 30_000 })
-      .toBe("complete");
-    const automatic = (await answer())!.body.match(/\]\((http:[^)]+)\)/)![1]!;
-    expect(automatic).toMatch(/\.autago\.relay\.localhost:/);
-    expect(new URL(automatic).pathname).toBe("/how-it-works");
-    await external.goto(automatic);
-    await expect(external.getByRole("heading")).toHaveText(`Port ${firstPort}`);
-    expect(
-      await app.evaluate(
-        ({ webContents }, port) =>
-          webContents
-            .getAllWebContents()
-            .filter((wc) => wc.getURL().includes(`:${port}/`)).length,
-        firstPort,
-      ),
-    ).toBe(0);
     // No saved command or dev port. The process scanner supplies the current HTTP port.
     await expect
       .poll(
@@ -209,69 +169,27 @@ test("discovers manual servers and keeps issued named links bound to their origi
     await page.reload();
     await openSurface(page, "Browser");
     const panel = page.locator('[data-pane="panel"]');
+    await page.evaluate(
+      ({ projectId, port }) =>
+        window.relay.navigatePreview(
+          projectId,
+          null,
+          `http://localhost:${port}/how-it-works?q=1`,
+        ),
+      { projectId: project!.id, port: firstPort },
+    );
     await panel
       .getByRole("button", { name: "Open in browser", exact: true })
       .click();
     await expect
-      .poll(() =>
-        app.evaluate(
-          () =>
-            (globalThis as typeof globalThis & { externalUrl?: string })
-              .externalUrl ?? "",
-        ),
-      )
-      .toMatch(/^http:/);
-    const named = await app.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { externalUrl?: string })
-          .externalUrl!,
-    );
-    await external.goto(named + "how-it-works?q=1");
-    await expect(external.getByRole("heading")).toHaveText(`Port ${firstPort}`);
-    await expect(external.locator("p")).toHaveText("/how-it-works?q=1");
-    await stop(server);
-    const nextPort = await port();
-    server = await launch(nextPort);
-    // Discovering a replacement must not reassign the original named link.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            async (id) =>
-              (await window.relay.projectTasks(id)).flatMap(
-                (task) => task.ports,
-              ),
-            project!.id,
-          ),
-        { timeout: 15_000 },
-      )
-      .toContain(nextPort);
-    expect((await external.reload())?.status()).toBe(502);
-    expect(external.url()).toBe(named + "how-it-works?q=1");
-    await page.evaluate(
-      async ({ projectId, port }) => {
-        const key = `draft:${projectId}`;
-        await window.relay.navigatePreview(
-          projectId,
-          null,
-          `http://localhost:${port}/`,
-        );
-        await window.relay.previewAction(key, "openExternal");
-      },
-      { projectId: project!.id, port: nextPort },
-    );
-    const replacement = await app.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { externalUrl?: string })
-          .externalUrl!,
-    );
-    expect(replacement).not.toBe(named);
-    await external.goto(replacement + "how-it-works?q=1");
-    await expect(external.getByRole("heading")).toHaveText(`Port ${nextPort}`);
-    await expect(external.locator("p")).toHaveText("/how-it-works?q=1");
-    expect((await external.goto(named))?.status()).toBe(502);
+      .poll(externalUrl)
+      .toBe(`http://localhost:${firstPort}/how-it-works?q=1`);
 
     // Checkout chats seed their cookies from the checkout, then remain isolated.
+    const ordinary = await page.evaluate(
+      (id) => window.relay.createProjectChat(id, { kind: "project" }),
+      project!.id,
+    );
     await app.evaluate(
       async ({ session }, { projectId, port }) => {
         await session
@@ -282,7 +200,7 @@ test("discovers manual servers and keeps issued named links bound to their origi
             value: "checkout",
           });
       },
-      { projectId: project!.id, port: nextPort },
+      { projectId: project!.id, port: firstPort },
     );
     await page.evaluate(
       ({ projectId, chatId }) => window.relay.openPreview(projectId, chatId),
@@ -307,7 +225,7 @@ test("discovers manual servers and keeps issued named links bound to their origi
           value: "first-thread",
         });
       },
-      { id: ordinary.id, port: nextPort },
+      { id: ordinary.id, port: firstPort },
     );
     const second = await page.evaluate(
       (id) => window.relay.createProjectChat(id, { kind: "project" }),
@@ -322,7 +240,7 @@ test("discovers manual servers and keeps issued named links bound to their origi
     expect(await cookie(`persist:project-${project!.id}`)).toBe("checkout");
 
     // Let the fake agent create a real worktree: the normal activity watcher
-    // must credit it before both the Browser and answer links can use it.
+    // must credit it before the Browser can use its server.
     const manualFolder = join(root, "manual-worktree");
     await page.evaluate(
       ({ id, folder }) =>
@@ -353,8 +271,7 @@ test("discovers manual servers and keeps issued named links bound to their origi
       )
       .toBe(true);
     const manualPort = await port();
-    const manualServer = await launch(manualPort, manualFolder);
-    extraServers.push(manualServer);
+    extraServers.push(await launch(manualPort, manualFolder));
     await expect
       .poll(
         () =>
@@ -370,53 +287,6 @@ test("discovers manual servers and keeps issued named links bound to their origi
         worktree: "manual-preview",
       });
 
-    const namedPage = async (p: number) => {
-      await page.evaluate(
-        async ({ projectId, id, port }) => {
-          await window.relay.navigatePreview(
-            projectId,
-            id,
-            `http://localhost:${port}/how-it-works`,
-          );
-          await window.relay.previewAction(id, "openExternal");
-        },
-        { projectId: project!.id, id: ordinary.id, port: p },
-      );
-      return app.evaluate(
-        () =>
-          (globalThis as typeof globalThis & { externalUrl?: string })
-            .externalUrl!,
-      );
-    };
-    // Issue A while it is the only server, then add B in the same worktree.
-    const manualA = await namedPage(manualPort);
-    const anotherPort = await port();
-    extraServers.push(await launch(anotherPort, manualFolder));
-    expect(await namedPage(manualPort)).toBe(manualA);
-    const manualB = await namedPage(anotherPort);
-    expect(new URL(manualA).hostname).not.toBe(new URL(manualB).hostname);
-    await external.goto(manualB);
-    await expect(external.getByRole("heading")).toHaveText(
-      `Port ${anotherPort}`,
-    );
-    await external.goto(manualA);
-    await expect(external.getByRole("heading")).toHaveText(
-      `Port ${manualPort}`,
-    );
-    expect(manualA).toMatch(/^http:\/\/manual-preview-/);
-    expect(manualB).toContain(`p-${anotherPort}.manual-preview-`);
-    // Losing A cannot turn its existing link into a link to the surviving B.
-    await stop(manualServer);
-    expect((await external.goto(manualA))?.status()).toBe(502);
-    await expect(external.locator("body")).toContainText(
-      `isn't answering on port ${manualPort}`,
-    );
-    await external.goto(manualB);
-    await expect(external.getByRole("heading")).toHaveText(
-      `Port ${anotherPort}`,
-    );
-    expect(await namedPage(anotherPort)).toBe(manualB);
-    expect((await external.goto(manualA))?.status()).toBe(502);
     // A simultaneous worktree server must not be mistaken for the checkout's.
     const chat = await page.evaluate(
       (id) =>
@@ -481,53 +351,11 @@ test("discovers manual servers and keeps issued named links bound to their origi
       (key) => window.relay.previewAction(key, "openExternal"),
       chat.id,
     );
-    const worktreeUrl = await app.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { externalUrl?: string })
-          .externalUrl!,
-    );
-    expect(worktreeUrl).toMatch(
-      /^http:\/\/feat-how-it-works-[a-f0-9]{8}\.autago\.relay\.localhost:/,
-    );
-    await external.goto(worktreeUrl);
-    await expect(external).toHaveTitle("[feat/how-it-works] Manual fixture");
-    await expect(external.getByRole("heading")).toHaveText(
-      `Port ${worktreePort}`,
-    );
-    await external.goto(replacement);
-    await expect(external.getByRole("heading")).toHaveText(`Port ${nextPort}`);
-    await panel
-      .getByRole("button", { name: "All previews in browser" })
-      .click();
-    await expect
-      .poll(() =>
-        app.evaluate(
-          () =>
-            (globalThis as typeof globalThis & { externalUrl?: string })
-              .externalUrl ?? "",
-        ),
-      )
-      .toMatch(/^http:\/\/relay\.localhost:/);
-    const index = await app.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { externalUrl?: string })
-          .externalUrl!,
-    );
-    await external.goto(index);
-    await expect(
-      external.getByRole("heading", { name: "Relay previews" }),
-    ).toBeVisible();
-    await expect(
-      external
-        .locator(`a[href="${replacement}"]`)
-        .getByRole("img", { name: "Last preview of autago" }),
-    ).toBeVisible();
-    await screenshot(external, { path: "test-results/preview-index.png" });
+    await expect.poll(externalUrl).toBe(`http://localhost:${worktreePort}/`);
     await screenshot(panel, {
       path: "test-results/preview-browser-controls.png",
     });
   } finally {
-    await external.close();
     await app.close();
     await stop(server);
     if (worktreeServer) await stop(worktreeServer);

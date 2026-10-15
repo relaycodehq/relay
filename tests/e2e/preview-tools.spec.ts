@@ -45,9 +45,7 @@ async function callTool(page: Page, tool: string, input: unknown) {
   return (await ((await code.count()) ? code : markdown).innerText()).trim();
 }
 
-test("an agent opens its thread's preview, pictures it unseen and reads its errors; a picked element goes to the composer", async ({
-  browser,
-}) => {
+test("an agent opens its thread's preview, pictures it unseen and reads its errors; a picked element goes to the composer", async () => {
   test.setTimeout(120_000);
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-preview-tools-")),
@@ -132,25 +130,15 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     const opened = JSON.parse(await callTool(page, "open_preview", {}));
     expect(opened).toEqual({
       url: `http://localhost:${port}/`,
-      browserUrl: expect.stringMatching(
-        /^http:\/\/checkout-[a-f0-9]{8}\.project\.relay\.localhost:\d+\/$/,
-      ),
       title: "Tools fixture",
       server: `running on port ${port}, started by Relay`,
       consoleErrorsWhileLoading: 0,
     });
-    // The tool returns an already usable named route without opening the user's browser.
-    const external = await browser.newPage();
-    await external.goto(opened.browserUrl);
-    await expect(external).toHaveTitle("[project] Tools fixture");
-    expect(await external.evaluate(() => window.isSecureContext)).toBe(true);
-    await external.close();
-
     // The panel is closed, so the page has never been drawn; it is pictured anyway.
     // 1280×800 at the screen's density, no wider than 1600.
     const shot = await callTool(page, "screenshot", {});
     const [, width, height, caption] =
-      /^\[image\/png (\d+)x(\d+)\]\s+(.*)$/.exec(shot) ?? [];
+      /^\[image\/png (\d+)x(\d+)\]\s+(.*)$/m.exec(shot) ?? [];
     expect(caption).toBe(`http://localhost:${port}/ (Tools fixture)`);
     expect(Number(width) / Number(height)).toBe(1.6);
     expect(Number(width)).toBeGreaterThanOrEqual(1280);
@@ -180,7 +168,6 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     );
     expect(broken).toMatchObject({
       url: `http://localhost:${port}/broken`,
-      browserUrl: opened.browserUrl + "broken",
       consoleErrorsWhileLoading: 1,
     });
     expect(await callTool(page, "console_errors", { clear: true })).toMatch(

@@ -1528,7 +1528,6 @@ function fakePreviews(capture: () => Promise<unknown>) {
     settled: async () => {},
     current: () => state,
     consoleErrors: () => [],
-    browserUrl: async () => "http://checkout.relay.localhost:1377/pricing",
     capture,
   } as any;
 }

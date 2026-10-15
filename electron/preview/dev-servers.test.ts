@@ -1,13 +1,12 @@
-import { createServer, type Server } from "node:net";
+import { connect, createServer, type Server } from "node:net";
 import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LocalUrls } from "./local-urls";
-import { ServerLinks } from "./server-links";
-import type { ProjectChat } from "../../shared/projects";
 import type { DevServerState } from "../../shared/preview";
+import { projectTasks } from "../terminal/tasks";
 import { DevServers, IDLE_MS, listening } from "./dev-servers";
+import { runningServerPorts } from "./running-server";
 
 const freePort = () =>
   new Promise<number>((resolve) => {
@@ -39,15 +38,80 @@ describe("DevServers", () => {
 
     servers.watch(folder, true);
     now += IDLE_MS * 2;
-    servers.sleepIdle();
+    await servers.sleepIdle();
     expect(servers.state(folder)?.state).toBe("running");
 
     servers.watch(folder, false);
     now += IDLE_MS + 1;
-    servers.sleepIdle();
+    await servers.sleepIdle();
     expect(servers.state(folder)).toEqual({ state: "asleep", port });
     await expect.poll(() => listening(port)).toBe(false);
   });
+
+  it("keeps a server something is connected to, and sleeps it half an hour after the last", async () => {
+    let now = Date.now();
+    let open = true;
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async (ports) => new Set(open ? ports : []),
+    );
+    cleanup.push(() => servers.dispose());
+    const folder = await mkdtemp(join(tmpdir(), "relay-dev-used-"));
+    const port = await freePort();
+    await servers.ensure(folder, serve, port, {});
+
+    now += IDLE_MS * 2;
+    await servers.sleepIdle();
+    expect(servers.state(folder)?.state).toBe("running");
+
+    open = false;
+    now += IDLE_MS / 2;
+    await servers.sleepIdle();
+    expect(servers.state(folder)?.state).toBe("running");
+    now += IDLE_MS / 2 + 1;
+    await servers.sleepIdle();
+    expect(servers.state(folder)).toEqual({ state: "asleep", port });
+  });
+
+  it("keeps every server when it can't tell what is connected", async () => {
+    let now = Date.now();
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async () => {
+        throw new Error("lsof is missing");
+      },
+    );
+    cleanup.push(() => servers.dispose());
+    const folder = await mkdtemp(join(tmpdir(), "relay-dev-unknown-"));
+    const port = await freePort();
+    await servers.ensure(folder, serve, port, {});
+    now += IDLE_MS * 2;
+    await servers.sleepIdle();
+    expect(servers.state(folder)?.state).toBe("running");
+  });
+
+  it.skipIf(process.platform !== "darwin")(
+    "sees a browser's open connection to a server it started",
+    async () => {
+      let now = Date.now();
+      const servers = new DevServers(
+        () => {},
+        () => now,
+      );
+      cleanup.push(() => servers.dispose());
+      const folder = await mkdtemp(join(tmpdir(), "relay-dev-socket-"));
+      const port = await freePort();
+      await servers.ensure(folder, serve, port, {});
+      const tab = connect({ host: "127.0.0.1", port });
+      await new Promise((r) => tab.once("connect", r));
+      cleanup.push(() => tab.destroy());
+      now += IDLE_MS * 2;
+      await servers.sleepIdle();
+      expect(servers.state(folder)?.state).toBe("running");
+    },
+  );
 
   it("leaves a server it didn't start alone", async () => {
     const port = await freePort();
@@ -89,7 +153,7 @@ describe("DevServers", () => {
     const command = `echo started >> launches; ${serve}`;
     await servers.ensure(folder, command, port, {});
     now += IDLE_MS + 1;
-    servers.sleepIdle();
+    await servers.sleepIdle();
     await expect.poll(() => listening(port)).toBe(false);
     const states = await Promise.all([
       servers.ensure(folder, command, port, {}),
@@ -174,33 +238,22 @@ describe("DevServers", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "discovers Relay-managed HTTP servers for answer links and agent context",
+    "lets the preview find a server it started by its folder",
     async () => {
       const servers = new DevServers(() => {});
-      const urls = new LocalUrls(0);
-      cleanup.push(() => {
-        urls.dispose();
-        servers.dispose();
-      });
+      cleanup.push(() => servers.dispose());
       const folder = await realpath(
-        await mkdtemp(join(tmpdir(), "relay-dev-links-")),
+        await mkdtemp(join(tmpdir(), "relay-dev-found-")),
       );
       const port = await freePort();
       await servers.ensure(folder, serve, port, {});
-      const links = new ServerLinks(urls, async () => ({
-        project: "fixture",
-        root: folder,
-        worktrees: [],
-        allowed: [folder],
-      }));
-      const chat = { id: "thread" } as ProjectChat;
-      const answer = await links.answer(
-        chat,
-        `[Page](http://localhost:${port}/path?q=1#details)`,
-      );
-      expect(answer).toMatch(/fixture\.relay\.localhost:/);
-      expect(answer).toContain("/path?q=1#details");
-      expect(await links.note(chat)).toContain(`localhost:${port} → http://`);
+      const tasks = await projectTasks.list(folder, [], {
+        fresh: true,
+        includeNewServers: true,
+      });
+      expect(
+        await runningServerPorts(tasks.filter((t) => t.folder === folder)),
+      ).toEqual([port]);
     },
   );
 });

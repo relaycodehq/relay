@@ -5,6 +5,7 @@ import type { DevServerState } from "../../shared/preview";
 import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";
+import { connectedPorts } from "./connected-ports";
 
 const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
@@ -38,7 +39,7 @@ interface Server {
 
 /**
  * The projects' dev servers, one per folder, started when a preview needs
- * one and stopped after half an hour nobody looked.
+ * one and stopped after half an hour nobody looked or connected.
  */
 export class DevServers {
   private servers = new Map<string, Server>();
@@ -47,8 +48,9 @@ export class DevServers {
   constructor(
     private changed: (folder: string, state: DevServerState) => void,
     private now = Date.now,
+    private connected = connectedPorts,
   ) {
-    this.sweep = setInterval(() => this.sleepIdle(), 60_000);
+    this.sweep = setInterval(() => void this.sleepIdle(), 60_000);
     this.sweep.unref();
   }
 
@@ -179,19 +181,34 @@ export class DevServers {
     server.usedAt = this.now();
   }
 
-  /** Puts the servers nobody watched for half an hour to sleep. */
-  sleepIdle() {
-    for (const server of this.servers.values())
+  /**
+   * Puts the servers nobody watched or connected to for half an hour to
+   * sleep. A browser outside Relay shows up only as a connection.
+   */
+  async sleepIdle() {
+    const unwatched = [...this.servers.values()].filter(
+      (server) => server.child && !server.watchers,
+    );
+    if (!unwatched.length) return;
+    const busy = await this.connected(unwatched.map((s) => s.port)).catch(
+      () => undefined,
+    );
+    // Without an answer, a server in use looks idle.
+    if (!busy) return;
+    for (const server of unwatched) {
+      if (busy.has(server.port)) server.usedAt = this.now();
+      const child = server.child;
       if (
-        server.child &&
+        child &&
         !server.watchers &&
+        this.servers.get(server.folder) === server &&
         this.now() - server.usedAt > IDLE_MS
       ) {
-        const child = server.child;
         this.set(server, { state: "asleep", port: server.port });
         server.child = undefined;
         terminate(child, { group: true });
       }
+    }
   }
 
   stop(folder: string) {
