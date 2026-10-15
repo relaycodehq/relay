@@ -39,7 +39,8 @@ private data class Saved(
  * hours (ten minutes after a failure); Settings' Check goes any time.
  */
 class LatestApp(
-    private val fetch: suspend () -> NewestApp,
+    /** This app's APK in the release feed; null when the release carries none. */
+    private val fetch: suspend () -> NewestApp?,
     private val storage: LatestAppStorage,
     /** The version the installed APK carries; with no over-the-air code, also what runs. */
     val installed: String,
@@ -69,6 +70,9 @@ class LatestApp(
         } ?: return
         // A damaged cache entry is dropped whole, as the TS schema parse does.
         if (saved.newest?.wellFormed() == false) return
+        // Another app's APK, which older builds took from a feed without this app's: with it
+        // goes the rollback error that weighing its versions against this app's left behind.
+        if (saved.newest?.installableBy(packageName) == false) return
         if ((saved.checkedAt ?: 0) < 0 || (saved.triedAt ?: 0) < 0) return
         triedAt = saved.triedAt ?: 0
         _state.value = _state.value.copy(newest = saved.newest, checkedAt = saved.checkedAt, error = saved.error)
@@ -110,15 +114,16 @@ class LatestApp(
             triedAt = at
             _state.value = s.copy(checking = true, error = null)
             try {
-                val newest = withTimeout(timeoutMs) { fetch() }
+                val newest = withTimeout(timeoutMs) { fetch() }?.takeIf { it.installableBy(packageName) }
                 val known = _state.value.newest
                 // Older feeds infer the APK's version from the release; only an Android entry pins it.
-                if (known != null && (
+                if (newest != null && known != null && (
                         newerVersion(known.release, newest.release) ||
                             (known.sha512 != null && newerVersion(known.version, newest.version))
                         )
                 ) throw FeedException("The release feed went back to an older release or app.")
-                _state.value = LatestAppState(newest = newest, checkedAt = now(), checking = false)
+                // A release without this app's APK says nothing about it; what was known stays.
+                _state.value = LatestAppState(newest = newest ?: known, checkedAt = now(), checking = false)
                 persist()
             } catch (e: TimeoutCancellationException) {
                 fail("GitHub didn't answer.")

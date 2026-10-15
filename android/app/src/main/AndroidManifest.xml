@@ -16,8 +16,13 @@
         <package android:name="com.tailscale.ipn" />
     </queries>
 
+    <!-- No backups or device transfers: drafts and the outbox (pasted images among them) stay on
+         the phone, and pairings are sealed with a key that never leaves it, so they'd arrive unusable. -->
     <application
         android:name=".RelayApp"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="Relay"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"

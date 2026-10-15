@@ -1,6 +1,7 @@
 package dev.relay.android.remote
 
 import android.os.Build
+import android.util.Log
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.RemoteClientListener
@@ -53,6 +54,9 @@ data class PairedComputer(
 
 class PairingFailed(message: String) : Exception(message)
 
+/** An overview just fetched from [computer] through [client], not a saved copy. */
+data class FreshOverview(val computer: String, val client: RemoteClient, val overview: RemoteOverview)
+
 /**
  * The phone's one live connection and what it knows of each paired computer
  * (mobile/src/remote/RemoteProvider). State lives on [dispatcher]; read it
@@ -69,6 +73,7 @@ class Remote(
     private val newClient: (RemoteStart, RemoteClientListener) -> RemoteClient = { start, listener -> RemoteClient(start, listener) },
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1),
     private val pairingTimeoutMs: Long = 15_000,
+    private val warn: (String, Throwable) -> Unit = { m, e -> Log.w(TAG, m, e) },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -90,6 +95,12 @@ class Remote(
     private val _events = MutableSharedFlow<RemoteEvent>(extraBufferCapacity = 1024)
     /** The live client's events, patches applied. */
     val events: SharedFlow<RemoteEvent> = _events.asSharedFlow()
+    private val _fresh = MutableSharedFlow<FreshOverview>(extraBufferCapacity = 16)
+    /**
+     * Each overview fetched on a (re)connect or [refresh], even one equal to
+     * what [overview] already holds, which then doesn't change.
+     */
+    val fresh: SharedFlow<FreshOverview> = _fresh.asSharedFlow()
 
     /** Every paired computer, in pairing order. */
     val computers: StateFlow<List<PairedComputer>> = _saved.map { list ->
@@ -209,7 +220,7 @@ class Remote(
         val fresh = client.overview()
         return withContext(dispatcher) {
             if (live !== client) return@withContext null
-            setOverview(fresh)
+            setFresh(client, fresh)
             fresh
         }
     }
@@ -254,13 +265,30 @@ class Remote(
         if (!_ready.value || (!loaded && _saved.value.isEmpty())) return
         val saved = _saved.value
         val active = saved.find { it.key == _active.value }?.key
-        scope.launch { store.savePaired(Paired(saved.map { it.key }, active)) }
+        save("the paired computers") { store.savePaired(Paired(saved.map { it.key }, active)) }
+    }
+
+    /** A Keystore that won't load fails the save, not the app; the files stay as they were. */
+    private fun save(what: String, block: suspend () -> Unit) {
+        scope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                warn("Couldn't save $what", e)
+            }
+        }
     }
 
     private fun setOverview(overview: RemoteOverview?) {
         _overview.value = overview
         val id = _active.value
         if (overview != null && id != null) scope.launch { cache.save(id, overview) }
+    }
+
+    private fun setFresh(client: RemoteClient, overview: RemoteOverview) {
+        setOverview(overview)
+        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, overview)) }
     }
 
     /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -306,7 +334,7 @@ class Remote(
                         scope.launch {
                             try {
                                 val fresh = next.overview()
-                                if (live === next) setOverview(fresh)
+                                if (live === next) setFresh(next, fresh)
                             } catch (_: Exception) {
                             }
                         }
@@ -320,14 +348,14 @@ class Remote(
             }
 
             override fun onPaired(credentials: RemoteCredentials) = onLive {
-                scope.launch { store.saveCredentials(credentials) }
+                save("${credentials.name}'s pairing") { store.saveCredentials(credentials) }
                 _saved.value = _saved.value.filter { it.key != credentials.key } + credentials
                 persist()
             }
 
             // New addresses or route order: kept in place, the list's order stays.
             override fun onCredentials(credentials: RemoteCredentials) = onLive {
-                scope.launch { store.saveCredentials(credentials) }
+                save("${credentials.name}'s addresses") { store.saveCredentials(credentials) }
                 _saved.value = _saved.value.map { if (it.key == credentials.key) credentials else it }
             }
 
@@ -350,3 +378,5 @@ class Remote(
         return next
     }
 }
+
+private const val TAG = "Remote"

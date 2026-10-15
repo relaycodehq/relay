@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.relay.android.features.composer.ComposerCore
 import dev.relay.android.features.composer.ComposerSaves
 import dev.relay.android.features.composer.SavedNewThread
+import dev.relay.android.features.composer.UnsentDrafts
 import dev.relay.android.features.composer.Made
 import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Composed
@@ -147,7 +148,10 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
     fun pick(next: Where) {
         val to = keyFor(next)
         // What's written follows the new thread to the project picked for it.
-        if (active != null && draftKey != null && to != null && to != draftKey) drafts.move(active, draftKey, to)
+        if (active != null && draftKey != null && to != null && to != draftKey) {
+            drafts.move(active, draftKey, to)
+            UnsentDrafts.move(active, draftKey, to)
+        }
         picked = next
     }
     val draftWorkspace by produceState(

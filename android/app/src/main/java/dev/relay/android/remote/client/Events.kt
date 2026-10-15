@@ -58,3 +58,16 @@ internal fun rebuildEvent(
         else -> null
     }
 }
+
+/** What [rebuildEvent] keeps per connection: answers still streaming, as JSON, and the last thread list. */
+internal class ConnectionEvents {
+    private val streaming = HashMap<String, JsonObject>()
+    private var chats: List<RemoteChatSummary>? = null
+
+    fun reset() {
+        streaming.clear()
+        chats = null
+    }
+
+    fun rebuild(event: JsonObject): RemoteEvent? = rebuildEvent(event, streaming, chats) { chats = it }
+}

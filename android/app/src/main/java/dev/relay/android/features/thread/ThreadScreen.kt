@@ -21,6 +21,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,6 +33,7 @@ import dev.relay.android.ui.dismissKeyboardOnTap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.relay.android.features.composer.Composer
 import dev.relay.android.features.composer.ComposerState
@@ -128,7 +130,15 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     var leavingUnread by remember { mutableStateOf(false) }
     val updated = summary?.updated
     val snoozedUntil = summary?.snoozedUntil
-    LaunchedEffect(updated, snoozedUntil, inFront, online, leavingUnread) {
+    // Read on past the wake time when it comes while you're looking.
+    var woke by remember { mutableIntStateOf(0) }
+    LaunchedEffect(snoozedUntil, inFront, woke) {
+        val wait = (snoozedUntil ?: return@LaunchedEffect) + 1 - System.currentTimeMillis()
+        if (!inFront || wait <= 0) return@LaunchedEffect
+        delay(wait)
+        woke++
+    }
+    LaunchedEffect(updated, snoozedUntil, woke, inFront, online, leavingUnread) {
         if (updated == null || !inFront || leavingUnread) return@LaunchedEffect
         onSeen(id, updated)
         // The desktop keeps the shared mark; an older one just doesn't know the call.

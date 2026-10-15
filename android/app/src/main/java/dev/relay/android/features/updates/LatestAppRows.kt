@@ -7,7 +7,6 @@ import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.Spinner
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Download
-import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import java.text.DateFormat
 import java.util.Date
@@ -52,17 +51,7 @@ fun LatestAppRows(updates: Updates) {
     val latest by updates.latest.state.collectAsState()
     val apk by updates.installer.state.collectAsState()
     val offer = updates.latest.offer(latest)
-    if (offer != null && !offer.installableBy(updates.packageName)) {
-        // The feed's APK is another app (the Expo one, until releases carry this one): link, don't install.
-        ListRow(
-            "Relay ${offer.release} is out",
-            subtitle = "The release's APK is a different Relay app than this one, so it can't update this " +
-                "app. Opens the release page.",
-            leadingIcon = TablerIcons.Outline.ExternalLink,
-            subtitleLines = 4,
-            onClick = updates::openReleasePage,
-        )
-    } else if (offer != null) {
+    if (offer != null) {
         val mine = apk.about(offer.version)
         val size = offer.size?.let { " (${Math.round(it / 1e6)} MB)" } ?: ""
         val (label, hint) = when {

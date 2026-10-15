@@ -12,8 +12,10 @@ import kotlin.concurrent.thread
  * The phone's loopback listeners, one per desktop port its browser opened,
  * handing each connection to the live link's [TunnelStreams]. They stay for
  * the app's life, so a page keeps its port, and with it its origin, across
- * reconnects. While no browser [hold]s them they turn connections away:
- * any app on the phone can reach 127.0.0.1.
+ * reconnects. They serve whichever computer is live, and so the same origin
+ * for each; the browser keeps each computer's storage apart (BrowserProfiles).
+ * While no browser [hold]s them they turn connections away: any app on the
+ * phone can reach 127.0.0.1.
  */
 class TunnelListeners(private val streams: () -> TunnelStreams?) {
     /** Desktop port → the phone's. */
@@ -38,6 +40,9 @@ class TunnelListeners(private val streams: () -> TunnelStreams?) {
     }
 
     fun localPort(desktopPort: Int): Int? = bound[desktopPort]
+
+    /** The desktop ports listened for. */
+    fun listening(): Set<Int> = bound.keys.toSet()
 
     fun desktopPort(localPort: Int): Int? = bound.entries.firstOrNull { it.value == localPort }?.key
 

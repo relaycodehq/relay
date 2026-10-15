@@ -60,13 +60,16 @@ private fun httpsUrl(url: String) = try {
     false
 }
 
-/** Reads the release feed and its signature; throws unless the feed is signed by a pinned key. */
+/**
+ * Reads the release feed and its signature; throws unless the feed is signed
+ * by a pinned key. Null when the release carries no APK of [packageName]'s.
+ */
 suspend fun fetchNewestApp(
     fetch: suspend (String) -> FeedResponse,
     packageName: String,
     feed: String = Releases.FEED,
     keys: List<String> = Releases.keys,
-): NewestApp {
+): NewestApp? {
     val (response, signed) = coroutineScope {
         val body = async { fetch(feed) }
         val sig = async { fetch("$feed.sig") }
@@ -80,11 +83,14 @@ suspend fun fetchNewestApp(
 }
 
 /**
- * The verified feed's newest app. Today's feeds carry the Expo app as
- * `android`; a native build would come as `androidNative` (or as `android`
- * naming its applicationId). This app's own entry wins when there is one.
+ * The verified feed's APK of [packageName]: `androidNative`, or an `android`
+ * entry naming its applicationId. Null when there's none, as in releases
+ * built without the native app: nothing new for this app, not an error. The
+ * Expo app's `android` entry (no id) has versions of its own, so it never
+ * stands in; nor does an old feed's guess at the release's APK, which is that
+ * app's too.
  */
-fun parseFeed(bytes: ByteArray, packageName: String): NewestApp {
+fun parseFeed(bytes: ByteArray, packageName: String): NewestApp? {
     val unreadable = FeedException("The release feed sent something Relay can't read.")
     val root = try {
         Json.parseToJsonElement(bytes.decodeToString()) as? JsonObject
@@ -96,14 +102,7 @@ fun parseFeed(bytes: ByteArray, packageName: String): NewestApp {
         val value = root[key] ?: return@mapNotNull null
         androidEntry(value, release) ?: throw unreadable
     }
-    entries.firstOrNull { it.installableBy(packageName) }?.let { return it }
-    entries.firstOrNull()?.let { return it }
-    // Its release carries an APK of its own version under the usual name.
-    return NewestApp(
-        release = release,
-        version = release,
-        url = "https://github.com/${Releases.REPO}/releases/download/v$release/Relay-Android.apk",
-    )
+    return entries.firstOrNull { it.installableBy(packageName) }
 }
 
 private fun androidEntry(value: JsonElement, release: String): NewestApp? {

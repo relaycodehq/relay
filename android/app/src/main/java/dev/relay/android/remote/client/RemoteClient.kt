@@ -1,23 +1,15 @@
 package dev.relay.android.remote.client
 
 import dev.relay.android.remote.Bridge
-import dev.relay.android.remote.PairingLink
 import dev.relay.android.remote.RouteKind
 import dev.relay.android.remote.Routes
-import dev.relay.android.remote.crypto.Base64Url
 import dev.relay.android.remote.crypto.Channel
-import dev.relay.android.remote.crypto.ClientHandshake
-import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.remote.model.RemoteCredentials
 import dev.relay.android.remote.model.RemoteEvent
-import dev.relay.android.remote.model.RemoteJson
 import dev.relay.android.remote.model.ServerFrame
 import dev.relay.android.remote.tunnel.TunnelFrame
 import dev.relay.android.remote.tunnel.TunnelStreams
 import dev.relay.android.remote.validHost
-import dev.relay.android.remote.wire.Opened
-import dev.relay.android.remote.wire.WireData
-import dev.relay.android.remote.wire.openWire
 import dev.relay.android.remote.wire.sealFrame
 import dev.relay.android.remote.wire.sealTunnel
 import kotlinx.coroutines.CompletableDeferred
@@ -44,51 +36,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-enum class LinkState { Connecting, Online, Offline, Denied }
-
-data class RemoteStatus(val state: LinkState, val detail: String? = null)
-
-/** How a client starts: trading a pairing code, or signing in with saved credentials. */
-sealed interface RemoteStart {
-    data class Pair(val link: PairingLink, val device: String, val kind: String? = null) : RemoteStart
-    data class Saved(val credentials: RemoteCredentials) : RemoteStart
-}
-
-data class RemoteRoute(val host: String, val kind: RouteKind)
-
-data class RemoteClientOptions(
-    /** Per host while connecting, and per call. */
-    val timeoutMs: Long = 15_000,
-    /** How long one route gets before the next is tried beside it. */
-    val staggerMs: Long = 1_500,
-    /** How often a link on a later route looks for an earlier one. */
-    val betterRouteMs: Long = 60_000,
-    /** Per call for the slow method lists. */
-    val slowTimeoutMs: Long = 120_000,
-    /** Silence after which a link counts as dead; the desktop ticks every 15s. */
-    val staleMs: Long = 40_000,
-    /** A route that lost to the current one isn't tried again for this long. */
-    val worseCooldownMs: Long = 5 * 60_000,
-)
-
-/** Called on the client's own thread. */
-interface RemoteClientListener {
-    fun onStatus(status: RemoteStatus) {}
-    fun onEvent(event: RemoteEvent) {}
-    /** First contact traded the pairing code for these; keep them to reconnect. */
-    fun onPaired(credentials: RemoteCredentials) {}
-    /** The desktop named new addresses, or the route order changed; keep these instead. */
-    fun onCredentials(credentials: RemoteCredentials) {}
-}
-
-open class RemoteCallException(message: String) : Exception(message)
-class NotConnected(message: String) : RemoteCallException(message)
-/** The call went out but no answer came back: the desktop may have done it all the same. */
-class Unanswered(message: String) : RemoteCallException(message)
-/** The desktop answered with an error. */
-class Rejected(message: String) : RemoteCallException(message)
-
-private class Denied(message: String) : Exception(message)
 
 /**
  * The phone's connection to the desktop bridge, a port of shared/remote-client.
@@ -119,22 +66,32 @@ class RemoteClient(
 
     private var current: Dial? = null
     private var channel: Channel? = null
-    private val calls = HashMap<Long, Pending>()
-    private var nextCall = 1L
+    private val calls = Calls(scope) { name }
     private var closed = true
     private var retry = 0
     private var retryTimer: Job? = null
     private var watchdog: Job? = null
     private var heard = 0L
     private var attempt = 0
-    private val dials = LinkedHashSet<Dial>()
     private var betterTimer: Job? = null
     private val worse = HashMap<String, Long>()
-    /** Answers still streaming on this connection, as JSON, for `messagePatch`. */
-    private val streaming = HashMap<String, JsonObject>()
-    private var chats: List<RemoteChatSummary>? = null
+    private val wireEvents = ConnectionEvents()
 
-    private class Pending(val result: CompletableDeferred<JsonElement>, val timer: Job)
+    private val owner = object : DialOwner {
+        override val scope get() = this@RemoteClient.scope
+        override val sockets get() = this@RemoteClient.sockets
+        override val timeoutMs get() = options.timeoutMs
+        override val name get() = this@RemoteClient.name
+        override fun post(block: () -> Unit) = this@RemoteClient.post(block)
+        override fun signInFrame() = signInFrameOf(target)
+        override fun isCurrent(dial: Dial) = current === dial
+        override fun heard(dial: Dial) = keepAlive(dial)
+        override fun lost() = this@RemoteClient.lost()
+        override fun tunnelFrame(frame: TunnelFrame) = this@RemoteClient.tunnelFrame(frame)
+        override fun receive(frame: ServerFrame) = this@RemoteClient.receive(frame)
+        override fun warn(message: String, error: Throwable?) = this@RemoteClient.warn(message, error)
+    }
+    private val racer = RouteRacer(owner, options.staggerMs)
 
     /** Raw TCP to the desktop's own loopback over this link, from Bridge.TUNNEL. */
     val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name })
@@ -173,7 +130,7 @@ class RemoteClient(
     fun close() = post {
         closed = true
         retryTimer?.cancel()
-        cancelDials()
+        racer.cancelAll()
         drop("Disconnected.")
         setStatus(LinkState.Offline)
     }
@@ -235,20 +192,14 @@ class RemoteClient(
 
     private fun request(method: String, args: JsonArray, timeoutMs: Long): CompletableDeferred<JsonElement> {
         if (_status.value.state != LinkState.Online || channel == null) throw NotConnected("Not connected to $name.")
-        val id = nextCall++
-        val result = CompletableDeferred<JsonElement>()
-        val timer = scope.launch {
-            delay(timeoutMs)
-            if (calls.remove(id) != null) result.completeExceptionally(Unanswered("$name didn't answer in time."))
+        return calls.open(timeoutMs) { id ->
+            sendFrame(buildJsonObject {
+                put("t", "call")
+                put("id", id)
+                put("method", method)
+                put("args", args)
+            })
         }
-        calls[id] = Pending(result, timer)
-        sendFrame(buildJsonObject {
-            put("t", "call")
-            put("id", id)
-            put("method", method)
-            put("args", args)
-        })
-        return result
     }
 
     private fun post(block: () -> Unit) {
@@ -261,8 +212,6 @@ class RemoteClient(
         listener.onStatus(status)
     }
 
-    private data class Endpoint(val hosts: List<String>, val port: Int, val key: String)
-
     private val endpoint: Endpoint
         get() = when (val t = target) {
             is RemoteStart.Pair -> Endpoint(t.link.hosts, t.link.port, t.link.key)
@@ -271,11 +220,11 @@ class RemoteClient(
 
     private fun connect() {
         val mine = ++attempt
-        cancelDials()
+        racer.cancelAll()
         setStatus(LinkState.Connecting)
         val order = Routes.order(endpoint.hosts, routes)
         var reason = "Can't reach $name."
-        race(order, object : Race {
+        racer.race(endpoint, target is RemoteStart.Pair, order, object : Race {
             override fun stale() = closed || mine != attempt
             override fun claim(link: Link): Boolean {
                 attach(link)
@@ -296,91 +245,6 @@ class RemoteClient(
         })
     }
 
-    private interface Race {
-        fun stale(): Boolean
-        fun claim(link: Link): Boolean
-        fun failed(error: Exception) {}
-        fun done()
-    }
-
-    private class Link(val dial: Dial, val channel: Channel, val host: String, val frame: ServerFrame)
-
-    /**
-     * Dials the hosts in order, each a little after the one before unless that
-     * one already failed, and keeps the first that signs in. A pairing code
-     * works once, so when pairing, the first channel to open alone sends it.
-     */
-    private fun race(order: List<String>, on: Race) {
-        val (_, port, key) = endpoint
-        val serverKey = Base64Url.decodeOrNull(key)
-        if (serverKey == null || serverKey.size != 32) {
-            on.failed(Exception("Couldn't verify $name. Pair again."))
-            return on.done()
-        }
-        val pairing = target is RemoteStart.Pair
-        val mine = LinkedHashSet<Dial>()
-        var next = 0
-        var won = false
-        var signing: Dial? = null
-        var timer: Job? = null
-        fun settle() {
-            timer?.cancel()
-            for (d in mine.toList()) {
-                d.cancel()
-                dials.remove(d)
-            }
-        }
-        fun dialNext() {
-            timer?.cancel()
-            if (won || signing != null || on.stale() || next >= order.size) return
-            val host = order[next++]
-            val dial = Dial(host, port, serverKey, object : DialHandlers {
-                override fun signIn(dial: Dial): Boolean {
-                    if (!pairing) return true
-                    if (won || signing != null || on.stale()) return false
-                    signing = dial
-                    timer?.cancel()
-                    for (other in mine.toList()) if (other !== dial) {
-                        other.cancel()
-                        mine.remove(other)
-                        dials.remove(other)
-                    }
-                    return true
-                }
-                override fun claim(dial: Dial, link: Link): Boolean {
-                    mine.remove(dial)
-                    dials.remove(dial)
-                    if (won || on.stale() || !on.claim(link)) return false
-                    won = true
-                    settle()
-                    return true
-                }
-                override fun failed(dial: Dial, error: Exception) {
-                    mine.remove(dial)
-                    dials.remove(dial)
-                    if (signing === dial) signing = null
-                    if (won || on.stale()) return
-                    on.failed(error)
-                    // A refusal from the pinned desktop holds for every route.
-                    if (error is Denied) return settle()
-                    if (next < order.size) dialNext() else if (mine.isEmpty()) on.done()
-                }
-            })
-            mine.add(dial)
-            dials.add(dial)
-            if (next < order.size) timer = scope.launch {
-                delay(options.staggerMs)
-                dialNext()
-            }
-        }
-        if (order.isEmpty()) on.done() else dialNext()
-    }
-
-    private fun cancelDials() {
-        for (d in dials.toList()) d.cancel()
-        dials.clear()
-    }
-
     private fun scheduleRetry() {
         retryTimer?.cancel()
         val wait = minOf(15_000L, 1000L shl minOf(retry++, 14))
@@ -396,8 +260,7 @@ class RemoteClient(
         channel = link.channel
         host = link.host
         bridgeVersion = link.frame.bridge
-        streaming.clear()
-        chats = null
+        wireEvents.reset()
         // Streams belong to the socket they opened on.
         tunnel.reset("Relay moved to another route.")
         val fresh = link.frame.hosts?.filter(::validHost)
@@ -455,16 +318,16 @@ class RemoteClient(
      * answer on its way comes back on the socket it went out on.
      */
     private fun tryBetter() {
-        if (_status.value.state != LinkState.Online || dials.isNotEmpty()) return
+        if (_status.value.state != LinkState.Online || racer.dialing) return
         val hosts = better()
         if (hosts.isEmpty()) return watchRoutes()
         val was = current
         var busy = false
-        race(hosts, object : Race {
+        racer.race(endpoint, target is RemoteStart.Pair, hosts, object : Race {
             override fun stale() = closed || current !== was
             override fun claim(link: Link): Boolean {
                 // A move would cut open pages' connections, Vite's live reload among them.
-                if (calls.isNotEmpty() || tunnel.active > 0) {
+                if (calls.waiting || tunnel.active > 0) {
                     busy = true
                     return false
                 }
@@ -478,131 +341,6 @@ class RemoteClient(
                 watchRoutes()
             }
         })
-    }
-
-    private interface DialHandlers {
-        /** The channel is open; false leaves this route before it signs in. */
-        fun signIn(dial: Dial): Boolean
-        fun claim(dial: Dial, link: Link): Boolean
-        fun failed(dial: Dial, error: Exception)
-    }
-
-    private enum class DialState { Dialing, Won, Done }
-
-    /** One route: connects, opens the channel under the pinned key and signs in. */
-    private inner class Dial(val host: String, port: Int, serverKey: ByteArray, private val on: DialHandlers) {
-        var state = DialState.Dialing
-        private var detached = false
-        private var channel: Channel? = null
-        private val handshake = ClientHandshake(serverKey)
-        private val timer: Job = scope.launch {
-            delay(options.timeoutMs)
-            fail(Exception("$host didn't answer."))
-        }
-        val socket: RemoteSocket = sockets.open(
-            "ws://${if (':' in host && !host.startsWith("[")) "[$host]" else host}:$port/",
-            object : SocketListener {
-                override fun onOpen() = post { if (!detached) socket.send(WireData.Text(handshake.hello)) }
-                override fun onMessage(data: WireData) = post { if (!detached) message(data) }
-                override fun onClosed() = post { if (!detached) closedHere() }
-            },
-        )
-
-        fun quit() {
-            detached = true
-            timer.cancel()
-            try {
-                socket.cancel()
-            } catch (_: Exception) {
-            }
-        }
-
-        fun cancel() {
-            if (state != DialState.Dialing) return
-            state = DialState.Done
-            quit()
-        }
-
-        private fun fail(error: Exception) {
-            if (state != DialState.Dialing) return
-            state = DialState.Done
-            quit()
-            on.failed(this, error)
-        }
-
-        private fun closedHere() {
-            if (state == DialState.Dialing) return fail(Exception("Can't reach $name."))
-            if (state == DialState.Won && current === this) lost()
-        }
-
-        private fun message(data: WireData) {
-            val opened: ServerFrame
-            try {
-                val open = channel
-                if (open == null) {
-                    if (data !is WireData.Text) throw IllegalStateException("A binary hello.")
-                    val ready = handshake.finish(data.text)
-                    channel = ready
-                    if (!on.signIn(this)) {
-                        state = DialState.Done
-                        return quit()
-                    }
-                    // Sealed whole: nothing compact before the desktop says it reads it.
-                    socket.send(sealFrame(ready, signInFrame().toString(), compact = false))
-                    return
-                }
-                val wire = openWire(open, data)
-                if (wire is Opened.Tunnel) {
-                    if (state == DialState.Won && current === this) {
-                        keepAlive(this)
-                        tunnelFrame(wire.frame)
-                    }
-                    return
-                }
-                val frame = RemoteJson.decodeFromString(ServerFrame.serializer(), (wire as Opened.Json).text)
-                if (state == DialState.Dialing) {
-                    if (frame.t == "denied") return fail(Denied(frame.reason ?: "Relay said no."))
-                    if (frame.t != "paired" && frame.t != "ready") return fail(Exception("Unexpected answer from Relay."))
-                    timer.cancel()
-                    if (!on.claim(this, Link(this, open, host, frame))) {
-                        state = DialState.Done
-                        return quit()
-                    }
-                    state = DialState.Won
-                    return
-                }
-                if (state != DialState.Won) return
-                keepAlive(this)
-                opened = frame
-            } catch (e: Exception) {
-                // Anything that doesn't open under the pinned key isn't our desktop.
-                if (state == DialState.Dialing) return fail(Exception("Couldn't verify $name. Pair again."))
-                if (current === this) lost() else quit()
-                return
-            }
-            // A listener's or a patch's failure is ours, not the desktop's: the link stays.
-            try {
-                receive(opened)
-            } catch (e: Exception) {
-                warn("Couldn't take in what $name sent:", e)
-            }
-        }
-    }
-
-    private fun signInFrame(): JsonObject = when (val t = target) {
-        is RemoteStart.Pair -> buildJsonObject {
-            put("t", "pair")
-            put("code", t.link.code)
-            put("device", t.device)
-            t.kind?.let { put("kind", it) }
-            put("bridge", Bridge.VERSION)
-        }
-        is RemoteStart.Saved -> buildJsonObject {
-            put("t", "auth")
-            put("deviceId", t.credentials.deviceId)
-            put("token", t.credentials.token)
-            put("bridge", Bridge.VERSION)
-        }
     }
 
     private fun receive(frame: ServerFrame) {
@@ -621,12 +359,7 @@ class RemoteClient(
                 watchRoutes()
                 tryBetter()
             }
-            "result" -> {
-                val call = calls.remove(frame.id ?: return) ?: return
-                call.timer.cancel()
-                if (frame.ok == true) call.result.complete(frame.value ?: JsonNull)
-                else call.result.completeExceptionally(Rejected(frame.error ?: "Relay refused that."))
-            }
+            "result" -> calls.answer(frame)
             "event" -> {
                 frame.s?.let { s ->
                     sendFrame(buildJsonObject {
@@ -635,7 +368,7 @@ class RemoteClient(
                     })
                 }
                 val event = frame.event as? JsonObject ?: return
-                val rebuilt = rebuildEvent(event, streaming, chats) { chats = it } ?: return
+                val rebuilt = wireEvents.rebuild(event) ?: return
                 listener.onEvent(rebuilt)
                 _events.tryEmit(rebuilt)
             }
@@ -692,14 +425,9 @@ class RemoteClient(
         channel = null
         host = null
         bridgeVersion = null
-        streaming.clear()
-        chats = null
+        wireEvents.reset()
         tunnel.reset(reason)
         dial?.quit()
-        for (call in calls.values) {
-            call.timer.cancel()
-            call.result.completeExceptionally(Unanswered(reason))
-        }
-        calls.clear()
+        calls.failAll(reason)
     }
 }

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.consume
@@ -27,7 +26,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.Sheet as SheetView
 import dev.relay.android.ui.Switch
@@ -35,28 +33,24 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import kotlin.math.roundToInt
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.relay.android.features.composer.logic.ComposeAttempt
 import dev.relay.android.features.composer.logic.ComposeDraft
 import dev.relay.android.features.composer.logic.CommandSettings
 import dev.relay.android.features.composer.logic.ModelCatalogs
@@ -94,20 +88,14 @@ import dev.relay.android.remote.model.ContextUsage
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.model.ThreadCost
-import dev.relay.android.ui.Haptic
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
-import dev.relay.android.ui.rememberHaptics
 import dev.relay.android.ui.ring
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.filled.PlayerStop
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
-import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.PhotoPlus
-import io.github.lyxnx.compose.ui.tablericons.outline.PlaylistAdd
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
@@ -116,51 +104,6 @@ import java.util.UUID
 
 // The desktop's composer on a phone (mobile/src/ui/Composer.tsx): the message,
 // then agent, model, mode and Plan under it.
-
-/** What the composer hands over to send; `held`: the computer holds part of its draft, so it goes out through its composer. */
-data class Composed(val attempt: ComposeAttempt<Attachment>, val held: Boolean) {
-    val body get() = attempt.draft.body
-    val settings get() = attempt.draft.settings
-    val images get() = attempt.draft.images
-}
-
-/** A workspace command's outcome: done (the text clears), not done, or why not. */
-sealed interface RunResult {
-    data object Done : RunResult
-    data object Kept : RunResult
-    data class Failed(val message: String) : RunResult
-}
-
-/** What a screen can do to its composer: quote into it, put a send back, focus it, ask its pick on another agent. */
-class ComposerHandle {
-    internal var onQuote: (String) -> Unit = {}
-    internal var onRestore: ((Returned) -> (() -> Unit))? = null
-    internal var onCompose: (String, String?) -> Unit = { _, _ -> }
-    internal var onFocus: () -> Unit = {}
-    internal var onSettingsOn: (String) -> ResumeSettings? = { null }
-    internal var onOpenSettings: () -> Unit = {}
-    /** What the composer sends with, in a line, for a header to show when the controls aren't in the composer. */
-    var line: ComposerLine? by mutableStateOf(null)
-        internal set
-    fun quote(markdown: String) = onQuote(markdown)
-    /**
-     * Puts a taken-back message after what's there, its images too; returns
-     * how to undo that. Throws when the two won't fit in one message or the
-     * composer isn't up yet.
-     */
-    fun restore(back: Returned): () -> Unit =
-        (onRestore ?: throw IllegalStateException("The composer isn't ready yet."))(back)
-    /** A page's text, in place of what it put in before ([earlier]), else after the draft. */
-    fun compose(text: String, earlier: String?) = onCompose(text, earlier)
-    fun focus() = onFocus()
-    /** The settings on agent `to`, with the model this composer kept for it. */
-    fun settingsOn(to: String) = onSettingsOn(to)
-    /** Model, permissions, plan and usage in one sheet. */
-    fun openSettings() = onOpenSettings()
-}
-
-/** The model with its effort, the permissions, plan mode, and how full the context is. */
-data class ComposerLine(val model: String, val mode: String, val plan: Boolean, val contextPercent: Int?)
 
 private enum class Sheet { Model, Mode, Attach, Later, Usage, Settings }
 
@@ -213,7 +156,6 @@ internal fun ComposerCore(
     val drafts = remember { Sends.drafts(appContext.filesDir) }
     remember(remote) { Sends.attach(remote, appContext.filesDir) }
     val scope = rememberCoroutineScope()
-    val haptics = rememberHaptics()
     val computer by remote.active.collectAsState()
     val status by remote.status.collectAsState()
     val client by remote.client.collectAsState()
@@ -230,10 +172,11 @@ internal fun ComposerCore(
     }
     val focus = remember { FocusRequester() }
     var typing by remember { mutableStateOf(false) }
-    var images by remember { mutableStateOf<List<Attachment>>(emptyList()) }
+    val unsent = rememberUnsent(computer, draftKey)
+    var images by unsent.images
+    var error by unsent.error
+    var failedSend by unsent.failedSend
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var failedSend by remember { mutableStateOf<ComposeAttempt<Attachment>?>(null) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var dismissed by remember { mutableStateOf<String?>(null) }
     val provider = settings.provider
@@ -262,31 +205,7 @@ internal fun ComposerCore(
         return true
     }
 
-    // The draft: saved text first, anything put in before it arrived after; then it follows the computer.
-    var loaded by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(computer, draftKey) {
-        loaded = null
-        val pc = computer ?: return@LaunchedEffect
-        val key = draftKey ?: return@LaunchedEffect
-        val at = "$pc\n$key"
-        drafts.load(pc)
-        val saved = drafts.text(pc, key).trim()
-        if (saved.isNotEmpty()) {
-            val typed = value.text.trim()
-            setText(if (typed.isNotEmpty() && typed != saved) "$saved\n\n$typed" else saved)
-        }
-        loaded = at
-        drafts.keyChanges.collect { changed ->
-            if (changed != at) return@collect
-            val now = drafts.text(pc, key)
-            if (now != value.text) setText(now)
-        }
-    }
-    LaunchedEffect(computer, draftKey, text, loaded) {
-        val pc = computer ?: return@LaunchedEffect
-        val key = draftKey ?: return@LaunchedEffect
-        if (loaded == "$pc\n$key") drafts.editText(pc, key, text)
-    }
+    FollowDraft(drafts, computer, draftKey, { value.text }, ::setText)
     val shared = computer?.let { pc -> draftKey?.let { drafts.shared(pc, it) } }
     // Screenshots the computer's composer has in this draft; they go with it from there.
     val computerShots = shared?.extras?.screenshots.orEmpty()
@@ -492,6 +411,13 @@ internal fun ComposerCore(
                     keepTyped()
                 }
             } catch (e: CancellationException) {
+                // Left mid-send: the draft is let go with the message back in it, and as it may
+                // have gone, sending it again reuses this attempt.
+                if (pc != null && key != null) drafts.release(pc, key)
+                val typed = value.text.trim()
+                setText(if (typed.isNotEmpty()) "$draft\n\n$typed" else draft)
+                keepTyped()
+                failedSend = attempt
                 throw e
             } catch (e: Exception) {
                 if (pc != null && key != null) drafts.release(pc, key)
@@ -593,38 +519,13 @@ internal fun ComposerCore(
                 }
                 // The two sends stay side by side, as on the desktop.
                 if (canDictate(remote)) DictationButton(remote, dictationOwner, target = { input }, enabled = !disabled && !busy)
-                if (steering) {
-                    Box(
-                        Modifier.padding(start = 4.dp)
-                            .pressable(onClick = {
-                                haptics.perform(Haptic.Medium)
-                                send("steer")
-                            }, enabled = !disabled && !busy)
-                            .size(SEND_SIZE).clip(SEND_SHAPE).ring(c.border, SEND_SHAPE)
-                            .semantics { contentDescription = "Steer now" },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(TablerIcons.Outline.Bolt, null, size = 16.dp, tint = c.foreground) }
-                }
-                val label = if (stop) "Stop" else if (retryingScheduled) "Retry scheduled send" else if (running) "Queue" else "Send"
-                Box(
-                    Modifier.padding(start = 4.dp)
-                        .pressable(
-                            onClick = { if (stop) onStop?.invoke() else send() },
-                            enabled = !disabled && !busy && (stop || !empty),
-                            onLongClick = if (empty) null else ({ sheet = Sheet.Later }),
-                        )
-                        .size(SEND_SIZE).alpha(if (disabled || busy) 0.5f else 1f)
-                        .background(if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
-                        .semantics { contentDescription = label },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val tint = if (stop) Color.White else if (!empty) c.onSend else c.faint
-                    when {
-                        stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 14.dp, tint = tint)
-                        running -> Icon(TablerIcons.Outline.PlaylistAdd, null, size = 16.dp, tint = tint)
-                        else -> Icon(TablerIcons.Outline.ArrowUp, null, size = 18.dp, tint = tint)
-                    }
-                }
+                SendButtons(
+                    steering = steering, stop = stop, running = running, empty = empty, retryingScheduled = retryingScheduled,
+                    enabled = !disabled && !busy,
+                    onSteer = { send("steer") },
+                    onSend = { if (stop) onStop?.invoke() else send() },
+                    onLater = { sheet = Sheet.Later },
+                )
             }
         }
     }
@@ -685,22 +586,3 @@ internal fun ComposerCore(
         null -> {}
     }
 }
-
-@Composable
-private fun Tool(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit, content: @Composable () -> Unit) {
-    Row(
-        modifier.widthIn(max = 140.dp)
-            .heightIn(min = 32.dp)
-            .alpha(if (enabled) 1f else 0.4f)
-            .pressable(onClick = onClick, enabled = enabled, role = Role.Button)
-            .semantics { contentDescription = label }
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) { content() }
-}
-
-private val SEND_SIZE = 32.dp
-private val SEND_SHAPE = CircleShape
-// The desktop's .composer-stop red; the same on light and dark.
-private val STOP_RED = Color(0xFFED3949)

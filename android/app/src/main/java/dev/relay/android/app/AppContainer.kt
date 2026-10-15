@@ -49,9 +49,13 @@ class AppContainer(context: Context) {
     /** Loopback listeners that carry the browser's connections to the computer's own ports. */
     val tunnels = TunnelListeners { remote.client.value?.tunnel }
     val tunnelPorts = TunnelPorts(object : TunnelPorts.Storage {
+        // The old "typed" list was every computer's at once; whose port it was is lost, so it goes.
         private val prefs = app.getSharedPreferences("relay-tunnel", Context.MODE_PRIVATE)
-        override fun read() = prefs.getString("typed", null)
-        override fun write(text: String) = prefs.edit().putString("typed", text).apply()
+            .also { if (it.contains("typed")) it.edit().remove("typed").apply() }
+        override fun read(computer: String) = prefs.getString("typed:$computer", null)
+        override fun write(computer: String, text: String) = prefs.edit().putString("typed:$computer", text).apply()
+        override fun computers() = prefs.all.keys.filter { it.startsWith("typed:") }.map { it.removePrefix("typed:") }.toSet()
+        override fun remove(computer: String) = prefs.edit().remove("typed:$computer").apply()
     })
 
     /** For work that outlives a screen: a switch or unpair that navigates away. */

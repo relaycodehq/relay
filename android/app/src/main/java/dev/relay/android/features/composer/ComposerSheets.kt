@@ -55,7 +55,7 @@ import kotlinx.coroutines.coroutineScope
 /** One choice in a [MenuSheet]. */
 data class MenuOption(val label: String, val hint: String? = null, val checked: Boolean = false, val onClick: () -> Unit)
 
-/** A sheet of choices; picking one closes it first. */
+/** A sheet of choices; picking one runs it, then closes the sheet (an [onDismiss] that waits on a confirmation can keep it). */
 @Composable
 fun MenuSheet(title: String, options: List<MenuOption>, onDismiss: () -> Unit) {
     Sheet(onDismiss, title = title) {
@@ -67,8 +67,8 @@ fun MenuSheet(title: String, options: List<MenuOption>, onDismiss: () -> Unit) {
                     selected = o.checked,
                     trailing = if (o.checked) ({ Icon(TablerIcons.Outline.Check, null, tint = RelayTheme.colors.accent) }) else null,
                     onClick = {
-                        onDismiss()
                         o.onClick()
+                        onDismiss()
                     },
                 )
             }

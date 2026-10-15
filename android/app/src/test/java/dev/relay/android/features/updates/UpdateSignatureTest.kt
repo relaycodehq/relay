@@ -76,13 +76,13 @@ class UpdateSignatureTest {
         assertFalse(signedByAny(body + '\n'.code.toByte(), sig, Releases.keys))
     }
 
-    @Test fun readsTheRealFeedAsTheExpoAppsApk() {
-        val newest = parseFeed(resource("latest.json"), "dev.relay.android")
-        assertEquals("0.12.0", newest.release)
-        assertEquals("0.12.0", newest.version)
-        assertEquals(null, newest.applicationId)
-        assertFalse(newest.installableBy("dev.relay.android"))
-        assertTrue(newest.installableBy("dev.relay.remote"))
+    @Test fun readsTheRealFeedAsTheExpoAppsApkAndNothingForThisApp() {
+        assertEquals(null, parseFeed(resource("latest.json"), "dev.relay.android"))
+        val expo = parseFeed(resource("latest.json"), "dev.relay.remote")!!
+        assertEquals("0.12.0", expo.release)
+        assertEquals("0.12.0", expo.version)
+        assertEquals(null, expo.applicationId)
+        assertFalse(expo.installableBy("dev.relay.android"))
     }
 
     private fun resource(name: String) =

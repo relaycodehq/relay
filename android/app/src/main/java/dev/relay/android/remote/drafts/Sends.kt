@@ -52,16 +52,11 @@ object Sends {
     fun attach(remote: Remote, filesDir: File) {
         if (!attached.add(remote)) return
         val (drafts, outbox) = stores(filesDir)
-        // The overview's drafts list held when the link came up: the cached copy, not a fresh one.
-        var stale: Any? = null
-        var handled: Any? = null
         scope.launch {
             var was: LinkState? = null
             remote.status.collect { status ->
                 val computer = remote.active.value
                 if (status.state == LinkState.Online && was != LinkState.Online) {
-                    stale = remote.overview.value?.drafts
-                    handled = null
                     _connection.value++
                     if (computer != null) outbox.resendFailed(outboxLink(remote.client.value), computer)
                 } else if (status.state != LinkState.Online && computer != null) {
@@ -70,14 +65,11 @@ object Sends {
                 was = status.state
             }
         }
+        // Each fetched overview, not each change of the shown one: a reconnect
+        // whose overview equals the saved copy changes nothing there.
         scope.launch {
-            remote.overview.collect { overview ->
-                val computer = remote.active.value ?: return@collect
-                val client = remote.client.value ?: return@collect
-                if (overview == null || remote.status.value.state != LinkState.Online) return@collect
-                val list = overview.drafts
-                if (list === stale || (list != null && list === handled)) return@collect
-                handled = list
+            remote.fresh.collect { (computer, client, overview) ->
+                if (remote.status.value.state != LinkState.Online || remote.client.value !== client) return@collect
                 drafts.online(computer, draftLink(client), overview)
             }
         }

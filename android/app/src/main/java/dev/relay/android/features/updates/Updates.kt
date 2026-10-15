@@ -109,7 +109,5 @@ class Updates(
 
     fun checkNow() = scope.launch { latest.check(force = true) }
 
-    fun openReleasePage() = native.openUrl(Releases.PAGE)
-
     private companion object { const val KEY = "relay.latestApp" }
 }

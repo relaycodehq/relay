@@ -8,6 +8,7 @@ import android.net.Uri
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -26,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,6 +85,22 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, url: String?) {
+    val context = LocalContext.current
+    val active by remote.active.collectAsStateWithLifecycle()
+    val computers by remote.computers.collectAsStateWithLifecycle()
+    LaunchedEffect(active, computers) {
+        val ids = computers.map { it.id }.toSet()
+        // Not before the pairings are read: an empty list would wipe every computer's.
+        if (active !in ids) return@LaunchedEffect
+        ports.keepOnly(ids)
+        BrowserProfiles.keepOnly(context, ids)
+    }
+    // Pages, their storage and the ports they may open are one computer's; another starts over.
+    key(active) { ComputerBrowser(remote, tunnels, ports, url, active.orEmpty()) }
+}
+
+@Composable
+private fun ComputerBrowser(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, url: String?, computer: String) {
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
     val focus = LocalFocusManager.current
@@ -96,7 +115,7 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
     var href by rememberSaveable { mutableStateOf(url?.let(LocalUrls::link)?.href) }
     val page = href?.let(LocalUrls::link)
     // A route's address goes through the same yes as a link: only a listed or typed port loads at once.
-    var wanted by remember { mutableStateOf(page?.takeIf { ports.allowed(it.port) }) }
+    var wanted by remember { mutableStateOf(page?.takeIf { ports.allowed(computer, it.port) }) }
     var loads by remember { mutableIntStateOf(0) }
     var view by remember { mutableStateOf<WebView?>(null) }
     var text by remember { mutableStateOf(page?.shown.orEmpty()) }
@@ -106,6 +125,8 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
     var canBack by remember { mutableStateOf(false) }
     var canForward by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
+    // A WebView whose renderer died can't be used again; each one gets the next.
+    var generation by remember { mutableIntStateOf(0) }
     // A link to a port that's neither a site nor typed, waiting for a yes.
     var asking by remember { mutableStateOf<SiteAddress?>(null) }
     val scope = rememberCoroutineScope()
@@ -123,14 +144,30 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
 
     /** Opens [address] if Sites lists its port or it was typed; [typed] says this one is. */
     fun open(address: SiteAddress, typed: Boolean = false) {
-        if (typed) ports.type(address.port)
-        if (ports.allowed(address.port)) return go(address)
+        if (typed) ports.type(computer, address.port)
+        if (ports.allowed(computer, address.port)) return go(address)
         focus.clearFocus()
         scope.launch {
             // Sites may not have been asked yet in this run.
-            runCatching { remote.call { sites() } }.onSuccess { list -> ports.sawSites(list.map { it.port }) }
-            if (ports.allowed(address.port)) go(address) else asking = address
+            runCatching { remote.call { sites() } }.onSuccess { list ->
+                if (remote.active.value == computer) ports.sawSites(computer, list.map { it.port })
+            }
+            if (ports.allowed(computer, address.port)) go(address) else asking = address
         }
+    }
+
+    /**
+     * The computer lets the tunnel reach a typed port once it's told, and
+     * forgets on restart: tells it [port] before the page loads, and beside
+     * that every other typed port a page here may call, the ones the phone
+     * listens for.
+     */
+    suspend fun allowTyped(port: Int) {
+        suspend fun allow(p: Int) {
+            if (ports.typed(computer, p) && remote.active.value == computer) runCatching { remote.call { tunnelAllow(p) } }
+        }
+        for (p in tunnels.listening() - port) scope.launch { allow(p) }
+        allow(port)
     }
     val opener by rememberUpdatedState({ address: SiteAddress -> open(address) })
     LaunchedEffect(Unit) { if (wanted == null) page?.let { open(it) } }
@@ -143,8 +180,10 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
     LaunchedEffect(view, loads) {
         val web = view ?: return@LaunchedEffect
         val address = wanted ?: return@LaunchedEffect
-        // The computer lets the tunnel reach a typed port once it's told; it forgets on restart.
-        if (ports.typed(address.port)) runCatching { remote.call { tunnelAllow(address.port) } }
+        // The one that replaced a dead renderer waits for Try again: a page
+        // that crashes it would crash it again.
+        if (failed != null) return@LaunchedEffect
+        allowTyped(address.port)
         val local = withContext(Dispatchers.IO) { runCatching { tunnels.listen(address.port) } }
         local.onSuccess { web.loadUrl(LocalUrls.local(address, it)) }
             .onFailure { failed = "The phone couldn't listen for localhost:${address.port}: ${it.message}" }
@@ -154,7 +193,7 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
     LaunchedEffect(online) {
         val back = wanted
         if (online && !wasOnline && back != null) {
-            if (ports.typed(back.port)) runCatching { remote.call { tunnelAllow(back.port) } }
+            allowTyped(back.port)
             view?.reload()
         }
         wasOnline = online
@@ -189,8 +228,12 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
                 IconButton(TablerIcons.Outline.ArrowLeft, "Back", { view?.goBack() }, size = ButtonSize.Sm, enabled = canBack)
                 IconButton(TablerIcons.Outline.ArrowRight, "Forward", { view?.goForward() }, size = ButtonSize.Sm, enabled = canForward)
                 IconButton(TablerIcons.Outline.Refresh, "Reload", {
-                    failed = null
-                    view?.reload()
+                    val web = view
+                    if (web?.url == null) page?.let { open(it) }
+                    else {
+                        failed = null
+                        web.reload()
+                    }
                 }, size = ButtonSize.Sm)
             }
         }
@@ -204,11 +247,12 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
                     description = "Opening its localhost here needs a newer Relay there.",
                     icon = TablerIcons.Outline.PlugConnectedX,
                 )
-                page != null -> {
+                page != null -> key(generation) {
                     AndroidView(
                         factory = { ctx ->
                             browserView(
                                 ctx,
+                                computer,
                                 tunnels,
                                 on = object : BrowserEvents {
                                     override fun open(address: SiteAddress) = opener(address)
@@ -236,11 +280,18 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
                                         failed = description
                                         loading = false
                                     }
+                                    override fun gone(description: String) {
+                                        failed = description
+                                        loading = false
+                                        canBack = false
+                                        canForward = false
+                                        generation++
+                                    }
                                 },
                             ).also { view = it }
                         },
                         onRelease = { web ->
-                            view = null
+                            if (view === web) view = null
                             web.destroy()
                         },
                         modifier = Modifier.fillMaxSize(),
@@ -280,6 +331,8 @@ private interface BrowserEvents {
     fun finished(web: WebView)
     fun moved(web: WebView, url: String)
     fun failed(description: String)
+    /** Its renderer crashed or was killed; this WebView is done. */
+    fun gone(description: String)
 }
 
 /**
@@ -288,7 +341,9 @@ private interface BrowserEvents {
  * browser or app for it.
  */
 @SuppressLint("SetJavaScriptEnabled")
-private fun browserView(context: Context, tunnels: TunnelListeners, on: BrowserEvents) = WebView(context).apply {
+private fun browserView(context: Context, computer: String, tunnels: TunnelListeners, on: BrowserEvents) = WebView(context).apply {
+    // Before anything else touches it.
+    BrowserProfiles.use(this, computer)
     settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
@@ -326,6 +381,12 @@ private fun browserView(context: Context, tunnels: TunnelListeners, on: BrowserE
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (request.isForMainFrame) on.failed(error.description?.toString() ?: "It didn't load.")
+        }
+
+        // Unhandled, a renderer that dies takes the whole app with it.
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            on.gone(if (detail.didCrash()) "The page crashed." else "Android closed the page to free memory.")
+            return true
         }
     }
     webChromeClient = object : WebChromeClient() {

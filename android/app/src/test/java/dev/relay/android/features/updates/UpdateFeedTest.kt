@@ -10,6 +10,7 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -21,6 +22,7 @@ class UpdateFeedTest {
     private val private = Ed25519PrivateKeyParameters(SecureRandom())
     private val key = Base64.getEncoder().encodeToString(private.generatePublicKey().encoded)
     private val me = "dev.relay.android"
+    private val expo = Releases.EXPO_APP_ID
 
     private val apk = buildJsonObject {
         put("name", "Relay-Android.apk")
@@ -60,19 +62,15 @@ class UpdateFeedTest {
     }
 
     @Test fun takesTheApkBesideTheDesktopsFilesWithItsOwnVersion() = runBlocking {
-        val newest = fetchNewestApp(serve(feed("android" to apk)), me, keys = listOf(key))
+        val newest = fetchNewestApp(serve(feed("android" to apk)), expo, keys = listOf(key))
         assertEquals(
             NewestApp("0.10.2", "0.10.0", apk["url"].toString().trim('"'), "abc", "A".repeat(86) + "==", 57_000_000),
             newest,
         )
     }
 
-    @Test fun fallsBackToTheReleasesOwnApkForOldFeeds() = runBlocking {
-        val newest = fetchNewestApp(serve(JsonObject(mapOf("version" to str("0.9.1")))), me, keys = listOf(key))
-        assertEquals(
-            NewestApp("0.9.1", "0.9.1", "https://github.com/relaycodehq/relay/releases/download/v0.9.1/Relay-Android.apk"),
-            newest,
-        )
+    @Test fun anOldFeedWithoutAndroidEntriesHasNothingForThisApp() = runBlocking {
+        assertNull(fetchNewestApp(serve(JsonObject(mapOf("version" to str("0.9.1")))), me, keys = listOf(key)))
     }
 
     @Test fun refusesAFeedThatIsNotSignedByAPinnedKey() {
@@ -95,18 +93,20 @@ class UpdateFeedTest {
     @Test fun prefersAnEntryForThisAppsId() = runBlocking {
         val native = with(apk, "version" to str("0.2.0"), "applicationId" to str(me), "url" to str("https://example.test/native.apk"))
         val newest = fetchNewestApp(serve(feed("android" to apk, "androidNative" to native)), me, keys = listOf(key))
-        assertEquals("0.2.0", newest.version)
+        assertEquals("0.2.0", newest!!.version)
         assertTrue(newest.installableBy(me))
         // The Expo app still reads its own entry from the same feed.
-        val expo = parseFeed(serve(feed("android" to apk, "androidNative" to native)).let { runBlocking { it("x").body } }, "dev.relay.remote")
-        assertEquals("0.10.0", expo.version)
+        val theirs = parseFeed(serve(feed("android" to apk, "androidNative" to native)).let { runBlocking { it("x").body } }, expo)
+        assertEquals("0.10.0", theirs!!.version)
     }
 
-    @Test fun anEntryWithoutAnIdIsTheExpoAppsAndNotInstallableHere() {
-        val newest = parseFeed(runBlocking { serve(feed("android" to apk))("x").body }, me)
-        assertFalse(newest.installableBy(me))
+    @Test fun aFeedWithOnlyTheExpoAppsEntryHasNothingForThisApp() {
+        // Releases built without RELAY_ANDROID_NATIVE: the Expo app's 0.10.0 is no version of this app.
+        val bytes = runBlocking { serve(feed("android" to apk))("x").body }
+        assertNull(parseFeed(bytes, me))
+        assertFalse(parseFeed(bytes, expo)!!.installableBy(me))
         val mine = parseFeed(runBlocking { serve(feed("android" to with(apk, "applicationId" to str(me))))("x").body }, me)
-        assertTrue(mine.installableBy(me))
+        assertTrue(mine!!.installableBy(me))
     }
 
     @Test fun offersOnlyANewerApk() {
