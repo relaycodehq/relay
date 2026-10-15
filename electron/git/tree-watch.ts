@@ -19,8 +19,13 @@ export function noticed(file: string | null, inGitDir: boolean) {
   const gitAt = inGitDir ? 0 : parts[0] === ".git" ? 1 : -1;
   if (gitAt < 0) return true;
   const inside = parts.slice(gitAt);
-  // "relay" holds Relay's own notes, written as it reads the tree.
-  if (["objects", "logs", "lfs", "hooks", "relay"].includes(inside[0] ?? ""))
+  // "relay" holds Relay's own notes, written as it reads the tree; Git's
+  // file system monitor drops a cookie there on every `git status`.
+  if (
+    ["objects", "logs", "lfs", "hooks", "relay", "fsmonitor--daemon"].includes(
+      inside[0] ?? "",
+    )
+  )
     return false;
   const name = parts[parts.length - 1]!;
   return !name.endsWith(".lock") && name !== "FETCH_HEAD";

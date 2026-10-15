@@ -26,6 +26,7 @@ it("notices what a working tree shows, not Git's own churn", () => {
   expect(noticed(".git/index.lock", false)).toBe(false);
   expect(noticed(".git/FETCH_HEAD", false)).toBe(false);
   expect(noticed(".git/relay/ignored-touches.json", false)).toBe(false);
+  expect(noticed(".git/fsmonitor--daemon/cookies/84249-3", false)).toBe(false);
   expect(noticed("web/node_modules/x/index.js", false)).toBe(false);
   expect(noticed("worktrees/feature/HEAD", true)).toBe(true);
   expect(noticed("objects/pack/pack-1.idx", true)).toBe(false);
