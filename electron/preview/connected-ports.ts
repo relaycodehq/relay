@@ -1,7 +1,12 @@
 import { execFile } from "node:child_process";
 
-function run(file: string, args: string[]) {
-  return new Promise<string>((resolve) => {
+/**
+ * Rejects when the tool is missing, timed out or ran out of room: only an
+ * answer may say nobody is connected. `nothingFound` is the exit code that
+ * means no matches.
+ */
+function run(file: string, args: string[], nothingFound?: number) {
+  return new Promise<string>((resolve, reject) => {
     execFile(
       file,
       args,
@@ -11,8 +16,10 @@ function run(file: string, args: string[]) {
         windowsHide: true,
         env: { ...process.env, LC_ALL: "C" },
       },
-      // lsof exits 1 when it finds nothing.
-      (_e, out) => resolve(out ?? ""),
+      (e, out) =>
+        !e || (e.code === nothingFound && !e.killed)
+          ? resolve(out ?? "")
+          : reject(e),
     );
   });
 }
@@ -53,7 +60,7 @@ export async function connectedPorts(ports: number[]): Promise<Set<number>> {
             ...ports.map((port) => `-iTCP:${port}`),
             "-sTCP:ESTABLISHED",
             "-Fn",
-          ]),
+          ], 1),
         );
   return new Set(found.filter((port) => ports.includes(port)));
 }

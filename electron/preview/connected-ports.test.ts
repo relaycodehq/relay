@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { lsofConnected, netstatConnected } from "./connected-ports";
+import {
+  connectedPorts,
+  lsofConnected,
+  netstatConnected,
+} from "./connected-ports";
 
 describe("connected ports", () => {
   it("reads both ends of lsof's connections, IPv4 and IPv6", () => {
@@ -26,4 +30,19 @@ describe("connected ports", () => {
     ].join("\r\n");
     expect(netstatConnected(out)).toEqual([3100, 51234, 51240, 3200]);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "says nobody is connected only when lsof answered",
+    async () => {
+      // Nothing listens on port 1, so lsof exits 1 with no matches.
+      await expect(connectedPorts([1])).resolves.toEqual(new Set());
+      const path = process.env.PATH;
+      process.env.PATH = "/nonexistent";
+      try {
+        await expect(connectedPorts([1])).rejects.toThrow();
+      } finally {
+        process.env.PATH = path;
+      }
+    },
+  );
 });
