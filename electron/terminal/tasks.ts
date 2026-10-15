@@ -349,11 +349,17 @@ class ProjectTasks {
   terminalShells(): ReadonlySet<number> {
     return new Set(this.terminals.keys());
   }
-  /** The live processes of a listed task, the shell it started from first. */
+  /**
+   * The live processes of a listed task, the shell it started from first
+   * while it runs. One that exited is left out: its pid may be another's now.
+   */
   members(id: string): number[] {
     const task = this.tracked.get(id);
     if (!task) return [];
-    return [task.root, ...[...task.pids.keys()].filter((p) => p !== task.root)];
+    const pids = [...task.pids.keys()];
+    return task.pids.has(task.root)
+      ? [task.root, ...pids.filter((p) => p !== task.root)]
+      : pids;
   }
   /** The thread and folder an agent CLI was seen running commands for. */
   agentWork(pid: number, started: number) {
