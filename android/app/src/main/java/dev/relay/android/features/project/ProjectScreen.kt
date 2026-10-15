@@ -1,6 +1,5 @@
 package dev.relay.android.features.project
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,7 +38,6 @@ import dev.relay.android.remote.model.WorkingTree
 import dev.relay.android.remote.tunnel.SiteAddress
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListRow
-import dev.relay.android.ui.RowSize
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.SectionHeader
 import dev.relay.android.ui.Text
@@ -56,6 +54,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import dev.relay.android.ui.listPadding
 
 private val operationNames = mapOf(
     "MERGE_HEAD" to "merge",
@@ -138,7 +137,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
                     }
                 }
             }, Modifier.fillMaxSize()) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding()) {
                     item(key = "new") {
                         Entry(TablerIcons.Outline.Plus, "New thread", tint = c.accent) { navigator.push(Route.NewThread(projectId = id)) }
                     }
@@ -174,14 +173,15 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
                             else ports.joinToString(", ") { "localhost:$it" },
                         ) { navigator.push(Route.Browser(ports.singleOrNull()?.let { SiteAddress(it).href })) }
                     }
-                    item(key = "threads-head") { SectionHeader("Threads", Modifier.padding(horizontal = 12.dp)) }
+                    item(key = "threads-head") { SectionHeader("Threads", count = chats.size.takeIf { it > 0 }) }
                     items(chats, key = { it.id }) { chat ->
                         ThreadRow(chat, threadDraft(drafts, chat.id), { navigator.push(Route.Thread(chat.id)) })
                     }
                     if (chats.isEmpty()) item(key = "none") {
                         Text(
                             "No threads in this project yet.",
-                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                            style = RelayTheme.type.xs,
                             color = c.mutedForeground,
                         )
                     }
@@ -196,8 +196,7 @@ private fun Entry(icon: ImageVector, title: String, subtitle: String? = null, ti
     ListRow(
         title,
         subtitle = subtitle,
-        size = RowSize.Sm,
-        leading = { Icon(icon, null, tint = tint, size = 17.dp) },
+        leading = { Icon(icon, null, tint = tint, size = 16.dp) },
         chevron = true,
         onClick = onClick,
     )

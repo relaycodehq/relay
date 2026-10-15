@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -62,6 +61,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import dev.relay.android.ui.SectionHeader
+import dev.relay.android.ui.listPadding
 
 private val LIST_BOTTOM = 16.dp
 
@@ -184,13 +185,8 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
             val needle = query.trim().lowercase()
             if (needle.isNotEmpty()) {
                 val results = o.chats.filter { "${it.title} ${names[it.projectId] ?: ""}".lowercase().contains(needle) }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LIST_BOTTOM)) {
-                    item(key = "head") {
-                        Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.Bottom) {
-                            SectionLabel("Results", Modifier.weight(1f))
-                            Text("${results.size}", Modifier.padding(bottom = 6.dp), style = RelayTheme.type.xs, color = c.mutedForeground)
-                        }
-                    }
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(bottom = LIST_BOTTOM)) {
+                    item(key = "head") { SectionHeader("Results", count = results.size) }
                     items(results, key = { it.id }) { chat ->
                         ThreadRow(chat, threadDraft(drafts, chat.id), { openChat(chat) }, project = names[chat.projectId], selected = chat.id == selected)
                     }

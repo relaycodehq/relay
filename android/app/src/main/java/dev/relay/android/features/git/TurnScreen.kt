@@ -2,7 +2,6 @@ package dev.relay.android.features.git
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +43,14 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import dev.relay.android.ui.SectionHeader
+import dev.relay.android.ui.listPadding
 
 /**
  * The desktop's Turn changes pane: what one agent turn changed, or with
@@ -90,14 +97,14 @@ fun TurnScreen(
         when {
             files == null && error != null -> LoadFailed(error, { if (worktree) model.loadStatus() else model.reloadThread() })
             files == null -> Loading()
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding()) {
                 item {
                     Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
+                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(summary(worktree, status, all, reverted), Modifier.weight(1f), color = c.mutedForeground)
+                        Text(summary(worktree, status, all, reverted), Modifier.weight(1f), style = RelayTheme.type.xs, color = c.mutedForeground)
                         if (!worktree && all > 0) {
                             val redo = reverted == all
                             Button(
@@ -120,19 +127,12 @@ fun TurnScreen(
                     }
                     val s = status
                     if (worktree && s?.from != null && s.landed == null && !s.removed && s.files.isNotEmpty()) {
-                        Button("Merge into ${s.from}", { merging = true }, Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp))
+                        Button("Merge into ${s.from}", { merging = true }, Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(bottom = 8.dp))
                     }
                 }
                 if (files.isEmpty()) item { EmptyNote("Nothing changed.", Modifier.fillMaxWidth()) }
                 for ((folder, group) in byFolder(files)) {
-                    if (folder.isNotEmpty()) item(key = "dir:$folder") {
-                        Text(
-                            folder,
-                            Modifier.padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 4.dp),
-                            style = RelayTheme.type.monoSm,
-                            color = c.faint,
-                        )
-                    }
+                    if (folder.isNotEmpty()) item(key = "dir:$folder") { SectionHeader(folder, count = group.size) }
                     items(group, key = { it.path }) { f ->
                         TurnFileRow(f, worktree, busy, onOpen = {
                             nav.push(diffRoute(if (worktree) RemoteDiffSource.worktree(chatId, f.path) else RemoteDiffSource.turn(chatId, messageId!!, f.path)))
@@ -168,9 +168,15 @@ private fun summary(worktree: Boolean, status: dev.relay.android.remote.model.Wo
 private fun TurnFileRow(f: TurnFileChange, worktree: Boolean, busy: String?, onOpen: () -> Unit, onRewind: () -> Unit) {
     val c = RelayTheme.colors
     val gone = f.revertedBy != null
-    Row(Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (pressed) c.hover else Color.Transparent)
+            .heightIn(min = 44.dp).padding(end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
-            Modifier.weight(1f).pressable(onOpen, scale = false).padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.weight(1f).pressable(onOpen, scale = false, interaction = press).padding(start = 12.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -187,13 +193,13 @@ private fun TurnFileRow(f: TurnFileChange, worktree: Boolean, busy: String?, onO
                 Text("−${f.deletions}", style = RelayTheme.type.monoSm, color = c.deletionText)
             }
         }
-        if (!worktree) Box(Modifier.padding(start = 12.dp)) {
+        if (!worktree) Box(Modifier.padding(start = 8.dp)) {
             IconButton(
                 if (gone) TablerIcons.Outline.ArrowForwardUp else TablerIcons.Outline.ArrowBackUp,
                 if (gone) "Redo ${f.path}" else "Roll back ${f.path}",
                 onRewind,
-                variant = ButtonVariant.Outline,
                 size = ButtonSize.Sm,
+                tint = c.mutedForeground,
                 enabled = busy == null,
                 loading = busy == f.path,
             )

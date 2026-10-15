@@ -39,6 +39,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
 import io.github.lyxnx.compose.ui.tablericons.outline.Notebook
+import dev.relay.android.ui.ListInset
+import dev.relay.android.ui.Spinner
+import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
+import io.github.lyxnx.compose.ui.tablericons.outline.Message
 
 // mobile/src/ui/NewThreadWhere.tsx: where a new thread starts and works.
 
@@ -146,18 +150,25 @@ fun ColumnScope.WhereIntro(
 @Composable
 fun ColumnScope.RecentThreads(chats: List<RemoteChatSummary>, onOpen: (RemoteChatSummary) -> Unit) {
     Column(
-        Modifier.weight(1f).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
+        Modifier.weight(1f).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = ListInset, vertical = 8.dp),
+        verticalArrangement = Arrangement.Bottom,
     ) {
-        SectionHeader("Recent threads")
+        SectionHeader("Recent threads", count = chats.size)
         ListGroup {
             chats.forEach { chat ->
                 ListRow(
                     chat.title.ifEmpty { "New thread" },
                     subtitle = when {
-                        chat.running == true -> "Working"
                         chat.waiting == true -> "Waiting for you"
+                        chat.running == true -> "Working"
                         else -> null
+                    },
+                    leading = {
+                        when {
+                            chat.waiting == true -> Icon(TablerIcons.Outline.HelpCircle, null, size = 16.dp, tint = RelayTheme.colors.accent)
+                            chat.running == true -> Spinner(size = 13.dp, color = RelayTheme.colors.mutedForeground)
+                            else -> Icon(TablerIcons.Outline.Message, null, size = 16.dp, tint = RelayTheme.colors.mutedForeground)
+                        }
                     },
                     onClick = { onOpen(chat) },
                 )

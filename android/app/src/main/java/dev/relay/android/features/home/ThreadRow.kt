@@ -48,6 +48,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToLong
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
 
 /** "just now", "4m ago", "yesterday", then a date (mobile/src/ui/ThreadRow.tsx's ago). */
 fun ago(at: Long, now: Long, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
@@ -147,21 +150,21 @@ fun ThreadRow(
         else -> Color.Transparent
     }
     Row(
-        modifier.fillMaxWidth().background(fill)
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(fill)
             .pressable(onClick = onClick, onLongClick = onLongClick, scale = false, interaction = press)
-            .heightIn(min = 60.dp).padding(horizontal = 16.dp),
+            .heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(20.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) {
             when {
-                blocked -> Icon(TablerIcons.Outline.HelpCircle, "Waiting for you", tint = c.accent, size = 17.dp)
-                working -> Spinner(size = 16.dp, color = c.mutedForeground)
-                chat.provider != null -> ProviderIcon(chat.provider, c.mutedForeground, size = 15.dp)
+                blocked -> Icon(TablerIcons.Outline.HelpCircle, "Waiting for you", tint = c.accent, size = 16.dp)
+                working -> Spinner(size = 13.dp, color = c.mutedForeground)
+                chat.provider != null -> ProviderIcon(chat.provider, c.mutedForeground, size = 14.dp)
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(chat.title, style = RelayTheme.type.base.copy(fontWeight = FontWeight.Medium), color = c.foreground, maxLines = 1)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(chat.title, style = RelayTheme.type.base.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = c.foreground, maxLines = 1)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.Text(
                     meta,

@@ -2,7 +2,6 @@ package dev.relay.android.features.git
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,7 +30,6 @@ import dev.relay.android.remote.model.CommitSummary
 import dev.relay.android.remote.model.RemoteDiffSource
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonVariant
-import dev.relay.android.ui.Divider
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.SectionHeader
@@ -39,6 +37,9 @@ import dev.relay.android.ui.Text
 import dev.relay.android.ui.theme.RelayTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import dev.relay.android.ui.listPadding
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.GitCommit
 
 private const val PAGE = 100
 
@@ -72,13 +73,19 @@ fun HistoryScreen(remote: Remote, where: String) {
         when {
             now == null && error != null -> LoadFailed(error!!, model::load)
             now == null -> Loading()
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 items(now.commits, key = { it.sha }) { c ->
-                    ListRow(c.subject, subtitle = historyLine(c), subtitleLines = 1, chevron = true, onClick = { nav.push(Route.Commit(where, c.sha)) })
-                    Divider()
+                    ListRow(
+                        c.subject,
+                        subtitle = historyLine(c),
+                        subtitleLines = 1,
+                        leadingIcon = TablerIcons.Outline.GitCommit,
+                        chevron = true,
+                        onClick = { nav.push(Route.Commit(where, c.sha)) },
+                    )
                 }
                 if (now.more) item {
-                    Button("Older commits", { model.limit.value += PAGE }, Modifier.fillMaxWidth().padding(16.dp), variant = ButtonVariant.Outline)
+                    Button("Older commits", { model.limit.value += PAGE }, Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp), variant = ButtonVariant.Outline)
                 }
             }
         }
@@ -95,6 +102,10 @@ fun historyLine(c: CommitSummary, now: Long = System.currentTimeMillis()): Strin
 }
 
 private val statusLabels = mapOf("A" to "Added", "M" to "Modified", "D" to "Deleted", "R" to "Renamed", "C" to "Copied", "T" to "Type changed")
+
+/** The file's folder, then what [commitFileLine] says. */
+private fun fileLine(f: CommitFileChange): String =
+    listOfNotNull(f.path.substringBeforeLast('/', "").ifEmpty { null }, commitFileLine(f)).joinToString(" · ")
 
 fun commitFileLine(f: CommitFileChange): String {
     val label = statusLabels[f.status] ?: f.status
@@ -131,10 +142,10 @@ fun CommitScreen(remote: Remote, where: String, sha: String) {
         when {
             now == null && error != null -> LoadFailed(error!!, model::load)
             now == null -> Loading()
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 item {
                     SelectionContainer {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(now.subject, style = RelayTheme.type.title.copy(fontWeight = FontWeight.SemiBold))
                             if (now.body.isNotBlank()) Text(now.body.trim())
                             Text("${now.author} · ${dateTime(now.time * 1000)}", style = RelayTheme.type.xs, color = c.mutedForeground)
@@ -142,12 +153,11 @@ fun CommitScreen(remote: Remote, where: String, sha: String) {
                         }
                     }
                 }
-                item { SectionHeader(plural(now.files.size, "file"), Modifier.padding(horizontal = 12.dp)) }
+                item { SectionHeader("Files", count = now.files.size) }
                 items(now.files, key = { it.path }) { f ->
-                    ListRow(f.path, subtitle = commitFileLine(f), chevron = true, onClick = {
+                    ListRow(f.path.substringAfterLast('/'), subtitle = fileLine(f), subtitleLines = 1, chevron = true, onClick = {
                         nav.push(diffRoute(RemoteDiffSource.commit(where, sha, f.path)))
                     })
-                    Divider()
                 }
             }
         }

@@ -1,8 +1,6 @@
 package dev.relay.android.features.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +30,8 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Components
 import kotlinx.coroutines.CoroutineScope
+import dev.relay.android.ui.ListInset
+import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 
 /**
  * mobile/src/app/settings.tsx: theme, notifications, this app's version and
@@ -51,10 +51,7 @@ fun SettingsScreen(
     val name = computerName(remote)
     val overview by remote.overview.collectAsState()
     Screen("Settings", onBack = nav.backAction) {
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = ListInset).padding(bottom = 24.dp)) {
             SectionHeader("Theme")
             ListGroup {
                 val known = overview?.appearance != null
@@ -71,6 +68,7 @@ fun SettingsScreen(
                 ListRow(
                     "Relay ${updates.installed}",
                     subtitle = "As installed; new versions come from GitHub.",
+                    leadingIcon = TablerIcons.Outline.DeviceMobile,
                     subtitleLines = 3,
                 )
                 LatestAppRows(updates)
@@ -89,7 +87,6 @@ fun SettingsScreen(
                     onClick = { nav.push(Route.Gallery) },
                 )
             }
-            Spacer(Modifier.size(24.dp))
         }
     }
 }
@@ -111,7 +108,6 @@ internal fun ChoiceRow(label: String, hint: String, chosen: Boolean, onClick: ()
         label,
         subtitle = hint,
         subtitleLines = 3,
-        selected = chosen,
         trailing = if (chosen) ({
             Icon(TablerIcons.Outline.Check, null, Modifier.size(16.dp), tint = RelayTheme.colors.primary)
         }) else null,

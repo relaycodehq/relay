@@ -1,8 +1,6 @@
 package dev.relay.android.features.home
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,11 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.relay.android.remote.model.RemoteChatSummary
@@ -30,6 +26,8 @@ import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import dev.relay.android.ui.SectionHeader
+import dev.relay.android.ui.listPadding
 
 /** Scratchpad threads shown before "Show more", as on the desktop. */
 private const val SCRATCH_PAGE = 5
@@ -62,15 +60,6 @@ fun projectLine(chats: List<RemoteChatSummary>, now: Long): String {
     return (if (busy > 0) "$busy working · " else "") + "$count · ${ago(chats.maxOf { it.updated }, now)}"
 }
 
-@Composable
-internal fun SectionLabel(text: String, modifier: Modifier = Modifier) =
-    Text(
-        text,
-        modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
-        style = RelayTheme.type.xs.copy(fontWeight = FontWeight.SemiBold),
-        color = RelayTheme.colors.mutedForeground,
-    )
-
 /** The Projects tab: the Scratchpad, then each folder's projects. */
 @Composable
 fun ProjectsList(
@@ -90,14 +79,12 @@ fun ProjectsList(
     val folders = remember(overview.projects) { projectFolders(overview.projects) }
     val byProject = remember(overview.chats) { overview.chats.groupBy { it.projectId } }
 
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottom)) {
+    LazyColumn(modifier.fillMaxSize(), contentPadding = listPadding(bottom = bottom)) {
         item(key = "scratch-head") {
-            Row(Modifier.fillMaxWidth().padding(end = 12.dp), verticalAlignment = Alignment.Bottom) {
-                SectionLabel("Scratchpad", Modifier.weight(1f))
-                Box(
-                    Modifier.semantics { contentDescription = "New Scratchpad chat" }
-                        .pressable(onClick = onNewScratch).padding(start = 4.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
-                ) { Icon(TablerIcons.Outline.Plus, null, tint = c.mutedForeground, size = 17.dp) }
+            SectionHeader("Scratchpad") {
+                Box(Modifier.semantics { contentDescription = "New Scratchpad chat" }.pressable(onClick = onNewScratch).padding(4.dp)) {
+                    Icon(TablerIcons.Outline.Plus, null, tint = c.mutedForeground, size = 16.dp)
+                }
             }
         }
         items(if (allScratch) scratch else scratch.take(SCRATCH_PAGE), key = { it.id }) { chat ->
@@ -110,18 +97,18 @@ fun ProjectsList(
             Text(
                 if (allScratch) "Show less" else "Show ${scratch.size - SCRATCH_PAGE} more",
                 Modifier.fillMaxWidth().pressable(onClick = { allScratch = !allScratch }, scale = false)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                style = RelayTheme.type.sm,
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                style = RelayTheme.type.xs,
                 color = c.mutedForeground,
             )
         }
         for ((title, projects) in folders) {
-            item(key = "folder:$title") { SectionLabel(title) }
+            item(key = "folder:$title") { SectionHeader(title, count = projects.size) }
             items(projects, key = { "project:${it.id}" }) { p ->
                 ListRow(
                     p.name,
                     subtitle = projectLine(byProject[p.id].orEmpty(), now),
-                    leading = { ProjectIcon(p) },
+                    leading = { ProjectIcon(p, size = 16.dp) },
                     selected = p.id == selected,
                     subtitleLines = 1,
                     onClick = { onOpenProject(p) },

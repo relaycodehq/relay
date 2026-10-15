@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.remote.model.RemoteProject
-import dev.relay.android.ui.Divider
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.LocalToasts
@@ -54,6 +53,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Sunrise
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import dev.relay.android.ui.SectionHeader
 
 private const val SHELF_PAGE = 5
 
@@ -144,16 +144,14 @@ fun ActivityList(
         if (items.isEmpty()) return
         val shown = shelves.getValue(kind)
         item("shelf-$kind") {
-            Row(
-                Modifier.padding(top = 14.dp).fillMaxWidth().pressable(onClick = { shelves[kind] = if (shown > 0) 0 else SHELF_PAGE }, scale = false)
-                    .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // A group label like the ones above, that folds its rows away.
+            SectionHeader(
+                label,
+                Modifier.padding(top = 8.dp).clip(RoundedCornerShape(9.dp))
+                    .pressable(onClick = { shelves[kind] = if (shown > 0) 0 else SHELF_PAGE }, scale = false),
+                count = items.size,
             ) {
-                Text(label, color = c.mutedForeground)
-                Text("${items.size}", color = c.mutedForeground, style = RelayTheme.type.sm.copy(fontWeight = FontWeight.SemiBold))
-                Divider(Modifier.weight(1f))
-                Icon(TablerIcons.Outline.ChevronRight, if (shown > 0) "Fold $label" else "Show $label", Modifier.rotate(if (shown > 0) 90f else 0f), tint = c.mutedForeground, size = 14.dp)
+                Icon(TablerIcons.Outline.ChevronRight, if (shown > 0) "Fold $label" else "Show $label", Modifier.rotate(if (shown > 0) 90f else 0f), tint = c.faint, size = 13.dp)
             }
         }
         items(items.take(shown), key = { "$kind-${it.id}" }) { chat ->
@@ -207,7 +205,7 @@ fun ActivityList(
         }
         for ((label, group) in groupByState(families.top, families.started)) {
             if (group.isEmpty()) continue
-            item("section-$label") { SectionLabel(label, group.size) }
+            item("section-$label") { SectionHeader(label, count = group.size) }
             items(group, key = { it.id }) { chat -> family(chat) }
         }
         if (sections.active.isEmpty() && fresh.isEmpty()) item("empty") { InboxZero() }
@@ -222,15 +220,6 @@ fun ActivityList(
             onTriage = { triage(chat, it) },
             onCopy = { branch -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Branch", branch))) } },
         ) { acting = null }
-    }
-}
-
-@Composable
-private fun SectionLabel(label: String, count: Int) {
-    val c = RelayTheme.colors
-    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground)
-        Text("$count", style = RelayTheme.type.xs, color = c.faint)
     }
 }
 
