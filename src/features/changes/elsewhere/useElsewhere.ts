@@ -21,6 +21,19 @@ export function useElsewhere(chatId: string | undefined) {
 }
 
 /**
+ * The same list, read without watching: enough to know whether there is
+ * one. The Changes pane's `useElsewhere` keeps it fresh while it shows.
+ */
+export function useElsewhereListed(chatId: string | undefined) {
+  return useQuery({
+    queryKey: elsewhereKey(chatId ?? ""),
+    queryFn: () => api.threadElsewhere(chatId!),
+    enabled: !!chatId,
+    refetchInterval: 60_000,
+  });
+}
+
+/**
  * Asks Relay to say when `chatId`'s changes elsewhere may read differently,
  * and refreshes them then; true while Relay watches their repositories. One
  * per window, as with the working tree. A hidden window refreshes once it

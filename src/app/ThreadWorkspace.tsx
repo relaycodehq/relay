@@ -31,6 +31,7 @@ import { usePullThreads } from "./usePullThreads";
 import type { ShellNavigation } from "./useShellNavigation";
 import { useThreadFolder } from "./useThreadFolder";
 import { useThreadTerminal } from "./useThreadTerminal";
+import { useElsewhereListed } from "../features/changes/elsewhere/useElsewhere";
 import { useThreadPreviewPanel } from "./useThreadPreviewPanel";
 
 type ChatProps = ComponentProps<typeof ProjectChat>;
@@ -92,6 +93,9 @@ export function ThreadHeaderActions({
 }) {
   const { chat, panes, pull } = nav;
   const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
+  // A folder without Git has no Changes of its own, but what its agents
+  // changed in other repositories still shows there.
+  const elsewhere = useElsewhereListed(project.plain ? chat?.id : undefined);
   return (
     <div className="thread-header-actions">
       <ProjectChecksButton
@@ -132,7 +136,7 @@ export function ThreadHeaderActions({
         )}
         <ThreadPaneToggles
           panes={panes}
-          plain={project.plain}
+          plain={project.plain && !elsewhere.data?.groups.length}
           pull={pull}
           lines={folder.tree?.lines}
           filesOpen={panel.has("files")}

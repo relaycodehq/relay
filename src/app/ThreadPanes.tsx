@@ -20,6 +20,7 @@ import { PullReviewPane } from "../features/review/PullReviewPane";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
+import { ElsewhereOnly } from "../features/changes/elsewhere/ElsewhereOnly";
 import { WORKTREE_DELETED } from "./thread-folder";
 import {
   NO_SLOTS,
@@ -158,6 +159,17 @@ export function ThreadChanges({
               </>
             )}
           </div>
+        )
+      ) : project.plain ? (
+        // No Git here: only what its agents changed in other repositories.
+        chatId && (
+          <ElsewhereOnly
+            chatId={chatId}
+            onOpenThread={onOpenThread}
+            onOpenOutside={(path) =>
+              opens.openInEditor({ path, outside: true, directory: false })
+            }
+          />
         )
       ) : gone || deleted ? (
         <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
