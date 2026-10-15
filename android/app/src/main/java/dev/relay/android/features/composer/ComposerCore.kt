@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.consume
@@ -700,7 +701,6 @@ private fun Tool(label: String, modifier: Modifier = Modifier, enabled: Boolean 
 }
 
 private val SEND_SIZE = 32.dp
-// The card's 18dp corner less its 6dp inset, so the corners nest.
-private val SEND_SHAPE = RoundedCornerShape(12.dp)
+private val SEND_SHAPE = CircleShape
 // The desktop's .composer-stop red; the same on light and dark.
 private val STOP_RED = Color(0xFFED3949)
