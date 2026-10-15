@@ -1,5 +1,5 @@
 import { Activity, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BugReportPreview } from "../../../shared/bug-report";
 import { api } from "../../lib/api";
 import { useNow } from "../../lib/useNow";
@@ -26,6 +26,20 @@ export function ReportRecording({
   const [started, setStarted] = useState<{ endsAt: number }>();
   const running = preview.recordingNow ?? started;
   const kept = preview.draft.recording;
+  // Started before this page opened: its `record` call went with the page
+  // that made it, so this one waits for the recording itself.
+  const othersRecording = !!preview.recordingNow && !started;
+  useEffect(() => {
+    if (!othersRecording) return;
+    let live = true;
+    api.bugReportRecordingDone().then(
+      (next) => live && onChange(next),
+      (error) => live && onError(error),
+    );
+    return () => {
+      live = false;
+    };
+  }, [othersRecording]);
 
   async function record() {
     setStarted({ endsAt: Date.now() + seconds * 1000 });

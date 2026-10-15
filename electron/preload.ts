@@ -386,6 +386,7 @@ const methods = [
   "takeBugReportWanted",
   "recordBugReportPerformance",
   "stopBugReportRecording",
+  "bugReportRecordingDone",
   "removeBugReportRecording",
   "offerBugReportFiles",
   "dragTrayFiles",

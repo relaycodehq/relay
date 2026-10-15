@@ -406,6 +406,13 @@ export class BugReports {
     return this.preview();
   }
 
+  /** The report once the recording under way is saved, or at once without one. */
+  async recordingDone() {
+    // Its own failure is the caller of `record`'s to show.
+    await this.recording?.done.catch(() => {});
+    return this.preview();
+  }
+
   /** Ends a recording early; what it caught so far is kept. */
   stopRecording() {
     // A page opened while it saves shows "Saving", not the time left.

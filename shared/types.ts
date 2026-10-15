@@ -381,6 +381,8 @@ export interface Api
   ): Promise<import("./bug-report").BugReportPreview>;
   /** Ends a recording early, keeping what it caught. */
   stopBugReportRecording(): Promise<void>;
+  /** The report once the recording under way is saved; for a page that didn't start it. */
+  bugReportRecordingDone(): Promise<import("./bug-report").BugReportPreview>;
   removeBugReportRecording(): Promise<import("./bug-report").BugReportPreview>;
   /** Floats the files that go in by hand again, to drag into GitHub. */
   offerBugReportFiles(): Promise<void>;

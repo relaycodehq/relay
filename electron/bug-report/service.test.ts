@@ -326,6 +326,28 @@ it("discards a report only once its recording has stopped saving", async () => {
   expect(existsSync(join(root, "bug-report"))).toBe(false);
 });
 
+it("tells a page opened during a recording once it's saved", async () => {
+  const saved: { at?: number } = {};
+  const reports = service(fakeHost().host, {
+    performance: stoppableRecording(saved),
+  });
+  await reports.save(fields);
+  const recording = reports.record(30);
+  await vi.waitFor(async () =>
+    expect((await reports.preview()).recordingNow).toBeDefined(),
+  );
+  // The page that started it went; another opens and waits.
+  const done = reports.recordingDone();
+  reports.stopRecording();
+  const after = await done;
+  expect(saved.at).toBeDefined();
+  expect(after.recordingNow).toBeUndefined();
+  expect(after.draft.recording).toMatchObject({ seconds: 30 });
+  await recording;
+  // With none under way it answers at once.
+  expect((await reports.recordingDone()).recordingNow).toBeUndefined();
+});
+
 it("keeps nothing, and says nothing, when stopped before it recorded", async () => {
   const reports = service(fakeHost().host, {
     performance: {

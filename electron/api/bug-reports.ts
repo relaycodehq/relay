@@ -63,6 +63,7 @@ export function bugReportHandlers(ctx: ApiContext) {
       reports().record(seconds),
     ),
     stopBugReportRecording: () => reports().stopRecording(),
+    bugReportRecordingDone: () => reports().recordingDone(),
     removeBugReportRecording: () => reports().removeRecording(),
     offerBugReportFiles: () => reports().offerDrag(),
     dragTrayFiles: () => tray().list(),
