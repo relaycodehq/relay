@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds one release tag into a Relay release and publishes it to the releases
-# repo: Mac, Windows, Linux, the phone bundle and the APK, all on the Mac mini.
+# repo: Mac, Windows, Linux and the Android app, all on the Mac mini.
 # poll.sh runs it for every new v* tag. The tag names the version and its
 # message is the release notes; scripts/tag-release.sh makes one.
 #
@@ -31,7 +31,7 @@ version="${tag#v}"
 major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
 
 export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export JAVA_HOME="$ROOT/jdk/Contents/Home"
+export JAVA_HOME="$ROOT/jdk21/Contents/Home"
 export ANDROID_HOME="$ROOT/android-sdk"
 export GRADLE_USER_HOME="$ROOT/gradle"
 export NODE_OPTIONS="--max-old-space-size=3072"
@@ -56,14 +56,12 @@ cd "$src"
 git fetch --quiet --force --tags origin
 git checkout --quiet --force --detach "$tag"
 # node_modules survive between builds; installs below redo them when the lockfile changes.
-git clean -ffdxq -e node_modules -e mobile/node_modules -e packaging/checks-typescript/node_modules
+git clean -ffdxq -e node_modules -e packaging/checks-typescript/node_modules
 rm -rf "$out" && mkdir -p "$out"
 
-# The mini is short on disk: drop what a build leaves beyond its installers,
-# including native build output inside node_modules (APKs are rebuilt rarely).
+# The mini is short on disk: drop what a build leaves beyond its installers.
 tidy() {
-  rm -rf release mobile/android
-  find mobile/node_modules -type d \( -path '*/android/build' -o -path '*/android/.cxx' \) -prune -exec rm -rf {} + 2>/dev/null || true
+  rm -rf release android/app/build android/build
 }
 tidy
 
@@ -113,7 +111,6 @@ install() { # <dir>: npm ci, skipped while the lockfile is unchanged
 }
 step "Installing dependencies"
 install .
-install mobile
 # Electron 44 fetches its binary on first use instead of at install. Fetch it
 # here, or two test workers race to unpack it into the same folder.
 node -e 'require("electron")' >/dev/null
@@ -123,17 +120,14 @@ node scripts/sync-version.mjs "$version"
 step "Building"
 npm run build
 
-step "Phone bundle"
-node scripts/export-phone-bundle.mjs "$version"
-
 # In an x64 container under Rosetta. Sources go in and installers come out as
 # tar streams: a shared mount drops executable bits and breaks the AppImage.
-# Runs alongside the tests and the other platforms; it only reads dist,
-# dist-phone and tracked files, which nothing after this point changes.
+# Runs alongside the tests and the other platforms; it only reads dist and
+# tracked files, which nothing after this point changes.
 build_linux() {
   for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 3; done
   # dist/ is the same on every platform, so only the Electron side is rebuilt.
-  { git ls-files -z | tar --null -T - -cf - dist dist-phone; } |
+  { git ls-files -z | tar --null -T - -cf - dist; } |
     docker run --rm -i --name relay-ci-linux --platform linux/amd64 \
       -v relay-ci-npm:/root/.npm -v relay-ci-cache:/root/.cache \
       -e VERSION="$version" -e npm_config_fund=false -e npm_config_audit=false \
@@ -163,7 +157,7 @@ npx vitest run --maxWorkers=2
 python3 -m unittest discover -s tests/packaging
 
 step "Headless"
-# One archive for every platform, carrying the phone bundle just exported.
+# One archive for every platform.
 node scripts/package-headless.mjs "$version"
 cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
 
@@ -206,52 +200,16 @@ cat "$linux_log" && rm -f "$linux_log"
 docker_was_running=1
 
 step "Android"
-runtime="$(node mobile/scripts/runtime.mjs)"
-apk="$out/Relay-Android.apk"
-previous_apk="$(mktemp -d)"
-# The APK only changes with the native side; otherwise the last one carries on.
-if gh release download --repo "$RELEASES_REPO" --pattern Relay-Android.apk --dir "$previous_apk" 2>/dev/null &&
-  [[ "$(unzip -p "$previous_apk/Relay-Android.apk" assets/app.config 2>/dev/null |
-    node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).extra?.relayRuntime??""))')" == "$runtime" ]]; then
-  echo "Native side unchanged ($runtime): reusing the last APK."
-  mv "$previous_apk/Relay-Android.apk" "$apk"
-else
-  set -a && . "$SIGNING" && set +a
-  (
-    cd mobile
-    # Grows with every version, minor and major bumps included: 0.1.37 → 1037.
-    export RELAY_VERSION="$version" RELAY_VERSION_CODE="$((major * 1000000 + minor * 1000 + patch))" RELAY_RUNTIME="$runtime"
-    CI=1 npx expo prebuild --platform android --no-install --clean
-    cd android
-    # At most two native compiles per worker. Not taskpolicy -b: macOS starves
-    # background work while anything else runs, and the build took 40 minutes, not 4.
-    ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --console=plain \
-      --no-daemon --max-workers=2 --init-script "$ROOT/bin/cap-native-jobs.gradle" -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g" \
-      -Pkotlin.daemon.jvmargs=-Xmx1g
-  )
-  cp mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
-  # React Native's Gradle plugin rewrites library manifests inside node_modules,
-  # which changes the runtime. Reinstall next time so it's fingerprinted clean.
-  rm -f mobile/node_modules/.relay-ci-lock
-fi
-rm -rf "$previous_apk"
-
-# The Kotlin app (android/, dev.relay.android). Off until it ships: RELAY_ANDROID_NATIVE=1
-# builds it, signed with the same key, at the release's version. Needs a JDK 21 in
-# $ROOT/jdk21 and SDK platform 37 in $ROOT/android-sdk.
-if [[ "${RELAY_ANDROID_NATIVE:-0}" == 1 ]]; then
-  step "Android (native)"
-  [[ -x "$ROOT/jdk21/Contents/Home/bin/java" ]] || { echo "No JDK 21 in $ROOT/jdk21." >&2; exit 1; }
-  set -a && . "$SIGNING" && set +a
-  (
-    cd android
-    export JAVA_HOME="$ROOT/jdk21/Contents/Home"
-    export RELAY_VERSION="$version" RELAY_VERSION_CODE="$((major * 1000000 + minor * 1000 + patch))"
-    ./gradlew :app:assembleRelease --console=plain --no-daemon --max-workers=2 \
-      -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g" -Pkotlin.daemon.jvmargs=-Xmx1g
-  )
-  cp android/app/build/outputs/apk/release/app-release.apk "$out/Relay-Android-Native.apk"
-fi
+set -a && . "$SIGNING" && set +a
+(
+  cd android
+  # Grows with every version, minor and major bumps included: 0.1.37 → 1037.
+  export RELAY_VERSION="$version" RELAY_VERSION_CODE="$((major * 1000000 + minor * 1000 + patch))"
+  # Not taskpolicy -b: macOS starves background work while anything else runs.
+  ./gradlew :app:assembleRelease --console=plain --no-daemon --max-workers=2 \
+    -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g" -Pkotlin.daemon.jvmargs=-Xmx1g
+)
+cp android/app/build/outputs/apk/release/app-release.apk "$out/Relay-Android.apk"
 
 node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$(cat "$ROOT/notes.md")"
 if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
