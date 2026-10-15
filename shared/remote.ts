@@ -259,22 +259,6 @@ export const skillsBridge = 21;
  */
 export const tunnelBridge = 23;
 
-/**
- * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
- * so a paired phone updates from its own computer, over the encrypted link.
- */
-export interface PhoneAppRelease {
-  /** The Relay release it was built with. */
-  version: string;
-  /** Fingerprint of the app's native side; the code only runs on an APK built with the same. */
-  runtime: string;
-  /** The file React Native loads; the rest are its images, laid out beside it. */
-  bundle: string;
-  files: { path: string; size: number; sha256: string }[];
-}
-/** The most of a phone-app file one call returns. */
-export const phoneAppChunk = 512 * 1024;
-
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
   kind: "light" | "dark";
@@ -311,8 +295,6 @@ export interface RemoteOverview {
   version?: string;
   /** Unknown until the desktop's window has applied its theme once. */
   appearance?: PhoneAppearance;
-  /** Missing before version 7, and in builds made without the phone app. */
-  phoneApp?: PhoneAppRelease;
   /** The desktop's speech model, which phones dictate with; missing before version 8. */
   dictation?: DictationModelState["status"];
   /** Whether the desktop has a voice ready to read answers to phones; missing before version 12. */
@@ -547,8 +529,6 @@ export interface RemoteApi {
   projectIcons(
     known: Record<string, string | null>,
   ): Promise<Record<string, RemoteProjectIcon>>;
-  /** Up to `phoneAppChunk` bytes of a file in `phoneApp`, from `offset`, as base64. */
-  phoneAppFile(path: string, offset: number): Promise<string>;
   /** What the phone's app runs, for the desktop's Settings. */
   reportApp(report: PhoneAppReport): Promise<void>;
   dictate(request: PhoneDictation): Promise<PhoneDictationHeard>;
@@ -640,7 +620,6 @@ export const remoteMethods = [
   "projectIcons",
   "subagents",
   "subagentRun",
-  "phoneAppFile",
   "reportApp",
   "dictate",
   "readAloud",
@@ -828,8 +807,6 @@ export interface PhoneRemoteState {
     /** As the phone last reported it; phones from before the report leave it out. */
     app?: PhoneAppReport;
   }[];
-  /** The phone app version this Relay hands out, if it carries one. */
-  phoneApp?: string;
 }
 export interface PhonePairing {
   url: string;

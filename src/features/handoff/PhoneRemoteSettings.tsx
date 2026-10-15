@@ -9,7 +9,6 @@ import {
   type PhoneTailnet,
 } from "../../../shared/remote";
 import { androidAppDownload } from "../../../shared/updates";
-import { phoneAppStatus } from "../../../shared/phone-app";
 import { useCopy } from "../../lib/useCopy";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
@@ -213,7 +212,7 @@ export function PhoneRemoteSettings() {
                       : "Paired"}
                   <br />
                   {d.app
-                    ? `Relay ${d.app.version} · ${phoneAppStatus(d.app, data.phoneApp)}`
+                    ? `Relay ${d.app.version}`
                     : "App version unknown until the phone runs a newer Relay"}
                 </>
               }

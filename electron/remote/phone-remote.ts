@@ -245,10 +245,7 @@ export class PhoneRemote {
     this.host.handoffs?.chatsChanged?.(event.projectId);
   }
   async state(): Promise<PhoneRemoteState> {
-    const [tailnet, phoneApp] = await Promise.all([
-      this.tailnet(true),
-      this.host.phoneApp?.release(),
-    ]);
+    const tailnet = await this.tailnet(true);
     const online = this.server.online();
     return {
       enabled: !!this.devices.settings.enabled,
@@ -267,7 +264,6 @@ export class PhoneRemote {
         online: online.has(d.id),
         ...(d.app ? { app: d.app } : {}),
       })),
-      ...(phoneApp ? { phoneApp: phoneApp.version } : {}),
     };
   }
   /** Enables access using the saved network choice, including an explicit LAN off. */

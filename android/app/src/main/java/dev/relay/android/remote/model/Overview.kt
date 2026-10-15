@@ -10,7 +10,6 @@ data class RemoteOverview(
     val bridge: Int? = null,
     val version: String? = null,
     val appearance: PhoneAppearance? = null,
-    val phoneApp: PhoneAppRelease? = null,
     /** "missing" | "downloading" | "ready" | "failed" | "unsupported"; null where dictation isn't offered. */
     val dictation: String? = null,
     val readAloud: Boolean? = null,
@@ -104,11 +103,6 @@ data class ThreadGoal(
 
 @Serializable
 data class LimitResume(val messageId: String, val provider: String, val at: Long, val off: Boolean? = null)
-
-@Serializable
-data class PhoneAppRelease(val version: String, val runtime: String, val bundle: String, val files: List<PhoneAppFile>)
-
-@Serializable data class PhoneAppFile(val path: String, val size: Long, val sha256: String)
 
 @Serializable
 data class PhonePalette(

@@ -68,7 +68,6 @@ import { mergedPulls } from "../pull-requests/merged";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { questionContext } from "../pull-requests/questions";
 import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
-import { PhoneAppFiles } from "../remote/phone-app";
 import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
 import { applyLinkedTools, teaTokenFor } from "../source-control";
@@ -387,7 +386,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       version: () => headlessVersion,
       // The bridge forwards only its allowlist; see shared/remote.ts.
       dispatch,
-      phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
       // Images go to phones whole, re-encoded smaller where that's possible.
       shrinkImage: (dataUrl) => compressImage(dataUrl),
       renderPage: (chatId, renderId, page) =>

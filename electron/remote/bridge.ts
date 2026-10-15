@@ -20,7 +20,6 @@ import {
   remoteHistory,
   type ComputerMethod,
   type PhoneAppearance,
-  type PhoneAppRelease,
   type PhoneDesktopMethod,
   type RemoteApi,
   type RemoteChatSummary,
@@ -64,11 +63,6 @@ export interface RemoteHost {
   /** This Relay's version, which the phone compares with its own. */
   version?(): string;
   appearance?(): PhoneAppearance | undefined;
-  /** The phone app's code this build carries, if any; see ./phone-app. */
-  phoneApp?: {
-    release(): Promise<PhoneAppRelease | undefined>;
-    chunk(path: string, offset: number): Promise<string>;
-  };
   /** `dataUrl` at most `max` pixels on its longer side; without it phones get images whole. */
   shrinkImage?(dataUrl: string, max: number): string;
   /** A page an answer showed with show_html. */
@@ -197,16 +191,12 @@ export class RemoteBridge {
     | ComputerMethod
   > = {
     overview: async () => {
-      const [projects, phoneApp] = await Promise.all([
-        this.host.projects(),
-        this.host.phoneApp?.release(),
-      ]);
+      const projects = await this.host.projects();
       this.projectIds = projects.map((p) => p.id);
       return {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
         ...(this.host.version ? { version: this.host.version() } : {}),
-        ...(phoneApp ? { phoneApp } : {}),
         ...(this.host.dictation
           ? { dictation: this.host.dictation.status() }
           : {}),
@@ -389,11 +379,6 @@ export class RemoteBridge {
         drafts.sendHeld(key, chatId, send),
       ).then(() => ({ chatId }));
     },
-    phoneAppFile: async (path, offset) => {
-      if (!this.host.phoneApp)
-        throw new Error("This Relay has no phone app to hand out.");
-      return this.host.phoneApp.chunk(path, offset);
-    },
     projectIcons: async (known) => {
       const projects = await this.host.projects();
       const changed: Record<string, RemoteProjectIcon> = {};
@@ -519,11 +504,6 @@ export class RemoteBridge {
         );
       case "projectIcons":
         return a.projectIcons(knownIconsSchema.parse(args[0] ?? {}));
-      case "phoneAppFile":
-        return a.phoneAppFile(
-          z.string().max(200).parse(args[0]),
-          z.number().int().min(0).parse(args[1]),
-        );
       default:
         throw new Error("Phones can't do that.");
     }

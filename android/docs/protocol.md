@@ -242,7 +242,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:106-157`. Arguments are positional in `args[]`.
 
 - **`overview()`** → `RemoteOverview` (`:284-303`):
-  - `{name, bridge?, version?, appearance?:PhoneAppearance, phoneApp?:PhoneAppRelease, dictation?: "…status", readAloud?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
+  - `{name, bridge?, version?, appearance?:PhoneAppearance, dictation?: "…status", readAloud?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
   - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?}`.
   - `RemoteChatSummary` (`:108-147`):
     - required: `id, projectId, title, scope, updated, created`;
@@ -298,11 +298,6 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - Returns `{pcm /* std base64 s16le mono */, sampleRate /* default 24000 */, loading, done}`, at most 3 s per pull.
   - The phone pulls in a loop (`mobile/src/remote/read-aloud.ts:87-133`).
 - **`reportApp(PhoneAppReport)`** (strict, `phone-remote.ts:29-45`): `{version, updated, apk, updates, update?:{kind:"downloading"|"ready"|"apk", version}, failed?}`. Versions match `^\d+\.\d+\.\d+(\.\d+)?$`.
-- **Self-update bundle:**
-  - `overview.phoneApp` = `{version, runtime, bundle, files:[{path, size, sha256 /* hex */}]}`.
-  - `phoneAppFile(path /* ≤200 */, offset)` → **standard base64** of up to `phoneAppChunk = 524288` bytes (`electron/remote/phone-app.ts:56-69`).
-  - The phone loops `offset += 524288` while `offset < size`, at least once per file, then verifies sha256 (`mobile/src/remote/self-update.ts:59-108`).
-  - If `runtime` differs from the APK's, the phone points to `https://github.com/relaycodehq/relay/releases/download/v<ver>/Relay-Android.apk` instead.
 - **APK feed** (direct HTTPS, not over the bridge):
   - Feed: `https://github.com/relaycodehq/relay/releases/latest/download/latest.json`, plus a `.sig` file verified with pinned Ed25519 keys (`shared/updates.ts:4-14`, `shared/phone-release.ts:60-80`, `shared/update-signature.ts`).
   - Checked every 6 h, with a 10 min retry after failure (`mobile/src/remote/latest-app.ts:38-40`).

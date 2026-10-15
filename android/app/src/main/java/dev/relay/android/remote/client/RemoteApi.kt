@@ -110,10 +110,6 @@ suspend fun RemoteClient.reportApp(report: PhoneAppReport) {
     call("reportApp", args(j(report)))
 }
 
-/** Up to Bridge.PHONE_APP_CHUNK bytes from [offset], as base64. */
-suspend fun RemoteClient.phoneAppFile(path: String, offset: Long): String =
-    call("phoneAppFile", args(s(path), n(offset))).to()
-
 /** `desktop("sendProjectChat", [chatId, send])`, with `to` dropped for desktops before Bridge.RECIPIENT. */
 suspend fun RemoteClient.sendProjectChat(chatId: String, send: ProjectChatSend): JsonElement =
     desktop("sendProjectChat", listOf(JsonPrimitive(chatId), j(send)))

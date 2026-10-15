@@ -13,29 +13,3 @@ export interface PhoneAppReport {
   /** A version that never reached its first screen; the phone won't fetch it again. */
   failed?: string;
 }
-
-/** a > b, for x.y.z versions and the x.y.z.n of a phone build pushed from a dev checkout. */
-export const newerVersion = (a: string, b: string) => {
-  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
-  for (let i = 0; i < 4; i++)
-    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
-  return false;
-};
-
-/** Where a phone's app stands against `offered`, the version its desktop hands out. */
-export function phoneAppStatus(app: PhoneAppReport, offered?: string): string {
-  const { update } = app;
-  if (update?.kind === "downloading") return `Downloading ${update.version}`;
-  if (update?.kind === "ready")
-    return `${update.version} downloaded, runs once the app restarts`;
-  if (update?.kind === "apk")
-    return `${update.version} needs a new APK; the phone offers to install it`;
-  if (!offered) return "This Relay has no phone update to hand out";
-  if (app.version === offered) return "Up to date";
-  if (newerVersion(app.version, offered))
-    return `Newer than the ${offered} this Relay hands out`;
-  if (!app.updates) return `A development build; it won't fetch ${offered}`;
-  if (app.failed === offered)
-    return `${offered} didn't start, so it stays on ${app.version}`;
-  return `${offered} not fetched yet`;
-}

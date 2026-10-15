@@ -73,7 +73,6 @@ import { projectForFolder } from "./app/open-folder";
 import { mergedPulls } from "./pull-requests/merged";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { questionContext } from "./pull-requests/questions";
-import { PhoneAppFiles } from "./remote/phone-app";
 import { PhoneRemote } from "./remote/phone-remote";
 import { DraftStore, Drafts } from "./drafts";
 import { DraftPages } from "./drafts/pages";
@@ -595,7 +594,6 @@ app
         version: () => app.getVersion(),
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
-        phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
         shrinkImage,
         renderPage: (chatId, renderId, page) =>
           chats.renderPage(chatId, renderId, page),

@@ -33,7 +33,6 @@ object Bridge {
     const val PHONE_DETAIL_PREVIEW = 600
     const val REMOTE_HISTORY = 100
     const val MAX_REMOTE_HISTORY = 1000
-    const val PHONE_APP_CHUNK = 512 * 1024
     const val MAX_DICTATION_CHUNK = 44_000
     const val MAX_READ_ALOUD_PULL = 3
     const val MAX_READ_ALOUD_TEXT = 1_000_000
