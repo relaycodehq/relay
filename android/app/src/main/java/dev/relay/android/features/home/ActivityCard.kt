@@ -155,7 +155,7 @@ private fun StateGlyph(chat: RemoteChatSummary, unread: Boolean, draft: Boolean)
 private fun stateLine(chat: RemoteChatSummary, now: Long): String? = when {
     inputBlocksThread(chat) -> "needs input"
     chat.running == true -> if (chat.goal?.status == "active") "working on its goal" else "working"
-    chat.snoozedUntil != null && chat.snoozedUntil <= now -> "woke up"
+    wokeUnread(chat, now) -> "woke up"
     !chat.pending.isNullOrEmpty() -> "waiting on agents"
     chat.nextSend != null -> "sends ${wakeLabel(chat.nextSend, now)}"
     else -> null

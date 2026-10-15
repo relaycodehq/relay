@@ -95,7 +95,8 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
     // The desktop's address of the page, kept across leaving the screen.
     var href by rememberSaveable { mutableStateOf(url?.let(LocalUrls::link)?.href) }
     val page = href?.let(LocalUrls::link)
-    var wanted by remember { mutableStateOf(page) }
+    // A route's address goes through the same yes as a link: only a listed or typed port loads at once.
+    var wanted by remember { mutableStateOf(page?.takeIf { ports.allowed(it.port) }) }
     var loads by remember { mutableIntStateOf(0) }
     var view by remember { mutableStateOf<WebView?>(null) }
     var text by remember { mutableStateOf(page?.shown.orEmpty()) }
@@ -132,6 +133,7 @@ fun BrowserScreen(remote: Remote, tunnels: TunnelListeners, ports: TunnelPorts, 
         }
     }
     val opener by rememberUpdatedState({ address: SiteAddress -> open(address) })
+    LaunchedEffect(Unit) { if (wanted == null) page?.let { open(it) } }
 
     // Connections reach the computer only while a browser is open.
     DisposableEffect(tunnels) {

@@ -7,14 +7,16 @@ import java.nio.charset.CodingErrorAction
 // Port of shared/markdown-links.ts and shared/project-file-links.ts: whether a
 // link destination or an inline code span names a file, from text alone.
 
-data class LinkPosition(val path: String, val line: Int? = null, val column: Int? = null)
+/** [endLine] is the last line of a range like `:12-20`, after [line]. */
+data class LinkPosition(val path: String, val line: Int? = null, val column: Int? = null, val endLine: Int? = null)
 
-private val POSITION = Regex(""":(\d+)(?::(\d+))?$""")
+// `:12`, `:12:5`, or a range `:12-20`.
+private val POSITION = Regex(""":(\d+)(?::(\d+)|[-–](\d+))?$""")
 private val WINDOWS_ABSOLUTE = Regex("""^[A-Za-z]:[/\\]""")
 private val EXPLICIT_RELATIVE = Regex("""^(?:~/|\./|\.\./)""")
 private val EXTENSION = Regex("""\.[\w-]+$""")
 private const val WORDS = "[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)*"
-private val RELATIVE_WITH_DIRECTORIES = Regex("^$WORDS(?:/$WORDS)+(?::\\d+){0,2}$")
+private val RELATIVE_WITH_DIRECTORIES = Regex("^$WORDS(?:/$WORDS)+(?::\\d+(?::\\d+|[-–]\\d+)?)?$")
 private val BARE_NAME = Regex("^$WORDS$")
 
 private fun words(list: String) = list.split(" ").toSet()
@@ -85,21 +87,30 @@ fun resolveFileLink(href: String): LinkPosition? {
     if (path.isEmpty() || isExternal(path)) return null
 
     val written = path
-    var line: Int?
-    var column: Int?
+    val line: Int?
+    val column: Int?
+    val endLine: Int?
     val suffix = POSITION.find(path)
     if (suffix != null) {
         path = path.substring(0, suffix.range.first)
         line = positive(suffix.groupValues[1])
         column = positive(suffix.groupValues[2])
+        endLine = positive(suffix.groupValues[3])
     } else {
-        val anchor = Regex("^#L(\\d+)(?:C(\\d+))?$", RegexOption.IGNORE_CASE).find(hash)
+        val anchor = Regex("^#L(\\d+)(?:C(\\d+))?(?:-L(\\d+)(?:C\\d+)?)?$", RegexOption.IGNORE_CASE).find(hash)
         line = positive(anchor?.groupValues?.get(1))
         column = positive(anchor?.groupValues?.get(2))
+        endLine = positive(anchor?.groupValues?.get(3))
     }
     if (!isFilePath(path, written)) return null
-    // A column means nothing without its line.
-    return LinkPosition(path, line, if (line != null) column else null)
+    return LinkPosition(
+        path,
+        line,
+        // A column means nothing without its line.
+        if (line != null) column else null,
+        // A backwards or one-line range is just its first line.
+        if (line != null && endLine != null && endLine > line) endLine else null,
+    )
 }
 
 private fun splitPathAndHash(destination: String): Pair<String, String> {
@@ -177,7 +188,7 @@ private fun isExternal(path: String): Boolean {
     val rest = scheme.groupValues[1]
     if (WINDOWS_ABSOLUTE.containsMatchIn(path)) return false
     if (rest.startsWith("//")) return true
-    return !Regex("""^\d+(?::\d+)?$""").matches(rest)
+    return !Regex("""^\d+(?::\d+|[-–]\d+)?$""").matches(rest)
 }
 
 /** Lines and columns beyond range are noise, not positions. */

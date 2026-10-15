@@ -10,7 +10,8 @@ class FileLinksTest {
     @Test fun inlineCodeCandidates() {
         listOf(
             "a.ts" to null, "README" to null, "node.meta" to null, "a.ts:3" to "a.ts:3",
-            "a.ts:3:4:5" to "a.ts:3:4:5", "Makefile:3" to "Makefile:3", "src/a.ts" to "src/a.ts",
+            "a.ts:3:4:5" to "a.ts:3:4:5", "src/a.ts:223-226" to "src/a.ts:223-226",
+            "a.ts:3–5" to "a.ts:3–5", "port:3000-4000" to "port:3000-4000", "Makefile:3" to "Makefile:3", "src/a.ts" to "src/a.ts",
             "  src/a.ts  " to "src/a.ts", "src/a b.ts" to null, "foo bar" to null, "src/`a`.ts" to null,
             "./a.ts" to "./a.ts", "./x" to "./x", "~/a.ts" to "~/a.ts", "~/" to "~/", "/" to "/",
             "/etc/hosts" to "/etc/hosts", "/Users/me/a.ts#L5" to "/Users/me/a.ts#L5",
@@ -26,13 +27,18 @@ class FileLinksTest {
     }
 
     @Test fun linkDestinations() {
-        fun p(path: String, line: Int? = null, column: Int? = null) = LinkPosition(path, line, column)
+        fun p(path: String, line: Int? = null, column: Int? = null, endLine: Int? = null) =
+            LinkPosition(path, line, column, endLine)
         listOf(
             "src/a.ts" to p("src/a.ts"), "<src/a b.ts>" to p("src/a b.ts"), "src/a%20b.ts" to p("src/a b.ts"),
             "src/a.ts#L10" to p("src/a.ts", 10), "src/a.ts#L10C5" to p("src/a.ts", 10, 5),
             "src/a.ts#l10c5" to p("src/a.ts", 10, 5), "src/a.ts:10#L99" to p("src/a.ts", 10),
             "src/a.ts?x=1#L3" to p("src/a.ts", 3), "src/a.ts:007" to p("src/a.ts", 7), "src/a.ts#L0" to p("src/a.ts"),
-            "src/a.ts#L3-L5" to p("src/a.ts"), "src/a.ts#frag" to p("src/a.ts"), "a.ts:0:5" to p("a.ts"),
+            "src/a.ts#L3-L5" to p("src/a.ts", 3, endLine = 5),
+            "src/a.ts#L3C2-L5C1" to p("src/a.ts", 3, 2, 5), "src/a.ts:223-226" to p("src/a.ts", 223, endLine = 226),
+            "src/a.ts:9-3" to p("src/a.ts", 9), "src/a.ts:9-9" to p("src/a.ts", 9), "src/a.ts:0-3" to p("src/a.ts"),
+            "a.ts:3–5" to p("a.ts", 3, endLine = 5), "/Users/me/a.ts:3-5" to p("/Users/me/a.ts", 3, endLine = 5),
+            "src/a.ts:3-" to null, "src/a.ts#L3C" to p("src/a.ts"), "src/a.ts#frag" to p("src/a.ts"), "a.ts:0:5" to p("a.ts"),
             "a.ts:99999999999999999999" to p("a.ts"),
             "/Users/test/workspace/a.ts:3:2" to p("/Users/test/workspace/a.ts", 3, 2),
             "#L3" to null, "//x/y.ts" to null, "" to null, "   " to null, "<>" to null, "/app/settings" to null,
@@ -59,6 +65,7 @@ class FileLinksTest {
 
     @Test fun projectLinks() {
         assertEquals(ProjectFileLink("src/app/main.ts", 42, false), projectFileLink("src/app/main.ts:42", root))
+        assertEquals(ProjectFileLink("src/app.ts", 12, false), projectFileLink("src/app.ts:12-20", root, true))
         assertEquals(
             ProjectFileLink("src/main.ts", 7, false),
             projectFileLink("file:///Users/test/workspace/src/main.ts#L7", root),

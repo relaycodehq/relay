@@ -21,6 +21,21 @@ class ChatActivityTest {
     private fun local(ms: Long) = Instant.ofEpochMilli(ms).atZone(prague)
 
     @Test
+    fun wokeUpClearsOnceOpenedPastTheWakeTimeAndComesBackWithTheNextSnooze() {
+        val woke = chat(updated = 100) { copy(seenAt = 100, snoozedUntil = 500) }
+        assertFalse(wokeUnread(woke, 400))
+        assertTrue(wokeUnread(woke, 600))
+        // Opening it reads past the wake time, though nothing new came in.
+        val opened = woke.copy(seenAt = openedUpTo(woke.updated, woke.snoozedUntil, 600))
+        assertFalse(wokeUnread(opened, 700))
+        val resnoozed = opened.copy(snoozedUntil = 900)
+        assertFalse(wokeUnread(resnoozed, 800))
+        assertTrue(wokeUnread(resnoozed, 1_000))
+        // Opened while still asleep, it reads only what's there.
+        assertEquals(100L, openedUpTo(resnoozed.updated, resnoozed.snoozedUntil, 800))
+    }
+
+    @Test
     fun settledMeansSettledAfterTheLastActivityUnlessWaitingOrSettledMidAnswer() {
         assertTrue(chatSettled(chat { copy(settledAt = 6_000) }))
         assertFalse(chatSettled(chat { copy(settledAt = 4_000) }))

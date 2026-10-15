@@ -48,6 +48,7 @@ import java.util.UUID
 import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
 import dev.relay.android.features.home.chatSettled
+import dev.relay.android.features.home.openedUpTo
 import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.notes.ThreadNotesButton
 import dev.relay.android.features.thread.logic.chainRoot
@@ -126,11 +127,14 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     // answers that land in the background are marked when it comes back.
     var leavingUnread by remember { mutableStateOf(false) }
     val updated = summary?.updated
-    LaunchedEffect(updated, inFront, online, leavingUnread) {
+    val snoozedUntil = summary?.snoozedUntil
+    LaunchedEffect(updated, snoozedUntil, inFront, online, leavingUnread) {
         if (updated == null || !inFront || leavingUnread) return@LaunchedEffect
         onSeen(id, updated)
         // The desktop keeps the shared mark; an older one just doesn't know the call.
-        if (online) runCatching { remote.desktop("markProjectChatSeen", id, updated) }
+        // Past a wake time it reads that too, so "Woke up" clears.
+        val upTo = openedUpTo(updated, snoozedUntil, System.currentTimeMillis())
+        if (online) runCatching { remote.desktop("markProjectChatSeen", id, upTo) }
     }
 
     SideEffect { composer.chat = thread }

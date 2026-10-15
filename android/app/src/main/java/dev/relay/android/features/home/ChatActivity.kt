@@ -31,6 +31,14 @@ fun chatSettled(chat: RemoteChatSummary): Boolean {
 
 private fun chatSnoozed(chat: RemoteChatSummary, now: Long) = chat.snoozedUntil != null && chat.snoozedUntil > now
 
+/** Its snooze ran out and it hasn't been read since: the card says "Woke up". */
+fun wokeUnread(chat: RemoteChatSummary, now: Long) =
+    chat.snoozedUntil != null && chat.snoozedUntil <= now && (chat.seenAt ?: 0) < chat.snoozedUntil
+
+/** How far opening a thread reads it: past its wake time once it woke. */
+fun openedUpTo(updated: Long, snoozedUntil: Long?, now: Long) =
+    if (snoozedUntil != null && snoozedUntil <= now) maxOf(updated, snoozedUntil) else updated
+
 fun chatActivitySection(chat: RemoteChatSummary, now: Long): ActivitySection = when {
     chatSettled(chat) -> ActivitySection.Settled
     chatSnoozed(chat, now) -> ActivitySection.Snoozed

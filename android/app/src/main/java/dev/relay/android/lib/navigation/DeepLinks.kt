@@ -21,7 +21,9 @@ fun routeForDeepLink(url: String): Route? {
         "pair" -> Route.Pair("relay-remote://$rest")
         "chat" -> {
             val id = rest.substring(host.length).trimStart('/').takeWhile { it != '/' && it != '?' && it != '#' }
-            if (id.isEmpty()) null else Route.Thread(URLDecoder.decode(id, "UTF-8"))
+            // A broken escape (`%zz`) is an unknown link, not a crash.
+            val decoded = runCatching { URLDecoder.decode(id, "UTF-8") }.getOrNull()
+            if (decoded.isNullOrEmpty()) null else Route.Thread(decoded)
         }
         else -> null
     }

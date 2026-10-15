@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -59,45 +60,48 @@ fun rememberImage(remote: Remote, source: ImageSource, max: Int? = null): Loaded
     val known = overview != null
     val bridge = overview?.bridge ?: 1
     val shrunk = source !is ImageSource.Pending && max != null && bridge >= Bridge.IMAGE
-    val key = scoped(source, computer) + if (shrunk) "@$max" else ""
+    val id = scoped(source, computer) + if (shrunk) "@$max" else ""
     val online = status.state == LinkState.Online
-    val cached = bitmaps.get(key)
-    val state by produceState(LoadedImage(cached, false), key, online, known) {
-        if (value.bitmap != null) return@produceState
-        if (source is ImageSource.Pending) {
-            val url = PendingImages.lookup(source.messageId, source.index)
-            value = LoadedImage(url?.let { withContext(Dispatchers.Default) { decodeDataUrl(it) } }, url == null)
-            return@produceState
-        }
-        // Wait for the overview: a missing bridge field on an older desktop means bridge 1.
-        if (!online || (max != null && !known)) return@produceState
-        val client = remote.client.value ?: return@produceState
-        refused -= scoped(source, computer)
-        value = try {
-            val url = dataUrls.load(key) {
-                val wire = source.remote()!!
-                if (shrunk) client.image(wire, max!!)
-                // Only `image` hands a preview's frame out; asked for whole, at the most it shrinks to.
-                else if (source is ImageSource.Preview) client.image(wire, LARGEST)
-                else when (source) {
-                    is ImageSource.Attached ->
-                        client.desktop("projectChatImage", listOf(JsonPrimitive(source.chatId), JsonPrimitive(source.imageId)))
-                    is ImageSource.Read -> client.desktop(
-                        "projectChatReadImage",
-                        listOf(JsonPrimitive(source.chatId), JsonPrimitive(source.messageId), JsonPrimitive(source.path)),
-                    )
-                    is ImageSource.Pending, is ImageSource.Preview -> error("unreachable")
-                }.jsonPrimitive.content
+    val cached = bitmaps.get(id)
+    // Keyed so another picture starts from its own state, not the last one's bitmap.
+    val state = key(id) {
+        produceState(LoadedImage(cached, false), online, known) {
+            if (value.bitmap != null) return@produceState
+            if (source is ImageSource.Pending) {
+                val url = PendingImages.lookup(source.messageId, source.index)
+                value = LoadedImage(url?.let { withContext(Dispatchers.Default) { decodeDataUrl(it) } }, url == null)
+                return@produceState
             }
-            val bitmap = withContext(Dispatchers.Default) { decodeDataUrl(url) } ?: error("Not an image")
-            bitmaps.put(key, bitmap)
-            LoadedImage(bitmap, false)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            refused += scoped(source, computer)
-            LoadedImage(null, true)
+            // Wait for the overview: a missing bridge field on an older desktop means bridge 1.
+            if (!online || (max != null && !known)) return@produceState
+            val client = remote.client.value ?: return@produceState
+            refused -= scoped(source, computer)
+            value = try {
+                val url = dataUrls.load(id) {
+                    val wire = source.remote()!!
+                    if (shrunk) client.image(wire, max!!)
+                    // Only `image` hands a preview's frame out; asked for whole, at the most it shrinks to.
+                    else if (source is ImageSource.Preview) client.image(wire, LARGEST)
+                    else when (source) {
+                        is ImageSource.Attached ->
+                            client.desktop("projectChatImage", listOf(JsonPrimitive(source.chatId), JsonPrimitive(source.imageId)))
+                        is ImageSource.Read -> client.desktop(
+                            "projectChatReadImage",
+                            listOf(JsonPrimitive(source.chatId), JsonPrimitive(source.messageId), JsonPrimitive(source.path)),
+                        )
+                        is ImageSource.Pending, is ImageSource.Preview -> error("unreachable")
+                    }.jsonPrimitive.content
+                }
+                val bitmap = withContext(Dispatchers.Default) { decodeDataUrl(url) } ?: error("Not an image")
+                bitmaps.put(id, bitmap)
+                LoadedImage(bitmap, false)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                refused += scoped(source, computer)
+                LoadedImage(null, true)
+            }
         }
     }
-    return state
+    return state.value
 }
