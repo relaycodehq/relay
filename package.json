@@ -1,7 +1,7 @@
 {
   "name": "relay",
   "productName": "Relay",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "description": "A project workspace for agent chats, code changes and pull request reviews",
   "author": "Relay contributors",
   "homepage": "https://relaycode.io",
