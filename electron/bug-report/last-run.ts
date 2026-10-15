@@ -61,7 +61,10 @@ export function trackRun(
     crashes: last?.crashes ?? 0,
     early: last?.early ?? 0,
   };
+  let quit = false;
   const write = (started: boolean) => {
+    // A quit's shutdown can outlast the startup timer.
+    if (quit) return;
     try {
       writeFileSync(file, JSON.stringify({ ...marker, started }));
     } catch (error) {
@@ -72,7 +75,10 @@ export function trackRun(
   return {
     last,
     started: () => write(true),
-    quit: () => rmSync(file, { force: true }),
+    quit: () => {
+      quit = true;
+      rmSync(file, { force: true });
+    },
   };
 }
 

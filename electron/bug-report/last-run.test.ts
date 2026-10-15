@@ -30,6 +30,15 @@ it("counts runs in a row that never quit, until one does", () => {
   expect(trackRun(dir, "1.0.1", dumps, 4000).last).toBeNull();
 });
 
+it("stays quit when the startup mark comes after the quit", () => {
+  dir = mkdtempSync(join(tmpdir(), "relay-run-"));
+  const dumps = join(dir, "Crashpad");
+  const run = trackRun(dir, "1.0.0", dumps, 1000);
+  run.quit();
+  run.started();
+  expect(trackRun(dir, "1.0.0", dumps, 2000).last).toBeNull();
+});
+
 it("counts the crashes at startup in a row apart from later ones", () => {
   dir = mkdtempSync(join(tmpdir(), "relay-run-"));
   const dumps = join(dir, "Crashpad");
