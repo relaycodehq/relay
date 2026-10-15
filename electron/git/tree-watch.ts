@@ -1,5 +1,10 @@
-import { watch as watchFolder, type FSWatcher } from "node:fs";
+import { watch as watchFolder } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import {
+  folderBudget,
+  watchEachFolder,
+  type FolderWatch,
+} from "./folder-watch";
 import { git } from "./git";
 
 /** A change waits this long for the ones that come with it, so a save or a commit refreshes once. */
@@ -40,7 +45,7 @@ const within = (dir: string, path: string) => {
 
 interface Watch {
   owners: Set<object>;
-  folders: FSWatcher[];
+  folders: FolderWatch[];
   timer?: ReturnType<typeof setTimeout>;
   retry?: ReturnType<typeof setTimeout>;
   /** When it last said `where` changed. */
@@ -56,9 +61,9 @@ export interface TreeWatchDeps {
   /** Something in `where` changed that its working tree may show. */
   changed(where: string): void;
   /**
-   * Only macOS watches: Linux needs an inotify watch per folder, which costs
-   * more than the poll it saves, and Windows holds the folder open, which can
-   * keep a worktree from being removed. Neither has been tried.
+   * macOS watches a whole tree in one go; Linux watches each folder Git can
+   * show (see folder-watch.ts). Windows holds the folder open, which can keep
+   * a worktree from being removed, so it polls.
    */
   platform?: NodeJS.Platform;
   watch?: typeof watchFolder;
@@ -79,7 +84,8 @@ export class TreeWatch {
 
   /** `owner` now shows `where`, or nothing. False when it should poll instead. */
   async show(owner: object, where: string | null): Promise<boolean> {
-    if ((this.deps.platform ?? process.platform) !== "darwin") return false;
+    if (!["darwin", "linux"].includes(this.deps.platform ?? process.platform))
+      return false;
     const was = this.shown.get(owner);
     if (was !== where) {
       if (was !== undefined) this.leave(owner, was);
@@ -128,14 +134,28 @@ export class TreeWatch {
           !all.some((d, j) => j !== i && within(d, dir) && (d !== dir || j < i)),
       );
       if (w.closed) return false;
+      const eachFolder =
+        (this.deps.platform ?? process.platform) === "linux"
+          ? await this.eachFolder(root)
+          : undefined;
+      if (w.closed) return false;
       const watch = this.deps.watch ?? watchFolder;
       for (const [dir, inGitDir] of [
         [root, false] as const,
         ...gitDirs.map((d) => [d, true] as const),
       ]) {
-        const folder = watch(dir, { recursive: true }, (_type, file) => {
-          if (noticed(file?.toString() ?? null, inGitDir)) this.soon(where, w);
-        });
+        const listener = (file: string | null) => {
+          if (noticed(file, inGitDir)) this.soon(where, w);
+        };
+        const folder = eachFolder
+          ? await eachFolder(dir, inGitDir, listener)
+          : watch(dir, { recursive: true }, (_type, file) =>
+              listener(file?.toString() ?? null),
+            );
+        if (w.closed) {
+          folder.close();
+          return false;
+        }
         // Its folder went or can't be read: the next refresh says what's
         // wrong, and the folder is watched again once it's back.
         folder.on("error", () => this.broke(where, w));
@@ -150,6 +170,52 @@ export class TreeWatch {
       else this.stop(w);
       return false;
     }
+  }
+
+  /**
+   * Opens one folder of `root`'s place a folder at a time, leaving out what
+   * Git ignores as well as its own churn.
+   */
+  private async eachFolder(root: string) {
+    const [budget, ignored] = await Promise.all([
+      folderBudget(),
+      git(root, [
+        "ls-files",
+        "-o",
+        "-i",
+        "--exclude-standard",
+        "--directory",
+        "-z",
+      ])
+        .then(
+          (out) => new Set(out.split("\0").map((p) => p.replace(/\/$/, ""))),
+        )
+        .catch(() => new Set<string>()),
+    ]);
+    return (
+      dir: string,
+      inGitDir: boolean,
+      listener: (file: string | null) => void,
+    ) =>
+      watchEachFolder(
+        dir,
+        {
+          budget,
+          skip: (rel) =>
+            !noticed(rel, inGitDir) || (!inGitDir && ignored.has(rel)),
+          skipLater: inGitDir
+            ? undefined
+            : (rel) =>
+                // check-ignore rejects literal pathspec magic outright.
+                git(root, ["check-ignore", "-q", "--", rel], {
+                  env: { GIT_LITERAL_PATHSPECS: undefined },
+                }).then(
+                  () => true,
+                  () => false,
+                ),
+        },
+        listener,
+      );
   }
 
   private broke(where: string, w: Watch) {

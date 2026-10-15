@@ -150,17 +150,16 @@ it("watches a folder again after it broke, once it can be read", async () => {
   expect(folders).toHaveLength(2);
 });
 
-it("leaves Linux, Windows and unreadable folders to the poll", async () => {
+it("leaves Windows and unreadable folders to the poll", async () => {
   const { watch } = fakeWatch();
   const deps = {
     root: async () => "/projects/a",
     changed: () => {},
     watch,
   };
-  for (const platform of ["linux", "win32"] as const)
-    expect(await new TreeWatch({ ...deps, platform }).show({}, "a")).toBe(
-      false,
-    );
+  expect(
+    await new TreeWatch({ ...deps, platform: "win32" }).show({}, "a"),
+  ).toBe(false);
   const failing = new TreeWatch({
     ...deps,
     platform: "darwin",
@@ -208,3 +207,54 @@ it("sees a commit in a worktree, whose HEAD lives in the main checkout", async (
   });
   trees.dispose();
 });
+
+it("on Linux, watches each folder Git shows and none it ignores", async () => {
+  temp = await realpath(await mkdtemp(join(tmpdir(), "relay-watch-")));
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", temp!, ...args], { stdio: "pipe" });
+  execFileSync("git", ["init", "-q", "-b", "main", temp]);
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  await mkdir(join(temp, "src", "deep"), { recursive: true });
+  await mkdir(join(temp, "dist"));
+  await mkdir(join(temp, "node_modules", "x"), { recursive: true });
+  await writeFile(join(temp, ".gitignore"), "dist/\nbuild/\n");
+  git("add", ".gitignore");
+  git("commit", "-q", "-m", "one");
+
+  const changes: string[] = [];
+  const trees = new TreeWatch({
+    root: async () => temp!,
+    changed: (where) => changes.push(where),
+    platform: "linux",
+  });
+  expect(await trees.show({}, "a")).toBe(true);
+  await new Promise((r) => setTimeout(r, 600));
+  changes.length = 0;
+  const quiet = async () => {
+    await new Promise((r) => setTimeout(r, 2600));
+    return changes.length;
+  };
+
+  await writeFile(join(temp, "dist", "app.js"), "x");
+  await writeFile(join(temp, "node_modules", "x", "index.js"), "x");
+  expect(await quiet()).toBe(0);
+
+  await writeFile(join(temp, "src", "deep", "a.ts"), "x");
+  await vi.waitFor(() => expect(changes).toHaveLength(1), { timeout: 5000 });
+
+  // A folder made after the watch started is followed; an ignored one isn't.
+  await mkdir(join(temp, "src", "later"));
+  await mkdir(join(temp, "build"));
+  await new Promise((r) => setTimeout(r, 2600));
+  changes.length = 0;
+  await writeFile(join(temp, "build", "out.js"), "x");
+  expect(await quiet()).toBe(0);
+  await writeFile(join(temp, "src", "later", "b.ts"), "x");
+  await vi.waitFor(() => expect(changes).toHaveLength(1), { timeout: 5000 });
+
+  git("add", "-A");
+  git("commit", "-q", "-m", "two");
+  await vi.waitFor(() => expect(changes).toHaveLength(2), { timeout: 5000 });
+  trees.dispose();
+}, 20_000);
