@@ -281,6 +281,11 @@
 .thread-bottom-composer > * {
   pointer-events: auto;
 }
+/* A failed send sits in the composer's column, not across the whole pane. */
+:is(.thread-start, .thread-bottom-composer) > .error-box {
+  max-width: var(--thread-width);
+  margin: 0 auto 10px;
+}
 /* A long prompt scrolls inside itself before it covers a short window's thread. */
 .thread-bottom-composer .composer-prompt-input {
   max-height: min(240px, 30vh);
