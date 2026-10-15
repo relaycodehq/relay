@@ -100,16 +100,18 @@
 /* Base UI's title is an h2, which the sidebar mutes as a heading. */
 .sb .update-toast-title {
   display: flex;
+  flex: 1 1 auto;
   align-items: baseline;
   min-width: 0;
+  container-type: inline-size;
   margin: 0;
   font-size: 12px;
   font-weight: 500;
   color: inherit;
 }
 .update-toast-name {
-  flex: none;
-  max-width: 60%;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -128,7 +130,15 @@
   font-variant-numeric: tabular-nums;
 }
 .update-toast-version.failed {
+  flex-shrink: 0;
   color: var(--danger);
+}
+/* Too narrow for both, the name stays whole and the version goes (its title
+   still tells it); a failure keeps its word and the name gives way. */
+@container (width < 120px) {
+  .update-toast-version:not(.failed) {
+    display: none;
+  }
 }
 
 /* A soft accent button; busy or done it turns grey with only the spinner or
