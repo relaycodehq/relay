@@ -198,10 +198,7 @@ function ThreadMenuItems({
         </MenuAction>
       ) : (
         <Menu.SubmenuRoot>
-          <Menu.SubmenuTrigger
-            className="sb-menu-item"
-            disabled={!!chat.waiting}
-          >
+          <Menu.SubmenuTrigger className="sb-menu-item">
             <span className="sb-menu-label">
               <Clock size={13} />
               Snooze

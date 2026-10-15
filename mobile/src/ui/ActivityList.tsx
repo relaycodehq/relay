@@ -133,19 +133,17 @@ export function ActivityList({
         !c.running && !c.waiting
           ? { label: "Settle", run: () => swiped({ kind: "settle" }, "Settled") }
           : undefined,
-      snooze: !c.waiting
-        ? {
-            label: `Snooze · ${preset.label}`,
-            run: () => {
-              // Taken now: `now` only ticks every half minute.
-              const until = snoozePresets(new Date())[0]!.until;
-              return swiped(
-                { kind: "snooze", until },
-                `Snoozed until ${wakeLabel(until, new Date())}`,
-              );
-            },
-          }
-        : undefined,
+      snooze: {
+        label: `Snooze · ${preset.label}`,
+        run: () => {
+          // Taken now: `now` only ticks every half minute.
+          const until = snoozePresets(new Date())[0]!.until;
+          return swiped(
+            { kind: "snooze", until },
+            `Snoozed until ${wakeLabel(until, new Date())}`,
+          );
+        },
+      },
     };
   };
 
@@ -387,14 +385,12 @@ export function ActivityList({
                       },
                     ]
                   : []),
-                ...(!acting.waiting
-                  ? snoozePresets(new Date(now)).map((p) => ({
-                      label: `Snooze · ${p.label}`,
-                      hint: wakeLabel(p.until, new Date(now)),
-                      onPress: () =>
-                        onTriage(acting, { kind: "snooze", until: p.until }),
-                    }))
-                  : []),
+                ...snoozePresets(new Date(now)).map((p) => ({
+                  label: `Snooze · ${p.label}`,
+                  hint: wakeLabel(p.until, new Date(now)),
+                  onPress: () =>
+                    onTriage(acting, { kind: "snooze", until: p.until }),
+                })),
                 ...((overview?.bridge ?? 1) >= markedUnreadBridge ? [{
                   label: "Mark as unread",
                   onPress: () => void onTriage(acting, { kind: "unread" }),

@@ -89,11 +89,6 @@ export class ThreadTriage {
       throw new Error(
         "Wait for the running answer and its requests before settling.",
       );
-    if (
-      triage.kind === "snooze" &&
-      (this.core.active.requests(id).length || chat.waiting)
-    )
-      throw new Error("Answer the waiting request before snoozing.");
     // Before anything changes: the loaded thread is the one kept in memory.
     if (triage.kind === "snooze" && triage.until <= now)
       throw new Error("Choose a future wake time.");

@@ -300,18 +300,16 @@ function ThreadCard({
                   <DraftSendButton send={unsent} title={`Send to ${c.title}`} />
                 ) : (
                   <>
+                    <SnoozeMenu
+                      now={now}
+                      onSnooze={(until) =>
+                        void actions.triage(c, { kind: "snooze", until })
+                      }
+                    />
                     {!c.waiting && (
-                      <SnoozeMenu
-                        now={now}
-                        onSnooze={(until) =>
-                          void actions.triage(c, { kind: "snooze", until })
-                        }
-                      />
-                    )}
-                    {!c.running && !c.waiting && (
                       <button
                         className="sb-card-action"
-                        title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
+                        title={`${c.running ? "Settle when done" : "Settle"}${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
                         onClick={(e) => {
                           e.stopPropagation();
                           actions.settle(c);
@@ -382,11 +380,11 @@ function ThreadCard({
                 <DraftSendButton send={unsent} title={`Send to ${c.title}`} />
               </div>
             )}
-            {compact && !draft && !c.running && !c.waiting && (
+            {compact && !draft && !c.waiting && (
               <div className="sb-card-actions">
                 <button
                   className="sb-card-action icon"
-                  title="Settle — hide until something new happens"
+                  title={`${c.running ? "Settle when done" : "Settle"} — hide until something new happens`}
                   aria-label={`Settle ${c.title}`}
                   onClick={(e) => {
                     e.stopPropagation();

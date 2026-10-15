@@ -543,7 +543,7 @@ it("keeps a manual unread mark until the thread is opened again at the same upda
   ).toBeUndefined();
 });
 
-it("rejects settle and waiting snooze against live state without changing saved marks", async () => {
+it("rejects settle against live state without changing saved marks, but snoozes a waiting thread", async () => {
   const chat = await chats.create(projectId, scope);
   const save = vi.fn();
   let working = true,
@@ -564,12 +564,13 @@ it("rejects settle and waiting snooze against live state without changing saved 
   await expect(triage.triage(chat.id, { kind: "settle" })).rejects.toThrow(
     "running answer",
   );
-  delete chat.waiting;
-  waiting = true;
-  await expect(
-    triage.triage(chat.id, { kind: "snooze", until: Date.now() + 3_600_000 }),
-  ).rejects.toThrow("waiting request");
   expect(save).not.toHaveBeenCalled();
   expect(chat.settledAt).toBeUndefined();
-  expect(chat.snoozedAt).toBeUndefined();
+  // Answering later is what snoozing a question means.
+  waiting = true;
+  // A summary stands in for the stored thread, which has messages.
+  Object.assign(chat, { messages: [] });
+  const until = Date.now() + 3_600_000;
+  await triage.triage(chat.id, { kind: "snooze", until });
+  expect(chat.snoozedUntil).toBe(until);
 });
