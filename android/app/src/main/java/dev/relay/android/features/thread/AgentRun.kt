@@ -192,7 +192,7 @@ fun AgentRun(
                     parts.forEachIndexed { index, part ->
                         when {
                             part is TracePart.Commentary ->
-                                Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true)
+                                Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
                             part !is TracePart.Run -> Unit
                             live && index == parts.lastIndex && !isQuestionCall(part.activity.first()) -> OpenBatch(part.activity)
                             // The only run's summary is already the turn's heading.

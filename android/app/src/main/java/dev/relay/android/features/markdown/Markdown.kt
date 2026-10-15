@@ -59,6 +59,9 @@ internal class MdContext(
     val openWeb: (String) -> Unit,
     val image: ShowImage?,
     val localhost: Boolean = false,
+    /** Text as Android's own views (NativeText.kt), selectable when [selectable]. */
+    val native: Boolean = false,
+    val selectable: Boolean = false,
 ) {
     /** A file first, then a web link; anything else stays text, as on the desktop. */
     fun link(href: String): (() -> Unit)? =
@@ -73,7 +76,9 @@ internal class MdContext(
  * Web links go to [onLink] (the browser when null). Paths in the thread open
  * through [openPath]; without it, paths inside [folder] go to [onLink] too.
  * [selectable] lets held text select, across blocks; a streaming answer
- * re-parses only its last blocks.
+ * re-parses only its last blocks. [native] draws the text as Android's own
+ * views instead, each paragraph selecting by itself; an answer keeps it while
+ * it streams, so finishing doesn't lay it out anew.
  */
 @Composable
 fun Markdown(
@@ -85,26 +90,27 @@ fun Markdown(
     openPath: OpenLink? = null,
     image: ShowImage? = null,
     selectable: Boolean = false,
+    native: Boolean = false,
 ) {
     val cache = remember { MarkdownCache() }
     val blocks = remember(markdown) { cache.blocks(markdown) }
     val uri = LocalUriHandler.current
     val localhost = LocalOpensLocalhost.current
-    val context = remember(small, onLink, folder, openPath, image, uri, localhost) {
+    val context = remember(small, onLink, folder, openPath, image, uri, localhost, native, selectable) {
         val web = onLink ?: { href: String -> runCatching { uri.openUri(href) }; Unit }
         val paths = openPath ?: if (folder != null && onLink != null) {
             { value: String, inline: Boolean ->
                 if (fileLinkTarget(value, inline, folder) != null) ({ onLink(value) }) else null
             }
         } else null
-        MdContext(small, paths, web, image, localhost)
+        MdContext(small, paths, web, image, localhost, native, selectable)
     }
     val content = @Composable {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             for (block in blocks) Block(block, context)
         }
     }
-    if (selectable) SelectionContainer { CompositionLocalProvider(LocalInSelection provides true, content) } else content()
+    if (selectable && !native) SelectionContainer { CompositionLocalProvider(LocalInSelection provides true, content) } else content()
 }
 
 /** Inside a selectable answer: a code block mustn't open a selection of its own within it. */
@@ -162,7 +168,7 @@ private fun Block(block: MdBlock, ctx: MdContext) {
                 }
             }
         }
-        is MdBlock.Table -> Table(block, ctx)
+        is MdBlock.Table -> if (ctx.native && ctx.selectable) SelectionContainer { Table(block, ctx) } else Table(block, ctx)
         is MdBlock.Raw -> Text(block.text, style = bodyStyle(ctx.small), color = c.foreground)
         MdBlock.Rule -> Divider(Modifier.padding(vertical = 6.dp))
     }
@@ -209,8 +215,9 @@ internal fun withoutImages(inlines: List<MdInline>): List<MdInline> {
 }
 
 @Composable
-private fun Inlines(inlines: List<MdInline>, ctx: MdContext, style: TextStyle, modifier: Modifier = Modifier) {
+private fun Inlines(inlines: List<MdInline>, ctx: MdContext, style: TextStyle, modifier: Modifier = Modifier, native: Boolean = ctx.native) {
     val c = RelayTheme.colors
+    if (native) return NativeInlines(inlines, ctx, style.copy(color = c.foreground), ctx.selectable, modifier)
     val text = remember(inlines, ctx, c) { inlineText(inlines, ctx, c) }
     RichText(text, modifier, style = style.copy(color = c.foreground))
 }
@@ -235,6 +242,8 @@ private fun Table(table: MdBlock.Table, ctx: MdContext) {
                         ctx,
                         if (r == 0) cell.copy(fontWeight = FontWeight.SemiBold) else cell,
                         Modifier.width(140.dp).padding(6.dp),
+                        // A table scrolls sideways; its cells select together, in Compose.
+                        native = false,
                     )
                 }
             }
