@@ -50,3 +50,39 @@ it("preserves Send later when the draft starts with /btw", async () => {
   );
   expect(after).toHaveBeenCalledOnce();
 });
+
+it("sends a meme's line once while the first send is on its way", async () => {
+  let accept!: (sent: boolean) => void;
+  const onSend = vi.fn(
+    () => new Promise<boolean>((resolve) => (accept = resolve)),
+  );
+  const settings: SendSettings = {
+    to: "codex",
+    choice: { model: "", reasoningEffort: "", fast: false },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+  };
+  const sending = mount(() =>
+    useComposerSend({
+      draft: { text: "/meme dew", attached: [], images: [] } as never,
+      state: {} as never,
+      runs: { codex: true, sendSettings: () => settings } as never,
+      to: "codex",
+      conversation: { busy: false, running: false },
+      complete: false,
+      intercept: () => false,
+      onSend,
+    }),
+  );
+  const first = sending().sendLine("[meme dew] …");
+  // Enter held down, or the cell clicked twice.
+  expect(await sending().sendLine("[meme dew] …")).toBe(false);
+  accept(true);
+  expect(await first).toBe(true);
+  expect(onSend).toHaveBeenCalledOnce();
+  // Once it's gone, the next one goes.
+  const next = sending().sendLine("[meme dew] …");
+  accept(true);
+  expect(await next).toBe(true);
+  expect(onSend).toHaveBeenCalledTimes(2);
+});

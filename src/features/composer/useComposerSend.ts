@@ -172,15 +172,21 @@ export function useComposerSend({
      * A line Relay wrote, like a meme's, sent as if typed here: queued
      * behind an answer that runs. The draft is the caller's to clear.
      */
-    sendLine(text: string) {
-      if (busy || !runs.codex) return Promise.resolve(false);
-      return onSend(
-        buildSend(
-          runs.sendSettings(to)!,
-          text,
-          running ? { running: { steer: false } } : {},
-        ),
-      );
+    async sendLine(text: string) {
+      // A held Enter or a second click mustn't send it twice.
+      if (busy || !runs.codex || sending.current) return false;
+      sending.current = true;
+      try {
+        return await onSend(
+          buildSend(
+            runs.sendSettings(to)!,
+            text,
+            running ? { running: { steer: false } } : {},
+          ),
+        );
+      } finally {
+        sending.current = false;
+      }
     },
     /**
      * The goal row's Pause, Resume and Clear, as `/goal …` typed here would
