@@ -64,9 +64,9 @@ const within = (path: string, root: string) =>
 /** Which agent's CLI a command line runs, if any. */
 export const agentName = (line: string) => {
   const [bin, arg] = windows ? windowsArgs(line) : line.split(/\s+/);
-  const name = (/[^/\\]+$/.exec(bin ?? "")?.[0] ?? "")
-    .replace(/\.exe$/i, "")
-    .toLowerCase();
+  const file = /[^/\\]+$/.exec(bin ?? "")?.[0] ?? "";
+  // Windows names files in any case; elsewhere "Claude" is the desktop app.
+  const name = windows ? file.replace(/\.exe$/i, "").toLowerCase() : file;
   // Each agent's CLI is named after it; Codex may also run as a Node script.
   if (agentProviders.some((p) => p === name)) return name as AgentProvider;
   if (name === "node" && /[/\\]codex(\.js)?$/.test(arg ?? ""))

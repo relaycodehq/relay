@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ProcessRow } from "../platform/processes";
-import { liveCwd, netstatListening, projectTasks } from "./tasks";
+import { agentName, liveCwd, netstatListening, projectTasks } from "./tasks";
 import {
   commandKey,
   describeTask,
@@ -307,3 +307,16 @@ it("reads costs again when a plain scan was under way or came since", async () =
   await projectTasks.costedTable();
   expect(fake.usage).toEqual([false, true, false, true]);
 });
+
+it.skipIf(process.platform === "win32")(
+  "doesn't take the Claude and Codex desktop apps for the CLIs",
+  () => {
+    expect(
+      agentName("/Applications/Claude.app/Contents/MacOS/Claude"),
+    ).toBeUndefined();
+    expect(
+      agentName("/Applications/Codex.app/Contents/MacOS/Codex --type=gpu"),
+    ).toBeUndefined();
+    expect(agentName("/opt/homebrew/bin/claude --resume x")).toBe("claude");
+  },
+);
