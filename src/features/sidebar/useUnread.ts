@@ -56,6 +56,17 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
   /** The thread last read here; marking it unread while it's open holds until it's opened again. */
   const opened = useRef<string | undefined>(undefined);
   const wasFocused = useRef(focused);
+  // Read on past the wake time when it comes while you're looking.
+  const [woke, setWoke] = useState(0);
+  const wakesAt = current?.snoozedUntil;
+  useEffect(() => {
+    if (!focused || !wakesAt || wakesAt <= Date.now()) return;
+    const timer = setTimeout(
+      () => setWoke((n) => n + 1),
+      Math.min(wakesAt + 1 - Date.now(), 2 ** 31 - 1),
+    );
+    return () => clearTimeout(timer);
+  }, [focused, wakesAt, woke]);
   useEffect(() => {
     const refocused = focused && !wasFocused.current;
     wasFocused.current = focused;
@@ -93,7 +104,7 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
     void window.relay
       ?.markProjectChatSeen?.(current.id, upTo)
       .catch(() => {});
-  }, [focused, current?.id, current?.updated, current?.snoozedUntil]);
+  }, [focused, current?.id, current?.updated, current?.snoozedUntil, woke]);
   return (c: ChatSummary) =>
     ((c.id !== chatId || (!focused && !c.running)) && !!c.markedUnread) ||
     movedSinceSeen(c, since, seen);

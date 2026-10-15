@@ -113,6 +113,16 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   const foreground = useForeground();
   const focused = useIsFocused();
   const leavingUnread = useRef(false);
+  // Read on past the wake time when it comes while you're looking.
+  const [woke, setWoke] = useState(0);
+  useEffect(() => {
+    if (!foreground || !focused || !snoozedUntil || snoozedUntil <= Date.now()) return;
+    const timer = setTimeout(
+      () => setWoke((n) => n + 1),
+      Math.min(snoozedUntil + 1 - Date.now(), 2 ** 31 - 1),
+    );
+    return () => clearTimeout(timer);
+  }, [snoozedUntil, foreground, focused, woke]);
   useEffect(() => {
     if (!updated || !foreground || !focused || leavingUnread.current) return;
     markSeen(id, updated);
@@ -122,7 +132,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     const upTo = openedUpTo({ updated, snoozedUntil }, Date.now());
     if (remote.status === "online")
       void remote.desktop("markProjectChatSeen", id, upTo).catch(() => {});
-  }, [id, updated, snoozedUntil, foreground, focused, remote.status, remote.desktop]);
+  }, [id, updated, snoozedUntil, woke, foreground, focused, remote.status, remote.desktop]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
     "thread" | "snooze" | "rename" | "sides" | "agents"
