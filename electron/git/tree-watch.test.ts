@@ -38,6 +38,7 @@ function fakeWatch() {
   const folders: {
     dir: string;
     change(file: string): void;
+    fail(): void;
     closed: boolean;
   }[] = [];
   const watch = ((
@@ -53,6 +54,7 @@ function fakeWatch() {
     const entry = {
       dir,
       change: (file: string) => !entry.closed && listener("change", file),
+      fail: () => folder.emit("error", new Error("EMFILE")),
       closed: false,
     };
     folders.push(entry);
@@ -106,6 +108,46 @@ it("settles a burst into one change and closes once nobody shows it", async () =
   expect(folders[1]!.dir).toBe("/projects/b");
   trees.release(popped);
   expect(folders[1]!.closed).toBe(true);
+});
+
+it("watches a folder again after it broke, once it can be read", async () => {
+  vi.useFakeTimers();
+  const { folders, watch } = fakeWatch();
+  const changed = vi.fn();
+  let gone = false;
+  const trees = new TreeWatch({
+    root: async (where) => `/projects/${where}`,
+    changed,
+    platform: "darwin",
+    watch,
+    gitDirs: async (root) => {
+      if (gone) throw new Error("not a git repository");
+      return [`${root}/.git`];
+    },
+  });
+  const owner = {};
+  expect(await trees.show(owner, "a")).toBe(true);
+  gone = true;
+  folders[0]!.fail();
+  expect(folders[0]!.closed).toBe(true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed).toHaveBeenCalledTimes(1);
+  // Still gone at the first retry; back by the second.
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(folders).toHaveLength(1);
+  gone = false;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(folders).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed).toHaveBeenCalledTimes(2);
+  folders[1]!.change("src/one.ts");
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(changed).toHaveBeenCalledTimes(3);
+  // Nobody shows it any more: no retry left behind.
+  folders[1]!.fail();
+  trees.release(owner);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(folders).toHaveLength(2);
 });
 
 it("leaves Linux, Windows and unreadable folders to the poll", async () => {

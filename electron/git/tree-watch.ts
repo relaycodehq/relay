@@ -6,6 +6,8 @@ import { git } from "./git";
 const SETTLE_MS = 400;
 /** Refreshes come no closer than this, however fast an agent writes: each runs Git a few times. */
 const GAP_MS = 2000;
+/** A folder that broke (deleted, recreated, out of handles) is watched again this much later. */
+const RETRY_MS = 15_000;
 
 /**
  * Whether a change at `file` (relative to the watched folder) can show in
@@ -40,6 +42,7 @@ interface Watch {
   owners: Set<object>;
   folders: FSWatcher[];
   timer?: ReturnType<typeof setTimeout>;
+  retry?: ReturnType<typeof setTimeout>;
   /** When it last said `where` changed. */
   last: number;
   closed: boolean;
@@ -113,7 +116,8 @@ export class TreeWatch {
     return watch;
   }
 
-  private async open(where: string, w: Watch) {
+  /** `again`: a broken watch tried again, which keeps trying while it's shown. */
+  private async open(where: string, w: Watch, again = false) {
     try {
       const root = await this.deps.root(where);
       // A worktree's HEAD and index, and every checkout's refs, can live
@@ -132,19 +136,35 @@ export class TreeWatch {
         const folder = watch(dir, { recursive: true }, (_type, file) => {
           if (noticed(file?.toString() ?? null, inGitDir)) this.soon(where, w);
         });
-        // Its folder went or can't be read: the next refresh says what's wrong.
-        folder.on("error", () => {
-          folder.close();
-          this.soon(where, w);
-        });
+        // Its folder went or can't be read: the next refresh says what's
+        // wrong, and the folder is watched again once it's back.
+        folder.on("error", () => this.broke(where, w));
         w.folders.push(folder);
       }
+      // What changed while it wasn't watched.
+      if (again) this.soon(where, w);
       return true;
     } catch {
+      if (again && !w.closed) this.retryLater(where, w);
       // Stays listed, so its owners keep polling until they show another place.
-      this.stop(w);
+      else this.stop(w);
       return false;
     }
+  }
+
+  private broke(where: string, w: Watch) {
+    if (w.closed || w.retry) return;
+    for (const folder of w.folders) folder.close();
+    w.folders = [];
+    this.soon(where, w);
+    this.retryLater(where, w);
+  }
+
+  private retryLater(where: string, w: Watch) {
+    w.retry = setTimeout(() => {
+      w.retry = undefined;
+      if (!w.closed) w.ready = this.open(where, w, true);
+    }, RETRY_MS);
   }
 
   private soon(where: string, w: Watch) {
@@ -173,6 +193,7 @@ export class TreeWatch {
   private stop(w: Watch) {
     w.closed = true;
     clearTimeout(w.timer);
+    clearTimeout(w.retry);
     for (const folder of w.folders) folder.close();
   }
 }
