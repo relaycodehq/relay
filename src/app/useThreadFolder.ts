@@ -121,12 +121,12 @@ function useTreeWatch(where: string | null) {
     if (where === null) return;
     let missed = false,
       live = true;
-    const refresh = () => {
+    const refresh = (cancelRefetch = true) => {
       missed = false;
-      void qc.invalidateQueries({
-        queryKey: workingTreeKey(where),
-        exact: true,
-      });
+      void qc.invalidateQueries(
+        { queryKey: workingTreeKey(where), exact: true },
+        { cancelRefetch },
+      );
     };
     const off = api.onWorkingTree((changed) => {
       if (changed !== where) return;
@@ -138,7 +138,14 @@ function useTreeWatch(where: string | null) {
     };
     document.addEventListener("visibilitychange", shown);
     api.watchWorkingTree(where).then(
-      (ok) => live && setWatched(ok ? where : null),
+      (ok) => {
+        if (!live) return;
+        setWatched(ok ? where : null);
+        // Nothing watched it while another place showed, and its cached
+        // tree is fresh enough that the slow poll would wait up to a minute.
+        // A fetch already under way for it is left to finish.
+        if (ok) refresh(false);
+      },
       () => live && setWatched(null),
     );
     return () => {
