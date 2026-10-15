@@ -239,13 +239,17 @@ export function ProjectSidebar({
   return (
     <div className="sb">
       <div className="sb-top">
-        {activity && (
-          <h2 className="sb-top-title">
-            Activity <small>({families.top.length})</small>
-          </h2>
-        )}
+        <h2 className="sb-top-title">
+          {activity ? (
+            <>
+              Activity <small>({families.top.length})</small>
+            </>
+          ) : (
+            "Projects"
+          )}
+        </h2>
         <button
-          className="sb-top-button sb-top-first"
+          className="sb-top-button"
           aria-label="Search threads"
           title={`Search threads  ${searchKeys}`.trim()}
           onClick={() => setSearching(true)}

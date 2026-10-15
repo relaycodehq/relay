@@ -83,7 +83,7 @@ test("sidebar choice survives reloads, browser storage loss and app restarts", a
     ).toHaveAttribute("aria-pressed", "false");
     await expect(
       page
-        .locator(".sb")
+        .locator(".sb-top")
         .getByRole("heading", { name: "Projects", exact: true }),
     ).toBeVisible();
     await screenshot(page, {

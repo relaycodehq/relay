@@ -45,10 +45,12 @@
   /* Its edges line up with the cards' below. */
   padding: 12px 8px 8px;
 }
-/* The view's name and count, where the buttons leave room. */
+/* The view's name and count, where the buttons leave room. Starts where the
+   cards' and nav items' content does, inside their 10px padding. */
 .sb-top-title {
   flex: 1;
   min-width: 0;
+  padding-left: 10px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -62,10 +64,6 @@
   font-size: 12px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
-}
-/* Keeps the buttons right-aligned whether or not a title is showing. */
-.sb .sb-top-first {
-  margin-left: auto;
 }
 .sb .sb-filter[data-popup-open] {
   background: var(--hover);
