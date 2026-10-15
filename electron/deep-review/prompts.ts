@@ -193,6 +193,41 @@ function agentLabel(reviewer: ReviewAgent) {
   return `${memberLabel(reviewer)} via ${review}`;
 }
 
+/**
+ * What a reviewer that was stopped or failed had so far. Its answer is often
+ * empty then, while its notes between calls and the reports of subagents that
+ * finished hold what it found. Some agents also stream a subagent's report as
+ * notes, so a report already among them isn't repeated.
+ */
+function unfinishedReport(answer: ChatMessage | undefined) {
+  if (!answer) return "";
+  const notes: string[] = [];
+  const subagents: string[] = [];
+  for (const entry of answer.trace ?? []) {
+    if (entry.kind === "commentary") notes.push(entry.text);
+    else {
+      const a = entry.activity;
+      const subagent = a.kind === "agent" || a.label === "subagent";
+      if (subagent && a.status === "complete" && a.detail?.trim())
+        subagents.push(a.detail.trim());
+    }
+  }
+  const written = notes.join("\n");
+  const unseen = subagents.filter((report) => {
+    // Without the wrapper some agents put round it, like `<subagent …>`.
+    const start = report.replace(/^<[^>\n]*>\s*/, "").slice(0, 200);
+    return !written.includes(start);
+  });
+  return [
+    written,
+    ...unseen.map((report) => `A subagent reported:\n${report}`),
+    answer.body,
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function leadPrompt(
   state: DeepReviewState,
   reports: {
@@ -225,10 +260,11 @@ export function leadPrompt(
         agent: agentLabel(r.reviewer),
         status: hasCouncilReport(r.answer)
           ? "finished"
-          : "didn't finish; use what it has, if anything",
-        report: (r.answer?.body ?? "").slice(
-          -Math.min(MAX_REPORT, Math.floor(REPORTS_BUDGET / count)),
-        ),
+          : "didn't finish; below is what it wrote between its calls and what its finished subagents reported, so check it the same way",
+        report: (hasCouncilReport(r.answer)
+          ? r.answer!.body
+          : unfinishedReport(r.answer)
+        ).slice(-Math.min(MAX_REPORT, Math.floor(REPORTS_BUDGET / count))),
       })),
     )}`,
   ].join("\n\n");
