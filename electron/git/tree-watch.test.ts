@@ -4,7 +4,12 @@ import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { noticed, TreeWatch, type TreeWatchDeps } from "./tree-watch";
+import {
+  askedTogether,
+  noticed,
+  TreeWatch,
+  type TreeWatchDeps,
+} from "./tree-watch";
 
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];
@@ -30,11 +35,24 @@ it("notices what a working tree shows, not Git's own churn", () => {
   expect(noticed("web/node_modules/x/index.js", false)).toBe(false);
   expect(noticed("worktrees/feature/HEAD", true)).toBe(true);
   expect(noticed("objects/pack/pack-1.idx", true)).toBe(false);
+  // Submodules' and worktrees' own Git folders churn the same way.
+  expect(noticed(".git/modules/lib/objects/ab/cd", false)).toBe(false);
+  expect(noticed(".git/modules/lib/logs/HEAD", false)).toBe(false);
+  expect(noticed("modules/vendor/lib/objects/ab", true)).toBe(false);
+  expect(noticed("modules/a/modules/b/objects/ab/cd", true)).toBe(false);
+  expect(noticed("modules/a/modules/b/hooks", true)).toBe(false);
+  expect(noticed("worktrees/feature/logs/HEAD", true)).toBe(false);
+  expect(noticed(".git/modules/lib/HEAD", false)).toBe(true);
+  expect(noticed("modules/vendor/lib/index", true)).toBe(true);
+  expect(noticed("modules/a/modules/b/refs/heads/main", true)).toBe(true);
+  expect(noticed("modules/a/refs/heads/logs", true)).toBe(true);
+  expect(noticed("worktrees/feature/index", true)).toBe(true);
   expect(noticed(null, false)).toBe(true);
 });
 
 /** A watch that changes only when told to, and counts its closes. */
 function fakeWatch() {
+  const refuse = new Set<string>();
   const folders: {
     dir: string;
     change(file: string): void;
@@ -46,6 +64,7 @@ function fakeWatch() {
     _options: unknown,
     listener: (type: string, file: string) => void,
   ) => {
+    if (refuse.has(dir)) throw new Error("EMFILE");
     const folder = Object.assign(new EventEmitter(), {
       close: () => {
         entry.closed = true;
@@ -60,7 +79,7 @@ function fakeWatch() {
     folders.push(entry);
     return folder;
   }) as unknown as TreeWatchDeps["watch"];
-  return { folders, watch };
+  return { folders, watch, refuse };
 }
 
 it("settles a burst into one change and closes once nobody shows it", async () => {
@@ -148,6 +167,38 @@ it("watches a folder again after it broke, once it can be read", async () => {
   trees.release(owner);
   await vi.advanceTimersByTimeAsync(60_000);
   expect(folders).toHaveLength(2);
+});
+
+it("closes what a retry opened when it fails part-way", async () => {
+  vi.useFakeTimers();
+  const { folders, watch, refuse } = fakeWatch();
+  const trees = new TreeWatch({
+    root: async () => "/projects/a",
+    changed: () => {},
+    platform: "darwin",
+    watch,
+    gitDirs: async () => ["/projects/main/.git"],
+  });
+  const owner = {};
+  expect(await trees.show(owner, "a")).toBe(true);
+  expect(folders.map((f) => f.dir)).toEqual([
+    "/projects/a",
+    "/projects/main/.git",
+  ]);
+  refuse.add("/projects/main/.git");
+  folders[0]!.fail();
+  await vi.advanceTimersByTimeAsync(15_000);
+  // The retry watched the folder, then couldn't watch the Git folder.
+  expect(folders).toHaveLength(3);
+  expect(folders.every((f) => f.closed)).toBe(true);
+  refuse.clear();
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(folders.filter((f) => !f.closed).map((f) => f.dir)).toEqual([
+    "/projects/a",
+    "/projects/main/.git",
+  ]);
+  trees.release(owner);
+  expect(folders.every((f) => f.closed)).toBe(true);
 });
 
 it("watches on Windows, where changes come with backslashes", async () => {
@@ -279,3 +330,17 @@ it("on Linux, watches each folder Git shows and none it ignores", async () => {
   await vi.waitFor(() => expect(changes).toHaveLength(2), { timeout: 5000 });
   trees.dispose();
 }, 20_000);
+
+it("tells which of the folders that appeared together Git ignores", async () => {
+  temp = await realpath(await mkdtemp(join(tmpdir(), "relay-watch-")));
+  execFileSync("git", ["init", "-q", "-b", "main", temp]);
+  await writeFile(join(temp, ".gitignore"), "dist/\nbuild/\n");
+  for (const dir of ["dist", "build", "src", "src/dist"])
+    await mkdir(join(temp, dir), { recursive: true });
+  const ignored = askedTogether(temp);
+  expect(
+    await Promise.all(["dist", "src", "src/dist", "build"].map(ignored)),
+  ).toEqual([true, false, true, true]);
+  // Git exits 1 when it ignores none of them.
+  expect(await Promise.all(["src"].map(ignored))).toEqual([false]);
+});

@@ -15,6 +15,13 @@ const GAP_MS = 2000;
 const RETRY_MS = 15_000;
 
 /**
+ * Folders of a Git folder that churn on every command. "relay" holds Relay's
+ * own notes, written as it reads the tree; Git's file system monitor drops a
+ * cookie there on every `git status`.
+ */
+const CHURN = ["objects", "logs", "lfs", "hooks", "relay", "fsmonitor--daemon"];
+
+/**
  * Whether a change at `file` (relative to the watched folder) can show in
  * the working tree. Git's objects, logs and lock files churn on every
  * command; the refs, HEAD and index they end in are what count.
@@ -26,14 +33,20 @@ export function noticed(file: string | null, inGitDir: boolean) {
   const gitAt = inGitDir ? 0 : parts[0] === ".git" ? 1 : -1;
   if (gitAt < 0) return true;
   const inside = parts.slice(gitAt);
-  // "relay" holds Relay's own notes, written as it reads the tree; Git's
-  // file system monitor drops a cookie there on every `git status`.
-  if (
-    ["objects", "logs", "lfs", "hooks", "relay", "fsmonitor--daemon"].includes(
-      inside[0] ?? "",
+  if (CHURN.includes(inside[0] ?? "")) return false;
+  if (inside[0] === "worktrees" && inside[2] === "logs") return false;
+  // A submodule's own Git folder sits at modules/<its name>/, a name that may
+  // have slashes, with its own submodules under it in turn. Branch names
+  // under refs/ may be anything.
+  if (inside[0] === "modules") {
+    const refs = inside.indexOf("refs");
+    if (
+      inside
+        .slice(1, refs < 0 ? undefined : refs)
+        .some((p) => CHURN.includes(p))
     )
-  )
-    return false;
+      return false;
+  }
   const name = parts[parts.length - 1]!;
   return !name.endsWith(".lock") && name !== "FETCH_HEAD";
 }
@@ -174,6 +187,9 @@ export class TreeWatch {
       if (again) this.soon(where, w);
       return true;
     } catch {
+      // Whatever opened before it failed; the next try opens its own.
+      for (const folder of w.folders) folder.close();
+      w.folders = [];
       if (again && !w.closed) this.retryLater(where, w);
       // Stays listed, so its owners keep polling until they show another place.
       else this.stop(w);
@@ -201,6 +217,7 @@ export class TreeWatch {
         )
         .catch(() => new Set<string>()),
     ]);
+    const ignoredLater = askedTogether(root);
     return (
       dir: string,
       inGitDir: boolean,
@@ -212,16 +229,7 @@ export class TreeWatch {
           budget,
           skip: (rel) =>
             !noticed(rel, inGitDir) || (!inGitDir && ignored.has(rel)),
-          skipLater: inGitDir
-            ? undefined
-            : (rel) =>
-                // check-ignore rejects literal pathspec magic outright.
-                git(root, ["check-ignore", "-q", "--", rel], {
-                  env: { GIT_LITERAL_PATHSPECS: undefined },
-                }).then(
-                  () => true,
-                  () => false,
-                ),
+          skipLater: inGitDir ? undefined : ignoredLater,
         },
         listener,
       );
@@ -271,6 +279,48 @@ export class TreeWatch {
     clearTimeout(w.retry);
     for (const folder of w.folders) folder.close();
   }
+}
+
+/** Most folders one `git check-ignore` is asked about. */
+const ASK_AT_ONCE = 200;
+
+/**
+ * Whether Git ignores a folder that appeared, asked of one Git at a time for
+ * all that appeared meanwhile: a checkout or an unpacked archive makes
+ * hundreds at once.
+ */
+export function askedTogether(root: string) {
+  let waiting: { rel: string; answer(ignored: boolean): void }[] = [];
+  let asking = false;
+  const ask = async () => {
+    while (waiting.length) {
+      const batch = waiting.slice(0, ASK_AT_ONCE);
+      waiting = waiting.slice(ASK_AT_ONCE);
+      const rels = batch.map((b) => b.rel);
+      // check-ignore rejects literal pathspec magic outright, and -z without
+      // --stdin. It exits 1 when it ignores none, and fails the lot on one it
+      // can't judge; those, and names it quotes, are watched.
+      const ignored = await git(
+        root,
+        ["-c", "core.quotePath=false", "check-ignore", "--", ...rels],
+        { env: { GIT_LITERAL_PATHSPECS: undefined } },
+      ).then(
+        (out) => new Set(out.split("\n")),
+        () => new Set<string>(),
+      );
+      for (const { rel, answer } of batch) answer(ignored.has(rel));
+    }
+    asking = false;
+  };
+  return (rel: string) =>
+    new Promise<boolean>((answer) => {
+      waiting.push({ rel, answer });
+      // A tick lets the rest of a burst join this one.
+      if (!asking) {
+        asking = true;
+        setImmediate(() => void ask());
+      }
+    });
 }
 
 async function gitDirsOf(root: string) {

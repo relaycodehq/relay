@@ -43,6 +43,8 @@ export async function watchEachFolder(
 class EachFolder extends EventEmitter implements FolderWatch {
   private folders = new Map<string, FSWatcher>();
   private closed = false;
+  /** The root's watch broke before anyone listened: fails the first crawl. */
+  private failed?: Error;
 
   constructor(
     private root: string,
@@ -64,13 +66,22 @@ class EachFolder extends EventEmitter implements FolderWatch {
         return;
       }
       const dir = join(this.root, at);
-      // Watched before it's read, so a folder made meanwhile is still seen.
-      const folder = watch(dir, (type, name) =>
-        this.changed(at, type, name?.toString() ?? null),
-      );
-      folder.on("error", (error) =>
-        at === "" ? this.emit("error", error) : this.drop(at),
-      );
+      let folder;
+      try {
+        // Watched before it's read, so a folder made meanwhile is still seen.
+        folder = watch(dir, (type, name) =>
+          this.changed(at, type, name?.toString() ?? null),
+        );
+      } catch (error) {
+        // Gone since its parent was read.
+        if (at === "") throw error;
+        continue;
+      }
+      folder.on("error", (error) => {
+        if (at !== "") this.drop(at);
+        else if (this.listenerCount("error")) this.emit("error", error);
+        else this.failed ??= error;
+      });
       this.folders.set(at, folder);
       let entries;
       try {
@@ -80,12 +91,14 @@ class EachFolder extends EventEmitter implements FolderWatch {
         this.drop(at);
         continue;
       }
+      if (strict && this.failed) throw this.failed;
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         const rel = at ? `${at}/${entry.name}` : entry.name;
         if (!this.options.skip(rel)) queue.push(rel);
       }
     }
+    if (strict && this.failed) throw this.failed;
   }
 
   private changed(at: string, type: string, name: string | null) {
@@ -104,7 +117,9 @@ class EachFolder extends EventEmitter implements FolderWatch {
     } catch {
       return this.drop(rel);
     }
-    if (this.folders.has(rel)) return;
+    // Deleted and made again, or another moved over it: the old watch sees
+    // the folder that went.
+    this.drop(rel);
     if (await this.options.skipLater?.(rel).catch(() => false)) return;
     await this.add(rel).catch(() => {});
   }
