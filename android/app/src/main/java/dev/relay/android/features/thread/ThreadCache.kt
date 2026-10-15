@@ -32,6 +32,9 @@ class ThreadCache(private val root: File) {
         }
     }
 
+    /** Whether the saved copy is missing or older than the thread's last change. */
+    fun stale(computer: String, id: String, updated: Long): Boolean = file(computer, id).lastModified() < updated
+
     @Synchronized
     fun save(computer: String?, id: String, thread: RemoteChat) {
         if (computer == null) return
