@@ -56,10 +56,16 @@ export function turnRules(turn: ChatTurn) {
     side: kind === "side",
     /**
      * A failed answer the user asked for pauses the queue behind it. A
-     * restart resumes whatever was streaming, so the message decides.
+     * restart resumes whatever was streaming, so the message decides. A
+     * compaction Relay started because the cache went cold wasn't asked
+     * for: when it fails, the message waiting behind it goes out anyway.
+     * Stopped, it holds the queue like any answer.
      */
     pausesQueue: (message: ChatMessage) =>
-      kind !== "side" && !message.handoff && !message.unprompted,
+      kind !== "side" &&
+      !message.handoff &&
+      !message.unprompted &&
+      !(message.compactedCold && message.status === "failed"),
     /**
      * The session has heard the conversation up to this answer, unless the
      * turn told it nothing new (a handoff note, a compaction, a command

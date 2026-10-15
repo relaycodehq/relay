@@ -800,6 +800,72 @@ it("sends straight away while the conversation's cache is still warm", async () 
     expect.stringMatching(/^assistant:/),
   ]);
 });
+/** The Codex turns asked for `body`, by the fixture's record of them. */
+const turnsAsking = async (body: string) =>
+  (await agentCalls())
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((r) =>
+      r.turn?.input?.some(
+        (i: { type: string; text?: string }) =>
+          i.type === "text" && i.text?.includes(body),
+      ),
+    );
+it("sends the message anyway when compacting the cold conversation fails", async () => {
+  vi.stubEnv("RELAY_FIXTURE_COMPACT_FAILS", "1");
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const chat = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(chat.id, input("@codex Go on"));
+  await vi.waitFor(
+    async () => {
+      expect(await shape(chat.id)).toEqual([
+        "user:@codex Expla",
+        expect.stringMatching(/^assistant:/),
+        "compaction (cold)",
+        "user:@codex Go on",
+        expect.stringMatching(/^assistant:/),
+      ]);
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 10_000 },
+  );
+  const saved = await chats.get(chat.id);
+  expect(saved.messages[2]!.status).toBe("failed");
+  expect(saved.queuePaused).toBeFalsy();
+  expect(saved.queue ?? []).toHaveLength(0);
+  expect(await turnsAsking("Go on")).toHaveLength(1);
+  expect(
+    warn.mock.calls.some(([m]) => String(m).includes("cold conversation")),
+  ).toBe(true);
+});
+it("holds the message back when the cold conversation's compaction is stopped", async () => {
+  const chat = await answeredLongAgo(2 * 60 * 60_000);
+  // The send returns once the compaction has started, with the message queued behind it.
+  await chats.send(chat.id, input("@codex Go on"));
+  expect(
+    (await chats.get(chat.id)).messages.find((m) => m.compaction)?.status,
+  ).toBe("streaming");
+  await chats.cancel(chat.id);
+  await vi.waitFor(async () => {
+    expect(
+      (await chats.get(chat.id)).messages.find((m) => m.compaction)?.status,
+    ).toBe("cancelled");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
+  const saved = await chats.get(chat.id);
+  expect(await shape(chat.id)).toEqual([
+    "user:@codex Expla",
+    expect.stringMatching(/^assistant:/),
+    "compaction (cold)",
+  ]);
+  expect(saved.queuePaused).toBe(true);
+  expect(saved.queue?.map((q) => q.input.body)).toEqual(["@codex Go on"]);
+  expect(await turnsAsking("Go on")).toHaveLength(0);
+});
 it("takes a repeated compact's instructions in place of the queued one's", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
   const chat = await chats.create(projectId, { kind: "project" });

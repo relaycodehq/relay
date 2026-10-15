@@ -1336,6 +1336,20 @@ if (args.includes("--permission-prompt-tool")) {
         params: { threadId: "fixture-thread", turn: { id: "fixture-compact" } },
       });
       setTimeout(() => {
+        if (process.env.RELAY_FIXTURE_COMPACT_FAILS) {
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: {
+                id: "fixture-compact",
+                status: "failed",
+                error: { message: "Compaction failed in the fixture." },
+              },
+            },
+          });
+          return;
+        }
         send({
           method: "thread/tokenUsage/updated",
           params: {

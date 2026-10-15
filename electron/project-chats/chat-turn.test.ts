@@ -26,6 +26,17 @@ it("plans a resume after a usage limit only for turns that carry on the user's a
   expect(turnRules({ kind: "compact" }).plansResume).toBe(false);
 });
 
+it("lets the queue go on past a failed compaction Relay started for a cold cache, not a stopped one", () => {
+  const compact = turnRules({ kind: "compact" });
+  expect(compact.pausesQueue(answer({ status: "failed" }))).toBe(true);
+  expect(
+    compact.pausesQueue(answer({ status: "failed", compactedCold: true })),
+  ).toBe(false);
+  expect(
+    compact.pausesQueue(answer({ status: "cancelled", compactedCold: true })),
+  ).toBe(true);
+});
+
 it("runs each turn kind as its job, and a reviewer's Codex review only for its task", () => {
   const kinds: ChatTurn[] = [
     { kind: "reply", request: "/review" },
