@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Toast } from "@base-ui/react/toast";
-import { ArrowDownToLine, Check, X } from "lucide-react";
+import { ArrowDownToLine, Check, TriangleAlert, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { releasesPage } from "../../../shared/updates";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
+import { useCrashOffer } from "../bug-report/useCrashOffer";
 import { RelayMark } from "../../ui/RelayMark";
 import { Spinner } from "../../ui/ui";
 import { useUpdates } from "./updates";
@@ -13,13 +14,20 @@ import {
   useAgentVersions,
 } from "./agent-updates";
 import { useRecent } from "./useRecent";
-import { doneFor, shortVersion, updateItems, type UpdateItem } from "./update-items";
+import {
+  crashItem,
+  doneFor,
+  shortVersion,
+  updateItems,
+  type UpdateItem,
+} from "./update-items";
 import "./update-toasts.css";
 
 /**
  * Relay's and the agents' updates as a stack of one-line toasts rising from
  * the sidebar footer: hover fans them out, × or a swipe left puts one off
- * until it has something new to say, and a dot brings them back.
+ * until it has something new to say, and a dot brings them back. An offer to
+ * report the last run's crash leads the stack; putting it off drops it.
  */
 export function UpdateToasts({ onAgentDetails }: { onAgentDetails: () => void }) {
   return (
@@ -31,6 +39,7 @@ export function UpdateToasts({ onAgentDetails }: { onAgentDetails: () => void })
 
 function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   const { state } = useUpdates();
+  const crash = useCrashOffer();
   const agents = useAgentVersions()?.agents;
   const notices = useAgentUpdateChecks() === true;
   const lastUpdated = Math.max(
@@ -39,10 +48,11 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   );
   // Re-renders when the last check mark is due to go.
   const justUpdated = useRecent(lastUpdated || undefined, doneFor);
-  const items = useMemo(
-    () => updateItems(state, agents ?? [], notices, Date.now()),
-    [state, agents, notices, justUpdated],
-  );
+  const items = useMemo(() => {
+    const updates = updateItems(state, agents ?? [], notices, Date.now());
+    const crashed = crashItem(crash.offer);
+    return crashed ? [crashed, ...updates] : updates;
+  }, [crash.offer, state, agents, notices, justUpdated]);
 
   const manager = Toast.useToastManager();
   const [putOff, setPutOff] = useState<ReadonlySet<string>>(new Set());
@@ -50,8 +60,24 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   const going = useRef(new Set<string>());
   const shown = useMemo(() => items.filter((i) => !putOff.has(i.key)), [items, putOff]);
 
+  /** Bumped to bring the crash offer back in front as a new toast. */
+  const crashTurn = useRef(0);
+  const toastId = (item: UpdateItem) =>
+    item.subject === "crash" ? `${item.id}:${crashTurn.current}` : item.id;
+
   useEffect(() => {
-    const ids = new Set(shown.map((i) => i.id));
+    const showing = new Set(manager.toasts.map((t) => t.id));
+    // The crash offer stays in front: an update arriving after it would bury
+    // it, so it comes back on top. Base UI can't reorder toasts, and one
+    // added again under its id stays invisible, hence a new one.
+    const crashed = shown.find((i) => i.subject === "crash");
+    if (
+      crashed &&
+      showing.has(toastId(crashed)) &&
+      shown.some((i) => !showing.has(toastId(i)))
+    )
+      crashTurn.current += 1;
+    const ids = new Set(shown.map(toastId));
     for (const toast of manager.toasts)
       if (!ids.has(toast.id) && !going.current.has(toast.id)) {
         going.current.add(toast.id);
@@ -59,15 +85,17 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
       }
     // The newest toast stacks in front; of those arriving together, Relay's.
     for (const item of [...shown].reverse()) {
-      going.current.delete(item.id);
+      const id = toastId(item);
+      going.current.delete(id);
       manager.add<UpdateItem>({
-        id: item.id,
+        id,
         data: item,
         onClose: () => {
-          if (going.current.has(item.id)) return;
+          if (going.current.has(id)) return;
+          if (item.subject === "crash") return crash.dismiss();
           setPutOff((keys) => new Set(keys).add(item.key));
         },
-        onRemove: () => going.current.delete(item.id),
+        onRemove: () => going.current.delete(id),
       });
     }
     // manager is a fresh object every render; its toasts are what's read.
@@ -82,9 +110,11 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
       case "install":
         return void api.installUpdate();
       case "update-agent":
-        return updateAgent(item.subject as Exclude<UpdateItem["subject"], "relay">);
+        return updateAgent(item.subject as Exclude<UpdateItem["subject"], "relay" | "crash">);
       case "agent-details":
         return onAgentDetails();
+      case "report-crash":
+        return crash.report();
     }
   };
 
@@ -104,6 +134,8 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
               <Toast.Content className="update-toast-content">
                 {item.subject === "relay" ? (
                   <RelayMark size={15} />
+                ) : item.subject === "crash" ? (
+                  <TriangleAlert size={14} className="update-toast-warning" />
                 ) : (
                   <ProviderIcon provider={item.subject} />
                 )}
@@ -114,7 +146,11 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
                   </span>
                 </Toast.Title>
                 <UpdateAction item={item} onRun={() => run(item)} />
-                <Toast.Close className="update-toast-close" aria-label="Later" title="Later">
+                <Toast.Close
+                  className="update-toast-close"
+                  aria-label={item.subject === "crash" ? "Not now" : "Later"}
+                  title={item.subject === "crash" ? "Not now" : "Later"}
+                >
                   <X size={10} />
                 </Toast.Close>
               </Toast.Content>

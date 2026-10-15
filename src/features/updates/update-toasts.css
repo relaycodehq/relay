@@ -97,6 +97,10 @@
   width: 15px;
   height: 15px;
 }
+.update-toast-warning {
+  flex-shrink: 0;
+  color: var(--danger);
+}
 /* Base UI's title is an h2, which the sidebar mutes as a heading. */
 .sb .update-toast-title {
   display: flex;

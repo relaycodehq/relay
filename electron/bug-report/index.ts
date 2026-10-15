@@ -17,6 +17,7 @@ import type { AgentVersion } from "../../shared/agent-updates";
 import type {
   BugReportFields,
   BugReportOccasion,
+  CrashOffer,
 } from "../../shared/bug-report";
 import type { Project } from "../../shared/projects";
 import type { AISettings } from "../../shared/settings";
@@ -37,6 +38,7 @@ export { BugReports };
 
 const exec = promisify(execFile);
 let reports: BugReports | undefined;
+let run: ReturnType<typeof trackRun> | undefined;
 let tray: DragTray | undefined;
 let show: (() => void) | undefined;
 
@@ -48,26 +50,39 @@ let show: (() => void) | undefined;
 export function watchForCrashes() {
   // Dumps stay on this computer; a report only says that one exists.
   crashReporter.start({ uploadToServer: false });
-  const run = trackRun(
+  const tracked = (run = trackRun(
     app.getPath("userData"),
     app.getVersion(),
     app.getPath("crashDumps"),
-  );
+  ));
   // Before this run's logging can rotate it away.
-  if (run.last) keepCrashedRunLog(app.getPath("logs"), run.last.startedAt);
-  app.on("will-quit", run.quit);
+  if (tracked.last)
+    keepCrashedRunLog(app.getPath("logs"), tracked.last.startedAt);
+  app.on("will-quit", tracked.quit);
   // Being told to stop isn't quitting unexpectedly, even when the system
   // kills Relay before its quit finishes. A hung Relay can't answer these.
   void app.whenReady().then(() => {
-    powerMonitor.on("shutdown", run.quit);
+    powerMonitor.on("shutdown", tracked.quit);
     for (const signal of ["SIGTERM", "SIGINT"] as const)
-      process.on(signal, run.quit);
+      process.on(signal, tracked.quit);
   });
   // Test runs and development restarts end however they like.
   const ask =
     !process.env.RELAY_TEST_DATA &&
     (app.isPackaged || process.env.RELAY_CRASH_PROMPT === "1");
-  return ask ? run.last : null;
+  return ask ? tracked.last : null;
+}
+
+/**
+ * How long a run lasts after its window loaded before a crash no longer
+ * counts as one at startup. The window loads within a second; what dies
+ * soon after, as restoring threads, is still a launch that can't get going.
+ */
+const startupMs = 10_000;
+
+/** Relay's window loaded; the run is through its startup once it lasts a while longer. */
+export function windowLoaded() {
+  setTimeout(() => run?.started(), startupMs).unref();
 }
 
 /** The report page's service, made once Relay knows its projects and agents. */
@@ -169,19 +184,52 @@ export async function draftBugReport(
   show?.();
 }
 
+let crashed: LastRun | null = null;
+
 /**
- * Asks before the rest of startup runs, so a launch that crashes again can
- * still be reported; the page itself shows once the window is up.
+ * Keeps the last run's crash for the window to offer reporting. Startup
+ * doesn't wait for an answer: a dialog here held up everything after it,
+ * keep-awake and phone access included, until someone clicked, and on
+ * Windows it could sit behind other windows unseen. A crash loop still asks
+ * up front: see `askAboutCrashLoop`.
  */
-export async function offerCrashReport(last: LastRun) {
+export function offerCrashReport(last: LastRun | null) {
+  crashed = last;
+}
+
+/** The crash on offer, until it's reported or put off. */
+export function crashOffer(): CrashOffer | null {
+  return crashed && { crashes: crashed.crashes, at: crashed.startedAt };
+}
+
+export async function reportCrash() {
+  const last = crashed;
+  crashed = null;
+  if (last)
+    await reportBug({ kind: "quit", at: last.startedAt, dump: last.dump });
+}
+
+export function dismissCrashOffer() {
+  crashed = null;
+}
+
+/** Launches in a row that died while starting, after which Relay asks before starting. */
+const crashLoop = 2;
+
+/**
+ * A Relay that keeps crashing while it starts never gets to show the toast,
+ * so after `crashLoop` such launches it asks before the rest of startup, which
+ * waits for the answer. Returns what to report, when the user wants to.
+ */
+export async function askAboutCrashLoop() {
+  const last = crashed;
+  if (!last || last.early < crashLoop) return null;
+  crashed = null;
   const { response } = await dialog.showMessageBox({
     type: "warning",
-    message:
-      last.crashes > 1
-        ? `Relay quit unexpectedly ${last.crashes} times in a row.`
-        : "Relay quit unexpectedly last time.",
+    message: `Relay quit while starting ${last.early} times in a row.`,
     detail:
-      "Tell us what happened? Relay kept that run's log. You write the report, see everything it would send, and nothing leaves this computer until you press Send.",
+      "Tell us what happened? Relay kept the last run's log. You write the report, see everything it would send, and nothing leaves this computer until you press Send.",
     buttons: ["Report a Problem…", "Not Now"],
     defaultId: 0,
     cancelId: 1,

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import { modelChoiceSchema } from "../../shared/settings";
+import {
+  crashOffer,
+  dismissCrashOffer,
+  reportCrash,
+} from "../bug-report";
 import { screenshotLimit } from "../bug-report/service";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -59,6 +64,9 @@ export function bugReportHandlers(ctx: ApiContext) {
     openBugReportIssue: () => reports().openIssue(),
     discardBugReport: () => reports().discard(),
     takeBugReportWanted: () => ctx.bugReports?.takeWanted() ?? false,
+    crashReportOffer: () => crashOffer(),
+    reportCrash: () => reportCrash(),
+    dismissCrashReport: () => dismissCrashOffer(),
     recordBugReportPerformance: takes([z.int().min(5).max(120)], (seconds) =>
       reports().record(seconds),
     ),

@@ -31,6 +31,7 @@ import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
 import { savedThreadWindows } from "../shared/thread-windows";
 import {
+  askAboutCrashLoop,
   offerCrashReport,
   offerWindowReport,
   draftBugReport,
@@ -38,7 +39,7 @@ import {
   reportBug,
   setUpBugReports,
   watchForCrashes,
-  type LastRun,
+  windowLoaded,
 } from "./bug-report";
 import { BlameService } from "./git/blame";
 import { Ci } from "./ci";
@@ -295,14 +296,13 @@ const projectChecks = new ProjectChecks(
 );
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init));
-let lastRun: LastRun | null = null;
 if (!app.requestSingleInstanceLock()) {
   // Opening Relay again only brings the running copy forward.
   console.info("Relay was opened again while already running");
   app.quit();
 } else {
   console.info(`Relay ${app.getVersion()} started`);
-  lastRun = watchForCrashes();
+  offerCrashReport(watchForCrashes());
 }
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
@@ -314,7 +314,7 @@ app
   .then(async () => {
     app.setName("Relay");
     quit.detachOnSignals();
-    const crash = lastRun ? await offerCrashReport(lastRun) : null;
+    const crash = await askAboutCrashLoop();
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
@@ -677,6 +677,7 @@ app
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
       menubar.start();
     window.create();
+    window.win?.webContents.once("did-finish-load", windowLoaded);
     window.threads.restore({
       load: () => savedThreadWindows(loaded.get().threadWindows),
       save: (windows) =>

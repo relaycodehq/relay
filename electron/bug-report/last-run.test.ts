@@ -21,12 +21,37 @@ it("counts runs in a row that never quit, until one does", () => {
     version: "1.0.0",
     startedAt: 1000,
     crashes: 1,
+    early: 1,
     dump: false,
   });
   const third = trackRun(dir, "1.0.1", dumps, 3000);
   expect(third.last?.crashes).toBe(2);
   third.quit();
   expect(trackRun(dir, "1.0.1", dumps, 4000).last).toBeNull();
+});
+
+it("counts the crashes at startup in a row apart from later ones", () => {
+  dir = mkdtempSync(join(tmpdir(), "relay-run-"));
+  const dumps = join(dir, "Crashpad");
+  trackRun(dir, "1.0.0", dumps, 1000).started();
+  // Killed after its window came up, as an installer does: no crash loop.
+  expect(trackRun(dir, "1.0.0", dumps, 2000).last).toMatchObject({
+    crashes: 1,
+    early: 0,
+  });
+  // Then two that died starting.
+  expect(trackRun(dir, "1.0.0", dumps, 3000).last).toMatchObject({
+    crashes: 2,
+    early: 1,
+  });
+  const fourth = trackRun(dir, "1.0.0", dumps, 4000);
+  expect(fourth.last).toMatchObject({ crashes: 3, early: 2 });
+  // One that got through starts the count again.
+  fourth.started();
+  expect(trackRun(dir, "1.0.0", dumps, 5000).last).toMatchObject({
+    crashes: 4,
+    early: 0,
+  });
 });
 
 it("tells a crash that left a dump from an older dump", () => {

@@ -14,6 +14,11 @@ export interface LastRun {
   startedAt: number;
   /** Runs in a row that ended this way, this one included. */
   crashes: number;
+  /**
+   * Of those, the latest in a row that ended while starting, before `started`:
+   * a crash at startup, which happening again is a crash loop.
+   */
+  early: number;
   /** Crashpad wrote a minidump during it, so the process itself crashed. */
   dump: boolean;
 }
@@ -22,7 +27,8 @@ export interface LastRun {
  * Leaves a marker for as long as Relay runs; a quit removes it, so finding
  * one at launch means the last run never got to quit. A run the computer
  * restarted under doesn't count unless it left a dump: shutting down kills
- * Relay without a quit on Linux, where the compositor goes first.
+ * Relay without a quit on Linux, where the compositor goes first. `started`
+ * marks the run as through its startup.
  */
 export function trackRun(
   dir: string,
@@ -42,22 +48,30 @@ export function trackRun(
           version: String(marker.version),
           startedAt: marker.startedAt,
           crashes: (Number(marker.crashes) || 0) + 1,
+          early: marker.started ? 0 : (Number(marker.early) || 0) + 1,
           dump,
         };
     }
   } catch {
     // No marker: the last run quit, or there wasn't one.
   }
-  try {
-    writeFileSync(
-      file,
-      JSON.stringify({ version, startedAt: now, crashes: last?.crashes ?? 0 }),
-    );
-  } catch (error) {
-    console.warn("Could not mark this run as started:", error);
-  }
+  const marker = {
+    version,
+    startedAt: now,
+    crashes: last?.crashes ?? 0,
+    early: last?.early ?? 0,
+  };
+  const write = (started: boolean) => {
+    try {
+      writeFileSync(file, JSON.stringify({ ...marker, started }));
+    } catch (error) {
+      console.warn("Could not mark this run as started:", error);
+    }
+  };
+  write(false);
   return {
     last,
+    started: () => write(true),
     quit: () => rmSync(file, { force: true }),
   };
 }

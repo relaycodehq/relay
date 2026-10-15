@@ -1,3 +1,4 @@
+import type { CrashOffer } from "../../../shared/bug-report";
 import type { UpdateState } from "../../../shared/updates";
 import {
   isBehind,
@@ -12,9 +13,10 @@ export type UpdateRun =
   | "releases"
   | "install"
   | "update-agent"
-  | "agent-details";
+  | "agent-details"
+  | "report-crash";
 
-/** One toast: Relay's own update or one agent CLI's. */
+/** One toast: Relay's own update, one agent CLI's, or the last run's crash. */
 export interface UpdateItem {
   /** The toast's id, one per subject, so a new state replaces the old in place. */
   id: string;
@@ -23,7 +25,7 @@ export interface UpdateItem {
    * through the same update's progress but comes back for the next step.
    */
   key: string;
-  subject: "relay" | AgentProvider;
+  subject: "relay" | AgentProvider | "crash";
   name: string;
   /** The version it goes to; absent when there's a failure to show instead. */
   version?: string;
@@ -42,6 +44,22 @@ export function shortVersion(version: string): string {
 
 /** How long an agent's toast shows its check before it goes. */
 export const doneFor = 4000;
+
+/** Offers to report the last run, which ended without quitting. */
+export function crashItem(offer: CrashOffer | null): UpdateItem | undefined {
+  if (!offer) return undefined;
+  const times = offer.crashes > 1 ? ` ${offer.crashes} times in a row` : "";
+  return {
+    id: "crash",
+    key: `crash:${offer.at}`,
+    subject: "crash",
+    name: "Relay crashed",
+    phase: "idle",
+    label: "Report",
+    run: "report-crash",
+    title: `Relay quit unexpectedly${times}. Tell us what happened? Relay kept that run's log; you see everything a report would send before it goes.`,
+  };
+}
 
 /** Relay's own update, when there's one to show. */
 export function relayItem(state: UpdateState | undefined): UpdateItem | undefined {

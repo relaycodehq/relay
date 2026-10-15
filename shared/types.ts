@@ -393,6 +393,11 @@ export interface Api
   discardBugReport(): Promise<import("./bug-report").BugReportPreview>;
   /** Whether a menu or crash prompt asked for the report page since last asked. */
   takeBugReportWanted(): Promise<boolean>;
+  /** The last run's crash, while the footer offers to report it. */
+  crashReportOffer(): Promise<import("./bug-report").CrashOffer | null>;
+  /** Starts a report about that crash and shows the page. */
+  reportCrash(): Promise<void>;
+  dismissCrashReport(): Promise<void>;
   onBugReport(callback: () => void): () => void;
   onWorkingTree(callback: (where: string) => void): () => void;
   onElsewhere(callback: (chatId: string) => void): () => void;

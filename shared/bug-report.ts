@@ -7,6 +7,13 @@ export type BugReportOccasion =
   | { kind: "quit"; at: number; dump: boolean }
   | { kind: "window"; reason: string; exitCode: number };
 
+/** The last run ended without quitting; the window offers to report it. */
+export interface CrashOffer {
+  /** Runs in a row that ended this way. */
+  crashes: number;
+  at: number;
+}
+
 /** A screenshot as stored with the draft: an edited, re-encoded PNG. */
 export interface BugReportScreenshot {
   id: string;
