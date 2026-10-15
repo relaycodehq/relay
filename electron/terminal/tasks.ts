@@ -106,7 +106,7 @@ class ProjectTasks {
   private notes = new Map<string, ProjectTask[]>();
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
   private roots = new Set<string>();
-  private scanning?: Promise<Proc[]>;
+  private scanning?: { costed: boolean; done: Promise<Proc[]> };
   private scanned = 0;
   private last: Proc[] = [];
   /** Relay's terminal shells, and the thread each belongs to. */
@@ -337,9 +337,13 @@ class ProjectTasks {
     this.notes.delete(session);
   }
 
-  /** Every process as the last scan read it; with costs after a `costed` list. */
-  table(): readonly Proc[] {
-    return this.last;
+  /**
+   * Every process with what it costs: the last scan's when it read costs,
+   * else a new one, as a plain scan since may have replaced them.
+   */
+  costedTable(): Promise<readonly Proc[]> {
+    if (!this.costed) this.scanned = 0;
+    return this.scan(true);
   }
   /** Relay's terminal shells' pids. */
   terminalShells(): ReadonlySet<number> {
@@ -413,13 +417,23 @@ class ProjectTasks {
     this.scanned = 0;
   }
 
-  private scan(costed = false) {
+  private scan(costed = false): Promise<Proc[]> {
     if (Date.now() - this.scanned < 1500) return Promise.resolve(this.last);
-    this.scanning ??= this.read(costed).finally(() => {
-      this.scanning = undefined;
-      this.scanned = Date.now();
-    });
-    return this.scanning;
+    const under = this.scanning;
+    if (under && (under.costed || !costed)) return under.done;
+    // A plain scan under way can't say what each process costs: a costed
+    // one follows it.
+    const scanning = {
+      costed,
+      done: (under?.done.catch(() => {}) ?? Promise.resolve())
+        .then(() => this.read(costed))
+        .finally(() => {
+          if (this.scanning === scanning) this.scanning = undefined;
+          this.scanned = Date.now();
+        }),
+    };
+    this.scanning = scanning;
+    return scanning.done;
   }
 
   private async read(costed: boolean) {

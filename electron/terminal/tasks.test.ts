@@ -18,9 +18,14 @@ const fake = vi.hoisted(() => ({
   rows: [] as ProcessRow[],
   cwd: "",
   spawned: 0,
+  /** Whether each read of the table asked for costs. */
+  usage: [] as boolean[],
 }));
 vi.mock("../platform/processes", () => ({
-  processTable: async () => fake.rows.map((r) => ({ ...r })),
+  processTable: async ({ usage = false } = {}) => {
+    fake.usage.push(usage);
+    return fake.rows.map((r) => ({ ...r }));
+  },
 }));
 vi.mock("node:fs/promises", () => ({
   readlink: async () => fake.cwd,
@@ -284,4 +289,21 @@ it("keeps a restarted task with the thread and agent that started it", async () 
   } finally {
     kill.mockRestore();
   }
+});
+
+it("reads costs again when a plain scan was under way or came since", async () => {
+  fake.rows = [];
+  fake.usage = [];
+  // The Running card's plain look is on its way as the Processes page asks.
+  const plain = projectTasks.list("/costs", [], { fresh: true });
+  await projectTasks.costedTable();
+  await plain;
+  expect(fake.usage).toEqual([false, true]);
+  // Read with costs just now: asked again, it uses that.
+  await projectTasks.costedTable();
+  expect(fake.usage).toEqual([false, true]);
+  // A plain look since replaced them.
+  await projectTasks.list("/costs", [], { fresh: true });
+  await projectTasks.costedTable();
+  expect(fake.usage).toEqual([false, true, false, true]);
 });

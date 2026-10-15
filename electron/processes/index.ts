@@ -49,7 +49,8 @@ export class ProcessOverviews {
         };
       }),
     );
-    const rows = projectTasks.table();
+    // Read after the lists, and even with no projects to list.
+    const rows = await projectTasks.costedTable();
     const relayPids = [process.pid, ...projectTasks.hosts()];
     const agents = rows.filter((r) => agentName(r.line));
     const agentFolders = await projectTasks.workingFolders(agents);
