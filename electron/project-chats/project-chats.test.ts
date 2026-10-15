@@ -1983,6 +1983,37 @@ it("steers an active Codex turn natively, and resumes its saved session with the
   ]);
 });
 
+it("resuming a stopped answer sends the queue its stop paused once the answer is done", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  const queued = input("@codex Then add a test");
+  await chats.send(chat.id, queued);
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  expect((await chats.get(chat.id)).queuePaused).toBe(true);
+  await chats.resume(chat.id);
+  await vi.waitFor(async () => {
+    const saved = await chats.get(chat.id);
+    expect(saved.queue ?? []).toHaveLength(0);
+    expect(saved.messages.at(-1)?.status).toBe("complete");
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
+  const saved = await chats.get(chat.id);
+  expect(saved.queuePaused).toBeFalsy();
+  expect(
+    saved.messages.filter((m) => m.role === "user").map((m) => m.body),
+  ).toEqual([
+    "@codex wait for cancellation",
+    expect.stringMatching(/^@codex Continue from where/),
+    "@codex Then add a test",
+  ]);
+});
+
 it("queues a currency-prefixed skill instead of steering the active turn", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture codex steer"));

@@ -135,7 +135,25 @@ export class ChatTurns {
         .catch((e) => console.warn("Could not save the thread:", e));
   }
   resume(id: string, settings?: ResumeSettings) {
-    return this.core.control(id, () => this.resumeHeld(id, settings));
+    return this.core.control(id, async () => {
+      // The stop paused the queue behind the answer; carrying it on picks
+      // the queue up after it, as asking again by hand does.
+      const chat = await this.core.storage.load(id);
+      const unpause = !!chat.queue?.length && !!chat.queuePaused;
+      if (unpause) {
+        delete chat.queuePaused;
+        await this.core.storage.save(chat);
+      }
+      try {
+        await this.resumeHeld(id, settings);
+      } catch (e) {
+        if (unpause) {
+          chat.queuePaused = true;
+          await this.core.storage.save(chat);
+        }
+        throw e;
+      }
+    });
   }
   /**
    * Resumes a turn stopped to get a waiting steer read, if the agent did
