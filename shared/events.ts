@@ -3,7 +3,11 @@ import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
 import type { PlaySoundEvent } from "./sounds";
-import type { ThreadWindow, ThreadWindowsState } from "./thread-windows";
+import type {
+  MainWindowCommand,
+  ThreadWindow,
+  ThreadWindowsState,
+} from "./thread-windows";
 
 /** A thread's message as it streams or changes; `title` once the thread is named. */
 export interface ProjectChatEvent {
@@ -31,6 +35,8 @@ export interface RelayEvents {
   "relay:thread-windows": ThreadWindowsState;
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
+  /** Run this command in the main window, asked from a thread's own. */
+  "relay:main-command": MainWindowCommand;
   "relay:device-hub": DeviceHubState;
   "relay:shared-draft": import("./drafts").DraftChange;
   "relay:draft-send": import("./drafts").HeldSend;

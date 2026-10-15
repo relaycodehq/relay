@@ -75,7 +75,8 @@ export default function ThreadWindowShell({
     else if (command === "files" || command === "changes")
       tools.opens.openCode(command);
     // Memes are set up in a Scratchpad thread, which opens in the main window.
-    else if (command === "meme") toMain();
+    else if (command === "meme")
+      void api.runInMainWindow("meme").catch(setError);
     else return false;
     return true;
   }

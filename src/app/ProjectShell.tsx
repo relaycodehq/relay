@@ -62,7 +62,10 @@ import {
   hasOwnWindow,
   useHasOwnWindow,
 } from "../features/thread-windows/thread-windows";
-import type { ThreadWindow } from "../../shared/thread-windows";
+import type {
+  MainWindowCommand,
+  ThreadWindow,
+} from "../../shared/thread-windows";
 import { SignInDialog } from "../features/settings/SignInDialog";
 import { ErrorBox, IconButton, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
@@ -229,6 +232,15 @@ export default function ProjectShell() {
       t && openChatById(t.projectId, t.chatId, undefined, true);
     void api.takeOpenThread().then(show).catch(setError);
     return api.onOpenThread(show);
+  }, [loaded]);
+  // Asked from a thread's own window, which can't open a Scratchpad thread.
+  const runAsked = useStableCallback(
+    (command: MainWindowCommand | null) => command && runCommand(command),
+  );
+  useEffect(() => {
+    if (!loaded) return;
+    void api.takeMainWindowCommand().then(runAsked).catch(setError);
+    return api.onMainWindowCommand(runAsked);
   }, [loaded]);
   const pullsHost = usePullsAccount(boot.data?.account);
   if (boot.error) return <ErrorBox error={boot.error} />;

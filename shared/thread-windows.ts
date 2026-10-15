@@ -6,6 +6,13 @@ export interface ThreadWindow {
   chatId: string;
 }
 
+/**
+ * What a thread's window asks the main window to do, as its own commands
+ * would there: "meme" sets memes up in a new Scratchpad thread.
+ */
+export const mainWindowCommands = ["meme"] as const;
+export type MainWindowCommand = (typeof mainWindowCommands)[number];
+
 /** Which threads have their own window, and which of those is in front. */
 export interface ThreadWindowsState {
   open: ThreadWindow[];

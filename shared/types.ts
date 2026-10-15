@@ -735,6 +735,18 @@ export interface Api
   openInMainWindow(projectId: string, chatId?: string): Promise<void>;
   /** The thread the main window was opened to show, once. */
   takeOpenThread(): Promise<import("./thread-windows").ThreadWindow | null>;
+  /** Shows the main window and runs `command` there, as typed in it. */
+  runInMainWindow(
+    command: import("./thread-windows").MainWindowCommand,
+  ): Promise<void>;
+  /** The command the main window was opened to run, once. */
+  takeMainWindowCommand(): Promise<
+    import("./thread-windows").MainWindowCommand | null
+  >;
+  /** A command a thread's window asks the main window to run. */
+  onMainWindowCommand(
+    callback: (command: import("./thread-windows").MainWindowCommand) => void,
+  ): () => void;
   /** A thread to show in the main window, sent as its own window closes. */
   onOpenThread(
     callback: (thread: import("./thread-windows").ThreadWindow) => void,

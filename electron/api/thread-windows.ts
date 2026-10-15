@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mainWindowCommands } from "../../shared/thread-windows";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const idSchema = z.string().min(1).max(200);
@@ -29,5 +30,9 @@ export function threadWindowHandlers(ctx: ApiContext) {
       },
     ),
     takeOpenThread: () => window.takeThread(),
+    runInMainWindow: takes([z.enum(mainWindowCommands)], (command) =>
+      window.runCommand(command),
+    ),
+    takeMainWindowCommand: () => window.takeCommand(),
   } satisfies Handlers;
 }

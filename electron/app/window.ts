@@ -13,7 +13,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { join } from "node:path";
 import { threadTerminals } from "../terminal/thread-terminals";
 import type { RelayEvents } from "../../shared/events";
-import type { ThreadWindow } from "../../shared/thread-windows";
+import type {
+  MainWindowCommand,
+  ThreadWindow,
+} from "../../shared/thread-windows";
 import { isRelayPage, loadPage } from "./page";
 import { ThreadWindows } from "./thread-windows";
 
@@ -59,6 +62,8 @@ export class AppWindow {
   private closingToQuit = false;
   /** A thread to open once the main window's page asks, as it loads. */
   private pendingThread?: ThreadWindow;
+  /** A command to run once the main window's page asks, as it loads. */
+  private pendingCommand?: MainWindowCommand;
   /** The main window's minimum width its sidebar wants; see `fitSidebar`. */
   private sidebarMin = MAIN_MIN_WIDTH.sidebar;
   /** Hidden pages of Relay's own that may call the API, as a phone's draft send opens. */
@@ -182,6 +187,24 @@ export class AppWindow {
     }
     this.pendingThread = thread;
     this.open();
+  }
+
+  /** Runs `command` in the main window, opening the window if it's closed. */
+  runCommand(command: MainWindowCommand) {
+    if (this.win && !this.win.webContents.isLoading()) {
+      this.show();
+      this.win.webContents.send("relay:main-command", command);
+      return;
+    }
+    this.pendingCommand = command;
+    this.open();
+  }
+
+  /** The command the main window's page should run as it loads, once. */
+  takeCommand() {
+    const command = this.pendingCommand;
+    this.pendingCommand = undefined;
+    return command ?? null;
   }
 
   /** The thread the main window's page should open as it loads, once. */
