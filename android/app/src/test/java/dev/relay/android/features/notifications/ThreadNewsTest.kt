@@ -17,6 +17,11 @@ class ThreadNewsTest {
     private fun answer(status: String = "complete", body: String = "", error: String? = null) =
         LastAnswer(status, body, error, "claude")
 
+    @Test fun keepsQuietAboutACompactionThatRanWhileYouWereAway() {
+        val news = threadNews(list(chat("a") { copy(running = true) }), listOf(chat("a")), mapOf("a" to answer(body = "The answer before it")))
+        assertEquals(emptyList<ThreadNews>(), news)
+    }
+
     @Test fun tellsOfAFinishedAnswerByItsFirstWordsAndAFailedOneByItsError() {
         val before = list(chat("a") { copy(running = true) }, chat("b") { copy(running = true) }, chat("c") { copy(running = true) })
         val news = threadNews(

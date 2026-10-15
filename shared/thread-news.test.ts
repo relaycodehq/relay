@@ -30,6 +30,16 @@ const answer = (more: Partial<LastAnswer>): LastAnswer => ({
 });
 
 describe("threadNews", () => {
+  it("keeps quiet about a compaction that ran while you were away", () => {
+    expect(
+      threadNews(
+        list(chat("a", { running: true })),
+        [chat("a")],
+        new Map([["a", answer({ body: "The answer before it" })]]),
+      ),
+    ).toEqual([]);
+  });
+
   it("tells of a finished answer by its first words, a failed one by its error", () => {
     const before = list(
       chat("a", { running: true }),

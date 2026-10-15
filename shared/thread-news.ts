@@ -74,6 +74,9 @@ export function threadNews(
       continue;
     }
     if (!was.running || c.running) continue;
+    // Every answer moves the thread on; a compaction while you were away
+    // doesn't, and isn't news.
+    if (c.updated <= was.updated) continue;
     // Snoozed: it comes back by itself when you said.
     if (c.snoozedUntil && c.snoozedUntil > at) continue;
     const answer = answers.get(c.id);
