@@ -111,6 +111,14 @@ type Session = {
   /** Starts this session again with another heap limit. */
   relimit: (memoryMb: number) => Promise<unknown>;
 };
+/**
+ * How often a state read looks at the checkout again; the window asks every
+ * second. A working tree's checks get their head from the window's working
+ * tree, which notices a commit or a switch within seconds, so this only
+ * catches what that misses. A PR's head comes from GitHub, so nothing else
+ * notices the checkout moving off it: those look every few seconds.
+ */
+export const revalidateMs = { tree: 30_000, pull: 3000 };
 /** Who holds the checker's heap limit, and the limit it has. */
 export interface CheckLimits {
   projectId?: string;
@@ -229,14 +237,15 @@ export class ProjectChecks {
   async state(key: string, head: string) {
     const s = this.sessions.get(key);
     if (!s || s.state.head !== head) return null;
+    const pull = !!(s.server && s.ref);
     if (
       !["failed", "stopped"].includes(s.state.status) &&
-      Date.now() - s.lastValidated > 3000
+      Date.now() - s.lastValidated > revalidateMs[pull ? "pull" : "tree"]
     ) {
       s.lastValidated = Date.now();
       try {
-        const local = await this.checkout(s.root, s.server, s.ref);
-        if (local.head !== head || !local.remoteMatches)
+        // The remote was checked at the start and doesn't change under a session.
+        if ((await checkoutHead(s.root, !pull)) !== head)
           throw new Error(
             "The local checkout changed. Refresh the project and restart live checks.",
           );
@@ -255,17 +264,9 @@ export class ProjectChecks {
     ref: PullRef | null,
   ) {
     if (server && ref) return inspectFolder(root, server, ref);
-    const path = await realpath(root);
-    if (
-      path !== root ||
-      (await realpath(
-        (await git(root, ["rev-parse", "--show-toplevel"])).trim(),
-      )) !== path
-    )
-      throw new Error("The project root changed. Reopen the correct folder.");
     return {
-      path,
-      head: (await git(root, ["rev-parse", "HEAD"])).trim(),
+      path: await realpath(root),
+      head: await checkoutHead(root, true),
       remoteMatches: true,
     };
   }
@@ -613,4 +614,21 @@ export class ProjectChecks {
     s.state.diagnostics = [];
     s.process.stdin.write(JSON.stringify({ seq: s.seq, path, text }) + "\n");
   }
+}
+
+/**
+ * The head of the checkout at `root`, with one Git call. Fails when `root`
+ * is no longer the top of its repository, or, `exact`, when it's reached
+ * through a link: a project's folder must be the checkout itself.
+ */
+async function checkoutHead(root: string, exact: boolean) {
+  const path = await realpath(root);
+  const [top = "", head = ""] = (
+    await git(root, ["rev-parse", "--show-toplevel", "HEAD"])
+  )
+    .trim()
+    .split(/\r?\n/);
+  if ((exact && path !== root) || (await realpath(top)) !== path)
+    throw new Error("The project root changed. Reopen the correct folder.");
+  return head;
 }

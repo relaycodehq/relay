@@ -6,12 +6,13 @@ import {
   rm,
   symlink,
   readFile,
+  realpath,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { detectProject } from "./detect";
-import { ProjectChecks } from "./service";
+import { ProjectChecks, revalidateMs } from "./service";
 import {
   languageProject,
   reviewCode,
@@ -290,9 +291,31 @@ describe("project language support", () => {
     );
     await ready(service, head);
     git("commit", "--allow-empty", "--quiet", "-m", "Different checkout");
-    // Trigger the checkout validation interval without waiting three real seconds.
-    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3001);
+    // Trigger the checkout validation interval without waiting for it.
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.now() + revalidateMs.pull + 1);
     try {
+      expect((await service.state("pr", head))?.status).toBe("failed");
+    } finally {
+      now.mockRestore();
+    }
+  });
+  it("leaves a working tree's checkout to the window for 30 s before looking itself", async () => {
+    const { root: made, head, git } = await languageProject(server);
+    roots.push(made);
+    const root = await realpath(made);
+    const service = new ProjectChecks(resolve("electron/checks/worker.mjs"));
+    services.push(service);
+    await service.start("pr", root, null, null, head, "typescript:tsconfig.json");
+    await ready(service, head);
+    git("commit", "--allow-empty", "--quiet", "-m", "Different checkout");
+    const at = Date.now();
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(at + revalidateMs.pull + 1);
+      expect((await service.state("pr", head))?.status).not.toBe("failed");
+      now.mockReturnValue(at + revalidateMs.tree + 1);
       expect((await service.state("pr", head))?.status).toBe("failed");
     } finally {
       now.mockRestore();
