@@ -160,7 +160,8 @@ async function pairedComputers() {
           if (method === "respondProjectChat")
             return mini.chats.respond(id, rest[0] as string, rest[1] as never);
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
-          if (method === "projectWorkingTree") return { ran: method, on: id };
+          if (method === "projectWorkingTree" || method === "threadElsewhere")
+            return { ran: method, on: id };
           throw new Error(`Not in this test: ${method}`);
         },
       }),
@@ -954,6 +955,11 @@ it("runs a live handoff's folder calls on the other computer's worktree, and won
     ]),
   ).toBe(false);
   expect(sender.forwards("projectWorkingTree", [laptop.projectId])).toBe(false);
+  // What its agents changed in other repositories is on that computer too.
+  expect(await sender.forward("threadElsewhere", [thread.id], here)).toEqual({
+    ran: "threadElsewhere",
+    on: there,
+  });
   await expect(
     sender.forward("revealProjectPath", [where, ""]),
   ).rejects.toThrow(`This thread's files are on ${sentTo!.computer};`);

@@ -1,6 +1,7 @@
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { ElsewhereChanges, ElsewhereGroup } from "../../shared/elsewhere";
+import { liveAway } from "../../shared/handoff";
 import type { ProjectChat } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -97,6 +98,11 @@ export function elsewhereHandlers(ctx: ApiContext) {
         changed(lead);
     }
   });
+
+  const filesAway = (chatId: string) => {
+    const chat = store.get().chats?.find((c) => c.id === chatId);
+    return !!chat && liveAway(chat) && !!chat.sentTo?.folder;
+  };
 
   // A started thread can't start threads of its own.
   const startedBy = (chatId: string) =>
@@ -262,7 +268,8 @@ export function elsewhereHandlers(ctx: ApiContext) {
       const watch = ctx.elsewhereWatch;
       if (!owner || !watch) return false;
       watch.show(owner, chatId);
-      if (chatId === null || !watch.watches) return false;
+      // Live on another computer, its files are there: the window polls.
+      if (chatId === null || !watch.watches || filesAway(chatId)) return false;
       const { own, touches } = await reading(chatId).read;
       // It asked for another thread's while this one was read.
       if (!watch.showing(owner, chatId)) return false;

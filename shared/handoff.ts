@@ -172,10 +172,17 @@ export const handoffFolderMethods = [
   "localBlame",
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
-/** Calls on a live handoff's worktree, the thread's id first, that run there from `folderHandoffBridge` too. */
+/**
+ * Calls on a live handoff's worktree, the thread's id first, that run there
+ * from `folderHandoffBridge` too; so do the files its agents changed in
+ * other repositories, which are on that computer's disk.
+ */
 export const handoffWorktreeMethods = [
   "projectWorktree",
   "projectWorktreeDiff",
+  "threadElsewhere",
+  "threadElsewhereDiff",
+  "threadElsewhereCommit",
 ] as const satisfies readonly ApiMethod[];
 /**
  * Calls that open or point at a thread's files on this computer's disk. For a
