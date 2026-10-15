@@ -119,8 +119,8 @@ it("splits text before a tool call into commentary and reports edits, cost and s
   expect(commentary).toEqual([["antigravity-0", "Let me look."]]);
   expect(activities.at(-1)).toMatchObject({ id: "t1", status: "complete" });
   expect(edits[0]).toEqual(["/p/a.ts"]);
-  // The first report is the session's spend before this turn; only the rise counts.
-  expect(costs).toEqual([0.25]);
+  // A new session starts at $0, so its first report is all this turn's.
+  expect(costs).toEqual([0.5, 0.25]);
   expect(onUsage.mock.calls[0][0].tokens).toMatchObject({ input: 10, output: 5 });
   const methods = (await sent()).map((m) => m.method);
   expect(methods).toContain("session/set_config_option");
@@ -217,6 +217,22 @@ it("picks up the thread's session, and starts over with a note when it is gone",
     ["session/resume", "gone"],
     ["session/new", undefined],
   ]);
+});
+
+it("charges each turn what it added when the agent reports the session's total once a turn ends", async () => {
+  const { acp, root } = await agent({ resume: true, sessions: ["old"], spend: 0.25, spent: { old: 3 } });
+  const costs: number[] = [];
+  const turn = (key: string, id?: string) =>
+    runAcp(acp, options(root, { session: { key, id, onId: async () => {} }, onCost: (usd) => costs.push(usd) }));
+
+  await turn("new");
+  await turn("new", "s1");
+  expect(costs).toEqual([0.25, 0.25]);
+
+  // A session picked up again ran up $3 Relay can't tell from this turn, so its first report only sets the mark.
+  await turn("old", "old");
+  await turn("old", "old");
+  expect(costs).toEqual([0.25, 0.25, 0.25]);
 });
 
 it("fails a turn whose only answer is the agent reporting an error", async () => {

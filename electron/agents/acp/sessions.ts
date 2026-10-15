@@ -44,6 +44,7 @@ const metaSchema = z
         id: z.string(),
         settings: z.unknown().optional(),
         base: z.record(z.string(), z.string()).optional(),
+        cost: z.number().optional(),
       })
       .optional(),
     run: z.object({ id: z.number() }).optional(),
@@ -56,8 +57,17 @@ const startTimeout = 60_000;
 export class AcpAgent implements Lease {
   busy = false;
   caps?: AcpCaps;
-  /** `base`: the settings it opened with, which Default goes back to. */
-  session?: { id: string; settings: AcpSettings; base?: Record<string, string> };
+  /**
+   * `base`: the settings it opened with, which Default goes back to. `cost`:
+   * what the session had cost at the agent's last report, which the next one
+   * counts from; unknown for a session picked up again.
+   */
+  session?: {
+    id: string;
+    settings: AcpSettings;
+    base?: Record<string, string>;
+    cost?: number;
+  };
   /** The prompt a restart cut off, for an `adopt` turn to show. */
   inflight?: { id: number };
 
@@ -246,7 +256,7 @@ export async function openSession(
   const { id, cwd, mcpServers } = options;
   if (id && agent.session?.id === id) return { id, lost: false };
   const state = (raw: unknown) => sessionResultSchema.parse(raw ?? {});
-  const take = (sessionId: string, found: AcpSessionState) => {
+  const take = (sessionId: string, found: AcpSessionState, cost?: number) => {
     agent.session = {
       id: sessionId,
       settings: {
@@ -254,6 +264,7 @@ export async function openSession(
         modes: found.modes,
         models: found.models,
       },
+      cost,
     };
     agent.keep();
   };
@@ -279,7 +290,7 @@ export async function openSession(
   );
   if (!found.sessionId)
     throw new Error(`${agent.profile.name} didn't name its new session.`);
-  take(found.sessionId, found);
+  take(found.sessionId, found, 0);
   return { id: found.sessionId, lost: !!id };
 }
 
@@ -317,6 +328,7 @@ export function reattachAcp(profile: AcpProfile, owns: (key: string) => boolean)
         id: meta.session.id,
         settings: sessionResultSchema.safeParse(meta.session.settings ?? {}).data ?? {},
         base: meta.session.base,
+        cost: meta.session.cost,
       };
     agent.inflight = meta.run;
     if (!info.open) child.release();

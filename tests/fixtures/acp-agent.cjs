@@ -12,6 +12,9 @@
 //     { ask: { toolCall, options } }  a request_permission, waited on
 //     { waitCancel: true }  waits for session/cancel and stops as cancelled
 //   stopReason, usage: how session/prompt ends ("end_turn" by default)
+//   spend: dollars each turn adds; the turn ends with one usage_update
+//     carrying the session's total, as OpenCode 2 reports it
+//   spent: what resumed sessions had cost before, by id
 const fs = require("node:fs");
 const scenario = JSON.parse(process.env.RELAY_ACP_SCENARIO || "{}");
 const log = (v) =>
@@ -24,6 +27,7 @@ let signedIn = !scenario.signIn;
 let nextId = 1000;
 let sessionCount = 0;
 let options = scenario.configOptions ?? [];
+const totals = new Map();
 const waiting = new Map();
 let cancelled;
 
@@ -48,6 +52,24 @@ async function prompt(m) {
       await new Promise((resolve) => (cancelled = resolve));
       return send({ id: m.id, result: { stopReason: "cancelled" } });
     }
+  }
+  if (scenario.spend) {
+    const total =
+      (totals.get(sessionId) ?? scenario.spent?.[sessionId] ?? 0) +
+      scenario.spend;
+    totals.set(sessionId, total);
+    send({
+      method: "session/update",
+      params: {
+        sessionId,
+        update: {
+          sessionUpdate: "usage_update",
+          used: 100,
+          size: 1000,
+          cost: { amount: total, currency: "USD" },
+        },
+      },
+    });
   }
   send({
     id: m.id,

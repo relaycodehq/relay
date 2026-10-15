@@ -155,7 +155,6 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
 
   const turn = new TurnText(options.onText, options.onCommentary, profile.provider);
   const calls = new Map<string, Partial<AcpToolCall> & { toolCallId: string }>();
-  let cost: number | undefined;
   let overflow!: (error: Error) => void;
   const overflowed = new Promise<never>((_, reject) => (overflow = reject));
   void overflowed.catch(() => {});
@@ -223,10 +222,16 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
           usedTokens: update.used,
           ...(update.size ? { maxTokens: update.size } : {}),
         });
-        // The session's cost so far; a turn counts what it added.
-        if (update.cost && (!update.cost.currency || update.cost.currency === "USD")) {
-          const spent = cost === undefined ? 0 : update.cost.amount - cost;
-          cost = update.cost.amount;
+        // The session's cost so far, which OpenCode only reports once a
+        // turn ends; a turn counts what it added since the last report.
+        if (
+          agent.session &&
+          update.cost &&
+          (!update.cost.currency || update.cost.currency === "USD")
+        ) {
+          const before = agent.session.cost;
+          agent.session.cost = update.cost.amount;
+          const spent = before === undefined ? 0 : update.cost.amount - before;
           if (spent > 0) options.onCost?.(spent);
         }
         return;
