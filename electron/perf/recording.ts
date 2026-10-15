@@ -49,9 +49,47 @@ const traceConfig = {
   ],
 };
 
-/** Images the window loaded, data URLs and all: the thread's own pictures. */
-export const withoutImages = (trace: string) =>
-  trace.replace(/"data:(?:[^"\\]|\\.){64,}"/g, '"data:(left out)"');
+/**
+ * Images the window loaded, data URLs and all: the thread's own pictures.
+ * Any JSON string starting `data:` with 64 or more characters after it, an
+ * escape counting as one. Scanned by hand: a regex repeating a group once a
+ * character, or once an escape, runs out of stack on a picture of 8 MB.
+ */
+export function withoutImages(trace: string) {
+  const open = '"data:';
+  let out = "";
+  let copied = 0;
+  let at = trace.indexOf(open);
+  while (at !== -1) {
+    const end = dataUrlEnd(trace, at + open.length);
+    if (end === -1) {
+      at = trace.indexOf(open, at + 1);
+      continue;
+    }
+    out += trace.slice(copied, at) + '"data:(left out)"';
+    copied = end + 1;
+    at = trace.indexOf(open, copied);
+  }
+  return copied ? out + trace.slice(copied) : trace;
+}
+
+/** The closing quote of a string 64 characters long or more, else -1. */
+function dataUrlEnd(trace: string, from: number) {
+  let length = 0;
+  for (let i = from; i < trace.length; i++) {
+    const c = trace.charCodeAt(i);
+    if (c === 0x22) return length >= 64 ? i : -1;
+    if (c === 0x5c) {
+      // A backslash escapes anything but a line break, as `\\.` did.
+      const next = trace.charCodeAt(++i);
+      if (Number.isNaN(next) || lineBreaks.has(next)) return -1;
+    }
+    length++;
+  }
+  return -1;
+}
+
+const lineBreaks = new Set([0x0a, 0x0d, 0x2028, 0x2029]);
 
 /**
  * Records Relay for `seconds` or until `signal` stops it: a Chrome trace of
@@ -64,6 +102,11 @@ export async function recordPerformance(
   { seconds, others }: { seconds: number; others: boolean },
   signal: AbortSignal,
 ) {
+  // Listened for first: a Stop while it starts must still end it.
+  const stopped = new Promise<void>((done) => {
+    if (signal.aborted) done();
+    else signal.addEventListener("abort", () => done(), { once: true });
+  });
   const at = Date.now();
   const look = async () => {
     const s = await fullSnapshot(deps.power, () =>
@@ -73,12 +116,18 @@ export async function recordPerformance(
     if (!others) delete s.others;
     return s;
   };
+  // Stopped before the trace runs, there's nothing to keep: this throws
+  // `signal.reason`, so the caller can tell it from a failure.
+  signal.throwIfAborted();
   const before = await look();
+  signal.throwIfAborted();
   const tracePath = join(deps.dir, "trace.tmp.json");
   await mkdir(deps.dir, { recursive: true, mode: 0o700 });
+  signal.throwIfAborted();
   await deps.tracing.start(traceConfig);
   let profiler;
   try {
+    signal.throwIfAborted();
     profiler = await startMainProfile();
   } catch (error) {
     await deps.tracing.stop(tracePath).catch(() => {});
@@ -94,13 +143,13 @@ export async function recordPerformance(
     );
   }, 1000);
   try {
-    await new Promise<void>((done) => {
-      const timer = setTimeout(done, seconds * 1000);
-      signal.addEventListener("abort", () => {
-        clearTimeout(timer);
-        done();
-      });
-    });
+    // Stopped once it runs, what it caught so far is kept.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      stopped,
+      new Promise<void>((done) => (timer = setTimeout(done, seconds * 1000))),
+    ]);
+    clearTimeout(timer);
   } finally {
     clearInterval(tick);
   }

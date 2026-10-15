@@ -1,5 +1,6 @@
 import { deflateSync } from "node:zlib";
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -280,6 +281,74 @@ it("records performance and floats the files GitHub only takes dragged in", asyn
   const removed = await reports.removeRecording().catch((e: Error) => e);
   // Sent through the browser isn't locked: GitHub's form may not be submitted.
   expect(removed).not.toBeInstanceOf(Error);
+});
+
+/** A recording that runs until stopped, then saves into the folder. */
+function stoppableRecording(saved: { at?: number } = {}) {
+  return {
+    facts: async () => [],
+    logText: async () => "",
+    record: async (
+      dir: string,
+      _anonymize: unknown,
+      options: { seconds: number },
+      signal: AbortSignal,
+    ) => {
+      await new Promise((stopped) =>
+        signal.addEventListener("abort", stopped, { once: true }),
+      );
+      // Zipping takes a while after the stop.
+      await new Promise((later) => setTimeout(later, 20));
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "performance.zip"), "zip");
+      saved.at = Date.now();
+      return { at: 1, seconds: options.seconds, bytes: 3 };
+    },
+  };
+}
+
+it("discards a report only once its recording has stopped saving", async () => {
+  const saved: { at?: number } = {};
+  const reports = service(fakeHost().host, {
+    performance: stoppableRecording(saved),
+  });
+  await reports.save(fields);
+  const recording = reports.record(30);
+  await vi.waitFor(async () =>
+    expect((await reports.preview()).recordingNow).toBeDefined(),
+  );
+  const discarded = await reports.discard();
+  expect(saved.at).toBeDefined();
+  expect(existsSync(join(root, "bug-report"))).toBe(false);
+  expect(discarded.draft.recording).toBeUndefined();
+  expect(discarded.draft.title).toBe("");
+  await recording;
+  expect(existsSync(join(root, "bug-report"))).toBe(false);
+});
+
+it("keeps nothing, and says nothing, when stopped before it recorded", async () => {
+  const reports = service(fakeHost().host, {
+    performance: {
+      ...stoppableRecording(),
+      record: async (_dir, _anonymize, _options, signal) => {
+        await new Promise((stopped) =>
+          signal.addEventListener("abort", stopped, { once: true }),
+        );
+        signal.throwIfAborted();
+        throw new Error("Not reached");
+      },
+    },
+  });
+  await reports.save(fields);
+  const recording = reports.record(30);
+  await vi.waitFor(async () =>
+    expect((await reports.preview()).recordingNow).toBeDefined(),
+  );
+  reports.stopRecording();
+  const stopped = await recording;
+  expect(stopped.draft.recording).toBeUndefined();
+  expect(stopped.recordingNow).toBeUndefined();
+  expect(stopped.draft.title).toBe(fields.title);
 });
 
 it("keeps the draft when GitHub refuses", async () => {

@@ -130,7 +130,13 @@ export class BugReports {
   >;
   /** A prompt asked for the report before a window could show it. */
   private wanted = false;
-  private recording?: { startedAt: number; endsAt: number; stop: AbortController };
+  private recording?: {
+    startedAt: number;
+    endsAt: number;
+    stop: AbortController;
+    /** Settles once the recording is saved, or has failed. */
+    done: Promise<unknown>;
+  };
 
   constructor(
     private deps: BugReportDeps,
@@ -367,23 +373,36 @@ export class BugReports {
     if (locked(draft)) throw new Error("This report was already sent.");
     const stop = new AbortController();
     const startedAt = this.now;
-    this.recording = { startedAt, endsAt: startedAt + seconds * 1000, stop };
-    try {
-      const recording = await performance.record(
-        this.deps.dir,
-        anonymizer(this.deps.identity()),
-        {
-          seconds,
-          others: !draft.removedFacts.includes("perf-others"),
-        },
-        stop.signal,
-      );
-      await this.change((next) => {
-        next.recording = recording;
-      });
-    } finally {
-      this.recording = undefined;
-    }
+    const run = async () => {
+      try {
+        const recording = await performance.record(
+          this.deps.dir,
+          anonymizer(this.deps.identity()),
+          {
+            seconds,
+            others: !draft.removedFacts.includes("perf-others"),
+          },
+          stop.signal,
+        );
+        await this.change((next) => {
+          next.recording = recording;
+        });
+      } catch (error) {
+        // Stopped before it began recording: there's nothing to keep.
+        if (!(stop.signal.aborted && error === stop.signal.reason)) throw error;
+      } finally {
+        this.recording = undefined;
+      }
+    };
+    const recording = {
+      startedAt,
+      endsAt: startedAt + seconds * 1000,
+      stop,
+      done: Promise.resolve() as Promise<unknown>,
+    };
+    this.recording = recording;
+    recording.done = run();
+    await recording.done;
     return this.preview();
   }
 
@@ -406,7 +425,10 @@ export class BugReports {
 
   /** Throws the draft away, screenshots and all, and starts a blank one. */
   async discard() {
-    this.recording?.stop.abort();
+    const recording = this.recording;
+    recording?.stop.abort();
+    // Its zip and its draft would land in, or bring back, the folder.
+    await recording?.done.catch(() => {});
     await this.queue;
     await rm(this.deps.dir, { recursive: true, force: true });
     this.draft = Promise.resolve(this.fresh({ kind: "asked" }));
