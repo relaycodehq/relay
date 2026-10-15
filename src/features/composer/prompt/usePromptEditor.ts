@@ -15,6 +15,8 @@ export interface PromptEvents {
   onOpenPaste?: (index: number) => void;
   /** Opens screenshot n, from its pill. */
   onOpenImage?: (n: number) => void;
+  /** A paste the message can't hold was turned away. */
+  onPasteRefused?: () => void;
 }
 
 /**
@@ -50,7 +52,8 @@ export function usePromptEditor(
         if (event.clipboardData?.files.length) return false;
         const plain = event.clipboardData?.getData("text/plain");
         if (plain === undefined) return false;
-        pasteText(view, pills, plain);
+        if (!pasteText(view, pills, plain))
+          callbacks.current.onPasteRefused?.();
         return true;
       },
       clipboardTextSerializer: (slice) => serialize(slice.content),

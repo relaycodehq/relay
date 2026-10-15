@@ -34,6 +34,7 @@ import {
   nextImageNumber,
   onlyImageTokens,
   pastedImages,
+  withoutImageTokens,
 } from "../../../shared/image-refs";
 import { droppedImage } from "../images/image-drag";
 import { copiedImages } from "../images/image-clipboard";
@@ -52,8 +53,8 @@ export interface DraftEditor {
   insertImages: (ns: number[], point?: Point) => void;
   /** Drops every pill for screenshot n. */
   removeImage: (n: number) => void;
-  /** Puts copied text in at the caret, over any selection, its tokens as pills. */
-  pasteText: (text: string) => void;
+  /** Puts copied text in at the caret, over any selection, its tokens as pills; false when the message cannot hold it. */
+  pasteText: (text: string) => boolean;
   /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
   insertPaste: (text: string) => boolean;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
@@ -162,7 +163,9 @@ export function useComposerDraft(
   /**
    * Screenshots arrive as files, each getting a pill where the pointer is or
    * at the caret, or with the `text` of a message they were copied from,
-   * whose tokens say where their pills go.
+   * whose tokens say where their pills go. A text long enough to paste as a
+   * pill goes in as one with its screenshots' pills after it, in token order:
+   * a token inside a paste pill points at nothing.
    */
   async function attachImages(
     files: { file: File; n?: number }[],
@@ -175,46 +178,82 @@ export function useComposerDraft(
       // The draft as it is now, with the pills of any batch before this one.
       const text = readDraft(key);
       const kept = attachedImages(text, existing);
-      if (kept.length + files.length > 3)
+      // A screenshot shown twice in what was copied comes as one file.
+      const unique = [...new Set(files.map(({ file }) => file))];
+      if (kept.length + unique.length > 3)
         throw new Error("Attach up to three screenshots per message.");
       const first = nextImageNumber(text, existing);
+      const long =
+        at.text !== undefined &&
+        isLongPaste(at.text) &&
+        !pastedTexts(at.text).length;
       // A pill only means something next to words; pasted into a draft with
       // none, the screenshot just sits in the strip. Without a pill it has no
       // number, so it always goes along.
       const inText = imagePills && !onlyImageTokens(`${text} ${at.text ?? ""}`);
-      const prepared = await Promise.all(
-        files.map(({ file }) => prepareScreenshot(file)),
+      const prepared = new Map(
+        await Promise.all(
+          unique.map(
+            async (file) => [file, await prepareScreenshot(file)] as const,
+          ),
+        ),
       );
       const placed =
         at.text === undefined
           ? {
               text: undefined,
-              images: prepared.map((image, i) =>
-                inText ? { ...image, n: first + i } : image,
-              ),
+              images: unique.map((file, i) => {
+                const image = prepared.get(file)!;
+                return inText ? { ...image, n: first + i } : image;
+              }),
             }
           : pastedImages(
               at.text,
-              prepared.map((image, i) => ({
-                ...image,
-                n: inText ? files[i].n : undefined,
+              files.map(({ file, n }) => ({
+                ...prepared.get(file)!,
+                n: inText ? n : undefined,
               })),
               first - 1,
+              (image) => image.id,
             );
       // Screenshots whose pills were deleted make room here, not on undo.
       const next = [...kept, ...placed.images];
       await saveDraftImages(key, next);
-      const ns = placed.images.flatMap((image) => image.n ?? []);
+      // Numbered on in token order, so ascending is the order they sat in.
+      const ns = placed.images
+        .flatMap((image) => image.n ?? [])
+        .sort((a, b) => a - b);
+      const words =
+        long && placed.text !== undefined
+          ? withoutImageTokens(placed.text)
+          : placed.text;
+      const shown = shownKey.current === key;
       // Kept for the thread it was pasted in, even once another one shows.
-      if (shownKey.current === key) {
+      if (shown) {
         imageQueue.current = Promise.resolve(next);
         setImages(next);
       }
-      const added = placed.text ?? ns.map(imageToken).join(" ");
-      if (shownKey.current === key && editor.current) {
-        if (placed.text === undefined)
-          editor.current.insertImages(ns, at.point);
-        else editor.current.pasteText(placed.text);
+      const tokens = ns.map(imageToken).join(" ");
+      const added =
+        words === undefined
+          ? tokens
+          : long && tokens
+            ? `${words} ${tokens}`
+            : words;
+      if (shown && editor.current) {
+        if (words === undefined) editor.current.insertImages(ns, at.point);
+        else if (
+          words.trim() &&
+          !(long
+            ? editor.current.insertPaste(words)
+            : editor.current.pasteText(words))
+        ) {
+          // The words don't fit, so their screenshots don't stay either.
+          imageQueue.current = Promise.resolve(existing);
+          setImages(existing);
+          setError(PASTE_TOO_LONG);
+          await saveDraftImages(key, existing).catch(() => {});
+        } else if (long && ns.length) editor.current.insertImages(ns);
       } else if (added) {
         // Navigation clears the editor ref; its tokens must still be saved.
         const now = readDraft(key);
@@ -236,7 +275,7 @@ export function useComposerDraft(
       writeDraft(key, `${now}${now ? " " : ""}${words}`);
     } else if (isLongPaste(words) && !pastedTexts(words).length) {
       if (!editor.current.insertPaste(words)) setError(PASTE_TOO_LONG);
-    } else editor.current.pasteText(words);
+    } else if (!editor.current.pasteText(words)) setError(PASTE_TOO_LONG);
   }
   /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
   function addFiles(files: File[], point?: Point) {
@@ -297,6 +336,7 @@ export function useComposerDraft(
     /** What went wrong bringing something in, or sending it. */
     error,
     setError,
+    pasteRefused: () => setError(PASTE_TOO_LONG),
     /** A screenshot is being prepared; the message waits for it. */
     preparing,
     /** The screenshot being drawn on. */

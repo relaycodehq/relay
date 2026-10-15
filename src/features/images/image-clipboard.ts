@@ -46,16 +46,22 @@ export function messageHtml(text: string, images: CopiedImage[]) {
   return `<div>${body}${rest.length ? "<br>" : ""}${rest.map(tag).join("")}</div>`;
 }
 
-/** The screenshots copied HTML carries, as files, with the token each had. */
+/**
+ * The screenshots copied HTML carries, as files, with the token each had, in
+ * the order they sit in it. One screenshot shown twice (its token repeated)
+ * comes back as the same file each time.
+ */
 export function copiedImages(html: string): { n?: number; file: File }[] {
   if (!html.includes(MARK)) return [];
   const doc = new DOMParser().parseFromString(html, "text/html");
+  const files = new Map<string, File | undefined>();
   return [...doc.querySelectorAll<HTMLImageElement>(`img[${MARK}]`)].flatMap(
     (img) => {
-      const file = dataUrlFile(
-        img.getAttribute("src") ?? "",
-        img.dataset.name || "image.png",
-      );
+      const src = img.getAttribute("src") ?? "",
+        name = img.dataset.name || "image.png";
+      const key = `${name}\n${src}`;
+      if (!files.has(key)) files.set(key, dataUrlFile(src, name));
+      const file = files.get(key);
       const n = Number(img.getAttribute(MARK));
       return file ? [{ n: n > 0 ? n : undefined, file }] : [];
     },

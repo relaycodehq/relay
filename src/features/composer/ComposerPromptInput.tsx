@@ -24,6 +24,7 @@ export function ComposerPromptInput({
   onCursor,
   onOpenPaste,
   onOpenImage,
+  onPasteRefused,
   images,
   placeholder,
   inputRef,
@@ -49,7 +50,7 @@ export function ComposerPromptInput({
     value,
     placeholder,
     pills,
-    { onChange, onCursor, onOpenPaste, onOpenImage },
+    { onChange, onCursor, onOpenPaste, onOpenImage, onPasteRefused },
     inputRef,
   );
   const tip = useQuoteTip(editor);

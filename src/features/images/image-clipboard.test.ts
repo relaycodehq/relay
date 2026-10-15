@@ -22,6 +22,16 @@ it("carries a message's screenshots through its HTML, each with its token", asyn
   ]);
 });
 
+it("gives a screenshot whose token a message repeats as one file", () => {
+  const copied = copiedImages(
+    messageHtml("[Image #1] and again [Image #1]", [
+      { n: 1, name: "a.png", src: png },
+    ]),
+  );
+  expect(copied.map(({ n }) => n)).toEqual([1, 1]);
+  expect(copied[0].file).toBe(copied[1].file);
+});
+
 it("finds nothing in HTML from elsewhere, or in a marked image that isn't data", () => {
   expect(
     copiedImages('<p>hi <img src="https://example.com/a.png"></p>'),

@@ -5,6 +5,8 @@ import { promptExtensions } from "./extensions";
 import { syncDraft } from "./usePromptSync";
 import { promptContent } from "../prompt-content";
 import { promptText } from "../prompt-text";
+import type { DraftPills } from "../useDraftPills";
+import { pasteText } from "./edits";
 
 const content = (text: string) => promptContent(text, {});
 const editors: Editor[] = [];
@@ -62,4 +64,12 @@ it("does not let typing grow a draft that is already over the limit", () => {
   // Typing over a selection that it does not outgrow still goes in.
   type(editor, 1, "ab", 3);
   expect(promptText(editor.state.doc)).toMatch(/^abx/);
+});
+
+it("says when pasted text didn't fit, so screenshots copied with it aren't kept", () => {
+  const editor = draft("a".repeat(31990));
+  const pills = { content } as DraftPills;
+  expect(pasteText(editor.view, pills, "b".repeat(10))).toBe(true);
+  expect(pasteText(editor.view, pills, "c")).toBe(false);
+  expect(promptText(editor.state.doc).length).toBe(32000);
 });

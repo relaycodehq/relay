@@ -48,14 +48,19 @@ vi.mock("../images/draft-images", () => ({
     }),
 }));
 
-// Stands in for the HTML a copied message carries; image-clipboard reads the real thing.
+// Stands in for the HTML a copied message carries; image-clipboard reads the
+// real thing, giving one screenshot shown twice as the same file.
 vi.mock("../images/image-clipboard", () => ({
-  copiedImages: (html: string) =>
-    html
-      ? (JSON.parse(html) as { n?: number; name: string }[]).map(
-          ({ n, name }) => ({ n, file: { name } as File }),
-        )
-      : [],
+  copiedImages: (html: string) => {
+    if (!html) return [];
+    const files = new Map<string, File>();
+    return (JSON.parse(html) as { n?: number; name: string }[]).map(
+      ({ n, name }) => {
+        if (!files.has(name)) files.set(name, { name } as File);
+        return { n, file: files.get(name)! };
+      },
+    );
+  },
 }));
 
 const store = new Map<string, string>();
@@ -231,7 +236,7 @@ it("pastes a copied message's screenshots as pills numbered after the draft's ow
     },
   ]);
   writeDraft(KEY, "Mine: [Image #1]");
-  const pasteText = vi.fn();
+  const pasteText = vi.fn(() => true);
   const editor = { current: { pasteText } as unknown as DraftEditor };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -272,7 +277,7 @@ it("still pastes a copied message's words when its screenshots don't fit", async
   });
   await saveDraftImages(KEY, [mine(1), mine(2)]);
   writeDraft(KEY, "Mine: [Image #1] [Image #2]");
-  const pasteText = vi.fn();
+  const pasteText = vi.fn(() => true);
   const editor = { current: { pasteText } as unknown as DraftEditor };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -292,4 +297,103 @@ it("still pastes a copied message's words when its screenshots don't fit", async
   await settle();
   expect(draft().error).toBe("Attach up to three screenshots per message.");
   expect(pasteText).toHaveBeenCalledWith("See  and ");
+});
+
+const mine = (n: number) => ({
+  id: `mine${n}.png`,
+  n,
+  name: `mine${n}.png`,
+  mimeType: "image/png" as const,
+  dataUrl: "data:image/png;base64,AAAA",
+});
+const copiedMessage = (
+  text: string,
+  images: { n?: number; name: string }[],
+) => ({
+  clipboardData: {
+    getData: (type: string) =>
+      type === "text/html" ? JSON.stringify(images) : text,
+  },
+  preventDefault: vi.fn(),
+  stopPropagation: vi.fn(),
+});
+
+it("pastes a long copied message as a paste pill with its screenshots' pills after it", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  const { saveDraftImages } = await import("../images/draft-images");
+  await saveDraftImages(KEY, [mine(1)]);
+  writeDraft(KEY, "Mine: [Image #1]");
+  const pasteText = vi.fn(() => true);
+  const insertPaste = vi.fn(() => true);
+  const insertImages = vi.fn();
+  const editor = {
+    current: { pasteText, insertPaste, insertImages } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  const log = "  line\n".repeat(250);
+  draft().paste(
+    copiedMessage(`${log}first [Image #2]\n\n[Image #1]\n\nthen`, [
+      { n: 2, name: "second.png" },
+      { n: 1, name: "first.png" },
+    ]) as never,
+  );
+  await settle();
+  expect(pasteText).not.toHaveBeenCalled();
+  expect(insertPaste).toHaveBeenCalledWith(`${log}first\n\nthen`);
+  expect(insertImages).toHaveBeenCalledWith([2, 3]);
+  expect(saved.get(KEY)?.map(({ id, n }) => ({ id, n }))).toEqual([
+    { id: "mine1.png", n: 1 },
+    { id: "second.png", n: 2 },
+    { id: "first.png", n: 3 },
+  ]);
+  expect(draft().error).toBeUndefined();
+});
+
+it("keeps no screenshots from a copied message too long for the draft", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  const { saveDraftImages } = await import("../images/draft-images");
+  await saveDraftImages(KEY, [mine(1)]);
+  writeDraft(KEY, "Mine: [Image #1]");
+  const insertPaste = vi.fn(() => false);
+  const editor = { current: { insertPaste } as unknown as DraftEditor };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  draft().paste(
+    copiedMessage(`${"x".repeat(40_000)} [Image #1]`, [
+      { n: 1, name: "theirs.png" },
+    ]) as never,
+  );
+  await settle();
+  expect(insertPaste).toHaveBeenCalled();
+  expect(draft().error).toBe(
+    "That paste is too long. A message holds up to 32,000 characters.",
+  );
+  expect(draft().images.map((image) => image.id)).toEqual(["mine1.png"]);
+  expect(saved.get(KEY)?.map((image) => image.id)).toEqual(["mine1.png"]);
+});
+
+it("gives each of two copied messages' #1 its own screenshot, and a repeated one once", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const pasteText = vi.fn(() => true);
+  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  draft().paste(
+    copiedMessage("[Image #1] then [Image #1]\nalso [Image #1]", [
+      { n: 1, name: "a.png" },
+      { n: 1, name: "a.png" },
+      { n: 1, name: "b.png" },
+    ]) as never,
+  );
+  await settle();
+  expect(pasteText).toHaveBeenCalledWith(
+    "[Image #1] then [Image #1]\nalso [Image #2]",
+  );
+  expect(saved.get(KEY)?.map(({ id, n }) => ({ id, n }))).toEqual([
+    { id: "a.png", n: 1 },
+    { id: "b.png", n: 2 },
+  ]);
 });

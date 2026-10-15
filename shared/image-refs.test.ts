@@ -70,6 +70,32 @@ it("numbers a copied message's screenshots after the draft's own, dropping token
   expect(out.images.map((i) => i.n)).toEqual([3, 2, undefined, undefined]);
 });
 
+it("gives each copied message's token its own screenshot when two have an #1", () => {
+  const out = pastedImages(
+    "msg1 [Image #1]\nmsg2 [Image #1] and [Image #2]",
+    [shot("a", 1), shot("b", 1), shot("c", 2)],
+    0,
+  );
+  expect(out.text).toBe("msg1 [Image #1]\nmsg2 [Image #2] and [Image #3]");
+  expect(out.images.map((i) => [i.id, i.n])).toEqual([
+    ["a", 1],
+    ["b", 2],
+    ["c", 3],
+  ]);
+});
+
+it("pastes one screenshot shown twice in a copied message once", () => {
+  const a = shot("a", 1);
+  const out = pastedImages(
+    "[Image #1] and again [Image #1]",
+    [a, { ...a }],
+    2,
+    (i) => i.id,
+  );
+  expect(out.text).toBe("[Image #3] and again [Image #3]");
+  expect(out.images).toEqual([{ id: "a", n: 3 }]);
+});
+
 it("shortens long names in the middle, keeping the extension", () => {
   expect(shortImageName("image.png")).toBe("image.png");
   expect(shortImageName("Screenshot 2026-10-01 at 13.42.10.png")).toBe(

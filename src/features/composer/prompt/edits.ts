@@ -120,15 +120,17 @@ export function insertQuote(editor: Editor, text: string) {
   );
 }
 
-/** Puts pasted text in over the selection, with the pills it names. */
+/** Puts pasted text in over the selection, with the pills it names; false when the message cannot hold it. */
 export function pasteText(view: EditorView, pills: DraftPills, text: string) {
   // A pill copied within the draft, or from another, gets a new number.
   const fragment = view.state.schema.nodeFromJSON(
     pills.content(pastesAfter(promptText(view.state.doc), text)),
   ).firstChild!.content;
+  const before = view.state.doc;
   view.dispatch(
     view.state.tr.replaceSelection(new Slice(fragment, 0, 0)).scrollIntoView(),
   );
+  return view.state.doc !== before;
 }
 
 /** Puts a paste pill at the caret, numbered after the others; false when the message cannot hold it. */

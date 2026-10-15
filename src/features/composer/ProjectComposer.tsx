@@ -392,6 +392,7 @@ export function ProjectComposer({
             recall.moved(at);
           }}
           onOpenPaste={setViewingPaste}
+          onPasteRefused={draft.pasteRefused}
           images={draft.chips}
           onOpenImage={(n) =>
             draft.sketch(draft.images.find((image) => image.n === n)?.id)

@@ -8,6 +8,13 @@ import { pasteBlock } from "./pasted-texts";
 export const imageToken = (n: number) => `[Image #${n}]`;
 const imageTokenPattern = /\[Image #(\d+)\]/g;
 
+/** The text with its screenshot tokens taken out, and the gaps they leave. */
+export const withoutImageTokens = (text: string) =>
+  text
+    .replace(/[ \t]*\[Image #\d+\]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+|\s+$/g, "");
+
 /** Text that is nothing but screenshot tokens, like a pasted image sent alone. */
 export const onlyImageTokens = (text: string) =>
   !text.replace(imageTokenPattern, "").trim();
@@ -94,29 +101,38 @@ export function imagesAfter<T>(text: string, images: T[], after: number) {
 
 /**
  * Text pasted with the screenshots it was copied with, into a draft that
- * numbers up to `after`: those its tokens name are numbered on from there in
- * token order, the rest go unnumbered, and a token whose screenshot didn't
- * come along goes, so it can't point at one of the draft's own.
+ * numbers up to `after`. Each token takes the next carried screenshot with its
+ * number, in order, so a selection over two messages that each have an #1
+ * gives each token its own message's screenshot; they're numbered on from
+ * `after` in token order. Screenshots no token took go unnumbered, and a token
+ * whose screenshot didn't come along goes, so it can't point at one of the
+ * draft's own. Copies of one screenshot (`same` gives them the same identity,
+ * like a token repeated in a message) go in once.
  */
 export function pastedImages<T extends Numbered>(
   text: string,
   carried: T[],
   after: number,
+  same: (image: T) => unknown = (image) => image,
 ) {
-  const named = imageRefs(text).filter((n) => carried.some((c) => c.n === n));
-  const next = new Map(named.map((n, i) => [n, after + i + 1]));
-  // Two messages copied together can both have an #1; the first one keeps it.
-  const taken = new Set<number>();
+  const untaken = new Set(carried);
+  const numbers = new Map<unknown, number>();
+  const out = replaceTokens(text, (n) => {
+    const image = carried.find((c) => untaken.has(c) && c.n === n);
+    if (!image) return "";
+    untaken.delete(image);
+    const id = same(image);
+    if (!numbers.has(id)) numbers.set(id, after + numbers.size + 1);
+    return imageToken(numbers.get(id)!);
+  });
+  const kept = new Set<unknown>();
   return {
-    text: replaceTokens(text, (n) => {
-      const to = next.get(n);
-      return to ? imageToken(to) : "";
-    }),
-    images: carried.map((image) => {
-      const n = image.n === undefined ? undefined : next.get(image.n);
-      if (n === undefined || taken.has(n)) return { ...image, n: undefined };
-      taken.add(n);
-      return { ...image, n };
+    text: out,
+    images: carried.flatMap((image) => {
+      const id = same(image);
+      if (kept.has(id)) return [];
+      kept.add(id);
+      return [{ ...image, n: numbers.get(id) }];
     }),
   };
 }
