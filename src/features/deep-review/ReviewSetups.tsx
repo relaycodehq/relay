@@ -24,6 +24,24 @@ import "../projects/projects.css";
 
 type Name = (agent: ReviewAgent | LeadAgent) => string;
 
+/** Two rows of four fit beside the name; past that the last slot counts the rest. */
+const GLYPHS = 8;
+
+function glyphs(providers: ReviewAgent["provider"][]) {
+  const shown =
+    providers.length > GLYPHS ? providers.slice(0, GLYPHS - 1) : providers;
+  return (
+    <>
+      {shown.map((provider, i) => (
+        <ProviderIcon key={i} provider={provider} />
+      ))}
+      {shown.length < providers.length && (
+        <small>+{providers.length - shown.length}</small>
+      )}
+    </>
+  );
+}
+
 /** Who reviews, who leads, and the prompts that aren't an agent's own review. */
 function summary(entry: SavedReviewSetup, name: Name) {
   const { reviewers, lead } = entry.setup;
@@ -202,9 +220,7 @@ function AllSetups({
                         }}
                       >
                         <span className="deep-review-setups-glyphs" aria-hidden>
-                          {entry.setup.reviewers.map((r, i) => (
-                            <ProviderIcon key={i} provider={r.provider} />
-                          ))}
+                          {glyphs(entry.setup.reviewers.map((r) => r.provider))}
                         </span>
                         <span className="deep-review-setups-text">
                           <strong>{label(entry)}</strong>

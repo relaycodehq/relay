@@ -328,8 +328,15 @@
 .deep-review-setups-glyphs {
   display: inline-flex;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
   width: 58px;
   gap: 2px;
+}
+.deep-review-setups-glyphs small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 13px;
 }
 .deep-review-setups-glyphs .provider-glyph {
   width: 13px;
