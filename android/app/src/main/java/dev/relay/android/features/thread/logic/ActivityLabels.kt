@@ -47,6 +47,7 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "list_projects" to "Listed projects",
     "add_project" to "Added a project",
     "restart_relay" to "Restarted Relay",
+    "report_relay_problem" to "Drafted a report about Relay",
     "show_html" to "Showed a page",
     "preview_html" to "Looked at a page",
     "ask_html" to "Asked with a page",
