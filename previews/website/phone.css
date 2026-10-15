@@ -6,6 +6,7 @@
   --p-bg: #18181b;
   --p-field: #212124;
   --p-bubble: #2a2a2e;
+  --p-raised: var(--p-bubble);
   --p-text: #e4e4e7;
   --p-muted: #8e8e98;
   --p-faint: #5e5e68;
@@ -13,6 +14,7 @@
   --p-hover: #232327;
   --p-selected: #27272c;
   --p-accent: #aaa8e5;
+  --p-on-accent: #1b1b22;
   --p-waiting: #d99a2b;
   --p-stop: #e5484d;
   --p-code: #8fb3e8;
@@ -532,7 +534,11 @@
   margin-left: -6px;
   border-radius: 50%;
   background: var(--p-accent);
-  color: #1b1b22;
+  color: var(--p-on-accent);
+  transition: transform 0.2s;
+}
+.ph-tools .ph-send[data-press] {
+  transform: scale(1.25);
 }
 .ph-tools .ph-send[data-stop] {
   background: var(--p-stop);

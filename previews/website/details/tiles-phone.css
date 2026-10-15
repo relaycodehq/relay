@@ -28,53 +28,15 @@
   height: 100%;
   overflow: hidden;
 }
-.p-thread {
-  position: relative;
+.p-turns {
   flex: 1;
-  min-width: 0;
-  padding-top: 38px;
+  min-height: 0;
+  overflow: hidden;
+}
+.p-turns .ph-turn {
+  padding: 6px 16px;
 }
 
-.p-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  font-size: 15px;
-}
-.p-bar b {
-  font-weight: 600;
-}
-.p-msg,
-.p-reply {
-  margin: 8px 16px 0;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.p-msg {
-  align-self: flex-end;
-  margin-left: 60px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--p-raised);
-}
-.p-reply {
-  color: var(--p-text);
-}
-.p-dock {
-  position: absolute;
-  inset: auto 10px 22px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 46px;
-  padding: 0 6px 0 16px;
-  border: 1px solid var(--p-border);
-  border-radius: 23px;
-  background: var(--p-raised);
-  color: var(--p-muted);
-  font-size: 14px;
-}
 .p-typed {
   flex: 1;
   min-width: 0;
@@ -85,31 +47,17 @@
 .p-typed .dt-cycle > span:last-child {
   color: var(--p-muted);
 }
-.p-send {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-left: auto;
-  border-radius: 50%;
-  background: var(--p-accent);
-  color: var(--p-on-accent);
-  transition: transform 0.2s;
-}
-.p-send[data-press] {
-  transform: scale(1.25);
-}
+/* Android's heads-up notification, as the app posts one for a thread that needs you. */
 .p-banner {
   position: absolute;
-  inset: 40px 12px auto;
+  inset: 40px 10px auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--p-border);
-  border-radius: 12px;
-  background: var(--p-raised);
-  box-shadow: 0 2px 8px #0006;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: #2b2b30;
+  box-shadow: 0 4px 16px #0008;
   opacity: 0;
   transform: translateY(-60px);
   transition: opacity 0.3s, transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
@@ -118,27 +66,23 @@
   opacity: 1;
   transform: none;
 }
+.p-banner img {
+  width: 30px;
+  height: 30px;
+}
 .p-banner > span {
   display: grid;
   flex: 1;
-  gap: 2px;
+  gap: 1px;
+  font-size: 14px;
+}
+.p-banner small {
+  font-size: 12px;
+  color: var(--p-muted);
 }
 .p-banner b {
   font-size: 15px;
-  font-weight: 500;
-}
-.p-banner small {
-  color: #d99a2b;
-  font-size: 12px;
-}
-.p-banner svg {
-  color: var(--p-muted);
-}
-.p-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #d99a2b;
+  font-weight: 600;
 }
 .p-later {
   margin: 14px 16px 0 40px;

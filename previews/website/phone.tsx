@@ -474,27 +474,43 @@ export function PhoneThread({
           ))}
         </div>
       </div>
-      <footer className="ph-dock">
-        <div className="ph-box">
-          <span className="ph-input">Message {agentName(provider)}</span>
-          <div className="ph-tools">
-            <ImagePlus size={20} />
-            <i />
-            <span className="ph-slash">/</span>
-            <Mic size={20} />
-            {chat.running ? (
-              <span className="ph-send" data-stop>
-                <i />
-              </span>
-            ) : (
-              <span className="ph-send">
-                <ArrowUp size={18} strokeWidth={2.5} />
-              </span>
-            )}
-          </div>
-        </div>
-        <i className="ph-grip" />
-      </footer>
+      <PhoneComposer
+        input={`Message ${agentName(provider)}`}
+        stop={chat.running}
+      />
     </section>
+  );
+}
+
+/** The message box with its tool row, and Android's gesture bar under it. */
+export function PhoneComposer({
+  input,
+  stop,
+  press,
+}: {
+  input: ReactNode;
+  stop?: boolean;
+  press?: boolean;
+}) {
+  return (
+    <footer className="ph-dock">
+      <div className="ph-box">
+        <span className="ph-input">{input}</span>
+        <div className="ph-tools">
+          <ImagePlus size={20} />
+          <i />
+          <span className="ph-slash">/</span>
+          <Mic size={20} />
+          <span
+            className="ph-send"
+            data-stop={stop || undefined}
+            data-press={press || undefined}
+          >
+            {stop ? <i /> : <ArrowUp size={18} strokeWidth={2.5} />}
+          </span>
+        </div>
+      </div>
+      <i className="ph-grip" />
+    </footer>
   );
 }

@@ -1,13 +1,15 @@
 // Demo tiles about the phone app, drawn in the same dp-scaled screens as the
 // site's phone section.
-import { ArrowUp, ChevronLeft, X } from "lucide-react";
+import { ChevronLeft, Ellipsis } from "lucide-react";
 import "../phone.css";
-import { PhoneStatus } from "../phone";
+import { relayIconSvg, svgDataUrl } from "../../../src/lib/relay-icon";
+import { PhoneComposer, PhoneStatus } from "../phone";
 import { Cycle, Finger, on, within } from "./kit";
 import type { Loop } from "./kit";
 import type { ReactNode } from "react";
 
 const is = (v: string | undefined) => v !== undefined;
+const icon = svgDataUrl(relayIconSvg("#aaa8e5"));
 
 function Phone({ children }: { children: ReactNode }) {
   return (
@@ -22,31 +24,49 @@ function Phone({ children }: { children: ReactNode }) {
   );
 }
 
-/* ---- "Needs you" banner ---- */
+function Thread({ title, children, composer }: { title: string; children: ReactNode; composer: ReactNode }) {
+  return (
+    <div className="ph-thread">
+      <header>
+        <ChevronLeft size={24} />
+        <span>
+          <strong>{title}</strong>
+          <small>Opus 5.5 · High · 12% context</small>
+        </span>
+        <Ellipsis size={22} />
+      </header>
+      <div className="p-turns">{children}</div>
+      {composer}
+    </div>
+  );
+}
+
+/* ---- A thread that needs you: Android's heads-up notification ---- */
 export const bannerLoop: Loop = { times: [0, 900, 2800, 3500, 5600], still: 1 };
 export function BannerTile({ s }: { s: number }) {
   return (
     <div className="p-tile">
       <Phone>
-        <div className="p-thread">
-          <div className="p-bar"><ChevronLeft size={20} /><b>Draft the release notes</b></div>
-          <p className="p-msg">Write the 0.12 notes from the commits since 0.11.1.</p>
-          <p className="p-reply">I'm going through the commits now and grouping them by what you'd notice.</p>
-          <div className="p-dock">
-            <span>Message</span>
-            <i className="p-send"><ArrowUp size={18} strokeWidth={2.5} /></i>
+        <Thread title="Draft the release notes" composer={<PhoneComposer input="Message Claude" stop />}>
+          <div className="ph-turn" data-user="">
+            <div className="ph-bubble">Write the 0.12 notes from the commits since 0.11.1.</div>
           </div>
-        </div>
+          <div className="ph-turn">
+            <div className="ph-md">
+              <p>I'm going through the commits now and grouping them by what you'd notice.</p>
+            </div>
+          </div>
+        </Thread>
         <div className="p-banner" data-on={within(s, 1, 3)}>
-          <i className="p-dot" />
+          <img src={icon} alt="" />
           <span>
+            <small>Relay · now</small>
             <b>Rename the sync worker</b>
-            <small>Needs input · relay</small>
+            <span>Claude needs you</span>
           </span>
-          <X size={16} />
         </div>
       </Phone>
-      <Finger x={s >= 2 ? 243 : 150} y={s >= 2 ? 64 : 120} show={s >= 2 && s < 4} press={s === 3} />
+      <Finger x={150} y={s >= 2 ? 70 : 120} show={s >= 2 && s < 4} press={s === 3} />
     </div>
   );
 }
@@ -57,22 +77,29 @@ export function HoldTile({ s }: { s: number }) {
   return (
     <div className="p-tile">
       <Phone>
-        <div className="p-thread">
-          <div className="p-bar"><ChevronLeft size={20} /><b>Rename the sync worker</b></div>
-          <p className="p-reply">Done. All 22 tests pass and the docs are updated.</p>
+        <Thread
+          title="Rename the sync worker"
+          composer={
+            <PhoneComposer
+              press={is(within(s, 2, 3))}
+              input={
+                <span className="p-typed" data-on={on(s, 6)}>
+                  <Cycle at={s >= 6 ? 1 : 0} items={["Ship the fix after the tests pass", "Message Claude"]} />
+                </span>
+              }
+            />
+          }
+        >
+          <div className="ph-turn">
+            <div className="ph-md">
+              <p>Done. All 22 tests pass and the docs are updated.</p>
+            </div>
+          </div>
           <div className="p-later" data-on={on(s, 6)}>
             <p>Ship the fix after the tests pass</p>
             <small>Sends 18:00</small>
           </div>
-          <div className="p-dock">
-            <span className="p-typed" data-on={on(s, 6)}>
-              <Cycle at={s >= 6 ? 1 : 0} items={["Ship the fix after the tests pass", "Message"]} />
-            </span>
-            <i className="p-send" data-press={within(s, 2, 3)}>
-              <ArrowUp size={18} strokeWidth={2.5} />
-            </i>
-          </div>
-        </div>
+        </Thread>
         <div className="p-scrim" data-on={within(s, 3, 6)} />
         <div className="p-sheet" data-on={within(s, 3, 6)}>
           <i className="p-grip" />
@@ -80,6 +107,7 @@ export function HoldTile({ s }: { s: number }) {
           {[
             ["In 30 minutes", "17:30"],
             ["In 1 hour", "18:00"],
+            ["In 3 hours", "20:00"],
             ["Tomorrow morning", "tomorrow 9:00"],
           ].map(([l, w]) => (
             <div className="p-sheetrow" data-hot={l === "In 1 hour" && s >= 4 ? "" : undefined} key={l}>
@@ -89,7 +117,7 @@ export function HoldTile({ s }: { s: number }) {
           ))}
         </div>
       </Phone>
-      <Finger x={s >= 4 ? 130 : 240} y={s >= 4 ? 180 : 208} show={s >= 1 && s < 6} press={is(within(s, 2, 3)) || is(within(s, 4, 5))} />
+      <Finger x={s >= 4 ? 130 : 233} y={s >= 4 ? 150 : 204} show={s >= 1 && s < 6} press={is(within(s, 2, 3)) || is(within(s, 4, 5))} />
     </div>
   );
 }
