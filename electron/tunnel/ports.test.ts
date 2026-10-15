@@ -45,3 +45,14 @@ it("forgets a site once it stops listening", async () => {
   wait(16_000);
   expect(await tunnel.allowed("p", 5177)).toBe(false);
 });
+
+it("lets a phone open what Sites just listed without looking again", async () => {
+  const { tunnel, looks, wait } = setup([5177]);
+  expect((await tunnel.sites()).map((s) => s.port)).toEqual([5177]);
+  wait(10_000);
+  expect(await tunnel.allowed("p", 5177)).toBe(true);
+  expect(looks()).toBe(1);
+  wait(6_000);
+  expect(await tunnel.allowed("p", 5177)).toBe(true);
+  expect(looks()).toBe(2);
+});

@@ -86,3 +86,21 @@ it("leaves out a run the computer restarted under, unless it left a dump", () =>
   utimesSync(join(dumps, "a.dmp"), 10, 10);
   expect(trackRun(dir, "1.0.0", dumps, 20000, 15000).last?.dump).toBe(true);
 });
+
+it("doesn't count an older Relay's run, which never said it started, as a crash at startup", () => {
+  dir = mkdtempSync(join(tmpdir(), "relay-run-"));
+  const dumps = join(dir, "Crashpad");
+  writeFileSync(
+    join(dir, "running.json"),
+    JSON.stringify({ version: "0.14.0", startedAt: 1000, crashes: 0 }),
+  );
+  expect(trackRun(dir, "0.15.0", dumps, 2000).last).toMatchObject({
+    crashes: 1,
+    early: 0,
+  });
+  // The first new run that dies starting is the first in a row, not the second.
+  expect(trackRun(dir, "0.15.0", dumps, 3000).last).toMatchObject({
+    crashes: 2,
+    early: 1,
+  });
+});

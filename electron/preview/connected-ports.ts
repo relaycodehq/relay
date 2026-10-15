@@ -33,6 +33,17 @@ export function lsofConnected(out: string): number[] {
 }
 
 /**
+ * Both ends' ports of `ss -tn state established`'s rows. Its columns vary by
+ * version, so this takes any row's two address:port pairs in a row.
+ */
+export function ssConnected(out: string): number[] {
+  return out.split("\n").flatMap((row) => {
+    const m = /\S:(\d+)\s+\S*:(\d+)(?:\s|$)/.exec(row);
+    return m ? [+m[1]!, +m[2]!] : [];
+  });
+}
+
+/**
  * Both ends' ports of `netstat -ano`'s connected TCP rows. The state's name is
  * translated on non-English Windows: listening rows have remote port 0, and
  * closed ones waiting out TIME_WAIT belong to pid 0.
@@ -54,13 +65,26 @@ export async function connectedPorts(ports: number[]): Promise<Set<number>> {
   const found =
     process.platform === "win32"
       ? netstatConnected(await run("netstat", ["-ano"]))
-      : lsofConnected(
-          await run("lsof", [
-            "-nP",
-            ...ports.map((port) => `-iTCP:${port}`),
-            "-sTCP:ESTABLISHED",
-            "-Fn",
-          ], 1),
+      : await lsof(ports).catch((e: NodeJS.ErrnoException) =>
+          // Minimal Linux installs leave lsof out, but not iproute2.
+          process.platform === "linux" && e.code === "ENOENT"
+            ? run("ss", ["-tn", "state", "established"]).then(ssConnected)
+            : Promise.reject(e),
         );
   return new Set(found.filter((port) => ports.includes(port)));
+}
+
+async function lsof(ports: number[]) {
+  return lsofConnected(
+    await run(
+      "lsof",
+      [
+        "-nP",
+        ...ports.map((port) => `-iTCP:${port}`),
+        "-sTCP:ESTABLISHED",
+        "-Fn",
+      ],
+      1,
+    ),
+  );
 }

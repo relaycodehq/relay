@@ -152,3 +152,15 @@ it("keeps one plan when arms overlap, and none once stopped", async () => {
   await vi.advanceTimersByTimeAsync(60 * MINUTE);
   expect(compact).not.toHaveBeenCalled();
 });
+
+it("plans again for what's left when its timer fires early", async () => {
+  chat = answered(30 * MINUTE);
+  const { idle, compact } = planner();
+  await idle.arm("chat");
+  // The clock steps back ten minutes while the timer waits.
+  vi.setSystemTime(Date.now() - 10 * MINUTE);
+  await vi.advanceTimersByTimeAsync(25 * MINUTE);
+  expect(compact).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(10 * MINUTE);
+  expect(compact).toHaveBeenCalledWith("chat");
+});

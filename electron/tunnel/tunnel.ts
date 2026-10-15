@@ -12,6 +12,13 @@ const loopback = ["127.0.0.1", "::1"];
 const connectMs = 5000;
 /** Smaller chunks barely deflate. */
 const packFrom = 1024;
+/**
+ * Chunks in a row that didn't shrink before a stream stops deflating, and how
+ * many it then sends as they are before trying again: media doesn't shrink,
+ * but a kept-alive connection can carry a script after an image.
+ */
+const packGiveUp = 2;
+const packRetryAfter = 32;
 
 export interface TunnelOptions {
   /** Ports a phone may not reach: the bridge's own. */
@@ -32,6 +39,10 @@ interface Stream {
   /** Read from the server, waiting for credit; at most about one read. */
   held: Buffer[];
   heldBytes: number;
+  /** Chunks in a row that deflating didn't shrink. */
+  unshrunk: number;
+  /** Chunks still to send as they are before deflating again. */
+  rawFor: number;
   /** Received from the phone and not credited back yet. */
   unacked: number;
   /** Of `unacked`, what the server's socket has taken. */
@@ -125,6 +136,8 @@ export class Tunnel {
       credit: this.window,
       held: [],
       heldBytes: 0,
+      unshrunk: 0,
+      rawFor: 0,
       unacked: 0,
       consumed: 0,
     };
@@ -196,7 +209,7 @@ export class Tunnel {
       else s.held[0] = head.subarray(n);
       s.heldBytes -= n;
       s.credit -= n;
-      this.sendData(s.id, head.subarray(0, n));
+      this.sendData(s, head.subarray(0, n));
     }
     if (s.heldBytes) return void s.socket?.pause();
     s.socket?.resume();
@@ -210,11 +223,20 @@ export class Tunnel {
     }
   }
 
-  private sendData(stream: number, data: Buffer) {
-    if (data.length >= packFrom) {
+  private sendData(s: Stream, data: Buffer) {
+    const stream = s.id;
+    if (data.length >= packFrom && s.rawFor > 0) s.rawFor--;
+    else if (data.length >= packFrom) {
       const packed = deflateRawSync(data, { level: 1 });
-      if (packed.length < data.length)
+      if (packed.length < data.length) {
+        s.unshrunk = 0;
         return this.send({ op: "packed", stream, data: packed });
+      }
+      // A retry that doesn't shrink either backs off again at once.
+      if (++s.unshrunk >= packGiveUp) {
+        s.unshrunk = packGiveUp - 1;
+        s.rawFor = packRetryAfter;
+      }
     }
     this.send({ op: "data", stream, data });
   }

@@ -20,6 +20,9 @@ const fake = vi.hoisted(() => ({
   spawned: 0,
   /** Whether each read of the table asked for costs. */
   usage: [] as boolean[],
+  /** What each pid listens on, and the pids each look for listeners asked about. */
+  listening: new Map<number, number>(),
+  listenLooks: [] as string[],
 }));
 vi.mock("../platform/processes", () => ({
   processTable: async ({ usage = false } = {}) => {
@@ -31,14 +34,23 @@ vi.mock("node:fs/promises", () => ({
   readlink: async () => fake.cwd,
 }));
 vi.mock("node:child_process", () => ({
-  // `lsof`: every process asked about works in the project; none listens.
+  // `lsof`: every process asked about works in the project.
   execFile: (
     _file: string,
     args: string[],
     _options: unknown,
     done: (e: null, out: string) => void,
   ) => {
-    const pids = args.includes("cwd") ? args[args.length - 1].split(",") : [];
+    const pids = args[args.length - 1]!.split(",");
+    if (args.includes("-sTCP:LISTEN")) {
+      fake.listenLooks.push(args[args.length - 1]!);
+      const found = pids.filter((pid) => fake.listening.has(+pid));
+      return done(
+        null,
+        found.map((pid) => `p${pid}\nn*:${fake.listening.get(+pid)}`).join("\n"),
+      );
+    }
+    if (!args.includes("cwd")) return done(null, "");
     done(null, pids.map((pid) => `p${pid}\nn${fake.cwd}`).join("\n"));
   },
   spawn: () => ({ pid: fake.spawned, on: () => {}, unref: () => {} }),
@@ -289,6 +301,31 @@ it("keeps a restarted task with the thread and agent that started it", async () 
   } finally {
     kill.mockRestore();
   }
+});
+
+it("looks for listening ports once for lists asked for together", async () => {
+  const root = "/projects/sites";
+  fake.cwd = root;
+  const started = Date.now() - 60000;
+  const [host, agent, web, api] = [3_000_001, 3_000_002, 3_000_003, 3_000_004];
+  fake.rows = [
+    { pid: process.pid, ppid: 3_000_000, pgid: 0, started: 1, line: "relay" },
+    { pid: host, ppid: process.pid, pgid: 0, started, line: "agent-host" },
+    { pid: agent, ppid: host, pgid: 0, started, line: "/usr/local/bin/claude" },
+    { pid: web, ppid: agent, pgid: 0, started, line: "/bin/zsh -lc npm run dev" },
+    { pid: api, ppid: agent, pgid: 0, started, line: "/bin/zsh -lc npm run api" },
+  ];
+  fake.listening = new Map([[web, 5173], [api, 3000]]);
+  projectTasks.hosts = () => [host];
+  await projectTasks.list(root, [], { fresh: true });
+  fake.listenLooks = [];
+  const lists = await Promise.all([
+    projectTasks.list(root, [], { fresh: true }),
+    projectTasks.list(root),
+  ]);
+  expect(fake.listenLooks).toHaveLength(1);
+  for (const tasks of lists)
+    expect(tasks.map((t) => t.ports)).toEqual([[5173], [3000]]);
 });
 
 it("reads costs again when a plain scan was under way or came since", async () => {

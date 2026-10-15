@@ -178,7 +178,7 @@ export class PhoneRemote {
             throw new Error("Read aloud isn't available on this computer.");
           return this.readings.handle(deviceId, readAloudSchema.parse(args[0]));
         }
-        if (method === "sites") return listSites(host, [this.server.port]);
+        if (method === "sites") return this.tunnelPorts.sites();
         if (method === "tunnelAllow")
           return this.tunnelPorts.type(deviceId, portSchema.parse(args[0]));
         return this.bridge.handle(method, args, deviceId);

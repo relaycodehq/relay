@@ -107,6 +107,10 @@ class ProjectTasks {
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
   private roots = new Set<string>();
   private scanning?: { costed: boolean; done: Promise<Proc[]> };
+  private portLook?: {
+    wanted: Set<number>;
+    done: Promise<Map<number, number[]>>;
+  };
   private scanned = 0;
   private last: Proc[] = [];
   /** Relay's terminal shells, and the thread each belongs to. */
@@ -647,9 +651,28 @@ class ProjectTasks {
       this.cwds.set(`${pid}:${this.seen.get(pid)}`, found.get(pid) ?? null);
   }
 
-  private async ports(pids: number[]) {
+  /**
+   * Lists asked for together, as Sites does over every project, share one
+   * look: the pids asked for before the next turn of the event loop.
+   */
+  private ports(pids: number[]): Promise<Map<number, number[]>> {
+    if (!pids.length) return Promise.resolve(new Map());
+    if (!this.portLook) {
+      const wanted = new Set<number>();
+      this.portLook = {
+        wanted,
+        done: new Promise((resolve) => setImmediate(resolve)).then(() => {
+          this.portLook = undefined;
+          return this.listening([...wanted]);
+        }),
+      };
+    }
+    for (const pid of pids) this.portLook.wanted.add(pid);
+    return this.portLook.done;
+  }
+
+  private async listening(pids: number[]) {
     const ports = new Map<number, number[]>();
-    if (!pids.length) return ports;
     if (windows) {
       const wanted = new Set(pids);
       for (const [pid, port] of netstatListening(

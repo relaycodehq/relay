@@ -72,7 +72,10 @@ export class IdleCompactions {
     this.arming.delete(id);
     if (!chat || this.stopped) return;
     const at = idleCompactAt(main(chat), Date.now());
-    if (at === undefined) return;
+    if (at !== undefined) this.schedule(id, at);
+  }
+
+  private schedule(id: string, at: number) {
     this.timers.set(
       id,
       setTimeout(
@@ -92,7 +95,13 @@ export class IdleCompactions {
       const chat = await this.core.storage.load(id);
       // A sleep that outlasted the cache, or a turn since, changed what's due.
       const at = idleCompactAt(main(chat), Date.now());
-      if (at === undefined || at > Date.now()) return;
+      if (at === undefined) return;
+      // Early: a timer can fire a millisecond short, or the clock stepped back.
+      if (at > Date.now()) {
+        if (!this.stopped && !this.timers.has(id) && !this.arming.has(id))
+          this.schedule(id, at);
+        return;
+      }
       const listed = this.host.summary(chat);
       const provider = main(chat)
         .filter((m) => m.role === "assistant")

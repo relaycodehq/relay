@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DevServerState } from "../../shared/preview";
 import { AgentHosts } from "../agent-host/client";
 import { hostAgents } from "../agents/hosted-sessions";
@@ -93,6 +93,41 @@ describe("DevServers", () => {
     now += IDLE_MS * 2;
     await servers.sleepIdle();
     expect(servers.state(folder)?.state).toBe("running");
+  });
+
+  it("falls back to previews alone when it can't look at connections at all, or keeps failing to", async () => {
+    let now = Date.now();
+    let error: Error = Object.assign(new Error("spawn lsof ENOENT"), {
+      code: "ENOENT",
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    cleanup.push(() => warn.mockRestore());
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async () => {
+        throw error;
+      },
+    );
+    cleanup.push(() => servers.dispose());
+    const missing = await mkdtemp(join(tmpdir(), "relay-dev-no-lsof-"));
+    const missingPort = await freePort();
+    await servers.ensure(missing, serve, missingPort, {});
+    now += IDLE_MS + 1;
+    await servers.sleepIdle();
+    expect(servers.state(missing)?.state).toBe("asleep");
+
+    error = new Error("lsof timed out");
+    const slow = await mkdtemp(join(tmpdir(), "relay-dev-slow-lsof-"));
+    const slowPort = await freePort();
+    await servers.ensure(slow, serve, slowPort, {});
+    now += IDLE_MS + 1;
+    await servers.sleepIdle();
+    await servers.sleepIdle();
+    expect(servers.state(slow)?.state).toBe("running");
+    await servers.sleepIdle();
+    expect(servers.state(slow)?.state).toBe("asleep");
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it.skipIf(process.platform !== "darwin")(

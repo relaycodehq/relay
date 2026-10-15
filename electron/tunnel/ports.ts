@@ -12,12 +12,17 @@ const recheckMs = 2_000;
 export class TunnelPorts {
   private typed = new Map<string, Set<number>>();
   private looked?: { at: number; ports: Set<number> };
-  private looking?: Promise<Set<number>>;
+  private looking?: Promise<RemoteSite[]>;
 
   constructor(
-    private sites: () => Promise<RemoteSite[]>,
+    private list: () => Promise<RemoteSite[]>,
     private now: () => number = Date.now,
   ) {}
+
+  /** What Sites lists now; the phone opening one of them doesn't look again. */
+  sites() {
+    return this.look();
+  }
 
   type(deviceId: string, port: number) {
     const ports = this.typed.get(deviceId) ?? new Set<number>();
@@ -31,15 +36,17 @@ export class TunnelPorts {
     if (age < freshMs && this.looked!.ports.has(port)) return true;
     // A server started since the last look counts.
     if (age < recheckMs) return false;
-    return (await this.look()).has(port);
+    return (await this.look()).some((site) => site.port === port);
   }
 
   private look() {
-    this.looking ??= this.sites()
+    this.looking ??= this.list()
       .then((sites) => {
-        const ports = new Set(sites.map((s) => s.port));
-        this.looked = { at: this.now(), ports };
-        return ports;
+        this.looked = {
+          at: this.now(),
+          ports: new Set(sites.map((s) => s.port)),
+        };
+        return sites;
       })
       .finally(() => (this.looking = undefined));
     return this.looking;

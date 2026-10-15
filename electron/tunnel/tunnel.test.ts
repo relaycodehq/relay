@@ -9,7 +9,7 @@ import {
   type Socket,
 } from "node:net";
 import { networkInterfaces } from "node:os";
-import { inflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   decodeTunnel,
@@ -19,6 +19,11 @@ import {
   type TunnelFrame,
 } from "../../shared/remote-tunnel";
 import { Tunnel, type TunnelOptions } from "./tunnel";
+
+vi.mock("node:zlib", async (actual) => {
+  const zlib = await actual<typeof import("node:zlib")>();
+  return { ...zlib, deflateRawSync: vi.fn(zlib.deflateRawSync) };
+});
 
 const cleanup: (() => unknown)[] = [];
 afterEach(async () => {
@@ -375,4 +380,35 @@ it("ends every stream when the phone goes away, including one still connecting",
   expect(d.of(3)).toEqual([]);
   d.tunnel.receive({ op: "open", stream: 4, port });
   expect(d.of(4)).toEqual([]);
+});
+
+it("stops deflating a stream whose chunks don't shrink, and tries again later", async () => {
+  // Incompressible media, then text a kept-alive connection carries after it.
+  const media = randomBytes(64 * tunnelChunk);
+  const text = Buffer.from("console.log('hello');\n".repeat(64 * 1024));
+  const { port } = await serve((socket) => socket.end(Buffer.concat([media, text])));
+  const deflate = vi.mocked(deflateRawSync);
+  deflate.mockClear();
+  const d = desktop();
+  d.heard.frame = (f) => {
+    if (f.op === "data" || f.op === "packed")
+      setImmediate(() =>
+        d.tunnel.receive({
+          op: "credit",
+          stream: 1,
+          bytes: f.op === "packed" ? inflateRawSync(f.data).length : f.data.length,
+        }),
+      );
+  };
+  d.tunnel.receive({ op: "open", stream: 1, port });
+  await vi.waitFor(() => expect(d.of(1).at(-1)?.op).toBe("end"));
+  expect(sha(d.bytes(1))).toBe(sha(Buffer.concat([media, text])));
+  // Two tries, then one after each stretch sent as is: 3 over 64 chunks.
+  const unshrunk = deflate.mock.calls.filter(
+    ([data], i) =>
+      deflate.mock.results[i]!.value.length >= (data as Buffer).length,
+  );
+  expect(unshrunk.length).toBeLessThanOrEqual(4);
+  expect(d.of(1).filter((f) => f.op === "data").length).toBeGreaterThan(60);
+  expect(d.of(1).filter((f) => f.op === "packed").length).toBeGreaterThan(0);
 });

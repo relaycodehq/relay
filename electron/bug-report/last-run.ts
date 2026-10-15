@@ -48,7 +48,9 @@ export function trackRun(
           version: String(marker.version),
           startedAt: marker.startedAt,
           crashes: (Number(marker.crashes) || 0) + 1,
-          early: marker.started ? 0 : (Number(marker.early) || 0) + 1,
+          // An older Relay's marker has no `started`, so it can't tell.
+          early:
+            marker.started === false ? (Number(marker.early) || 0) + 1 : 0,
           dump,
         };
     }

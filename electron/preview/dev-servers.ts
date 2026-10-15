@@ -14,6 +14,8 @@ import { connectedPorts } from "./connected-ports";
 const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
 export const IDLE_MS = 30 * 60_000;
+/** Sweeps in a row that couldn't tell who's connected before only previews count. */
+const PROBE_GIVE_UP = 3;
 
 /** Whether something accepts connections on the port, over IPv4 or IPv6. */
 export function listening(port: number, timeoutMs = 400): Promise<boolean> {
@@ -73,6 +75,8 @@ export class DevServers {
   private sweep: NodeJS.Timeout;
   private reattached?: Promise<void>;
   private reattaching = false;
+  private probeFailures = 0;
+  private gaveUpProbing = false;
 
   constructor(
     private changed: (folder: string, state: DevServerState) => void,
@@ -319,10 +323,13 @@ export class DevServers {
       (server) => server.child && !server.watchers,
     );
     if (!unwatched.length) return;
-    const busy = await this.connected(unwatched.map((s) => s.port)).catch(
-      () => undefined,
+    const busy = await this.connected(unwatched.map((s) => s.port)).then(
+      (found) => {
+        this.probeFailures = 0;
+        return found;
+      },
+      (error) => this.unknownConnections(error),
     );
-    // Without an answer, a server in use looks idle.
     if (!busy) return;
     for (const server of unwatched) {
       if (busy.has(server.port)) server.usedAt = this.now();
@@ -338,6 +345,23 @@ export class DevServers {
         terminate(child, { group: true });
       }
     }
+  }
+
+  /**
+   * Without an answer a server in use looks idle, so a look that failed keeps
+   * every server awake. One that can't run here at all, or keeps failing,
+   * would keep them awake for good: then only previews count.
+   */
+  private unknownConnections(error: unknown): Set<number> | undefined {
+    const missing = (error as NodeJS.ErrnoException)?.code === "ENOENT";
+    if (!missing && ++this.probeFailures < PROBE_GIVE_UP) return undefined;
+    if (!this.gaveUpProbing)
+      console.warn(
+        "Can't tell who's connected to the dev servers, so only open previews keep them awake:",
+        error,
+      );
+    this.gaveUpProbing = true;
+    return new Set();
   }
 
   stop(folder: string) {

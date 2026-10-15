@@ -3,6 +3,7 @@ import {
   connectedPorts,
   lsofConnected,
   netstatConnected,
+  ssConnected,
 } from "./connected-ports";
 
 describe("connected ports", () => {
@@ -29,6 +30,16 @@ describe("connected ports", () => {
       "  UDP    0.0.0.0:3100           *:*                                    812",
     ].join("\r\n");
     expect(netstatConnected(out)).toEqual([3100, 51234, 51240, 3200]);
+  });
+
+  it("reads both ends of ss's connections, whichever columns its version prints", () => {
+    const out = [
+      "Recv-Q Send-Q Local Address:Port  Peer Address:Port Process",
+      "0      0          127.0.0.1:5177     127.0.0.1:59367",
+      "0      0              [::1]:59368        [::1]:3100",
+      "ESTAB  0      0      ::ffff:127.0.0.1:4000 ::ffff:127.0.0.1:4100",
+    ].join("\n");
+    expect(ssConnected(out)).toEqual([5177, 59367, 59368, 3100, 4000, 4100]);
   });
 
   it.skipIf(process.platform === "win32")(
