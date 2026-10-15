@@ -39,6 +39,7 @@ export function LocalChanges({
   chatId,
   onOpenThread,
   onOpenOutside,
+  agentRunning,
 }: {
   pull?: Pull;
   projectId?: string;
@@ -55,6 +56,8 @@ export function LocalChanges({
   onOpenThread?: (chatId: string) => void;
   /** Opens a file outside the folder by its absolute path. */
   onOpenOutside?: (path: string) => void;
+  /** The thread's agent is at work in this folder. */
+  agentRunning?: boolean;
 }) {
   const [split, setSplit] = useSplitDiff();
   const { selected, setSelected, message, setMessage, grouped, setGrouped } =
@@ -110,6 +113,7 @@ export function LocalChanges({
         onGrouped={setGrouped}
         onRefresh={() => void state.refetch()}
         onPush={() => setPush(true)}
+        agentRunning={agentRunning}
       />
       {state.error && (
         <>

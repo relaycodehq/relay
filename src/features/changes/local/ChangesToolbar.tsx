@@ -17,6 +17,10 @@ import { gitBlockedReason } from "../working-changes";
 import { RebaseConflictCard } from "../RebaseConflict";
 import { useBranchSync } from "../useBranchSync";
 import { IconButton, Spinner } from "../../../ui/ui";
+import {
+  LOCKED_MESSAGE,
+  useNavigationLock,
+} from "../../../lib/navigation-lock";
 import type { PaneSlots } from "../../../ui/WorkspacePanes";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import "../../agents/composer-model-picker.css";
@@ -34,6 +38,7 @@ export function ChangesToolbar({
   onGrouped,
   onRefresh,
   onPush,
+  agentRunning = false,
 }: {
   /** Set for a project's checkout, which can also pull and rebase from here. */
   projectId?: string;
@@ -44,6 +49,8 @@ export function ChangesToolbar({
   onGrouped: (grouped: boolean) => void;
   onRefresh: () => void;
   onPush: () => void;
+  /** The thread's agent is at work in this folder: pulling waits for it. */
+  agentRunning?: boolean;
 }) {
   const blocked = tree && gitBlockedReason(tree, "push");
   const view = (
@@ -69,7 +76,12 @@ export function ChangesToolbar({
     </button>
   );
   const level = projectId ? (
-    <SyncButton projectId={projectId} busy={busy} push={push} />
+    <SyncButton
+      projectId={projectId}
+      busy={busy}
+      agentRunning={agentRunning}
+      push={push}
+    />
   ) : (
     push
   );
@@ -144,12 +156,17 @@ export function ChangesToolbar({
 function SyncButton({
   projectId,
   busy,
+  agentRunning,
   push,
 }: {
   projectId: string;
   busy: boolean;
+  agentRunning: boolean;
   push: React.ReactNode;
 }) {
+  // As in the branch picker: the checkout doesn't move under a running
+  // agent or an unsaved edit.
+  const { locked } = useNavigationLock();
   const {
     t,
     sync,
@@ -175,13 +192,17 @@ function SyncButton({
       >
         <Popover.Trigger
           className="primary"
-          disabled={busy || syncing}
+          disabled={busy || syncing || locked || agentRunning}
           title={
-            clash
-              ? `Couldn’t rebase onto ${t.upstream}`
-              : sync === "pull"
-                ? `Pull ${n(t.behind)} from ${t.upstream}`
-                : `Pull ${n(t.behind)} from ${t.upstream} and put your ${n(t.ahead)} on top`
+            locked
+              ? LOCKED_MESSAGE
+              : agentRunning
+                ? "Pull once the agent is done"
+                : clash
+                  ? `Couldn’t rebase onto ${t.upstream}`
+                  : sync === "pull"
+                    ? `Pull ${n(t.behind)} from ${t.upstream}`
+                    : `Pull ${n(t.behind)} from ${t.upstream} and put your ${n(t.ahead)} on top`
           }
           onClick={() => void runSync()}
         >

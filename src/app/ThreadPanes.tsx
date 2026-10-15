@@ -65,6 +65,7 @@ export function ThreadChanges({
   review,
   chatId,
   onOpenThread,
+  agentRunning,
 }: {
   project: Project;
   pull: PullRef | null;
@@ -84,6 +85,8 @@ export function ThreadChanges({
   chatId?: string;
   /** Opens a thread this one started, from a file it changed. */
   onOpenThread?: (chatId: string) => void;
+  /** The thread's agent is at work in its folder. */
+  agentRunning?: boolean;
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
   const editFile = (path: string, line?: number) =>
@@ -171,6 +174,7 @@ export function ThreadChanges({
           onAsk={(code) => opens.ask({ text: "", code })}
           chatId={chatId}
           onOpenThread={onOpenThread}
+          agentRunning={agentRunning}
           onOpenOutside={(path) =>
             opens.openInEditor({ path, outside: true, directory: false })
           }

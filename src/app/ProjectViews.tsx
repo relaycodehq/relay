@@ -52,6 +52,7 @@ export function ProjectChanges({
   chatId,
   onOpenThread,
   onOpenOutside,
+  agentRunning,
 }: {
   /** Workspace id: the checkout, or the thread's worktree. */
   where: string;
@@ -66,6 +67,7 @@ export function ProjectChanges({
   chatId?: string;
   onOpenThread?: (chatId: string) => void;
   onOpenOutside?: (path: string) => void;
+  agentRunning?: boolean;
 }) {
   if (turn)
     return (
@@ -88,6 +90,7 @@ export function ProjectChanges({
       chatId={chatId}
       onOpenThread={onOpenThread}
       onOpenOutside={onOpenOutside}
+      agentRunning={agentRunning}
     />
   );
 }

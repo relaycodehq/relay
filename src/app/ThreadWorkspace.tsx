@@ -281,6 +281,7 @@ export function ThreadWorkspace({
               folder={folder}
               view={view}
               chatId={chat?.id}
+              agentRunning={!!chat?.running}
               onOpenThread={(id) => {
                 const c = everyThread.find((t) => t.id === id);
                 if (c)
