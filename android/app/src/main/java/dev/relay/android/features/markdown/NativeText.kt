@@ -3,9 +3,11 @@ package dev.relay.android.features.markdown
 import android.content.Context
 import android.graphics.Typeface
 import android.text.Layout
+import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
+import android.text.method.ArrowKeyMovementMethod
 import android.text.method.LinkMovementMethod
 import android.text.style.BackgroundColorSpan
 import android.text.style.ClickableSpan
@@ -15,7 +17,9 @@ import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.util.TypedValue
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -104,8 +108,8 @@ private fun TextView.show(text: Spanned, selectable: Boolean) {
         setTextIsSelectable(selectable)
         shown.text = null
     }
-    // Selectable text opens its links itself; plain text needs the movement method for them.
-    if (!selectable && movementMethod !is LinkMovementMethod) movementMethod = LinkMovementMethod.getInstance()
+    val links = if (selectable) SelectableLinks else LinkMovementMethod.getInstance()
+    if (movementMethod !== links) movementMethod = links
     if (shown.text === text || hasSelection() && this.text.toString() == text.toString()) return
     shown.text = text
     setText(text, TextView.BufferType.SPANNABLE)
@@ -187,13 +191,42 @@ private class Code(private val mono: Typeface, private val sizePx: Float) : Metr
     }
 }
 
+/**
+ * Selection as setTextIsSelectable gives it, plus link taps: TextView opens
+ * links in selectable text only when it found them itself (autoLink), and
+ * LinkMovementMethod selects the link it opens. A tap that clears a selection
+ * doesn't also follow the link under it.
+ */
+private object SelectableLinks : ArrowKeyMovementMethod() {
+    private var selectedAtDown = false
+
+    override fun onTouchEvent(widget: TextView, buffer: Spannable, event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> selectedAtDown = widget.hasSelection()
+            MotionEvent.ACTION_UP -> if (!selectedAtDown && event.eventTime - event.downTime < ViewConfiguration.getLongPressTimeout()) {
+                linkAt(widget, buffer, event)?.let { link ->
+                    link.onClick(widget)
+                    return true
+                }
+            }
+        }
+        return super.onTouchEvent(widget, buffer, event)
+    }
+
+    private fun linkAt(widget: TextView, buffer: Spannable, event: MotionEvent): ClickableSpan? {
+        val layout = widget.layout ?: return null
+        val x = event.x - widget.totalPaddingLeft + widget.scrollX
+        val y = event.y.toInt() - widget.totalPaddingTop + widget.scrollY
+        val line = layout.getLineForVertical(y)
+        if (x < layout.getLineLeft(line) || x > layout.getLineRight(line)) return null
+        val at = layout.getOffsetForHorizontal(line, x)
+        return buffer.getSpans(at, at, ClickableSpan::class.java).firstOrNull()
+    }
+}
+
 /** A link or path: the accent colour without an underline, or the text's own colour for code. */
 private class Click(private val open: () -> Unit, private val color: Color?) : ClickableSpan() {
-    override fun onClick(widget: View) {
-        // A tap that ends a selection mustn't also follow the link under it.
-        if ((widget as? TextView)?.hasSelection() == true) return
-        open()
-    }
+    override fun onClick(widget: View) = open()
 
     override fun updateDrawState(paint: TextPaint) {
         if (color != null) paint.color = color.toArgb()
