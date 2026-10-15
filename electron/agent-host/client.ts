@@ -756,6 +756,14 @@ export class HostedProcess {
       this.connection.send({ t: "meta", session: this.id, meta });
   }
 
+  /** The process's pid on the host's machine; hosts before it don't say. */
+  pid(): Promise<number | undefined> {
+    return this.connection
+      .call(this.id, "pid", [], 5000)
+      .then((pid) => (typeof pid === "number" ? pid : undefined))
+      .catch(() => undefined);
+  }
+
   close() {
     if (this.closed) return;
     this.closed = true;

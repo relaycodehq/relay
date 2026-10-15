@@ -16,6 +16,12 @@ nothing has shown or connected to it for 30 minutes, and leaves other servers
 alone. A browser tab outside Relay counts while it holds a connection open, as
 hot-reload sockets do; a server without one may sleep under an idle tab.
 
+On macOS and Linux the servers Relay starts run in the agent host, so they keep
+running while Relay restarts for a rebuild or an update, and the next Relay
+takes them back. Quitting Relay stops them, and so does the host once Relay has
+been gone 10 minutes with no agent working there. On Windows they still run in
+Relay and stop with it.
+
 ## Sessions and links
 
 The pane loads localhost directly. Every thread has its own Electron storage

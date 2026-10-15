@@ -79,6 +79,8 @@ export interface ProcessSpec {
   group: boolean;
   /** Closing its input is how it's asked to stop, not SIGTERM; it may wind down first. */
   stopByInput?: boolean;
+  /** Its error output goes in the log as lines too, e.g. a dev server's. */
+  logErrors?: boolean;
 }
 
 export type ClientMessage =

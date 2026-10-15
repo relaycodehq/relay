@@ -354,6 +354,55 @@ it("reports a process that died while Relay was away as ended", async () => {
   expect(await exited).toBe(1);
 });
 
+it("logs a dev server's error output with its last words, and says its pid", async () => {
+  // Exits once told to, with a last line it never ends.
+  const script = `
+    console.log("listening");
+    console.error("deprecated option");
+    const lines = require("node:readline").createInterface({ input: process.stdin });
+    lines.on("line", () => {
+      process.stderr.write("Error: port taken");
+      process.exitCode = 3;
+      lines.close();
+      process.stdin.destroy();
+    });
+  `;
+  const running = await hostsFor().openProcess({
+    key: "dev-server",
+    meta: { provider: "fixture" },
+    process: {
+      command: process.execPath,
+      args: ["-e", script],
+      cwd: root,
+      env: { ...process.env } as Record<string, string>,
+      group: false,
+      logErrors: true,
+    },
+  });
+  const entries: Entry[] = [];
+  const ended = new Promise<void>((resolve) =>
+    running.read({
+      entry: (e) => {
+        entries.push(e);
+        if (e.kind === "end") resolve();
+      },
+    }),
+  );
+  await expect.poll(() => entries.some((e) => e.kind === "line")).toBe(true);
+  const pid = await running.pid();
+  expect(pid && alive(pid)).toBe(true);
+  running.write("stop");
+  await ended;
+  expect(
+    entries.flatMap((e) => (e.kind === "line" ? [e.text] : [])).sort(),
+  ).toEqual(["Error: port taken", "deprecated option", "listening"]);
+  // Already in the log, so not again in why it ended.
+  expect(entries.at(-1)).toMatchObject({
+    kind: "end",
+    failure: "node exited (3).",
+  });
+});
+
 it("replays a cut-off Codex turn without the last Relay's replies or answered questions", () => {
   const line = (seq: number, value: unknown) =>
     ({ seq, kind: "line", text: JSON.stringify(value) }) as const;

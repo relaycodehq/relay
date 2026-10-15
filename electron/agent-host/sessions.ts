@@ -315,24 +315,44 @@ export class ProcessSession extends HostSession {
       detached: this.group,
     });
     this.child = child;
-    let buffer = "",
-      errors = "";
+    let errors = "";
+    const lines = () => {
+      let buffer = "";
+      return {
+        take: (chunk: string) => {
+          buffer += chunk;
+          let at: number;
+          while ((at = buffer.indexOf("\n")) >= 0) {
+            this.append({ kind: "line", text: buffer.slice(0, at) });
+            buffer = buffer.slice(at + 1);
+          }
+          // A line this long is broken output; the reader would refuse it anyway.
+          if (buffer.length > limits.line) buffer = "";
+        },
+        /** What it printed last without a newline, e.g. an error before it exits. */
+        flush: () => {
+          if (buffer) this.append({ kind: "line", text: buffer });
+          buffer = "";
+        },
+      };
+    };
+    const out = lines();
     child.stdout!.setEncoding("utf8");
-    child.stdout!.on("data", (chunk: string) => {
-      buffer += chunk;
-      let at: number;
-      while ((at = buffer.indexOf("\n")) >= 0) {
-        this.append({ kind: "line", text: buffer.slice(0, at) });
-        buffer = buffer.slice(at + 1);
-      }
-      // A line this long is broken output; the reader would refuse it anyway.
-      if (buffer.length > limits.line) buffer = "";
-    });
+    child.stdout!.on("data", out.take);
     child.stderr!.setEncoding("utf8");
+    const errorLines = spec.logErrors ? lines() : undefined;
     child.stderr!.on("data", (chunk: string) => {
       errors = (errors + chunk).slice(-4000);
+      errorLines?.take(chunk);
     });
     child.stdin!.on("error", () => {});
+    // Its last output may still be in the pipes when it exits; something it
+    // started may hold them open, so not for long.
+    const drained = Promise.all(
+      [child.stdout!, child.stderr!].map(
+        (stream) => new Promise((done) => stream.once("close", done)),
+      ),
+    );
     const ended = (failure?: string) => {
       if (this.ended) return;
       this.append({
@@ -341,11 +361,18 @@ export class ProcessSession extends HostSession {
       });
     };
     child.once("error", (error) => ended(error.message));
-    child.once("exit", (code, signal) =>
-      ended(
-        `${spec.command.split(/[\\/]/).pop()} exited (${signal ?? code}).${errors.trim() ? ` ${errors.trim().slice(-500)}` : ""}`,
-      ),
-    );
+    child.once("exit", (code, signal) => {
+      const waited = new Promise((done) => setTimeout(done, 500).unref());
+      void Promise.race([drained, waited]).then(() => {
+        if (errorLines) {
+          out.flush();
+          errorLines.flush();
+        }
+        ended(
+          `${spec.command.split(/[\\/]/).pop()} exited (${signal ?? code}).${errors.trim() && !errorLines ? ` ${errors.trim().slice(-500)}` : ""}`,
+        );
+      });
+    });
   }
 
   push(message: unknown) {
@@ -371,7 +398,8 @@ export class ProcessSession extends HostSession {
     });
   }
 
-  async call(): Promise<unknown> {
-    throw new Error("A process session takes no calls.");
+  async call(method: string): Promise<unknown> {
+    if (method === "pid") return this.child?.pid;
+    throw new Error(`A process session takes no ${method} call.`);
   }
 }

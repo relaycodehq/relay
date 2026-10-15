@@ -209,7 +209,7 @@ const quit = new Quit({
     menubarSounds?.dispose();
     keepAwake.dispose();
     threadTerminals.closeAll();
-    previews?.dispose();
+    previews?.dispose({ detach: quit.detaching });
     treeWatch?.dispose();
     elsewhereWatch?.dispose();
     // Quitting before Relay finished starting skips shutDown.
@@ -482,6 +482,7 @@ app
     previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
       previewProjects.target(projectId, chatId, url, folder),
     );
+    void previews.servers.reattach();
     const draftStore = new DraftStore(
       join(app.getPath("userData"), "drafts.json"),
     );

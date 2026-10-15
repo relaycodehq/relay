@@ -702,14 +702,16 @@ export class ThreadPreviews {
     }
   }
 
-  dispose() {
+  /** With `detach`, Relay is restarting and the dev servers the agent host runs carry on. */
+  dispose({ detach = false } = {}) {
     clearInterval(this.sweep);
     for (const key of new Set([
       ...this.previews.keys(),
       ...this.opening.keys(),
     ]))
       this.close(key);
-    this.servers.dispose();
+    if (detach) this.servers.detach();
+    else this.servers.dispose();
   }
 
   /** Where the page is, live or parked. */

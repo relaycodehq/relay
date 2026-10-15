@@ -1,7 +1,15 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect } from "node:net";
 import { stripVTControlCharacters } from "node:util";
+import { z } from "zod";
 import type { DevServerState } from "../../shared/preview";
+import { HostedChild } from "../agent-host/child";
+import type { Entry } from "../agent-host/protocol";
+import {
+  foundSessions,
+  inAgentHost,
+  savedMeta,
+} from "../agents/hosted-sessions";
 import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";
@@ -27,10 +35,32 @@ export function listening(port: number, timeoutMs = 400): Promise<boolean> {
   return Promise.all([one("127.0.0.1"), one("::1")]).then(([a, b]) => a || b);
 }
 
+/** What the agent host keeps with a server it runs, for the next Relay. */
+const savedServer = z.object({
+  provider: z.literal("dev-server"),
+  folder: z.string(),
+  port: z.number().int(),
+  command: z.string(),
+});
+
+/** The output a server taken back after a restart printed last, as much as is kept. */
+function lastLines(entries: Entry[]) {
+  const lines: string[] = [];
+  let chars = 0;
+  for (let i = entries.length - 1; i >= 0 && chars < keepChars; i--) {
+    const entry = entries[i]!;
+    if (entry.kind !== "line") continue;
+    lines.push(entry.text);
+    chars += entry.text.length + 1;
+  }
+  return lines.reverse();
+}
+
 interface Server {
   folder: string;
   port: number;
-  child?: ChildProcess;
+  /** In the agent host when there is one, so it outlives a restart of Relay. */
+  child?: ChildProcess | HostedChild;
   state: DevServerState;
   /** Previews showing it now; it sleeps only with none. */
   watchers: number;
@@ -39,11 +69,14 @@ interface Server {
 
 /**
  * The projects' dev servers, one per folder, started when a preview needs
- * one and stopped after half an hour nobody looked or connected.
+ * one and stopped after half an hour nobody looked or connected. Those the
+ * agent host runs keep running while Relay restarts.
  */
 export class DevServers {
   private servers = new Map<string, Server>();
   private sweep: NodeJS.Timeout;
+  private reattached?: Promise<void>;
+  private reattaching = false;
 
   constructor(
     private changed: (folder: string, state: DevServerState) => void,
@@ -70,6 +103,8 @@ export class DevServers {
   ): Promise<DevServerState> {
     if (!Number.isInteger(port) || port < 1 || port > 65535)
       throw new Error("The preview’s dev port must be between 1 and 65535.");
+    // A server the host kept through a restart is this folder's already.
+    if (this.reattaching) await this.reattached;
     const had = this.servers.get(folder);
     if (had) had.usedAt = this.now();
     if (had?.port === port && had.state.state === "starting")
@@ -97,25 +132,78 @@ export class DevServers {
       this.set(server, { state: "running", port, ours: false });
       return server.state;
     }
-    let output = "";
-    const [shell] = userShell();
+    const child = await this.launch(folder, command, port, env);
+    if (
+      this.servers.get(folder) !== server ||
+      server.state.state !== "starting"
+    ) {
+      terminate(child, { group: true });
+      return server.state;
+    }
+    this.follow(server, child, command);
+    return this.waitFor(server);
+  }
+
+  /** Runs the command in the agent host, or in Relay without one. */
+  private async launch(
+    folder: string,
+    command: string,
+    port: number,
+    env: Record<string, string>,
+  ): Promise<ChildProcess | HostedChild> {
     const childEnv = { ...inheritedEnv(), ...env, PORT: String(port) };
-    const child =
-      process.platform === "win32"
-        ? spawn(command, {
-            cwd: folder,
-            env: childEnv,
-            shell: true,
-            windowsHide: true,
-          })
-        : spawn(shell, ["-lc", command], {
-            cwd: folder,
-            env: childEnv,
-            detached: true,
-            stdio: ["ignore", "pipe", "pipe"],
-          });
+    if (process.platform === "win32")
+      return spawn(command, {
+        cwd: folder,
+        env: childEnv,
+        shell: true,
+        windowsHide: true,
+      });
+    const [shell] = userShell();
+    const hosted = await inAgentHost("the dev server", (hosts) =>
+      hosts.openProcess({
+        key: `dev-server:${folder}`,
+        meta: {
+          provider: "dev-server",
+          folder,
+          port,
+          command,
+        } satisfies z.infer<typeof savedServer>,
+        process: {
+          command: shell,
+          args: ["-lc", command],
+          cwd: folder,
+          env: childEnv,
+          group: true,
+          logErrors: true,
+        },
+      }),
+    );
+    if (hosted) return new HostedChild(hosted);
+    return spawn(shell, ["-lc", command], {
+      cwd: folder,
+      env: childEnv,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  }
+
+  /** Keeps the server's output and state, until it listens or gives up. */
+  private follow(
+    server: Server,
+    child: ChildProcess | HostedChild,
+    command: string,
+  ) {
+    const { folder, port } = server;
     server.child = child;
-    if (child.pid) projectTasks.trackServer(child.pid, command, folder);
+    const hosted = child instanceof HostedChild ? child : undefined;
+    if (child instanceof HostedChild)
+      void child.hosted.pid().then((pid) => {
+        if (pid && server.child === child)
+          projectTasks.trackServer(pid, command, folder);
+      });
+    else if (child.pid) projectTasks.trackServer(child.pid, command, folder);
+    let output = "";
     const add = (chunk: Buffer | string) => {
       output = (output + stripVTControlCharacters(String(chunk))).slice(
         -keepChars,
@@ -134,13 +222,19 @@ export class DevServers {
       });
     };
     child.on("error", (e) => failed(e.message));
-    child.on("exit", (code, signal) =>
+    child.on("exit", (code, signal) => {
+      if (hosted) {
+        // The host said how it exited; the session has nothing left to keep.
+        hosted.hosted.close();
+        return failed();
+      }
       failed(
         server.state.state === "running" || code === null
           ? `Exited${signal ? ` on ${signal}` : ""}.`
           : `Exited with code ${code}.`,
-      ),
-    );
+      );
+    });
+    hosted?.release();
     const started = this.now();
     void (async () => {
       while (server.child === child && server.state.state === "starting") {
@@ -160,7 +254,46 @@ export class DevServers {
         await new Promise((r) => setTimeout(r, 400));
       }
     })();
-    return this.waitFor(server);
+  }
+
+  /**
+   * Takes back the servers the agent host kept running while Relay
+   * restarted. One that exited meanwhile, or that this Relay can't read,
+   * ends; the next preview starts it again.
+   */
+  reattach(): Promise<void> {
+    if (this.reattached) return this.reattached;
+    this.reattaching = true;
+    this.reattached = (async () => {
+      for (const found of await foundSessions("dev-server", "process")) {
+        const saved = found.info.ended
+          ? undefined
+          : savedMeta(found, savedServer);
+        if (!saved || this.servers.has(saved.folder)) {
+          found.close();
+          continue;
+        }
+        const server: Server = {
+          folder: saved.folder,
+          port: saved.port,
+          watchers: 0,
+          usedAt: this.now(),
+          state: { state: "starting", port: saved.port },
+        };
+        this.servers.set(saved.folder, server);
+        this.set(server, server.state);
+        this.follow(
+          server,
+          new HostedChild(found.attachProcess(), lastLines),
+          saved.command,
+        );
+      }
+    })()
+      .catch((error) =>
+        console.warn("Couldn't take back the dev servers:", error),
+      )
+      .finally(() => (this.reattaching = false));
+    return this.reattached;
   }
 
   private waitFor(server: Server) {
@@ -222,6 +355,18 @@ export class DevServers {
     if (child) terminate(child, { group: true });
   }
 
+  /** Relay is restarting: what the host runs carries on, the rest ends with Relay. */
+  detach() {
+    clearInterval(this.sweep);
+    for (const [folder, server] of [...this.servers]) {
+      if (server.child instanceof HostedChild) {
+        this.servers.delete(folder);
+        server.child = undefined;
+      } else this.stop(folder);
+    }
+  }
+
+  /** Relay is quitting: every server it started stops. */
   dispose() {
     clearInterval(this.sweep);
     for (const folder of [...this.servers.keys()]) this.stop(folder);

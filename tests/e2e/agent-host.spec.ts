@@ -16,6 +16,7 @@ import {
   rm,
   realpath,
 } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
@@ -462,5 +463,66 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
   } finally {
     await relay.dispose();
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a preview's dev server keeps running while Relay restarts, and quitting stops it", async () => {
+  test.skip(
+    process.platform === "win32",
+    "On Windows Relay still runs dev servers itself.",
+  );
+  test.setTimeout(90_000);
+  const relay = await restartable({});
+  try {
+    const port = await new Promise<number>((resolve) => {
+      const probe = createServer().listen(0, "127.0.0.1", () => {
+        const { port } = probe.address() as { port: number };
+        probe.close(() => resolve(port));
+      });
+    });
+    const project = await relay.page.evaluate(async (port) => {
+      const [project] = await window.relay.projects();
+      await window.relay.saveProjectSettings(project!.id, {
+        devCommand: "node server.js",
+        devPort: port,
+      });
+      return project!;
+    }, port);
+    await writeFile(
+      join(project.path, "server.js"),
+      `require("fs").appendFileSync("launches", process.pid + "\\n");
+require("http").createServer((req, res) => res.end("kept")).listen(+process.env.PORT, "127.0.0.1");
+`,
+    );
+    const server = () =>
+      relay.page.evaluate(
+        async ({ projectId, chatId }) =>
+          (await window.relay.openPreview(projectId, chatId)).server,
+        { projectId: project.id, chatId: relay.chatId },
+      );
+    const launches = async () =>
+      (await readFile(join(project.path, "launches"), "utf8"))
+        .trim()
+        .split("\n")
+        .map(Number);
+    await expect
+      .poll(server, { timeout: 30_000 })
+      .toEqual({ state: "running", port, ours: true });
+    const [pid] = await launches();
+
+    await relay.restart();
+    expect(alive(pid!)).toBe(true);
+    // Taken back as Relay's own, not started again.
+    await expect
+      .poll(server, { timeout: 30_000 })
+      .toEqual({ state: "running", port, ours: true });
+    expect(await launches()).toEqual([pid]);
+
+    const quit = new Promise((r) => relay.app.process().once("exit", r));
+    await relay.app.evaluate(({ app }) => app.quit());
+    await quit;
+    await expect.poll(() => alive(pid!), { timeout: 10_000 }).toBe(false);
+  } finally {
+    await relay.dispose();
   }
 });
