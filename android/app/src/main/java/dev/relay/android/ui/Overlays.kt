@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -82,9 +83,15 @@ fun Sheet(
             Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).background(c.foreground.copy(alpha = 0.15f), RoundedCornerShape(2.dp)))
         },
     ) {
-        Column(Modifier.navigationBarsPadding()) { SheetBody(title, description, content) }
+        // Held short of the top: a sheet whose content reached it bounced about a dozen times a second
+        // there (the notes sheet with a long table), while one that stops short sat still.
+        val window = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+        Column(Modifier.heightIn(max = window * SHEET_MAX).navigationBarsPadding()) { SheetBody(title, description, content) }
     }
 }
+
+/** How much of the window a bottom sheet may take. */
+private const val SHEET_MAX = 0.88f
 
 @Composable
 private fun SheetBody(title: String?, description: String?, content: @Composable ColumnScope.() -> Unit) {
