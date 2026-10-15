@@ -11,59 +11,55 @@ interface QuoteTip {
 }
 
 /**
- * The quote pill the pointer rests on, after a short pause. Leaving the pill,
- * scrolling or editing the draft hides it.
+ * The passage of the quote pill the pointer rests on, after a short pause,
+ * in the editor or any element showing quote pills. Moving off
+ * the pill, clicking, typing or scrolling hides it.
  */
-export function useQuoteTip(editor: Editor | null) {
+export function useQuoteTip(within: Editor | HTMLElement | null) {
   const [tip, setTip] = useState<QuoteTip | null>(null);
   useEffect(() => {
-    if (!editor) return;
-    const dom = editor.view.dom;
+    if (!within) return;
+    const root = within instanceof HTMLElement ? within : within.view.dom;
     let timer: number | undefined;
-    const chipOf = (target: EventTarget | null) =>
-      target instanceof Element ? target.closest(".composer-quote-chip") : null;
+    let hovered: Element | null = null;
     const hide = () => {
       window.clearTimeout(timer);
+      hovered = null;
       setTip(null);
     };
     const over = (event: MouseEvent) => {
-      const chip = chipOf(event.target);
-      if (!chip) return;
-      window.clearTimeout(timer);
+      const pill =
+        event.target instanceof Element
+          ? event.target.closest(".prompt-pill.quote[data-relay-quote]")
+          : null;
+      if (pill === hovered) return;
+      hide();
+      if (!pill) return;
+      hovered = pill;
       timer = window.setTimeout(() => {
-        if (!chip.isConnected) return;
-        const rect = chip.getBoundingClientRect();
+        const rect = pill.getBoundingClientRect();
         setTip({
-          text: chip.getAttribute("data-quote") ?? "",
+          text: pill.getAttribute("data-relay-quote")!,
           left: rect.left,
           top: rect.top,
           bottom: rect.bottom,
         });
       }, 150);
     };
-    const out = (event: MouseEvent) => {
-      const chip = chipOf(event.target);
-      if (
-        chip &&
-        !(
-          event.relatedTarget instanceof Element &&
-          chip.contains(event.relatedTarget)
-        )
-      )
-        hide();
-    };
-    dom.addEventListener("mouseover", over);
-    dom.addEventListener("mouseout", out);
+    root.addEventListener("mouseover", over);
+    root.addEventListener("mouseleave", hide);
+    root.addEventListener("mousedown", hide);
+    root.addEventListener("keydown", hide);
     window.addEventListener("scroll", hide, true);
-    editor.on("update", hide);
     return () => {
       hide();
-      dom.removeEventListener("mouseover", over);
-      dom.removeEventListener("mouseout", out);
+      root.removeEventListener("mouseover", over);
+      root.removeEventListener("mouseleave", hide);
+      root.removeEventListener("mousedown", hide);
+      root.removeEventListener("keydown", hide);
       window.removeEventListener("scroll", hide, true);
-      editor.off("update", hide);
     };
-  }, [editor]);
+  }, [within]);
   return tip;
 }
 
@@ -72,7 +68,7 @@ export function QuoteTooltip({ tip }: { tip: QuoteTip }) {
   return createPortal(
     <div
       role="tooltip"
-      className="composer-quote-tooltip"
+      className="prompt-pill-tooltip"
       style={{
         left: Math.max(12, Math.min(tip.left, innerWidth - 12 - 440)),
         top: above ? tip.top : tip.bottom,

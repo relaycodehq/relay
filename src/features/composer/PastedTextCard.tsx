@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Check, ClipboardPaste, Copy, X } from "lucide-react";
-import { pastedLines, type PastedText } from "../../../shared/pasted-texts";
+import type { PastedText } from "../../../shared/pasted-texts";
 import { Modal } from "../../ui/ui";
 import "./pasted-texts.css";
 import { useCopy } from "../../lib/useCopy";
+import { pastePill, PillButton } from "./prompt/Pill";
 
 /** The opening lines, dedented so pasted code does not preview as indent. */
 function preview(text: string) {
@@ -14,12 +15,6 @@ function preview(text: string) {
       .map((line) => line.length - line.trimStart().length),
   );
   return lines.map((line) => line.slice(indent, indent + 90)).join("\n");
-}
-
-const label = (paste: PastedText) => `Pasted text #${paste.n}`;
-function lineCount(paste: PastedText) {
-  const count = pastedLines(paste.text);
-  return `${count.toLocaleString()} ${count === 1 ? "line" : "lines"}`;
 }
 
 /** The whole paste, to read, copy or turn back into ordinary text. */
@@ -34,14 +29,11 @@ export function PastedTextDialog({
   onInline?: () => void;
 }) {
   const [copied, copy] = useCopy();
+  const { label, detail: lines } = pastePill(paste);
   return (
-    <Modal
-      title={label(paste)}
-      onClose={onClose}
-      className="pasted-text-dialog"
-    >
+    <Modal title={label} onClose={onClose} className="pasted-text-dialog">
       <p className="pasted-text-meta">
-        {lineCount(paste)} · {paste.text.length.toLocaleString()} characters
+        {lines} · {paste.text.length.toLocaleString()} characters
       </p>
       <pre className="pasted-text-full">{paste.text}</pre>
       <div className="modal-actions">
@@ -76,12 +68,13 @@ export function PastedTextCard({
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const { label, detail: lines } = pastePill(paste);
   return (
     <div className="pasted-text">
       <button
         type="button"
         className="pasted-text-open"
-        aria-label={`Show ${label(paste)}, ${lineCount(paste)}`}
+        aria-label={`Show ${label}, ${lines}`}
         title="Show pasted text"
         onClick={onOpen}
       >
@@ -91,15 +84,15 @@ export function PastedTextCard({
         <span className="pasted-text-footer">
           <span className="pasted-text-pill">
             <ClipboardPaste size={11} aria-hidden="true" />
-            {label(paste)}
+            {label}
           </span>
-          <span className="pasted-text-lines">{lineCount(paste)}</span>
+          <span className="pasted-text-lines">{lines}</span>
         </span>
       </button>
       <button
         type="button"
         className="composer-image-remove"
-        aria-label={`Remove ${label(paste)}`}
+        aria-label={`Remove ${label}`}
         onClick={onRemove}
       >
         <X size={13} />
@@ -111,19 +104,14 @@ export function PastedTextCard({
 /** The pill a sent message shows where the paste went, like the composer's. */
 export function PastedTextPill({ paste }: { paste: PastedText }) {
   const [open, setOpen] = useState(false);
+  const look = pastePill(paste);
   return (
     <>
-      <button
-        type="button"
-        className="paste-pill"
-        aria-label={`Show ${label(paste)}, ${lineCount(paste)}`}
-        title="Show pasted text"
+      <PillButton
+        look={look}
+        aria-label={`Show ${look.label}, ${look.detail}`}
         onClick={() => setOpen(true)}
-      >
-        <span className="paste-pill-icon" aria-hidden="true" />
-        {label(paste)}
-        <span className="paste-pill-lines">{lineCount(paste)}</span>
-      </button>
+      />
       {open && (
         <PastedTextDialog paste={paste} onClose={() => setOpen(false)} />
       )}

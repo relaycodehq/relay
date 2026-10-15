@@ -4,6 +4,7 @@ import type { DictationTarget } from "../../dictation/audio/session";
 import { quotesIn } from "../prompt-pills";
 import type { DraftEditor } from "../useComposerDraft";
 import type { DraftPills } from "../useDraftPills";
+import { copiedPills } from "./pill-clipboard";
 import { beginDictation, endDictation, updateDictation } from "./dictation";
 import {
   caretOffsets,
@@ -99,6 +100,10 @@ export function usePromptHandle(
         if (editor) inlinePaste(editor, index);
       },
       caret: () => (editor ? caretOffsets(editor) : undefined),
+      adoptPills(html) {
+        const copied = copiedPills(html);
+        if (copied) pills.adopt(copied);
+      },
       replace: (text) =>
         editor ? replaceDraft(editor, pills.content(text)) : undefined,
       dictation: {

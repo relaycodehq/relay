@@ -232,7 +232,7 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     );
     await expect(composer).toContainText("Selector: `#save`");
     await expect(composer).toContainText('Its text: "Save changes"');
-    await expect(composer.locator(".composer-image-chip")).toHaveCount(1);
+    await expect(composer.locator(".prompt-pill.image")).toHaveCount(1);
     await expect(
       panel.getByRole("button", { name: "Pick an element to ask about" }),
     ).toBeVisible();

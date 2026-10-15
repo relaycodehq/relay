@@ -1,0 +1,21 @@
+/* What the user sent, in one box like the composer's and in its font, with
+   the composer's pills where they went. */
+.project-message.user > .user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--toolbar);
+  font-family: var(--font-prompt, inherit);
+  font-size: var(--prompt-font-size, 13px);
+  line-height: 1.65;
+}
+.project-message .user-text > .markdown {
+  font-size: inherit;
+  line-height: inherit;
+}
+.user-text > .message-pill {
+  margin: 0;
+}

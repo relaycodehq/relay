@@ -2,11 +2,9 @@ import { Node, type Editor } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { formatSize } from "../../../lib/file-tree";
-import {
-  imageToken,
-  isPastedImageName,
-  shortImageName,
-} from "../../../../shared/image-refs";
+import { imageToken } from "../../../../shared/image-refs";
+import { copiedPill } from "../../images/image-clipboard";
+import { imagePill, pillClass } from "./Pill";
 
 /** What an image pill shows; the screenshot itself stays with the composer. */
 export interface ImageChip {
@@ -41,8 +39,13 @@ export const ImageTag = Node.create<object, ImageStorage>({
   parseHTML() {
     return [{ tag: "span[data-relay-image]" }];
   },
+  // Copied, it carries its screenshot, which another draft pastes back in with it.
   renderHTML({ node }) {
-    return ["span", { "data-relay-image": "" }, imageToken(node.attrs.n)];
+    const n: number = node.attrs.n;
+    // The editor's storage: the schema's own copy never sees the screenshots.
+    const image = this.editor?.storage.relayImage.images.get(n);
+    if (!image) return ["span", { "data-relay-image": "" }, imageToken(n)];
+    return ["img", { ...copiedPill(n, image.name), src: image.src }];
   },
   renderText({ node }) {
     return imageToken(node.attrs.n);
@@ -75,40 +78,41 @@ export const ImageTag = Node.create<object, ImageStorage>({
     return ({ node }) => {
       const n: number = node.attrs.n;
       const dom = document.createElement("span");
-      dom.className =
-        "composer-skill-chip composer-file-chip composer-image-chip";
+      // Flags are toggled, not set: ProseMirror adds its own classes here.
+      dom.className = pillClass("image");
       dom.contentEditable = "false";
       dom.dataset.relayImage = "";
       dom.dataset.n = String(n);
+      const remove = document.createElement("span");
+      remove.className = "prompt-pill-remove";
+      remove.setAttribute("role", "button");
       const draw = () => {
         const image = storage.images.get(n);
-        // A paste's name says nothing, so its pill is just the picture.
-        const pasted = !!image && isPastedImageName(image.name);
-        dom.classList.toggle("missing", !image);
-        dom.classList.toggle("pasted", pasted);
+        const look = imagePill(n, image?.name);
+        dom.classList.toggle("missing", look.missing);
+        dom.classList.toggle("pasted", look.pasted);
         dom.title = image
           ? `${image.name} · ${formatSize(image.bytes)}, sent as ${imageToken(n)}. Click to draw on it.`
           : "This screenshot is no longer in the draft";
-        dom.replaceChildren();
+        remove.setAttribute(
+          "aria-label",
+          `Remove ${look.label ?? `Image #${n}`}`,
+        );
+        let thumb: HTMLElement;
         if (image) {
-          const thumb = document.createElement("img");
-          thumb.className = "composer-image-chip-thumb";
-          thumb.src = image.src;
-          thumb.alt = pasted ? `Image #${n}` : "";
-          dom.append(thumb);
+          const picture = document.createElement("img");
+          picture.src = image.src;
+          picture.alt = look.label ? "" : `Image #${n}`;
+          thumb = picture;
         } else {
-          const thumb = document.createElement("span");
-          thumb.className = "composer-image-chip-thumb";
+          thumb = document.createElement("span");
           thumb.setAttribute("aria-hidden", "true");
-          dom.append(thumb);
         }
-        if (!pasted) {
-          const label = document.createElement("span");
-          label.textContent = image
-            ? shortImageName(image.name)
-            : `Image #${n}`;
-          dom.append(label);
-        }
+        thumb.className = "prompt-pill-thumb";
+        const label = document.createElement("span");
+        label.className = "prompt-pill-label";
+        label.textContent = look.label ?? "";
+        dom.replaceChildren(thumb, ...(look.label ? [label] : []), remove);
       };
       draw();
       storage.views.add(draw);

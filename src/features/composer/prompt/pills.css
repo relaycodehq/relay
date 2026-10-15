@@ -1,0 +1,211 @@
+/* A pill stands in a prompt for what wasn't typed: a skill, a file, a quote,
+   a paste or a screenshot. The composer and sent messages show the same one;
+   only its colour and icon say which kind it is. */
+.prompt-pill {
+  --pill-color: var(--accent);
+  --pill-edge: color-mix(in srgb, var(--accent) 50%, transparent);
+  --pill-fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  --pill-fill-hover: color-mix(in srgb, var(--accent) 18%, transparent);
+  display: inline-flex;
+  /* The label sets the pill's baseline, so it sits on the text's line; the
+     icon would otherwise lend its own and lift the label a few pixels. */
+  align-items: baseline;
+  vertical-align: baseline;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--pill-edge);
+  border-radius: 6px;
+  color: var(--pill-color);
+  background: var(--pill-fill);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+/* What's on disk takes the text's own colour. */
+.prompt-pill:is(.file, .folder, .image) {
+  --pill-color: var(--text);
+  --pill-edge: var(--border);
+  --pill-fill: color-mix(in srgb, var(--text) 5%, transparent);
+  --pill-fill-hover: color-mix(in srgb, var(--text) 9%, transparent);
+  font-weight: 400;
+}
+.ProseMirror .prompt-pill:hover,
+button.prompt-pill:hover {
+  background: var(--pill-fill-hover);
+}
+.prompt-pill.ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+.prompt-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prompt-pill-detail {
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-pill-icon {
+  flex: none;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+}
+.prompt-pill:is(.file, .folder) .prompt-pill-icon {
+  background: var(--muted);
+}
+.prompt-pill.skill .prompt-pill-icon {
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M12 3 3 8v9l9 5 9-5V8L12 3ZM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5"/%3E%3C/svg%3E');
+}
+.prompt-pill.file .prompt-pill-icon {
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/%3E%3Cpath d="M14 2v4a2 2 0 0 0 2 2h4"/%3E%3C/svg%3E');
+}
+.prompt-pill.folder .prompt-pill-icon {
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/%3E%3C/svg%3E');
+}
+.prompt-pill.quote .prompt-pill-icon {
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/%3E%3Cpath d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/%3E%3C/svg%3E');
+}
+.prompt-pill.paste .prompt-pill-icon {
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M11 14h10"/%3E%3Cpath d="M16 4h2a2 2 0 0 1 2 2v1.344"/%3E%3Cpath d="m17 18 4-4-4-4"/%3E%3Cpath d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/%3E%3Crect x="8" y="2" width="8" height="4" rx="1"/%3E%3C/svg%3E');
+}
+/* In the editor the icon is also the pill's ×, swapped in place so the line
+   doesn't move under the pointer. */
+.prompt-pill:hover > .prompt-pill-icon.prompt-pill-remove {
+  opacity: 0.75;
+  background: currentColor;
+  mask-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M18 6 6 18M6 6l12 12"/%3E%3C/svg%3E');
+  mask-size: 11px;
+  cursor: pointer;
+}
+.prompt-pill > .prompt-pill-icon.prompt-pill-remove:hover {
+  opacity: 1;
+}
+
+/* The whole passage, shown above a hovered quote pill. */
+.prompt-pill-tooltip {
+  position: fixed;
+  z-index: 350;
+  max-width: min(440px, calc(100vw - 24px));
+  max-height: 40vh;
+  overflow: hidden;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 24px #0002;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* A screenshot: the file pill around a thumbnail big enough to recognise.
+   The label still sets the baseline, centred on the picture by its margins. */
+.prompt-pill.image {
+  position: relative;
+  gap: 6px;
+  padding: 2px 7px 2px 2px;
+  cursor: pointer;
+}
+.prompt-pill.image > .prompt-pill-label {
+  margin-block: calc((24px - 1.4em) / 2);
+}
+/* Just the picture, with no text to line up with. */
+.prompt-pill.image.pasted {
+  vertical-align: middle;
+  padding-right: 2px;
+}
+.prompt-pill-thumb {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.prompt-pill.image.missing {
+  color: var(--muted);
+  cursor: default;
+}
+.prompt-pill.image.missing .prompt-pill-thumb {
+  box-shadow: none;
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+}
+/* Its × sits on the picture's corner, as on the screenshot tiles. */
+.prompt-pill.image > .prompt-pill-remove {
+  position: absolute;
+  top: 4px;
+  left: 22px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--toolbar);
+  color: var(--text);
+  opacity: 0;
+  cursor: pointer;
+}
+.prompt-pill.image > .prompt-pill-remove::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M18 6 6 18M6 6l12 12"/%3E%3C/svg%3E')
+    center/10px no-repeat;
+}
+.prompt-pill.image:hover > .prompt-pill-remove {
+  opacity: 1;
+}
+/* Inside a selection the whole pill is outlined, instead of the browser
+   tinting its picture and label in patches. */
+.prompt-pill.image::selection,
+.prompt-pill.image ::selection {
+  background: transparent;
+}
+.prompt-pill.image.in-selection,
+.prompt-pill.image.ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+/* Hovering a screenshot pill grows its picture out of it, like a colour swatch. */
+.image-chip-peek {
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 24%, transparent),
+    0 12px 30px -12px #0009;
+  outline: none;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+.image-chip-peek[data-starting-style],
+.image-chip-peek[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.3);
+}
+.image-chip-peek img {
+  display: block;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: 240px;
+}
+.image-chip-peek img.opens {
+  cursor: zoom-in;
+}

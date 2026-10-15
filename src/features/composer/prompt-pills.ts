@@ -41,19 +41,27 @@ export function quotesIn(doc: PMNode) {
   return present;
 }
 
+/** Deletes the pill at `pos` in the document `tr` started on, with the space put in beside it. */
+export function removePill<T extends Transform>(
+  tr: T,
+  pos: number,
+  node: PMNode,
+) {
+  const doc = tr.before;
+  const end = pos + node.nodeSize,
+    $pos = doc.resolve(pos);
+  const before = doc.textBetween($pos.start(), pos, "\n", "x");
+  const spare =
+    doc.textBetween(end, Math.min(end + 1, $pos.end())) === " " &&
+    /(^|\s)$/.test(before);
+  return tr.delete(tr.mapping.map(pos), tr.mapping.map(end + (spare ? 1 : 0)));
+}
+
 /** Deletes every pill for screenshot n from the document `tr` started on. */
 export function deleteImagePills<T extends Transform>(tr: T, n: number) {
-  const doc = tr.before;
-  doc.descendants((node, pos) => {
-    if (node.type.name !== "relayImage" || node.attrs.n !== n) return;
-    // The space put in beside the pill goes with it.
-    const end = pos + node.nodeSize,
-      $pos = doc.resolve(pos);
-    const before = doc.textBetween($pos.start(), pos, "\n", "x");
-    const spare =
-      doc.textBetween(end, Math.min(end + 1, $pos.end())) === " " &&
-      /(^|\s)$/.test(before);
-    tr.delete(tr.mapping.map(pos), tr.mapping.map(end + (spare ? 1 : 0)));
+  tr.before.descendants((node, pos) => {
+    if (node.type.name === "relayImage" && node.attrs.n === n)
+      removePill(tr, pos, node);
   });
   return tr;
 }

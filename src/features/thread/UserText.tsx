@@ -1,25 +1,21 @@
-import { useCallback, useMemo, useRef } from "react";
-import { PreviewCard } from "@base-ui/react/preview-card";
+import { useCallback, useMemo, useState } from "react";
 import { pasteBlock, type PastedText } from "../../../shared/pasted-texts";
-import type { ChatImage } from "../../../shared/projects";
-import { formatSize } from "../../lib/file-tree";
+import { quoteBlock, unquote } from "../../../shared/composer-quotes";
 import {
-  imageToken,
-  isPastedImageName,
-  shortImageName,
-} from "../../../shared/image-refs";
-import { useImageSource, type PreviewImage } from "../images/ImagePreview";
-import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
-import { copiedPill } from "../images/image-clipboard";
+  chatFileLink,
+  type ProjectFileLink,
+} from "../../../shared/project-file-links";
 import { PastedTextPill } from "../composer/PastedTextCard";
+import { Pill, skillPill } from "../composer/prompt/Pill";
+import { QuoteTooltip, useQuoteTip } from "../composer/prompt/QuoteTip";
+import {
+  copyWithPills,
+  type CopiedPills,
+} from "../composer/prompt/pill-clipboard";
 import { RichText } from "../../ui/RichText";
 import { skillMentions, type SentSkill } from "../../../shared/skill-mentions";
-import "../composer/prompt/prompt-input.css";
-
-export interface SentImage {
-  image: ChatImage;
-  preview: PreviewImage;
-}
+import { FilePill, ImagePill, QuotePill, type SentImage } from "./SentPills";
+import "./user-text.css";
 
 // A token becomes inline code the pill replaces; one already in a code span is
 // pilled as it stands (as the composer does), one in a fence stays text.
@@ -47,6 +43,21 @@ const tokenAsCode = (text: string, skills: ReadonlySet<string>) => {
 };
 const sentToken = /^\[Image #(\d+)\]$/;
 
+type PilledCode =
+  { skill: string } | { image: number } | { file: ProjectFileLink };
+
+/** What a code span in a sent message shows as a pill, if anything. */
+function pilledCode(
+  value: string,
+  projectRoot: string | undefined,
+): PilledCode | undefined {
+  if (value.startsWith(skillMark)) return { skill: value.slice(1) };
+  const n = sentToken.exec(value)?.[1];
+  if (n) return { image: Number(n) };
+  const file = projectRoot && chatFileLink(value, projectRoot, true);
+  return file ? { file } : undefined;
+}
+
 /** The screenshot numbers a sent message's text shows as pills. */
 export function pilledImages(text: string) {
   const shown = new Set<number>();
@@ -58,12 +69,81 @@ export function pilledImages(text: string) {
   return shown;
 }
 
-/** A sent message's text, with each paste and screenshot shown as a pill where it went. */
+type SentPart = string | { paste: PastedText } | { quote: string };
+const fence = /(```[\s\S]*?(?:```|$))/;
+
+/**
+ * The message as the composer showed it: runs of text, and its pastes and
+ * quotes as pills of their own. A blockquote outside code reads as a quote
+ * pill: the composer's quote pill sends one, and a typed `>` means the same.
+ */
+function sentParts(text: string, skills: ReadonlySet<string>) {
+  const parts: SentPart[] = [];
+  let prose = "";
+  const flush = () => {
+    if (prose.trim()) parts.push(tokenAsCode(prose, skills));
+    prose = "";
+  };
+  const quotes = (chunk: string) =>
+    chunk.split(fence).forEach((segment, i) => {
+      if (i % 2) return void (prose += segment);
+      let last = 0;
+      for (const m of segment.matchAll(quoteBlock)) {
+        prose += segment.slice(last, m.index);
+        flush();
+        parts.push({ quote: unquote(m[0]) });
+        last = m.index! + m[0].length;
+      }
+      prose += segment.slice(last);
+    });
+  let last = 0;
+  for (const m of text.matchAll(pasteBlock)) {
+    quotes(text.slice(last, m.index));
+    flush();
+    parts.push({ paste: { n: Number(m[1]), text: m[3] } });
+    last = m.index! + m[0].length;
+  }
+  quotes(text.slice(last));
+  flush();
+  return parts;
+}
+
+const codeSpan = /```[\s\S]*?(?:```|$)|`([^`\n]*)`/g;
+
+/** The skills, quotes and files a sent message shows as pills, for a copy of it to carry. */
+export function sentPills(
+  text: string,
+  skills: SentSkill[] = [],
+  projectRoot?: string,
+): CopiedPills {
+  const labels = new Map(skills.map((s) => [s.name, s.label]));
+  const pills: CopiedPills = { skills: {}, quotes: [], files: [] };
+  for (const part of sentParts(text, new Set(labels.keys()))) {
+    if (typeof part !== "string") {
+      if ("quote" in part) pills.quotes.push(part.quote);
+      continue;
+    }
+    for (const [, code] of part.matchAll(codeSpan)) {
+      // A fence matches without a span of its own: its code isn't pilled.
+      if (code === undefined) continue;
+      const pilled = pilledCode(code, projectRoot);
+      if (pilled && "skill" in pilled)
+        pills.skills[`$${pilled.skill}`] =
+          labels.get(pilled.skill) ?? pilled.skill;
+      else if (pilled && "file" in pilled) pills.files.push(code);
+    }
+  }
+  return pills;
+}
+
+/** A sent message's text in one box like the composer's, with the same pills where they went. */
 export function UserText({
   text,
   skills = [],
   images = [],
   onOpenImage,
+  projectRoot,
+  onOpenFile,
 }: {
   text: string;
   /** The skills picked as pills when it was sent. */
@@ -71,121 +151,66 @@ export function UserText({
   /** In the order sent, which is the order the tokens number them. */
   images?: SentImage[];
   onOpenImage: (key: string) => void;
+  /** Where file paths in code spans are looked up, to pill the ones that are files. */
+  projectRoot?: string;
+  onOpenFile?: (target: ProjectFileLink) => void;
 }) {
   const labels = useMemo(
     () => new Map(skills.map((s) => [s.name, s.label])),
     [skills],
   );
-  const parts = useMemo(() => {
-    const names = new Set(labels.keys());
-    const parts: (string | PastedText)[] = [];
-    let last = 0;
-    for (const m of text.matchAll(pasteBlock)) {
-      parts.push(tokenAsCode(text.slice(last, m.index), names));
-      parts.push({ n: Number(m[1]), text: m[3] });
-      last = m.index! + m[0].length;
-    }
-    parts.push(tokenAsCode(text.slice(last), names));
-    return parts;
-  }, [text, labels]);
+  const parts = useMemo(
+    () => sentParts(text, new Set(labels.keys())),
+    [text, labels],
+  );
   const inlineCode = useCallback(
     (value: string) => {
-      if (value.startsWith(skillMark)) {
-        const name = value.slice(1);
+      const pilled = pilledCode(value, projectRoot);
+      if (!pilled) return undefined;
+      if ("skill" in pilled) {
+        const { skill } = pilled;
         return (
-          <span className="composer-skill-chip" title={`$${name}`}>
-            <span className="composer-skill-icon" aria-hidden="true" />
-            <span>{labels.get(name) ?? name}</span>
-          </span>
+          <Pill look={skillPill(`$${skill}`, labels.get(skill) ?? skill)} />
         );
       }
-      const n = sentToken.exec(value)?.[1];
-      if (!n) return undefined;
-      const sent = images[Number(n) - 1];
-      return sent ? (
-        <ImagePill sent={sent} n={Number(n)} onOpen={onOpenImage} />
-      ) : (
-        <span
-          className="composer-skill-chip composer-file-chip composer-image-chip missing"
-          title="This screenshot didn't come with the message"
-        >
-          <span className="composer-image-chip-thumb" aria-hidden="true" />
-          <span>Image #{n}</span>
-        </span>
-      );
+      if ("image" in pilled)
+        return (
+          <ImagePill
+            sent={images[pilled.image - 1]}
+            n={pilled.image}
+            onOpen={onOpenImage}
+          />
+        );
+      return onOpenFile ? (
+        <FilePill code={value} target={pilled.file} onOpen={onOpenFile} />
+      ) : undefined;
     },
-    [images, onOpenImage, labels],
+    [images, onOpenImage, labels, projectRoot, onOpenFile],
   );
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const tip = useQuoteTip(box);
+  if (!parts.length) return null;
   return (
-    <>
+    <div
+      className="user-text"
+      ref={setBox}
+      // A copied selection keeps what its pills stand for, and a draft makes pills of them again.
+      onCopy={(event) => copyWithPills(event.nativeEvent, event.currentTarget)}
+    >
       {parts.map((part, i) =>
         typeof part === "string" ? (
-          part.trim() ? (
-            <RichText
-              key={i}
-              text={part}
-              inlineCode={inlineCode}
-              typed
-            />
-          ) : null
+          <RichText key={i} text={part} inlineCode={inlineCode} typed />
         ) : (
-          <p key={i} className="message-paste">
-            <PastedTextPill paste={part} />
+          <p key={i} className="message-pill">
+            {"quote" in part ? (
+              <QuotePill quote={part.quote} />
+            ) : (
+              <PastedTextPill paste={part.paste} />
+            )}
           </p>
         ),
       )}
-    </>
-  );
-}
-
-/** The composer's screenshot pill, opening the image in the viewer. */
-function ImagePill({
-  sent: { image, preview },
-  n,
-  onOpen,
-}: {
-  sent: SentImage;
-  n: number;
-  onOpen: (key: string) => void;
-}) {
-  const { data: source } = useImageSource(preview);
-  const pasted = isPastedImageName(image.name);
-  const peek = useRef<PreviewCard.Root.Actions>(null);
-  return (
-    <PreviewCard.Root actionsRef={peek}>
-      <PreviewCard.Trigger
-        delay={PEEK_DELAY}
-        closeDelay={0}
-        render={
-          <button
-            type="button"
-            className={`composer-skill-chip composer-file-chip composer-image-chip message-image-chip${pasted ? " pasted" : ""}`}
-            title={`${image.name} · ${formatSize(image.sizeBytes)}, sent as ${imageToken(n)}`}
-            aria-label={`Open ${pasted ? `Image #${n}` : image.name}`}
-            onClick={() => onOpen(preview.key)}
-          />
-        }
-      >
-        {source ? (
-          <img
-            className="composer-image-chip-thumb"
-            src={source}
-            {...copiedPill(n, image.name)}
-          />
-        ) : (
-          <span className="composer-image-chip-thumb" aria-hidden="true" />
-        )}
-        {!pasted && <span>{shortImageName(image.name)}</span>}
-      </PreviewCard.Trigger>
-      {source && (
-        <ImagePeek
-          src={source}
-          onOpen={() => {
-            peek.current?.close();
-            onOpen(preview.key);
-          }}
-        />
-      )}
-    </PreviewCard.Root>
+      {tip && <QuoteTooltip tip={tip} />}
+    </div>
   );
 }

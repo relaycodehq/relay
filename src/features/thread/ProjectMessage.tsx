@@ -48,7 +48,8 @@ import { MessageAgentName } from "./MessageAgentName";
 import { useStartedThreads } from "../agent-turn/StartedThreads";
 import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
-import { pilledImages, UserText, type SentImage } from "./UserText";
+import { pilledImages, sentPills, UserText } from "./UserText";
+import type { SentImage } from "./SentPills";
 import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
@@ -410,6 +411,7 @@ export const Message = memo(function Message({
             className="message-copy"
             text={text.trim()}
             images={sentImages}
+            pills={() => sentPills(text, m.skills, projectRoot)}
             label="Copy message"
           />
         )}
@@ -457,6 +459,8 @@ export const Message = memo(function Message({
                 skills={m.skills}
                 images={sentImages}
                 onOpenImage={setViewing}
+                projectRoot={projectRoot}
+                onOpenFile={onOpenFile}
               />
             )}
           </>

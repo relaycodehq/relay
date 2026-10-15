@@ -17,6 +17,8 @@ const savedListeners = new Set<(key: string, images: DraftImage[]) => void>();
 // How long a screenshot takes to shrink; a big one re-encodes on a canvas.
 let preparing = 0;
 let finishScreenshot: (() => void) | undefined;
+// Pills copied along with a paste; these tests paste none.
+const adoptPills = () => {};
 vi.mock("../images/draft-images", () => ({
   isScreenshot: () => true,
   loadDraftImages: async (key: string) => saved.get(key) ?? [],
@@ -237,7 +239,9 @@ it("pastes a copied message's screenshots as pills numbered after the draft's ow
   ]);
   writeDraft(KEY, "Mine: [Image #1]");
   const pasteText = vi.fn(() => true);
-  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const editor = {
+    current: { pasteText, adoptPills } as unknown as DraftEditor,
+  };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   const event = {
@@ -278,7 +282,9 @@ it("still pastes a copied message's words when its screenshots don't fit", async
   await saveDraftImages(KEY, [mine(1), mine(2)]);
   writeDraft(KEY, "Mine: [Image #1] [Image #2]");
   const pasteText = vi.fn(() => true);
-  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const editor = {
+    current: { pasteText, adoptPills } as unknown as DraftEditor,
+  };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   draft().paste({
@@ -328,7 +334,12 @@ it("pastes a long copied message as a paste pill with its screenshots' pills aft
   const insertPaste = vi.fn(() => true);
   const insertImages = vi.fn();
   const editor = {
-    current: { pasteText, insertPaste, insertImages } as unknown as DraftEditor,
+    current: {
+      pasteText,
+      insertPaste,
+      insertImages,
+      adoptPills,
+    } as unknown as DraftEditor,
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -358,7 +369,9 @@ it("keeps no screenshots from a copied message too long for the draft", async ()
   await saveDraftImages(KEY, [mine(1)]);
   writeDraft(KEY, "Mine: [Image #1]");
   const insertPaste = vi.fn(() => false);
-  const editor = { current: { insertPaste } as unknown as DraftEditor };
+  const editor = {
+    current: { insertPaste, adoptPills } as unknown as DraftEditor,
+  };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   draft().paste(
@@ -378,7 +391,9 @@ it("keeps no screenshots from a copied message too long for the draft", async ()
 it("gives each of two copied messages' #1 its own screenshot, and a repeated one once", async () => {
   const { useComposerDraft } = await import("./useComposerDraft");
   const pasteText = vi.fn(() => true);
-  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const editor = {
+    current: { pasteText, adoptPills } as unknown as DraftEditor,
+  };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   draft().paste(

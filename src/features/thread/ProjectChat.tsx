@@ -38,6 +38,9 @@ import { useNewThread } from "./useNewThread";
 import { useQueuedMessages } from "./useQueuedMessages";
 import { useSessionCommands } from "./useSessionCommands";
 import { useThreadScroll } from "./useThreadScroll";
+import { useStableCallback } from "../../lib/useStableCallback";
+import { flashPassage, quotedPassage } from "./quote-passage";
+import { QuoteJump } from "./SentPills";
 import { useThreadSend } from "./useThreadSend";
 import type { Viewing } from "./useThreadView";
 import { useThreadHandle } from "./useThreadHandle";
@@ -295,6 +298,17 @@ export function ProjectChat({
     view.jumpInto(placeOf(to), messageId);
     setRootId(to);
   };
+  // A quote pill takes the reader back up to the passage it quotes, lit.
+  const jumpToQuote = useStableCallback((quote: string, pill: HTMLElement) => {
+    const quoting = pill.closest("[data-message-id]");
+    const found =
+      scroll.current &&
+      quoting &&
+      quotedPassage(scroll.current, quoting, quote);
+    if (!found) return;
+    view.jumpToPassage(found.id, found.passage);
+    flashPassage(found.message, found.passage);
+  });
   const notes = useThreadNotes(chat, handle.setError);
   const chatId = chat?.id;
   const keeper = useMemo<Keeper | null>(
@@ -388,21 +402,23 @@ export function ProjectChat({
       {!isEmpty && (
         <RunCommand.Provider value={runCommand}>
           <KeepBlock.Provider value={keeper}>
-            <ThreadMessages
-              handle={handle}
-              projectPath={project.path}
-              thread={thread}
-              view={view}
-              councils={councils}
-              actions={actions}
-              queue={queue}
-              worktree={worktree}
-              onResume={() =>
-                void resume(() => composer.current?.agentSettings())
-              }
-              onSteer={steerFromNote}
-              onCompose={composeFromPage}
-            />
+            <QuoteJump.Provider value={jumpToQuote}>
+              <ThreadMessages
+                handle={handle}
+                projectPath={project.path}
+                thread={thread}
+                view={view}
+                councils={councils}
+                actions={actions}
+                queue={queue}
+                worktree={worktree}
+                onResume={() =>
+                  void resume(() => composer.current?.agentSettings())
+                }
+                onSteer={steerFromNote}
+                onCompose={composeFromPage}
+              />
+            </QuoteJump.Provider>
           </KeepBlock.Provider>
         </RunCommand.Provider>
       )}

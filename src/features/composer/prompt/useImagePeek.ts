@@ -18,10 +18,11 @@ export function useImagePeek(editor: Editor | null) {
       setPeek(null);
     };
     const over = (event: MouseEvent) => {
-      const chip =
-        event.target instanceof Element
-          ? event.target.closest(".composer-image-chip")
-          : null;
+      const target = event.target instanceof Element ? event.target : null;
+      // The picture would grow over the ×.
+      const chip = target?.closest(".prompt-pill-remove")
+        ? null
+        : (target?.closest(".prompt-pill.image") ?? null);
       if (chip === hovered) return;
       hide();
       const thumb = chip?.querySelector<HTMLImageElement>("img");

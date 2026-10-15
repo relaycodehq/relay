@@ -59,6 +59,8 @@ export interface DraftEditor {
   insertPaste: (text: string) => boolean;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
   insertText: (range: { start: number; end: number; text: string }) => void;
+  /** Takes on the pills copied `html` marks, before its text is pasted. */
+  adoptPills: (html: string) => void;
 }
 
 const PASTE_TOO_LONG =
@@ -389,9 +391,15 @@ export function useComposerDraft(
       );
     },
     paste(event: ClipboardEvent) {
-      // A message copied in Relay brings its screenshots in its HTML.
-      const copied = copiedImages(event.clipboardData.getData("text/html"));
-      if (copied.length) {
+      // A message copied in Relay brings its screenshots and pills in its HTML.
+      const html = event.clipboardData.getData("text/html");
+      editor.current?.adoptPills(html);
+      const copied = copiedImages(html);
+      // Copied within this draft, its pills still have their screenshots.
+      const ownPills = copied.every(({ n, src }) =>
+        images.some((image) => image.n === n && image.dataUrl === src),
+      );
+      if (copied.length && !ownPills) {
         event.preventDefault();
         event.stopPropagation();
         const text = cleanPaste(event.clipboardData.getData("text/plain"));

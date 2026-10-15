@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { promptContent } from "./prompt-content";
 import { draftChips } from "../../lib/thread-storage";
+import type { CopiedPills } from "./prompt/pill-clipboard";
 
 export type DraftPills = ReturnType<typeof useDraftPills>;
 
@@ -32,6 +33,21 @@ export function useDraftPills(draftKey: string) {
       addFiles(paths: string[]) {
         files.current = [...new Set([...files.current, ...paths])];
         chips.files.save(files.current);
+      },
+      /** Takes on pills copied from another draft or message, so pasting them makes pills. */
+      adopt({ skills, quotes: copied, files: paths }: CopiedPills) {
+        if (Object.keys(skills).length) {
+          Object.assign(labels.current, skills);
+          chips.skills.save(labels.current);
+        }
+        if (copied.length) {
+          quotes.current = [...new Set([...quotes.current, ...copied])];
+          chips.quotes.save(quotes.current);
+        }
+        if (paths.length) {
+          files.current = [...new Set([...files.current, ...paths])];
+          chips.files.save(files.current);
+        }
       },
     }),
     [chips],

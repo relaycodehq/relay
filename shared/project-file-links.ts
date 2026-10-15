@@ -15,6 +15,11 @@ export type ProjectFileLink = {
   outside?: boolean;
 };
 
+/** `223`, or `223–226` for a range; empty without a line. */
+export function linesOf({ line, endLine }: ProjectFileLink, dash: string) {
+  return line ? `${line}${endLine ? `${dash}${endLine}` : ""}` : "";
+}
+
 /** Whether a link names this file, or a folder that contains it. */
 export function linksTo(link: ProjectFileLink, path: string) {
   return link.directory ? path.startsWith(link.path + "/") : path === link.path;

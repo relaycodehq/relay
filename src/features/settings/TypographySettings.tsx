@@ -24,6 +24,7 @@ import {
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import { mac } from "../../lib/mod-key";
 import "../composer/prompt/prompt-input.css";
+import { Pill, skillPill } from "../composer/prompt/Pill";
 
 function SizeSelect({
   label,
@@ -84,12 +85,8 @@ function FontRow({
 function PromptSample() {
   return (
     <div className="composer-prompt-input typography-prompt" aria-hidden>
-      Use{" "}
-      <span className="composer-skill-chip">
-        <span className="composer-skill-icon">◇</span>
-        <span>Frontend Design</span>
-      </span>{" "}
-      to fix the flaky test in @tests/unit/settings.test.ts and align the header
+      Use <Pill look={skillPill("$frontend-design", "Frontend Design")} /> to
+      fix the flaky test in @tests/unit/settings.test.ts and align the header
       with @src/components/Settings.tsx before shipping.
     </div>
   );

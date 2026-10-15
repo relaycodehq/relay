@@ -21,8 +21,8 @@ const FIRST_MESSAGES = 20,
   MESSAGE_STEP = 20;
 /** A message jumped to lands this far below the top of the view. */
 const JUMP_OFFSET = 12;
-/** How long a message jumped to stays lit, matching its CSS animation. */
-const FLASH_MS = 1400;
+/** How long a message or passage jumped to stays lit, matching their CSS animations. */
+export const FLASH_MS = 1400;
 
 /** Lights message `id` up once it's in `view`, which may take a render or two. */
 function flashWhenShown(view: { current: HTMLElement | null }, id: string) {
@@ -258,6 +258,22 @@ export function useThreadScroll({
     const top = placeInView(e);
     if (top) readingPlaces.set(place, top);
   }
+  /** Brings message `id` to the top of the view, or `offset` below it,
+   * mounting back to it if it is further up than the messages shown, and
+   * holds it there. */
+  function jumpTo(id: string, { flash = false, offset = JUMP_OFFSET } = {}) {
+    const view = scroll.current,
+      index = shown.findIndex((m) => m.id === id);
+    if (!view || index < 0) return;
+    follow.current = false;
+    returning.current = { id, offset };
+    if (shown.length - index > visible) setVisible(shown.length - index);
+    else if (scrollToPlace(view, returning.current))
+      placed.current = view.scrollTop;
+    // Mounted but not drawn: there's nowhere to hold.
+    else returning.current = undefined;
+    if (flash) flashWhenShown(scroll, id);
+  }
   return {
     /** The scrolling view, its message column, and the composer docked over it. */
     scroll,
@@ -293,20 +309,19 @@ export function useThreadScroll({
       returning.current = placeInView(scroll.current!);
       setVisible((v) => v + MESSAGE_WINDOW);
     },
-    /** Brings message `id` to the top of the view, mounting back to it if it
-     * is further up than the messages shown, and holds it there. */
-    jumpTo(id: string, { flash = false } = {}) {
+    jumpTo,
+    /** Brings a passage of shown message `id` a third of the way down the
+     * view, or the message to the top when the passage starts near it. */
+    jumpToPassage(id: string, passage: Range) {
       const view = scroll.current,
-        index = shown.findIndex((m) => m.id === id);
-      if (!view || index < 0) return;
-      follow.current = false;
-      returning.current = { id, offset: JUMP_OFFSET };
-      if (shown.length - index > visible) setVisible(shown.length - index);
-      else if (scrollToPlace(view, returning.current))
-        placed.current = view.scrollTop;
-      // Mounted but not drawn: there's nowhere to hold.
-      else returning.current = undefined;
-      if (flash) flashWhenShown(scroll, id);
+        message = view?.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+      if (!view || !message) return;
+      const into =
+        passage.getBoundingClientRect().top -
+        message.getBoundingClientRect().top;
+      jumpTo(id, {
+        offset: Math.min(JUMP_OFFSET, view.clientHeight / 3 - into),
+      });
     },
     /** Opens the view at `to` on message `id`, lit, for a jump that has to
      * switch conversations first. */

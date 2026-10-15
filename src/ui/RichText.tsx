@@ -27,6 +27,7 @@ import type { PluggableList, Plugin } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
 import {
   chatFileLink,
+  linesOf,
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import { api } from "../lib/api";
@@ -233,11 +234,6 @@ function linkedProjectFiles(text: string, root: string): string[] {
       }
   });
   return [...paths];
-}
-
-/** `223`, or `223–226` for a range. */
-function linesOf({ line, endLine }: ProjectFileLink, dash: string) {
-  return line ? `${line}${endLine ? `${dash}${endLine}` : ""}` : "";
 }
 
 /** File chip: type icon, file name, and its line or lines when there are some. */

@@ -126,8 +126,8 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       .getByRole("button", { name: "Quote remaining items in your message" })
       .click();
     const composer = page.getByLabel("Message project");
-    await expect(composer.locator(".composer-quote-chip")).toHaveAttribute(
-      "data-quote",
+    await expect(composer.locator(".prompt-pill.quote")).toHaveAttribute(
+      "data-relay-quote",
       "1. Open threads from the cache\n\n3. Optimistic sends with an outbox",
     );
     await expect(card).toBeHidden();
@@ -164,7 +164,7 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       .locator(".notes-ask")
       .click();
     await expect(
-      page.getByLabel("Message project").locator(".composer-quote-chip"),
+      page.getByLabel("Message project").locator(".prompt-pill.quote"),
     ).toContainText("3. Optimistic sends");
 
     // Items drop out and move by their grip, numbered again, ticks and all.
@@ -300,8 +300,11 @@ test("keeps lists, selections and an agent's note in the thread's notes, across 
       .getByRole("button", { name: "Quote it in your message", exact: true })
       .click();
     await expect(
-      page.getByLabel("Message project").locator(".composer-quote-chip").last(),
-    ).toHaveAttribute("data-quote", "1. Skip the re-render on every heartbeat");
+      page.getByLabel("Message project").locator(".prompt-pill.quote").last(),
+    ).toHaveAttribute(
+      "data-relay-quote",
+      "1. Skip the re-render on every heartbeat",
+    );
   } finally {
     await app?.close();
     if (root) await rm(root, { recursive: true, force: true, maxRetries: 10 });
@@ -370,8 +373,8 @@ test("pins a whole answer as a pointer that brings you back to it", async () => 
       .getByRole("button", { name: "Point your message at it" })
       .click();
     await expect(
-      page.getByLabel("Message project").locator(".composer-quote-chip"),
-    ).toHaveAttribute("data-quote", "Cache plan");
+      page.getByLabel("Message project").locator(".prompt-pill.quote"),
+    ).toHaveAttribute("data-relay-quote", "Cache plan");
 
     // Pinning it again from the answer unpins it.
     await answer.hover();

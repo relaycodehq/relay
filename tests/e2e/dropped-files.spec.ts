@@ -131,7 +131,7 @@ test("tags a dropped or picked file from outside the project and sends its path"
     await page
       .locator(".project-composer input[type=file]")
       .setInputFiles([rows]);
-    const tags = input.locator(".composer-file-chip");
+    const tags = input.locator(".prompt-pill.file");
     await expect(tags).toHaveText(["Q3 report.pdf", "rows.csv"]);
     await expect(tags.first()).toHaveAttribute("title", report);
     await expect(input).toHaveText("Compare Q3 report.pdf rows.csv ");

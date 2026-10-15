@@ -141,21 +141,17 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await input.fill("Please use $exp");
     await expect(page.getByRole("option", { name: /Explain/ })).toBeVisible();
     await input.press("Tab");
-    await expect(input.locator(".composer-skill-chip")).toContainText(
-      "Explain",
-    );
+    await expect(input.locator(".prompt-pill.skill")).toContainText("Explain");
     await input.press("End");
     await input.press("Backspace");
     await input.press("Backspace");
-    if (await input.locator(".composer-skill-chip").count())
+    if (await input.locator(".prompt-pill.skill").count())
       await input.press("Backspace");
-    await expect(input.locator(".composer-skill-chip")).toHaveCount(0);
+    await expect(input.locator(".prompt-pill.skill")).toHaveCount(0);
     await input.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
-    await expect(input.locator(".composer-skill-chip")).toHaveCount(1);
+    await expect(input.locator(".prompt-pill.skill")).toHaveCount(1);
     await page.reload();
-    await expect(input.locator(".composer-skill-chip")).toContainText(
-      "Explain",
-    );
+    await expect(input.locator(".prompt-pill.skill")).toContainText("Explain");
     await input.fill("/openpr");
     await input.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Create pull request" });

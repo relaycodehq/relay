@@ -123,7 +123,7 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
       .getByRole("button", { name: "Web Store", exact: true })
       .click();
     const input = page.getByLabel("Message project");
-    const pills = input.locator(".composer-image-chip");
+    const pills = input.locator(".prompt-pill.image");
     const strip = page.getByLabel("Attachments").locator(".composer-image");
     await input.click();
     await input.pressSequentially("Make ");
@@ -195,7 +195,7 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     ).toBeVisible();
     // The sent message keeps the pills where the tokens went.
     const message = page.getByRole("article", { name: "Your message" }).last();
-    const sentPills = message.locator(".message-image-chip");
+    const sentPills = message.locator("button.prompt-pill.image");
     await expect(sentPills).toHaveCount(2);
     await expect(message).not.toContainText("[Image #");
     await expect(message.locator(".message-image")).toHaveCount(0);
@@ -279,7 +279,7 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     }, copied!);
     await expect(pills).toHaveCount(2);
     expect(await numbers(pills)).toEqual(["1", "2"]);
-    await expect(input.locator(".composer-image-chip.missing")).toHaveCount(0);
+    await expect(input.locator(".prompt-pill.image.missing")).toHaveCount(0);
     await expect(pills.locator("img")).toHaveCount(2);
     await expect(strip).toHaveCount(3);
     await expect(input).toHaveText(/^What is this\? Make look like/);

@@ -115,7 +115,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     });
     await expect(card).toBeVisible();
     await expect(input).toContainText("Why does the table crash? inline bit");
-    await expect(input.locator(".paste-pill")).toHaveCount(1);
+    await expect(input.locator(".prompt-pill.paste")).toHaveCount(1);
     await paste(page, "\r\n" + trace.replaceAll("\n", "\r\n") + "\r\n");
     await expect(
       page.getByRole("button", { name: "Show Pasted text #2, 240 lines" }),
@@ -128,7 +128,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     await page.reload();
     await expect(card).toBeVisible();
     await expect(input).toContainText("Why does the table crash? inline bit");
-    await expect(input.locator(".paste-pill")).toHaveCount(1);
+    await expect(input.locator(".prompt-pill.paste")).toHaveCount(1);
     await screenshot(page.locator(".project-composer"), {
       path: "test-results/pasted-text-composer.png",
     });

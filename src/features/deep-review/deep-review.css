@@ -554,7 +554,7 @@
 .deep-review-pane-thread .project-message {
   padding: 14px 0 6px;
 }
-.deep-review-pane-thread .project-message.user > .markdown {
+.deep-review-pane-thread .project-message.user > .user-text {
   padding: 8px 12px;
   font-size: 13px;
 }

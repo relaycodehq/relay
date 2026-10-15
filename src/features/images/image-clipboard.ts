@@ -51,7 +51,9 @@ export function messageHtml(text: string, images: CopiedImage[]) {
  * the order they sit in it. One screenshot shown twice (its token repeated)
  * comes back as the same file each time.
  */
-export function copiedImages(html: string): { n?: number; file: File }[] {
+export function copiedImages(
+  html: string,
+): { n?: number; file: File; src: string }[] {
   if (!html.includes(MARK)) return [];
   const doc = new DOMParser().parseFromString(html, "text/html");
   const files = new Map<string, File | undefined>();
@@ -63,14 +65,14 @@ export function copiedImages(html: string): { n?: number; file: File }[] {
       if (!files.has(key)) files.set(key, dataUrlFile(src, name));
       const file = files.get(key);
       const n = Number(img.getAttribute(MARK));
-      return file ? [{ n: n > 0 ? n : undefined, file }] : [];
+      return file ? [{ n: n > 0 ? n : undefined, file, src }] : [];
     },
   );
 }
 
-/** What a sent screenshot pill carries when a selection over it is copied. */
+/** What a screenshot pill carries when a selection over it is copied. */
 export const copiedPill = (n: number, name: string) => ({
-  [MARK]: n,
+  [MARK]: String(n),
   "data-name": name,
   alt: imageToken(n),
 });

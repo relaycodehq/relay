@@ -3,6 +3,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorContent, type Editor } from "@tiptap/react";
+import { DOMSerializer } from "@tiptap/pm/model";
+import { copiedImages } from "../../images/image-clipboard";
+import { showImages } from "./image-pill";
 import { promptContent } from "../prompt-content";
 import { promptText } from "../prompt-text";
 import type { DraftPills } from "../useDraftPills";
@@ -55,4 +58,25 @@ it("says so when a paste doesn't fit the message, instead of dropping it unseen"
   paste(editor(), "c");
   expect(promptText(editor().state.doc).length).toBe(32_000);
   expect(onPasteRefused).toHaveBeenCalledOnce();
+});
+
+it("copies a screenshot pill with its screenshot, so another draft gets the picture too", () => {
+  const editor = mount("look at [Image #1] here", {
+    onChange: () => {},
+    onCursor: () => {},
+  })();
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+  act(() =>
+    showImages(editor, [{ n: 1, name: "shot.png", src: png, bytes: 8 }]),
+  );
+  // What ProseMirror puts on the clipboard as HTML.
+  const html = document.createElement("div");
+  html.append(
+    DOMSerializer.fromSchema(editor.schema).serializeFragment(
+      editor.state.doc.content,
+    ),
+  );
+  expect(
+    copiedImages(html.innerHTML).map(({ n, file, src }) => [n, file.name, src]),
+  ).toEqual([[1, "shot.png", png]]);
 });

@@ -1,7 +1,7 @@
 import { useEditor, type UseEditorOptions } from "@tiptap/react";
 import { closeHistory } from "@tiptap/pm/history";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { pasteIndex } from "../prompt-pills";
+import { pasteIndex, removePill } from "../prompt-pills";
 import { promptText, serialize } from "../prompt-text";
 import { pasteText } from "./edits";
 import type { DraftPills } from "../useDraftPills";
@@ -57,34 +57,28 @@ export function usePromptEditor(
         return true;
       },
       clipboardTextSerializer: (slice) => serialize(slice.content),
-      // The × inside a quote or paste pill removes it; the pill itself stays an atom.
+      // A pill's × removes it; elsewhere a screenshot or paste opens.
       handleClickOn(view, _pos, node, nodePos, event) {
+        if (
+          event.target instanceof Element &&
+          event.target.closest(".prompt-pill-remove")
+        ) {
+          view.dispatch(
+            closeHistory(
+              removePill(view.state.tr, nodePos, node),
+            ).scrollIntoView(),
+          );
+          return true;
+        }
         if (node.type.name === "relayImage") {
           callbacks.current.onOpenImage?.(node.attrs.n);
           return true;
         }
-        if (
-          node.type.name === "relayPaste" &&
-          !(
-            event.target instanceof Element &&
-            event.target.closest(".composer-quote-remove")
-          )
-        ) {
+        if (node.type.name === "relayPaste") {
           callbacks.current.onOpenPaste?.(pasteIndex(view.state.doc, nodePos));
           return true;
         }
-        if (
-          !["relayQuote", "relayPaste"].includes(node.type.name) ||
-          !(event.target instanceof Element) ||
-          !event.target.closest(".composer-quote-remove")
-        )
-          return false;
-        view.dispatch(
-          closeHistory(
-            view.state.tr.delete(nodePos, nodePos + node.nodeSize),
-          ).scrollIntoView(),
-        );
-        return true;
+        return false;
       },
     },
     onUpdate({ editor }) {

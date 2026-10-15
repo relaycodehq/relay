@@ -459,7 +459,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     }, screenshotPng);
     await expect(page.getByLabel("Attachments")).toBeVisible();
     // The screenshot also sits in the text, where the agent reads it as [Image #1].
-    const imagePill = page.locator(".composer-image-chip");
+    const imagePill = page.locator(".prompt-pill.image");
     await expect(imagePill).toHaveText("screen.png");
     await page.reload();
     await expect(page.getByLabel("Attachments")).toBeVisible();
@@ -519,7 +519,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     });
     await quoteOffer.click();
     const composerInput = page.getByLabel("Message project");
-    await expect(composerInput.locator(".composer-quote-chip")).toContainText(
+    await expect(composerInput.locator(".prompt-pill.quote")).toContainText(
       "The cache guard prevents",
     );
     await expect(composerInput).toBeFocused();
@@ -560,12 +560,12 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .toContain(
         "> The cache guard prevents duplicate requests.\n\nWhy is it needed?\n> The cache guard prevents duplicate requests.\n\n",
       );
-    const laterPill = composerInput.locator(".composer-quote-chip").last();
+    const laterPill = composerInput.locator(".prompt-pill.quote").last();
     await laterPill.hover();
-    await laterPill.locator(".composer-quote-remove").click();
-    const quotePill = composerInput.locator(".composer-quote-chip");
+    await laterPill.locator(".prompt-pill-remove").click();
+    const quotePill = composerInput.locator(".prompt-pill.quote");
     await expect(quotePill).toHaveText(
-      '"The cache guard prevents duplicate requ…"',
+      "The cache guard prevents duplicate requ…",
     );
     await quotePill.hover();
     await expect(page.getByRole("tooltip")).toHaveText(
@@ -575,9 +575,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/57-quote-pill.png",
       animations: "disabled",
     });
-    await quotePill.locator(".composer-quote-remove").click();
+    await quotePill.locator(".prompt-pill-remove").click();
     await expect(page.getByRole("tooltip")).toHaveCount(0);
-    await expect(composerInput.locator(".composer-quote-chip")).toHaveCount(0);
+    await expect(composerInput.locator(".prompt-pill.quote")).toHaveCount(0);
     await expect(composerInput).toHaveText("Why is it needed?");
     await composerInput.fill("");
     await expect(page.locator(".agent-run-heading")).toContainText(
