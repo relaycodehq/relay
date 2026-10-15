@@ -224,7 +224,19 @@ export function useComposerDraft(
       setError(
         error instanceof Error ? error.message : "Could not attach screenshot.",
       );
+      // The copied message's words still land, without the pills that
+      // would point at screenshots it didn't bring.
+      if (at.text !== undefined) pasteWords(pastedImages(at.text, [], 0).text);
     }
+  }
+  function pasteWords(words: string) {
+    if (!words.trim()) return;
+    if (shownKey.current !== key || !editor.current) {
+      const now = readDraft(key);
+      writeDraft(key, `${now}${now ? " " : ""}${words}`);
+    } else if (isLongPaste(words) && !pastedTexts(words).length) {
+      if (!editor.current.insertPaste(words)) setError(PASTE_TOO_LONG);
+    } else editor.current.pasteText(words);
   }
   /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
   function addFiles(files: File[], point?: Point) {

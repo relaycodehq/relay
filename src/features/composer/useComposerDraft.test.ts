@@ -258,3 +258,38 @@ it("pastes a copied message's screenshots as pills numbered after the draft's ow
     { id: "strip.png", n: undefined },
   ]);
 });
+
+it("still pastes a copied message's words when its screenshots don't fit", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  const { saveDraftImages } = await import("../images/draft-images");
+  const mine = (n: number) => ({
+    id: `mine${n}.png`,
+    n,
+    name: `mine${n}.png`,
+    mimeType: "image/png" as const,
+    dataUrl: "data:image/png;base64,AAAA",
+  });
+  await saveDraftImages(KEY, [mine(1), mine(2)]);
+  writeDraft(KEY, "Mine: [Image #1] [Image #2]");
+  const pasteText = vi.fn();
+  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  draft().paste({
+    clipboardData: {
+      getData: (type: string) =>
+        type === "text/html"
+          ? JSON.stringify([
+              { n: 1, name: "a.png" },
+              { n: 2, name: "b.png" },
+            ])
+          : "See [Image #1] and [Image #2]",
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  } as never);
+  await settle();
+  expect(draft().error).toBe("Attach up to three screenshots per message.");
+  expect(pasteText).toHaveBeenCalledWith("See  and ");
+});
