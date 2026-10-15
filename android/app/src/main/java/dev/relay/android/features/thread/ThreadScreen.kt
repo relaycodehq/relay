@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import dev.relay.android.ui.dismissKeyboardOnTap
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -88,9 +85,6 @@ private fun isAnswer(m: ChatMessage) =
     m.role == "assistant" && m.compaction != true && m.handoff == null && m.reload == null && m.worktreeCommand == null
 
 private enum class Sheet { Thread, Snooze, Rename, Sides, Agents, Archive }
-
-/** At the bottom within this much, the thread follows new text. */
-private val PIN_SLACK = 48.dp
 
 @Composable
 fun ThreadScreen(
@@ -160,7 +154,6 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     // The desktop took one the thread doesn't show yet: ask for it, again on each acknowledgement.
     val fetchSent = outgoing.mapNotNull { it.sent }.joinToString(":")
     LaunchedEffect(fetchSent) { if (fetchSent.isNotEmpty()) runCatching { model.load() } }
-    val shown = remember(listed) { listed.asReversed() }
     val counts = remember(all) { replyCounts(all) }
     val byId = remember(all) { all.associateBy { it.id } }
     val setupId = if (rootId == null) remember(listed) { latestSetup(listed)?.id } else null
@@ -187,9 +180,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     )
     val agentBatch = runningBatch(agents.runs)
 
-    val list = rememberLazyListState()
-    val slack = with(LocalDensity.current) { PIN_SLACK.roundToPx() }
-    val pinned by remember { derivedStateOf { list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset <= slack } }
+    val earlier = t?.earlier?.takeIf { it > 0 && rootId == null }
+    val scroll = rememberThreadScroll(items = listed.size + if (earlier != null) 2 else 1)
+    // Sending from further up goes back down to it, as on the desktop.
+    val sends = remember { outgoing.mapTo(HashSet()) { it.send.id } }
+    LaunchedEffect(outgoing) { if (outgoing.count { sends.add(it.send.id) } > 0) scroll.toBottom() }
+    val pinned = scroll.pinned
     val started = rememberStartedSlot(remote, id, pinned)
     val display = remember(t?.root) { displayIn(t?.root) }
     // The strip shows the fan-out's agents and stops them; the waiting strip keeps the rest.
@@ -263,19 +259,32 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             onTitleClick = if (line != null) composer::openSettings else null,
             actions = {
                 if (rootId == null) {
-                    ThreadNotesButton(remote, id, summary?.notesMark, shown, list, composer::quote)
+                    ThreadNotesButton(remote, id, summary?.notesMark, listed, composer::quote) { messageId ->
+                        val at = listed.indexOfFirst { it.id == messageId }
+                        if (at >= 0) scope.launch { scroll.show(at + if (earlier != null) 1 else 0) }
+                    }
                     if (projectId != null) CiStatusButton(remote, projectId, id, running)
                     IconButton(TablerIcons.Outline.Dots, "Thread actions", { sheet = Sheet.Thread }, enabled = where != null)
                 }
             },
         ) {
             if (t == null && listed.isEmpty()) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
-            else LazyColumn(Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap(), state = list, reverseLayout = true) {
-                // Never zero high: an empty item isn't "visible", so the newest message would
-                // become the anchor and new ones would land below the fold instead of pinning.
-                item("head") {
+            else LazyColumn(
+                Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap(),
+                state = scroll.list,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                if (earlier != null) item("earlier") { Earlier(earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
+                items(listed, key = { it.id }) { m ->
+                    Column {
+                        MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
+                        if (rootId == null) WorkspaceMoveLine(t?.workspaceMoves, m.id)
+                    }
+                }
+                // Never zero high: an empty item isn't "visible", so the list couldn't tell it's at the bottom.
+                item("end") {
                     Column(Modifier.heightIn(min = 1.dp)) {
-                        val newest = shown.firstOrNull()
+                        val newest = listed.lastOrNull()
                         if (running && newest?.role == "user") AwaitingAnswer(composer.settings?.provider ?: t?.settings?.provider ?: "claude", newest.id)
                         if (canResume) Row(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -293,14 +302,6 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                         if (rootId == null && t != null) Queue(t, running, actions, ::editQueued)
                     }
                 }
-                items(shown, key = { it.id }) { m ->
-                    // One child, so the reversed list keeps the line under its message.
-                    Column {
-                        MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
-                        if (rootId == null) WorkspaceMoveLine(t?.workspaceMoves, m.id)
-                    }
-                }
-                if (t != null && t.earlier > 0 && rootId == null) item("earlier") { Earlier(t.earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
             }
             Strips(t, summary, rootId, running, actions)
             if (rootId == null) SubagentStrip(

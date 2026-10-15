@@ -8,7 +8,6 @@ package dev.relay.android.features.notes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,13 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,12 +51,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Square
 import io.github.lyxnx.compose.ui.tablericons.outline.SquareCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.X
-import kotlinx.coroutines.launch
 
 /**
  * The header's pin and count, nothing while the thread keeps no notes.
- * [messages] and [list] are the thread's: a head row, then [messages] newest
- * first, which a note kept from one of them scrolls to.
+ * [messages] are the thread's shown ones; a note kept from one of them scrolls to it.
  */
 @Composable
 fun ThreadNotesButton(
@@ -67,14 +62,14 @@ fun ThreadNotesButton(
     chatId: String,
     mark: String?,
     messages: List<ChatMessage>,
-    list: LazyListState,
     onQuote: (String) -> Unit,
+    /** Scrolls the thread to the message a note was kept from. */
+    onShow: (messageId: String) -> Unit,
 ) {
     val notes = rememberThreadNotes(remote, chatId, mark) ?: return
     val count = notes.notes.size
     if (count == 0) return
     val c = RelayTheme.colors
-    val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
     Row(
         Modifier.height(ButtonSize.Default.height).clip(Radii.mdShape)
@@ -95,22 +90,11 @@ fun ThreadNotesButton(
             onQuote(text)
         },
         onJump = { id ->
-            val at = messages.indexOfFirst { it.id == id }
-            if (at >= 0) {
-                open = false
-                scope.launch { list.showMessage(at + 1) }
-            }
+            open = false
+            onShow(id)
         },
         onClose = { open = false },
     )
-}
-
-/** Scrolls the reversed thread list to item [index], its top in view when it's taller than the screen. */
-private suspend fun LazyListState.showMessage(index: Int) {
-    animateScrollToItem(index)
-    val item = layoutInfo.visibleItemsInfo.find { it.index == index } ?: return
-    val room = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-    if (item.size > room) animateScrollBy((item.size - room).toFloat())
 }
 
 @Composable
