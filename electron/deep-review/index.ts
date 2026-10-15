@@ -3,7 +3,6 @@
 // stop or continue it; then the lead in the review thread itself, where it
 // fixes findings with the user.
 import { randomUUID } from "node:crypto";
-import { reviewDiff } from "./review-diff";
 import type {
   ChatMessage,
   Project,
@@ -319,21 +318,11 @@ export class DeepReviews {
 
   private async startReviewers(chat: ProjectChat, slots: number[]) {
     const state = chat.deepReview!;
-    let diff: Promise<string> | undefined;
     await startSlots(
       slots,
       async (slot) => {
         const reviewer = state.reviewers[slot]!;
-        const { body } = reviewerTask(
-          reviewer,
-          state.scope,
-          state.focus,
-          reviewer.provider === "cursor"
-            ? await (diff ??= this.host
-                .root(chat.projectId)
-                .then((root) => reviewDiff(root, state.scope)))
-            : undefined,
-        );
+        const { body } = reviewerTask(reviewer, state.scope, state.focus);
         await this.host.send(reviewer.chatId, {
           id: randomUUID(),
           body,

@@ -237,7 +237,8 @@ function segmentReads(segment: string) {
   }
 }
 
-function gitReadsOnly(args: string[]) {
+/** `git` with these arguments, as words after `git`, only reads. */
+export function gitReadsOnly(args: string[]) {
   let i = 0;
   while (args[i] === "--no-pager" || args[i] === "-C")
     i += args[i] === "-C" ? 2 : 1;

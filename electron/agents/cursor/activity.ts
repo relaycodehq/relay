@@ -1,7 +1,7 @@
 import type { AgentActivity } from "../../../shared/projects";
 import { mcpCall } from "../activity";
 
-/** Where the SDK serves custom tools from; Relay's tools are the only ones it hands Cursor (relay-tools.ts). */
+/** Where the SDK serves custom tools from: Relay's tools (relay-tools.ts) and a reviewer's read-only git (git-tool.ts). */
 const CUSTOM_TOOLS_SERVER = "custom-user-tools";
 
 /** A tool call as the worker forwards it: the SDK's, cut down (see `slim` in worker.ts). */
@@ -91,6 +91,9 @@ export function cursorActivity(
       const server = text(call, "providerIdentifier");
       const tool = text(call, "toolName");
       if (!tool || !server) return make("tool", tool || server);
+      const git = call.args?.gitArgs;
+      if (server === CUSTOM_TOOLS_SERVER && Array.isArray(git))
+        return make("command", ["git", ...git].join(" "));
       return {
         ...make("tool", tool),
         ...mcpCall(server === CUSTOM_TOOLS_SERVER ? "relay" : server, tool),

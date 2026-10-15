@@ -75,30 +75,20 @@ function describe(scope: ReviewScope) {
   }
 }
 
-/**
- * What one reviewer is asked to do: each agent's own review where it fits.
- * Cursor's Bugbot can't run Git in a read-only turn, so it gets `diff`.
- */
+/** What one reviewer is asked to do: each agent's own review where it fits. */
 export function reviewerTask(
   reviewer: ReviewAgent,
   scope: ReviewScope,
   focus?: string,
-  diff?: string,
 ): { body: string; codex?: CodexReviewTarget } {
   const asked = reviewerPrompt(reviewer.provider, reviewer.prompt);
   if (asked.kind === "custom")
     return {
-      body: `@${reviewer.provider} ${
-        reviewer.provider === "cursor" && diff !== undefined
-          ? diffPrompt(asked.text, scope, diff, focus)
-          : customPrompt(asked.text, scope, focus)
-      }`,
+      body: `@${reviewer.provider} ${customPrompt(asked.text, scope, focus)}`,
     };
   // A note after the agent's own command reads like the user's focus.
   const note = [focus, asked.note].filter(Boolean).join("\n\n") || undefined;
   const t = scope.target;
-  if (reviewer.provider === "cursor" && diff !== undefined)
-    return { body: `@cursor ${bugbotPrompt(scope, diff, note)}` };
   if (reviewer.provider === "codex") {
     // Codex's review takes a note only as instructions of its own. Its
     // base-branch review diffs its working directory against the base, so
@@ -177,17 +167,6 @@ function customPrompt(text: string, scope: ReviewScope, focus?: string) {
   ].join("\n\n");
 }
 
-function fenced(diff: string) {
-  const fence = "`".repeat(
-    Math.max(3, ...[...diff.matchAll(/`+/g)].map((m) => m[0].length + 1)),
-  );
-  return `${fence}diff\n${diff.trimEnd()}\n${fence}`;
-}
-const notCheckedOut = (scope: ReviewScope) =>
-  fromGit(scope)
-    ? " These changes aren't checked out, so files on disk may not match them."
-    : "";
-
 /** Where the lead's fixes go, when that isn't simply the checkout it works in. */
 function fixesNote(scope: ReviewScope) {
   const c = scope.checkout;
@@ -202,32 +181,6 @@ function fixesNote(scope: ReviewScope) {
   if (fromGit(scope))
     return " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out.";
   return "";
-}
-
-function bugbotPrompt(scope: ReviewScope, diff: string, focus?: string) {
-  return [
-    `/review-bugbot Review ${describe(scope).what}.`,
-    `Bugbot can't run Git here, so the diff is below. Pass it to Bugbot in full as the source of truth for what changed.${notCheckedOut(scope)}`,
-    ...focusNote(focus),
-    fenced(diff),
-  ].join("\n\n");
-}
-
-/** `customPrompt` for Cursor, which reads the changes from the diff. */
-function diffPrompt(
-  text: string,
-  scope: ReviewScope,
-  diff: string,
-  focus?: string,
-) {
-  return [
-    text,
-    `This review covers ${describe(scope).what}. You can't run Git here, so the diff is below; it's the source of truth for what changed.${notCheckedOut(scope)}`,
-    "Don't change any files.",
-    reportFormat,
-    ...focusNote(focus),
-    fenced(diff),
-  ].join("\n\n");
 }
 
 /** How a reviewer's answer reads to the lead. */

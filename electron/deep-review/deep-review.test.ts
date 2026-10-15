@@ -260,9 +260,7 @@ describe("reviewer tasks", () => {
     expect(task.body).toContain("git diff HEAD");
     expect(task.body).toContain('"the queue"');
   });
-  it("hands Cursor's Bugbot the diff, since it can't run Git", () => {
-    const cursor = { provider: "cursor" as const, choice };
-    const diff = "+const md = ```js```;\n";
+  it("asks Cursor with Relay's prompt, which it reads through git", () => {
     const pr = {
       ...scope,
       target: {
@@ -270,12 +268,15 @@ describe("reviewer tasks", () => {
         ref: { owner: "team", name: "app", number: 4 },
       },
     };
-    const { body } = reviewerTask(cursor, pr, "the queue", diff);
-    expect(body).toMatch(/^@cursor \/review-bugbot Review pull request #4/);
-    expect(body).toContain("aren't checked out");
+    const { body } = reviewerTask(
+      { provider: "cursor", choice },
+      pr,
+      "the queue",
+    );
+    expect(body).toMatch(/^@cursor Review pull request #4/);
+    expect(body).toContain(`git diff ${scope.base} ${scope.head}`);
     expect(body).toContain('"the queue"');
-    // A fence longer than any in the diff, so the diff can't close it early.
-    expect(body).toContain("````diff\n+const md = ```js```;\n````");
+    expect(body).not.toMatch(/bugbot|```diff/i);
   });
   it("sends the prompt you picked, with what to review and how to report", () => {
     const uncommitted = { ...scope, target: { kind: "uncommitted" as const } };
@@ -298,16 +299,12 @@ describe("reviewer tasks", () => {
     );
     expect(skill.codex).toBeUndefined();
     expect(skill.body).toMatch(/^@codex \$test-gaps\n\n/);
-    // Your own words, for Cursor, still come with the diff it can't get itself.
     const cursor = reviewerTask(
       { provider: "cursor", choice, prompt: "Only the SQL" },
       uncommitted,
-      undefined,
-      "+select 1;\n",
     );
     expect(cursor.body).toMatch(/^@cursor Only the SQL\n\n/);
-    expect(cursor.body).not.toContain("/review-bugbot");
-    expect(cursor.body).toContain("```diff\n+select 1;\n```");
+    expect(cursor.body).toContain("git diff HEAD");
     // A command that only starts like the agent's own is someone else's.
     expect(
       reviewerTask(
@@ -1146,33 +1143,6 @@ describe("what a review covers", () => {
         project,
       ),
     ).rejects.toThrow("can't find the branch gone");
-  });
-
-  it("diffs uncommitted changes with new files, leaving the index alone", async () => {
-    const { resolveScope } = await import("./scope");
-    const { reviewDiff } = await import("./review-diff");
-    await writeFile(join(work, "a.ts"), "one\nstaged\n");
-    git(work, "add", "a.ts");
-    await writeFile(join(work, "a.ts"), "one\nstaged\nunstaged\n");
-    await writeFile(join(work, "new.ts"), "brand new\n");
-    const status = git(work, "status", "--porcelain");
-    const scope = await resolveScope(work, { kind: "uncommitted" }, project);
-    const diff = await reviewDiff(work, scope);
-    expect(diff).toContain("+staged\n+unstaged");
-    expect(diff).toContain("+++ b/new.ts\n@@ -0,0 +1 @@\n+brand new");
-    expect(git(work, "status", "--porcelain")).toBe(status);
-  });
-
-  it("cuts a diff too long to hand over, listing every file", async () => {
-    const { resolveScope } = await import("./scope");
-    const { reviewDiff, MAX_DIFF } = await import("./review-diff");
-    const line = "x".repeat(99) + "\n";
-    await writeFile(join(work, "big.ts"), line.repeat(MAX_DIFF / 50));
-    await writeFile(join(work, "small.ts"), "tail\n");
-    const scope = await resolveScope(work, { kind: "uncommitted" }, project);
-    const diff = await reviewDiff(work, scope);
-    expect(diff.length).toBeLessThan(MAX_DIFF + 2000);
-    expect(diff).toMatch(/Relay cut the diff here[\s\S]*small\.ts/);
   });
 
   it("covers one commit, by its full id", async () => {

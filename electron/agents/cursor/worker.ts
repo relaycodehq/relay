@@ -15,6 +15,7 @@ import type {
   CursorRunResult,
   CursorUpdate,
 } from "./protocol";
+import { gitTool } from "./git-tool";
 import { relayCustomTools } from "./relay-tools";
 
 type Sdk = typeof import("@cursor/sdk");
@@ -165,9 +166,15 @@ function slim(call: any) {
   if (!call || typeof call !== "object") return call;
   const args: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(call.args ?? {}))
-    // An MCP call's own arguments, like a whole page to show, Relay never reads.
+    // An MCP call's own arguments, like a whole page to show, Relay never
+    // reads, except the read-only git's, which name the command it ran.
     if (!(call.type === "mcp" && name === "args"))
       args[name] = name === "plan" ? value : clip(value);
+    else if (call.args.toolName === "git") {
+      const words = (value as { args?: unknown } | undefined)?.args;
+      if (Array.isArray(words))
+        args.gitArgs = words.map((word) => clip(String(word), 500));
+    }
   const result = call.result;
   return {
     type: call.type,
@@ -270,9 +277,12 @@ async function startWith(
 ): Promise<CursorRunResult> {
   const model = await modelSelection(params);
   const agent = await agentFor(params, model);
-  const customTools = params.relayTools
-    ? await relayCustomTools(params.relayTools, toolCalls)
-    : {};
+  const customTools = {
+    ...(params.relayTools
+      ? await relayCustomTools(params.relayTools, toolCalls)
+      : {}),
+    ...(params.git ? { git: gitTool(params.cwd, toolCalls) } : {}),
+  };
   const message = params.images.length
     ? {
         text: params.prompt,

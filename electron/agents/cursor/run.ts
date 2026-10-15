@@ -24,11 +24,14 @@ import { answerLimitError, guardSteer } from "../turn-kit";
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
   options: Pick<AgentOptions, "runtimeMode" | "readOnly">,
-): Pick<CursorRun, "sandbox" | "autoReview" | "tools"> {
+): Pick<CursorRun, "sandbox" | "autoReview" | "tools" | "git"> {
+  // No `task`: Cursor hands any review to its Bugbot subagent, which ignores
+  // custom tools and guesses the diff from the files under .git.
   if (options.readOnly)
     return {
       sandbox: true,
       autoReview: false,
+      git: true,
       tools: [
         "read",
         "grep",
@@ -40,8 +43,8 @@ export function cursorPolicy(
         "updateTodos",
         "webSearch",
         "webFetch",
-        // Subagents get the same tools, so Bugbot can run for a deep review.
-        "task",
+        // Custom tools, the read-only `git` among them, are MCP tools to the SDK.
+        "mcp",
       ],
     };
   switch (options.runtimeMode) {
@@ -233,7 +236,13 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         "cursor-sandbox",
         "Cursor can't sandbox on this system, so it runs with read-only tools only.",
       );
-    return { ...params, sandbox: false };
+    // The sandbox is what fails the user's own MCP servers closed in a
+    // read-only turn, so without it none of their settings load.
+    return {
+      ...params,
+      sandbox: false,
+      ...(params.tools?.includes("mcp") ? { ambient: false } : {}),
+    };
   };
   /** No run this turn sent is left without the worker's answer. */
   let answered = true;

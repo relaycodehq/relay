@@ -135,7 +135,9 @@ export const agents = {
     cli: "Cursor SDK",
     defaultModel: "Cursor default",
     helper: false,
-    reviewCommand: "/review-bugbot",
+    // Cursor hands `/review` to Bugbot, which can't run git; Relay's prompt
+    // keeps the review with the agent, which reads through a read-only git.
+    reviewCommand: "Relay's review prompt",
     fast: true,
     skills: false,
     commandsAlone: true,

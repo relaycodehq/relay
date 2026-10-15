@@ -490,7 +490,7 @@ describe("Relay's own tools", () => {
     });
   });
 
-  it("aren't given to a read-only reviewer or a helper job", async () => {
+  it("aren't given to a read-only reviewer, which only gets git, or a helper job", async () => {
     await runCursor(
       turn("[[relay]]", { relayTools: relayTools(), readOnly: true }).options,
     );
@@ -501,7 +501,7 @@ describe("Relay's own tools", () => {
       }).options,
     );
     expect((await asked()).map((sent) => sent.sendOptions.customTools)).toEqual(
-      [undefined, undefined],
+      [["git"], undefined],
     );
     expect(calls).toEqual([]);
   });
@@ -583,19 +583,24 @@ describe("what Cursor may do", () => {
     );
   });
 
-  it("gives a read-only turn no shell and no edits at all", async () => {
-    const { tools, sandbox } = cursorPolicy({
+  it("gives a read-only turn no shell, no edits and no Bugbot, but a git that only reads", async () => {
+    const { tools, sandbox, git } = cursorPolicy({
       readOnly: true,
       runtimeMode: "full-access",
     });
     expect(sandbox).toBe(true);
+    expect(git).toBe(true);
     expect(tools).toContain("read");
-    for (const forbidden of ["shell", "edit", "write", "delete", "mcp"])
+    // Custom tools are MCP tools to the SDK.
+    expect(tools).toContain("mcp");
+    for (const forbidden of ["shell", "edit", "write", "delete", "task"])
       expect(tools).not.toContain(forbidden);
 
     const { options } = turn("say hello", { readOnly: true });
     await runCursor(options);
-    expect((await asked())[0].options.tools).toEqual(tools);
+    const [sent] = await asked();
+    expect(sent.options.tools).toEqual(tools);
+    expect(sent.sendOptions.customTools).toEqual(["git"]);
   });
 
   it("passes the limit on to the SDK", async () => {
@@ -648,6 +653,10 @@ describe("where Cursor can't sandbox", () => {
     expect(refused.options.local.sandboxOptions).toEqual({ enabled: true });
     expect(sent.options.local.sandboxOptions).toBeUndefined();
     expect(sent.options.tools).toEqual(cursorPolicy({ readOnly: true }).tools);
+    // Nothing fails the user's own MCP servers closed now, so none load.
+    expect(refused.options.local.settingSources).toBeDefined();
+    expect(sent.options.local.settingSources).toBeUndefined();
+    expect(sent.sendOptions.customTools).toEqual(["git"]);
     expect(seen.commentary.get("cursor-sandbox")).toMatch(
       /can't sandbox.*read-only tools/,
     );
