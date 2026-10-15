@@ -24,3 +24,9 @@ export const branchActionSchema = z
   })
   .strict();
 export type BranchAction = z.infer<typeof branchActionSchema>;
+/** The local branch checking out remote `b` would land on, if it exists. */
+export function localTwin(list: BranchRef[], b: BranchRef) {
+  if (!b.remote) return undefined;
+  const name = b.name.slice(b.name.indexOf("/") + 1);
+  return list.find((l) => !l.remote && l.name === name);
+}

@@ -17,7 +17,7 @@ import { Spinner } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { RebaseConflictCard, resolvePrompt } from "./RebaseConflict";
 import { everythingButFetch, useBranchSync } from "./useBranchSync";
-import type { BranchAction } from "../../../shared/branches";
+import { localTwin, type BranchAction } from "../../../shared/branches";
 import { isGitMissing } from "../../../shared/working-tree";
 import "../projects/projects.css";
 import "./branch-picker.css";
@@ -157,7 +157,10 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                 items={items}
                 filter={null}
                 inputValue={search}
-                onInputValueChange={setSearch}
+                onInputValueChange={(value) => {
+                  setSearch(value);
+                  setError(undefined);
+                }}
                 value={null}
                 onValueChange={(value) => {
                   if (value) void choose(value);
@@ -182,26 +185,31 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                 </div>
                 <div className="headline-project-scroll">
                   <Combobox.List aria-label="Branches">
-                    {matches.map((b) => (
-                      <Combobox.Item
-                        key={b.ref}
-                        value={b.ref}
-                        disabled={pending || (b.worktree && !b.current)}
-                        className="branch-picker-row"
-                        data-current={b.current ? "" : undefined}
-                      >
-                        <MiddleTruncate text={b.name} kind="branch" />
-                        <small>
-                          {b.current
-                            ? "current"
-                            : b.worktree
-                              ? "worktree"
-                              : b.remote
-                                ? "remote"
-                                : ""}
-                        </small>
-                      </Combobox.Item>
-                    ))}
+                    {matches.map((b) => {
+                      // Picking a remote checks out its local twin when there is one.
+                      const own = localTwin(refs.data?.branches ?? [], b) ?? b;
+                      const elsewhere = own.worktree && !own.current;
+                      return (
+                        <Combobox.Item
+                          key={b.ref}
+                          value={b.ref}
+                          disabled={pending || elsewhere}
+                          className="branch-picker-row"
+                          data-current={b.current ? "" : undefined}
+                        >
+                          <MiddleTruncate text={b.name} kind="branch" />
+                          <small>
+                            {b.current
+                              ? "current"
+                              : elsewhere
+                                ? "worktree"
+                                : b.remote
+                                  ? "remote"
+                                  : ""}
+                          </small>
+                        </Combobox.Item>
+                      );
+                    })}
                     {create && (
                       <Combobox.Item
                         value="create"

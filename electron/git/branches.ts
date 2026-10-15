@@ -1,5 +1,6 @@
 import { git } from "./git";
 import { gitOperation, serializeRepo } from "./working-tree";
+import { localTwin } from "../../shared/branches";
 import type { BranchAction, BranchList } from "../../shared/branches";
 /** The branches work usually merges into: origin's HEAD, then the usual names. */
 export async function baseCandidates(root: string) {
@@ -121,17 +122,15 @@ export async function changeBranch(root: string, action: BranchAction) {
       const target = state.branches.find((b) => b.ref === action.name);
       if (!target)
         throw new Error("This branch no longer exists. Refresh and try again.");
-      if (target.current) return state;
-      if (target.worktree)
+      // A remote whose local branch exists means that branch, like `git switch`.
+      const branch = localTwin(state.branches, target) ?? target;
+      if (branch.current) return state;
+      if (branch.worktree)
         throw new Error("This branch is checked out in another worktree.");
-      if (target.remote) {
-        const local = target.name.slice(target.name.indexOf("/") + 1);
-        if (state.branches.some((b) => !b.remote && b.name === local))
-          throw new Error(
-            "A local branch with this name already exists. Select the local branch instead.",
-          );
-        await git(root, ["switch", "--track", "-c", local, target.ref]);
-      } else await git(root, ["switch", "--no-guess", "--", target.name]);
+      if (branch.remote) {
+        const local = branch.name.slice(branch.name.indexOf("/") + 1);
+        await git(root, ["switch", "--track", "-c", local, branch.ref]);
+      } else await git(root, ["switch", "--no-guess", "--", branch.name]);
     }
     return branches(root);
   });

@@ -95,6 +95,18 @@ it("creates a tracking branch for a remote ref and skips symbolic remote HEAD", 
   ).toBe("remote-feature");
   expect(git("config", "branch.remote-feature.remote")).toBe("origin");
 });
+it("switches to the local branch a picked remote already has, unless another worktree holds it", async () => {
+  git("remote", "add", "origin", "/unused");
+  git("update-ref", "refs/remotes/origin/feature", "HEAD");
+  expect((await run("switch", "refs/remotes/origin/feature")).current).toBe(
+    "feature",
+  );
+  git("switch", "main");
+  git("worktree", "add", join(root, "second"), "feature");
+  await expect(run("switch", "refs/remotes/origin/feature")).rejects.toThrow(
+    /another worktree/,
+  );
+});
 
 it("offers origin's default branch first as the base to merge into", async () => {
   const sha = git("rev-parse", "HEAD");
