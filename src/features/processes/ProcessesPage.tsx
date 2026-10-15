@@ -78,6 +78,9 @@ export function ProcessesPage({
     () => (localStorage.getItem("relay-processes-order") as Order) ?? "mb",
   );
   const [stopping, setStopping] = useState<Set<string>>(new Set());
+  // "Nothing that started it" can be a tmux server or a tunnel the user
+  // started in the folder, so stopping them all asks first.
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
   const query = useQuery({
     queryKey: ["process-overview"],
@@ -131,12 +134,12 @@ export function ProcessesPage({
           <p>{overview ? summaryLine(overview) : "Looking…"}</p>
         </div>
         <div className="pr-tools">
-          {leftBehind.length > 0 && (
+          {leftBehind.length > 0 && !confirming && (
             <button
               type="button"
               className="pr-stop-all"
               title={leftBehind.map((l) => l.entry.title).join("\n")}
-              onClick={() => void stop(leftBehind)}
+              onClick={() => setConfirming(true)}
             >
               Stop {leftBehind.length} left running
             </button>
@@ -161,6 +164,43 @@ export function ProcessesPage({
           </div>
         </div>
       </header>
+      {confirming && leftBehind.length > 0 && (
+        <div
+          className="pr-confirm"
+          role="group"
+          aria-label="Stop what's left running"
+        >
+          <p>Stop these? Each one is ended, its own processes with it.</p>
+          <ul>
+            {leftBehind.map(({ entry }) => (
+              <li key={entry.id}>
+                <strong>{entry.title}</strong>
+                {entry.leftBehind && (
+                  <span className="muted">
+                    {" "}
+                    · {leftBehindText[entry.leftBehind]}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="pr-confirm-buttons">
+            <button type="button" onClick={() => setConfirming(false)}>
+              Keep them
+            </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => {
+                setConfirming(false);
+                void stop(leftBehind);
+              }}
+            >
+              Stop {leftBehind.length}
+            </button>
+          </div>
+        </div>
+      )}
       {error && <ErrorBox error={error} />}
       {query.error ? (
         <ErrorBox error={query.error} />

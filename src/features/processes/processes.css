@@ -62,6 +62,33 @@
   padding: 0 12px;
   font-size: 12px;
 }
+.pr-confirm {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.pr-confirm p {
+  margin: 0 0 8px;
+}
+.pr-confirm ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow: auto;
+}
+.pr-confirm li {
+  line-height: 1.6;
+}
+.pr-confirm strong {
+  font-weight: 500;
+}
+.pr-confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .pr-empty,
 .pr-note {
   color: var(--muted);
