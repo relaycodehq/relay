@@ -88,6 +88,8 @@ export function useThreadFolder({
   return {
     /** Workspace id: the checkout, or the thread's worktree. */
     where,
+    /** Relay watches the folder and refreshes its tree and listings on a change. */
+    watched,
     /** For pane headers: which worktree they show. */
     detail: away
       ? {
@@ -125,6 +127,11 @@ function useTreeWatch(where: string | null) {
       missed = false;
       void qc.invalidateQueries(
         { queryKey: workingTreeKey(where), exact: true },
+        { cancelRefetch },
+      );
+      // The Files pane's open folders; closed ones wait until they show.
+      void qc.invalidateQueries(
+        { queryKey: directoryKey(where) },
         { cancelRefetch },
       );
     };

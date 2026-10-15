@@ -108,6 +108,7 @@ type Selection =
 export function ProjectFiles({
   project,
   where,
+  watched,
   checks,
   onViewing,
   opens,
@@ -115,6 +116,8 @@ export function ProjectFiles({
   project: Project;
   /** Workspace id: the checkout, or the thread's worktree. */
   where: string;
+  /** The shell refreshes its listings when the folder changes. */
+  watched: boolean;
   /** Owned by the shell, which shows the status in the title bar. */
   checks: ChecksController;
   onViewing: (v: Viewing) => void;
@@ -261,6 +264,7 @@ export function ProjectFiles({
         ) : (
           <FileTree
             where={where}
+            watched={watched}
             title={project.name}
             selected={selection?.path ?? null}
             lockedPath={
@@ -370,6 +374,7 @@ export function ProjectFiles({
           dir={selection?.path ?? ""}
           title={project.name}
           lead={listToggle}
+          watched={watched}
           onOpen={(path, kind) => select({ kind, path })}
         />
       )}

@@ -45,6 +45,7 @@ export function FileTree({
   selected,
   lockedPath,
   expansion,
+  watched,
   onSelect,
   onMoved,
   onTrashed,
@@ -56,13 +57,19 @@ export function FileTree({
   /** The file with unsaved edits: it and the folders around it stay as they are. */
   lockedPath: string | null;
   expansion: ReturnType<typeof useExpanded>;
+  /** The shell refreshes open folders when the checkout changes. */
+  watched: boolean;
   onSelect: (path: string, kind: "file" | "dir") => void;
   onMoved: (from: string, to: string) => void;
   onTrashed: (path: string) => void;
   onCreated: (path: string, kind: "file" | "dir") => void;
 }) {
   const queryClient = useQueryClient();
-  const directories = useDirectories(where, expansion.expanded);
+  const directories = useDirectories(
+    where,
+    expansion.expanded,
+    watched,
+  );
   const rows = useMemo(
     () => treeRows(directories.listing, expansion.expanded),
     [directories.listing, expansion.expanded],

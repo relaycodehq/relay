@@ -59,14 +59,25 @@ export function useExpanded(where: string) {
   };
 }
 
+/**
+ * How often a shown folder is listed again. Watched, the shell refreshes it
+ * when the folder changes, and the slow poll catches what the watch skips,
+ * as a change only inside node_modules.
+ */
+export const listingPoll = (watched: boolean) => (watched ? 60_000 : 5000);
+
 /** The root and every open folder, listed from disk and refreshed while shown. */
-export function useDirectories(where: string, open: ReadonlySet<string>) {
+export function useDirectories(
+  where: string,
+  open: ReadonlySet<string>,
+  watched: boolean,
+) {
   const dirs = ["", ...open];
   return useQueries({
     queries: dirs.map((dir) => ({
       queryKey: directoryKey(where, dir),
       queryFn: () => api.projectDirectory(where, dir),
-      refetchInterval: 5000,
+      refetchInterval: listingPoll(watched),
       retry: false,
     })),
     combine: (results) => ({

@@ -204,7 +204,7 @@ export function ThreadChanges({
 export function ThreadPanel({
   project,
   chatId,
-  folder: { where, detail, checks, gone, deleted },
+  folder: { where, watched, detail, checks, gone, deleted },
   view,
   opens,
   panel,
@@ -348,6 +348,7 @@ export function ThreadPanel({
               key={where}
               project={project}
               where={where}
+              watched={watched}
               checks={checks}
               onViewing={filesViewing}
               opens={opens.fileOpens}

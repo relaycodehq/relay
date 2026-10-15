@@ -21,6 +21,7 @@ import type { ChatSummary, Project } from "../../../shared/projects";
 import type { ProjectTask, TaskKind } from "../../../shared/tasks";
 import { api } from "../../lib/api";
 import { useChatWidth } from "../../lib/chat-width";
+import { useWindowFocused } from "../../lib/window-focus";
 import "./running-tasks.css";
 
 const icons: Record<TaskKind, typeof Globe> = {
@@ -107,10 +108,14 @@ export function RunningTasks({
   const collapsed = roomy ? folded : !peeking;
   const [busy, setBusy] = useState<Map<string, "stop" | "restart">>(new Map());
   const [error, setError] = useState<string>();
+  // Each look reads the system's whole process list: on Windows, through WMI,
+  // a look every 3 s costs ~4% of a core. Behind other windows a task can
+  // show up to 30 s later; back in front, within 3 s.
+  const focused = useWindowFocused();
   const tasks = useQuery({
     queryKey: ["project-tasks", project.id],
     queryFn: () => api.projectTasks(project.id),
-    refetchInterval: 3000,
+    refetchInterval: focused ? 3000 : 30_000,
   });
   const list = tasks.data ?? [];
   if (!list.length) return null;

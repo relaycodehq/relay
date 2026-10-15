@@ -16,7 +16,7 @@ import {
 } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import { formatSize, joinPath } from "../../lib/file-tree";
-import { directoryKey } from "./useFileTree";
+import { directoryKey, listingPoll } from "./useFileTree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { EditorPath } from "./EditorPath";
@@ -93,6 +93,7 @@ export function FolderView({
   dir,
   title,
   lead,
+  watched,
   onOpen,
 }: {
   where: string;
@@ -100,6 +101,8 @@ export function FolderView({
   /** The project's name, for the root. */
   title: string;
   lead?: ReactNode;
+  /** The shell refreshes the folder when it changes (see `listingPoll`). */
+  watched: boolean;
   onOpen: (path: string, kind: "file" | "dir") => void;
 }) {
   const [error, setError] = useState<unknown>();
@@ -110,7 +113,7 @@ export function FolderView({
   const listing = useQuery({
     queryKey: directoryKey(where, dir),
     queryFn: () => api.projectDirectory(where, dir),
-    refetchInterval: 5000,
+    refetchInterval: listingPoll(watched),
     retry: false,
   });
   const entries = listing.data?.entries ?? [];
