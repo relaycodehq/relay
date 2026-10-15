@@ -79,11 +79,15 @@ export function CompactionRow({
         {m.status === "streaming"
           ? m.compactedCold
             ? "Cache went cold, compacting context first…"
-            : "Compacting context…"
+            : m.compactedIdle
+              ? "Compacting while idle, before the cache goes cold…"
+              : "Compacting context…"
           : m.status === "complete"
             ? m.compactedCold
               ? "Cache went cold, context compacted"
-              : "Context compacted"
+              : m.compactedIdle
+                ? "Compacted while idle, before the cache went cold"
+                : "Context compacted"
             : m.status === "cancelled"
               ? "Compaction stopped"
               : (m.error ?? "Compaction failed")}

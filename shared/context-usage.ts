@@ -36,3 +36,41 @@ export function compactsCold(usage: ContextUsage, now: number) {
     usage.usedTokens >= COLD_COMPACT_TOKENS
   );
 }
+
+/**
+ * How long before its cache expires an idle conversation compacts, so the
+ * compaction itself still reads the context from the cache.
+ */
+export const IDLE_COMPACT_LEAD_MS = 5 * 60_000;
+/** A cache this short would compact a thread the moment you looked away. */
+const IDLE_COMPACT_MIN_TTL_MS = 20 * 60_000;
+
+/**
+ * When a conversation this big compacts while idle, before its cache goes
+ * cold; undefined when it is too small, its cache too short-lived or already
+ * cold, or its newest answer is a compaction.
+ */
+export function idleCompactAt(
+  messages: ChatMessage[],
+  now: number,
+): number | undefined {
+  const held = latestContext(messages);
+  const newest = messages
+    .filter(
+      (m) =>
+        m.role === "assistant" && !m.side && !m.reload && !m.worktreeCommand,
+    )
+    .at(-1);
+  const cache = held?.usage.cache;
+  if (
+    !held ||
+    !cache ||
+    newest?.compaction ||
+    newest?.provider !== held.provider ||
+    cache.ttlMs < IDLE_COMPACT_MIN_TTL_MS ||
+    held.usage.usedTokens < COLD_COMPACT_TOKENS ||
+    now >= cache.at + cache.ttlMs - 60_000
+  )
+    return undefined;
+  return cache.at + cache.ttlMs - IDLE_COMPACT_LEAD_MS;
+}

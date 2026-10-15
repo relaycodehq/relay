@@ -48,6 +48,7 @@ import { assertHere, ComputerHandoff } from "./handoff";
 import { LiveHandoff } from "./handoff-live";
 import { ChatQueue } from "./queue";
 import { LimitResumes } from "./limit-resume";
+import { IdleCompactions } from "./idle-compact";
 import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
@@ -80,6 +81,7 @@ export class ProjectChats {
   private active: ActiveTurns;
   private schedule: ChatSchedule;
   private limits: LimitResumes;
+  private idle: IdleCompactions;
   private titles: ThreadTitles;
   private worktrees: ThreadWorktrees;
   private cleanup: WorktreeCleanup;
@@ -161,6 +163,19 @@ export class ProjectChats {
     this.limits = new LimitResumes(core, {
       resume: (id) => this.turns.resumeHeld(id),
     });
+    this.idle = new IdleCompactions(core, {
+      summary: (chat) => {
+        try {
+          return this.threads
+            .list(chat.projectId)
+            .find((c) => c.id === chat.id);
+        } catch {
+          return undefined;
+        }
+      },
+      busy: (chat) => this.councils.busy(chat),
+      compact: (id) => this.turns.compactNow(id, undefined, undefined, "idle"),
+    });
     this.titles = new ThreadTitles(core);
     this.worktrees = new ThreadWorktrees(core, worktrees, this.councils);
     this.cleanup = new WorktreeCleanup(
@@ -219,7 +234,10 @@ export class ProjectChats {
       this.councils,
       this.queue,
       evidence,
-      (id) => this.triaging.ended(id),
+      (id) => {
+        void this.idle.arm(id);
+        return this.triaging.ended(id);
+      },
     );
   }
   /**
@@ -340,10 +358,14 @@ export class ProjectChats {
   stopPending(id: string, pendingId: string) {
     return this.schedule.stopPending(id, pendingId);
   }
-  /** Arms the wake-ups kept when Relay last closed, scheduled messages and resumes after a limit. */
+  /**
+   * Arms the wake-ups kept when Relay last closed, scheduled messages,
+   * resumes after a limit and compactions of idle conversations.
+   */
   armWakeups() {
     this.schedule.armAll();
     this.limits.armAll();
+    this.idle.armAll();
   }
   /** Turns off carrying on the answer a usage limit stopped, or back on. */
   setLimitResume(id: string, on: boolean) {
@@ -1016,6 +1038,7 @@ export class ProjectChats {
     this.disposing = true;
     this.schedule.stop();
     this.limits.stop();
+    this.idle.stop();
     try {
       await this.worktrees.setup.stop();
       if (!detach) {
@@ -1055,6 +1078,7 @@ export class ProjectChats {
     this.disposing = false;
     this.schedule.armAll();
     this.limits.armAll();
+    this.idle.armAll();
   }
 
   /** Commit teardown only after preparation, or an explicit discard. */

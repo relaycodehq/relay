@@ -526,8 +526,9 @@ export class TurnRunner {
       // A stopped answer ended when it was stopped, not when its agent let go.
       ended.ended = answer.stopped ? (ended.ended ?? Date.now()) : Date.now();
       // A finished answer is new activity: it reorders the thread and can
-      // unsettle it. Snoozed threads stay hidden until their wake time.
-      chat.updated = ended.ended;
+      // unsettle it. Snoozed threads stay hidden until their wake time. A
+      // compaction while you were away isn't news, and leaves a read thread read.
+      if (!ended.compactedIdle) chat.updated = ended.ended;
       if (committed) chat.committedAt = ended.ended;
       await this.host.keepShown(chat, ended);
       answer.end();

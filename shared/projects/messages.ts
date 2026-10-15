@@ -95,6 +95,8 @@ export interface ChatMessage {
   compactedFrom?: number;
   /** Local: Relay compacted before a message because the prompt cache had gone cold. */
   compactedCold?: true;
+  /** Local: Relay compacted an idle conversation just before its prompt cache expired. */
+  compactedIdle?: true;
   handoff?: AgentHandoff;
   reload?: SessionReload;
   worktreeCommand?: WorktreeCommandRun;

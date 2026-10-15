@@ -765,7 +765,7 @@ const answeredLongAgo = async (cacheAge: number) => {
 const shape = async (id: string) =>
   (await chats.get(id)).messages.map((m) =>
     m.compaction
-      ? `compaction${m.compactedCold ? " (cold)" : ""}`
+      ? `compaction${m.compactedCold ? " (cold)" : ""}${m.compactedIdle ? " (idle)" : ""}`
       : `${m.role}:${m.body.slice(0, 12)}`,
   );
 it("compacts a big conversation whose cache went cold before the next message", async () => {
@@ -799,6 +799,25 @@ it("sends straight away while the conversation's cache is still warm", async () 
     "user:@codex Go on",
     expect.stringMatching(/^assistant:/),
   ]);
+});
+it("compacts a big unread conversation just before its cache goes cold, without bumping the thread", async () => {
+  const chat = await answeredLongAgo(57 * 60_000);
+  const before = await chats.get(chat.id);
+  chats.armWakeups();
+  await vi.waitFor(
+    async () => {
+      expect(await shape(chat.id)).toEqual([
+        "user:@codex Expla",
+        expect.stringMatching(/^assistant:/),
+        "compaction (idle)",
+      ]);
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+    },
+    { timeout: 10_000 },
+  );
+  expect((await chats.get(chat.id)).updated).toBe(before.updated);
 });
 /** The Codex turns asked for `body`, by the fixture's record of them. */
 const turnsAsking = async (body: string) =>

@@ -851,7 +851,7 @@ export class ChatTurns {
       return false;
     await this.queue.add(id, { ...input, delivery: undefined });
     try {
-      await this.compactNow(id, parentId, undefined, true);
+      await this.compactNow(id, parentId, undefined, "cold");
     } catch (e) {
       console.warn("Could not compact the cold conversation first:", e);
       await this.queue.drain(id);
@@ -863,7 +863,8 @@ export class ChatTurns {
     id: string,
     parentId?: string,
     instructions?: string,
-    cold = false,
+    /** Relay compacted unasked: the cache went cold, or was about to while idle. */
+    unasked?: "cold" | "idle",
   ) {
     if (this.core.active.has(id))
       throw new Error("Wait for the current answer before compacting.");
@@ -886,7 +887,8 @@ export class ChatTurns {
     const message = streamingAnswer(provider, {
       compaction: true,
       ...(before ? { compactedFrom: before } : {}),
-      ...(cold && { compactedCold: true as const }),
+      ...(unasked === "cold" && { compactedCold: true as const }),
+      ...(unasked === "idle" && { compactedIdle: true as const }),
       ...(parentId ? { parentId } : {}),
     });
     chat.messages.push(message);
