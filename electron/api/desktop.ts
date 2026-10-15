@@ -110,9 +110,23 @@ export function desktopHandlers(ctx: ApiContext) {
     setSidebarShown: takes([z.boolean(), z.boolean()], (shown, toggled) =>
       window.fitSidebar(shown, toggled),
     ),
-    writeClipboard: takes([textSchema], async (text) => {
-      await clipboard.writeText(text);
-    }),
+    // With `html`, apps that take it get that instead: a message's screenshots ride along in it.
+    writeClipboard: takes(
+      [
+        textSchema,
+        z
+          .string()
+          .max(64 * 1024 * 1024)
+          .optional(),
+      ],
+      async (text, html) => {
+        await (html
+          ? clipboard.write([
+              new ClipboardItem({ "text/plain": text, "text/html": html }),
+            ])
+          : clipboard.writeText(text));
+      },
+    ),
     writeClipboardImage: takes(
       [
         z

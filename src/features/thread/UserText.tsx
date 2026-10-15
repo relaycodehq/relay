@@ -10,6 +10,7 @@ import {
 } from "../../../shared/image-refs";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
+import { copiedPill } from "../images/image-clipboard";
 import { PastedTextPill } from "../composer/PastedTextCard";
 import { RichText } from "../../ui/RichText";
 import { skillMentions, type SentSkill } from "../../../shared/skill-mentions";
@@ -166,7 +167,11 @@ function ImagePill({
         }
       >
         {source ? (
-          <img className="composer-image-chip-thumb" src={source} alt="" />
+          <img
+            className="composer-image-chip-thumb"
+            src={source}
+            {...copiedPill(n, image.name)}
+          />
         ) : (
           <span className="composer-image-chip-thumb" aria-hidden="true" />
         )}

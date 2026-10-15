@@ -409,6 +409,7 @@ export const Message = memo(function Message({
           <CopyMessageButton
             className="message-copy"
             text={text.trim()}
+            images={sentImages}
             label="Copy message"
           />
         )}

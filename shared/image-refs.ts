@@ -92,6 +92,35 @@ export function imagesAfter<T>(text: string, images: T[], after: number) {
   };
 }
 
+/**
+ * Text pasted with the screenshots it was copied with, into a draft that
+ * numbers up to `after`: those its tokens name are numbered on from there in
+ * token order, the rest go unnumbered, and a token whose screenshot didn't
+ * come along goes, so it can't point at one of the draft's own.
+ */
+export function pastedImages<T extends Numbered>(
+  text: string,
+  carried: T[],
+  after: number,
+) {
+  const named = imageRefs(text).filter((n) => carried.some((c) => c.n === n));
+  const next = new Map(named.map((n, i) => [n, after + i + 1]));
+  // Two messages copied together can both have an #1; the first one keeps it.
+  const taken = new Set<number>();
+  return {
+    text: replaceTokens(text, (n) => {
+      const to = next.get(n);
+      return to ? imageToken(to) : "";
+    }),
+    images: carried.map((image) => {
+      const n = image.n === undefined ? undefined : next.get(image.n);
+      if (n === undefined || taken.has(n)) return { ...image, n: undefined };
+      taken.add(n);
+      return { ...image, n };
+    }),
+  };
+}
+
 /** A name nobody chose: a clipboard paste, or a macOS screenshot's timestamp. */
 export const isPastedImageName = (name: string) =>
   /^(image|screenshot)(\.\w+)?$|^screenshot \d{4}-\d\d-\d\d at /i.test(name);

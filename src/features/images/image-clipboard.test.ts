@@ -1,0 +1,32 @@
+// @vitest-environment happy-dom
+import { expect, it } from "vitest";
+import { copiedImages, messageHtml } from "./image-clipboard";
+
+const png = "data:image/png;base64,iVBORw0KGgo=";
+
+it("carries a message's screenshots through its HTML, each with its token", async () => {
+  const html = messageHtml("a <b> & [Image #2]\nthen [Image #9]", [
+    { n: 2, name: 'say "cheese".png', src: png },
+    { n: 3, name: "image.png", src: png },
+  ]);
+  // The text stays text; a token without a screenshot stays as written.
+  expect(html).toContain("a &lt;b&gt; &amp; <img");
+  expect(html).toContain("<br>then [Image #9]");
+  const copied = copiedImages(html);
+  expect(copied.map(({ n, file }) => [n, file.name, file.type])).toEqual([
+    [2, 'say "cheese".png', "image/png"],
+    [3, "image.png", "image/png"],
+  ]);
+  expect([...new Uint8Array(await copied[0].file.arrayBuffer())]).toEqual([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+});
+
+it("finds nothing in HTML from elsewhere, or in a marked image that isn't data", () => {
+  expect(
+    copiedImages('<p>hi <img src="https://example.com/a.png"></p>'),
+  ).toEqual([]);
+  expect(
+    copiedImages('<img data-relay-image="1" src="https://example.com/a.png">'),
+  ).toEqual([]);
+});

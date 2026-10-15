@@ -33,8 +33,10 @@ import {
   imageToken,
   nextImageNumber,
   onlyImageTokens,
+  pastedImages,
 } from "../../../shared/image-refs";
 import { droppedImage } from "../images/image-drag";
+import { copiedImages } from "../images/image-clipboard";
 import { useImagePills } from "../images/image-pills";
 import type { Sketch, SketchHistory } from "../images/sketch";
 
@@ -50,6 +52,8 @@ export interface DraftEditor {
   insertImages: (ns: number[], point?: Point) => void;
   /** Drops every pill for screenshot n. */
   removeImage: (n: number) => void;
+  /** Puts copied text in at the caret, over any selection, its tokens as pills. */
+  pasteText: (text: string) => void;
   /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
   insertPaste: (text: string) => boolean;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
@@ -143,18 +147,27 @@ export function useComposerDraft(
   }, [key]);
   // Screenshots pasted while others are still being prepared wait their turn,
   // so each batch counts the ones before it.
-  function addImages(files: File[], point?: Point) {
-    if (!files.length) return;
+  function queueImages(attach: () => Promise<void>) {
     batches.current++;
     setPreparing(true);
     setError(undefined);
-    preparation.current = preparation.current
-      .then(() => attachImages(files, point))
-      .finally(() => {
-        if (!--batches.current) setPreparing(false);
-      });
+    preparation.current = preparation.current.then(attach).finally(() => {
+      if (!--batches.current) setPreparing(false);
+    });
   }
-  async function attachImages(files: File[], point?: Point) {
+  function addImages(files: File[], point?: Point) {
+    const arriving = files.map((file) => ({ file }));
+    if (arriving.length) queueImages(() => attachImages(arriving, { point }));
+  }
+  /**
+   * Screenshots arrive as files, each getting a pill where the pointer is or
+   * at the caret, or with the `text` of a message they were copied from,
+   * whose tokens say where their pills go.
+   */
+  async function attachImages(
+    files: { file: File; n?: number }[],
+    at: { point?: Point; text?: string },
+  ) {
     try {
       const existing = await (shownKey.current === key
         ? imageQueue.current
@@ -168,28 +181,44 @@ export function useComposerDraft(
       // A pill only means something next to words; pasted into a draft with
       // none, the screenshot just sits in the strip. Without a pill it has no
       // number, so it always goes along.
-      const inText = imagePills && !onlyImageTokens(text);
-      const prepared = (await Promise.all(files.map(prepareScreenshot))).map(
-        (image, i) => (inText ? { ...image, n: first + i } : image),
+      const inText = imagePills && !onlyImageTokens(`${text} ${at.text ?? ""}`);
+      const prepared = await Promise.all(
+        files.map(({ file }) => prepareScreenshot(file)),
       );
+      const placed =
+        at.text === undefined
+          ? {
+              text: undefined,
+              images: prepared.map((image, i) =>
+                inText ? { ...image, n: first + i } : image,
+              ),
+            }
+          : pastedImages(
+              at.text,
+              prepared.map((image, i) => ({
+                ...image,
+                n: inText ? files[i].n : undefined,
+              })),
+              first - 1,
+            );
       // Screenshots whose pills were deleted make room here, not on undo.
-      const next = [...kept, ...prepared];
+      const next = [...kept, ...placed.images];
       await saveDraftImages(key, next);
-      const ns = prepared.flatMap((image) => image.n ?? []);
+      const ns = placed.images.flatMap((image) => image.n ?? []);
       // Kept for the thread it was pasted in, even once another one shows.
       if (shownKey.current === key) {
         imageQueue.current = Promise.resolve(next);
         setImages(next);
       }
-      if (shownKey.current === key && editor.current)
-        editor.current.insertImages(ns, point);
-      else if (ns.length) {
+      const added = placed.text ?? ns.map(imageToken).join(" ");
+      if (shownKey.current === key && editor.current) {
+        if (placed.text === undefined)
+          editor.current.insertImages(ns, at.point);
+        else editor.current.pasteText(placed.text);
+      } else if (added) {
         // Navigation clears the editor ref; its tokens must still be saved.
         const now = readDraft(key);
-        writeDraft(
-          key,
-          `${now}${now ? " " : ""}${ns.map(imageToken).join(" ")}`,
-        );
+        writeDraft(key, `${now}${now ? " " : ""}${added}`);
       }
     } catch (error) {
       setError(
@@ -308,6 +337,15 @@ export function useComposerDraft(
       );
     },
     paste(event: ClipboardEvent) {
+      // A message copied in Relay brings its screenshots in its HTML.
+      const copied = copiedImages(event.clipboardData.getData("text/html"));
+      if (copied.length) {
+        event.preventDefault();
+        event.stopPropagation();
+        const text = cleanPaste(event.clipboardData.getData("text/plain"));
+        queueImages(() => attachImages(copied, { text }));
+        return;
+      }
       const files = event.clipboardData.files.length
         ? Array.from(event.clipboardData.files)
         : Array.from(event.clipboardData.items)

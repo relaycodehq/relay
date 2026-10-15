@@ -1,10 +1,9 @@
 import { useEditor, type UseEditorOptions } from "@tiptap/react";
-import { Slice } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { pastesAfter } from "../../../../shared/pasted-texts";
 import { pasteIndex } from "../prompt-pills";
 import { promptText, serialize } from "../prompt-text";
+import { pasteText } from "./edits";
 import type { DraftPills } from "../useDraftPills";
 import { promptExtensions } from "./extensions";
 
@@ -51,15 +50,7 @@ export function usePromptEditor(
         if (event.clipboardData?.files.length) return false;
         const plain = event.clipboardData?.getData("text/plain");
         if (plain === undefined) return false;
-        // A pill copied within the draft, or from another, gets a new number.
-        const fragment = view.state.schema.nodeFromJSON(
-          pills.content(pastesAfter(promptText(view.state.doc), plain)),
-        ).firstChild!.content;
-        view.dispatch(
-          view.state.tr
-            .replaceSelection(new Slice(fragment, 0, 0))
-            .scrollIntoView(),
-        );
+        pasteText(view, pills, plain);
         return true;
       },
       clipboardTextSerializer: (slice) => serialize(slice.content),

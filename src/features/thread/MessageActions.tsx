@@ -1,10 +1,14 @@
 import { Check, Copy, Reply, Split } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { sentLabel } from "../../../shared/chat-activity";
 import { answerSpeed, type Streamed } from "../../../shared/usage";
 import { formatCost } from "../../../shared/thread-cost";
 import { useCopy } from "../../lib/useCopy";
 import { PinMessageButton } from "../../ui/KeepBlock";
 import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
+import { imageQuery } from "../images/ImagePreview";
+import { messageHtml } from "../images/image-clipboard";
+import type { SentImage } from "./UserText";
 
 const speedDetail = (s: Streamed) =>
   `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
@@ -84,21 +88,41 @@ export function MessageActions({
 
 export function CopyMessageButton({
   text,
+  images = [],
   label,
   className,
 }: {
   text: string;
+  /** A sent message's screenshots, in the order its tokens number them. */
+  images?: SentImage[];
   label: string;
   className?: string;
 }) {
   const [copied, copy] = useCopy();
+  const qc = useQueryClient();
+  // The screenshots go along as HTML, so pasting into a draft brings them too.
+  const html = async () => {
+    if (!images.length) return undefined;
+    const sources = await Promise.all(
+      images.map(({ preview }) =>
+        qc.query(imageQuery(preview)).catch(() => undefined),
+      ),
+    );
+    return messageHtml(
+      text,
+      images.flatMap(({ image }, i) => {
+        const src = sources[i];
+        return src ? [{ n: i + 1, name: image.name, src }] : [];
+      }),
+    );
+  };
   return (
     <button
       type="button"
       className={className}
       title={copied ? "Copied" : label}
       aria-label={copied ? "Copied" : label}
-      onClick={() => copy(text)}
+      onClick={() => void html().then((html) => copy(text, html))}
     >
       {copied ? <Check size={15} /> : <Copy size={15} />}
     </button>

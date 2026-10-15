@@ -1,6 +1,10 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
+import { Slice } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
+import { pastesAfter } from "../../../../shared/pasted-texts";
+import type { DraftPills } from "../useDraftPills";
 import {
   deleteImagePills,
   lastPaste,
@@ -113,6 +117,17 @@ export function insertQuote(editor: Editor, text: string) {
         attrs: { text },
       })
       .run(),
+  );
+}
+
+/** Puts pasted text in over the selection, with the pills it names. */
+export function pasteText(view: EditorView, pills: DraftPills, text: string) {
+  // A pill copied within the draft, or from another, gets a new number.
+  const fragment = view.state.schema.nodeFromJSON(
+    pills.content(pastesAfter(promptText(view.state.doc), text)),
+  ).firstChild!.content;
+  view.dispatch(
+    view.state.tr.replaceSelection(new Slice(fragment, 0, 0)).scrollIntoView(),
   );
 }
 

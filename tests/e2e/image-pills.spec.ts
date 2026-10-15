@@ -237,6 +237,52 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     await expect(pills).toHaveCount(0);
     await page.keyboard.type("What is this?");
     await expect(pills).toHaveCount(0);
+
+    // Copying the sent message brings its screenshots along: pasted back,
+    // they're pills with pictures, numbered after the draft's own.
+    await app.evaluate(({ clipboard }) => {
+      clipboard.write = async ([item]) => {
+        const copied: Record<string, string> = {};
+        for (const type of item.types)
+          copied[type] = await ((await item.getType(type)) as Blob).text();
+        (globalThis as { copied?: typeof copied }).copied = copied;
+      };
+    });
+    await message.hover();
+    await message.getByRole("button", { name: "Copy message" }).click();
+    let copied: Record<string, string> | undefined;
+    await expect
+      .poll(async () => {
+        copied = await app!.evaluate(
+          () => (globalThis as { copied?: Record<string, string> }).copied,
+        );
+        return copied;
+      })
+      .toBeTruthy();
+    expect(copied!["text/plain"]).toBe(
+      "Make look like [Image #1] and [Image #2]",
+    );
+    await input.focus();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" ");
+    await input.evaluate((element, copied) => {
+      const clipboard = new DataTransfer();
+      for (const [type, data] of Object.entries(copied))
+        clipboard.setData(type, data);
+      element.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: clipboard,
+        }),
+      );
+    }, copied!);
+    await expect(pills).toHaveCount(2);
+    expect(await numbers(pills)).toEqual(["1", "2"]);
+    await expect(input.locator(".composer-image-chip.missing")).toHaveCount(0);
+    await expect(pills.locator("img")).toHaveCount(2);
+    await expect(strip).toHaveCount(3);
+    await expect(input).toHaveText(/^What is this\? Make look like/);
   } finally {
     await app?.close();
     await fixture.close();

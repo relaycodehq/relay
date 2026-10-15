@@ -1,0 +1,70 @@
+import { imageToken } from "../../../shared/image-refs";
+import { dataUrlFile } from "./image-drag";
+
+/**
+ * A screenshot copied along with the text it sits in. `n` is its token in
+ * that text; without one it went with the message but had no pill.
+ */
+export interface CopiedImage {
+  n?: number;
+  name: string;
+  /** A data URL. */
+  src: string;
+}
+
+const MARK = "data-relay-image";
+const escaped = (text: string) =>
+  text.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
+  );
+const tag = (image: CopiedImage) =>
+  `<img ${MARK}="${image.n ?? ""}" data-name="${escaped(image.name)}" alt="${escaped(image.name)}" src="${escaped(image.src)}">`;
+
+/**
+ * A sent message as HTML, each screenshot where its token was and any without
+ * one after the text. The composer reads the screenshots back out of it on
+ * paste; other apps show them inline.
+ */
+export function messageHtml(text: string, images: CopiedImage[]) {
+  const placed = new Set<number>();
+  const body = text
+    .split(/(\[Image #\d+\])/)
+    .map((part, i) => {
+      if (i % 2) {
+        const n = Number(part.slice(8, -1));
+        const image = images.find((image) => image.n === n);
+        if (image) {
+          placed.add(n);
+          return tag(image);
+        }
+      }
+      return escaped(part).replace(/\n/g, "<br>");
+    })
+    .join("");
+  const rest = images.filter((image) => !placed.has(image.n ?? 0));
+  return `<div>${body}${rest.length ? "<br>" : ""}${rest.map(tag).join("")}</div>`;
+}
+
+/** The screenshots copied HTML carries, as files, with the token each had. */
+export function copiedImages(html: string): { n?: number; file: File }[] {
+  if (!html.includes(MARK)) return [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return [...doc.querySelectorAll<HTMLImageElement>(`img[${MARK}]`)].flatMap(
+    (img) => {
+      const file = dataUrlFile(
+        img.getAttribute("src") ?? "",
+        img.dataset.name || "image.png",
+      );
+      const n = Number(img.getAttribute(MARK));
+      return file ? [{ n: n > 0 ? n : undefined, file }] : [];
+    },
+  );
+}
+
+/** What a sent screenshot pill carries when a selection over it is copied. */
+export const copiedPill = (n: number, name: string) => ({
+  [MARK]: n,
+  "data-name": name,
+  alt: imageToken(n),
+});

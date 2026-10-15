@@ -28,7 +28,8 @@ export function droppedImage(data: DataTransfer): File | undefined {
   return dataUrlFile(uri, "Image");
 }
 
-function dataUrlFile(url: string, name: string) {
+/** A data-URL image as a file; undefined for anything else. */
+export function dataUrlFile(url: string, name: string) {
   const match = /^data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(url);
   if (!match) return undefined;
   const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));

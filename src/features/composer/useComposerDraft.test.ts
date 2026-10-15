@@ -48,6 +48,16 @@ vi.mock("../images/draft-images", () => ({
     }),
 }));
 
+// Stands in for the HTML a copied message carries; image-clipboard reads the real thing.
+vi.mock("../images/image-clipboard", () => ({
+  copiedImages: (html: string) =>
+    html
+      ? (JSON.parse(html) as { n?: number; name: string }[]).map(
+          ({ n, name }) => ({ n, file: { name } as File }),
+        )
+      : [],
+}));
+
 const store = new Map<string, string>();
 beforeEach(() => {
   store.clear();
@@ -205,4 +215,46 @@ it("hears a screenshot completed by a composer that was closed and reopened", as
   writeDraft(KEY, "Look at this screenshot [Image #1]");
   await settle();
   expect(draft().attached.map((image) => image.id)).toEqual(["late.png"]);
+});
+
+it("pastes a copied message's screenshots as pills numbered after the draft's own", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  const { saveDraftImages } = await import("../images/draft-images");
+  await saveDraftImages(KEY, [
+    {
+      id: "mine.png",
+      n: 1,
+      name: "mine.png",
+      mimeType: "image/png",
+      dataUrl: "data:image/png;base64,AAAA",
+    },
+  ]);
+  writeDraft(KEY, "Mine: [Image #1]");
+  const pasteText = vi.fn();
+  const editor = { current: { pasteText } as unknown as DraftEditor };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  const event = {
+    clipboardData: {
+      getData: (type: string) =>
+        type === "text/html"
+          ? JSON.stringify([
+              { n: 1, name: "theirs.png" },
+              { name: "strip.png" },
+            ])
+          : "Theirs: [Image #1]\r\n",
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  };
+  draft().paste(event as never);
+  expect(event.preventDefault).toHaveBeenCalled();
+  await settle();
+  expect(pasteText).toHaveBeenCalledWith("Theirs: [Image #2]");
+  expect(saved.get(KEY)?.map(({ id, n }) => ({ id, n }))).toEqual([
+    { id: "mine.png", n: 1 },
+    { id: "theirs.png", n: 2 },
+    { id: "strip.png", n: undefined },
+  ]);
 });

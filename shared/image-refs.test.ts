@@ -6,6 +6,7 @@ import {
   nextImageNumber,
   numberImages,
   onlyImageTokens,
+  pastedImages,
   shortImageName,
 } from "./image-refs";
 import { pasteMarkdown } from "./pasted-texts";
@@ -57,6 +58,16 @@ it("restores a sent message's images after the draft's own", () => {
   expect(back.images.map((i) => i.n)).toEqual([4, 5]);
   // A message from before pills keeps its images unnumbered, so still attached.
   expect(imagesAfter("plain", [shot("z")], 3).images[0].n).toBeUndefined();
+});
+
+it("numbers a copied message's screenshots after the draft's own, dropping tokens that came without one", () => {
+  const out = pastedImages(
+    "[Image #2] beats [Image #1], unlike [Image #3]",
+    [shot("a", 1), shot("b", 2), shot("loose"), shot("next message's", 1)],
+    1,
+  );
+  expect(out.text).toBe("[Image #2] beats [Image #3], unlike ");
+  expect(out.images.map((i) => i.n)).toEqual([3, 2, undefined, undefined]);
 });
 
 it("shortens long names in the middle, keeping the extension", () => {
