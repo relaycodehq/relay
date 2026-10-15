@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
-  ChartColumn,
-  Cpu,
   GitPullRequest,
   Plus,
   Search,
@@ -309,22 +307,6 @@ export function ProjectSidebar({
                 <GitPullRequest size={15} />
                 Pull requests
               </button>
-              <button
-                className={`sb-nav-item ${usage ? "selected" : ""}`}
-                aria-current={usage ? "page" : undefined}
-                onClick={onUsage}
-              >
-                <ChartColumn size={15} />
-                Usage
-              </button>
-              <button
-                className={`sb-nav-item ${processes ? "selected" : ""}`}
-                aria-current={processes ? "page" : undefined}
-                onClick={onProcesses}
-              >
-                <Cpu size={15} />
-                Processes
-              </button>
             </nav>
             {takesProject(filter, SCRATCHPAD) && (
               <Scratchpad
@@ -388,6 +370,8 @@ export function ProjectSidebar({
         chatId={chatId}
         usage={usage}
         onUsage={onUsage}
+        processes={processes}
+        onProcesses={onProcesses}
         onSettings={onSettings}
       />
     </div>
