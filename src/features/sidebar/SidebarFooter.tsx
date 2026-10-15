@@ -1,5 +1,12 @@
 import { useRef } from "react";
-import { ChartColumn, Cpu, Settings2 } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
+import {
+  ChartColumn,
+  Cpu,
+  Ellipsis,
+  GitPullRequest,
+  Settings2,
+} from "lucide-react";
 import { DevRestartButton } from "../updates/DevRestartButton";
 import { DevCheckoutLabel } from "./DevSwitchMenu";
 import { ClockifyTimer } from "../plugins/ClockifyTimer";
@@ -8,15 +15,18 @@ import { IconButton } from "../../ui/ui";
 import { RunningVersion } from "../updates/RunningVersion";
 import { UpdateToasts } from "../updates/UpdateToasts";
 import { useFooterFit } from "./useFooterFit";
+import { MenuAction, MenuPopup } from "./SidebarMenu";
 
 /**
- * The version, the time tracker, Usage, Processes and Settings under the sidebar, with
- * Relay's and the agents' updates rising above them.
+ * The version, the time tracker and global navigation under both sidebar views,
+ * with Relay's and the agents' updates rising above them.
  */
 export function SidebarFooter({
   projectId,
   projectName,
   chatId,
+  inbox,
+  onInbox,
   usage,
   onUsage,
   processes,
@@ -26,6 +36,9 @@ export function SidebarFooter({
   projectId: string | undefined;
   projectName: string | undefined;
   chatId: string | undefined;
+  /** Whether the Pull requests page is showing. */
+  inbox?: boolean;
+  onInbox: () => void;
   /** Whether the Usage page is showing. */
   usage?: boolean;
   onUsage?: () => void;
@@ -50,15 +63,47 @@ export function SidebarFooter({
           chatId={chatId}
           onSetUp={() => onSettings("integrations")}
         />
-        <IconButton label="Usage" active={usage} onClick={onUsage}>
-          <ChartColumn size={15} />
-        </IconButton>
-        <IconButton label="Processes" active={processes} onClick={onProcesses}>
-          <Cpu size={15} />
-        </IconButton>
+        <button
+          type="button"
+          className={`icon-button ${inbox ? "active" : ""}`}
+          title="Pull requests"
+          aria-label="Pull requests"
+          aria-current={inbox ? "page" : undefined}
+          onClick={onInbox}
+        >
+          <GitPullRequest size={15} />
+        </button>
         <IconButton label="Open settings" onClick={() => onSettings()}>
           <Settings2 size={15} />
         </IconButton>
+        <span className="sb-footer-separator" aria-hidden="true" />
+        <Menu.Root>
+          <Menu.Trigger
+            className={`icon-button sb-footer-more ${usage || processes ? "active" : ""}`}
+            aria-label="More tools"
+            title="More tools"
+          >
+            <Ellipsis size={15} />
+          </Menu.Trigger>
+          <MenuPopup side="top" align="end" sideOffset={8}>
+            <MenuAction
+              icon={<ChartColumn size={15} />}
+              aria-current={usage ? "page" : undefined}
+              disabled={!onUsage}
+              onClick={onUsage}
+            >
+              Usage
+            </MenuAction>
+            <MenuAction
+              icon={<Cpu size={15} />}
+              aria-current={processes ? "page" : undefined}
+              disabled={!onProcesses}
+              onClick={onProcesses}
+            >
+              Processes
+            </MenuAction>
+          </MenuPopup>
+        </Menu.Root>
       </div>
     </div>
   );

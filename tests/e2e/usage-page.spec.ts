@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 
-test("Usage closes from its back button and from the sidebar entry that opened it", async () => {
+test("Usage closes from its back button and from the sidebar menu that opened it", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-usage-"))),
     repo = join(root, "project");
   const git = (...args: string[]) =>
@@ -45,14 +45,21 @@ test("Usage closes from its back button and from the sidebar entry that opened i
       .getByRole("dialog", { name: "Add a project", exact: true })
       .getByRole("option", { name: "Choose in Finder…", exact: true })
       .click();
-    const usage = page.getByRole("button", { name: "Usage", exact: true });
+    const more = page
+      .locator(".sb-footer")
+      .getByRole("button", { name: "More tools", exact: true });
+    const openUsage = async () => {
+      await more.click();
+      await page.getByRole("menuitem", { name: "Usage", exact: true }).click();
+      await expect(page.getByRole("menu")).toBeHidden();
+    };
     const heading = page.getByRole("heading", { name: "Usage", level: 1 });
     const project = page
       .locator(".project-window-title")
       .getByText("Project", { exact: true });
     await expect(project).toBeVisible();
 
-    await usage.first().click();
+    await openUsage();
     await expect(heading).toBeVisible();
     await page
       .locator(".project-titlebar")
@@ -61,9 +68,9 @@ test("Usage closes from its back button and from the sidebar entry that opened i
     await expect(heading).toBeHidden();
     await expect(project).toBeVisible();
 
-    await usage.first().click();
+    await openUsage();
     await expect(heading).toBeVisible();
-    await usage.first().click();
+    await openUsage();
     await expect(heading).toBeHidden();
     await expect(project).toBeVisible();
   } finally {

@@ -1,11 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Bell,
-  GitPullRequest,
-  Plus,
-  Search,
-} from "lucide-react";
+import { Bell, Plus, Search } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type {
   AgentProvider,
@@ -302,16 +297,6 @@ export function ProjectSidebar({
           />
         ) : (
           <>
-            <nav className="sb-nav">
-              <button
-                className={`sb-nav-item ${inbox ? "selected" : ""}`}
-                aria-current={inbox ? "page" : undefined}
-                onClick={onInbox}
-              >
-                <GitPullRequest size={15} />
-                Pull requests
-              </button>
-            </nav>
             {takesProject(filter, SCRATCHPAD) && (
               <Scratchpad
                 chats={all.filter((c) => scratchIds.has(c.projectId))}
@@ -372,6 +357,8 @@ export function ProjectSidebar({
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
         chatId={chatId}
+        inbox={inbox}
+        onInbox={onInbox}
         usage={usage}
         onUsage={onUsage}
         processes={processes}

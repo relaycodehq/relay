@@ -137,35 +137,6 @@
   scrollbar-width: thin;
 }
 
-/* Primary navigation. */
-.sb-nav {
-  display: grid;
-  gap: 1px;
-  margin-bottom: 14px;
-}
-.sb .sb-nav-item {
-  display: flex;
-  justify-content: flex-start;
-  gap: 10px;
-  width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  font-size: 12.5px;
-  color: var(--text);
-}
-.sb .sb-nav-item > svg {
-  color: var(--muted);
-}
-.sb .sb-nav-item:hover:not(:disabled) {
-  background: var(--hover);
-}
-.sb .sb-nav-item.selected {
-  background: var(--selected);
-}
-.sb .sb-nav-item.selected > svg {
-  color: var(--accent);
-}
-
 .sb-section-heading {
   display: flex;
   align-items: center;
@@ -489,7 +460,6 @@
 .sb-card[data-popup-open]:not(.selected) {
   background: color-mix(in srgb, var(--hover) 60%, transparent);
 }
-.sb-nav,
 .sb-thread-list,
 .sb-cards,
 .sb-shelf-list {
@@ -1420,6 +1390,17 @@
    fits. The tooltips keep the full words. */
 .sb-footer[data-fit~="1"] .sb-version {
   display: none;
+}
+.sb-footer-separator {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--border);
+}
+.sb-footer-more[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
 }
 /* Pushes the rest of the footer right, even before the version is known. */
 .sb .sb-version {
