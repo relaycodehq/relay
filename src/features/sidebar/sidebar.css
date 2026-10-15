@@ -1161,23 +1161,39 @@
 }
 
 /* Snoozed / settled shelves, on the sidebar's floor while the cards leave
-   room and right after them once they don't. */
+   room. Once they don't, their headers stay pinned there, stacked, and the
+   cards scroll under them. */
 .sb-activity {
+  --shelf-head: 38px;
+  --shelf-floor: 14px;
   display: flex;
   flex-direction: column;
+  padding-bottom: 0;
 }
-.sb-shelves {
+.sb-shelf-toggle.first {
   margin-top: auto;
 }
-.sb-shelf {
-  margin-top: 14px;
+.sb-shelf-floor {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex: none;
+  height: var(--shelf-floor);
+  background: var(--sidebar);
 }
 .sb .sb-shelf-toggle {
+  /* Above the headers after it (--after) and the floor. */
+  position: sticky;
+  bottom: calc(var(--shelf-floor) + var(--after, 0) * var(--shelf-head));
+  z-index: 1;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 4px 6px 4px 10px;
+  height: var(--shelf-head);
+  padding: 14px 6px 4px 10px;
+  background: var(--sidebar);
   color: var(--muted);
   font-size: 11.5px;
 }

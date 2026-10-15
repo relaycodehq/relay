@@ -1,6 +1,6 @@
 // The sidebar's Activity view: drafts and open threads as cards, Snoozed
-// and Settled folded away at the bottom.
-import { Fragment } from "react";
+// and Settled folded away at the bottom, their headers pinned there.
+import { Fragment, useRef, type CSSProperties } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   Check,
@@ -42,6 +42,7 @@ import {
   useDraftSend,
 } from "./DraftCard";
 import { useCardSlide } from "./useCardSlide";
+import { reducedMotion } from "../../lib/slide-row";
 import { ProjectBadge } from "../projects/ProjectBadge";
 import {
   ThreadRename,
@@ -97,6 +98,8 @@ export function ActivityView({
   const draftOf = new Map(
     drafts.flatMap((d) => (d.chat ? [[d.chat.id, d] as const] : [])),
   );
+  const snoozed = sections.snoozed;
+  const settled = sections.settled.filter((c) => !families.headers.has(c.id));
   return (
     <>
       <div ref={list} className={`sb-cards ${hints ? "shortcuts" : ""}`}>
@@ -184,22 +187,24 @@ export function ActivityView({
           <p>Threads come back here when an agent replies or needs you.</p>
         </div>
       )}
-      <div className="sb-shelves">
-        <Shelf
-          kind="snoozed"
-          label="Snoozed"
-          items={sections.snoozed}
-          rows={rows}
-          shelves={shelves}
-        />
-        <Shelf
-          kind="settled"
-          label="Settled"
-          items={sections.settled.filter((c) => !families.headers.has(c.id))}
-          rows={rows}
-          shelves={shelves}
-        />
-      </div>
+      <Shelf
+        kind="snoozed"
+        label="Snoozed"
+        items={snoozed}
+        after={settled.length ? 1 : 0}
+        rows={rows}
+        shelves={shelves}
+      />
+      <Shelf
+        kind="settled"
+        label="Settled"
+        items={settled}
+        after={0}
+        first={!snoozed.length}
+        rows={rows}
+        shelves={shelves}
+      />
+      <div className="sb-shelf-floor" />
     </>
   );
 }
@@ -481,28 +486,41 @@ function SettledLead({
 
 type ShelfKind = "snoozed" | "settled";
 
-/** Snoozed or Settled, folded under Activity's cards. */
+/**
+ * Snoozed or Settled under Activity's cards. Its header and list sit straight
+ * in the sidebar's scroller, so the header can stay pinned to the floor while
+ * the cards scroll, `after` headers up from it.
+ */
 function Shelf({
   kind,
   label,
   items,
+  after,
+  first = true,
   rows,
   shelves,
 }: {
   kind: ShelfKind;
   label: string;
   items: ChatSummary[];
+  after: number;
+  first?: boolean;
   rows: SidebarRows;
   shelves: Shelves;
 }) {
   const shown = shelves.shown[kind];
+  const opening = useRef(false);
   if (!items.length) return null;
   return (
-    <section className="sb-shelf">
+    <>
       <button
-        className="sb-shelf-toggle"
+        className={`sb-shelf-toggle ${first ? "first" : ""}`}
+        style={{ "--after": after } as CSSProperties}
         aria-expanded={shelves.open[kind]}
-        onClick={() => shelves.toggle(kind)}
+        onClick={() => {
+          opening.current = !shelves.open[kind];
+          shelves.toggle(kind);
+        }}
       >
         <span>
           {label} <b>{items.length}</b>
@@ -511,7 +529,13 @@ function Shelf({
         <ChevronRight size={12} />
       </button>
       {shelves.open[kind] && (
-        <div className="sb-shelf-list">
+        <div
+          className="sb-shelf-list"
+          ref={(list) => {
+            if (list && opening.current) revealShelf(list);
+            opening.current = false;
+          }}
+        >
           {items.slice(0, shown).map((c) => (
             <CompactRow key={c.id} chat={c} kind={kind} rows={rows} />
           ))}
@@ -527,8 +551,39 @@ function Shelf({
           )}
         </div>
       )}
-    </section>
+    </>
   );
+}
+
+/**
+ * Scrolls a shelf just opened from its pinned header into view: as much of
+ * its list as fits above the headers pinned below it, its own header no
+ * higher than the top.
+ */
+function revealShelf(list: HTMLElement) {
+  const scroller = list.parentElement;
+  const header = list.previousElementSibling;
+  if (!scroller || !(header instanceof HTMLElement)) return;
+  let pinned = 0;
+  for (let at = list.nextElementSibling; at; at = at.nextElementSibling)
+    if (
+      at instanceof HTMLElement &&
+      at.matches(".sb-shelf-toggle, .sb-shelf-floor")
+    )
+      pinned += at.offsetHeight;
+  const top =
+    list.getBoundingClientRect().top -
+    scroller.getBoundingClientRect().top +
+    scroller.scrollTop;
+  const to = Math.min(
+    top + list.offsetHeight - (scroller.clientHeight - pinned),
+    top - header.offsetHeight,
+  );
+  if (to > scroller.scrollTop)
+    scroller.scrollTo({
+      top: to,
+      behavior: reducedMotion() ? "auto" : "smooth",
+    });
 }
 
 /** A shelved thread: when it wakes or how long since it settled. */
