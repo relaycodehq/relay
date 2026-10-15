@@ -5,11 +5,7 @@ import { z } from "zod";
 import type { DevServerState } from "../../shared/preview";
 import { HostedChild } from "../agent-host/child";
 import type { Entry } from "../agent-host/protocol";
-import {
-  foundSessions,
-  inAgentHost,
-  savedMeta,
-} from "../agents/hosted-sessions";
+import { foundSessions, inAgentHost, savedMeta } from "../agents";
 import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";

@@ -178,5 +178,10 @@ export async function forgetRegistryRuntime(provider: RegistryProvider) {
   registryRuntimes.delete(provider);
 }
 
-export { hostAgents } from "./hosted-sessions";
+export {
+  foundSessions,
+  hostAgents,
+  inAgentHost,
+  savedMeta,
+} from "./hosted-sessions";
 export { setOpenCodeEnvRoot } from "./opencode/worktree-env";
