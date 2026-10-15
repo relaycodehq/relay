@@ -101,7 +101,12 @@ function Strip({ picker }: { picker: MemePickerState }) {
               onMouseMove={() => picker.setActive(i)}
               onClick={() => picker.pick(m)}
             >
-              <MemePicture url={m.url!} name={m.name} play={i === active} />
+              <MemePicture
+                url={m.url!}
+                name={m.name}
+                caption={m.caption}
+                play={i === active}
+              />
             </button>
           ))}
         </div>

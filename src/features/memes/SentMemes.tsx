@@ -4,7 +4,9 @@ import { MemePicture } from "./MemePicture";
 import { useMemes } from "./useMemes";
 import "./memes.css";
 
-type SentMeme = Pick<MemeView, "id" | "name" | "meaning"> & { url: string };
+type SentMeme = Pick<MemeView, "id" | "name" | "meaning" | "caption"> & {
+  url: string;
+};
 
 /**
  * The memes in a sent message that this computer has pictures of, and the
@@ -16,16 +18,21 @@ export function useSentMemes(text: string | undefined) {
   return useMemo(() => {
     if (!text || !tokens.length) return { memes: [], rest: text };
     const pictures = new Map(
-      memes.data?.memes.flatMap((m) => (m.url ? [[m.id, m.url]] : [])),
+      memes.data?.memes.flatMap((m) => (m.url ? [[m.id, m]] : [])),
     );
     const shown: SentMeme[] = [];
     let rest = "",
       at = 0;
     for (const t of tokens) {
-      const url = pictures.get(t.id);
-      if (!url) continue;
-      const name = memes.data?.memes.find((m) => m.id === t.id)?.name ?? t.id;
-      shown.push({ id: t.id, name, meaning: t.meaning, url });
+      const m = pictures.get(t.id);
+      if (!m?.url) continue;
+      shown.push({
+        id: t.id,
+        name: m.name,
+        meaning: t.meaning,
+        url: m.url,
+        ...(m.caption && { caption: m.caption }),
+      });
       rest += text.slice(at, t.start);
       at = t.end;
     }
@@ -43,8 +50,13 @@ function Sent({ meme }: { meme: SentMeme }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <MemePicture url={meme.url} name={meme.name} play={hover} />
-      <figcaption>{meme.name}</figcaption>
+      <MemePicture
+        url={meme.url}
+        name={meme.name}
+        caption={meme.caption}
+        play={hover}
+      />
+      {!meme.caption && <figcaption>{meme.name}</figcaption>}
     </figure>
   );
 }

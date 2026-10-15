@@ -83,6 +83,7 @@ export class Memes {
           name: memeName(m),
           meaning: m.meaning,
           ...(m.find && { find: m.find }),
+          ...(m.caption && { caption: m.caption }),
           ...(file && { url: mediaUrl(file) }),
         };
       }),

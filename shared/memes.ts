@@ -31,6 +31,8 @@ export const memeEntrySchema = z
     page: z.url().optional(),
     /** The image file itself. */
     image: z.url().optional(),
+    /** Words Relay writes across the bottom, for a picture without its line. */
+    caption: z.string().trim().min(1).max(80).optional(),
   })
   .loose();
 export type MemeEntry = z.infer<typeof memeEntrySchema>;
@@ -49,6 +51,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Yes, go ahead and do it.",
     find: 'Emperor Palpatine saying "Do it" in Star Wars: Revenge of the Sith',
     image: "https://i.imgflip.com/u3u78.jpg",
+    caption: "Dew it.",
   },
   {
     id: "perhaps",
@@ -57,6 +60,7 @@ export const builtInMemes: BuiltIn[] = [
     find: 'The "Perhaps" cow (Otis from Barnyard)',
     image:
       "https://i.kym-cdn.com/photos/images/newsfeed/001/785/838/937.png",
+    caption: "Perhaps.",
   },
   {
     id: "hello-there",
@@ -64,6 +68,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Hello! Let's get started.",
     find: "Obi-Wan Kenobi, Star Wars",
     page: kym("hello-there"),
+    caption: "Hello there.",
   },
   {
     id: "same-picture",
@@ -131,6 +136,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Now the fun part starts.",
     find: "Anakin Skywalker, Star Wars",
     page: kym("this-is-where-the-fun-begins"),
+    caption: "This is where the fun begins.",
   },
   {
     id: "kowalski-analysis",
@@ -164,6 +170,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Are you sure about that? Double-check it.",
     find: "John Cena",
     page: kym("are-you-sure-about-that"),
+    caption: "Are you sure about that?",
   },
   {
     id: "well-yes-but-actually-no",
@@ -197,12 +204,14 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "No, we don't do that here.",
     find: "T'Challa, Black Panther",
     page: kym("we-dont-do-that-here"),
+    caption: "We don't do that here.",
   },
   {
     id: "why-are-you-running",
     name: "Why are you running?",
     meaning: "Why are you doing that? Slow down.",
     page: kym("why-are-you-running"),
+    caption: "Why are you running?",
   },
   {
     id: "stop-it-get-some-help",
@@ -210,6 +219,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Stop, that's too much.",
     find: "Michael Jordan",
     page: kym("stop-it-get-some-help"),
+    caption: "Stop it. Get some help.",
   },
   {
     id: "once-again-asking",
@@ -236,6 +246,7 @@ export const builtInMemes: BuiltIn[] = [
     name: "This is fine",
     meaning: "Things are on fire, but let's keep going.",
     page: kym("this-is-fine"),
+    caption: "This is fine.",
   },
   {
     id: "here-we-go-again",
@@ -282,6 +293,7 @@ export const builtInMemes: BuiltIn[] = [
     meaning: "Hacky, but it works.",
     find: "Dave Chappelle",
     page: kym("modern-problems-require-modern-solutions"),
+    caption: "Modern problems require modern solutions.",
   },
   {
     id: "perfectly-balanced",
@@ -440,6 +452,8 @@ export interface MemeView {
   meaning: string;
   /** Who or what it shows, which a search finds it by too. */
   find?: string;
+  /** Written across the bottom of the picture. */
+  caption?: string;
   /** Where the window shows its picture from; none until it's downloaded. */
   url?: string;
 }
@@ -464,7 +478,9 @@ export function memeSetupPrompt(state: Pick<MemesState, "folder" | "list" | "mem
     "",
     `Download the picture of each meme below into that folder as <id>.<ext>, where ext is jpg, png, gif or webp by what the file really is. Check each download is a picture (for example with \`file\`) and delete anything that isn't. Some sites only send the picture with a browser user agent and \`Accept: */*\`.`,
     "",
-    "When a link doesn't work, or a meme has none, search the web for the classic version of that meme (its Know Your Meme or Tenor page is usually best), download it, and put the link you used in memes.json as its `page` or `image`. Change nothing else in memes.json and nothing outside the folder.",
+    "When a link doesn't work, or a meme has none, search the web for the classic version of that meme (its Know Your Meme or Tenor page is usually best), download it, and put the link you used in memes.json as its `page` or `image`.",
+    "",
+    "Relay writes a meme's `caption` across the bottom of its picture, so for one with a `caption`, get a still without words on it. A meme known by its line (like \"Hello there\") has to show it: if the picture you got doesn't, set that meme's `caption` to the line. Change nothing else in memes.json and nothing outside the folder.",
     "",
     `Memes to get (${missing.length}): ${missing.map((m) => m.id).join(", ")}`,
     "",

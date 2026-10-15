@@ -26,19 +26,31 @@ function Still({ url, alt }: { url: string; alt: string }) {
   return <canvas ref={canvas} role="img" aria-label={alt} />;
 }
 
-/** A meme's picture; a GIF moves only while `play`. */
+/** A meme's picture, with its caption on it; a GIF moves only while `play`. */
 export function MemePicture({
   url,
   name,
+  caption,
   play,
 }: {
   url: string;
   name: string;
+  caption?: string;
   play: boolean;
 }) {
-  return isGif(url) && !play ? (
-    <Still url={url} alt={name} />
-  ) : (
-    <img src={url} alt={name} draggable={false} />
+  const picture =
+    isGif(url) && !play ? (
+      <Still url={url} alt={name} />
+    ) : (
+      <img src={url} alt={name} draggable={false} />
+    );
+  if (!caption) return picture;
+  return (
+    <span className="meme-art">
+      {picture}
+      <span className="meme-caption" aria-hidden>
+        {caption}
+      </span>
+    </span>
   );
 }

@@ -62,6 +62,33 @@
   object-fit: cover;
   background: color-mix(in srgb, var(--border) 45%, transparent);
 }
+/* A caption Relay writes on, like a film's subtitle. */
+.meme-art {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+}
+.meme-caption {
+  position: absolute;
+  inset: auto 6% 7%;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+  -webkit-text-stroke: 0.18em #000;
+  paint-order: stroke fill;
+  text-shadow: 0 1px 3px #000c;
+  pointer-events: none;
+}
+.meme-cell .meme-caption {
+  font-size: 11px;
+}
+.sent-meme .meme-caption {
+  font-size: 17px;
+}
+
 .meme-picker-foot {
   display: flex;
   align-items: center;

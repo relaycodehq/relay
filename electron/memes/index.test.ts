@@ -33,6 +33,7 @@ it("offers the built-ins until set up, then shows the pictures an agent saved", 
     id: "dew-it",
     name: "Dew it",
     meaning: "Yes, go ahead and do it.",
+    caption: "Dew it.",
     url: "relay-media://file/t/dew-it.jpg",
   });
   expect(after.memes.filter((m) => m.url)).toHaveLength(1);
