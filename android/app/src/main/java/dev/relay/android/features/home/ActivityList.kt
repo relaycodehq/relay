@@ -110,12 +110,12 @@ fun ActivityList(
             return true
         }
         val settle = if (chat.running != true && chat.waiting != true) SwipeAction("Settle") { swiped(TriageAction.Settle, "Settled") } else null
-        val snooze = if (chat.waiting != true) SwipeAction("Snooze · ${snoozePresets(now).first().label}") {
+        val snooze = SwipeAction("Snooze · ${snoozePresets(now).first().label}") {
             // Taken now: `now` only ticks every half minute.
             val at = System.currentTimeMillis()
             val until = snoozePresets(at).first().until
             swiped(TriageAction.Snooze(until), "Snoozed until ${wakeLabel(until, at)}")
-        } else null
+        }
         return settle to snooze
     }
 
@@ -288,7 +288,7 @@ private fun HoldMenu(chat: RemoteChatSummary, now: Long, bridge: Int, onTriage: 
         Column {
             if (chat.running != true && chat.waiting != true)
                 ListRow("Settle", subtitle = "Hide it until something new happens", leadingIcon = TablerIcons.Outline.Check, onClick = { pick { onTriage(TriageAction.Settle) } })
-            if (chat.waiting != true) for (p in snoozePresets(now))
+            for (p in snoozePresets(now))
                 ListRow("Snooze · ${p.label}", subtitle = wakeLabel(p.until, now), onClick = { pick { onTriage(TriageAction.Snooze(p.until)) } })
             if (bridge >= Bridge.MARKED_UNREAD)
                 ListRow("Mark as unread", onClick = { pick { onTriage(TriageAction.Unread) } })
