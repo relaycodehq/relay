@@ -35,7 +35,14 @@ export class Memes {
     }
     try {
       const file: unknown = JSON.parse(text);
-      if (!file || typeof file !== "object" || Array.isArray(file))
+      if (
+        !file ||
+        typeof file !== "object" ||
+        Array.isArray(file) ||
+        // A hand-edited one with no list yet gets the built-ins; another
+        // shape there stays the person's to fix.
+        ("memes" in file && !Array.isArray(file.memes))
+      )
         return { problem: 'memes.json must be an object with a "memes" list.' };
       return { file: file as MemeListFile };
     } catch (e) {

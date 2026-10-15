@@ -60,4 +60,9 @@ it("says what's wrong with a broken memes.json instead of overwriting it", async
   expect(state.memes).toEqual([]);
   expect(state.problems[0]).toMatch(/^memes.json isn't valid JSON/);
   expect(await readFile(list, "utf8")).toBe("{ nope");
+  // Valid JSON, but not a list where the memes go.
+  const odd = '{ "memes": { "dew": "drake" } }';
+  await writeFile(list, odd);
+  expect((await memes.prepare()).problems[0]).toMatch(/"memes" list/);
+  expect(await readFile(list, "utf8")).toBe(odd);
 });
