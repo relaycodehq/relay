@@ -20,13 +20,7 @@ const codexAgent = (model: string): ReviewAgent => ({
   provider: "codex",
   choice: { model, reasoningEffort: "high", fast: false },
 });
-/** The first two are the default pair; Add reviewer takes the next one, then repeats the last. */
-const lineup = [
-  claudeAgent("high"),
-  codexAgent("gpt-5.6-sol"),
-  codexAgent("gpt-5.5"),
-  claudeAgent("xhigh"),
-];
+const defaultPair = [claudeAgent("high"), codexAgent("gpt-5.6-sol")];
 
 export interface Setup {
   kind: ReviewTarget["kind"];
@@ -56,9 +50,7 @@ export function firstSetup(projectId: string): Setup {
     savedSetup(projectId) ?? {
       kind: "uncommitted",
       ...(latest ?? {
-        reviewers: lineup
-          .slice(0, 2)
-          .map((r) => ({ ...r, prompt: lastPrompt(r.provider) })),
+        reviewers: defaultPair.map((r) => ({ ...r, prompt: lastPrompt(r.provider) })),
         lead: claudeAgent("high"),
         runChecks: true,
       }),
@@ -79,13 +71,13 @@ export function withOpus(setup: Setup, opus: string): Setup {
   };
 }
 
-/** The reviewer Add reviewer appends. */
-export function nextReviewer(reviewers: ReviewAgent[]): ReviewAgent {
-  const next = lineup[reviewers.length];
-  if (next) return { ...next, prompt: lastPrompt(next.provider) };
-  // Past the lineup, another of the last one: more runs of a model find more.
-  return { ...reviewers.at(-1)! };
-}
+/**
+ * Add reviewer repeats the last one: more runs of a model find more, and a
+ * model picked in the setup can't go stale the way a hardcoded one did.
+ */
+export const nextReviewer = (reviewers: ReviewAgent[]): ReviewAgent => ({
+  ...reviewers.at(-1)!,
+});
 
 /** Reviewer `i` on another model; prompts belong to an agent, so another starts where you left it. */
 export const swapReviewer = (

@@ -91,19 +91,14 @@ describe("setup", () => {
     expect(setup.lead.choice.model).toBe("opus");
   });
 
-  it("adds the lineup's reviewers in turn, then more of the last one", () => {
-    const one: ReviewAgent = {
-      provider: "codex",
-      choice: { model: "gpt-5.6-sol", reasoningEffort: "high", fast: false },
+  it("adds another of the last reviewer, prompt included", () => {
+    const claude: ReviewAgent = {
+      provider: "claude",
+      choice: { model: "opus", reasoningEffort: "xhigh", fast: false },
+      prompt: "$hunt",
     };
-    expect(nextReviewer([one]).choice.model).toBe("gpt-5.6-sol");
-    const four = Array.from({ length: 4 }, (_, i) => ({
-      ...one,
-      choice: { ...one.choice, model: `m${i}` },
-      prompt: `prompt ${i}`,
-    }));
-    expect(nextReviewer(four)).toEqual(four[3]);
-    expect(nextReviewer([...four, four[3]!])).toEqual(four[3]);
+    expect(nextReviewer([claude])).toEqual(claude);
+    expect(nextReviewer([claude, codex])).toEqual(codex);
   });
   it("keeps a reviewer's prompt only while it stays on the same agent", () => {
     const reviewers: ReviewAgent[] = [{ ...codex, prompt: "$hunt" }, codex];
