@@ -101,7 +101,9 @@
   `src/styles.css` pauses the loops listed there. Add any new `infinite`
   animation (spinner, shimmer, glyph) to that list. A visible window behind the
   editor still repaints every display refresh; one spinner measured ~18% of a
-  core, paused ~0%.
+  core, paused ~0%. The one exception: the sidebar's spinners on running
+  threads keep turning (their arc still pauses), so a glance at the window
+  says which threads are busy. Don't add others to it.
 - **Animate one thing at a time in an agent turn.** Either the running call's
   row or the thinking line, never both. Headers and finished rows stay still.
 - **Keep live rows from jumping.** Rows that come and go with each tool call
