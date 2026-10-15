@@ -484,6 +484,6 @@ export function memeSetupPrompt(state: Pick<MemesState, "folder" | "list" | "mem
     "",
     `Memes to get (${missing.length}): ${missing.map((m) => m.id).join(", ")}`,
     "",
-    "Finish with a short list of any you couldn't get.",
+    "Finish by saying how many you got, then list any you couldn't get, if there are some.",
   ].join("\n");
 }
