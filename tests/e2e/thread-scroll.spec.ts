@@ -519,3 +519,120 @@ test("lets the reader scroll up while an answer streams", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("folding the composer away and back doesn't move the thread", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-fold-scroll-")),
+  );
+  const repo = join(root, "project"),
+    data = join(root, "data"),
+    bin = join(root, "bin");
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(repo);
+    await mkdir(bin);
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
+    for (const name of ["codex", "claude"])
+      await fakeCli(join(bin, name), agent);
+    await mkdir(join(data, "project-chats"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const projectId = randomUUID();
+    const chat = thread(projectId, "Folding", 12);
+    await writeFile(
+      join(data, "project-chats", chat.id + ".json"),
+      JSON.stringify(chat),
+    );
+    await writeFile(
+      join(data, "state.json"),
+      JSON.stringify({
+        version: 1,
+        folders: {},
+        progress: {},
+        projects: [
+          {
+            id: projectId,
+            path: repo,
+            name: "project",
+            repository: null,
+            added: 1,
+          },
+        ],
+        chats: [chat].map(({ messages: _, ...summary }) => summary),
+      }),
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+      ),
+    ) as Record<string, string>;
+    app = await electron.launch({
+      args: ["tests/fixtures/launch.cjs"],
+      env: {
+        ...env,
+        ...pathWith(env, bin),
+        RELAY_TEST_DATA: data,
+        RELAY_TEST_HEADED: "0",
+        RELAY_TEST_NATIVE_STORAGE: "0",
+      },
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.locator(".sb-thread", { hasText: "Folding" }).click();
+    await expect(page.locator('[data-message-id="folding-11"]')).toBeAttached();
+    await settled(page);
+    // The composer folds for a reader, not for someone writing in it.
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    const dock = page.locator(".thread-bottom-composer");
+    // The room kept under the messages for the composer, every frame.
+    await page.evaluate(() => {
+      const view = document.querySelector(".project-messages")!;
+      const seen: number[] = [];
+      Object.assign(window, { paddings: seen });
+      const sample = () => {
+        seen.push(parseFloat(getComputedStyle(view).paddingBottom));
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    const scrollTop = () =>
+      page.evaluate(
+        () => document.querySelector(".project-messages")!.scrollTop,
+      );
+    // Trackpad steps up until it folds, then back down until it unfolds.
+    const step = 12;
+    const box = (await page.locator(".project-messages").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 200);
+    for (let i = 0; i < 40; i++) {
+      await page.mouse.wheel(0, -step);
+      await page.waitForTimeout(16);
+    }
+    await expect(dock).toHaveClass(/collapsed/);
+    await settled(page);
+    const start = await scrollTop();
+    const ahead: number[] = [];
+    for (let i = 1; i <= 40; i++) {
+      await page.mouse.wheel(0, step);
+      await page.waitForTimeout(16);
+      ahead.push((await scrollTop()) - start - i * step);
+    }
+    await expect(dock).not.toHaveClass(/collapsed/);
+    await settled(page);
+
+    // The room stays as it was: shrinking or regrowing it mid-fold moves
+    // what the reader is looking at.
+    const paddings = await page.evaluate(
+      () => (window as unknown as { paddings: number[] }).paddings,
+    );
+    expect(Math.min(...paddings)).toBe(Math.max(...paddings));
+    // The thread went only as far as the wheel took it, never pinned ahead.
+    expect(Math.max(...ahead)).toBeLessThanOrEqual(1);
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

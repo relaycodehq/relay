@@ -110,6 +110,12 @@
 - **Keep live rows from jumping.** Rows that come and go with each tool call
   should reserve their height instead of mounting and unmounting; the thread
   stays pinned to the bottom, so every height change jolts it.
+- **Don't move the thread under the reader.** Something at the end of the
+  thread that changes height (the composer folding, a card above it) keeps
+  the room it takes until it has settled; never size the view from an element
+  mid-transition, whose first measurement is where it started. After touching
+  `useThreadScroll`, the composer dock or the end of the thread, run
+  `tests/e2e/thread-scroll.spec.ts`: the release CI runs only unit tests.
 - **Keep it cheap.** Move things with `transform`/`opacity`, and step every
   endless loop at 20 updates a second (`steps(seconds × 20)`; for an eased
   loop, sample the curve into a few keyframes, each with its own `steps`).

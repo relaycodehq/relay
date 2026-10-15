@@ -162,16 +162,28 @@ export function useThreadScroll({
     const dock = composerDock.current;
     if (!dock) return;
     // Messages scroll underneath the composer, so they need bottom padding as
-    // tall as it. While it is folded away the padding only grows: shrinking it
-    // would pull the reader back toward the bottom, but a prompt typed into
-    // the folded composer, or a card above it, still has to leave the end of
-    // the thread readable. Unfolding re-observes, which measures it exactly.
-    const observer = new ResizeObserver(() => {
+    // tall as it. While it is folded away, or still unfolding, the padding
+    // only grows: shrinking it would move the thread under the reader, and
+    // pin them to the bottom as it grew back. A prompt typed into the folded
+    // composer, or a card above it, still has to leave the end of the thread
+    // readable. Once unfolded it's measured exactly.
+    const measure = () => {
       const height = dock.offsetHeight;
-      setDockHeight((h) => (scrolledUp ? Math.max(h, height) : height));
-    });
+      const folding = dock
+        .querySelector(".composer-prompt-input")
+        ?.getAnimations()
+        .some((a) => a instanceof CSSTransition);
+      setDockHeight((h) =>
+        scrolledUp || folding ? Math.max(h, height) : height,
+      );
+    };
+    const observer = new ResizeObserver(measure);
     observer.observe(dock);
-    return () => observer.disconnect();
+    dock.addEventListener("transitionend", measure);
+    return () => {
+      observer.disconnect();
+      dock.removeEventListener("transitionend", measure);
+    };
   }, [isEmpty, scrolledUp]);
   // The folded composer shows the draft's first line, not wherever the caret
   // last scrolled it to.
