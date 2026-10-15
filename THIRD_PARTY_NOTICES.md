@@ -511,6 +511,35 @@ packages listed under “npm packages”, the APK contains their native code:
 
 Relay's own Android modules are in `mobile/modules/`.
 
+## Native Android app
+
+The Kotlin app in `android/` is written from scratch and contains no npm
+packages. Its APK contains:
+
+- AndroidX and Jetpack Compose (Activity, Core, Compose UI, Foundation,
+  Material 3 and its adaptive layouts, Navigation 3, Lifecycle, DataStore,
+  CameraX, WebKit), Kotlin, kotlinx.coroutines and kotlinx.serialization,
+  OkHttp and Okio, Coil 3.6.3 and the Tabler icons for Compose 3.49.0
+  (`io.github.lyxnx.compose.ui:tabler-icons`): Apache License 2.0. The icons
+  themselves are Tabler Icons by Paweł Kuna (MIT).
+- commonmark-java 0.30.1 with its GFM tables, strikethrough, task list and
+  autolink extensions (BSD 2-Clause), and autolink-java, which the autolink
+  extension uses (MIT).
+- Bouncy Castle 1.86 (`org.bouncycastle:bcprov-jdk18on`), under the Bouncy
+  Castle Licence, an MIT-style licence:
+  https://www.bouncycastle.org/about/license/
+- KaTeX 0.19.0 and its fonts (MIT), in `android/app/src/main/assets/katex`.
+- Inter and JetBrains Mono (SIL Open Font License 1.1); their licence texts
+  ship in the APK as `res/raw/license_inter.txt` and
+  `res/raw/license_jetbrains_mono.txt`.
+- Google's ML Kit barcode scanning (`com.google.mlkit:barcode-scanning`
+  17.3.0), which reads the pairing QR code. It is not open source; it is
+  provided under the ML Kit Terms of Service
+  (https://developers.google.com/ml-kit/terms).
+
+Their versions are in `android/gradle/libs.versions.toml`; transitive
+dependencies are under the licences their publishers give on Maven.
+
 ## Downloaded when first used
 
 Relay does not ship these; it downloads them from their publishers when you

@@ -32,6 +32,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Components
 import kotlinx.coroutines.CoroutineScope
 import dev.relay.android.ui.ListInset
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
+import io.github.lyxnx.compose.ui.tablericons.outline.License
 
 /**
  * mobile/src/app/settings.tsx: theme, notifications, this app's version and
@@ -72,6 +73,12 @@ fun SettingsScreen(
                     subtitleLines = 3,
                 )
                 LatestAppRows(updates)
+                ListRow(
+                    "Open-source licences",
+                    leadingIcon = TablerIcons.Outline.License,
+                    chevron = true,
+                    onClick = { nav.push(Route.Licences) },
+                )
             }
 
             ComputersSection(remote, updates, name, scope)

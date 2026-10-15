@@ -21,6 +21,7 @@ import dev.relay.android.features.home.ProjectCardBadge
 import dev.relay.android.features.home.ProvideProjectIcons
 import dev.relay.android.features.newthread.NewThreadScreen
 import dev.relay.android.features.pairing.PairScreen
+import dev.relay.android.features.settings.LicencesScreen
 import dev.relay.android.features.settings.SettingsScreen
 import dev.relay.android.features.thread.SubagentRunScreen
 import dev.relay.android.features.thread.ThreadScreen
@@ -36,6 +37,7 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Home> { if (wide()) PaneEmpty() else AppHome(container, pane = false, selected = null) }
     entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
     entry<Route.Gallery> { GalleryScreen() }
+    entry<Route.Licences> { LicencesScreen() }
 
     entry<Route.Pair> { PairScreen(container.remote, it.link) }
     entry<Route.NewThread> { route ->

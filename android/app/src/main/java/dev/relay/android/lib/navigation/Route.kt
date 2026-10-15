@@ -23,6 +23,7 @@ sealed interface Route : NavKey {
 
     @Serializable data object Settings : Route
     @Serializable data object Gallery : Route
+    @Serializable data object Licences : Route
 
     @Serializable data class Thread(val id: String) : Route
     @Serializable data class Reply(val id: String, val rootId: String) : Route
