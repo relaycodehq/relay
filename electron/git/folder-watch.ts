@@ -40,11 +40,28 @@ export async function watchEachFolder(
   return folders;
 }
 
+/**
+ * Errors that say a folder isn't there to watch or read: gone since its
+ * parent was read, or not the user's to read. Any other (out of inotify
+ * watches, out of handles) leaves holes, so the watch fails and its owner
+ * polls instead.
+ */
+const unreachable = (error: unknown) =>
+  ["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(
+    (error as NodeJS.ErrnoException | null)?.code ?? "",
+  );
+
+const parentOf = (rel: string) =>
+  rel.slice(0, Math.max(rel.lastIndexOf("/"), 0));
+
 class EachFolder extends EventEmitter implements FolderWatch {
   private folders = new Map<string, FSWatcher>();
+  /** Watched folders by their parent, so a folder drops with what's under it without a scan. */
+  private under = new Map<string, Set<string>>();
   private closed = false;
-  /** The root's watch broke before anyone listened: fails the first crawl. */
+  /** It broke before anyone listened: fails the first crawl. */
   private failed?: Error;
+  private full = false;
 
   constructor(
     private root: string,
@@ -54,51 +71,73 @@ class EachFolder extends EventEmitter implements FolderWatch {
     super();
   }
 
-  /** `strict`: the first crawl, which fails as a whole past the budget. */
+  /**
+   * `strict`: the first crawl, which fails as a whole past the budget.
+   * Later, what's under `start` is asked about with `skipLater` as well.
+   */
   async add(start: string, strict = false) {
-    const queue = [start];
-    while (queue.length) {
-      const at = queue.shift()!;
-      if (this.closed || this.folders.has(at)) continue;
-      if (this.folders.size >= this.options.budget) {
-        if (strict) throw new Error(`more than ${this.options.budget} folders`);
-        // Grown past it since: the rest waits for the slow poll.
-        return;
+    let level = [start];
+    while (level.length) {
+      const next: string[] = [];
+      for (const at of level) {
+        if (this.closed || this.folders.has(at)) continue;
+        // Its parent went while this waited, and took it along.
+        if (at !== start && !this.folders.has(parentOf(at))) continue;
+        if (this.folders.size >= this.options.budget) {
+          if (strict)
+            throw new Error(`more than ${this.options.budget} folders`);
+          // Grown past it since: the rest waits for the slow poll.
+          if (!this.full)
+            console.warn(
+              `[tree-watch] ${this.root} has more than ${this.options.budget} folders; new ones aren't watched`,
+            );
+          this.full = true;
+          return;
+        }
+        const dir = join(this.root, at);
+        let folder;
+        try {
+          // Watched before it's read, so a folder made meanwhile is still seen.
+          folder = watch(dir, (type, name) =>
+            this.changed(at, type, name?.toString() ?? null),
+          );
+        } catch (error) {
+          if (at === "" || !unreachable(error)) throw error;
+          continue;
+        }
+        folder.on("error", (error) => {
+          if (at !== "" && unreachable(error)) this.drop(at);
+          else this.fail(error);
+        });
+        this.watched(at, folder);
+        let entries;
+        try {
+          entries = await readdir(dir, { withFileTypes: true });
+        } catch (error) {
+          if (at === "" || !unreachable(error)) throw error;
+          this.drop(at);
+          continue;
+        }
+        if (strict && this.failed) throw this.failed;
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const rel = at ? `${at}/${entry.name}` : entry.name;
+          if (!this.options.skip(rel)) next.push(rel);
+        }
       }
-      const dir = join(this.root, at);
-      let folder;
-      try {
-        // Watched before it's read, so a folder made meanwhile is still seen.
-        folder = watch(dir, (type, name) =>
-          this.changed(at, type, name?.toString() ?? null),
-        );
-      } catch (error) {
-        // Gone since its parent was read.
-        if (at === "") throw error;
-        continue;
-      }
-      folder.on("error", (error) => {
-        if (at !== "") this.drop(at);
-        else if (this.listenerCount("error")) this.emit("error", error);
-        else this.failed ??= error;
-      });
-      this.folders.set(at, folder);
-      let entries;
-      try {
-        entries = await readdir(dir, { withFileTypes: true });
-      } catch (error) {
-        if (at === "") throw error;
-        this.drop(at);
-        continue;
-      }
-      if (strict && this.failed) throw this.failed;
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const rel = at ? `${at}/${entry.name}` : entry.name;
-        if (!this.options.skip(rel)) queue.push(rel);
-      }
+      level = strict ? next : await this.notIgnored(next);
     }
     if (strict && this.failed) throw this.failed;
+  }
+
+  /** Those of `rels` Git doesn't ignore, asked all at once. */
+  private async notIgnored(rels: string[]) {
+    const skipLater = this.options.skipLater;
+    if (!skipLater || !rels.length) return rels;
+    const ignored = await Promise.all(
+      rels.map((rel) => skipLater(rel).catch(() => false)),
+    );
+    return rels.filter((_, i) => !ignored[i]);
   }
 
   private changed(at: string, type: string, name: string | null) {
@@ -121,21 +160,45 @@ class EachFolder extends EventEmitter implements FolderWatch {
     // the folder that went.
     this.drop(rel);
     if (await this.options.skipLater?.(rel).catch(() => false)) return;
-    await this.add(rel).catch(() => {});
+    await this.add(rel).catch((error: Error) => this.fail(error));
+  }
+
+  private fail(error: Error) {
+    if (this.closed) return;
+    if (this.listenerCount("error")) this.emit("error", error);
+    else this.failed ??= error;
+  }
+
+  private watched(at: string, folder: FSWatcher) {
+    this.folders.set(at, folder);
+    if (at === "") return;
+    const parent = parentOf(at);
+    const siblings = this.under.get(parent);
+    if (siblings) siblings.add(at);
+    else this.under.set(parent, new Set([at]));
   }
 
   private drop(rel: string) {
-    for (const [at, folder] of this.folders)
-      if (at === rel || at.startsWith(`${rel}/`)) {
-        folder.close();
-        this.folders.delete(at);
-      }
+    const below = this.under.get(rel);
+    if (below) {
+      this.under.delete(rel);
+      for (const at of below) this.drop(at);
+    }
+    const folder = this.folders.get(rel);
+    if (!folder) return;
+    folder.close();
+    this.folders.delete(rel);
+    const parent = parentOf(rel);
+    const siblings = this.under.get(parent);
+    siblings?.delete(rel);
+    if (siblings?.size === 0) this.under.delete(parent);
   }
 
   close() {
     this.closed = true;
     for (const folder of this.folders.values()) folder.close();
     this.folders.clear();
+    this.under.clear();
   }
 }
 

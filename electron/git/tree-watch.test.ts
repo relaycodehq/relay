@@ -11,11 +11,27 @@ import {
   type TreeWatchDeps,
 } from "./tree-watch";
 
+/** Stands in for the Linux folder-at-a-time watch while set. */
+const eachFolder = vi.hoisted(() => ({
+  instead: undefined as
+    | ((dir: string) => Promise<import("./folder-watch").FolderWatch>)
+    | undefined,
+}));
+vi.mock("./folder-watch", async (load) => {
+  const real = await load<typeof import("./folder-watch")>();
+  return {
+    ...real,
+    watchEachFolder: (...args: Parameters<typeof real.watchEachFolder>) =>
+      eachFolder.instead?.(args[0]) ?? real.watchEachFolder(...args),
+  };
+});
+
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];
 
 let temp: string | undefined;
 afterEach(async () => {
+  eachFolder.instead = undefined;
   vi.useRealTimers();
   if (temp) await rm(temp, { recursive: true, force: true });
   temp = undefined;
@@ -48,6 +64,37 @@ it("notices what a working tree shows, not Git's own churn", () => {
   expect(noticed("modules/a/refs/heads/logs", true)).toBe(true);
   expect(noticed("worktrees/feature/index", true)).toBe(true);
   expect(noticed(null, false)).toBe(true);
+});
+
+it("tells a submodule's name from its Git folder's own entries", () => {
+  const modules = new Set([
+    ".git/modules/relay",
+    ".git/modules/src/hooks",
+    ".git/modules/docs/refs/api",
+    "modules/a",
+    "modules/a/modules/logs",
+  ]);
+  const isGitDir = (rel: string) => modules.has(rel);
+  const seen = (file: string, inGitDir = false) =>
+    noticed(file, inGitDir, isGitDir);
+  // Named after Git's churn, or after a folder of its own.
+  expect(seen(".git/modules/relay/HEAD")).toBe(true);
+  expect(seen(".git/modules/relay/objects/ab/cd")).toBe(false);
+  expect(seen(".git/modules/src/hooks/index")).toBe(true);
+  expect(seen(".git/modules/src/hooks/hooks/pre-commit")).toBe(false);
+  expect(seen(".git/modules/docs/refs/api/objects/ab/cdef")).toBe(false);
+  expect(seen(".git/modules/docs/refs/api/refs/heads/main")).toBe(true);
+  // On Linux each folder on the way to one is watched, and its churn isn't.
+  expect(seen(".git/modules/src")).toBe(true);
+  expect(seen(".git/modules/src/hooks")).toBe(true);
+  expect(seen(".git/modules/relay/logs")).toBe(false);
+  // A submodule's own submodules, named the same way.
+  expect(seen("modules/a/modules/logs/HEAD", true)).toBe(true);
+  expect(seen("modules/a/modules/logs/logs/HEAD", true)).toBe(false);
+  expect(seen("modules/a/logs/HEAD", true)).toBe(false);
+  // One not made yet ends at the first of Git's entries past its name.
+  expect(noticed(".git/modules/relay/HEAD", false)).toBe(true);
+  expect(noticed(".git/modules/new/objects/ab", false, isGitDir)).toBe(false);
 });
 
 /** A watch that changes only when told to, and counts its closes. */
@@ -151,14 +198,19 @@ it("watches a folder again after it broke, once it can be read", async () => {
   expect(folders[0]!.closed).toBe(true);
   await vi.advanceTimersByTimeAsync(1000);
   expect(changed).toHaveBeenCalledTimes(1);
-  // Still gone at the first retry; back by the second.
+  // Told it changed, the window asks again and polls meanwhile.
+  expect(await trees.show(owner, "a")).toBe(false);
+  // Still gone at the first retry; back by the second, which waits longer.
   await vi.advanceTimersByTimeAsync(15_000);
   expect(folders).toHaveLength(1);
   gone = false;
   await vi.advanceTimersByTimeAsync(15_000);
+  expect(folders).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(15_000);
   expect(folders).toHaveLength(2);
   await vi.advanceTimersByTimeAsync(1000);
   expect(changed).toHaveBeenCalledTimes(2);
+  expect(await trees.show(owner, "a")).toBe(true);
   folders[1]!.change("src/one.ts");
   await vi.advanceTimersByTimeAsync(3000);
   expect(changed).toHaveBeenCalledTimes(3);
@@ -192,13 +244,54 @@ it("closes what a retry opened when it fails part-way", async () => {
   expect(folders).toHaveLength(3);
   expect(folders.every((f) => f.closed)).toBe(true);
   refuse.clear();
-  await vi.advanceTimersByTimeAsync(15_000);
+  await vi.advanceTimersByTimeAsync(30_000);
   expect(folders.filter((f) => !f.closed).map((f) => f.dir)).toEqual([
     "/projects/a",
     "/projects/main/.git",
   ]);
   trees.release(owner);
   expect(folders.every((f) => f.closed)).toBe(true);
+});
+
+it("stops an open a break overtook, so its retry doesn't watch twice", async () => {
+  vi.useFakeTimers();
+  const made: { dir: string; folder: EventEmitter; closed: boolean }[] = [];
+  let gitDirReady: (() => void) | undefined;
+  eachFolder.instead = async (dir) => {
+    const folder = Object.assign(new EventEmitter(), {
+      close: () => {
+        entry.closed = true;
+      },
+    });
+    const entry = { dir, folder, closed: false };
+    made.push(entry);
+    // The first time, the Git folder's crawl takes a while.
+    if (dir.endsWith(".git") && !gitDirReady)
+      await new Promise<void>((done) => (gitDirReady = done));
+    return folder;
+  };
+  const trees = new TreeWatch({
+    root: async () => "/projects/a",
+    changed: () => {},
+    platform: "linux",
+    gitDirs: async () => ["/projects/main/.git"],
+  });
+  const owner = {};
+  const ready = trees.show(owner, "a");
+  await vi.waitFor(() => expect(gitDirReady).toBeDefined());
+  // The folder broke while the Git folder was still being crawled.
+  made[0]!.folder.emit("error", new Error("ENOENT"));
+  gitDirReady!();
+  expect(await ready).toBe(false);
+  await vi.advanceTimersByTimeAsync(15_000);
+  // The retry runs Git for what it ignores before it watches.
+  await vi.waitFor(() => expect(made).toHaveLength(4));
+  expect(made.filter((w) => !w.closed).map((w) => w.dir)).toEqual([
+    "/projects/a",
+    "/projects/main/.git",
+  ]);
+  trees.release(owner);
+  expect(made.every((w) => w.closed)).toBe(true);
 });
 
 it("watches on Windows, where changes come with backslashes", async () => {

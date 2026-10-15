@@ -128,8 +128,22 @@ function useTreeWatch(where: string | null) {
         { cancelRefetch },
       );
     };
+    const ask = (first: boolean) =>
+      api.watchWorkingTree(where).then(
+        (ok) => {
+          if (!live) return;
+          setWatched(ok ? where : null);
+          // Nothing watched it while another place showed, and its cached
+          // tree is fresh enough that the slow poll would wait up to a minute.
+          // A fetch already under way for it is left to finish.
+          if (ok && first) refresh(false);
+        },
+        () => live && setWatched(null),
+      );
     const off = api.onWorkingTree((changed) => {
       if (changed !== where) return;
+      // A watch that broke says so with a change, and again once it's back.
+      void ask(false);
       if (document.hidden) missed = true;
       else refresh();
     });
@@ -137,17 +151,7 @@ function useTreeWatch(where: string | null) {
       if (missed && !document.hidden) refresh();
     };
     document.addEventListener("visibilitychange", shown);
-    api.watchWorkingTree(where).then(
-      (ok) => {
-        if (!live) return;
-        setWatched(ok ? where : null);
-        // Nothing watched it while another place showed, and its cached
-        // tree is fresh enough that the slow poll would wait up to a minute.
-        // A fetch already under way for it is left to finish.
-        if (ok) refresh(false);
-      },
-      () => live && setWatched(null),
-    );
+    void ask(true);
     return () => {
       live = false;
       off();

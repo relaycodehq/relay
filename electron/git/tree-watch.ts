@@ -1,5 +1,5 @@
-import { watch as watchFolder } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { existsSync, watch as watchFolder } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   folderBudget,
   watchEachFolder,
@@ -11,8 +11,13 @@ import { git } from "./git";
 const SETTLE_MS = 400;
 /** Refreshes come no closer than this, however fast an agent writes: each runs Git a few times. */
 const GAP_MS = 2000;
-/** A folder that broke (deleted, recreated, out of handles) is watched again this much later. */
+/**
+ * A folder that broke (deleted, recreated, out of handles) is watched again
+ * this much later, twice as long after each try that fails: one out of
+ * inotify watches would otherwise take them from other programs every time.
+ */
 const RETRY_MS = 15_000;
+const RETRY_MAX_MS = 4 * 60_000;
 
 /**
  * Folders of a Git folder that churn on every command. "relay" holds Relay's
@@ -22,33 +27,87 @@ const RETRY_MS = 15_000;
 const CHURN = ["objects", "logs", "lfs", "hooks", "relay", "fsmonitor--daemon"];
 
 /**
+ * What a Git folder holds at its top, Relay's notes included. Tells where a
+ * submodule's name ends under modules/ when its folder can't be asked.
+ */
+const GIT_ENTRIES = new Set([
+  ...CHURN,
+  "HEAD",
+  "ORIG_HEAD",
+  "FETCH_HEAD",
+  "MERGE_HEAD",
+  "CHERRY_PICK_HEAD",
+  "REVERT_HEAD",
+  "COMMIT_EDITMSG",
+  "index",
+  "config",
+  "description",
+  "packed-refs",
+  "shallow",
+  "refs",
+  "info",
+  "modules",
+  "worktrees",
+  "sequencer",
+  "rebase-merge",
+  "rebase-apply",
+]);
+
+/**
  * Whether a change at `file` (relative to the watched folder) can show in
  * the working tree. Git's objects, logs and lock files churn on every
  * command; the refs, HEAD and index they end in are what count.
+ * `isGitDir` says whether a folder (relative too) is a Git folder.
  */
-export function noticed(file: string | null, inGitDir: boolean) {
+export function noticed(
+  file: string | null,
+  inGitDir: boolean,
+  isGitDir?: (rel: string) => boolean,
+) {
   if (!file) return true;
   const parts = file.split(/[\\/]/);
   if (parts.includes("node_modules")) return false;
   const gitAt = inGitDir ? 0 : parts[0] === ".git" ? 1 : -1;
   if (gitAt < 0) return true;
-  const inside = parts.slice(gitAt);
-  if (CHURN.includes(inside[0] ?? "")) return false;
-  if (inside[0] === "worktrees" && inside[2] === "logs") return false;
-  // A submodule's own Git folder sits at modules/<its name>/, a name that may
-  // have slashes, with its own submodules under it in turn. Branch names
-  // under refs/ may be anything.
-  if (inside[0] === "modules") {
-    const refs = inside.indexOf("refs");
-    if (
-      inside
-        .slice(1, refs < 0 ? undefined : refs)
-        .some((p) => CHURN.includes(p))
-    )
-      return false;
-  }
+  if (!pastChurn(parts, gitAt, isGitDir)) return false;
   const name = parts[parts.length - 1]!;
   return !name.endsWith(".lock") && name !== "FETCH_HEAD";
+}
+
+/** Whether `parts` from `at`, inside a Git folder, is outside its churn. */
+function pastChurn(
+  parts: string[],
+  at: number,
+  isGitDir?: (rel: string) => boolean,
+): boolean {
+  const entry = parts[at] ?? "";
+  if (CHURN.includes(entry)) return false;
+  if (entry === "worktrees" && parts[at + 2] === "logs") return false;
+  if (entry !== "modules") return true;
+  // A submodule's own Git folder sits at modules/<its name>/, with its own
+  // submodules under it in turn. Branch names under refs/ may be anything.
+  const inside = moduleEnd(parts, at + 1, isGitDir);
+  return inside >= parts.length || pastChurn(parts, inside, isGitDir);
+}
+
+/**
+ * Where the name of the submodule whose folder starts at `parts[start]`
+ * ends. The name may have slashes and Git's own words in it (src/hooks), but
+ * Git won't put one submodule's folder inside another's, so the first folder
+ * on the way that is a Git folder is it. One not made yet ends at the first
+ * of Git's entries past the name's first part.
+ */
+function moduleEnd(
+  parts: string[],
+  start: number,
+  isGitDir?: (rel: string) => boolean,
+) {
+  if (isGitDir)
+    for (let end = start + 1; end <= parts.length; end++)
+      if (isGitDir(parts.slice(0, end).join("/"))) return end;
+  for (let end = start + 1; end < parts.length; end++)
+    if (GIT_ENTRIES.has(parts[end]!)) return end;
+  return parts.length;
 }
 
 /**
@@ -74,6 +133,10 @@ interface Watch {
   /** When it last said `where` changed. */
   last: number;
   closed: boolean;
+  /** Counts its opens; one a break or a later open overtook stops. */
+  attempt: number;
+  /** Tries in a row that failed since it last watched. */
+  failed: number;
   /** Whether it's watching; false where it couldn't, and its owners poll. */
   ready: Promise<boolean>;
 }
@@ -137,6 +200,8 @@ export class TreeWatch {
       folders: [],
       last: 0,
       closed: false,
+      attempt: 0,
+      failed: 0,
       ready: Promise.resolve(false),
     };
     watch.ready = this.open(where, watch);
@@ -146,6 +211,8 @@ export class TreeWatch {
 
   /** `again`: a broken watch tried again, which keeps trying while it's shown. */
   private async open(where: string, w: Watch, again = false) {
+    const attempt = ++w.attempt;
+    const overtaken = () => w.closed || w.attempt !== attempt;
     try {
       const root = await this.deps.root(where);
       // A worktree's HEAD and index, and every checkout's refs, can live
@@ -155,38 +222,46 @@ export class TreeWatch {
           !within(root, dir) &&
           !all.some((d, j) => j !== i && within(d, dir) && (d !== dir || j < i)),
       );
-      if (w.closed) return false;
+      if (overtaken()) return false;
       const eachFolder =
         (this.deps.platform ?? process.platform) === "linux"
           ? await this.eachFolder(root)
           : undefined;
-      if (w.closed) return false;
+      if (overtaken()) return false;
       const watch = this.deps.watch ?? watchFolder;
       for (const [dir, inGitDir] of [
         [root, false] as const,
         ...gitDirs.map((d) => [d, true] as const),
       ]) {
+        const gitDir = gitDirAt(dir);
         const listener = (file: string | null) => {
-          if (noticed(file, inGitDir)) this.soon(where, w);
+          if (noticed(file, inGitDir, gitDir)) this.soon(where, w);
         };
         const folder = eachFolder
           ? await eachFolder(dir, inGitDir, listener)
           : watch(dir, { recursive: true }, (_type, file) =>
               listener(file?.toString() ?? null),
             );
-        if (w.closed) {
+        // A folder broke meanwhile and closed what this opened; its retry
+        // opens them all again.
+        if (overtaken()) {
           folder.close();
           return false;
         }
         // Its folder went or can't be read: the next refresh says what's
         // wrong, and the folder is watched again once it's back.
-        folder.on("error", () => this.broke(where, w));
+        folder.on("error", () => {
+          if (w.attempt === attempt) this.broke(where, w);
+        });
         w.folders.push(folder);
       }
+      w.failed = 0;
       // What changed while it wasn't watched.
       if (again) this.soon(where, w);
       return true;
     } catch {
+      // What it opened went with whatever overtook it.
+      if (overtaken()) return false;
       // Whatever opened before it failed; the next try opens its own.
       for (const folder of w.folders) folder.close();
       w.folders = [];
@@ -222,32 +297,40 @@ export class TreeWatch {
       dir: string,
       inGitDir: boolean,
       listener: (file: string | null) => void,
-    ) =>
-      watchEachFolder(
+    ) => {
+      const gitDir = gitDirAt(dir);
+      return watchEachFolder(
         dir,
         {
           budget,
           skip: (rel) =>
-            !noticed(rel, inGitDir) || (!inGitDir && ignored.has(rel)),
+            !noticed(rel, inGitDir, gitDir) || (!inGitDir && ignored.has(rel)),
           skipLater: inGitDir ? undefined : ignoredLater,
         },
         listener,
       );
+    };
   }
 
   private broke(where: string, w: Watch) {
     if (w.closed || w.retry) return;
+    w.attempt++;
     for (const folder of w.folders) folder.close();
     w.folders = [];
+    // Its owners poll until the retry watches again; the change below sends
+    // them to ask, and so does the one the retry makes.
+    w.ready = Promise.resolve(false);
     this.soon(where, w);
     this.retryLater(where, w);
   }
 
   private retryLater(where: string, w: Watch) {
+    const wait = Math.min(RETRY_MS * 2 ** w.failed, RETRY_MAX_MS);
+    w.failed++;
     w.retry = setTimeout(() => {
       w.retry = undefined;
       if (!w.closed) w.ready = this.open(where, w, true);
-    }, RETRY_MS);
+    }, wait);
   }
 
   private soon(where: string, w: Watch) {
@@ -322,6 +405,10 @@ export function askedTogether(root: string) {
       }
     });
 }
+
+/** Whether a folder under `dir` (relative, "/"-separated) is a Git folder. */
+const gitDirAt = (dir: string) => (rel: string) =>
+  existsSync(join(dir, rel, "HEAD"));
 
 async function gitDirsOf(root: string) {
   const out = await git(root, [
