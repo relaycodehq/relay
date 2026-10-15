@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { everyWhileShown } from "../../lib/while-shown";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import type { ProviderUsage } from "../../../shared/provider-usage";
 
 const REFRESH_MS = 60_000;
 
 /**
- * Each account's limits, read again every minute while shown. The main
+ * Each account's limits, read again every minute while the window shows. The main
  * process caches readings, so several views asking at once cost one.
  */
 export function useAccountsUsage(
@@ -27,10 +28,10 @@ export function useAccountsUsage(
           .catch(() => {});
     };
     load();
-    const timer = setInterval(load, REFRESH_MS);
+    const stop = everyWhileShown(load, REFRESH_MS);
     return () => {
       cancel = true;
-      clearInterval(timer);
+      stop();
     };
   }, [provider, key]);
   return usage;

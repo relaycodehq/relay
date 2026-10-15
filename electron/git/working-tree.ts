@@ -168,6 +168,17 @@ export async function pushDestination(root: string, branch: string) {
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref, tracks, label: `${remote}/${ref.slice(11)}` };
 }
+/** The branch HEAD tracks, as `origin/main`; null when it tracks none. */
+const upstreamOf = (root: string) =>
+  git(root, [
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "@{upstream}",
+  ]).then(
+    (out) => out.trim() || null,
+    () => null,
+  );
 export async function fetchUpstream(root: string, branch: string) {
   // Detached or local-only branches have nothing to fetch.
   const remote = branch
@@ -284,15 +295,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     git(root, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => ""),
     git(root, ["branch", "--show-current"]),
     git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
-    git(root, [
-      "rev-parse",
-      "--abbrev-ref",
-      "--symbolic-full-name",
-      "@{upstream}",
-    ]).then(
-      (out) => out.trim() || null,
-      () => null,
-    ),
+    upstreamOf(root),
     gitOperation(root),
   ]);
   const head = headRaw.trim(),
@@ -478,13 +481,18 @@ export async function performGitAction(
   trash?: (file: string) => Promise<void>,
 ) {
   return serializeRepo(root, async () => {
-    const state = await workingTree(root);
     if (action.kind === "fetch") {
-      // Background refresh of the upstream so "behind" reflects the remote.
-      if (!state.upstream) return state;
-      await fetchUpstream(root, state.branch);
+      // Background refresh of the upstream so "behind" reflects the remote,
+      // every few minutes: the branch and its upstream decide whether to
+      // fetch, and the whole tree is read once, after it.
+      const [branch, upstream] = await Promise.all([
+        git(root, ["branch", "--show-current"]),
+        upstreamOf(root),
+      ]);
+      if (upstream) await fetchUpstream(root, branch.trim());
       return workingTree(root);
     }
+    const state = await workingTree(root);
     if (action.revision !== state.revision)
       throw new Error(
         `${checkoutChanged} Review the refreshed changes and try again.`,

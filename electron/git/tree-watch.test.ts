@@ -304,6 +304,7 @@ it("watches on Windows, where changes come with backslashes", async () => {
     platform: "win32",
     watch,
     gitDirs: async (root) => [`${root}\\.git`],
+    isFolder: async () => false,
   });
   expect(await trees.show({}, "a")).toBe(true);
   folders[0]!.change(".git\\objects\\ab\\cd");
@@ -311,6 +312,29 @@ it("watches on Windows, where changes come with backslashes", async () => {
   await vi.advanceTimersByTimeAsync(1000);
   expect(changed).not.toHaveBeenCalled();
   folders[0]!.change(".git\\index");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed.mock.calls).toEqual([["a"]]);
+});
+
+it("passes over a folder in Git's own that changed only as an entry came and went", async () => {
+  vi.useFakeTimers();
+  const { folders, watch } = fakeWatch();
+  const changed = vi.fn();
+  const trees = new TreeWatch({
+    root: async () => "C:\\projects\\a",
+    changed,
+    platform: "win32",
+    watch,
+    gitDirs: async (root) => [`${root}\\.git`],
+    isFolder: async (path) => /origin$/.test(path),
+  });
+  expect(await trees.show({}, "a")).toBe(true);
+  // A fetch with nothing new: the lock beside origin/HEAD comes and goes.
+  folders[0]!.change(".git\\refs\\remotes\\origin\\HEAD.lock");
+  folders[0]!.change(".git\\refs\\remotes\\origin");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed).not.toHaveBeenCalled();
+  folders[0]!.change(".git\\refs\\remotes\\origin\\main");
   await vi.advanceTimersByTimeAsync(1000);
   expect(changed.mock.calls).toEqual([["a"]]);
 });

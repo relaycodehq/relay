@@ -10,6 +10,7 @@ import {
   type UsageMeter,
 } from "../../../shared/provider-usage";
 import { api } from "../../lib/api";
+import { everyWhileShown } from "../../lib/while-shown";
 import { UsageDial } from "../agents/UsageDial";
 import "../agents/composer-model-picker.css";
 import { agentName, type UsageProvider } from "../../../shared/agents";
@@ -79,11 +80,12 @@ export const UsageRing = memo(function UsageRing({
         });
     loadRef.current = load;
     void load();
-    const refresh = setInterval(() => void load(), REFRESH_MS);
+    // Each read past the main process's cache starts a Claude Code process.
+    const stopRefresh = everyWhileShown(() => void load(), REFRESH_MS);
     const tick = setInterval(() => setNow(Date.now()), 20_000);
     return () => {
       cancel = true;
-      clearInterval(refresh);
+      stopRefresh();
       clearInterval(tick);
     };
   }, [provider, account]);

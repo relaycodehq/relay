@@ -1,4 +1,5 @@
 import { existsSync, watch as watchFolder } from "node:fs";
+import { lstat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   folderBudget,
@@ -154,6 +155,7 @@ export interface TreeWatchDeps {
   watch?: typeof watchFolder;
   /** Git's own folder and the one its worktrees share. */
   gitDirs?(root: string): Promise<string[]>;
+  isFolder?(path: string): Promise<boolean>;
 }
 
 /**
@@ -229,18 +231,35 @@ export class TreeWatch {
           : undefined;
       if (overtaken()) return false;
       const watch = this.deps.watch ?? watchFolder;
+      const isFolder =
+        this.deps.isFolder ??
+        ((path: string) => lstat(path).then((s) => s.isDirectory()));
       for (const [dir, inGitDir] of [
         [root, false] as const,
         ...gitDirs.map((d) => [d, true] as const),
       ]) {
         const gitDir = gitDirAt(dir);
-        const listener = (file: string | null) => {
-          if (noticed(file, inGitDir, gitDir)) this.soon(where, w);
+        const listener = (file: string | null, type?: string) => {
+          if (!noticed(file, inGitDir, gitDir)) return;
+          // Windows marks a folder changed when an entry in it comes or goes,
+          // as a fetch's lock beside refs/remotes/origin/HEAD does with
+          // nothing fetched. In Git's folder the entry's own event says
+          // whether it counts.
+          if (
+            type === "change" &&
+            file &&
+            (inGitDir || /^\.git[\\/]/.test(file))
+          )
+            void isFolder(join(dir, file)).then(
+              (folder) => folder || this.soon(where, w),
+              () => this.soon(where, w),
+            );
+          else this.soon(where, w);
         };
         const folder = eachFolder
           ? await eachFolder(dir, inGitDir, listener)
-          : watch(dir, { recursive: true }, (_type, file) =>
-              listener(file?.toString() ?? null),
+          : watch(dir, { recursive: true }, (type, file) =>
+              listener(file?.toString() ?? null, type),
             );
         // A folder broke meanwhile and closed what this opened; its retry
         // opens them all again.
