@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { liveCwd, netstatListening } from "./tasks";
+import { describe, expect, it, vi } from "vitest";
+import type { ProcessRow } from "../platform/processes";
+import { liveCwd, netstatListening, projectTasks } from "./tasks";
 import {
   commandKey,
   describeTask,
@@ -10,6 +11,33 @@ import {
   windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
+
+// A stand-in process table: what `ps` would list, where each process works,
+// and the shell `restart` spawns.
+const fake = vi.hoisted(() => ({
+  rows: [] as ProcessRow[],
+  cwd: "",
+  spawned: 0,
+}));
+vi.mock("../platform/processes", () => ({
+  processTable: async () => fake.rows.map((r) => ({ ...r })),
+}));
+vi.mock("node:fs/promises", () => ({
+  readlink: async () => fake.cwd,
+}));
+vi.mock("node:child_process", () => ({
+  // `lsof`: every process asked about works in the project; none listens.
+  execFile: (
+    _file: string,
+    args: string[],
+    _options: unknown,
+    done: (e: null, out: string) => void,
+  ) => {
+    const pids = args.includes("cwd") ? args[args.length - 1].split(",") : [];
+    done(null, pids.map((pid) => `p${pid}\nn${fake.cwd}`).join("\n"));
+  },
+  spawn: () => ({ pid: fake.spawned, on: () => {}, unref: () => {} }),
+}));
 
 describe("shellCommand", () => {
   it("reads the command Claude Code evals", () => {
@@ -206,4 +234,54 @@ describe("liveCwd", () => {
     );
     expect(liveCwd("/home/jan/work/search")).toBe("/home/jan/work/search");
   });
+});
+
+it("keeps a restarted task with the thread and agent that started it", async () => {
+  const root = "/projects/restart-owner";
+  fake.cwd = root;
+  const started = Date.now() - 60000;
+  const host = 2_000_001;
+  const agent = 2_000_002;
+  const shell = 2_000_003;
+  fake.spawned = 2_000_004;
+  fake.rows = [
+    { pid: process.pid, ppid: 2_000_000, pgid: 0, started: 1, line: "relay" },
+    { pid: host, ppid: process.pid, pgid: 0, started, line: "agent-host" },
+    { pid: agent, ppid: host, pgid: 0, started, line: "/usr/local/bin/claude" },
+    { pid: shell, ppid: agent, pgid: 0, started, line: "/bin/zsh -lc npm run dev" },
+  ];
+  projectTasks.hosts = () => [host];
+  projectTasks.record(root, "thread-1", "npm run dev");
+  // Stopping the old shell takes it out of the table.
+  const kill = vi.spyOn(process, "kill").mockImplementation((pid) => {
+    fake.rows = fake.rows.filter((r) => r.pid !== pid);
+    return true;
+  });
+  try {
+    const [before] = await projectTasks.list(root, [], { fresh: true });
+    expect(before).toMatchObject({ origin: "relay", chatId: "thread-1", agent: "claude" });
+
+    await projectTasks.restart(root, before.id);
+    expect(kill).toHaveBeenCalledWith(shell, "SIGTERM");
+    // Relay's own spawn of the command, a child of Relay.
+    fake.rows.push({
+      pid: fake.spawned,
+      ppid: process.pid,
+      pgid: fake.spawned,
+      started: Date.now(),
+      line: "/bin/zsh -lc npm run dev",
+    });
+    const after = await projectTasks.list(root, [], { fresh: true });
+    expect(after).toHaveLength(1);
+    expect(after[0].id).not.toBe(before.id);
+    // Not "detached": the Processes page would sweep it as starter-gone.
+    expect(after[0]).toMatchObject({
+      origin: "relay",
+      chatId: "thread-1",
+      agent: "claude",
+      command: "npm run dev",
+    });
+  } finally {
+    kill.mockRestore();
+  }
 });

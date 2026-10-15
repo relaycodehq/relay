@@ -252,10 +252,12 @@ class ProjectTasks {
     child.on("error", () => {});
     child.unref();
     if (!child.pid) throw new Error("The process couldn't be started again.");
+    // It still belongs to whoever started it: the Processes page would
+    // otherwise offer to sweep it away with the tasks whose starter is gone.
     this.adopting.set(child.pid, {
       command: task.command,
       ...(task.agent ? { agent: task.agent } : {}),
-      origin: "detached",
+      origin: task.origin,
       ...(task.chatId ? { chatId: task.chatId } : {}),
       cwd: task.cwd ?? root,
       ...(task.rerun ? { rerun: task.rerun } : {}),
