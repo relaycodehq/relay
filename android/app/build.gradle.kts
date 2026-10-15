@@ -1,13 +1,25 @@
 import java.util.Properties
 
 // Relay's release key: from the environment on the mini (signing.env sourced), else
-// the same file on this Mac. Without either, release builds fall back to the debug key.
+// the same file on this Mac. Without either, debug builds work and release builds fail:
+// an APK signed with any other key can never update the installed app.
 val signing: Map<String, String> = run {
     val file = File(System.getProperty("user.home"), ".config/relay-android/signing.env")
     val fromFile = if (file.isFile) Properties().apply { file.reader().use { load(it) } }
         .entries.associate { (k, v) -> k.toString() to v.toString().trim('"', '\'') } else emptyMap()
     listOf("RELAY_ANDROID_KEYSTORE", "RELAY_ANDROID_KEYSTORE_PASSWORD", "RELAY_ANDROID_KEY_ALIAS", "RELAY_ANDROID_KEY_PASSWORD")
         .mapNotNull { key -> (System.getenv(key) ?: fromFile[key])?.let { key to it } }.toMap()
+}
+if (signing.size in 1..3) {
+    throw GradleException("Relay's Android signing is incomplete: ${signing.keys.sorted().joinToString()} set, all four RELAY_ANDROID_* needed.")
+}
+val unsignedRelease = "Relay's Android release key isn't set up (RELAY_ANDROID_* or ~/.config/relay-android/signing.env)."
+// Fails before the build starts when a release task is asked for by name; packageRelease below catches the rest.
+val shipsRelease = gradle.startParameter.taskNames.map { it.substringAfterLast(':') }.any { name ->
+    listOf("assemble", "bundle", "package", "install").any(name::startsWith) && name.contains("Release")
+}
+if (signing.isEmpty() && shipsRelease) {
+    throw GradleException(unsignedRelease)
 }
 
 plugins {
@@ -45,7 +57,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Updates must keep one key forever: Android refuses an APK signed differently.
-            signingConfig = signingConfigs.findByName("relay") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("relay")
         }
     }
     buildFeatures { compose = true }
@@ -53,6 +65,12 @@ android {
 }
 
 kotlin { jvmToolchain(21) }
+
+if (signing.isEmpty()) tasks.matching { it.name == "packageRelease" }.configureEach {
+    // A local copy: the configuration cache can't keep a reference to the script.
+    val message = unsignedRelease
+    doFirst { throw GradleException(message) }
+}
 
 dependencies {
     implementation(libs.androidx.core.ktx)

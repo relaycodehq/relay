@@ -58,8 +58,11 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
 
     private val foreground get() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
-    /** Something keeps the app in the foreground: a running thread or a reply read aloud. */
-    val busy get() = holding.isNotEmpty()
+    /**
+     * Work an install would cut short: a thread running on the computer or a
+     * reply read aloud. The idle watch on the connection doesn't count.
+     */
+    val busy get() = Reason.Read in holding || remote.overview.value?.chats?.any { it.running == true } == true
 
     private fun notice() = notices.getValue(if (Reason.Read in holding) Reason.Read else Reason.Watch)
 

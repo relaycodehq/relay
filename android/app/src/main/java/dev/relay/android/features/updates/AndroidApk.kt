@@ -96,7 +96,9 @@ class AndroidApk(private val context: Context, private val http: OkHttpClient) :
         dir.listFiles()?.forEach { it.delete() }
         val part = File(dir, "part-$version.apk")
         val digest = MessageDigest.getInstance("SHA-512")
-        val client = http.newBuilder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+        // No call timeout: the shared client's 20 s would cut off any download that takes longer.
+        val client = http.newBuilder().callTimeout(0, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (response.code != 200) throw ApkException("The download failed (HTTP ${response.code}).")
