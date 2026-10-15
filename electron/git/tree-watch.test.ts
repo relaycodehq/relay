@@ -150,7 +150,28 @@ it("watches a folder again after it broke, once it can be read", async () => {
   expect(folders).toHaveLength(2);
 });
 
-it("leaves Windows and unreadable folders to the poll", async () => {
+it("watches on Windows, where changes come with backslashes", async () => {
+  vi.useFakeTimers();
+  const { folders, watch } = fakeWatch();
+  const changed = vi.fn();
+  const trees = new TreeWatch({
+    root: async () => "C:\\projects\\a",
+    changed,
+    platform: "win32",
+    watch,
+    gitDirs: async (root) => [`${root}\\.git`],
+  });
+  expect(await trees.show({}, "a")).toBe(true);
+  folders[0]!.change(".git\\objects\\ab\\cd");
+  folders[0]!.change("node_modules\\x\\index.js");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed).not.toHaveBeenCalled();
+  folders[0]!.change(".git\\index");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(changed.mock.calls).toEqual([["a"]]);
+});
+
+it("leaves other systems and unreadable folders to the poll", async () => {
   const { watch } = fakeWatch();
   const deps = {
     root: async () => "/projects/a",
@@ -158,7 +179,7 @@ it("leaves Windows and unreadable folders to the poll", async () => {
     watch,
   };
   expect(
-    await new TreeWatch({ ...deps, platform: "win32" }).show({}, "a"),
+    await new TreeWatch({ ...deps, platform: "freebsd" }).show({}, "a"),
   ).toBe(false);
   const failing = new TreeWatch({
     ...deps,

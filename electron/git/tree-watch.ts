@@ -38,6 +38,16 @@ export function noticed(file: string | null, inGitDir: boolean) {
   return !name.endsWith(".lock") && name !== "FETCH_HEAD";
 }
 
+/**
+ * Whether one recursive watch covers a whole tree here: macOS and Windows.
+ * Windows was left out at first for fear a watched worktree couldn't be
+ * removed; on Windows 11 `git worktree remove` works with both its folders
+ * watched. Linux watches each folder on its own (see folder-watch.ts).
+ */
+export const watchesWholeTrees = (
+  platform: NodeJS.Platform = process.platform,
+) => platform === "darwin" || platform === "win32";
+
 const within = (dir: string, path: string) => {
   const rel = relative(dir, path);
   return !rel.startsWith("..") && !isAbsolute(rel);
@@ -61,9 +71,8 @@ export interface TreeWatchDeps {
   /** Something in `where` changed that its working tree may show. */
   changed(where: string): void;
   /**
-   * macOS watches a whole tree in one go; Linux watches each folder Git can
-   * show (see folder-watch.ts). Windows holds the folder open, which can keep
-   * a worktree from being removed, so it polls.
+   * macOS and Windows watch a whole tree in one go; Linux watches each folder
+   * Git can show (see folder-watch.ts).
    */
   platform?: NodeJS.Platform;
   watch?: typeof watchFolder;
@@ -84,8 +93,8 @@ export class TreeWatch {
 
   /** `owner` now shows `where`, or nothing. False when it should poll instead. */
   async show(owner: object, where: string | null): Promise<boolean> {
-    if (!["darwin", "linux"].includes(this.deps.platform ?? process.platform))
-      return false;
+    const platform = this.deps.platform ?? process.platform;
+    if (!watchesWholeTrees(platform) && platform !== "linux") return false;
     const was = this.shown.get(owner);
     if (was !== where) {
       if (was !== undefined) this.leave(owner, was);
