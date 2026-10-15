@@ -566,7 +566,8 @@ export interface Api
     contents: string,
   ): Promise<{ version: string }>;
   readClipboard(): Promise<string>;
-  writeClipboard(text: string): Promise<void>;
+  /** `html`, when given, is what apps that take HTML paste instead. */
+  writeClipboard(text: string, html?: string): Promise<void>;
   writeClipboardImage(dataUrl: string): Promise<void>;
   /** Where a dropped file sits on disk; empty when no file is behind it. */
   pathForFile(file: File): string;
@@ -745,6 +746,8 @@ export interface Api
   onMainWindowCommand(
     callback: (command: import("./thread-windows").MainWindowCommand) => void,
   ): () => void;
+  /** This thread's own window was brought up from elsewhere. */
+  onFlashWindow(callback: () => void): () => void;
   /** A thread to show in the main window, sent as its own window closes. */
   onOpenThread(
     callback: (thread: import("./thread-windows").ThreadWindow) => void,

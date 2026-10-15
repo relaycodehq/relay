@@ -114,3 +114,34 @@
 .thread-elsewhere-foot .text-button:hover {
   color: var(--text);
 }
+
+/* A popped-out window brought up from the main one pulses at its edges, twice.
+   Under reduced motion the ring just shows until it goes. */
+.window-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 4px var(--accent),
+    inset 0 0 70px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: window-flash 1.2s ease-out forwards;
+}
+@keyframes window-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  32% {
+    opacity: 0.2;
+  }
+  52% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

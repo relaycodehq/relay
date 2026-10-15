@@ -78,7 +78,12 @@ export class ThreadWindows {
   /** Pops `thread` out, or brings its window up if it has one. */
   open(thread: ThreadWindow, bounds?: Rectangle, focus = true) {
     const had = this.entries.get(thread.chatId);
-    if (had) return void show(had.win);
+    if (had) {
+      show(had.win);
+      // It may be on another screen, where coming forward goes unnoticed.
+      had.win.webContents.send("relay:flash-window", null);
+      return;
+    }
     const entry: Entry = {
       thread: { projectId: thread.projectId, chatId: thread.chatId },
       win: this.hooks.make(bounds && this.onScreen(bounds), () => {

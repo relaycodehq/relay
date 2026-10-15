@@ -440,6 +440,7 @@ contextBridge.exposeInMainWorld("relay", {
   onOpenProject: subscribe<string>("relay:open-project"),
   onThreadWindows: on("relay:thread-windows"),
   onOpenThread: on("relay:open-thread"),
+  onFlashWindow: on("relay:flash-window"),
   onMainWindowCommand: on("relay:main-command"),
   onSharedDraft: on("relay:shared-draft"),
   onDraftSend: on("relay:draft-send"),

@@ -152,6 +152,9 @@ test("a thread pops out into its own window and back, and reopens after a restar
     await card("Pop me out").click();
     await expect(page.getByText("Answer that stays")).toBeVisible();
     await expect(page.locator(".thread-elsewhere")).toHaveCount(0);
+    // Raised from here, it flashes its edges so it's found on another screen.
+    await expect(own.locator(".window-flash")).toHaveCount(1);
+    await expect(own.locator(".window-flash")).toHaveCount(0);
 
     // Back: its window closes and the thread opens in the main window.
     const gone = own.waitForEvent("close");

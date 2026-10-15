@@ -14,6 +14,7 @@ import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import { useUnread } from "../features/sidebar/useUnread";
 import { BackButton } from "../features/thread-windows/ThreadWindowButtons";
+import { WindowFlash } from "../features/thread-windows/WindowFlash";
 import { ErrorBox, Loading } from "../ui/ui";
 import { fitHeader } from "./header-fit";
 import { ProjectTitle } from "./ShellTitlebar";
@@ -120,6 +121,7 @@ export default function ThreadWindowShell({
           onSettings={toMain}
         />
       </div>
+      <WindowFlash />
       {!!error && (
         <div className="toast error">
           <ErrorBox error={error} />

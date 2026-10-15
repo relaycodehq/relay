@@ -35,6 +35,8 @@ export interface RelayEvents {
   "relay:thread-windows": ThreadWindowsState;
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
+  /** This thread's own window was brought up; it lights its edges to be found. */
+  "relay:flash-window": null;
   /** Run this command in the main window, asked from a thread's own. */
   "relay:main-command": MainWindowCommand;
   "relay:device-hub": DeviceHubState;
