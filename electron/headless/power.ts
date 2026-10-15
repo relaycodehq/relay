@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Power } from "../app/keep-awake";
+import { holdWindowsAwake } from "../platform/windows-awake";
 
 /**
  * Keeping a headless computer awake without Electron: macOS takes the same
@@ -31,34 +32,9 @@ export function headlessPower(): Power {
   };
 }
 
-/**
- * Windows keeps a computer awake for a thread that asks it to, so a hidden
- * PowerShell asks (ES_CONTINUOUS | ES_SYSTEM_REQUIRED) and waits on Relay's
- * process, holding the request until it ends.
- */
-const windowsAwake = (pid: number) =>
-  Buffer.from(
-    `$t = Add-Type -Name Power -Namespace Relay -PassThru -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);'
-[void]$t::SetThreadExecutionState([uint32]2147483649)
-Wait-Process -Id ${pid}`,
-    "utf16le",
-  ).toString("base64");
-
 function inhibitor() {
   const options = { stdio: "ignore" as const, windowsHide: true };
-  if (process.platform === "win32")
-    return spawn(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-WindowStyle",
-        "Hidden",
-        "-EncodedCommand",
-        windowsAwake(process.pid),
-      ],
-      options,
-    );
+  if (process.platform === "win32") return holdWindowsAwake();
   if (process.platform === "darwin")
     return spawn(
       "/usr/bin/caffeinate",

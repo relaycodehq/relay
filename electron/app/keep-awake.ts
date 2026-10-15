@@ -6,6 +6,11 @@ import { powerMonitor, powerSaveBlocker } from "electron";
 import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { promisify } from "node:util";
+import type { ChildProcess } from "node:child_process";
+import {
+  holdWindowsAwake,
+  windowsBatteryLevel,
+} from "../platform/windows-awake";
 
 /** Below this, on battery, the computer may sleep, so a forgotten one doesn't run flat. */
 export const batteryFloor = 20;
@@ -70,6 +75,25 @@ export class KeepAwake {
 const run = promisify(execFile);
 
 function electronPower(): Power {
+  if (process.platform === "win32") {
+    const held = new Map<number, ChildProcess>();
+    let next = 1;
+    return {
+      hold() {
+        const id = next++;
+        const child = holdWindowsAwake();
+        child.on("error", () => held.delete(id));
+        held.set(id, child);
+        return id;
+      },
+      release(id) {
+        held.get(id)?.kill();
+        held.delete(id);
+      },
+      onBattery: () => powerMonitor.isOnBatteryPower(),
+      batteryLevel: windowsBatteryLevel,
+    };
+  }
   return {
     // On macOS an assertion against idle sleep alone, as `caffeinate -i` takes.
     hold: () => powerSaveBlocker.start("prevent-app-suspension"),
