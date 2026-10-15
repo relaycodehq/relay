@@ -183,7 +183,11 @@ export function MemePicker({
       onMouseDown={(e) => e.preventDefault()}
     >
       {picker.mode === "loading" ? (
-        <p className="meme-picker-head">Loading memes…</p>
+        <p className="meme-picker-head">
+          {picker.error
+            ? `Couldn't read the memes: ${picker.error}`
+            : "Loading memes…"}
+        </p>
       ) : picker.mode === "setup" ? (
         <SetUpOffer picker={picker} />
       ) : (

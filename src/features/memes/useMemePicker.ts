@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import type { RelayCommand } from "../../../shared/commands";
 import { memeToken, type MemeView } from "../../../shared/memes";
+import { errorMessage } from "../../lib/error-message";
 import { useMemes } from "./useMemes";
 
 const typed = /^\s*\/meme\s([^\n]*)$/i;
@@ -70,13 +71,20 @@ export function useMemePicker({
       setDismissed(draft);
       return handled();
     }
-    const enter = (e.key === "Enter" && !e.shiftKey) || e.key === "Tab";
+    const enter = e.key === "Enter" && !e.shiftKey;
     if (mode === "setup") {
       if (!enter) return false;
       setUp();
       return handled();
     }
     if (mode !== "row" || !items.length) return false;
+    // Tab walks the row, round to the start, as it would through a menu;
+    // only Enter sends.
+    if (e.key === "Tab") {
+      const step = e.shiftKey ? -1 : 1;
+      setActive((at + step + items.length) % items.length);
+      return handled();
+    }
     const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
     if (step) {
       const next = at + step;
@@ -93,6 +101,8 @@ export function useMemePicker({
     activeId: visible && mode === "row" && items.length ? `${id}-${at}` : undefined,
     mode,
     state,
+    /** Why the list couldn't be read, while `mode` is "loading". */
+    error: memes.error ? errorMessage(memes.error) : undefined,
     query: query ?? "",
     items,
     active: at,
@@ -104,7 +114,11 @@ export function useMemePicker({
     /** `/meme <name>` sent as typed: the best match goes out. */
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "meme") return undefined;
-      if (!state?.setUp) {
+      if (!state)
+        return memes.error
+          ? `Couldn't read the memes: ${errorMessage(memes.error)}`
+          : "The memes are still loading. Try again in a moment.";
+      if (!state.setUp) {
         setUp();
         return true;
       }
