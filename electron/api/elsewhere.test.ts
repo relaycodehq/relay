@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectChat } from "../../shared/projects";
@@ -135,6 +142,19 @@ it("lists the other repository's touched files, and names started threads in the
       }),
     ],
   });
+});
+
+it("finds a started thread's files when its folder is reached through a symlink", async () => {
+  const { h, folders } = setup();
+  folders[PORTER] = join(base, "linked");
+  await symlink(clone, folders[PORTER]);
+  const { groups } = await h.threadElsewhere([LEAD]);
+  expect(groups[0]?.files).toEqual([
+    expect.objectContaining({
+      path: "a.ts",
+      by: [{ chatId: PORTER, title: "Port shader" }],
+    }),
+  ]);
 });
 
 it("shows and commits only files the thread's agents changed there", async () => {

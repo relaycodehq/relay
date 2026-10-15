@@ -1,3 +1,4 @@
+import { realpath } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { ElsewhereChanges, ElsewhereGroup } from "../../shared/elsewhere";
@@ -128,8 +129,11 @@ export function elsewhereHandlers(ctx: ApiContext) {
       marks.set(child.id, touchMark(child));
       const folder = await folderOf(child);
       const top = folder && (await topLevel(folder));
-      // Turn changes are relative to the thread's folder, which may sit below its repository's top.
-      const prefix = top && folder ? relative(top, resolve(folder)) : "";
+      // Turn changes are relative to the thread's folder, which may sit
+      // below its repository's top. Git gives that top with symlinks resolved.
+      const real =
+        folder && (await realpath(folder).catch(() => resolve(folder)));
+      const prefix = top && real ? relative(top, real) : "";
       for (const m of child.messages) {
         if (top)
           for (const f of m.changes ?? [])
