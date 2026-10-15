@@ -67,10 +67,11 @@ private var stackRestored = false
 
 /**
  * The whole app: theme, navigator, toasts, and either one stack (phone) or
- * Home in a sidebar beside a detail pane (600dp and wider).
+ * Home in a sidebar beside a detail pane (600dp and wider). After a [crash],
+ * only its page until [onCrashSeen].
  */
 @Composable
-fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
+fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Crash?, onCrashSeen: () -> Unit) {
     val prefs = container.prefs
     val remote = container.remote
     val systemDark = isSystemInDarkTheme()
@@ -83,6 +84,7 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>) {
     val colors = remember(prefs.themeMode, systemDark, appearance) { resolveColors(prefs.themeMode, appearance?.toDesktop(), systemDark) }
     RelayTheme(colors) {
         SystemBars(dark = colors.isDark)
+        if (crash != null) return@RelayTheme CrashScreen(crash, onCrashSeen)
         val backStack = rememberNavBackStack(Route.Home)
         val top = backStack.lastOrNull() as? Route
         // Panes only once there's a computer to list; pairing is one whole screen.
