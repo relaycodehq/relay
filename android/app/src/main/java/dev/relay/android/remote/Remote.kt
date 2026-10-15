@@ -47,6 +47,8 @@ data class PairedComputer(
     val name: String,
     /** Where the phone reaches it, to tell apart pairings that share a name. */
     val address: String,
+    /** It has an address on the tailnet, so Tailscale on this phone reaches it from anywhere. */
+    val tailscale: Boolean = false,
 )
 
 class PairingFailed(message: String) : Exception(message)
@@ -91,7 +93,12 @@ class Remote(
 
     /** Every paired computer, in pairing order. */
     val computers: StateFlow<List<PairedComputer>> = _saved.map { list ->
-        list.map { PairedComputer(it.key, it.name, "${Routes.order(it.hosts, it.routes ?: Routes.default).firstOrNull() ?: "?"}:${it.port}") }
+        list.map {
+            PairedComputer(
+                it.key, it.name, "${Routes.order(it.hosts, it.routes ?: Routes.default).firstOrNull() ?: "?"}:${it.port}",
+                tailscale = it.hosts.any { host -> Routes.kind(host) == RouteKind.Tailscale },
+            )
+        }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     /** The active computer's route order. */
