@@ -3,7 +3,6 @@ node_modules
 dist/
 dist-electron/
 dist-headless/
-dist-phone/
 release/
 test-results/
 playwright-report/

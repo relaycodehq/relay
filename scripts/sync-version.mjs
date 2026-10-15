@@ -50,22 +50,12 @@ export function syncVersion(options = {}) {
   const version = resolveVersion(options);
   // Read everything before writing, so a broken file doesn't leave half the
   // metadata synced. Dependency versions and lockfile entries stay untouched.
-  const files = [
-    "package.json",
-    "package-lock.json",
-    "mobile/package.json",
-    "mobile/package-lock.json",
-    "mobile/app.json",
-  ].map((name) => {
+  const files = ["package.json", "package-lock.json"].map((name) => {
     const path = join(root, name);
     const before = readFileSync(path, "utf8");
     const data = JSON.parse(before);
-    if (name === "mobile/app.json") data.expo.version = version;
-    else {
-      data.version = version;
-      if (name.endsWith("package-lock.json"))
-        data.packages[""].version = version;
-    }
+    data.version = version;
+    if (name === "package-lock.json") data.packages[""].version = version;
     return { path, before, after: JSON.stringify(data, null, 2) + "\n" };
   });
   for (const { path, before, after } of files)

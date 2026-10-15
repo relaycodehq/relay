@@ -18,8 +18,8 @@
 // move.
 //
 // Rewrites, in the moved files' new homes and in every file that points at a
-// moved one (src, electron, shared, server, tests, previews, scripts,
-// mobile/src and the root-level .ts, .html and .js files):
+// moved one (src, electron, shared, server, tests, previews, scripts and the
+// root-level .ts, .html and .js files):
 //   import/export ... from, side-effect imports, import("..."), require("..."),
 //   require.resolve, import.meta.resolve, typeof import("..."), vi/jest
 //   .mock/.doMock/.importActual/..., new URL(..., import.meta.url),
@@ -142,12 +142,7 @@ function walk(dir = "", out = []) {
     if (st.isDirectory()) {
       if (SKIP_DIRS.has(name)) continue;
       if (!dir && isGenerated(name)) continue;
-      if (
-        rel === "mobile/android" ||
-        rel === "mobile/ios" ||
-        rel === ".claude/skills"
-      )
-        continue;
+      if (rel === ".claude/skills") continue;
       walk(rel, out);
     } else if (st.isFile()) out.push({ rel, size: st.size });
   }
@@ -539,7 +534,6 @@ const inScanRoot = (rel) => {
     ].includes(top)
   )
     return true;
-  if (rel.startsWith("mobile/src/")) return true;
   return !rel.includes("/");
 };
 const allFiles = walk();
@@ -662,7 +656,7 @@ const TEXT_NAMES = new Set([
   "LICENSE",
 ]);
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-// Not glued to a longer path (so mobile/src/x isn't src/x), but a URL's port may precede it.
+// Not glued to a longer path (so previews/src/x isn't src/x), but a URL's port may precede it.
 const BOUNDARY = String.raw`(?:(?<![\w\-./])|(?<=:\d{2,5}))\/?(?:\.{1,2}\/)*`;
 const CODE_STEM_EXT = /\.(?:[cm]?[jt]sx?)$/;
 

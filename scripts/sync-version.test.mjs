@@ -22,30 +22,26 @@ afterEach(() => {
 function fixture(version = "0.1.0") {
   const root = mkdtempSync(join(tmpdir(), "relay-version-"));
   roots.push(root);
-  mkdirSync(join(root, "mobile"));
   const write = (path, data) =>
     writeFileSync(join(root, path), JSON.stringify(data, null, 2) + "\n");
   const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
-  for (const prefix of ["", "mobile/"]) {
-    write(`${prefix}package.json`, {
-      name: "relay",
-      version,
-      dependencies: { example: "1.2.3" },
-      scripts: {
-        version: "node scripts/sync-version.mjs --package",
-        "version:bump": "node scripts/sync-version.mjs --bump",
-      },
-    });
-    write(`${prefix}package-lock.json`, {
-      version,
-      lockfileVersion: 3,
-      packages: {
-        "": { name: "relay", version, dependencies: { example: "1.2.3" } },
-        "node_modules/example": { version: "1.2.3", integrity: "unchanged" },
-      },
-    });
-  }
-  write("mobile/app.json", { expo: { name: "Relay", version } });
+  write("package.json", {
+    name: "relay",
+    version,
+    dependencies: { example: "1.2.3" },
+    scripts: {
+      version: "node scripts/sync-version.mjs --package",
+      "version:bump": "node scripts/sync-version.mjs --bump",
+    },
+  });
+  write("package-lock.json", {
+    version,
+    lockfileVersion: 3,
+    packages: {
+      "": { name: "relay", version, dependencies: { example: "1.2.3" } },
+      "node_modules/example": { version: "1.2.3", integrity: "unchanged" },
+    },
+  });
   const git = (...args) =>
     execFileSync("git", args, {
       cwd: root,
@@ -75,10 +71,6 @@ function fixture(version = "0.1.0") {
     read("package.json").version,
     read("package-lock.json").version,
     read("package-lock.json").packages[""].version,
-    read("mobile/package.json").version,
-    read("mobile/package-lock.json").version,
-    read("mobile/package-lock.json").packages[""].version,
-    read("mobile/app.json").expo.version,
   ];
   return { root, read, write, tag, git, versions };
 }
@@ -88,22 +80,20 @@ describe("Relay version syncing", () => {
     const f = fixture();
     f.tag("0.10.3");
     expect(syncVersion({ root: f.root })).toBe("0.10.3");
-    expect(f.versions()).toEqual(Array(7).fill("0.10.3"));
-    for (const prefix of ["", "mobile/"]) {
-      expect(f.read(`${prefix}package.json`).dependencies).toEqual({
-        example: "1.2.3",
-      });
-      expect(
-        f.read(`${prefix}package-lock.json`).packages["node_modules/example"],
-      ).toEqual({ version: "1.2.3", integrity: "unchanged" });
-    }
+    expect(f.versions()).toEqual(Array(3).fill("0.10.3"));
+    expect(f.read("package.json").dependencies).toEqual({
+      example: "1.2.3",
+    });
+    expect(
+      f.read("package-lock.json").packages["node_modules/example"],
+    ).toEqual({ version: "1.2.3", integrity: "unchanged" });
   });
 
   it("keeps a package version ahead of the last release tag", () => {
     const f = fixture("0.11.0");
     f.tag("0.10.3");
     expect(syncVersion({ root: f.root })).toBe("0.11.0");
-    expect(f.versions()).toEqual(Array(7).fill("0.11.0"));
+    expect(f.versions()).toEqual(Array(3).fill("0.11.0"));
   });
 
   it("uses package.json in a source archive without Git", () => {
@@ -136,7 +126,7 @@ describe("Relay version syncing", () => {
     const f = fixture("0.11.0");
     f.tag("0.10.3");
     expect(syncVersion({ root: f.root, version: "v0.9.0" })).toBe("0.9.0");
-    expect(f.versions()).toEqual(Array(7).fill("0.9.0"));
+    expect(f.versions()).toEqual(Array(3).fill("0.9.0"));
   });
 
   it.each(["", "vnext", "0.10", "0.10.3-beta", "00.10.3"])(
@@ -146,28 +136,27 @@ describe("Relay version syncing", () => {
       expect(() => syncVersion({ root: f.root, version })).toThrow(
         "Not a release version",
       );
-      expect(f.versions()).toEqual(Array(7).fill("0.1.0"));
+      expect(f.versions()).toEqual(Array(3).fill("0.1.0"));
     },
   );
 
   it("reads all metadata before writing any of it", () => {
     const f = fixture();
-    writeFileSync(join(f.root, "mobile/app.json"), "broken JSON");
+    writeFileSync(join(f.root, "package-lock.json"), "broken JSON");
     expect(() => syncVersion({ root: f.root, version: "0.10.3" })).toThrow();
     expect(f.read("package.json").version).toBe("0.1.0");
-    expect(f.read("mobile/package-lock.json").version).toBe("0.1.0");
   });
 
   it("leaves already synced files untouched", () => {
     const f = fixture();
     syncVersion({ root: f.root, version: "0.10.3" });
-    const path = join(f.root, "mobile/app.json");
+    const path = join(f.root, "package-lock.json");
     const before = statSync(path).mtimeMs;
     syncVersion({ root: f.root, version: "0.10.3" });
     expect(statSync(path).mtimeMs).toBe(before);
   });
 
-  it("syncs the phone and both lockfiles through npm version's lifecycle", () => {
+  it("syncs the package and its lockfile through npm version's lifecycle", () => {
     const f = fixture();
     mkdirSync(join(f.root, "scripts"));
     copyFileSync(
@@ -183,7 +172,7 @@ describe("Relay version syncing", () => {
         shell: process.platform === "win32",
       },
     );
-    expect(f.versions()).toEqual(Array(7).fill("0.10.4"));
+    expect(f.versions()).toEqual(Array(3).fill("0.10.4"));
   });
 });
 
@@ -197,7 +186,7 @@ describe("Relay version bumps", () => {
   ])("bumps %s and syncs every version to %s", (bump, version) => {
     const f = fixture("0.10.3");
     expect(bumpVersion({ root: f.root, bump })).toBe(version);
-    expect(f.versions()).toEqual(Array(7).fill(version));
+    expect(f.versions()).toEqual(Array(3).fill(version));
     expect(
       f.read("package-lock.json").packages["node_modules/example"],
     ).toEqual({ version: "1.2.3", integrity: "unchanged" });
@@ -207,7 +196,7 @@ describe("Relay version bumps", () => {
     const f = fixture();
     f.tag("0.10.3");
     expect(bumpVersion({ root: f.root })).toBe("0.10.4");
-    expect(f.versions()).toEqual(Array(7).fill("0.10.4"));
+    expect(f.versions()).toEqual(Array(3).fill("0.10.4"));
   });
 
   it.each(["0.10.3", "0.9.9", "nope", "0.11.0-beta"])(
@@ -215,7 +204,7 @@ describe("Relay version bumps", () => {
     (bump) => {
       const f = fixture("0.10.3");
       expect(() => bumpVersion({ root: f.root, bump })).toThrow();
-      expect(f.versions()).toEqual(Array(7).fill("0.10.3"));
+      expect(f.versions()).toEqual(Array(3).fill("0.10.3"));
     },
   );
 
@@ -246,7 +235,7 @@ describe("Relay version bumps", () => {
         },
       );
       const version = args[0] === "minor" ? "0.11.0" : (args[0] ?? "0.10.4");
-      expect(f.versions()).toEqual(Array(7).fill(version));
+      expect(f.versions()).toEqual(Array(3).fill(version));
       expect(result).toContain(`Relay ${version}`);
     },
   );

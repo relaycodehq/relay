@@ -34,9 +34,6 @@ try {
     join(folder, "bin", "relay.cmd"),
   );
   cpSync(headlessOut, join(folder, "lib"), { recursive: true });
-  // The phone app's code, which paired phones update from; see remote/phone-app.
-  if (existsSync("dist-phone"))
-    cpSync("dist-phone", join(folder, "dist-phone"), { recursive: true });
   copyFileSync("docs/headless.md", join(folder, "README.md"));
   for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md"])
     copyFileSync(file, join(folder, file));
