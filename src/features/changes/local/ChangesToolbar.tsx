@@ -85,16 +85,19 @@ export function ChangesToolbar({
   ) : (
     push
   );
+  const refresh = (
+    <IconButton
+      label="Refresh local changes"
+      disabled={busy}
+      onClick={onRefresh}
+    >
+      <RefreshCw size={15} />
+    </IconButton>
+  );
   const actions = (
     <>
       {view}
-      <IconButton
-        label="Refresh local changes"
-        disabled={busy}
-        onClick={onRefresh}
-      >
-        <RefreshCw size={15} />
-      </IconButton>
+      {refresh}
       {level}
     </>
   );
@@ -147,6 +150,7 @@ export function ChangesToolbar({
           </span>
         ))}
       <span className="spacer" />
+      {refresh}
       {level}
     </header>
   );
