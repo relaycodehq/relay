@@ -52,7 +52,6 @@ internal fun ComputersSection(remote: Remote, updates: Updates, name: String, sc
                 } else "Tap to switch to it.",
                 subtitleLines = 3,
                 leadingIcon = TablerIcons.Outline.DeviceDesktop,
-                selected = inUse,
                 onClick = {
                     if (!inUse) {
                         nav.home()
@@ -63,7 +62,7 @@ internal fun ComputersSection(remote: Remote, updates: Updates, name: String, sc
         }
         val u = update.update
         when {
-            u != null -> ListRow("Updating $name", subtitle = describeUpdate(name, u), subtitleLines = 4)
+            u != null -> ListRow("Updating $name", subtitle = describeUpdate(name, u), leadingIcon = TablerIcons.Outline.Refresh, subtitleLines = 4)
             update.can -> ListRow(
                 "Update $name",
                 subtitle = "${update.hint} It restarts into the new version; its agents keep going.",
@@ -138,8 +137,8 @@ internal fun RouteSection(remote: Remote, name: String) {
 private fun Note(text: String) {
     Text(
         text,
-        Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        style = RelayTheme.type.caption,
+        Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        style = RelayTheme.type.xs,
         color = RelayTheme.colors.mutedForeground,
     )
 }

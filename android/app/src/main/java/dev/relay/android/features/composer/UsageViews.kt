@@ -52,6 +52,14 @@ import dev.relay.android.ui.theme.RelayTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 
 // The desktop's usage meters and context meter (mobile/src/ui/Usage.tsx).
 
@@ -108,9 +116,9 @@ private fun usageLabel(usage: ProviderUsage?): String? {
 }
 
 /**
- * The composer's footer: the context window and the plan's limits as thin
- * bars along the bottom edge, and what a thread billed per token so far,
- * opening the usage sheet on a tap.
+ * The thread settings sheet's footer: the context window and the plan's
+ * limits as thin bars, and what a thread billed per token so far, opening
+ * the usage sheet on a tap.
  */
 @Composable
 fun UsageBar(provider: String, usage: ProviderUsage?, context: ContextUsage?, cost: ThreadCost?, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -136,6 +144,38 @@ fun UsageBar(provider: String, usage: ProviderUsage?, context: ContextUsage?, co
         if (spent != null) Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("This thread", style = RelayTheme.type.xs, color = c.faint, maxLines = 1)
             Text(formatCost(spent.usd), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * The plan's first two limits as rings, the session outside and the week
+ * inside, each arc what's left. Nothing for an agent without plan limits;
+ * bare rings while the first answer is on its way.
+ */
+@Composable
+fun UsageRings(provider: String, usage: ProviderUsage?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (!reportsUsage(provider)) return
+    val c = RelayTheme.colors
+    val list = meters(usage).take(2)
+    Box(
+        modifier.size(36.dp).clip(CircleShape)
+            .pressable(onClick = onClick, role = Role.Button)
+            .semantics { contentDescription = usageLabel(usage) ?: "${agentName(provider)} usage" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(22.dp)) {
+            val stroke = 2.4.dp.toPx()
+            val step = stroke + 1.6.dp.toPx()
+            for (i in 0 until maxOf(1, list.size)) {
+                val inset = stroke / 2 + i * step
+                val at = Offset(inset, inset)
+                val box = Size(size.width - 2 * inset, size.height - 2 * inset)
+                drawArc(c.border, 0f, 360f, false, at, box, style = Stroke(stroke))
+                val m = list.getOrNull(i) ?: continue
+                val color = paceColor(m.pace, if (m.kind == "session") c.accent else c.mutedForeground)
+                if (m.leftPercent > 0) drawArc(color, -90f, 360f * m.leftPercent / 100f, false, at, box, style = Stroke(stroke, cap = StrokeCap.Round))
+            }
         }
     }
 }

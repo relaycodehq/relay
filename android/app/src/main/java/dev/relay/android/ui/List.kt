@@ -7,23 +7,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -32,68 +27,53 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 
-/** A group heading above a list: 11sp, 500, muted. */
+/*
+ * Lists look like Home's: rows sit 8dp in from the screen's edges ([ListInset]),
+ * each a rounded patch that lights up when pressed, with a quiet label over
+ * each group. No cards, no rules between rows.
+ */
+
+/** How far a list's rows sit in from the screen's edges; a screen pads its list with it. */
+val ListInset = 8.dp
+
+/** A screen's list: [ListInset] at the sides, [bottom] below the last row. */
+fun listPadding(bottom: Dp = 40.dp, top: Dp = 4.dp) = PaddingValues(start = ListInset, end = ListInset, top = top, bottom = bottom)
+
+/** Rows' text starts this far inside them, so it lines up with group labels. */
+private val ROW_PAD = 12.dp
+private val ROW_SHAPE = RoundedCornerShape(12.dp)
+
+/** A group's label: 11sp, 500, muted, with how many it holds in faint on the right. */
 @Composable
 fun SectionHeader(
     text: String,
     modifier: Modifier = Modifier,
+    count: Int? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
+    val c = RelayTheme.colors
     Row(
-        modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
+        modifier.fillMaxWidth().heightIn(min = 34.dp).padding(start = ROW_PAD, end = ROW_PAD, top = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text, Modifier.weight(1f), style = RelayTheme.type.caption, color = RelayTheme.colors.mutedForeground)
+        Text(text, Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground, maxLines = 1)
+        if (count != null) Text("$count", style = RelayTheme.type.xs, color = c.faint)
         if (action != null) action()
     }
 }
 
-/**
- * One card holding rows, with a hairline between each. Children are stacked
- * as they are; any composable works as a row, ListRow is the usual one.
- */
+/** Rows of one group, stacked with Home's 2dp between them. */
 @Composable
-fun ListGroup(
-    modifier: Modifier = Modifier,
-    dividerInset: Dp = 0.dp,
-    content: @Composable () -> Unit,
-) {
-    val c = RelayTheme.colors
-    val line = RelayTheme.hairline
-    val edges = remember { IntArray(64) }
-    val count = remember { IntArray(1) }
-    Layout(
-        content = content,
-        modifier = modifier
-            .clip(Radii.xlShape)
-            .background(c.card)
-            .ring(shape = Radii.xlShape)
-            .drawWithContent {
-                drawContent()
-                val w = line.toPx()
-                val inset = dividerInset.toPx()
-                for (i in 0 until count[0]) {
-                    val y = edges[i].toFloat() - w / 2
-                    drawLine(c.border, Offset(inset, y), Offset(size.width, y), w)
-                }
-            },
-    ) { measurables, constraints ->
-        val loose = constraints.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity)
-        val placeables = measurables.map { it.measure(loose) }
-        val width = placeables.maxOfOrNull { it.width }?.coerceAtLeast(constraints.minWidth) ?: constraints.minWidth
-        val height = placeables.sumOf { it.height }
-        layout(width, height.coerceIn(constraints.minHeight, constraints.maxHeight)) {
-            var y = 0
-            var n = 0
-            placeables.forEachIndexed { i, p ->
-                p.placeRelative(0, y)
-                y += p.height
-                if (i < placeables.lastIndex && p.height > 0 && n < edges.size) edges[n++] = y
-            }
-            count[0] = n
-        }
-    }
+fun ListGroup(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) { content() }
 }
 
 /** Hexta's 40dp item media: an icon on a muted tile. */
@@ -111,11 +91,13 @@ fun MediaTile(
     ) { Icon(icon, null, tint = tint, size = if (size >= 40.dp) 18.dp else 16.dp) }
 }
 
-enum class RowSize(val padX: Dp, val padY: Dp) { Default(16.dp, 14.dp), Sm(12.dp, 10.dp), Xs(10.dp, 8.dp) }
+/** Default rows are a thread row's height; Sm and Xs are for menus and dense lists. */
+enum class RowSize(val minHeight: Dp, val padY: Dp) { Default(52.dp, 9.dp), Sm(44.dp, 7.dp), Xs(36.dp, 5.dp) }
 
 /**
- * A list row: leading media, a title (13sp, 500), a muted subtitle, then
- * whatever trails. Pressed rows highlight in muted; `selected` keeps it.
+ * A list row as Home draws a thread: a 16dp glyph, a 14sp title, a muted
+ * line under it, then whatever trails. Pressed it lights up in hover;
+ * `selected` keeps it lit.
  */
 @Composable
 fun ListRow(
@@ -137,37 +119,41 @@ fun ListRow(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val fill = when {
-        pressed -> c.muted.copy(alpha = 0.6f)
-        selected -> c.muted
+        pressed -> c.hover
+        selected -> c.selected
         else -> Color.Transparent
     }
     Row(
         modifier
             .fillMaxWidth()
+            .clip(ROW_SHAPE)
             .semantics { this.selected = selected }
+            .background(fill)
             .then(
                 if (onClick != null || onLongClick != null)
                     Modifier.pressable(onClick ?: {}, onLongClick = onLongClick, scale = false, interaction = interaction)
                 else Modifier,
             )
-            .background(fill)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = size.padX, vertical = size.padY),
+            .heightIn(min = size.minHeight)
+            .padding(horizontal = ROW_PAD, vertical = size.padY),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         when {
-            leading != null -> leading()
-            leadingIcon != null -> MediaTile(leadingIcon, size = if (size == RowSize.Default) 40.dp else 32.dp)
+            leading != null -> Box(Modifier.widthIn(min = 16.dp), contentAlignment = Alignment.Center) { leading() }
+            leadingIcon != null -> Icon(leadingIcon, null, tint = c.mutedForeground, size = 16.dp)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = RelayTheme.type.label, color = titleColor, maxLines = 1)
-            if (subtitle != null) Text(subtitle, color = c.mutedForeground, maxLines = subtitleLines)
+            Text(
+                title,
+                style = RelayTheme.type.base.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) Text(subtitle, style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
         }
         if (trailing != null) trailing()
-        if (chevron) {
-            Spacer(Modifier.width(0.dp))
-            Icon(TablerIcons.Outline.ChevronRight, null, tint = c.faint)
-        }
+        if (chevron) Icon(TablerIcons.Outline.ChevronRight, null, tint = c.faint, size = 14.dp)
     }
 }

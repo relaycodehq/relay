@@ -1,7 +1,6 @@
 package dev.relay.android.features.tunnel
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +34,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ArrowRight
 import io.github.lyxnx.compose.ui.tablericons.outline.World
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import dev.relay.android.ui.listPadding
 
 /** "Vite dev server · Relay · in a worktree". */
 internal fun siteLine(site: RemoteSite) =
@@ -79,19 +79,19 @@ internal fun SitesPanel(
     }
     val address = LocalUrls.typed(typed)
     val shown = list?.let { if (address != null) it else matching(it, typed) }
-    LazyColumn(modifier.fillMaxSize().background(c.background), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(modifier.fillMaxSize().background(c.background), contentPadding = listPadding(bottom = 24.dp)) {
         if (address != null) item(key = "typed") {
             ListRow(
                 "Open ${address.shown}",
                 size = RowSize.Sm,
-                leading = { Icon(TablerIcons.Outline.ArrowRight, null, tint = c.accent, size = 17.dp) },
+                leading = { Icon(TablerIcons.Outline.ArrowRight, null, tint = c.accent, size = 16.dp) },
                 onClick = { onOpen(address) },
             )
         }
-        item(key = "head") { SectionHeader("Running on $name", Modifier.padding(horizontal = 12.dp)) }
+        item(key = "head") { SectionHeader("Running on $name", count = shown?.size?.takeIf { it > 0 }) }
         when {
             shown == null && error != null -> item(key = "error") { Note("Couldn't see what runs there: $error") }
-            shown == null -> item(key = "loading") { Spinner(Modifier.padding(16.dp)) }
+            shown == null -> item(key = "loading") { Spinner(Modifier.padding(12.dp)) }
             shown.isEmpty() && list.isNullOrEmpty() -> item(key = "none") {
                 Note("Nothing in your projects listens on a port right now. Type one to open it anyway.")
             }
@@ -101,7 +101,7 @@ internal fun SitesPanel(
                     "localhost:${site.port}",
                     subtitle = siteLine(site),
                     size = RowSize.Sm,
-                    leading = { Icon(TablerIcons.Outline.World, null, tint = c.mutedForeground, size = 17.dp) },
+                    leading = { Icon(TablerIcons.Outline.World, null, tint = c.mutedForeground, size = 16.dp) },
                     chevron = true,
                     onClick = { onOpen(SiteAddress(site.port)) },
                 )
@@ -112,4 +112,4 @@ internal fun SitesPanel(
 
 @Composable
 private fun Note(text: String) =
-    Text(text, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), color = RelayTheme.colors.mutedForeground)
+    Text(text, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), style = RelayTheme.type.xs, color = RelayTheme.colors.mutedForeground)

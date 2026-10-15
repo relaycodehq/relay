@@ -25,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
+import dev.relay.android.features.thread.ReadAhead
+import dev.relay.android.features.thread.ThreadCache
 
 /**
  * The app's object graph, built once in RelayApp. Wire services here and hand
@@ -79,6 +81,7 @@ class AppContainer(context: Context) {
     init {
         // Once per process, not per activity: a rotation or fold mustn't reconnect.
         scope.launch { remote.load() }
+        scope.launch { ReadAhead.of(remote, ThreadCache.of(app)).run() }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) = remote.wake()
         })

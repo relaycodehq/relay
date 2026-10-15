@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +50,14 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Minus
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import dev.relay.android.ui.listPadding
 
 /** The desktop's Changes pane: commit and push everything in one go, or stage and commit a part. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +92,7 @@ private fun ChangesList(model: ChangesModel, tree: WorkingTree, state: ChangesSt
     val busy = state.busy != null
     val staged = tree.changes.filter { it.staged }
     val working = tree.changes.filter { it.unstaged }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding()) {
         if (tree.operation != null) item {
             Note("${operationInProgress(tree.operation)}. Finish it on your computer.", c.destructive)
         }
@@ -94,14 +101,14 @@ private fun ChangesList(model: ChangesModel, tree: WorkingTree, state: ChangesSt
             if (files.isEmpty()) continue
             val isStaged = area == "staged"
             item(key = "head:$area") {
-                SectionHeader(title, Modifier.padding(horizontal = 12.dp), action = {
+                SectionHeader(title, count = files.size, action = {
                     Text(
                         if (isStaged) "Unstage all" else "Stage all",
                         Modifier.pressable({
                             val paths = files.map { it.path }
                             model.act(if (isStaged) "unstage" else "stage", if (isStaged) GitAction.unstage(tree.revision, paths) else GitAction.stage(tree.revision, paths))
-                        }, enabled = !busy),
-                        style = RelayTheme.type.caption,
+                        }, enabled = !busy).padding(start = 4.dp),
+                        style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium),
                         color = if (busy) c.faint else c.foreground,
                     )
                 })
@@ -122,9 +129,15 @@ private fun FileRow(f: WorkingChange, staged: Boolean, busy: Boolean, onOpen: ()
     val code = if (staged) f.index else f.worktree
     val kind = changeKind(code, f.conflict)
     val slash = f.path.lastIndexOf('/')
-    Row(Modifier.fillMaxWidth().heightIn(min = 46.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (pressed) c.hover else Color.Transparent)
+            .heightIn(min = 44.dp).padding(end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
-            Modifier.weight(1f).pressable(onOpen, scale = false).padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.weight(1f).pressable(onOpen, scale = false, interaction = press).padding(start = 12.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -154,9 +167,9 @@ private fun FileRow(f: WorkingChange, staged: Boolean, busy: Boolean, onOpen: ()
             if (staged) TablerIcons.Outline.Minus else TablerIcons.Outline.Plus,
             "${if (staged) "Unstage" else "Stage"} ${f.path}",
             onToggle,
-            variant = ButtonVariant.Outline,
             size = ButtonSize.Sm,
             enabled = !busy,
+            tint = c.mutedForeground,
         )
     }
 }
@@ -166,7 +179,7 @@ private fun RemoteSection(model: ChangesModel, tree: WorkingTree, state: Changes
     val c = RelayTheme.colors
     val busy = state.busy != null
     Column {
-        SectionHeader("Remote", Modifier.padding(horizontal = 12.dp))
+        SectionHeader("Remote")
         Note(remoteLine(tree), c.mutedForeground)
         for (commit in tree.outgoing) {
             androidx.compose.material3.Text(
@@ -174,13 +187,13 @@ private fun RemoteSection(model: ChangesModel, tree: WorkingTree, state: Changes
                     withStyle(SpanStyle(color = c.faint, fontFamily = RelayTheme.type.mono.fontFamily)) { append(commit.sha.take(7) + " ") }
                     append(commit.subject)
                 },
-                Modifier.padding(horizontal = 16.dp, vertical = 3.dp),
+                Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                 style = RelayTheme.type.sm.copy(color = c.foreground),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(Modifier.padding(horizontal = 16.dp).padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(horizontal = 12.dp).padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(if (state.busy == "fetch") "Fetching…" else "Fetch", { model.act("fetch", GitAction.fetch) }, variant = ButtonVariant.Outline, enabled = !busy)
             if (tree.behind > 0) Button(
                 if (state.busy == "pull") "Pulling…" else "Pull",
@@ -267,7 +280,7 @@ private fun CommitDock(model: ChangesModel, tree: WorkingTree, state: ChangesSta
 
 @Composable
 private fun Note(text: String, color: androidx.compose.ui.graphics.Color) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Text(text, color = color)
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text(text, style = RelayTheme.type.xs, color = color)
     }
 }

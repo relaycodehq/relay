@@ -1,9 +1,7 @@
 package dev.relay.android.features.git
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -43,6 +41,9 @@ import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import dev.relay.android.ui.IconButton
+import dev.relay.android.ui.listPadding
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 
 /** mobile/src/app/branches.tsx. [projectId] is what the bridge's branch calls take. */
 class BranchesModel(private val remote: Remote, private val projectId: String) : ViewModel() {
@@ -91,18 +92,19 @@ fun BranchesScreen(remote: Remote, projectId: String) {
     var creating by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
 
-    Screen("Branches", onBack = nav.backAction) {
+    Screen("Branches", onBack = nav.backAction, actions = {
+        if (list != null) IconButton(TablerIcons.Outline.Plus, "New branch from here", { creating = true }, enabled = !busy)
+    }) {
         val now = list
         when {
             now == null && error != null -> LoadFailed(error!!, model::load)
             now == null -> Loading()
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-                item { Button("New branch from here", { creating = true }, Modifier.fillMaxWidth(), enabled = !busy) }
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding()) {
                 for ((title, rows) in listOf("Local" to now.branches.filter { !it.remote }, "Remote" to now.branches.filter { it.remote })) {
                     if (rows.isEmpty()) continue
                     item(key = title) {
-                        SectionHeader(title, Modifier.padding(top = 12.dp))
-                        ListGroup(Modifier.fillMaxWidth()) {
+                        SectionHeader(title, count = rows.size)
+                        ListGroup {
                             for (b in rows) BranchRow(b, busy) {
                                 model.asks.confirm(
                                     "Switch to ${b.name}?",
@@ -151,8 +153,8 @@ private fun BranchRow(b: BranchRef, busy: Boolean, onSwitch: () -> Unit) {
         b.name,
         subtitle = if (b.current) "Checked out" else if (b.worktree) "Checked out in a worktree" else null,
         leading = {
-            if (b.current) Icon(TablerIcons.Outline.Check, null, tint = c.accent, size = 17.dp)
-            else Icon(TablerIcons.Outline.GitBranch, null, tint = c.mutedForeground, size = 17.dp)
+            if (b.current) Icon(TablerIcons.Outline.Check, null, tint = c.foreground, size = 16.dp)
+            else Icon(TablerIcons.Outline.GitBranch, null, tint = c.mutedForeground, size = 16.dp)
         },
         onClick = if (b.current || b.worktree || busy) null else onSwitch,
     )
