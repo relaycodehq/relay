@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   ChevronRight,
   FolderGit2,
   FolderPlus,
@@ -44,22 +45,32 @@ import {
   RepoMark,
   type PullContext,
 } from "./PullRows";
-import { ErrorBox, Loading } from "../../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { isGithubServer } from "../../../shared/source-control";
 import "./pull-requests.css";
 
-/** The window title's trail back from a PR or a project's page. */
+/** The window title's trail back from a PR or a project's page. Back goes up
+ *  one crumb, and from the board leaves the page. */
 export function PullsTitle({
   where,
   onNav,
+  onLeave,
 }: {
   where: PullsLocation;
   onNav: (target: PullsTarget) => void;
+  onLeave: () => void;
 }) {
   const { repo, pull } = where;
+  const back = () => {
+    if (pull && repo) onNav({ to: "repo", repo: repo.key });
+    else if (pull || repo) onNav({ to: "board" });
+    else onLeave();
+  };
   return (
     <div className="project-window-title pulls-title">
-      <GitPullRequest size={14} />
+      <IconButton label="Back" onClick={back}>
+        <ArrowLeft size={15} />
+      </IconButton>
       {repo || pull ? (
         <button onClick={() => onNav({ to: "board" })}>Pull requests</button>
       ) : (

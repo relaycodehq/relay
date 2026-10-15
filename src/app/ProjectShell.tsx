@@ -266,7 +266,11 @@ export default function ProjectShell() {
               <strong>{settings.where}</strong>
             </div>
           ) : inbox ? (
-            <PullsTitle where={pullsPage.where} onNav={pullsPage.go} />
+            <PullsTitle
+              where={pullsPage.where}
+              onNav={pullsPage.go}
+              onLeave={() => !lock.blocked() && nav.setInbox(false)}
+            />
           ) : usage ? (
             <UsageTitle onBack={toggleUsage} />
           ) : processes ? (
