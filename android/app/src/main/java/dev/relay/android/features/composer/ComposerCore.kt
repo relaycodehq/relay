@@ -79,7 +79,6 @@ import dev.relay.android.features.composer.logic.switchAgent
 import dev.relay.android.features.composer.logic.wakeLabel
 import dev.relay.android.features.composer.logic.withComposerChange
 import dev.relay.android.features.composer.logic.withRememberedModel
-import dev.relay.android.features.dictation.DICTATION_SHRINK_MS
 import dev.relay.android.features.dictation.Dictation
 import dev.relay.android.features.dictation.DictationButton
 import dev.relay.android.features.dictation.DictationInput
@@ -110,7 +109,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PhotoPlus
 import io.github.lyxnx.compose.ui.tablericons.outline.PlaylistAdd
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -201,7 +199,9 @@ internal fun ComposerCore(
     /**
      * The model, permissions, plan and usage live up in the screen's header
      * (through [handle]) instead of around the message box, where they took
-     * stray taps aimed at the keyboard and the send button.
+     * stray taps aimed at the keyboard and the send button. Without one, the
+     * box keeps only the model, whose sheet holds the rest, and the limits
+     * show as rings at the end of [above].
      */
     settingsUp: Boolean = false,
     /** Over the message box, inside the dock. */
@@ -243,18 +243,6 @@ internal fun ComposerCore(
     val dictating = dictationNow.owner === dictationOwner && dictationNow.phase != DictationState.Phase.Idle
     val dictationError = if (dictationNow.owner === dictationOwner) dictationNow.error else null
     val input = remember { DictationInput({ value }, { value = it }, { typing }) }
-    // The waveform shrinks back before Permissions and Plan return, so the row doesn't jump.
-    var shrinking by remember { mutableStateOf(false) }
-    val wasDictating = remember { booleanArrayOf(false) }
-    LaunchedEffect(dictating) {
-        val ended = wasDictating[0] && !dictating
-        wasDictating[0] = dictating
-        if (ended) {
-            shrinking = true
-            delay(DICTATION_SHRINK_MS.toLong())
-            shrinking = false
-        }
-    }
     // Leaving the thread, or its draft, takes unfinished words back out.
     DisposableEffect(draftKey) {
         onDispose {
@@ -527,7 +515,12 @@ internal fun ComposerCore(
         modifier.fillMaxWidth().background(c.background).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 10.dp).navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        above()
+        // Without a header to hold them, the plan's limits sit at the end of the line over the box, away from the thumb.
+        if (settingsUp) above()
+        else Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { above() }
+            UsageRings(provider, usage.usage, onClick = { sheet = Sheet.Usage })
+        }
         if (items != null) CommandMenu(items, commands.loading, commands.failed, ::pick)
         val pc = computer
         if (pc != null && draftKey != null) DraftNotes(drafts, pc, draftKey, shared)
@@ -570,29 +563,22 @@ internal fun ComposerCore(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                // Short of room, the model and mode chips give way, their labels cut short.
+                // Short of room, the model's label is cut short.
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 Tool("Attach a photo", enabled = images.size < MAX_IMAGES, onClick = { sheet = Sheet.Attach }) {
                     Icon(TablerIcons.Outline.PhotoPlus, null, size = 17.dp, tint = c.mutedForeground)
                 }
-                if (!settingsUp) Tool("Agent and model", Modifier.weight(2f, fill = false), onClick = { sheet = Sheet.Model }) {
+                // Permissions and Plan are a tap further, in the sheet it opens with the model.
+                if (!settingsUp) Tool("Model, permissions and plan", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Settings }) {
                     Text(
                         modelLabel +
                             (if (settings.choice.reasoningEffort.isNotEmpty()) " · ${effortLabel(settings.choice.reasoningEffort)}" else "") +
-                            (if (agentInfo(provider)?.fast == true && settings.choice.fast) " · Fast" else ""),
+                            (if (agentInfo(provider)?.fast == true && settings.choice.fast) " · Fast" else "") +
+                            (if (plan) " · Plan" else ""),
                         Modifier.weight(1f, fill = false),
                         style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Icon(TablerIcons.Outline.ChevronDown, null, size = 12.dp, tint = c.faint)
-                }
-                // Room for the waveform on a narrow phone.
-                if (!dictating && !shrinking && !settingsUp) {
-                    if (!steering) Tool("Permissions", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Mode }) {
-                        Text(modeLabel(settings.runtimeMode), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Tool(if (plan) "Plan mode on" else "Plan mode off", onClick = { onSettings(settings.copy(interactionMode = if (plan) "default" else "plan")) }) {
-                        Text("Plan", style = RelayTheme.type.xs, color = if (plan) c.accent else c.mutedForeground)
-                    }
                 }
                 }
                 if (dictating && dictationNow.phase == DictationState.Phase.Listening) Tool("Discard dictation", onClick = { dictation.cancel() }) {
@@ -640,7 +626,6 @@ internal fun ComposerCore(
                 }
             }
         }
-        if (!settingsUp) UsageBar(provider, usage.usage, context, cost, onClick = { sheet = Sheet.Usage })
     }
 
     when (sheet) {
