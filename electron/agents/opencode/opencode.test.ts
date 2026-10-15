@@ -8,7 +8,6 @@ import { openCodeSubagentBooks } from "./subagents";
 import { disposeOpenCode } from "./client";
 import { permissionRules } from "./permissions";
 import { openCodeCommands, openCodeDefaults, openCodeModels } from "./catalog";
-import { readOpenRouterCredit } from "../openrouter-credit";
 import { runtimeModes } from "../../../shared/agent-modes";
 import type { AgentOptions, UsageReport } from "../types";
 import type { AgentActivity } from "../../../shared/projects";
@@ -610,20 +609,4 @@ describe("what OpenCode lists and configures", () => {
       );
     },
   );
-
-  it("says so when OpenCode lists its providers in a shape this Relay can't read, rather than that it has no key", async () => {
-    vi.stubEnv("RELAY_OPENCODE_QUIRK", "providers-not-a-list");
-    expect(await readOpenRouterCredit(true)).toMatchObject({
-      balance: null,
-      message: expect.stringContaining(
-        "OpenCode sent an unexpected provider config response (providers",
-      ),
-    });
-  });
-
-  it("says OpenCode has no OpenRouter key when none of its providers has one", async () => {
-    expect(await readOpenRouterCredit(true)).toMatchObject({
-      message: "OpenCode has no OpenRouter key",
-    });
-  });
 });

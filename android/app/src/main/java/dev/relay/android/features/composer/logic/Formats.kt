@@ -20,7 +20,7 @@ fun formatTokens(n: Long): String {
     }
 }
 
-/** shared/openrouter-credit.ts: $3, $2.50, $1,234, −$4.20. */
+/** shared/thread-cost.ts: $3, $2.50, $1,234, −$4.20. */
 fun formatDollars(value: Double): String {
     val a = abs(value)
     val digits = if (a >= 100 || a == Math.floor(a)) 0 else 2

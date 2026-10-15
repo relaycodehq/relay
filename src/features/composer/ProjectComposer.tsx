@@ -57,7 +57,6 @@ import { SketchEditor } from "../images/ImageSketch";
 import { carriesImage } from "../images/image-drag";
 import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "../quick-switch/QuickSwitchHud";
-import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
 import { ThreadCostButton } from "./ThreadCost";
 import type { ThreadCost } from "../../../shared/thread-cost";
@@ -222,14 +221,6 @@ export function ProjectComposer({
   useToolbarFit(tools);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const to = draftRecipient(draft.text, composer.provider);
-  // OpenRouter bills per token, so its spend shows instead of a usage ring.
-  const runsOnOpenRouter =
-    to === "opencode" &&
-    (
-      runs.pickOf("opencode").model ||
-      catalogs.defaults.of("opencode")?.model ||
-      ""
-    ).startsWith("openrouter/");
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
@@ -537,8 +528,6 @@ export function ProjectComposer({
               ),
               usage: reportsUsage(to) ? (
                 <UsageRing provider={to} account={accounts.of(to)} />
-              ) : runsOnOpenRouter ? (
-                <OpenRouterCreditButton threadCost={threadCost?.usd} />
               ) : (
                 threadCost && <ThreadCostButton cost={threadCost} />
               ),

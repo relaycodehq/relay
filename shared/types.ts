@@ -484,10 +484,6 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<import("./projects").ChatSummary>;
-  /** Credit on the OpenRouter key OpenCode runs on; `force` skips the cache. */
-  openRouterCredit(
-    force?: boolean,
-  ): Promise<import("./openrouter-credit").OpenRouterCredit>;
   /** An agent's models; Codex's and Claude's carry their own extra fields. */
   agentModels<P extends import("./agents").AgentProvider>(
     provider: P,

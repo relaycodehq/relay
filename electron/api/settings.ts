@@ -28,7 +28,6 @@ import { runExecutable, setLinkedAgents } from "../platform/executables";
 import { gitInfo, gitVersion, setGitPath } from "../git/git";
 import { readProviderUsage } from "../agents/provider-usage";
 import { redeemCodexReset } from "../agents/codex/codex-resets";
-import { readOpenRouterCredit } from "../agents/openrouter-credit";
 import {
   linkCli,
   resolveCliPath,
@@ -180,9 +179,6 @@ export function settingsHandlers(ctx: ApiContext) {
       [accountIdSchema, z.string().min(1).max(200).nullable(), z.uuid()],
       (account, creditId, attempt) =>
         redeemCodexReset(account, creditId, attempt),
-    ),
-    openRouterCredit: takes([z.boolean().optional()], (force) =>
-      readOpenRouterCredit(force),
     ),
     devopsStatus: () => devops.status(),
     devopsConnection: () => azureDevOps(devops),

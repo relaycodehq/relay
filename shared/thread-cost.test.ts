@@ -39,4 +39,11 @@ describe("threadCost", () => {
     expect(formatCost(0.004)).toBe("<$0.01");
     expect(formatCost(0.4218)).toBe("$0.42");
   });
+
+  it("drops cents on big amounts", () => {
+    expect(formatCost(3.0612)).toBe("$3.06");
+    expect(formatCost(145.3)).toBe("$145");
+    expect(formatCost(1098.35)).toBe("$1,098");
+    expect(formatCost(50)).toBe("$50");
+  });
 });

@@ -1,5 +1,4 @@
 import type { ChatMessage } from "./projects/messages";
-import { formatDollars } from "./openrouter-credit";
 
 /**
  * What a thread's answers cost where their agent priced them: OpenCode and
@@ -39,3 +38,12 @@ export function threadCost(
 
 export const formatCost = (usd: number) =>
   usd < 0.01 ? "<$0.01" : formatDollars(usd);
+
+function formatDollars(value: number) {
+  const abs = Math.abs(value);
+  const digits = abs >= 100 || Number.isInteger(abs) ? 0 : 2;
+  return `${value < 0 ? "−" : ""}$${abs.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
+}

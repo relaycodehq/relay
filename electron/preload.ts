@@ -278,7 +278,6 @@ const methods = [
   "removeAgentAccount",
   "useAgentAccount",
   "setThreadAccount",
-  "openRouterCredit",
   "agentModels",
   "reloadAgentModels",
   "agentDefaults",

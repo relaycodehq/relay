@@ -275,12 +275,6 @@ export const providerSchema = z
 
 /** `GET /config`: what the project's config picks. */
 export const configSchema = z.object({ model: text }).loose();
-/** `GET /config/providers`: the providers the config resolves, with their keys. */
-export const configProvidersSchema = z
-  .object({
-    providers: z.array(z.object({ id: z.string(), key: text }).loose()),
-  })
-  .loose();
 /** Answers creating and forking a session. */
 export const sessionCreatedSchema = z.object({ id: z.string() }).loose();
 export const sessionSchema = z

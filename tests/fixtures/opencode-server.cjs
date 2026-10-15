@@ -387,11 +387,7 @@ const server = http.createServer(async (req, res) => {
     return send(200, "nope");
   if (quirk === "command-without-name" && path === "/command")
     return send(200, [{ description: "Create AGENTS.md" }]);
-  if (quirk === "providers-not-a-list" && path === "/config/providers")
-    return send(200, { providers: "none" });
   if (path === "/config") return send(200, { model: "zen/pickle" });
-  if (path === "/config/providers")
-    return send(200, { providers: [{ id: "zen" }] });
   if (path === "/provider")
     return send(200, {
       all: [

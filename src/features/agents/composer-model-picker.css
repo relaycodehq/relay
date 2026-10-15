@@ -898,7 +898,7 @@
   top: 0;
   color: #ef6a5a;
 }
-/* OpenRouter has no windows to ring, so it shows what's left in dollars. */
+/* Agents billed per token have no windows to ring, so the thread's cost shows. */
 .composer-tools .credit-trigger {
   position: relative;
   height: 32px;
@@ -907,17 +907,6 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-}
-/* Keeps its warning colour on hover, where composer controls turn to text. */
-.composer-tools .credit-trigger[data-pace="warn"] {
-  color: #e3a23a;
-}
-.composer-tools .credit-trigger[data-pace="hot"],
-.composer-tools .credit-trigger[data-pace="spent"] {
-  color: #ef6a5a;
-}
-.credit-trigger[data-loading] {
-  opacity: 0.45;
 }
 .usage-ring-popup.credit-popup {
   width: 256px;
@@ -947,22 +936,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.credit-spent {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-.credit-spent dt {
-  color: var(--muted);
-}
-.credit-spent dd {
-  margin: 0;
-  color: var(--text);
 }
 .usage-ring-popup {
   width: 232px;
