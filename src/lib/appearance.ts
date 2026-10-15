@@ -78,6 +78,8 @@ function phonePalette(resolved: ResolvedAppearance): PhonePalette {
     accent: t["--accent"],
     accentSoft: t["--accent-soft"],
     onAccent: t["--accent-foreground"],
+    send: t["--send"],
+    onSend: t["--send-foreground"],
     diffAddition: t["--diff-addition"],
     diffDeletion: t["--diff-deletion"],
   };

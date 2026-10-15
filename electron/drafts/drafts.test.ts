@@ -280,3 +280,18 @@ it("writes the file only after the typing pauses", async () => {
     JSON.parse(await readFile(join(dir, "drafts.json"), "utf8")).drafts,
   ).toHaveLength(1);
 });
+
+it("keeps what a phone typed while its held send was going out", async () => {
+  const requests: HeldSend[] = [];
+  const { drafts } = await setup((r) => (requests.push(r), true));
+  drafts.write(
+    { key: chatId, text: "Look", base: 0, at: 1, extras: { codeRefs: 1 } },
+    "desktop",
+  );
+  const sending = drafts.sendHeld(chatId, chatId, send("Look"));
+  // The next message, typed and saved before the computer finished sending.
+  drafts.write({ key: chatId, text: "And then", base: 1, at: 2 }, "phone:p");
+  drafts.finishSend(requests[0]!.id, { chatId });
+  await sending;
+  expect(drafts.list().map((d) => [d.text, d.extras])).toEqual([["And then", undefined]]);
+});

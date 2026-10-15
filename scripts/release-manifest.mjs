@@ -80,6 +80,23 @@ if (present.has(androidName)) {
   };
 }
 
+// The Kotlin app, beside the Expo one: built at the release's own version every
+// time, and named by its applicationId so each app only takes its own APK.
+const nativeName = "Relay-Android-Native.apk";
+const androidNative = present.has(nativeName)
+  ? (() => {
+      const bytes = readFileSync(join(dir, nativeName));
+      return {
+        name: nativeName,
+        url: `https://github.com/${repo}/releases/download/v${version}/${nativeName}`,
+        sha512: createHash("sha512").update(bytes).digest("base64"),
+        size: bytes.length,
+        version,
+        applicationId: "dev.relay.android",
+      };
+    })()
+  : undefined;
+
 writeFileSync(
   join(dir, "latest.json"),
   JSON.stringify(
@@ -90,6 +107,7 @@ writeFileSync(
       files,
       ...(headless ? { headless } : {}),
       ...(android ? { android } : {}),
+      ...(androidNative ? { androidNative } : {}),
     },
     null,
     2,
@@ -100,5 +118,6 @@ console.log(
     ...Object.keys(files),
     ...(headless ? ["headless"] : []),
     ...(android ? [`android ${android.version}`] : []),
+    ...(androidNative ? ["android native"] : []),
   ].join(", ")}`,
 );

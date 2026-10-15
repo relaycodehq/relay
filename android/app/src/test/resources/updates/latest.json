@@ -1,0 +1,45 @@
+{
+  "version": "0.12.0",
+  "published": "2026-10-12T21:50:47.447Z",
+  "notes": "**TL;DR:** Drafts follow you between the desktop and the phone, threads live on another computer now feel like they're here, and per-token agents show what a thread cost.\n\n- Drafts sync between the desktop and its phones: start typing on one, finish on the other. Offline typing on the phone is safe, and a clash keeps both versions a tap away.\n- Start a new thread straight on another paired computer from the Workspace menu, beside Current checkout and New worktree.\n- A thread handed off to another computer shows its Changes, Files, History and Git actions from that computer, so commits and pushes land where the work is.\n- Agents can send to, stop and hand off threads on another computer themselves, always asking you first.\n- OpenCode and ACP agents show what a thread cost beside the send button, split by model on hover, and each answer's cost beside its speed. The phone shows it too.\n- The phone shows how fast an agent wrote under each answer.\n- Mention a Claude skill anywhere in a message with $name, steers too; sent messages show picked skills as pills.\n- Search every agent's models from the model picker, not just the tab you're on, and refresh OpenCode's model list from the picker's footer.\n- New worktrees are named after the thread's title instead of the first words you typed.\n- The composer shows a Plan button only while planning, instead of a Mode button on every turn.\n- Agent update notices under the sidebar can be turned off in Settings → AI models → Agents. The sidebar footer no longer spills off its edge, and the version checks for updates itself on hover.\n- The workspace dot only shows when a thread's folder changed without you, and everything under a message shares one line.\n- The pin on a kept list, code block or table now removes it from the notes when clicked again.\n- Spinners and the thinking glyph keep running under reduced motion, so a busy thread doesn't look frozen.\n- Fixes: a running terminal no longer scrolls the whole window up; the Add to chat buttons no longer flash back; Activity cards no longer jump on hover; a short page in an answer no longer blocks scrolling the thread on Android; Linux headers reach the window buttons; Scratchpad chats no longer flash as new drafts; taking back a started thread keeps its first message.\n- The Dock icon fits macOS 26's grid and lighting.",
+  "files": {
+    "mac-arm64": {
+      "name": "Relay-0.12.0-mac-arm64.zip",
+      "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-0.12.0-mac-arm64.zip",
+      "sha512": "A8ocKzTQWTG3bAVamaWzSkG0RyAmZqNuhZ5KvT9sL5hS4cOgXrwIkToBxTQwnDKbbWVRhJiBESh4xGQtsUjF3g==",
+      "size": 163544372
+    },
+    "win-x64": {
+      "name": "Relay-0.12.0-win-x64.exe",
+      "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-0.12.0-win-x64.exe",
+      "sha512": "cvUB7WNOnax+HL1F6UNW3p/hNqJ8JWzI7BI28kcXimFUngc18kxF5CjcrJNZWXuiWSqpbiA6OyCDLjTO0PmGSQ==",
+      "size": 148809142
+    },
+    "linux-x64-appimage": {
+      "name": "Relay-0.12.0-linux-x86_64.AppImage",
+      "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-0.12.0-linux-x86_64.AppImage",
+      "sha512": "dqNCgqbnyEV9SS2ZdZtXle6E5xBIFk6YdA9sUgZK4CMzIAkSMUZotC0cYxl1u5dEpskEgoJEj4SJ+4o1b90+5Q==",
+      "size": 167447769
+    },
+    "linux-x64-omarchy": {
+      "name": "Relay-0.12.0-omarchy-x86_64.tar.gz",
+      "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-0.12.0-omarchy-x86_64.tar.gz",
+      "sha512": "xUX22+Q8rxl+3ztiP1HD6ULHcnGEoZ2PZTKpz49HtTTVAsU4FvXkBl2vVTqlxSUzH/MRZ1ZdOmvIGztRA05q4Q==",
+      "size": 164878653
+    }
+  },
+  "headless": {
+    "name": "Relay-0.12.0-headless.tar.gz",
+    "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-0.12.0-headless.tar.gz",
+    "sha512": "KsIYttUw5Mgxq5XiC5t/uB5QNarf+ipQ2PC+iBq1HyL1D0y29Vs9qR8cYoUXIGc7wQ1RfagA9wdYKXOlWDOdNA==",
+    "size": 5890748
+  },
+  "android": {
+    "name": "Relay-Android.apk",
+    "url": "https://github.com/relaycodehq/relay/releases/download/v0.12.0/Relay-Android.apk",
+    "sha512": "dQ4YqO0iSSLGmZ90sR4MN5uJLbSCiMB26qrnLUxHfzS9ZphxsFC3weijPKMViHFnEX08j26bqwM2DRcCZQ+AAA==",
+    "size": 58664015,
+    "version": "0.12.0",
+    "runtime": "239435266f5ddaf94e5f7454291547d81efc2264"
+  }
+}

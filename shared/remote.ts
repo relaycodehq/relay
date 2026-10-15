@@ -34,6 +34,7 @@ import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
+import type { RemoteSite } from "./remote-tunnel";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -144,6 +145,8 @@ export interface RemoteChatSummary {
   startedBy?: StartedBy;
   /** The answer a usage limit stopped, resumed once the limit lifts; missing before `awayBridge`. */
   limitResume?: LimitResume;
+  /** Changes with the thread's notes, so a phone knows to fetch them again; missing before `notesBridge`. */
+  notesMark?: string;
 }
 
 export interface RemoteProject {
@@ -166,7 +169,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 21;
+export const remoteBridgeVersion = 23;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -203,11 +206,22 @@ export const renderBridge = 17;
  * thread's message.
  */
 export const draftsBridge = 19;
+/** From here phones may fetch the preview frame a turn kept (`image` with `{kind: "preview"}`). */
+export const previewBridge = 22;
+/**
+ * From here thread summaries carry `notesMark`, and phones may list, tick and
+ * remove a thread's notes (`threadNotes`, `tickThreadNote`, `removeThreadNote`).
+ */
+export const notesBridge = 22;
+/** From here a thread carries where it moved (`workspaceMoves`), for the line under its message. */
+export const workspaceMovesBridge = 22;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
   | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string };
+  | { kind: "read"; chatId: string; messageId: string; path: string }
+  /** The preview's last frame turn `messageId` kept; from `previewBridge`. */
+  | { kind: "preview"; chatId: string; messageId: string };
 /**
  * From here a desktop tells phones which thread started which and when a
  * limited answer resumes, and takes `setLimitResume` and `closeWatchNote`.
@@ -239,6 +253,11 @@ export const folderHandoffBridge = 20;
 export const startHandoffBridge = 20;
 /** From here a send may carry the skills its pills picked (`skills`); older computers refuse the field. */
 export const skillsBridge = 21;
+/**
+ * From here a phone may tunnel TCP to the desktop's own loopback
+ * (shared/remote-tunnel) and list what listens there (`sites`).
+ */
+export const tunnelBridge = 23;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -271,6 +290,9 @@ export interface PhonePalette {
   accent: string;
   accentSoft: string;
   onAccent: string;
+  /** The Send button's own colour; desktops before it was sent leave it out. */
+  send?: string;
+  onSend?: string;
   diffAddition: string;
   diffDeletion: string;
 }
@@ -340,6 +362,7 @@ export interface RemoteChat extends Pick<
   | "stopped"
   | "pending"
   | "worktree"
+  | "workspaceMoves"
 > {
   running: boolean;
   /** The folder the thread works in; tool labels drop it, as on the desktop. Older desktops leave it out. */
@@ -387,7 +410,7 @@ export type RemoteDiffSource =
 
 /**
  * Desktop calls a paired phone makes as they are, validated by the desktop's
- * own dispatch: threads, models, Git (stage, commit, push, pull, fetch,
+ * own dispatch: threads and their notes, models, Git (stage, commit, push, pull, fetch,
  * branches), read-only files, history, background tasks and subagents; only what the
  * phone app uses. Terminals, file saves, settings (bar the agent new threads
  * start on), sharing and anything that opens a desktop dialog are not on the
@@ -423,6 +446,9 @@ export const phoneDesktopMethods = [
   "projectChatImage",
   "projectChatReadImage",
   "projectChatQueuedImages",
+  "threadNotes",
+  "tickThreadNote",
+  "removeThreadNote",
   "agentModels",
   "agentDefaults",
   "aiSettings",
@@ -538,6 +564,10 @@ export interface RemoteApi {
   image(source: RemoteImageSource, max: number): Promise<string>;
   /** One page of a thread's render, as the agent wrote it; missing before `renderBridge`. */
   renderPage(chatId: string, renderId: string, page: number): Promise<string>;
+  /** Projects' tasks listening on a port, one per port; from `tunnelBridge`. */
+  sites(): Promise<RemoteSite[]>;
+  /** A port typed into the phone's address bar, which the tunnel may then reach besides Sites'; from `tunnelBridge`. */
+  tunnelAllow(port: number): Promise<void>;
   /** The phone's edit of a draft; the draft as it stands after, null once gone. From `draftsBridge`. */
   saveDraft(write: DraftWrite): Promise<SharedDraft | null>;
   /** Swaps in the version a clash kept, or with `drop` lets it go. From `draftsBridge`. */
@@ -617,6 +647,8 @@ export const remoteMethods = [
   "activityDetail",
   "image",
   "renderPage",
+  "sites",
+  "tunnelAllow",
   "saveDraft",
   "draftOther",
   "sendDraft",

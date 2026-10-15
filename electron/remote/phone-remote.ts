@@ -25,6 +25,7 @@ import { lanAddresses } from "./lan";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
+import { listSites, Tunnel, TunnelPorts } from "../tunnel";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/);
 const appReportSchema = z
@@ -90,6 +91,8 @@ const paletteSchema = z
     accent: color,
     accentSoft: color,
     onAccent: color,
+    send: color.optional(),
+    onSend: color.optional(),
     diffAddition: color,
     diffDeletion: color,
   })
@@ -109,6 +112,8 @@ export const phoneAppearanceSchema = z
  * listens everywhere and lets in the tailnet and private addresses. Either
  * way a device needs the pinned key and its token to get anything.
  */
+const portSchema = z.number().int().min(1).max(65535);
+
 export class PhoneRemote {
   readonly devices: RemoteDevices;
   private bridge: RemoteBridge;
@@ -120,6 +125,7 @@ export class PhoneRemote {
   private syncing = Promise.resolve();
   /** Where devices reach this computer now: local addresses, then Tailscale's. */
   private hosts: string[] = [];
+  private tunnelPorts: TunnelPorts;
   constructor(
     store: Store,
     seal: (value: string) => Promise<string | null>,
@@ -130,6 +136,7 @@ export class PhoneRemote {
     private lan: () => string[] = () => lanAddresses(networkInterfaces()),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
+    this.tunnelPorts = new TunnelPorts(() => listSites(host, [this.server.port]));
     const name = computerName;
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
@@ -171,8 +178,18 @@ export class PhoneRemote {
             throw new Error("Read aloud isn't available on this computer.");
           return this.readings.handle(deviceId, readAloudSchema.parse(args[0]));
         }
+        if (method === "sites") return listSites(host, [this.server.port]);
+        if (method === "tunnelAllow")
+          return this.tunnelPorts.type(deviceId, portSchema.parse(args[0]));
         return this.bridge.handle(method, args, deviceId);
       },
+      tunnel: (deviceId, send) =>
+        this.isComputer(deviceId)
+          ? undefined
+          : new Tunnel(send, {
+              refused: () => [this.server.port],
+              allowed: (port) => this.tunnelPorts.allowed(deviceId, port),
+            }),
       // Thread states are watched for phones; computers ask for theirs.
       onPresence: () =>
         this.bridge.setWatching(

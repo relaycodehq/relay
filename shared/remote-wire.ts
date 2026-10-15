@@ -3,7 +3,8 @@
  * the sealed JSON. From it they're binary: sealed, a flag byte, then the JSON,
  * deflated when that pays (raw DEFLATE, so fflate and node:zlib read each
  * other). Real threads deflate about 4x; photos, already base64 JPEG inside
- * the JSON, barely do, so big frames go as they are.
+ * the JSON, barely do, so big frames go as they are. A third flag carries the
+ * port tunnel's frames (./remote-tunnel), bytes rather than JSON.
  */
 import { deflateSync, inflateSync } from "fflate";
 import { utf8ToBytes } from "@noble/hashes/utils.js";
@@ -13,6 +14,12 @@ import {
   toBase64Url,
   type Channel,
 } from "./remote-crypto";
+import {
+  decodeTunnel,
+  encodeTunnel,
+  tunnelFlag,
+  type TunnelFrame,
+} from "./remote-tunnel";
 
 export interface Codec {
   deflate(bytes: Uint8Array): Uint8Array;
@@ -59,6 +66,24 @@ export function sealFrame(
   return channel.seal(plain) as Uint8Array<ArrayBuffer>;
 }
 
+/** A tunnel frame, sealed as it is: the tunnel packs its data or not. */
+export function sealTunnel(
+  channel: Channel,
+  frame: TunnelFrame,
+): Uint8Array<ArrayBuffer> {
+  return channel.seal(encodeTunnel(frame)) as Uint8Array<ArrayBuffer>;
+}
+
+/**
+ * What `openFrame` makes of a tunnel frame; every other frame opens to its
+ * JSON, which can't make one of these.
+ */
+export class OpenedTunnel {
+  constructor(readonly frame: TunnelFrame) {}
+}
+export const isTunnel = (opened: unknown): opened is OpenedTunnel =>
+  opened instanceof OpenedTunnel;
+
 /** Throws on anything that doesn't open under the channel or isn't a known flag. */
 export function openFrame(
   channel: Channel,
@@ -72,5 +97,6 @@ export function openFrame(
   if (plain[0] === raw) return JSON.parse(decodeUtf8Bytes(body));
   if (plain[0] === deflated)
     return JSON.parse(decodeUtf8Bytes(codec.inflate(body)));
+  if (plain[0] === tunnelFlag) return new OpenedTunnel(decodeTunnel(plain));
   throw new Error("Unknown frame.");
 }

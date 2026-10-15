@@ -31,3 +31,8 @@ it("keeps a recreated worktree even though the folder is the same", () => {
     shown([move(1, "ask", "/wt/a"), move(2, "later", "/wt/a", "recreated")]),
   ).toEqual([1, 2]);
 });
+
+it("ends for moves made before the thread had a message", () => {
+  const early: WorkspaceMove = { at: 1, how: "moved", to: "/wt/a", unasked: true };
+  expect(shownWorkspaceMoves([early]).map((m) => m.at)).toEqual([1]);
+});
