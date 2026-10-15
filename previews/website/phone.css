@@ -1,19 +1,22 @@
-/* The phone app's screens, as the retired Expo app drew them (see phone.tsx).
-   Lengths are the app's dp values from mobile/src/ui;
-   `zoom` brings them down to the drawn device. Colours are the app's built-in
-   dark palette (mobile/src/ui/theme.ts). */
+/* The phone app's screens as the Kotlin app draws them (see phone.tsx).
+   Lengths are its dp values (android/app/src/main/java/dev/relay/android/ui);
+   `zoom` brings them down to the drawn device. Colours are the app wearing
+   the desktop's default dark theme. */
 .ph {
-  --p-bg: #1e1e21;
-  --p-sidebar: #232326;
-  --p-raised: #28282c;
-  --p-text: #e1e1e5;
-  --p-muted: #94949f;
-  --p-faint: #6c6c76;
-  --p-border: #37373d;
-  --p-hover: #34343c;
+  --p-bg: #18181b;
+  --p-field: #212124;
+  --p-bubble: #2a2a2e;
+  --p-text: #e4e4e7;
+  --p-muted: #8e8e98;
+  --p-faint: #5e5e68;
+  --p-border: #2c2c31;
+  --p-hover: #232327;
+  --p-selected: #27272c;
   --p-accent: #aaa8e5;
-  --p-on-accent: #1e1e21;
-  --p-code: #18181b;
+  --p-waiting: #d99a2b;
+  --p-stop: #e5484d;
+  --p-code: #8fb3e8;
+  --p-code-bg: #1c2129;
   --p-status: 32px;
   position: relative;
   display: flex;
@@ -22,8 +25,9 @@
   zoom: var(--dp);
   background: var(--p-bg);
   color: var(--p-text);
+  font-family: Inter, var(--font-sans);
   font-size: 15px;
-  line-height: 1.35;
+  line-height: 1.5;
   text-align: left;
   cursor: default;
   user-select: none;
@@ -66,156 +70,175 @@
   right: 25%;
 }
 
-/* Sidebar */
+/* Home: features/home */
 .ph-sidebar {
   position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 280px;
+  width: 300px;
+  padding-top: var(--p-status);
   border-right: 1px solid var(--p-border);
-  background: var(--p-sidebar);
   overflow: hidden;
 }
-.ph-sidebar > header {
+.ph-home-head {
   display: flex;
   flex: none;
-  align-items: flex-end;
-  gap: 12px;
-  height: calc(var(--p-status) + 64px);
-  padding: 0 16px 20px;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
 }
-.ph-sidebar > header strong {
+.ph-home-head strong {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 4px;
-  font-size: 16px;
+  gap: 6px;
+  font-size: 17px;
 }
-.ph-sidebar > header strong svg {
+.ph-home-head strong svg {
   color: var(--p-muted);
 }
 .ph-search {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
-  height: 40px;
+  gap: 10px;
+  height: 44px;
   margin: 4px 16px 6px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid var(--p-border);
-  border-radius: 10px;
-  background: var(--p-raised);
+  border-radius: 12.8px;
+  background: var(--p-field);
+  font-size: 16px;
   color: var(--p-muted);
 }
-.ph-tabs {
+.ph-rows {
   display: flex;
-  flex: none;
-  gap: 3px;
-  margin: 2px 16px 4px;
-  padding: 3px;
-  border-radius: 10px;
-}
-.ph-tabs span {
   flex: 1;
-  padding: 7px 0;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  color: var(--p-muted);
-}
-.ph-tabs span[data-on] {
-  background: var(--p-raised);
-  color: var(--p-text);
-}
-.ph-cards {
-  flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-height: 0;
-  padding: 4px 8px 0;
+  padding: 4px 8px;
   overflow: hidden;
 }
-.ph-cards-head {
+.ph-section {
   display: flex;
-  justify-content: space-between;
-  padding: 8px 10px 6px;
-  font-size: 12px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 10px 12px 0;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--p-muted);
 }
-.ph-cards-head span:first-child {
-  font-weight: 500;
+.ph-section span {
+  flex: 1;
 }
-.ph .ph-card {
+.ph-section i {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--p-faint);
+}
+.ph-section svg {
+  color: var(--p-faint);
+}
+.ph-rows > .ph-section:nth-last-child(2) {
+  margin-top: 8px;
+}
+.ph-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
   width: 100%;
-  height: auto;
-  margin-bottom: 2px;
-  padding: 10px 12px;
+  min-height: 56px;
+  padding: 9px 12px;
   border: 0;
   border-radius: 12px;
-  background: none;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: opacity 0.2s;
 }
-.ph .ph-card[data-dim] {
-  opacity: 0.45;
-}
-.ph .ph-card[data-on] {
-  background: color-mix(in srgb, var(--p-text) 9%, var(--p-bg));
-}
-.ph .ph-card:hover {
+.ph-row:hover {
   background: var(--p-hover);
-  opacity: 1;
 }
-.ph-card-top {
+.ph-row[data-on] {
+  background: var(--p-selected);
+}
+.ph-row[data-dim] > * {
+  opacity: 0.6;
+}
+.ph-glyph {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 22px;
-  font-size: 13px;
-  color: var(--p-muted);
-}
-.ph-card-top > span:nth-child(2) {
-  flex: 1;
-}
-.ph-badge {
-  display: grid;
   flex: none;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 4.8px;
-  font-size: 9.6px;
-  font-weight: 700;
+  color: var(--p-muted);
 }
-.ph-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.ph-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ph-row-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-row-text strong {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.ph-row-text span {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--p-muted);
+}
+.ph-row-end {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+  color: var(--p-muted);
 }
-.ph-state[data-kind="waiting"] {
-  color: #d99a2b;
+.ph-row-end time[data-kind="waiting"] {
+  color: var(--p-waiting);
 }
-.ph-state:is([data-kind="working"], [data-kind="unread"]) {
-  color: var(--p-accent);
+.ph-row-end svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
 }
 .ph-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--p-faint);
 }
-/* Android's ActivityIndicator at the size the cards scale it to. */
+.ph-dot:is([data-kind="waiting"], [data-kind="unread"]) {
+  width: 8px;
+  height: 8px;
+  background: var(--p-waiting);
+}
+.ph-dot[data-kind="unread"] {
+  background: var(--p-accent);
+}
+/* The app's Spinner at the size rows use. */
 .ph-spin {
-  width: 11px;
-  height: 11px;
+  width: 13px;
+  height: 13px;
   border: 1.6px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
@@ -229,67 +252,71 @@
 :root[data-inactive] .ph-spin {
   animation-play-state: paused;
 }
-.ph-card strong {
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ph-card-meta {
+.ph-tabs {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 16px;
-  font-size: 12px;
-  color: color-mix(in srgb, var(--p-muted) 70%, var(--p-bg));
+  flex: none;
+  height: 56px;
+  margin-bottom: 26px;
+  padding: 0 8px;
+  border-top: 1px solid var(--p-border);
 }
-.ph-card-meta span {
+.ph-tabs span {
+  display: flex;
   flex: 1;
-}
-.ph-card-meta svg {
-  width: 13px;
-  height: 13px;
-  opacity: 0.75;
-}
-.ph-fab {
-  position: absolute;
-  right: 16px;
-  bottom: 28px;
-  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 18px;
-  border-radius: 16px;
-  background: var(--p-accent);
-  color: var(--p-on-accent);
-  font-weight: 600;
-  box-shadow: 0 2px 5px rgb(0 0 0 / 0.3);
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--p-muted);
+}
+.ph-tabs span[data-on] {
+  color: var(--p-text);
 }
 
-/* Thread */
+/* Thread: features/thread */
 .ph-thread {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  padding-top: var(--p-status);
 }
 .ph-thread > header {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 20px;
-  height: calc(var(--p-status) + 64px);
-  padding: var(--p-status) 16px 0;
+  gap: 8px;
+  height: 52px;
+  padding: 0 14px 0 10px;
 }
-.ph-thread > header strong {
+.ph-thread > header svg {
+  color: var(--p-text);
+}
+.ph-thread > header > svg:first-child[width="20"] {
+  color: var(--p-muted);
+}
+.ph-thread > header span {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.ph-thread > header span > * {
   overflow: hidden;
-  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ph-thread > header strong {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.ph-thread > header small {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--p-muted);
 }
 /* Pinned to the newest message, as the app keeps it. */
 .ph-list {
@@ -297,7 +324,6 @@
   flex: 1;
   flex-direction: column-reverse;
   min-height: 0;
-  padding: 8px 0;
   overflow: hidden;
 }
 .ph-list > div {
@@ -309,31 +335,36 @@
   gap: 8px;
   padding: 12px 16px;
 }
-.ph-turn-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
+.ph-turn[data-user] {
+  align-items: flex-end;
 }
-.ph-turn-head svg {
-  width: 14px;
-  height: 14px;
-}
-.ph-turn-head span {
-  font-size: 12px;
-  color: var(--p-muted);
+.ph-turn > time {
+  font-size: 11px;
+  color: var(--p-faint);
 }
 .ph-bubble {
-  padding: 11px 14px;
-  border: 1px solid var(--p-border);
-  border-radius: 12px;
-  background: var(--p-raised);
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--p-bubble);
   line-height: 22px;
+}
+.ph-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--p-muted);
+}
+.ph-agent svg {
+  width: 13px;
+  height: 13px;
 }
 .ph-md {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   line-height: 22px;
 }
 .ph .ph-md p {
@@ -345,38 +376,36 @@
   line-height: 19px;
 }
 .ph-md code {
-  padding: 0;
+  padding: 1px 4px;
   border: 0;
-  border-radius: 0;
-  background: var(--p-code);
+  border-radius: 4px;
+  background: var(--p-code-bg);
   font-family: var(--font-mono);
   font-size: 13.5px;
-  color: inherit;
+  color: var(--p-code);
 }
 .ph-run {
   margin: 2px 0 4px;
   font-size: 13px;
   color: var(--p-muted);
 }
-.ph-run-head,
 .ph-step {
   display: flex;
   align-items: center;
   gap: 7px;
   min-height: 26px;
 }
-.ph-run-head span,
 .ph-step span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ph-step > svg:last-child:not(:first-child) {
+  color: var(--p-faint);
+}
 .ph-run-head time {
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
-}
-.ph-run-head svg:last-child {
-  color: var(--p-faint);
 }
 .ph-run-head svg[data-turned] {
   transform: rotate(90deg);
@@ -387,17 +416,13 @@
 .ph-trace .ph-md {
   color: var(--p-text);
 }
-.ph-step svg {
-  opacity: 0.75;
-}
 .ph-step span[data-mono] {
   font-family: var(--font-mono);
   font-size: 12px;
 }
 .ph-files {
   border: 1px solid var(--p-border);
-  border-radius: 10px;
-  background: var(--p-raised);
+  border-radius: 10.2px;
   font-size: 13px;
   overflow: hidden;
 }
@@ -409,6 +434,8 @@
   padding: 0 12px;
 }
 .ph-files > div:first-child {
+  min-height: 0;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--p-border);
 }
 .ph-files strong {
@@ -418,11 +445,12 @@
   flex: 1;
   overflow: hidden;
   font-family: var(--font-mono);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ph-path i {
-  margin-left: 1.2em;
+  margin-left: 1em;
   font-style: normal;
   color: var(--p-faint);
 }
@@ -454,77 +482,66 @@
   align-items: center;
   gap: 18px;
   margin-top: 2px;
-  font-size: 12px;
   color: var(--p-muted);
 }
-.ph-actions span {
+.ph-actions time {
+  font-size: 11px;
   color: var(--p-faint);
 }
 
-/* Composer */
+/* Composer: features/composer */
 .ph-dock {
   display: flex;
   flex: none;
   flex-direction: column;
   padding: 8px 10px 0;
-  border-top: 1px solid var(--p-border);
 }
 .ph-box {
-  padding: 4px 6px 6px;
+  padding: 2px 8px 8px;
   border: 1px solid var(--p-border);
-  border-radius: 18px;
-  background: var(--p-raised);
+  border-radius: 20px;
+  background: var(--p-field);
 }
 .ph-input {
   display: block;
-  min-height: 38px;
-  padding: 8px;
-  line-height: 21px;
+  padding: 12px 6px 8px;
+  font-size: 16px;
+  line-height: 22px;
   color: var(--p-faint);
 }
 .ph-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
-  font-size: 12px;
+  gap: 18px;
+  padding-left: 6px;
   color: var(--p-muted);
-}
-.ph-tools > span {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 6px;
-  white-space: nowrap;
-}
-.ph-tools > span svg:last-child:not(:first-child) {
-  color: var(--p-faint);
-}
-.ph-tools > span > svg:first-child:not(:only-child) {
-  width: 13px;
-  height: 13px;
 }
 .ph-tools > i {
   flex: 1;
 }
 .ph-tools .ph-slash {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
 }
 .ph-tools .ph-send {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  margin-left: 4px;
-  padding: 0;
+  width: 36px;
+  height: 36px;
+  margin-left: -6px;
   border-radius: 50%;
-  background: var(--p-hover);
-  color: var(--p-faint);
-}
-.ph-tools .ph-send[data-on] {
   background: var(--p-accent);
-  color: var(--p-on-accent);
+  color: #1b1b22;
+}
+.ph-tools .ph-send[data-stop] {
+  background: var(--p-stop);
+}
+.ph-send[data-stop] i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: #fff;
 }
 /* Android's gesture bar. */
 .ph-grip {
@@ -534,8 +551,4 @@
   margin: 10px 0 8px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--p-text) 55%, transparent);
-}
-/* Too narrow for the whole toolbar, the cover screen drops the last labels. */
-.ph-cover .ph-tools > span:nth-child(4) {
-  display: none;
 }

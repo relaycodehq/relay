@@ -1,13 +1,15 @@
-// The phone app's screens, redrawn for the web from the retired Expo app's
-// mobile/src/ui (in git history, gone after aa514caa): the same structure,
-// sizes (in dp, scaled by --dp) and wording, and the same shared logic for a
-// turn's heading and a card's state. The Kotlin app in android/ looks different.
+// The phone app's screens, redrawn for the web from the Kotlin app in
+// android/: Home's list (features/home), the thread (features/thread) and its
+// composer, at the app's dp sizes (scaled by --dp) and with its wording. A
+// turn's heading and a row's state come from the same shared logic.
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowLeft,
   ArrowUp,
   BatteryMedium,
+  Bot,
+  Brain,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   Copy,
@@ -15,26 +17,45 @@ import {
   FilePen,
   FileText,
   Globe,
-  Bot,
-  Brain,
   ImagePlus,
+  Inbox,
+  LayoutGrid,
+  Mic,
   PanelLeft,
   Plus,
   Reply,
   Search,
-  Settings2,
+  Bolt,
   Split,
-  Square,
   Terminal,
   Undo2,
+  Volume2,
   Wifi,
   Wrench,
 } from "lucide-react";
-import type { AgentActivity, ChatMessage, ChatSummary } from "../../shared/projects";
+import type {
+  AgentActivity,
+  ChatMessage,
+  ChatSummary,
+} from "../../shared/projects";
 import { agentName } from "../../shared/agents";
-import { doneLabel, duration, liveLabel, summarizeActivity } from "../../shared/activity-labels";
-import { batchHead, groupTrace, readTurn, turnHeading } from "../../shared/agent-trace";
-import { chatActivitySections, elapsedLabel, sentLabel, shortAge } from "../../shared/chat-activity";
+import {
+  doneLabel,
+  duration,
+  liveLabel,
+  summarizeActivity,
+} from "../../shared/activity-labels";
+import {
+  batchHead,
+  groupTrace,
+  readTurn,
+  turnHeading,
+} from "../../shared/agent-trace";
+import {
+  chatActivitySections,
+  elapsedLabel,
+  shortAge,
+} from "../../shared/chat-activity";
 import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { chats, projectRoot, projects } from "./sample";
 import "./phone.css";
@@ -59,7 +80,10 @@ function useNow(ms: number) {
 }
 
 const clock = (at: number) =>
-  new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  new Date(at).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 /** Android's status bar; `hole` is where this screen's camera sits. */
 export function PhoneStatus({ hole }: { hole: "center" | "right" }) {
@@ -76,46 +100,85 @@ export function PhoneStatus({ hole }: { hole: "center" | "right" }) {
   );
 }
 
-// mobile/src/ui/ProjectIcon.tsx
-function projectHue(name: string) {
-  let hash = 0;
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return Math.abs(hash) % 360;
+const projectName = (chat: ChatSummary) =>
+  projects.find((p) => p.id === chat.projectId)?.name ?? "?";
+
+/** ActivityCard's leading mark: needs you, working, unread or nothing new. */
+function Glyph({ chat, unread }: { chat: ChatSummary; unread: boolean }) {
+  if (chat.waiting) return <i className="ph-dot" data-kind="waiting" />;
+  if (chat.running) return <i className="ph-spin" />;
+  return <i className="ph-dot" data-kind={unread ? "unread" : undefined} />;
 }
 
-function Badge({ name }: { name: string }) {
-  const hue = projectHue(name);
+/** A thread on Home: its title, where it is and what it's doing, and how long. */
+function Row({
+  chat,
+  on,
+  unread,
+  now,
+  onOpen,
+}: {
+  chat: ChatSummary;
+  on: boolean;
+  unread: boolean;
+  now: number;
+  onOpen: () => void;
+}) {
+  const state = chat.waiting
+    ? "needs input"
+    : chat.running
+      ? "working"
+      : undefined;
+  const meta = [projectName(chat), state, chat.branch]
+    .filter(Boolean)
+    .join(" · ");
+  const bright = on || unread || chat.waiting;
   return (
-    <span className="ph-badge" style={{ background: `hsl(${hue}, 45%, 48%)`, color: `hsl(${hue}, 55%, 96%)` }}>
-      {name.slice(0, 1).toUpperCase()}
-    </span>
+    <button
+      type="button"
+      className="ph-row"
+      data-on={on || undefined}
+      data-dim={!bright || undefined}
+      onClick={onOpen}
+    >
+      <span className="ph-glyph">
+        <Glyph chat={chat} unread={unread} />
+      </span>
+      <span className="ph-row-text">
+        <strong>{chat.title}</strong>
+        <span>{meta}</span>
+      </span>
+      <span className="ph-row-end">
+        <time data-kind={chat.waiting ? "waiting" : undefined}>
+          {chat.running && chat.runningSince
+            ? elapsedLabel(chat.runningSince, now)
+            : shortAge(chat.updated, now)}
+        </time>
+        {chat.provider ? <ProviderIcon provider={chat.provider} /> : null}
+      </span>
+    </button>
   );
 }
 
-function CardState({ chat, unread, now }: { chat: ChatSummary; unread: boolean; now: number }) {
-  if (chat.waiting)
-    return (
-      <span className="ph-state" data-kind="waiting">
-        <i className="ph-dot" />
-        Needs input
-      </span>
-    );
-  if (chat.running)
-    return (
-      <span className="ph-state" data-kind="working">
-        <i className="ph-spin" />
-        Working{chat.runningSince ? ` ${elapsedLabel(chat.runningSince, now)}` : ""}
-      </span>
-    );
+function SectionHeader({
+  label,
+  count,
+  folded,
+}: {
+  label: string;
+  count: number;
+  folded?: boolean;
+}) {
   return (
-    <span className="ph-state" data-kind={unread ? "unread" : undefined}>
-      {unread ? <i className="ph-dot" /> : null}
-      {shortAge(chat.updated, now)}
-    </span>
+    <div className="ph-section">
+      <span>{label}</span>
+      <i>{count}</i>
+      {folded ? <ChevronRight size={13} /> : null}
+    </div>
   );
 }
 
-/** The list beside the open thread from 600dp wide: mobile/src/ui/Sidebar.tsx. */
+/** Home: the computer, search, threads grouped as you'd triage them, and the tabs. On a fold it's the list beside the thread. */
 export function PhoneSidebar({
   selected,
   unread,
@@ -127,61 +190,60 @@ export function PhoneSidebar({
   onOpen: (chat: ChatSummary) => void;
 }) {
   const now = useNow(1000);
-  const active = chatActivitySections(chats, now).active;
+  const sections = chatActivitySections(chats, now);
+  const groups: [string, ChatSummary[]][] = [
+    ["Needs you", sections.active.filter((c) => c.waiting)],
+    ["Running", sections.active.filter((c) => c.running && !c.waiting)],
+    ["Recent", sections.active.filter((c) => !c.running && !c.waiting)],
+  ];
   return (
     <aside className="ph-sidebar">
-      <header>
-        <PanelLeft size={20} />
+      <header className="ph-home-head">
         <strong>
           studio-mac
-          <ChevronDown size={15} />
+          <ChevronDown size={16} />
         </strong>
-        <Settings2 size={20} />
+        <Plus size={22} />
       </header>
       <div className="ph-search">
-        <Search size={16} />
+        <Search size={18} />
         Search
       </div>
-      <div className="ph-tabs">
-        <span data-on>Activity</span>
-        <span>Projects</span>
+      <div className="ph-rows">
+        {groups.map(([label, group]) =>
+          group.length ? (
+            <Fragment key={label}>
+              <SectionHeader label={label} count={group.length} />
+              {group.map((chat) => (
+                <Row
+                  key={chat.id}
+                  chat={chat}
+                  on={chat.id === selected}
+                  unread={unread.has(chat.id)}
+                  now={now}
+                  onOpen={() => onOpen(chat)}
+                />
+              ))}
+            </Fragment>
+          ) : null,
+        )}
+        <SectionHeader label="Snoozed" count={2} folded />
+        <SectionHeader label="Settled" count={14} folded />
       </div>
-      <div className="ph-cards">
-        <div className="ph-cards-head">
-          <span>Activity</span>
-          <span>{active.length} open</span>
-        </div>
-        {active.map((chat) => {
-          const project = projects.find((p) => p.id === chat.projectId)?.name ?? "?";
-          const on = chat.id === selected;
-          const bright = on || unread.has(chat.id) || chat.waiting;
-          return (
-            <button
-              key={chat.id}
-              type="button"
-              className="ph-card"
-              data-on={on || undefined}
-              data-dim={!bright || undefined}
-              onClick={() => onOpen(chat)}
-            >
-              <span className="ph-card-top">
-                <Badge name={project} />
-                <span>{project}</span>
-                <CardState chat={chat} unread={unread.has(chat.id)} now={now} />
-              </span>
-              <strong>{chat.title}</strong>
-              <span className="ph-card-meta">
-                <span>{chat.branch}</span>
-                {chat.provider ? <ProviderIcon provider={chat.provider} /> : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <span className="ph-fab">
-        <Plus size={18} strokeWidth={2.5} />
-        New thread
-      </span>
+      <nav className="ph-tabs">
+        <span data-on>
+          <Inbox size={20} />
+          Threads
+        </span>
+        <span>
+          <LayoutGrid size={20} />
+          Projects
+        </span>
+        <span>
+          <Bolt size={20} />
+          Settings
+        </span>
+      </nav>
     </aside>
   );
 }
@@ -192,15 +254,17 @@ function Markdown({ text, small }: { text: string; small?: boolean }) {
     <div className="ph-md" data-small={small || undefined}>
       {text.split("\n\n").map((block, i) => (
         <p key={i}>
-          {block.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, j) =>
-            part.startsWith("**") ? (
-              <b key={j}>{part.slice(2, -2)}</b>
-            ) : part.startsWith("`") ? (
-              <code key={j}>{part.slice(1, -1)}</code>
-            ) : (
-              <Fragment key={j}>{part}</Fragment>
-            ),
-          )}
+          {block
+            .split(/(\*\*[^*]+\*\*|`[^`]+`)/)
+            .map((part, j) =>
+              part.startsWith("**") ? (
+                <b key={j}>{part.slice(2, -2)}</b>
+              ) : part.startsWith("`") ? (
+                <code key={j}>{part.slice(1, -1)}</code>
+              ) : (
+                <Fragment key={j}>{part}</Fragment>
+              ),
+            )}
         </p>
       ))}
     </div>
@@ -209,18 +273,34 @@ function Markdown({ text, small }: { text: string; small?: boolean }) {
 
 const display = (text: string) => text.split(`${projectRoot}/`).join("");
 
-function Step({ icon: Icon, running, mono, children }: { icon: typeof Terminal; running?: boolean; mono?: boolean; children: ReactNode }) {
+function Step({
+  icon: Icon,
+  running,
+  mono,
+  folds,
+  children,
+}: {
+  icon: typeof Terminal;
+  running?: boolean;
+  mono?: boolean;
+  folds?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="ph-step">
       <Icon size={14} />
-      <span className={running ? "live-shine" : undefined} data-mono={mono || undefined}>
+      <span
+        className={running ? "live-shine" : undefined}
+        data-mono={mono || undefined}
+      >
         {children}
       </span>
+      {folds ? <ChevronRight size={13} /> : null}
     </div>
   );
 }
 
-// mobile/src/ui/AgentRun.tsx
+// features/thread/AgentRun.kt
 function AgentRun({ message }: { message: ChatMessage }) {
   useNow(1000);
   const turn = readTurn(message);
@@ -232,16 +312,14 @@ function AgentRun({ message }: { message: ChatMessage }) {
       ? Clock3
       : heading.kind === "call"
         ? icons[heading.activity.kind]
-        : heading.kind === "done"
-          ? heading.last
-            ? icons[heading.last.kind]
-            : Brain
+        : heading.kind === "done" && heading.last
+          ? icons[heading.last.kind]
           : Brain;
   return (
     <div className="ph-run">
-      <div className="ph-run-head">
+      <div className="ph-step ph-run-head">
         <HeaderIcon size={14} />
-        <span>
+        <span className={heading.kind === "call" ? "live-shine" : undefined}>
           {heading.kind === "working"
             ? "Working for"
             : heading.kind === "done"
@@ -262,7 +340,8 @@ function AgentRun({ message }: { message: ChatMessage }) {
       {live ? (
         <div className="ph-trace">
           {groupTrace(shown).map((part, index, parts) => {
-            if (part.kind === "commentary") return <Markdown key={part.id} text={part.text} small />;
+            if (part.kind === "commentary")
+              return <Markdown key={part.id} text={part.text} small />;
             if (index === parts.length - 1) {
               const { head } = batchHead(part.activity);
               const running = head.status === "running";
@@ -272,13 +351,15 @@ function AgentRun({ message }: { message: ChatMessage }) {
                 </Step>
               );
             }
-            const only = part.activity.length === 1 ? part.activity[0]! : undefined;
+            const only =
+              part.activity.length === 1 ? part.activity[0]! : undefined;
             const kinds = new Set(part.activity.map((a) => a.kind));
             return (
               <Step
                 key={part.id}
                 icon={kinds.size === 1 ? icons[part.activity[0]!.kind] : Wrench}
                 mono={only?.kind === "command"}
+                folds
               >
                 {only ? display(only.label) : summarizeActivity(part.activity)}
               </Step>
@@ -290,24 +371,34 @@ function AgentRun({ message }: { message: ChatMessage }) {
   );
 }
 
-// mobile/src/ui/MessageView.tsx
+// features/thread/MessageView.kt
 function Turn({ message: m }: { message: ChatMessage }) {
   const user = m.role === "user";
   const add = m.changes?.reduce((n, f) => n + f.additions, 0) ?? 0;
   const del = m.changes?.reduce((n, f) => n + f.deletions, 0) ?? 0;
+  if (user)
+    return (
+      <div className="ph-turn" data-user>
+        <div className="ph-bubble">{m.body}</div>
+        <time>{clock(m.created)}</time>
+      </div>
+    );
   return (
     <div className="ph-turn">
-      <div className="ph-turn-head">
-        {user ? null : <ProviderIcon provider={m.provider} />}
-        <strong>{user ? "You" : agentName(m.provider)}</strong>
-        {user ? <span>{clock(m.created)}</span> : null}
+      <div className="ph-agent">
+        <ProviderIcon provider={m.provider} />
+        {agentName(m.provider)}
       </div>
-      {user ? <div className="ph-bubble">{m.body}</div> : <AgentRun message={m} />}
-      {!user && m.body.trim() ? <Markdown text={m.body} /> : null}
-      {!user && m.changes?.length && m.status !== "streaming" ? (
+      <AgentRun message={m} />
+      {m.body.trim() ? <Markdown text={m.body} /> : null}
+      {m.changes?.length && m.status !== "streaming" ? (
         <div className="ph-files">
           <div>
-            <strong>{m.changes.length === 1 ? "1 file changed" : `${m.changes.length} files changed`}</strong>
+            <strong>
+              {m.changes.length === 1
+                ? "1 file changed"
+                : `${m.changes.length} files changed`}
+            </strong>
             <Counts add={add} del={del} />
             <span className="ph-rewind">
               <Undo2 size={14} />
@@ -328,12 +419,14 @@ function Turn({ message: m }: { message: ChatMessage }) {
           })}
         </div>
       ) : null}
-      {!user && m.status !== "streaming" ? (
+      {m.status !== "streaming" ? (
         <div className="ph-actions">
-          <span>{sentLabel(m.ended ?? m.created, new Date())}</span>
-          <Copy size={16} />
-          <Split size={16} />
-          <Reply size={16} />
+          <time>{clock(m.ended ?? m.created)}</time>
+          <Copy size={18} />
+          <Volume2 size={18} />
+          <Split size={18} />
+          <Reply size={18} />
+          <Ellipsis size={18} />
         </div>
       ) : null}
     </div>
@@ -349,7 +442,7 @@ function Counts({ add, del }: { add: number; del: number }) {
   );
 }
 
-/** The thread screen: the stack's header, the messages and the composer. */
+/** The thread screen: its top bar, the messages and the composer. */
 export function PhoneThread({
   chat,
   messages,
@@ -358,17 +451,20 @@ export function PhoneThread({
 }: {
   chat: ChatSummary;
   messages: ChatMessage[];
-  /** The composer's model label, e.g. "Opus 5.5 · High". */
+  /** The thread's model line, e.g. "Opus 5.5 · High". */
   model: string;
-  /** Beside the list, where the first screen has nothing to go back to. */
+  /** Beside the list on a fold: the sidebar's toggle where the back arrow was. */
   pane?: boolean;
 }) {
   const provider = messages.at(-1)?.provider ?? "claude";
   return (
     <section className="ph-thread">
       <header>
-        {pane ? null : <ArrowLeft size={24} />}
-        <strong>{chat.title}</strong>
+        {pane ? <PanelLeft size={20} /> : <ChevronLeft size={24} />}
+        <span>
+          <strong>{chat.title}</strong>
+          <small>{model} · 31% context</small>
+        </span>
         <Ellipsis size={22} />
       </header>
       <div className="ph-list">
@@ -382,21 +478,13 @@ export function PhoneThread({
         <div className="ph-box">
           <span className="ph-input">Message {agentName(provider)}</span>
           <div className="ph-tools">
-            <span>
-              <ImagePlus size={17} />
-            </span>
-            <span>
-              <ProviderIcon provider={provider} />
-              {model}
-              <ChevronDown size={12} />
-            </span>
-            <span>Full access</span>
-            <span>Plan</span>
+            <ImagePlus size={20} />
             <i />
             <span className="ph-slash">/</span>
+            <Mic size={20} />
             {chat.running ? (
-              <span className="ph-send" data-on>
-                <Square size={13} fill="currentColor" />
+              <span className="ph-send" data-stop>
+                <i />
               </span>
             ) : (
               <span className="ph-send">
