@@ -178,6 +178,19 @@ it("holds the summary back until it is synced", async () => {
   expect(listed(chat).updated).toBe(99);
 });
 
+it("tells who listens for saves of each write, the turn end's held summary too", async () => {
+  const chat = thread();
+  const saved: ProjectChat[] = [];
+  const off = storage.onSaved((c) => saved.push(c));
+  await storage.add(chat);
+  await storage.save(chat, { holdSummary: true });
+  expect(saved).toEqual([chat, chat]);
+  expect(saved[0]).toBe(chat);
+  off();
+  await storage.save(chat);
+  expect(saved).toHaveLength(2);
+});
+
 it("leaves a thread that isn't listed to add", async () => {
   const chat = thread();
   storage.keep(chat);

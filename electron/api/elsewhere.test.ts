@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,7 +27,7 @@ const LEAD = "11111111-1111-4111-8111-111111111111",
   PORTER = "33333333-3333-4333-8333-333333333333",
   REVIEWER = "44444444-4444-4444-8444-444444444444";
 
-function handlers() {
+function setup() {
   const chat = (
     id: string,
     title: string,
@@ -64,20 +64,43 @@ function handlers() {
     [PORTER]: clone,
     [REVIEWER]: clone,
   };
+  const started = [
+    { id: HELPER, title: "Fix status test" },
+    { id: PORTER, title: "Port shader" },
+    { id: REVIEWER, title: "Reviewer", reviewer: { parent: LEAD } },
+  ];
+  const saved = new Set<(chat: ProjectChat) => void>();
+  const get = vi.fn(async (id: string) => structuredClone(chats.get(id)!));
+  const send = vi.fn();
   const ctx = {
     store: { get: () => ({ projects: [] }) },
+    window: { send, caller: () => null },
     projectChats: {
-      get: async (id: string) => chats.get(id)!,
+      get,
       terminalFolder: async (_: string, id: string) => folders[id],
-      startedThreads: () => [
-        { id: HELPER },
-        { id: PORTER },
-        { id: REVIEWER, reviewer: { parent: LEAD } },
-      ],
+      startedThreads: () => started,
+      onSaved: (listener: (chat: ProjectChat) => void) => {
+        saved.add(listener);
+        return () => saved.delete(listener);
+      },
     },
   } as unknown as ApiContext;
-  return elsewhereHandlers(ctx);
+  /** Saves a thread as a turn ending would. */
+  const save = (chat: ProjectChat) => {
+    chats.set(chat.id, chat);
+    for (const listener of saved) listener(chat);
+  };
+  return {
+    h: elsewhereHandlers(ctx),
+    chats,
+    folders,
+    started,
+    get,
+    send,
+    save,
+  };
 }
+const handlers = () => setup().h;
 
 beforeEach(async () => {
   base = await realpath(await mkdtemp(join(tmpdir(), "relay-elsewhere-api-")));
@@ -135,4 +158,61 @@ it("shows and commits only files the thread's agents changed there", async () =>
   expect(git(clone, "show", "--name-only", "--format=%s", "HEAD").trim()).toBe(
     "Port it\n\na.ts",
   );
+});
+
+it("reads the threads once, until a turn records other files", async () => {
+  const { h, chats, get, send, save } = setup();
+  const first = await h.threadElsewhere([LEAD]);
+  const reads = get.mock.calls.length;
+  expect(reads).toBe(3);
+  expect(await h.threadElsewhere([LEAD])).toEqual(first);
+  expect(get).toHaveBeenCalledTimes(reads);
+
+  // Saved mid-turn, with nothing new recorded: the reading holds.
+  const lead = structuredClone(chats.get(LEAD)!);
+  lead.title = "Lead, renamed";
+  save(lead);
+  await h.threadElsewhere([LEAD]);
+  expect(get).toHaveBeenCalledTimes(reads);
+  expect(send).not.toHaveBeenCalled();
+
+  // A helper's turn ends having changed a file in the clone.
+  const helper = structuredClone(chats.get(HELPER)!);
+  helper.messages.push({
+    elsewhere: [{ root: clone, paths: ["b.ts"] }],
+  } as ProjectChat["messages"][number]);
+  save(helper);
+  expect(send).toHaveBeenCalledWith("relay:elsewhere", LEAD);
+  const after = await h.threadElsewhere([LEAD]);
+  expect(get).toHaveBeenCalledTimes(reads * 2);
+  expect(after.groups[0]!.files.map((f) => [f.path, f.by])).toEqual([
+    ["a.ts", [{ chatId: PORTER, title: "Port shader" }]],
+    ["b.ts", [{ chatId: HELPER, title: "Fix status test" }]],
+  ]);
+});
+
+it("reads again when a rollback or a newly started thread changes what was touched", async () => {
+  const { h, chats, started, get, send, save } = setup();
+  await h.threadElsewhere([LEAD]);
+  const reads = get.mock.calls.length;
+
+  const porter = structuredClone(chats.get(PORTER)!);
+  porter.messages[0]!.changes![0]!.revertedBy = "undo";
+  save(porter);
+  expect(send).toHaveBeenCalledWith("relay:elsewhere", LEAD);
+  const reverted = await h.threadElsewhere([LEAD]);
+  expect(reverted.groups[0]!.files[0]!.by).toEqual([]);
+  expect(get).toHaveBeenCalledTimes(reads * 2);
+
+  // Started since: listed now, so the reading is stale even before it saves.
+  const NEW = "55555555-5555-4555-8555-555555555555";
+  chats.set(NEW, {
+    id: NEW,
+    projectId: "p",
+    title: "New",
+    messages: [],
+  } as unknown as ProjectChat);
+  started.push({ id: NEW, title: "New" });
+  await h.threadElsewhere([LEAD]);
+  expect(get).toHaveBeenCalledTimes(reads * 3 + 1);
 });

@@ -393,6 +393,7 @@ export interface Api
   takeBugReportWanted(): Promise<boolean>;
   onBugReport(callback: () => void): () => void;
   onWorkingTree(callback: (where: string) => void): () => void;
+  onElsewhere(callback: (chatId: string) => void): () => void;
   /** Plugged in, Relay keeps the computer from idling to sleep; on battery only while it has work or a paired device. */
   keepAwake(): Promise<boolean>;
   saveKeepAwake(enabled: boolean): Promise<boolean>;

@@ -64,3 +64,13 @@ it("lists only the touched files that are still uncommitted, with their lines", 
     { path: "new.ts", additions: 2, deletions: 0, added: true },
   ]);
 });
+
+it("counts no lines in an untracked file too big to read", async () => {
+  await writeFile(join(clone, "big.log"), "line\n".repeat(300_000));
+  await writeFile(join(clone, "small.log"), "line\n".repeat(3));
+  const { files } = await uncommitted(clone, ["big.log", "small.log"]);
+  expect(files).toEqual([
+    { path: "big.log", additions: 0, deletions: 0, added: true },
+    { path: "small.log", additions: 3, deletions: 0, added: true },
+  ]);
+});

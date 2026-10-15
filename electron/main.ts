@@ -28,6 +28,7 @@ import { Quit } from "./app/quit";
 import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
+import { ElsewhereWatch } from "./git/elsewhere-watch";
 import { savedThreadWindows } from "../shared/thread-windows";
 import {
   offerCrashReport,
@@ -147,6 +148,8 @@ let handoffs: { computers: Computers; sender: Handoffs } | undefined;
 let agentHosts: AgentHosts | undefined;
 /** Which working trees the windows show; unset until Relay has started. */
 let treeWatch: TreeWatch | undefined;
+/** Which other repositories the windows' threads changed files in; unset until Relay has started. */
+let elsewhereWatch: ElsewhereWatch | undefined;
 const login = new GiteaLogin(teaTokenFor);
 const github = new GithubLogin((url, options) => net.fetch(url, options));
 /** The client for a project's repository host; null when it has none Relay can use. */
@@ -160,6 +163,7 @@ const window = new AppWindow({
     previews?.hideAll(win);
     devices?.hideAll(win);
     treeWatch?.release(win);
+    elsewhereWatch?.release(win);
     // A phone's send it was finishing goes to the page that comes next.
     if (win === window.win) drafts?.service.redeliver();
   },
@@ -212,6 +216,7 @@ const quit = new Quit({
     threadTerminals.closeAll();
     previews?.dispose();
     treeWatch?.dispose();
+    elsewhereWatch?.dispose();
     // Quitting before Relay finished starting skips shutDown.
     void devices?.dispose();
     blame.dispose();
@@ -510,6 +515,9 @@ app
       root: (where) => api.placeRoot(where),
       changed: (where) => window.send("relay:working-tree", where),
     });
+    elsewhereWatch = new ElsewhereWatch({
+      changed: (chatId) => window.send("relay:elsewhere", chatId),
+    });
     const api = apiContext({
       store: loaded,
       projects,
@@ -549,6 +557,7 @@ app
       bugReports,
       dragTray: dragTray(),
       treeWatch,
+      elsewhereWatch,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

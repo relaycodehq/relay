@@ -230,6 +230,13 @@ export class ProjectChats {
   onSummaries(listener: (projectId: string) => void) {
     return this.storage.onSummaries(listener);
   }
+  /**
+   * Hears each thread written to disk, as a turn ends or its files are
+   * rolled back. The thread is Relay's own copy: read it, never change it.
+   */
+  onSaved(listener: (chat: ProjectChat) => void) {
+    return this.storage.onSaved(listener);
+  }
   /** Says a project's list may read differently; every project's, given none. */
   summariesChanged(projectId?: string) {
     this.storage.summariesChanged(projectId);

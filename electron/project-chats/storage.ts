@@ -148,6 +148,7 @@ export class ChatStorage {
   /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
   private ready: Promise<void> = Promise.resolve();
   private listeners = new Set<(projectId: string) => void>();
+  private savedListeners = new Set<(chat: ProjectChat) => void>();
   /** The pages answers showed with show_html. */
   readonly renders: RenderFiles;
   readonly shown: ShownImages;
@@ -305,6 +306,7 @@ export class ChatStorage {
       if (left) this.saving.set(id, left);
       else this.saving.delete(id);
     }
+    for (const listener of this.savedListeners) listener(chat);
     if (!holdSummary) await this.syncSummary(chat);
   }
 
@@ -447,6 +449,12 @@ export class ChatStorage {
   onSummaries(listener: (projectId: string) => void) {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);
+  }
+
+  /** Hears every thread written to disk, the cached copy itself: read it, never change it. */
+  onSaved(listener: (chat: ProjectChat) => void) {
+    this.savedListeners.add(listener);
+    return () => void this.savedListeners.delete(listener);
   }
 
   /** Says a project's list may read differently; every project's, given none. */

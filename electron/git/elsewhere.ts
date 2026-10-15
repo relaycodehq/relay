@@ -86,8 +86,16 @@ export async function outsideEdits(
   }));
 }
 
+/** Untracked files larger than this aren't read to count their lines: they show as added, with none. */
+const COUNTED_BYTES = 1024 * 1024;
+
 /** A text file's lines, for one Git doesn't track yet. */
 async function lineCount(path: string) {
+  const size = await stat(path).then(
+    (s) => (s.isFile() ? s.size : 0),
+    () => 0,
+  );
+  if (!size || size > COUNTED_BYTES) return 0;
   const bytes = await readFile(path).catch(() => null);
   if (!bytes?.length || bytes.includes(0)) return 0;
   let lines = 0;

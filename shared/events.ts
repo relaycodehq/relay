@@ -38,4 +38,6 @@ export interface RelayEvents {
   "relay:bug-report": null;
   /** Something changed in this place's folder that its working tree may show. */
   "relay:working-tree": string;
+  /** What this thread and those it started changed in other repositories may read differently. */
+  "relay:elsewhere": string;
 }

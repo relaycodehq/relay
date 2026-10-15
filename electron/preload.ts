@@ -110,6 +110,7 @@ const methods = [
   "projectWorkingDiff",
   "projectIgnoredDiff",
   "threadElsewhere",
+  "watchElsewhere",
   "threadElsewhereDiff",
   "threadElsewhereCommit",
   "projectDismissIgnored",
@@ -441,6 +442,7 @@ contextBridge.exposeInMainWorld("relay", {
   onDraftSend: on("relay:draft-send"),
   onBugReport: on("relay:bug-report"),
   onWorkingTree: on("relay:working-tree"),
+  onElsewhere: on("relay:elsewhere"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

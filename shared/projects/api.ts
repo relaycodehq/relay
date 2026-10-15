@@ -431,6 +431,12 @@ export interface ProjectGitApi {
   projectIgnoredDiff(where: string, path: string): Promise<FilePair>;
   /** What a thread and the threads it started changed in other repositories, and which of its own folder's files the started ones changed. */
   threadElsewhere(chatId: string): Promise<ElsewhereChanges>;
+  /**
+   * The calling window now shows this thread's changes elsewhere, or none:
+   * Relay says when they may read differently (`relay:elsewhere`). False
+   * where it can't watch their repositories, and the window polls instead.
+   */
+  watchElsewhere(chatId: string | null): Promise<boolean>;
   /** A file changed in another repository, against its HEAD. */
   threadElsewhereDiff(
     chatId: string,

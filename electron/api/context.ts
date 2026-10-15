@@ -37,6 +37,7 @@ import type { Drafts } from "../drafts";
 import type { DragTray } from "../bug-report/drag-tray";
 import type { BugReports } from "../bug-report/service";
 import type { TreeWatch } from "../git/tree-watch";
+import type { ElsewhereWatch } from "../git/elsewhere-watch";
 
 export interface Services {
   store: Store;
@@ -77,6 +78,8 @@ export interface Services {
   dragTray?: DragTray;
   /** Tells windows when their working tree may have changed; absent headless. */
   treeWatch?: TreeWatch;
+  /** Tells windows when other repositories a thread changed files in may have; absent headless. */
+  elsewhereWatch?: ElsewhereWatch;
 }
 
 /** What a method's promise resolves to in the page. */
