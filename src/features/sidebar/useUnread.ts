@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { movedSinceSeen, readUpTo } from "../../../shared/chat-activity";
+import {
+  movedSinceSeen,
+  openedUpTo,
+  readUpTo,
+} from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
 import { readJson, writeJson } from "../../lib/persisted-store";
 import { useWindowFocused } from "../../lib/window-focus";
@@ -65,31 +69,31 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
     opened.current = current.id;
     // Before it's marked read below: the thread's "New" divider goes where
     // you had read up to.
+    const now = Date.now();
     noteArrival({
       chatId: current.id,
       readTo: readUpTo(current, since, seen),
       updated: current.updated,
-      now: Date.now(),
+      now,
       opened: reopened,
       refocused,
     });
-    if (
-      !(current.markedUnread && reopened) &&
-      (seen[current.id] ?? 0) >= current.updated
-    )
+    // A woken thread reads past its wake time, so "Woke up" clears.
+    const upTo = openedUpTo(current, now);
+    if (!(current.markedUnread && reopened) && (seen[current.id] ?? 0) >= upTo)
       return;
     setSeen(() => {
       // Storage has what every window read, and not the threads swept as gone.
       const next = savedSeen();
-      next[current.id] = Math.max(next[current.id] ?? 0, current.updated);
+      next[current.id] = Math.max(next[current.id] ?? 0, upTo);
       writeJson(SEEN, next);
       return next;
     });
     // Phones read it from the desktop, so their marks clear too.
     void window.relay
-      ?.markProjectChatSeen?.(current.id, current.updated)
+      ?.markProjectChatSeen?.(current.id, upTo)
       .catch(() => {});
-  }, [focused, current?.id, current?.updated]);
+  }, [focused, current?.id, current?.updated, current?.snoozedUntil]);
   return (c: ChatSummary) =>
     ((c.id !== chatId || (!focused && !c.running)) && !!c.markedUnread) ||
     movedSinceSeen(c, since, seen);

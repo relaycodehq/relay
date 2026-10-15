@@ -19,7 +19,7 @@ import { threadCost } from "../../../shared/thread-cost";
 import { remoteHistory, titleBridge, markedUnreadBridge, workspaceBridge, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
 import { sentSettings, takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
-import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
+import { openedUpTo, snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
 import { openPlan } from "../../../shared/open-plan";
 import { preview } from "../../../shared/thread-news";
@@ -109,6 +109,7 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
   // but only while the app is in front: answers that land in the background
   // are marked when it comes back.
   const updated = summary?.updated;
+  const snoozedUntil = summary?.snoozedUntil;
   const foreground = useForeground();
   const focused = useIsFocused();
   const leavingUnread = useRef(false);
@@ -117,9 +118,11 @@ function ThreadBody({ id, rootId }: { id: string; rootId?: string }) {
     markSeen(id, updated);
     clearThreadNotice(id);
     // The desktop keeps the shared mark; an older one just doesn't know the call.
+    // Past a wake time it reads that too, so "Woke up" clears.
+    const upTo = openedUpTo({ updated, snoozedUntil }, Date.now());
     if (remote.status === "online")
-      void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
-  }, [id, updated, foreground, focused, remote.status, remote.desktop]);
+      void remote.desktop("markProjectChatSeen", id, upTo).catch(() => {});
+  }, [id, updated, snoozedUntil, foreground, focused, remote.status, remote.desktop]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
     "thread" | "snooze" | "rename" | "sides" | "agents"

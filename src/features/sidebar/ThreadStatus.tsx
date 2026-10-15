@@ -6,6 +6,7 @@ import {
   elapsedLabel,
   shortAge,
   wakeLabel,
+  wokeUnread,
 } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { agentsSince } from "../../../shared/waiting";
@@ -156,7 +157,7 @@ export function CardState({
         <span className="sb-card-label">Stopped</span>
       </span>
     );
-  if (chat.snoozedUntil && chat.snoozedUntil <= now)
+  if (wokeUnread(chat, now))
     return <span className="sb-card-state unread">Woke up</span>;
   if (chat.pending?.length)
     return (

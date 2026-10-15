@@ -6,12 +6,14 @@ import {
   chatActivitySections,
   chatIsEmpty,
   elapsedLabel,
+  openedUpTo,
   shortAge,
   sentLabel,
   settledSince,
   snoozePresets,
   unreadStart,
   wakeLabel,
+  wokeUnread,
 } from "./chat-activity";
 import type { ChatSummary } from "./projects";
 
@@ -130,6 +132,20 @@ describe("chat activity", () => {
     const at = (id: string) => sunday.find((p) => p.id === id)!.until;
     expect(new Date(at("tomorrow")).getDate()).toBe(12);
     expect(new Date(at("next-week")).getDate()).toBe(19);
+  });
+
+  it("says a thread woke up until it's opened, then again after its next snooze", () => {
+    const woke = chat({ updated: 100, seenAt: 100, snoozedUntil: 500 });
+    expect(wokeUnread(woke, 400)).toBe(false);
+    expect(wokeUnread(woke, 600)).toBe(true);
+    // Opening it reads past the wake time, though nothing new came in.
+    const opened = { ...woke, seenAt: openedUpTo(woke, 600) };
+    expect(wokeUnread(opened, 700)).toBe(false);
+    const resnoozed = { ...opened, snoozedUntil: 900 };
+    expect(wokeUnread(resnoozed, 800)).toBe(false);
+    expect(wokeUnread(resnoozed, 1000)).toBe(true);
+    // Opened while still asleep, it reads only what's there.
+    expect(openedUpTo(resnoozed, 800)).toBe(100);
   });
 
   it("counts a running turn by the second, then by the minute past an hour", () => {

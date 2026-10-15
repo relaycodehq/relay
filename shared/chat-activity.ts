@@ -26,6 +26,24 @@ function chatSnoozed(chat: Triaged, now: number): boolean {
   return chat.snoozedUntil != null && chat.snoozedUntil > now;
 }
 
+/** Its snooze ran out and it hasn't been read since: the card says "Woke up". */
+export const wokeUnread = (
+  chat: Pick<ChatSummary, "snoozedUntil" | "seenAt">,
+  now: number,
+) =>
+  chat.snoozedUntil != null &&
+  chat.snoozedUntil <= now &&
+  (chat.seenAt ?? 0) < chat.snoozedUntil;
+
+/** How far opening a thread reads it: past its wake time once it woke. */
+export const openedUpTo = (
+  chat: Pick<ChatSummary, "updated" | "snoozedUntil">,
+  now: number,
+) =>
+  chat.snoozedUntil != null && chat.snoozedUntil <= now
+    ? Math.max(chat.updated, chat.snoozedUntil)
+    : chat.updated;
+
 export function chatActivitySection(
   chat: Triaged,
   now: number,

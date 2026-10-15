@@ -26,6 +26,7 @@ import {
   shortAge,
   snoozePresets,
   wakeLabel,
+  wokeUnread,
 } from "../../../shared/chat-activity";
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
 import { markedUnreadBridge, type RemoteChatSummary, type RemoteProject } from "../../../shared/remote";
@@ -632,7 +633,7 @@ function CardState({
         </Text>
       </View>
     );
-  if (chat.snoozedUntil && chat.snoozedUntil <= now)
+  if (wokeUnread(chat, now))
     return <Text style={[styles.stateText, { color: t.accent }]}>Woke up</Text>;
   if (chat.pending?.length)
     return (
