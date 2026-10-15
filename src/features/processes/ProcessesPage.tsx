@@ -271,8 +271,13 @@ export function ProcessesPage({
 
 function summaryLine(o: ProcessOverview) {
   const share = o.total.mb / o.machine.totalMb;
+  const cpu = o.total.cpu;
+  const machineCpu =
+    cpu !== undefined && o.machine.cores > 1
+      ? ` (${formatCpu(cpu / o.machine.cores)} of ${o.machine.cores} cores)`
+      : "";
   return [
-    `${formatCpu(o.total.cpu)} CPU`,
+    `${formatCpu(cpu)} CPU${machineCpu}`,
     `${formatMemory(o.total.mb)} of ${formatMemory(o.machine.totalMb)} memory${share >= 0.01 ? ` (${Math.round(share * 100)}%)` : ""}`,
   ].join(" · ");
 }
