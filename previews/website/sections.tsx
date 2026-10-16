@@ -186,6 +186,16 @@ export function QuickKeys({ arrows }: { arrows: string }) {
   return <>{mod + arrows}</>;
 }
 
+/**
+ * The composer's key chip, on macOS only: Ctrl+Alt+Shift+ crowds it, and the
+ * arrow buttons around it and the text beside it already say the rest.
+ */
+function QuickKeysChip() {
+  const os = useOs();
+  if (os === "win" || os === "linux") return null;
+  return <kbd>⌃⌘← →</kbd>;
+}
+
 /** The composer's quick switch, stepping through presets as its keys do. */
 export function QuickSwitchDemo() {
   const [ref, active] = useActive<HTMLDivElement>();
@@ -236,9 +246,7 @@ export function QuickSwitchDemo() {
           >
             <ChevronLeft size={15} />
           </button>
-          <kbd>
-            <QuickKeys arrows="← →" />
-          </kbd>
+          <QuickKeysChip />
           <button
             type="button"
             className="icon-button"
