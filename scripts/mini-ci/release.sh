@@ -16,6 +16,8 @@ SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
 # Signs latest.json; installs refuse a feed without a signature from it.
 UPDATE_KEY="$HOME/.config/relay-ci/update-signing-key.pem"
+# CLOUDFLARE_API_TOKEN (Workers edit) and CLOUDFLARE_ACCOUNT_ID, for relaycode.io.
+CLOUDFLARE="$HOME/.config/relay-ci/cloudflare.env"
 
 dry_run=0
 args=()
@@ -235,3 +237,16 @@ gh release edit "$tag" --repo "$RELEASES_REPO" --draft=false --latest \
   --title "Relay $version" --notes-file "$ROOT/notes.md"
 rm -rf "$out"
 step "Published $version"
+
+# The site is built from the tag: it names this version and links its files.
+# The release is public by now, so a failed deploy only shows in the status.
+step "Deploying relaycode.io"
+if [[ ! -f "$CLOUDFLARE" ]]; then
+  echo "No Cloudflare token at $CLOUDFLARE; the site keeps its old version."
+  echo skipped >"$ROOT/state/website"
+elif (set -a && . "$CLOUDFLARE" && set +a && npm run deploy:website); then
+  echo deployed >"$ROOT/state/website"
+else
+  echo failed >"$ROOT/state/website"
+fi
+rm -rf dist-website

@@ -50,11 +50,17 @@ upload_log() {
 log="$ROOT/logs/$(date +%Y-%m-%d-%H%M)-$tag.log"
 echo "$(date '+%F %T') building $tag (${head:0:7}) → $log"
 report pending "Building $tag on the Mac mini"
+rm -f "$state/website"
 if "$ROOT/bin/release.sh" "$tag" >"$log" 2>&1; then
   echo "$build" >"$state/released"
   rm -f "$state/failed"
   version="$(cat "$state/version")"
-  report success "Published $version" "https://github.com/$REPO/releases/tag/v$version"
+  case "$(cat "$state/website" 2>/dev/null)" in
+    deployed) site="" ;;
+    failed) site=", site deploy failed" ;;
+    *) site=", site not deployed" ;;
+  esac
+  report success "Published $version$site" "https://github.com/$REPO/releases/tag/v$version"
   echo "$(date '+%F %T') released $tag (${head:0:7})"
 else
   echo "$build" >"$state/failed"
