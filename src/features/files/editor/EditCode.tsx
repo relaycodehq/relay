@@ -1,21 +1,22 @@
 import { EditProvider } from "@pierre/diffs/react";
-import type { useEditableDiff } from "./useEditableDiff";
+import type { useEditorView } from "./useEditorView";
 import { useSyntaxThemes } from "../../../lib/appearance";
 import { useTheme } from "../../../lib/useTheme";
 import { DiffCodeView } from "../../diff/DiffCodeView";
 import type { useSymbolNavigation } from "../../diff/SymbolNavigation";
 import { createEditor } from "./create-editor";
 
-/** The editable diff in Pierre's code view. */
+/** The editable file, or its side-by-side comparison, in Pierre's code view. */
 export function EditCode({
   view,
   symbols,
-  compare,
+  onRender,
   onEdit,
 }: {
-  view: ReturnType<typeof useEditableDiff>;
+  view: ReturnType<typeof useEditorView>;
   symbols: ReturnType<typeof useSymbolNavigation>["handlers"];
-  compare: boolean;
+  /** Each render of the item, with its host element. */
+  onRender?: (node: HTMLElement) => void;
   onEdit: (contents: string) => void;
 }) {
   const theme = useTheme();
@@ -33,11 +34,14 @@ export function EditCode({
         unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-diff], [data-file] {opacity:1 !important;} [data-code] {tab-size:2;}`}
         options={{
           ...symbols,
-          onPostRender: view.onPostRender,
+          onPostRender: (node, rendered) => {
+            onRender?.(node);
+            view.onPostRender(node, rendered);
+          },
           useTokenTransformer: true,
           theme: syntaxThemes,
           themeType: theme,
-          diffStyle: compare ? "split" : "unified",
+          diffStyle: "split",
           expandUnchanged: true,
           disableFileHeader: true,
           diffIndicators: "bars",

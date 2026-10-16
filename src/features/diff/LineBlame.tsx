@@ -14,6 +14,12 @@ interface Source {
   revision: string;
   path: string;
   label: string;
+  /**
+   * The line at `revision` a shown line still is, or none for one changed
+   * since. Without it, every line is the same line at `revision`.
+   */
+  lineAt?: (line: number) => number | undefined;
+  /** Why a line has no history: every line's, or with `lineAt`, a changed one's. */
   unavailable?: string;
 }
 interface Hover {
@@ -186,23 +192,24 @@ export function useLineBlame(
       };
       target.current!.element = current;
       current.setAttribute("aria-describedby", id);
-      if (source.unavailable) {
-        setHover({ ...next, error: source.unavailable });
+      const at = source.lineAt
+        ? source.lineAt(line)
+        : source.unavailable
+          ? undefined
+          : line;
+      if (at === undefined) {
+        setHover({
+          ...next,
+          error: source.unavailable ?? "This line has no history.",
+        });
         return;
       }
       setHover(next);
+      const query = { revision: source.revision, path: source.path, line: at };
       void (
         "projectId" in pull
-          ? api.localBlame(pull.projectId, {
-              revision: source.revision,
-              path: source.path,
-              line,
-            })
-          : api.blame(pull, {
-              revision: source.revision,
-              path: source.path,
-              line,
-            })
+          ? api.localBlame(pull.projectId, query)
+          : api.blame(pull, query)
       )
         .then((result) => {
           if (generation.current === request) setHover({ ...next, result });

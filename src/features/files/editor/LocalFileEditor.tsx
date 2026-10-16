@@ -5,7 +5,6 @@ import { useContentHash } from "../../checks/diagnostics";
 import { editorKeys } from "./editor-keys";
 import { useShortcutLabel } from "../../../lib/shortcuts";
 import { useBufferChecks } from "../../checks/useBufferChecks";
-import { useEditableDiff } from "./useEditableDiff";
 import { useEditorCompare } from "./useEditorCompare";
 import { useLocalFile, type LocalProject } from "./useLocalFile";
 import type { ChecksController } from "../../checks/useProjectChecks";
@@ -23,11 +22,16 @@ import {
   useMarkdownSplit,
 } from "./MarkdownPreview";
 import { FolderPrompt, UnsavedPrompt } from "./prompts";
+import { useChangeBars } from "./useChangeBars";
 import { useEditorBlame } from "./useEditorBlame";
+import { useEditorView } from "./useEditorView";
 import { useSymbolNavigation } from "../../diff/SymbolNavigation";
 import { ErrorBox, Loading, Modal } from "../../../ui/ui";
 
-/** A file from a project's folder or a PR's checkout, edited against its committed version. */
+/**
+ * A file from a project's folder or a PR's checkout, edited with change bars
+ * against its committed version, or beside it when comparing.
+ */
 export default function LocalFileEditor({
   checks,
   pull,
@@ -70,15 +74,18 @@ export default function LocalFileEditor({
     projectId: project!.id,
     head: { sha: source?.head ?? project!.head },
   };
-  const blame = useEditorBlame(
-    target,
-    path,
-    file.revision,
-    base,
-    source?.original !== file.buffer,
-    plain,
-    compare ? "split" : "unified",
+  // Only the file by itself: comparing shows the diff instead, and a folder
+  // without Git has no committed version to mark changes against.
+  const bars = useChangeBars(
+    plain || compare ? undefined : source?.original,
+    file.buffer,
   );
+  const blame = useEditorBlame(target, path, file.revision, base, {
+    plain,
+    compare,
+    edited: source?.original !== file.buffer,
+    hunks: bars.hunks,
+  });
   const symbols = useSymbolNavigation(
     target,
     path,
@@ -93,14 +100,16 @@ export default function LocalFileEditor({
     hash,
     file.setError,
   );
-  const view = useEditableDiff(
+  const view = useEditorView({
     path,
     source,
-    file.revision,
+    revision: file.revision,
+    buffer: file.buffer,
+    compare,
     line,
     markers,
-    file.quiet,
-  );
+    quiet: file.quiet,
+  });
   const saveKeys = useShortcutLabel("save");
   useSaveShortcut(file.save);
   const markdown = inline && !!project && isMarkdown(path);
@@ -121,13 +130,13 @@ export default function LocalFileEditor({
         onKeyDownCapture={editorKeys(view.editor, symbols.at)}
         onPointerDownCapture={view.editable ? undefined : view.startEditing}
       >
-        {!view.diff ? (
-          <Loading text="Preparing editable diff…" />
+        {!view.ready ? (
+          <Loading text="Comparing…" />
         ) : (
           <EditCode
             view={view}
             symbols={symbols.handlers}
-            compare={compare}
+            onRender={bars.attach}
             onEdit={file.edit}
           />
         )}
