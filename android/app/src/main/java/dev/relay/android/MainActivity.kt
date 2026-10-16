@@ -9,11 +9,17 @@ import dev.relay.android.app.RelayRoot
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.routeForDeepLink
 import kotlinx.coroutines.channels.Channel
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.setValue
 import dev.relay.android.app.Crash
 import dev.relay.android.app.CrashRecovery
+import dev.relay.android.app.splash.handOffSplash
 
 class MainActivity : ComponentActivity() {
     private val links = Channel<Route>(Channel.BUFFERED)
@@ -21,9 +27,13 @@ class MainActivity : ComponentActivity() {
     /** The crash this launch came back from, until the reader goes on to Home. */
     private var crash by mutableStateOf<Crash?>(null)
 
+    /** The app settles from slightly zoomed in while the splash ribbon pulls away. */
+    private val splashScale = mutableFloatStateOf(1f)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        handOffSplash { splashScale.floatValue = it }
         // A restored activity already has the link's screen on its saved stack.
         if (savedInstanceState == null) {
             crash = CrashRecovery.take(intent)
@@ -31,9 +41,11 @@ class MainActivity : ComponentActivity() {
         }
         val container = (application as RelayApp).container
         setContent {
-            RelayRoot(container, links, crash) {
-                crash = null
-                CrashRecovery.seen()
+            Box(Modifier.fillMaxSize().graphicsLayer { splashScale.floatValue.let { scaleX = it; scaleY = it } }) {
+                RelayRoot(container, links, crash) {
+                    crash = null
+                    CrashRecovery.seen()
+                }
             }
         }
     }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The splash shows a still of the ribbon R; MainActivity then pulls the ribbon out of it
+         (app/splash). splash_mark.png comes from android/tools/splash-icon. -->
+    <style name="Theme.Relay" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/relay_background</item>
+        <item name="android:windowSplashScreenBackground">@color/relay_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+    </style>
+</resources>
