@@ -20,3 +20,8 @@ it("leaves other links to the Pull requests page", () => {
   expect(threadLink("relay-room://threads/x")).toBeUndefined();
   expect(threadLink("not a url")).toBeUndefined();
 });
+
+it("takes a malformed thread link as a bare one rather than throwing", () => {
+  expect(threadLink("relay://threads/%E0")).toEqual({});
+  expect(threadLink("relay://threads/%")).toEqual({});
+});

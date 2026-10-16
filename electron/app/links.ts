@@ -19,7 +19,13 @@ export function threadLink(url: string): { chatId?: string } | undefined {
   }
   if (parsed.protocol !== "relay:" || parsed.hostname !== "threads")
     return undefined;
-  const chatId = decodeURIComponent(parsed.pathname.replace(/^\/+|\/+$/g, ""));
+  let chatId: string;
+  try {
+    chatId = decodeURIComponent(parsed.pathname.replace(/^\/+|\/+$/g, ""));
+  } catch {
+    // A malformed escape names no thread; the link still brings Relay forward.
+    return {};
+  }
   return chatId ? { chatId } : {};
 }
 
