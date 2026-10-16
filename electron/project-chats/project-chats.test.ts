@@ -1997,6 +1997,35 @@ it("lists Codex's enabled skills and sends a picked one as the `$name` Codex par
   );
 });
 
+it("records a steer at another effort with the effort Codex's running turn answers it at", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const first = input("@codex wait for cancellation");
+  await chats.send(chat.id, first);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  const followup = {
+    ...input("@codex Focus only on the cache key"),
+    parentId: null,
+    delivery: "steer" as const,
+  };
+  const lower = { ...followup.choice, reasoningEffort: "low" as const };
+  const asked = { ...followup, choice: lower };
+  await chats.send(chat.id, asked);
+  const steered = (await chats.get(chat.id)).messages.at(-1);
+  expect(steered?.id).toBe(asked.id);
+  expect(steered?.sentSettings?.choice).toEqual(first.choice);
+  await chats.cancel(chat.id);
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages.find((m) => m.role === "assistant")
+        ?.status,
+    ).toBe("cancelled"),
+  );
+});
+
 it("steers an active Codex turn natively, and resumes its saved session with the steer it never read after stop", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));

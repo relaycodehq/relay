@@ -82,9 +82,10 @@ export interface AgentOptions {
     goal?: (command: "pause" | "clear") => Promise<void>;
     /**
      * Moves the running turn to another effort, for an agent that can take
-     * one mid-turn; the others take it from their next turn.
+     * one mid-turn; the others take it from their next turn. Whether the
+     * running turn took it.
      */
-    retune?: (choice: ModelChoice) => Promise<void>;
+    retune?: (choice: ModelChoice) => Promise<boolean>;
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;

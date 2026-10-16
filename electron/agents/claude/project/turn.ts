@@ -167,10 +167,10 @@ export async function runClaudeProject(
         retune: async (choice) => {
           const tuned = { ...session!.options, ...claudeArgs(choice), choice };
           // Kept with the session, so the next turn on these settings reuses it.
-          if (await retune(session!, tuned)) {
-            session!.options = tuned;
-            session!.signature = sessionSignature(tuned);
-          }
+          if (!(await retune(session!, tuned))) return false;
+          session!.options = tuned;
+          session!.signature = sessionSignature(tuned);
+          return true;
         },
       });
     while (true) {

@@ -6,6 +6,7 @@ import type {
 } from "../../shared/projects";
 import { replyRoot, sentBy, sentSettingsOf } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
+import type { ModelChoice } from "../../shared/settings";
 import { compactInstructions } from "../../shared/commands";
 import { mayMentionSkill } from "../../shared/skill-mentions";
 import type { ChatCore } from "./core";
@@ -49,6 +50,11 @@ export function steers(
     /^\s*\//.test(asked.question)
   );
 }
+
+const sameChoice = (a: ModelChoice, b: ModelChoice) =>
+  a.model === b.model &&
+  a.reasoningEffort === b.reasoningEffort &&
+  a.fast === b.fast;
 
 /** Messages waiting for the thread's running answer, and steering it with one. */
 export class ChatQueue {
@@ -184,7 +190,6 @@ export class ChatQueue {
       ...(images.length ? { images } : {}),
       ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
       ...sentBy(next.input),
-      sentSettings: sentSettingsOf(next.input),
     };
     // In the thread before the agent hears it: Codex can say it read the
     // steer in the same breath as accepting it, and its answer continues
@@ -192,8 +197,18 @@ export class ChatQueue {
     chat.messages.push(message);
     try {
       // Before the steer, so Claude answers it at the new effort. A steer
-      // that then fails still leaves it there, as its own turn would.
-      await active.retune?.(next.input.choice);
+      // that then fails still leaves it there, as its own turn would. An
+      // agent that can't take it now answers at the running turn's, and the
+      // message says so.
+      const running = active.input!;
+      const tuned =
+        sameChoice(next.input.choice, running.choice) ||
+        ((await active.retune?.(next.input.choice)) ?? false);
+      // The answer goes on at it, for the next steer to compare with.
+      if (tuned) active.input = { ...running, choice: next.input.choice };
+      message.sentSettings = sentSettingsOf(
+        tuned ? next.input : { ...next.input, choice: running.choice },
+      );
       await active.steer(
         asked.question +
           (next.input.viewing
