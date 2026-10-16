@@ -20,3 +20,7 @@ dist-website/
 !/previews/website/
 !/previews/promo/
 !/previews/_shared/
+
+# Secrets
+.env*
+!.env.example
