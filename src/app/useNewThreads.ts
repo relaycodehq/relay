@@ -68,10 +68,10 @@ export function useNewThreads(
    * one; with none yet, the picker offers adding one or Scratchpad.
    */
   function pick() {
-    // Before the list loads, "no projects" isn't known yet.
-    if (lock.blocked() || !projects.data) return;
-    const real = projects.data.filter((p) => !p.scratch);
-    if (real.length === 1) open(real[0]);
+    if (lock.blocked()) return;
+    // Pressed before the list loads, the picker fills in once it has.
+    const real = projects.data?.filter((p) => !p.scratch);
+    if (real?.length === 1) open(real[0]);
     else setPicking(true);
   }
   /** ⌘⇧N: a chat about anything, in a folder of its own. */

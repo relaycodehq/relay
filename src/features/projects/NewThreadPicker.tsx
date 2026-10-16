@@ -19,7 +19,8 @@ export function NewThreadPicker({
   onScratch,
   onClose,
 }: {
-  projects: Project[];
+  /** Undefined until the list has loaded. */
+  projects: Project[] | undefined;
   current: string | null;
   onSelect: (project: Project) => void;
   onAdd: () => void;
@@ -30,11 +31,12 @@ export function NewThreadPicker({
   const scratchKeys = useShortcutLabel("new-scratch");
   const scratch = useRef(onScratch);
   scratch.current = onScratch;
-  // The dialog's showModal() runs after this effect and focuses its first button.
+  // The dialog's showModal() runs after this effect and focuses its first
+  // button. The search mounts later when the list was still loading.
   useEffect(() => {
     const frame = requestAnimationFrame(() => input.current?.focus());
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [!projects]);
   // Shortcuts stand down while a dialog is open, so the one the heading
   // shows has to be heard here.
   useEffect(() => {
@@ -64,7 +66,7 @@ export function NewThreadPicker({
         </button>
       }
     >
-      {projects.length ? (
+      {!projects ? null : projects.length ? (
         <ProjectSearch
           projects={projects}
           current={current}

@@ -166,7 +166,7 @@ export default function ProjectShell() {
   );
   useOpenedFolders(boot.data, projects, lock, starts.open);
   useShortcut("settings", true, () => settings.show());
-  useShortcut("new-thread", !!project && !elsewhere && !error, starts.pick);
+  useShortcut("new-thread", !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
   function runCommand(command: RelayCommand) {
     if (lock.blocked()) return false;
@@ -488,7 +488,7 @@ export default function ProjectShell() {
       )}
       {starts.picking && (
         <NewThreadPicker
-          projects={realProjects}
+          projects={projects.data && realProjects}
           current={project?.id ?? null}
           onSelect={(p) => {
             starts.setPicking(false);

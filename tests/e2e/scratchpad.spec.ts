@@ -46,12 +46,17 @@ test("⌘⇧N opens a Scratchpad chat in a folder of its own, outside Projects",
       page.getByText("Your project. Your conversation."),
     ).toBeVisible();
 
-    // With no projects yet, New thread still asks: add one or use Scratchpad,
-    // whose shortcut works inside the picker, where shortcuts otherwise rest.
+    // With no projects yet, ⌘N and New thread still ask: add one or use
+    // Scratchpad, whose shortcut works inside the picker, where shortcuts
+    // otherwise rest.
+    const picker = page.getByRole("dialog", { name: "New thread in…" });
+    await page.keyboard.press("ControlOrMeta+N");
+    await expect(picker).toContainText("No projects yet");
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
     await sidebar
       .getByRole("button", { name: "New thread", exact: true })
       .click();
-    const picker = page.getByRole("dialog", { name: "New thread in…" });
     await expect(picker).toContainText("No projects yet");
     await page.keyboard.press("ControlOrMeta+Shift+N");
     await expect(picker).toHaveCount(0);
