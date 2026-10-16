@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, realpath, rm, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { watchEachFolder } from "./folder-watch";
+import { WatchPool, watchEachFolder } from "./folder-watch";
 
 /** Watches that change only when told to; real folders are read as they are. */
 const watches = vi.hoisted(() => ({
@@ -207,6 +207,35 @@ it("says so in the log when a folder that appears is past the budget", async () 
   expect(watching()).toEqual(["", "/a", "/a/deep", "/b", "/c"]);
   warn.mockRestore();
   folders.close();
+});
+
+it("shares the watches between trees, and gives them back as folders go", async () => {
+  await open();
+  const shared = new WatchPool(6);
+  const first = await watchEachFolder(
+    temp,
+    { skip: () => false, budget: 100, shared },
+    () => {},
+  );
+  await expect(
+    watchEachFolder(temp, { skip: () => false, budget: 100, shared }, () => {}),
+  ).rejects.toThrow("no folder watches left of Relay's 6");
+  await rm(join(temp, "a"), { recursive: true });
+  watches.made[0]!.change("rename", "a");
+  await vi.waitFor(() => expect(shared.take()).toBe(true));
+  shared.give();
+  first.close();
+  const second = await watchEachFolder(
+    temp,
+    { skip: () => false, budget: 100, shared },
+    () => {},
+  );
+  expect(shared.take()).toBe(true);
+  expect(shared.take()).toBe(true);
+  expect(shared.take()).toBe(true);
+  expect(shared.take()).toBe(true);
+  expect(shared.take()).toBe(false);
+  second.close();
 });
 
 it("drops a folder that went with what's under it, and nothing else", async () => {

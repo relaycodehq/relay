@@ -296,7 +296,7 @@ export class TreeWatch {
    * Git ignores as well as its own churn.
    */
   private async eachFolder(root: string) {
-    const [budget, ignored] = await Promise.all([
+    const [{ budget, shared }, ignored] = await Promise.all([
       folderBudget(),
       git(root, [
         "ls-files",
@@ -322,6 +322,7 @@ export class TreeWatch {
         dir,
         {
           budget,
+          shared,
           skip: (rel) =>
             !noticed(rel, inGitDir, gitDir) || (!inGitDir && ignored.has(rel)),
           skipLater: inGitDir ? undefined : ignoredLater,

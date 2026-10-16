@@ -16,6 +16,25 @@ export interface EachFolderOptions {
   skipLater?(rel: string): Promise<boolean>;
   /** Most folders to watch; more than this at the start and it throws. */
   budget: number;
+  /** Watches every tree takes from, which can run out before `budget` does. */
+  shared?: WatchPool;
+}
+
+/**
+ * The inotify watches Relay's trees share: each tree's own budget alone would
+ * let a few big places together take what the user's other programs need.
+ */
+export class WatchPool {
+  private used = 0;
+  constructor(readonly size: number) {}
+  take() {
+    if (this.used >= this.size) return false;
+    this.used++;
+    return true;
+  }
+  give(count = 1) {
+    this.used = Math.max(0, this.used - count);
+  }
 }
 
 /**
@@ -83,13 +102,16 @@ class EachFolder extends EventEmitter implements FolderWatch {
         if (this.closed || this.folders.has(at)) continue;
         // Its parent went while this waited, and took it along.
         if (at !== start && !this.folders.has(parentOf(at))) continue;
-        if (this.folders.size >= this.options.budget) {
-          if (strict)
-            throw new Error(`more than ${this.options.budget} folders`);
+        const over = this.folders.size >= this.options.budget;
+        if (over || !(this.options.shared?.take() ?? true)) {
+          const why = over
+            ? `more than ${this.options.budget} folders`
+            : `no folder watches left of Relay's ${this.options.shared!.size}`;
+          if (strict) throw new Error(why);
           // Grown past it since: the rest waits for the slow poll.
           if (!this.full)
             console.warn(
-              `[tree-watch] ${this.root} has more than ${this.options.budget} folders; new ones aren't watched`,
+              `[tree-watch] ${this.root} has ${why}; new ones aren't watched`,
             );
           this.full = true;
           return;
@@ -102,6 +124,7 @@ class EachFolder extends EventEmitter implements FolderWatch {
             this.changed(at, type, name?.toString() ?? null),
           );
         } catch (error) {
+          this.options.shared?.give();
           if (at === "" || !unreachable(error)) throw error;
           continue;
         }
@@ -188,6 +211,7 @@ class EachFolder extends EventEmitter implements FolderWatch {
     if (!folder) return;
     folder.close();
     this.folders.delete(rel);
+    this.options.shared?.give();
     const parent = parentOf(rel);
     const siblings = this.under.get(parent);
     siblings?.delete(rel);
@@ -197,16 +221,26 @@ class EachFolder extends EventEmitter implements FolderWatch {
   close() {
     this.closed = true;
     for (const folder of this.folders.values()) folder.close();
+    this.options.shared?.give(this.folders.size);
     this.folders.clear();
     this.under.clear();
   }
 }
 
-/** How many folders one tree may watch: a share of what the user may hold. */
-export async function folderBudget() {
+async function watchPool() {
   const most = await readFile("/proc/sys/fs/inotify/max_user_watches", "utf8")
     .then((text) => Number.parseInt(text, 10))
     .catch(() => NaN);
   // Older kernels default to 8192 for every program the user runs.
-  return Math.min(20_000, Math.floor((most > 0 ? most : 8192) / 4));
+  return new WatchPool(Math.floor((most > 0 ? most : 8192) / 4));
+}
+let pool: Promise<WatchPool> | undefined;
+
+/**
+ * How many folders one tree may watch, and the watches all of them share: a
+ * quarter of what the user may hold.
+ */
+export async function folderBudget() {
+  const shared = await (pool ??= watchPool());
+  return { budget: Math.min(20_000, shared.size), shared };
 }
