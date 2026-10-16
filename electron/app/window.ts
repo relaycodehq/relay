@@ -287,7 +287,9 @@ export class AppWindow {
               screen.getPrimaryDisplay().workArea,
             )
           : { width: 1500, height: 960 }),
-        minWidth: MAIN_MIN_WIDTH.sidebar,
+        // A window saved narrow, its sidebar hidden, opens at its own width;
+        // holdMinWidth raises this once it is as wide as the sidebar needs.
+        minWidth: MAIN_MIN_WIDTH.alone,
         minHeight: 650,
       },
       () => {
@@ -296,6 +298,7 @@ export class AppWindow {
       },
     );
     this.win = win;
+    this.holdMinWidth(win);
     win.on("resize", () => this.holdMinWidth(win));
     // A reloaded window starts without terminals; shells keep their output until it asks.
     win.webContents.on("did-start-navigation", (details) => {
