@@ -25,6 +25,8 @@ export function useSetPluginEnabled() {
     await qc.invalidateQueries({ queryKey: clockifyKey });
     // Azure DevOps keeps its switch in its own settings.
     await qc.invalidateQueries({ queryKey: devopsKey });
+    // Its organization is one the Pull requests page asks.
+    await qc.invalidateQueries({ queryKey: ["pull-servers"] });
   };
 }
 

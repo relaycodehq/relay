@@ -133,6 +133,8 @@ export function DevOpsSettings() {
       saved();
       void qc.invalidateQueries({ queryKey: ["devops-items"] });
       void qc.invalidateQueries({ queryKey: devopsConnectionKey });
+      // The organization is one the Pull requests page asks.
+      void qc.invalidateQueries({ queryKey: ["pull-servers"] });
       return true;
     } catch (e) {
       setError(e);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSitePullUrl,
   parseAzurePullUrl,
-  parseSitePullUrl,
+  parseGithubPullUrl,
 } from "./validation";
 
 const wrapped = (url: string) => `relay://open?url=${encodeURIComponent(url)}`;
@@ -81,16 +81,16 @@ describe("links whose site names their host", () => {
   });
 
   it("parses each by its own site", () => {
-    expect(parseSitePullUrl(wrapped("https://github.com/o/r/pull/12"))).toEqual(
-      {
-        owner: "o",
-        name: "r",
-        number: 12,
-        server: "https://github.com",
-      },
-    );
     expect(
-      parseSitePullUrl(
+      parseGithubPullUrl(wrapped("https://github.com/o/r/pull/12")),
+    ).toEqual({
+      owner: "o",
+      name: "r",
+      number: 12,
+      server: "https://github.com",
+    });
+    expect(
+      parseAzurePullUrl(
         wrapped(
           "https://sample-org.visualstudio.com/Sample%20Project/_git/web-store/pullrequest/42",
         ),

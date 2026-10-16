@@ -7,6 +7,7 @@ import { plainText } from "./parse";
 import { DevOps } from "./service";
 import { Store } from "../../app/store";
 import {
+  azureOrganizationServer,
   currentSprintField,
   defaultDevOpsSettings,
   organizationUrl,
@@ -90,6 +91,15 @@ it("normalizes organization names and URLs", () => {
   expect(() => organizationUrl("http://dev.azure.com/contoso")).toThrow(
     /https/,
   );
+});
+
+it("names a mixed-case organization the way its remotes do", () => {
+  for (const typed of [
+    "MyOrg",
+    "https://dev.azure.com/MyOrg",
+    "https://MyOrg.visualstudio.com",
+  ])
+    expect(azureOrganizationServer(typed)).toBe("https://dev.azure.com/myorg");
 });
 
 it("turns work item HTML into plain text", () => {

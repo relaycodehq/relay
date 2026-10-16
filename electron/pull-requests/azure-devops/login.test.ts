@@ -63,12 +63,19 @@ function server() {
     if (url.endsWith("/held") && state.hold) return state.hold;
     if (state.failure === "network") throw new TypeError("fetch failed");
     if (state.failure !== undefined) return failed(state.failure);
+    const bob = seen.at(-1) === "Bearer bob-login";
     return Response.json({
-      authenticatedUser: {
-        id: "me-1",
-        providerDisplayName: "Ann Example",
-        properties: { Account: { $value: "ann@example.com" } },
-      },
+      authenticatedUser: bob
+        ? {
+            id: "me-2",
+            providerDisplayName: "Bob Example",
+            properties: { Account: { $value: "bob@example.com" } },
+          }
+        : {
+            id: "me-1",
+            providerDisplayName: "Ann Example",
+            properties: { Account: { $value: "ann@example.com" } },
+          },
       value: [],
     });
   }, tokens);
@@ -224,4 +231,40 @@ it("starts over once Azure DevOps is turned off", async () => {
   const before = await login.require(org);
   login.release();
   expect(await login.require(org)).not.toBe(before);
+});
+
+it("acts as the new az login once work items let the old token go", async () => {
+  const { login, tokens } = server();
+  const ann = await login.require(org);
+  // Work items forget the shared tokens; `az` is signed in as someone else now.
+  az.token = "bob-login";
+  tokens.forget();
+  const bob = await login.require(org);
+  expect(bob).not.toBe(ann);
+  expect(bob.account.user.login).toBe("bob@example.com");
+});
+
+it("checking again asks az, so a login made since shows without a refusal", async () => {
+  const { login } = server();
+  await expect(login.account(org)).resolves.toMatchObject({
+    user: { login: "ann@example.com" },
+  });
+  az.token = "bob-login";
+  await expect(login.account(org)).resolves.toMatchObject({
+    user: { login: "bob@example.com" },
+  });
+});
+
+it("asks for an organization's tenant again after an answer without it", async () => {
+  let answers = 0;
+  const tokens = new AzureCliTokens(async () =>
+    ++answers === 1
+      ? new Response(null, { status: 503 })
+      : new Response(null, { headers: { "x-vss-resourcetenant": tenant } }),
+  );
+  await tokens.token(org);
+  expect(az.asked[0]).not.toContain("--tenant");
+  await tokens.renew(org);
+  await tokens.token(org);
+  expect(az.asked.at(-1)).toEqual(expect.arrayContaining(["--tenant", tenant]));
 });
