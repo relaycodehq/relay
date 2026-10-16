@@ -19,8 +19,8 @@ npx vitest run tests/unit/replay-fixtures.test.ts electron/project-chats/turn-li
 
 - It spends a little real usage on cheap models.
 - Every agent runs in a throwaway sample project with an empty config folder:
-  only its sign-in comes along (Claude reads the usual Keychain item, Codex
-  and OpenCode get a link to their `auth.json`), so no instructions, MCP
+  only its sign-in comes along (Claude reads the usual Keychain item, Codex,
+  OpenCode and Muse get a link to their `auth.json`), so no instructions, MCP
   servers or skills of yours end up in a transcript. What the account itself
   brings still does: Claude lists the claude.ai connectors and skills synced
   to it.
@@ -28,3 +28,6 @@ npx vitest run tests/unit/replay-fixtures.test.ts electron/project-chats/turn-li
   plan, credit and computer name into placeholders, and drops what came from
   claude.ai; `tests/unit/replay-fixtures.test.ts` fails on anything it
   missed. Read a new transcript before committing it anyway.
+- Cursor has no transcripts: its SDK talks HTTP from a worker, with no stdio
+  to record. Neither has Amp, until `amp-acp` is installed where they're
+  recorded.

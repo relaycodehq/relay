@@ -87,6 +87,8 @@ export interface ScenarioOptions {
   };
   /** More environment for the agents. */
   env?: Record<string, string>;
+  /** How long a wait may take; real agents, as when recording, take longer than stand-ins. */
+  waitMs?: number;
 }
 
 /**
@@ -103,8 +105,6 @@ export const recordedChoice = (provider: AgentProvider) => ({
       : { model: "", reasoningEffort: "" as const }),
 });
 
-/** As tests/unit/setup.ts caps a wait. */
-const WAIT_MS = 20_000;
 
 export async function startScenario(
   options: ScenarioOptions,
@@ -184,13 +184,15 @@ export async function startScenario(
 
   const summary = (id: string) =>
     chats.list(projectId).find((c) => c.id === id);
-  /** Settles when `check` has a value; fails after WAIT_MS, so a stuck replay can't pass an `it.fails`. */
+  // As tests/unit/setup.ts caps a wait; a stuck replay fails rather than hangs.
+  const waitMs = options.waitMs ?? 20_000;
+  /** Settles when `check` has a value, or fails after `waitMs`. */
   const waitFor = <T>(what: string, check: () => T | undefined) =>
     new Promise<T>((done, fail) => {
       const timer = setTimeout(() => {
         listeners.delete(listener);
-        fail(new Error(`Waited ${WAIT_MS}ms for ${what}.`));
-      }, WAIT_MS);
+        fail(new Error(`Waited ${waitMs}ms for ${what}.`));
+      }, waitMs);
       const listener = () => {
         const value = check();
         if (value === undefined) return;

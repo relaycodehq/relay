@@ -73,6 +73,19 @@ async function recording(provider: AgentProvider, scenario: string) {
       });
     }
   }
+  if (provider === "muse") {
+    // Muse keeps its sign-in with its settings and its sessions under data.
+    env.XDG_CONFIG_HOME = clean;
+    env.XDG_DATA_HOME = join(clean, "data");
+    env.XDG_STATE_HOME = join(clean, "state");
+    if (fresh) {
+      await mkdir(join(clean, "muse"), { recursive: true });
+      await symlink(
+        join(homedir(), ".config", "muse", "auth.json"),
+        join(clean, "muse", "auth.json"),
+      );
+    }
+  }
   if (provider === "opencode") {
     env.XDG_CONFIG_HOME = clean;
     env.OPENCODE_CONFIG_DIR = clean;
@@ -89,6 +102,8 @@ async function recording(provider: AgentProvider, scenario: string) {
   const s = await startScenario({
     findExecutable: vi.mocked(findExecutable),
     env,
+    // A real model takes its time over a tool call.
+    waitMs: 240_000,
   });
   const tee = await readFile(resolve("tests/fixtures/replay-tee.cjs"), "utf8");
   const cli = await fakeCli(

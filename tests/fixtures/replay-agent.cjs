@@ -48,9 +48,11 @@ function roleOf(args) {
   if (args.includes("--print") || args.includes("-p")) return "print";
   if (args.includes("--chrome")) return "chrome";
   // Codex is one app-server either way; what it's told with -c says what for.
+  // Muse's helpers are a `serve` like its turns, with --no-session-log.
   const sub = args[0] && !args[0].startsWith("-") ? args[0] : "";
   const config = args.flatMap((a, i) => (args[i - 1] === "-c" ? [a.split("=")[0]] : []));
-  return `run:${sub}:${config.sort().join(",")}`;
+  const flags = args.filter((a) => a.startsWith("--")).map((a) => a.split("=")[0]);
+  return `run:${sub}:${config.sort().join(",")}:${flags.sort().join(",")}`;
 }
 
 /** What kind of line it is, the same however Relay numbered it. */
