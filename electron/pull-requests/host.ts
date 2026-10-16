@@ -59,7 +59,7 @@ export interface PullHost {
     page: number,
   ): Promise<Page<Issue>>;
   pull(r: PullRef, signal?: AbortSignal): Promise<Pull>;
-  /** The ref a clone fetches a PR's head commit from. */
+  /** The ref, or the commit itself, a clone fetches a PR's head commit by. */
   headRef(p: Pull): string;
   /** A page of the repository's pulls, newest first; entries may lack counts and the merge base. */
   pulls(

@@ -370,11 +370,13 @@ export class AzureDevOps implements PullHost {
   }
 
   /**
-   * Azure serves only `refs/pull/N/merge`, so the head comes from its branch,
-   * which a PR from a fork keeps in the fork.
+   * Azure has no `refs/pull/N/head`, and no merge ref while a PR has
+   * conflicts, but it serves any commit asked for. The head commit stays
+   * right when the source branch lives in a fork, was deleted, or an
+   * upstream branch shares its name.
    */
   headRef(p: Pull) {
-    return `refs/heads/${p.head.ref}`;
+    return p.head.sha || `refs/heads/${p.head.ref}`;
   }
 
   async pulls(
