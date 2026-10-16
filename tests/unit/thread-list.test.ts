@@ -30,12 +30,19 @@ it("lists a PR thread whose review is under way on the phone as on the desktop",
   const ref = { owner: "me", name: "app", number: 7 };
   // A PR thread nobody has written in, but whose review is under way.
   const thread = await chats.create(projectId, { kind: "pr", ref });
-  const login = { client: { account: { id: 1 } }, require: () => login.client };
+  const server = "https://git.example.com";
+  const login = {
+    client: { account: { id: 1, server } },
+    require: () => login.client,
+  };
+  // A Gitea PR, keyed by the account as the hosts key it.
+  const hosts = { accountKey: () => login.client.account.id };
   const api = apiContext({
     store,
     projects,
     projectChats: chats,
     login,
+    hosts,
   } as unknown as Parameters<typeof apiContext>[0]);
   const heard: string[] = [];
   chats.onSummaries((id) => heard.push(id));
