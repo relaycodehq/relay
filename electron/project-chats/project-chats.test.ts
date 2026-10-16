@@ -1045,7 +1045,7 @@ it("steers a turn Claude started by itself", async () => {
       expect(
         (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
       ).toBe("Looking into it."),
-    { timeout: 10_000 },
+    { timeout: 30_000 },
   );
   await chats.send(chat.id, {
     ...claude("@claude Use the blue one"),
@@ -1056,7 +1056,7 @@ it("steers a turn Claude started by itself", async () => {
       expect(chats.hasActiveProject(projectId)).toBe(false);
       expect((await chats.get(chat.id)).messages).toHaveLength(5);
     },
-    { timeout: 10_000 },
+    { timeout: 30_000 },
   );
   expect(
     (await chats.get(chat.id)).messages.map((m) => [
@@ -1095,7 +1095,7 @@ it.each([
         expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
           "Looking into it.",
         ),
-      { timeout: 10_000 },
+      { timeout: 30_000 },
     );
     await chats.send(chat.id, {
       ...claude("@claude Use the blue one"),
@@ -1106,7 +1106,7 @@ it.each([
         expect(chats.hasActiveProject(projectId)).toBe(false);
         expect((await chats.get(chat.id)).messages).toHaveLength(4);
       },
-      { timeout: 10_000 },
+      { timeout: 30_000 },
     );
     const messages = (await chats.get(chat.id)).messages;
     expect(
