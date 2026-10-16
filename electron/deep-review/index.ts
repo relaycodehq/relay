@@ -22,6 +22,7 @@ import { hasCouncilReport, memberAnswer } from "../../shared/council";
 import {
   councilTurn,
   halted,
+  lastAnswer,
   queued,
   startSlots,
   unfinishedSlots,
@@ -305,6 +306,32 @@ export class DeepReviews {
       await this.abandon(member);
       await this.reviewerDone(member.reviewer.parent);
     }
+  }
+
+  /**
+   * Relay restarted and the agent host kept the turns of the reviewers in
+   * `kept`. The review waits on them again, unless another reviewer was cut
+   * off before it reported: then it stops, and Resume runs that one.
+   */
+  async reattached(chatId: string, kept: ReadonlySet<string>) {
+    const chat = await this.host.load(chatId).catch(() => undefined);
+    const state = chat?.deepReview;
+    if (!chat || state?.status !== "reviewing") return;
+    for (const r of state.reviewers)
+      if (
+        !kept.has(r.chatId) &&
+        !hasCouncilReport(await lastAnswer(this.host, r.chatId))
+      )
+        return this.reviewerLost(chat.id);
+  }
+
+  /** A reviewer's turn a restart cut off couldn't be picked back up. */
+  async reviewerLost(chatId: string) {
+    const chat = await this.host.load(chatId).catch(() => undefined);
+    const state = chat?.deepReview;
+    if (!chat || state?.status !== "reviewing") return;
+    state.status = "stopped";
+    await this.host.touch(chat, state.request);
   }
 
   /** Messages wait for the lead while the reviewers work. */

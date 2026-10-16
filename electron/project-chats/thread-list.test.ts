@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { ThreadList } from "./thread-list";
 import type { ChatCore } from "./core";
-import type { ChatSummary } from "../../shared/projects";
+import { ActiveTurns } from "./active";
+import type { ChatSummary, ProjectChatSend } from "../../shared/projects";
 
 it("counts blocking requests from helpers even when the parent keeps running", () => {
   const parent: ChatSummary = {
@@ -23,10 +24,13 @@ it("counts blocking requests from helpers even when the parent keeps running", (
     startedBy: { chatId: "parent", agent: "claude" },
   };
   let blocked = false;
-  const running = new Map([
-    ["parent", { started: 1, requests: { list: () => [] } }],
-    ["helper", { started: 2, requests: { list: () => (blocked ? [{}] : []) } }],
-  ]);
+  const running = new ActiveTurns(() => {});
+  const input = { provider: "claude", body: "" } as ProjectChatSend;
+  const held = [running.claim("parent", input), running.claim("helper", input)];
+  held[1].requests = {
+    list: () => (blocked ? [{}] : []),
+    close: () => {},
+  } as never;
   const core = {
     store: { get: () => ({ chats: [parent, helper], autoSettleDays: null }) },
     projects: { get: () => ({ settings: {} }) },
@@ -48,7 +52,8 @@ it("counts blocking requests from helpers even when the parent keeps running", (
   parent.reviewing = undefined;
   expect(review().blocked).toBeUndefined();
   parent.reviewing = true;
-  running.clear();
+  running.release("parent", held[0]);
+  running.release("helper", held[1]);
   expect(review()).toMatchObject({ waiting: true });
   expect(review().running).toBeUndefined();
   parent.sentTo = { state: "away" } as ChatSummary["sentTo"];

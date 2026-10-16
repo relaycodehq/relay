@@ -92,7 +92,11 @@ const notificationSchema = z.discriminatedUnion("method", [
   }),
   notification("turn/completed", {
     turn: z
-      .object({ status: z.string(), error: z.unknown().optional() })
+      .object({
+        id: lenient(z.string()),
+        status: z.string(),
+        error: z.unknown().optional(),
+      })
       .loose(),
   }),
   notification("error", {

@@ -131,6 +131,9 @@ export class TurnRunner {
     const stop = () => answer.stop();
     abort.signal.addEventListener("abort", stop, { once: true });
     const active = this.core.active.get(chat.id);
+    // The turn this runs in, when it's one of the thread's own.
+    const mine = this.core.active.of(abort);
+    if (mine) mine.answer = () => answer.message;
     if (!rules.side && active?.abort === abort) {
       active.render = (render) => answer.render(render);
       active.askPage = (group) => answer.askPage(group);
@@ -381,6 +384,7 @@ export class TurnRunner {
           ignoredStart = await keepIgnored(path).catch(() => null);
           if (commits) commits = await commitWatch([path, root]);
         };
+      if (mine) this.core.active.running(chat.id, mine, answer.message.id);
       try {
         const body = await agentRuntime(provider).run({
           ...options,
@@ -490,8 +494,7 @@ export class TurnRunner {
         chat.queuePaused = true;
     } finally {
       abort.signal.removeEventListener("abort", stop);
-      const owner = this.core.active.get(chat.id);
-      if (owner?.abort === abort) owner.finishing = true;
+      if (mine && !mine.stopping) this.core.active.finishing(chat.id, mine);
       const ended = answer.message;
       if (turn.kind === "reply")
         settleFixes(chat.findings, input.id, ended.status === "complete");

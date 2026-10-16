@@ -119,6 +119,27 @@ export class Councils {
     return sweepReviewCheckouts(this.worktrees, done);
   }
 
+  /**
+   * Relay restarted with the turns of the threads in `kept` still going: a
+   * review whose reviewers are among them waits on them again.
+   */
+  async reattached(kept: string[]) {
+    const reviews = new Set<string>();
+    for (const id of kept) {
+      const chat = await this.core.storage.load(id).catch(() => undefined);
+      if (chat?.reviewer) reviews.add(chat.reviewer.parent);
+    }
+    const ids = new Set(kept);
+    for (const review of reviews)
+      await this.track(this.reviews.reattached(review, ids));
+  }
+
+  /** A reviewer's turn a restart cut off couldn't be picked back up. */
+  reviewerLost(chat: ProjectChat) {
+    if (!chat.reviewer) return;
+    return this.track(this.reviews.reviewerLost(chat.reviewer.parent));
+  }
+
   /** A turn in the thread ended; a review at work takes its next step, settling once it has. */
   step(id: string, turn: { request?: string; answer?: string }) {
     return this.track(this.reviews.finished(id, turn));

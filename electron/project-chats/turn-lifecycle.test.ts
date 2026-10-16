@@ -161,7 +161,7 @@ it.runIf(recorded("claude", "background")).fails(
 );
 
 describe("known lifecycle bugs", () => {
-  it.fails(
+  it(
     "reads stopping, not idle, while a stopped agent winds down",
     async () => {
       await start();
@@ -180,7 +180,7 @@ describe("known lifecycle bugs", () => {
     },
   );
 
-  it.fails(
+  it(
     "keeps the thread running while a turn Claude started beside another one runs",
     async () => {
       await start();
@@ -209,7 +209,7 @@ describe("known lifecycle bugs", () => {
     },
   );
 
-  it.fails(
+  it(
     "ignores word that an earlier Codex turn completed",
     async () => {
       await start();

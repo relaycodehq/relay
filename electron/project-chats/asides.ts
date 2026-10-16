@@ -103,7 +103,7 @@ export class SideQuestions {
           console.warn("Could not update the thread's summary:", e),
         );
     });
-    this.core.active.runSide(key, abort, job);
+    this.core.active.runSide(key, provider, answer, abort, job);
     void job.catch(() => {});
   }
   private async fromSession(

@@ -196,6 +196,7 @@ export class ChatStorage {
             chat,
             (m) => this.resuming(chat.id, m.parentId ?? undefined),
             !this.held.has(id),
+            (other) => this.resuming(other),
           );
           if (changed) await this.save(chat);
           this.use(chat);

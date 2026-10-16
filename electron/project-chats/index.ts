@@ -39,6 +39,7 @@ import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
+import { openTurnStore, TurnLedger } from "../turns";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -62,6 +63,10 @@ import { ThreadNotes } from "./notes";
 import { ThreadTriage } from "./thread-triage";
 import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
+import { Compactions } from "./turn-compaction";
+import { RunEnds } from "./turn-end";
+import { AgentHandoffs } from "./turn-handoff";
+import { TurnRecovery } from "./turn-recovery";
 import { ThreadWorktrees, type WorktreeRequest } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
@@ -69,6 +74,9 @@ import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
+
+/** How often the ledger looks for turns that ended without saying. */
+const LEAK_CHECK_MS = 30_000;
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -92,9 +100,12 @@ export class ProjectChats {
   private asides: SideQuestions;
   private queue: ChatQueue;
   private turns: ChatTurns;
+  private recovery: TurnRecovery;
+  private compactions: Compactions;
   private control = threadControl();
   private questions: AsyncQuestions;
   private disposing = false;
+  private leakCheck: ReturnType<typeof setInterval>;
   private councils: Councils;
   private watchNotes: WatchReviews;
   private core: ChatCore;
@@ -123,7 +134,16 @@ export class ProjectChats {
       (id) => this.storage.chatChanged(id),
       (id) => this.active.has(id) || this.active.hasSide(id),
     );
-    this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
+    this.active = new ActiveTurns(
+      (id) => this.storage.chatChanged(id),
+      // Beside the threads' folder, which holds nothing but threads.
+      new TurnLedger(openTurnStore(join(dirname(dir), "relay.db"))),
+    );
+    this.leakCheck = setInterval(
+      () => this.active.ledger.check((id) => this.active.holds(id)),
+      LEAK_CHECK_MS,
+    );
+    this.leakCheck.unref();
     const core: ChatCore = {
       store,
       projects,
@@ -147,7 +167,7 @@ export class ProjectChats {
       join(dirname(dir), "watch-verdicts.jsonl"),
     );
     // Hosts look methods up at call time, not with .bind(this): tests
-    // vi.spyOn(chats, "send"), and this.turns is only built last.
+    // vi.spyOn(chats, "send"), and the turn flows are only built last.
     const worktrees = join(dirname(dir), "worktrees");
     this.councils = new Councils(
       core,
@@ -174,7 +194,7 @@ export class ProjectChats {
         }
       },
       busy: (chat) => this.councils.busy(chat),
-      compact: (id) => this.turns.compactNow(id, undefined, undefined, "idle"),
+      compact: (id) => this.compactions.now(id, undefined, undefined, "idle"),
     });
     this.titles = new ThreadTitles(core);
     this.worktrees = new ThreadWorktrees(core, worktrees, this.councils);
@@ -197,7 +217,7 @@ export class ProjectChats {
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>
-        this.turns.handoff(
+        handoffs.note(
           chat,
           root,
           provider,
@@ -212,7 +232,7 @@ export class ProjectChats {
     );
     this.runner = new TurnRunner(core, this.titles, {
       unprompted: (chat, root, provider, parentId) =>
-        this.turns.unprompted(chat, root, provider, parentId),
+        this.recovery.unprompted(chat, root, provider, parentId),
       limited: (id, messageId, limit) =>
         void this.limits
           .stopped(id, messageId, limit)
@@ -220,11 +240,16 @@ export class ProjectChats {
       env: (chat) => this.worktrees.setup.env(chat),
       keepShown: (chat, message) => this.files.keepShown(chat, message),
     });
+    const handoffs = new AgentHandoffs(core, this.runner);
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(core, this.schedule, this.councils, {
       sendNow: (id, input) => this.turns.sendNow(id, input),
       compactNow: (id, parentId, instructions) =>
-        this.turns.compactNow(id, parentId, instructions),
+        this.compactions.now(id, parentId, instructions),
+    });
+    const ends = new RunEnds(core, this.councils, this.queue, (id) => {
+      void this.idle.arm(id);
+      return this.triaging.ended(id);
     });
     this.turns = new ChatTurns(
       core,
@@ -232,12 +257,24 @@ export class ProjectChats {
       this.runner,
       this.titles,
       this.councils,
-      this.queue,
+      handoffs,
+      ends,
       evidence,
-      (id) => {
-        void this.idle.arm(id);
-        return this.triaging.ended(id);
-      },
+    );
+    this.recovery = new TurnRecovery(
+      core,
+      this.worktrees,
+      this.runner,
+      this.councils,
+      ends,
+    );
+    this.compactions = new Compactions(
+      core,
+      this.worktrees,
+      this.runner,
+      this.councils,
+      this.queue,
+      ends,
     );
   }
   /**
@@ -763,7 +800,7 @@ export class ProjectChats {
       !this.active.has(id) &&
       !this.councils.busy(await this.storage.load(id))
     ) {
-      if (await this.turns.compactFirstIfCold(id, input))
+      if (await this.compactions.firstIfCold(id, input))
         return this.queue.sentNow(id, input, fromRelay);
       await this.turns.sendNow(id, input);
       return this.queue.sentNow(id, input, fromRelay);
@@ -783,7 +820,7 @@ export class ProjectChats {
   }
   /** Compacts the provider session behind the newest answer on this branch. */
   compact(id: string, parentId?: string, instructions?: string) {
-    return this.turns.compact(id, parentId, instructions);
+    return this.compactions.request(id, parentId, instructions);
   }
   /** Restarts the thread's agent on its conversation, to load what changed on disk since. */
   reloadSessions(id: string) {
@@ -794,7 +831,9 @@ export class ProjectChats {
    * A turn one was in carries on in the answer it was writing.
    */
   async reattach() {
-    await this.turns.reattach();
+    await this.recovery.reattach();
+    // Whatever the agent host kept runs in a turn of its own by now.
+    this.active.ledger.recover();
     await this.triaging.restarted();
   }
   /** Puts right any thread summary a crash left behind its thread. */
@@ -1081,11 +1120,13 @@ export class ProjectChats {
   /** Commit teardown only after preparation, or an explicit discard. */
   async dispose({ detach = false, save = true } = {}) {
     if (!this.disposing) await this.prepareToQuit({ detach, save });
+    clearInterval(this.leakCheck);
     this.liveHandoff.dispose();
     this.sessions.stopListening();
     await this.sessions.keepAllSubagents();
     if (detach) {
       for (const runtime of everyAgentRuntime()) runtime.detach?.();
+      this.active.ledger.dispose();
       return;
     }
     this.schedule.commitPending();
@@ -1093,5 +1134,6 @@ export class ProjectChats {
     await Promise.all(
       everyAgentRuntime().map((runtime) => runtime.dispose?.().catch(() => {})),
     );
+    this.active.ledger.dispose();
   }
 }

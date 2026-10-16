@@ -222,6 +222,97 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
   expect(after.deepReview).not.toHaveProperty("leadStopped");
 }, 30_000);
 
+/**
+ * A review whose first reviewer was mid-answer when Relay restarted; the
+ * second either reported already or was cut off with nothing kept.
+ */
+async function reviewAcrossRestart(second: "reported" | "cut off") {
+  const { agentRuntime } = await import("../agents");
+  const review = await chats.create(projectId, { kind: "project" });
+  const kept = await chats.create(projectId, { kind: "project" });
+  const other = await chats.create(projectId, { kind: "project" });
+  await chats.dispose();
+  const answer = (body: string, status: string) => ({
+    id: randomUUID(),
+    role: "assistant",
+    body,
+    status,
+    created: 1,
+    provider: "codex",
+    version: 1,
+  });
+  const edit = async (id: string, change: (saved: Record<string, unknown>) => void) => {
+    const file = join(root, "chats", id + ".json");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    change(saved);
+    await writeFile(file, JSON.stringify(saved));
+  };
+  const reviewer = { provider: "codex", choice: input("").choice };
+  await edit(review.id, (saved) => {
+    saved.deepReview = {
+      scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
+      request: "request",
+      reviewers: [
+        { ...reviewer, chatId: kept.id },
+        { ...reviewer, chatId: other.id },
+      ],
+      lead: reviewer,
+      runChecks: false,
+      runtimeMode: "full-access",
+      status: "reviewing",
+    };
+  });
+  const cutOff = answer("Reading the diff", "streaming");
+  await edit(kept.id, (saved) => {
+    saved.reviewer = { parent: review.id, slot: 0 };
+    saved.messages = [cutOff];
+  });
+  await edit(other.id, (saved) => {
+    saved.reviewer = { parent: review.id, slot: 1 };
+    saved.messages = [
+      second === "reported"
+        ? answer("No issues in the parser.", "complete")
+        : answer("Reading the tests", "streaming"),
+    ];
+  });
+  const codex = agentRuntime("codex");
+  const key = JSON.stringify([join(root, "chats"), kept.id, "main"]);
+  vi.spyOn(codex, "reattach").mockResolvedValue([{ key, open: true }]);
+  vi.spyOn(codex, "run").mockImplementation(async (options) =>
+    options.job?.kind === "adopt" ? "The cache key ignores the locale." : "Findings are in.",
+  );
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  await chats.reattach();
+  return { review, kept, cutOff };
+}
+
+it("waits for a reviewer that carried on through a restart, then hands over to the lead", async () => {
+  const { review, kept, cutOff } = await reviewAcrossRestart("reported");
+  await vi.waitFor(
+    async () => expect((await chats.get(review.id)).deepReview?.status).toBe("done"),
+    { timeout: 10_000 },
+  );
+  const answer = (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id);
+  expect(answer).toMatchObject({
+    status: "complete",
+    body: "The cache key ignores the locale.",
+  });
+}, 30_000);
+
+it("stops a review a restart cut a reviewer off from, letting the kept one finish", async () => {
+  const { review, kept, cutOff } = await reviewAcrossRestart("cut off");
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id)?.status,
+      ).toBe("complete"),
+    { timeout: 10_000 },
+  );
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  // Resume runs the reviewer that was cut off, then the lead.
+  expect((await chats.get(review.id)).deepReview?.status).toBe("stopped");
+}, 30_000);
+
 it("refuses to take a queued message back once it went out", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "800");
   const chat = await chats.create(projectId, { kind: "project" });

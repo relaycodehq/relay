@@ -161,6 +161,21 @@ it("tells an expired login apart from other failed turns", async () => {
   await expect(run()).rejects.toThrow("Claude could not complete this turn.");
 });
 
+it("says what Claude reported when a turn fails", async () => {
+  claude((uuid) => [
+    lifecycle(uuid, "started"),
+    {
+      ...result(""),
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Tool permission stream closed before response received"],
+    },
+  ]);
+  await expect(run()).rejects.toThrow(
+    "Claude could not complete this turn: Tool permission stream closed before response received",
+  );
+});
+
 it("tells a spent plan apart, with when it lifts, and lets extra usage carry the turn", async () => {
   const resetsAt = Math.floor(Date.now() / 1000) + 3600;
   const limit = (status: "rejected" | "allowed") => ({
@@ -216,7 +231,9 @@ it("does not read an overloaded turn as a spent plan while extra usage carries t
   claude(failed(limit("allowed")));
   const overloaded = await run().catch((e) => e);
   expect(overloaded).not.toBeInstanceOf(AgentError);
-  expect(overloaded.message).toBe("Claude could not complete this turn.");
+  expect(overloaded.message).toBe(
+    "Claude could not complete this turn: API Error: overloaded",
+  );
   // Without extra usage the same failure is the plan's refusal.
   claude(failed(limit()));
   await expect(run()).rejects.toMatchObject({ kind: "usageLimit" });

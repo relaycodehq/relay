@@ -225,6 +225,9 @@ export class CodexTurn {
       this.turnId = n.params.turn.id;
     }
     if (n.method === "turn/completed") {
+      // Word about an earlier turn, late: this one goes on.
+      const { id } = n.params.turn;
+      if (id && this.turnId && id !== this.turnId) return;
       const done = n.params.turn.status === "completed";
       if (this.holds && done && this.goals.completed()) return;
       if (done) {

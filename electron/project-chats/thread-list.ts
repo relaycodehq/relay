@@ -9,10 +9,12 @@ import type {
   ProjectSettings,
 } from "../../shared/projects";
 import { DEFAULT_WORKTREE_CLEANUP_DAYS } from "../../shared/projects";
-import { sentAgent } from "../../shared/recipient";
-import type { ActiveChat } from "./active";
+import { working, type EndedTurn, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
 import type { CleanupCandidate } from "./worktree-cleanup";
+
+/** Turns that make the thread read running; a side answer or a handoff note runs inside another. */
+const holdsThread = (t: Turn) => t.kind !== "aside" && t.kind !== "handoff";
 
 /** A thread on another computer through a live handoff, as running and waiting there. */
 function awaySummary(
@@ -93,14 +95,17 @@ export class ThreadList {
       (c) => c.projectId === projectId,
     );
     const byId = new Map(chats.map((c) => [c.id, c]));
+    const { ledger } = this.core.active;
     // A review runs while any of its reviewers does, until its lead takes
     // over; a reviewer asked something later runs on its own.
-    const helpers = new Map<string, ActiveChat[]>();
+    const helpers = new Map<string, Turn[]>();
     for (const c of chats) {
       const parent = c.reviewer?.parent;
-      const active =
-        parent && byId.get(parent)?.reviewing && this.core.active.get(c.id);
-      if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
+      if (!parent || !byId.get(parent)?.reviewing) continue;
+      helpers.set(parent, [
+        ...(helpers.get(parent) ?? []),
+        ...ledger.inThread(c.id).filter(holdsThread),
+      ]);
     }
     // Once for the list: it is read on every change to any of its threads.
     const live = this.core.sessions.pending();
@@ -124,17 +129,25 @@ export class ThreadList {
           const away = this.core.away?.get(c.id);
           return away ? awaySummary(c, away) : c;
         }
-        const crew = [
-          this.core.active.get(c.id),
-          ...(helpers.get(c.id) ?? []).sort((a, b) => a.started - b.started),
-          // A stopped answer reads as stopped while its agent winds down.
-        ].filter((a): a is ActiveChat => !!a && !a.stopping);
-        const active = crew[0];
-        const running = [
-          ...new Set(
-            crew.flatMap(({ input }) => (input ? [sentAgent(input)] : [])),
-          ),
+        // The thread's own turns first: the one holding it, any the agent
+        // started beside it, then its reviewers'.
+        const turns = [
+          ...ledger.inThread(c.id).filter(holdsThread),
+          ...(helpers.get(c.id) ?? []),
         ];
+        const crew = turns.filter((t) => working(t.phase));
+        const active = crew.find((t) => t.threadId === c.id) ?? crew[0];
+        // A stopped answer reads as stopping until its agent winds down.
+        const stopping = !active && turns.some((t) => t.phase === "stopping");
+        const running = [...new Set(crew.map((t) => t.provider))];
+        const last = ledger.lastTurn(c.id);
+        const lastTurn: EndedTurn | undefined = last && {
+          id: last.id,
+          kind: last.kind,
+          endedAs: last.endedAs,
+          endedAt: last.endedAt,
+          ...(last.answerId ? { answerId: last.answerId } : {}),
+        };
         const pending = [
           ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
@@ -147,22 +160,32 @@ export class ThreadList {
         ];
         // Open questions need the user even while the agent continues.
         // A thread handed away is answered on that computer.
-        const blocked = crew.some((a) => a.requests.list().length > 0);
+        const blocked = crew.some(
+          (t) => !!this.core.active.handle(t.id)?.requests.list().length,
+        );
         const waiting = blocked || (!!c.asking && !c.sentTo);
-        return active || pending.length || waiting
+        return active || stopping || lastTurn || pending.length || waiting
           ? {
               ...c,
+              ...(lastTurn ? { lastTurn } : {}),
               ...(active
                 ? {
                     running: true,
-                    runningSince: active.started,
+                    runningSince: Math.min(...crew.map((t) => t.startedAt)),
                     runningAgents: running,
+                    turn: {
+                      id: active.id,
+                      kind: active.kind,
+                      phase: active.phase,
+                      startedAt: active.startedAt,
+                    },
                     waiting,
                     ...(blocked ? { blocked: true as const } : {}),
                   }
                 : waiting
                   ? { waiting }
                   : {}),
+              ...(stopping ? { stopping: true as const } : {}),
               ...(pending.length ? { pending } : {}),
             }
           : c;

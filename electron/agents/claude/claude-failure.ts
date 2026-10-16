@@ -7,6 +7,7 @@ interface Frame {
   type: string;
   error?: string;
   parent_tool_use_id?: string | null;
+  message?: unknown;
   rate_limit_info?: {
     status?: string;
     resetsAt?: number;
@@ -26,6 +27,8 @@ export class ClaudeFailureWatch {
   // Extra usage can still carry the request, so this alone fails nothing, and
   // while it does every turn sees this, whatever else made one fail.
   private rejected?: { resetsAt?: number; overage: boolean };
+  // What Claude answered with when a request failed, such as "API Error: overloaded".
+  private errorText?: string;
 
   see(frame: Frame) {
     if (frame.type === "rate_limit_event" && frame.rate_limit_info) {
@@ -40,6 +43,10 @@ export class ClaudeFailureWatch {
         };
     }
     if (frame.type !== "assistant") return;
+    if (frame.error && !frame.parent_tool_use_id)
+      this.errorText = textOf(
+        (frame.message as { content?: unknown } | undefined)?.content,
+      );
     if (frame.error === "authentication_failed") this.signedOut = true;
     if (
       (frame.error === "rate_limit" || frame.error === "billing_error") &&
@@ -63,7 +70,29 @@ export class ClaudeFailureWatch {
       );
     if (failed && this.signedOut) return signedOutError("claude");
   }
+
+  /** What Claude said went wrong: its result, its errors, or the error it answered with. */
+  reason(result: { result?: unknown; errors?: unknown }) {
+    return (
+      claudeReason(result.result) ??
+      claudeReason(
+        Array.isArray(result.errors) ? result.errors.join("; ") : undefined,
+      ) ??
+      claudeReason(this.errorText)
+    );
+  }
 }
+
+const textOf = (content: unknown) =>
+  typeof content === "string"
+    ? content
+    : Array.isArray(content)
+      ? content
+          .map((part: { type?: string; text?: unknown }) =>
+            part?.type === "text" && typeof part.text === "string" ? part.text : "",
+          )
+          .join("\n")
+      : undefined;
 
 /** What the CLI said when it failed, trimmed and without anything that looks like a secret. */
 export function claudeReason(result: unknown) {

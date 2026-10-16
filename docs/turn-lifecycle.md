@@ -95,7 +95,7 @@ turn ids (Codex) drop events for any turn but the current one.
 
 ## Storage
 
-- One SQLite database, `relay.db`, in the folder Relay keeps threads in,
+- One SQLite database, `relay.db`, beside the folder Relay keeps threads in,
   opened with `node:sqlite` (Electron's Node and the headless Relay's Node 22
   both have it). WAL journal, `synchronous = NORMAL`.
 - Tables: `turns` and `events (seq, at, thread_id, turn_id, type, data)`.
@@ -112,16 +112,18 @@ turn ids (Codex) drop events for any turn but the current one.
 
 ## Tests
 
-- **Scenarios** in `electron/turns/scenarios/` drive threads through
-  `ProjectChats` with stand-in agents and check only what a person or a phone
+- **Scenarios** in `electron/project-chats/turn-lifecycle.test.ts` drive
+  threads through `ProjectChats` with stand-in agents
+  (`tests/fixtures/turn-scenario.ts`) and check only what a person or a phone
   would see: whether the thread reads running, how many times it was news,
-  what the answer ended as, which events a client catching up gets.
+  what the answer ended as, what a phone catching up gets.
 - **Replays.** `tests/fixtures/replay-agent.cjs` plays transcripts recorded
   from the real CLIs (`tests/fixtures/replays/`), waiting on what Relay sends
   instead of on time. Transcripts are recorded in a throwaway project with
   empty agent configs and redacted before they're committed; see
   `tests/fixtures/replays/README.md`.
-- **Faults.** The replay player can drop the agent's last message, cut the
-  stream, or exit mid-turn. Every scenario must still end its turn.
-- `waitForTurn(chats, threadId)` waits for the ledger to end the thread's
-  turn; tests don't poll message statuses for it.
+- **Faults.** The replay player can exit instead of the line that ends the
+  turn, or cut the stream there. Every scenario must still end its turn.
+- `scenario.ended(threadId)` waits for the thread's turns to give it back;
+  every wait fails after 20s with what it waited for, so a stuck replay can't
+  pass as an expected failure.

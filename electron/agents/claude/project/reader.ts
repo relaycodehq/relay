@@ -255,7 +255,14 @@ export class ClaudeTurnReader {
       this.session.work.any,
     );
     if (stopped) throw stopped;
-    if (failed) throw new Error("Claude could not complete this turn.");
+    if (failed) {
+      const reason = this.failures.reason(message);
+      throw new Error(
+        reason
+          ? `Claude could not complete this turn: ${reason}`
+          : "Claude could not complete this turn.",
+      );
+    }
     this.meter.finished(message.modelUsage);
     if (this.options.job.kind === "compact")
       return { answer: this.compacted ?? "" };

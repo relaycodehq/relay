@@ -1,11 +1,16 @@
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
 import type {
+  AgentProvider,
   AsyncAgentQuestions,
+  ChatMessage,
   ProjectChatSend,
 } from "../../shared/projects";
+import { sentAgent } from "../../shared/recipient";
+import type { TurnEnd, TurnKind } from "../../shared/turns";
 import { AgentRequests } from "./agent-requests";
 import type { AgentOptions } from "../agents/types";
+import { MemoryTurnStore, TurnLedger } from "../turns";
 import { withTimeout } from "../util/timeout";
 
 export type AgentControl = Parameters<
@@ -13,6 +18,8 @@ export type AgentControl = Parameters<
 >[0];
 
 export interface ActiveChat {
+  /** The turn in the ledger; see docs/turn-lifecycle.md. */
+  turnId: string;
   started: number;
   requests: AgentRequests;
   abort: AbortController;
@@ -39,22 +46,53 @@ export interface ActiveChat {
   stopping?: boolean;
   /** Stopped to send a steer it hadn't read: the queue goes on after that. */
   keepsQueue?: boolean;
+  /** The message the turn writes; how it ended is how the turn did. */
+  answer?: () => ChatMessage;
   end: () => void;
 }
 
 interface Side {
+  turnId: string;
   abort: AbortController;
   job: Promise<unknown>;
+  answer: ChatMessage;
 }
 
-/** Each thread's one running turn, and the side questions answered beside it. */
+/** How a turn ended, from the message it wrote. */
+export function outcome(answer: ChatMessage | undefined, stopped: boolean): TurnEnd {
+  switch (answer?.status) {
+    case "complete":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    case "streaming":
+      return stopped ? "cancelled" : "lost";
+    default:
+      return "unstarted";
+  }
+}
+
+/**
+ * Each thread's one running turn, and the side questions answered beside it:
+ * what a running turn needs to be stopped, steered and asked. Whether a turn
+ * runs is the ledger's to say; every change here goes through it.
+ */
 export class ActiveTurns {
   private turns = new Map<string, ActiveChat>();
   /** By `chatId:rootId`. */
   private sides = new Map<string, Side>();
   /** Turns an agent started by itself while another held the thread. */
   private riders = new Map<string, Set<ActiveChat>>();
-  constructor(private changed: (id: string) => void) {}
+  /** Every turn this holds, by its ledger id. */
+  private handles = new Map<string, ActiveChat>();
+  /** Turns that serve one of these, such as a handoff note. */
+  private helpers = new Set<string>();
+  constructor(
+    private changed: (id: string) => void,
+    readonly ledger = new TurnLedger(new MemoryTurnStore()),
+  ) {}
 
   get(id: string) {
     return this.turns.get(id);
@@ -75,62 +113,107 @@ export class ActiveTurns {
     return this.turns.get(id)?.requests.list() ?? [];
   }
 
-  /** A turn that's about to run, with the means to stop it and answer its requests. */
-  create(id: string, input: ProjectChatSend): ActiveChat {
+  /**
+   * A turn that's about to run, with the means to stop it and answer its
+   * requests. `rides`: the agent started it beside the thread's running one;
+   * it doesn't hold the thread, but stopping the thread stops it too.
+   * Whoever creates one releases it.
+   */
+  create(
+    id: string,
+    input: ProjectChatSend,
+    kind: TurnKind = "answer",
+    { rides = false } = {},
+  ): ActiveChat {
     const abort = new AbortController();
     let end!: () => void;
     const ended = new Promise<void>((resolve) => (end = resolve));
-    return {
-      started: Date.now(),
+    const turn = this.ledger.start({
+      threadId: id,
+      kind,
+      provider: sentAgent(input),
+      rides,
+    });
+    const active: ActiveChat = {
+      turnId: turn.id,
+      started: turn.startedAt,
       abort,
       input,
       requests: new AgentRequests(abort.signal, () => this.changed(id)),
       ended,
       end,
     };
+    this.handles.set(turn.id, active);
+    if (rides) {
+      const riders = this.riders.get(id) ?? new Set();
+      riders.add(active);
+      this.riders.set(id, riders);
+      this.changed(id);
+    }
+    return active;
   }
 
   /** Claims the thread's one running turn. */
-  claim(id: string, input: ProjectChatSend) {
+  claim(id: string, input: ProjectChatSend, kind: TurnKind = "answer") {
     if (this.turns.has(id))
       throw new Error("This chat already has a running answer.");
-    const active = this.create(id, input);
+    const active = this.create(id, input, kind);
     this.turns.set(id, active);
     this.changed(id);
     return active;
   }
 
-  /**
-   * A turn the agent started by itself beside the thread's running one. It
-   * doesn't hold the thread, but stopping the thread stops it too.
-   */
-  ride(id: string, active: ActiveChat) {
-    const riders = this.riders.get(id) ?? new Set();
-    riders.add(active);
-    this.riders.set(id, riders);
-    return () => {
-      riders.delete(active);
-      if (!riders.size && this.riders.get(id) === riders)
-        this.riders.delete(id);
-    };
+  /** The turn `abort` stops, if this holds it. */
+  of(abort: AbortController) {
+    for (const active of this.handles.values())
+      if (active.abort === abort) return active;
+  }
+  /** The turn by its ledger id, if this holds it. */
+  handle(turnId: string) {
+    return this.handles.get(turnId);
   }
 
-  /** Stops the thread's answer; the thread reads as idle while the agent winds down. */
+  /** The turn's agent is at work, writing `answerId`. */
+  running(id: string, active: ActiveChat, answerId: string) {
+    this.ledger.phase(active.turnId, "running", answerId);
+    this.changed(id);
+  }
+  /** The answer is written; the turn saves before it gives the thread back. */
+  finishing(id: string, active: ActiveChat) {
+    active.finishing = true;
+    this.ledger.phase(active.turnId, "finishing");
+    this.changed(id);
+  }
+
+  /** Stops the thread's answer and the turns riding beside it; they read as stopping until they end. */
   stop(id: string) {
     const running = [this.turns.get(id), ...(this.riders.get(id) ?? [])];
     if (!running.some(Boolean)) return;
     for (const active of running) {
       if (!active) continue;
       active.stopping = true;
+      this.ledger.phase(active.turnId, "stopping");
       active.abort.abort();
     }
     this.changed(id);
   }
 
-  /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
+  /**
+   * Ends the turn: it asks nothing more, gives the thread back if it held it,
+   * and `halt` stops waiting. Ending one twice changes nothing.
+   */
   release(id: string, active: ActiveChat) {
     active.requests.close();
     if (this.turns.get(id) === active) this.turns.delete(id);
+    const riders = this.riders.get(id);
+    if (riders?.delete(active) && !riders.size) this.riders.delete(id);
+    this.handles.delete(active.turnId);
+    const answer = active.answer?.();
+    this.ledger.end(
+      active.turnId,
+      outcome(answer, active.abort.signal.aborted),
+      answer?.id,
+    );
     active.end();
     this.changed(id);
   }
@@ -194,12 +277,65 @@ export class ActiveTurns {
   hasSide(id: string) {
     return [...this.sides.keys()].some((key) => key.startsWith(`${id}:`));
   }
-  /** A side question's answer, running until `job` settles. */
-  runSide(key: string, abort: AbortController, job: Promise<unknown>) {
-    this.sides.set(key, { abort, job });
+  /** A side question's `answer`, running until `job` settles. */
+  runSide(
+    key: string,
+    provider: AgentProvider,
+    answer: ChatMessage,
+    abort: AbortController,
+    job: Promise<unknown>,
+  ) {
+    const turn = this.ledger.start({
+      threadId: key.slice(0, key.indexOf(":")),
+      kind: "aside",
+      provider,
+      rides: true,
+    });
+    this.ledger.phase(turn.id, "running", answer.id);
+    this.sides.set(key, { turnId: turn.id, abort, job, answer });
   }
   sideDone(key: string) {
+    const side = this.sides.get(key);
+    if (!side) return;
     this.sides.delete(key);
+    this.ledger.end(
+      side.turnId,
+      outcome(side.answer, side.abort.signal.aborted),
+      side.answer.id,
+    );
+  }
+  /**
+   * A turn that serves `parent` and writes `answer`, such as the outgoing
+   * agent's handoff note. Call what this returns when it's done.
+   */
+  helper(
+    threadId: string,
+    parent: ActiveChat,
+    kind: TurnKind,
+    provider: AgentProvider,
+    answer: ChatMessage,
+  ) {
+    const turn = this.ledger.start({
+      threadId,
+      kind,
+      provider,
+      rides: true,
+      parentTurnId: parent.turnId,
+    });
+    this.ledger.phase(turn.id, "running", answer.id);
+    this.helpers.add(turn.id);
+    return (stopped: boolean) => {
+      this.helpers.delete(turn.id);
+      this.ledger.end(turn.id, outcome(answer, stopped), answer.id);
+    };
+  }
+  /** Whether this still holds the turn: the ledger's check asks. */
+  holds(turnId: string) {
+    return (
+      this.handles.has(turnId) ||
+      this.helpers.has(turnId) ||
+      [...this.sides.values()].some((s) => s.turnId === turnId)
+    );
   }
   allSides() {
     return [...this.sides.values()];

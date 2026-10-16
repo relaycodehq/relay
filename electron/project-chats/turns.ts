@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type {
-  AgentProvider,
   ChatMessage,
   ProjectChat,
   ProjectChatSend,
@@ -14,45 +13,33 @@ import {
 } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
-import { agentName, agentInfo } from "../../shared/agents";
-import { compactsCold, latestContext } from "../../shared/context-usage";
+import { agentInfo } from "../../shared/agents";
 import { parseGoalCommand } from "../../shared/goal";
-import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatTurn } from "./chat-turn";
 import { checkedOutOr } from "../git/git";
 import { promptTitle } from "../agents/thread-titles";
-import { relayNote } from "./relay-note";
 import { turnPrompt } from "./turn-prompt";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { assertHere } from "./handoff";
-import type { ChatQueue } from "./queue";
 import { supersedeQuestions } from "./async-questions";
-import { interrupt } from "./revive";
 import { startFixing } from "../findings";
-import { agentSession, parseSessionKey, sessionInput } from "./sessions";
+import { agentSession } from "./sessions";
 import type { ThreadTitles } from "./titles";
+import type { RunEnds } from "./turn-end";
+import type { AgentHandoffs } from "./turn-handoff";
 import { forkFor, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
 
-/** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
-const HANDOFF_TIMEOUT = 120000;
 /** How long a new worktree's first turn waits for the title it's named after. */
 const TITLE_WAIT_MS = 8000;
-/** Asked of the agent whose session ends here, in that session, so it can draw on everything it did. */
-const handoffPrompt = (to: AgentProvider, computer?: string) =>
-  `${
-    computer
-      ? `This conversation moves to another computer, ${computer}, from here. ${agentName(to)} picks it up there in a fresh session that cannot see yours; everything in the working tree is committed and goes with it.`
-      : `${agentName(to)} is taking over this conversation from here and cannot see your session.`
-  } Write a handoff note for it: the user's goal, what you did (files read or changed, commands run), what you found, decisions and their reasons, and what remains or should be verified next. Use concrete file paths. Answer from what you already know without running tools or changing anything. Keep it under 500 words.`;
 
 /**
- * Starts and ends a thread's turns: a message going out, the agent that
- * answered last briefing the next, Claude's own turns, a council's lead,
- * compacting, carrying on after a stop or a restart.
+ * A message going out and the answer to it, a council's lead, and carrying
+ * on after a stop. Handoff notes, recovery, compaction and how a run ends
+ * live in turn-handoff, turn-recovery, turn-compaction and turn-end.
  */
 export class ChatTurns {
   /** Sends whose message is in and whose answer hasn't started its agent yet. */
@@ -63,76 +50,15 @@ export class ChatTurns {
     private runner: TurnRunner,
     private titles: ThreadTitles,
     private councils: Councils,
-    private queue: ChatQueue,
+    private handoffs: AgentHandoffs,
+    private ends: RunEnds,
     private evidence:
       | ((chat: ProjectChat, selection: LineQuestion) => Promise<unknown>)
       | undefined,
-    /** A run ended and its queue went out; see ThreadTriage.ended. */
-    private ended: (id: string) => Promise<void>,
   ) {}
 
   starting() {
     return [...this.starts];
-  }
-  /**
-   * Ends a run. The thread goes idle first: the finished answer moved
-   * `updated`, and the sidebar summary only catches up once the thread no
-   * longer counts as active. Queued messages go out last, after a deep review
-   * has taken its next step, since that step decides whether the review
-   * still holds them back.
-   */
-  private endRun(
-    chat: ProjectChat,
-    active: ActiveChat,
-    turn?: { request?: string; answer?: string },
-  ) {
-    this.core.active.release(chat.id, active);
-    this.settleUnread(chat);
-    void this.core.storage
-      .syncSummary(chat)
-      .catch((e) => console.warn("Could not update the thread's summary:", e));
-    const stepped = turn && this.councils.step(chat.id, turn);
-    // Taken now, so the queue keeps its place ahead of anything sent after
-    // the run ended. A step never takes this thread's control, so waiting
-    // for it here can't deadlock.
-    void this.core
-      .control(chat.id, async () => {
-        await stepped;
-        await this.queue.drain(chat.id);
-        // A reviewer's step waited for its queue; nothing went out after all.
-        if (chat.reviewer && !this.core.active.has(chat.id))
-          await this.councils.step(chat.id, {});
-        await this.ended(chat.id);
-        // A review that stopped or failed has no lead turn whose end would look at it.
-        if (chat.reviewer) await this.ended(chat.reviewer.parent);
-      })
-      .catch((e) => console.warn("Could not send the queued messages:", e));
-  }
-  /**
-   * A steer the agent never confirmed reading went to it if its turn finished.
-   * A stopped or failed turn drops what the agent hadn't picked up yet.
-   */
-  private settleUnread(chat: ProjectChat) {
-    const unread = chat.messages.filter((m) => m.unread);
-    for (const m of unread) {
-      delete m.unread;
-      const steered = [...chat.messages.slice(0, chat.messages.indexOf(m))]
-        .reverse()
-        .find(
-          (a) =>
-            a.role === "assistant" &&
-            a.provider === m.provider &&
-            (a.parentId ?? null) === (m.parentId ?? null),
-        );
-      if (steered?.status === "cancelled" || steered?.status === "failed")
-        m.missed = true;
-      m.version++;
-      this.core.emit({ chatId: chat.id, message: structuredClone(m) });
-    }
-    if (unread.length)
-      void this.core.storage
-        .save(chat)
-        .catch((e) => console.warn("Could not save the thread:", e));
   }
   resume(id: string, settings?: ResumeSettings) {
     return this.core.control(id, async () => {
@@ -382,7 +308,7 @@ export class ChatTurns {
         );
       if (active.abort.signal.aborted) {
         this.core.active.release(id, active);
-        this.unstarted(chat, input);
+        this.ends.unstarted(chat, input);
         return;
       }
       // A side conversation continues the main one as it stood at its message.
@@ -428,7 +354,7 @@ export class ChatTurns {
         outgoing!.status !== "failed" &&
         agentSession(chat, switchedFrom, parent?.id).thread;
       let note = asksNote
-        ? await this.handoff(
+        ? await this.handoffs.note(
             chat,
             root,
             switchedFrom,
@@ -440,11 +366,11 @@ export class ChatTurns {
       // Stopped while the outgoing agent wrote its note: no note from Relay, no answer.
       if (active.abort.signal.aborted) {
         this.core.active.release(id, active);
-        this.unstarted(chat, input);
+        this.ends.unstarted(chat, input);
         return;
       }
       if (switchedFrom && !(note?.status === "complete" && note.body.trim()))
-        note = await this.relayHandoff(
+        note = await this.handoffs.byRelay(
           chat,
           note,
           switchedFrom,
@@ -505,23 +431,8 @@ export class ChatTurns {
         .save(chat)
         .catch((e) => console.warn("Could not save the failed send:", e));
       this.core.emit({ chatId: id, message: failed });
-      this.unstarted(chat, input, failed.id);
+      this.ends.unstarted(chat, input, failed.id);
     }
-  }
-  /**
-   * A turn stopped or failed before its agent ran, so no run ends to move a
-   * review on: a reviewer's review takes its step here, or would wait for good.
-   */
-  private unstarted(
-    chat: ProjectChat,
-    input: ProjectChatSend,
-    answer?: string,
-  ) {
-    if (chat.reviewer)
-      void this.councils.step(chat.id, {
-        request: input.id,
-        ...(answer ? { answer } : {}),
-      });
   }
   /**
    * Runs `answer` as the thread's reply to `input`. When it ends the thread
@@ -542,241 +453,10 @@ export class ChatTurns {
         answer = last;
       })
       .finally(() =>
-        this.endRun(chat, active, { request: input.id, answer: answer.id }),
+        this.ends.run(chat, active, { request: input.id, answer: answer.id }),
       );
     // The runner turns agent errors into a failed answer; what's left is a failed save.
     void active.job.catch((e) => console.warn("Could not save the answer:", e));
-  }
-  /**
-   * Asks the agent that answered last to brief the one taking over. Best effort:
-   * a failed or slow note leaves a marker and the switch proceeds without it.
-   */
-  async handoff(
-    chat: ProjectChat,
-    root: string,
-    from: AgentProvider,
-    to: AgentProvider,
-    parentId: string | undefined,
-    active: ActiveChat,
-    computer?: string,
-  ): Promise<ChatMessage> {
-    const input = sessionInput(chat, from, this.core.store, parentId);
-    const message = streamingAnswer(from, {
-      handoff: { from, to, ...(computer ? { computer } : {}) },
-      ...(parentId ? { parentId } : {}),
-    });
-    chat.messages.push(message);
-    await this.core.storage.save(chat);
-    this.core.emit({ chatId: chat.id, message: structuredClone(message) });
-    const abort = new AbortController();
-    const stop = () => abort.abort();
-    active.abort.signal.addEventListener("abort", stop, { once: true });
-    // A Stop during the save above has already fired.
-    if (active.abort.signal.aborted) stop();
-    const timer = setTimeout(stop, HANDOFF_TIMEOUT);
-    try {
-      await this.runner.run(
-        chat,
-        message,
-        root,
-        handoffPrompt(to, computer),
-        input,
-        abort,
-        { kind: "handoff" },
-      );
-    } finally {
-      clearTimeout(timer);
-      active.abort.signal.removeEventListener("abort", stop);
-    }
-    return message;
-  }
-  /**
-   * The note Relay writes when the outgoing agent left none, in the place of
-   * its failed one if it tried, so the thread shows what the new agent got.
-   */
-  private async relayHandoff(
-    chat: ProjectChat,
-    failed: ChatMessage | undefined,
-    from: AgentProvider,
-    to: AgentProvider,
-    parentId: string | undefined,
-    conversation: ChatMessage[],
-  ): Promise<ChatMessage> {
-    const body = relayNote(conversation, from);
-    const kept = failed && chat.messages.find((m) => m.id === failed.id);
-    const message =
-      kept ?? streamingAnswer(from, { ...(parentId ? { parentId } : {}) });
-    Object.assign(message, {
-      handoff: { from, to, byRelay: true },
-      body,
-      status: "complete",
-      ended: Date.now(),
-    });
-    delete message.error;
-    if (!kept) chat.messages.push(message);
-    await this.core.storage.save(chat);
-    this.core.emit({ chatId: chat.id, message: structuredClone(message) });
-    return message;
-  }
-  /**
-   * Claude started a turn itself, e.g. when a background command it launched
-   * finished. It gets its own answer; otherwise it would fill the next
-   * question's slot and push every later answer one message down.
-   */
-  async unprompted(
-    chat: ProjectChat,
-    root: string,
-    provider: AgentProvider,
-    parentId?: string,
-    /** The answer a restart cut off, carrying on where the session is. */
-    resumed?: ChatMessage,
-  ) {
-    if (this.core.closing()) throw new Error("Relay is closing.");
-    const input = sessionInput(chat, provider, this.core.store, parentId);
-    // Usually the thread is idle and this becomes its running answer, so new
-    // messages queue behind it. A prompt racing it waits in the session instead.
-    const idle = !this.core.active.has(chat.id);
-    const active = idle
-      ? this.core.active.claim(chat.id, input)
-      : this.core.active.create(chat.id, input);
-    // Otherwise Stop only reaches the turn holding the thread, and this one
-    // runs on after it with a Stop button that does nothing.
-    const unride = idle ? undefined : this.core.active.ride(chat.id, active);
-    const { abort } = active;
-    const message: ChatMessage =
-      resumed ??
-      streamingAnswer(provider, {
-        unprompted: true,
-        ...(parentId ? { parentId } : {}),
-      });
-    try {
-      if (!resumed) {
-        chat.messages.push(message);
-        await this.core.storage.save(chat);
-      }
-      this.core.emit({ chatId: chat.id, message: structuredClone(message) });
-      await this.runner.run(chat, message, root, "", input, abort, {
-        kind: "adopt",
-        resumed,
-      });
-    } finally {
-      // A resumed answer may be a review lead's, whose end settles the review.
-      if (idle)
-        this.endRun(chat, active, resumed ? { answer: resumed.id } : undefined);
-      else {
-        unride!();
-        active.requests.close();
-        active.end();
-      }
-    }
-  }
-  /**
-   * Takes back the agent sessions that kept running while Relay restarted.
-   * A turn one was in carries on in the answer it was writing.
-   */
-  reattach() {
-    const back = Promise.all(
-      agentRuntimes().map(async ([provider, runtime]) =>
-        (
-          (await runtime.reattach?.(
-            (key) =>
-              this.core.sessions.owns(key, (chatId) =>
-                this.core.storage.has(chatId),
-              ),
-            (key) => () => this.unpromptedFor(key),
-          )) ?? []
-        ).map((session) => ({
-          ...session,
-          provider: provider as AgentProvider,
-        })),
-      ),
-    ).then((lists) => {
-      const sessions = lists.flat();
-      for (const { key, open } of sessions)
-        this.core.sessions.reattached(key, open);
-      return sessions;
-    });
-    this.core.storage.waitFor(
-      back.then(
-        () => {},
-        (e) => console.warn("Could not take back the running agents:", e),
-      ),
-    );
-    return back.then(
-      (sessions) =>
-        void Promise.allSettled(
-          sessions
-            .filter((s) => s.open)
-            .map(({ key, provider }) => this.resumeTurn(key, provider)),
-        ),
-      () => {},
-    );
-  }
-  private async unpromptedFor(key: string) {
-    const { chatId, branch } = parseSessionKey(key);
-    const chat = await this.core.storage.load(chatId);
-    return this.unprompted(
-      chat,
-      await this.worktrees.root(chat),
-      "claude",
-      branch,
-    );
-  }
-  /** Shows the rest of a turn a restart cut off, in the answer it was writing. */
-  private async resumeTurn(key: string, provider: AgentProvider) {
-    const { chatId, branch } = parseSessionKey(key);
-    let chat: ProjectChat | undefined;
-    let message: ChatMessage | undefined;
-    try {
-      chat = await this.core.storage.load(chatId);
-      this.core.sessions.resumed(key);
-      message = [...chat.messages]
-        .reverse()
-        .find(
-          (m) =>
-            m.role === "assistant" &&
-            m.status === "streaming" &&
-            m.provider === provider &&
-            (m.parentId ?? undefined) === branch,
-        );
-      // Reviewers answer a step Relay drove; that step is gone.
-      if (chat.reviewer)
-        throw new Error("This thread's turns can't be picked back up.");
-      await this.unprompted(
-        chat,
-        await this.worktrees.root(chat),
-        provider,
-        branch,
-        message,
-      );
-    } catch (e) {
-      this.core.sessions.lost(key);
-      this.core.storage.chatChanged(chatId);
-      await agentRuntime(provider)
-        .closeSession(key)
-        .catch(() => {});
-      if (chat) {
-        let failed = false;
-        for (const m of chat.messages)
-          if (
-            m.status === "streaming" &&
-            (m.parentId ?? undefined) === branch &&
-            !this.core.active.has(chat.id)
-          ) {
-            interrupt(m);
-            failed = true;
-          }
-        if (failed && chat.queue?.length) chat.queuePaused = true;
-        if (failed)
-          await this.core.storage
-            .save(chat)
-            .catch((e) => console.warn("Could not save the thread:", e));
-        // A review lead's answer revive kept going ends here; the review fails with it.
-        if (failed && !chat.reviewer && message?.status === "failed")
-          await this.councils.step(chat.id, { answer: message.id });
-      }
-      console.warn("Could not pick a turn back up:", e);
-    }
   }
   /**
    * The lead's first turn in a deep review. It answers the review request,
@@ -784,7 +464,7 @@ export class ChatTurns {
    */
   async lead(chat: ProjectChat, input: ProjectChatSend, prompt: string) {
     if (this.core.closing()) throw new Error("Relay is closing.");
-    const active = this.core.active.claim(chat.id, input);
+    const active = this.core.active.claim(chat.id, input, "lead");
     const message = streamingAnswer(input.provider);
     try {
       const root = await this.worktrees.root(chat);
@@ -799,151 +479,4 @@ export class ChatTurns {
       throw e;
     }
   }
-  /**
-   * Compacts the provider session behind the newest answer on this branch,
-   * or queues compacting it right after the running answer.
-   */
-  compact(id: string, parentId?: string, instructions?: string) {
-    return this.core.control(id, async () => {
-      if (this.core.closing()) throw new Error("Relay is closing.");
-      await this.core.active.finished(id);
-      const chat = await this.core.storage.load(id);
-      assertHere(chat);
-      if (parentId && chat.messages.find((m) => m.id === parentId)?.side)
-        throw new Error(
-          "A side question has no session of its own to compact.",
-        );
-      const running = this.core.active.get(id);
-      if (!running && !this.councils.busy(chat)) {
-        // Compacting now does what one queued for this conversation would.
-        const queued = chat.queue?.find(
-          (q) => q.compact && (q.input.parentId ?? undefined) === parentId,
-        );
-        if (queued) {
-          chat.queue = chat.queue!.filter((q) => q !== queued);
-          await this.core.storage.save(chat);
-        }
-        return this.compactNow(id, parentId, instructions);
-      }
-      if (chat.messages.some((m) => m.compaction && m.status === "streaming"))
-        throw new Error("The session is already compacting.");
-      // The running answer's agent, when it answers on this branch, is the
-      // one whose session will be newest by the time this goes.
-      const provider =
-        (running?.input && (running.input.parentId ?? undefined) === parentId
-          ? agentAsked(running.input)?.provider
-          : undefined) ?? latestAnswer(chat, parentId)?.provider;
-      if (!provider)
-        throw new Error("There is no agent session to compact yet.");
-      if (instructions && !agentInfo(provider).compactInstructions)
-        throw new Error(
-          `${agentName(provider)} compacts without custom instructions.`,
-        );
-      await this.queue.addCompact(chat, {
-        ...sessionInput(chat, provider, this.core.store, parentId),
-        body: instructions ? `/compact ${instructions}` : "/compact",
-      });
-    });
-  }
-  /**
-   * Compacts before a message that finds a big conversation's prompt cache
-   * cold, for a caller holding the thread's control. The message waits in
-   * the queue behind the compaction; false leaves sending it to the caller.
-   */
-  async compactFirstIfCold(id: string, input: ProjectChatSend) {
-    const chat = await this.core.storage.load(id);
-    const asked = agentAsked(input);
-    // Behind other queued messages it would jump their order; a command
-    // like /compact or /goal means what it says.
-    if (
-      !asked ||
-      chat.queue?.length ||
-      chat.queuePaused ||
-      /^\s*\//.test(asked.question)
-    )
-      return false;
-    const parentId = input.parentId
-      ? replyRoot(chat.messages, input.parentId).id
-      : undefined;
-    const held = latestContext(
-      chat.messages.filter((m) => (m.parentId ?? undefined) === parentId),
-    );
-    if (
-      !held ||
-      held.provider !== asked.provider ||
-      latestAnswer(chat, parentId)?.provider !== asked.provider ||
-      !agentSession(chat, asked.provider, parentId).thread ||
-      !compactsCold(held.usage, Date.now())
-    )
-      return false;
-    await this.queue.add(id, { ...input, delivery: undefined });
-    try {
-      await this.compactNow(id, parentId, undefined, "cold");
-    } catch (e) {
-      console.warn("Could not compact the cold conversation first:", e);
-      await this.queue.drain(id);
-    }
-    return true;
-  }
-  /** Compacts now, for a caller already holding the thread's control. */
-  async compactNow(
-    id: string,
-    parentId?: string,
-    instructions?: string,
-    /** Relay compacted unasked: the cache went cold, or was about to while idle. */
-    unasked?: "cold" | "idle",
-  ) {
-    if (this.core.active.has(id))
-      throw new Error("Wait for the current answer before compacting.");
-    const chat = await this.core.storage.load(id);
-    assertHere(chat);
-    const root = await this.worktrees.root(chat);
-    const provider = latestAnswer(chat, parentId)?.provider;
-    if (!provider || !agentSession(chat, provider, parentId).thread)
-      throw new Error("There is no agent session to compact yet.");
-    if (instructions && !agentInfo(provider).compactInstructions)
-      throw new Error(
-        `${agentName(provider)} compacts without custom instructions.`,
-      );
-    // Quitting began while this looked for the session: one Relay started
-    // unasked waits for the next launch instead of holding up the quit.
-    if (unasked && this.core.closing()) return;
-    const input = sessionInput(chat, provider, this.core.store, parentId);
-    const active = this.core.active.claim(id, input);
-    const { abort } = active;
-    const before = latestContext(
-      chat.messages.filter((m) => (m.parentId ?? undefined) === parentId),
-    )?.usage.usedTokens;
-    const message = streamingAnswer(provider, {
-      compaction: true,
-      ...(before ? { compactedFrom: before } : {}),
-      ...(unasked === "cold" && { compactedCold: true as const }),
-      ...(unasked === "idle" && { compactedIdle: true as const }),
-      ...(parentId ? { parentId } : {}),
-    });
-    chat.messages.push(message);
-    try {
-      await this.core.storage.save(chat);
-    } catch (e) {
-      this.core.active.release(id, active);
-      throw e;
-    }
-    this.core.emit({ chatId: id, message: structuredClone(message) });
-    active.job = this.runner
-      .run(chat, message, root, instructions ?? "", input, abort, {
-        kind: "compact",
-      })
-      .finally(() => this.endRun(chat, active));
-    void active.job.catch((e) =>
-      console.warn("Could not save the compaction:", e),
-    );
-  }
 }
-
-/** The newest answer in a conversation: the main one, or a side one by its root. */
-const latestAnswer = (chat: ProjectChat, parentId?: string) =>
-  [...chat.messages]
-    .reverse()
-    .find(
-      (m) => m.role === "assistant" && (m.parentId ?? undefined) === parentId,
-    );

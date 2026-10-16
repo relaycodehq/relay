@@ -19,7 +19,8 @@ export function interrupt(m: ChatMessage) {
 /**
  * Brings a thread read from disk up to date: older save formats, and what
  * an earlier session left running. `streams` keeps an answer streaming
- * whose session a restart left running. A thread this session held before
+ * whose session a restart left running; `carriesOn` says the same of another
+ * thread, a review's reviewer. A thread this session held before
  * (`earlierSession` false) left nothing running behind it. Says whether the
  * thread needs saving again.
  */
@@ -27,6 +28,7 @@ export function reviveChat(
   chat: ProjectChat,
   streams: (m: ChatMessage) => boolean,
   earlierSession = true,
+  carriesOn: (chatId: string) => boolean = () => false,
 ) {
   let interrupted = migrateAgentSessions(chat);
   for (const input of [
@@ -72,8 +74,13 @@ export function reviveChat(
         .reverse()
         .find((m) => m.role === "assistant" && !m.parentId);
     // A review whose agents ran in an earlier session can only be resumed,
-    // unless its lead's session carries on in the turn; that turn's end settles it.
-    if (!(lead && lead.status === "streaming" && streams(lead))) {
+    // unless its lead's session, or a reviewer's, carries on in the turn;
+    // that turn's end settles it.
+    const goesOn =
+      review.status === "reviewing"
+        ? review.reviewers.some((r) => carriesOn(r.chatId))
+        : lead && lead.status === "streaming" && streams(lead);
+    if (!goesOn) {
       if (lead) review.leadStopped = lead.id;
       review.status = review.status === "reviewing" ? "stopped" : "failed";
       interrupted = true;
