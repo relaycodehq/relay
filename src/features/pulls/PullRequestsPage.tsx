@@ -330,18 +330,29 @@ export function PullRequestsPage({
   );
 }
 
-/** GitHub searches only what you're part of unless asked wider; the rest search all. */
+/**
+ * GitHub searches only what you're part of unless asked wider, Azure DevOps
+ * reads through its newest PRs, Gitea searches all.
+ */
 function SearchSummary({ accounts }: { accounts: Account[] }) {
-  const github = accounts.some((a) => hostKindOf(a.server) === "github");
-  if (!github) return <>Searching every repository you can see</>;
-  return accounts.length === 1 ? (
-    <>Searching pull requests you're part of; add repo: or org: to look wider</>
-  ) : (
-    <>
-      Searching every repository you can see, and on GitHub the pull requests
-      you're part of; add repo: or org: to look wider there
-    </>
-  );
+  const kinds = new Set(accounts.map((a) => hostKindOf(a.server)));
+  if (kinds.size === 1 && kinds.has("github"))
+    return (
+      <>
+        Searching pull requests you're part of; add repo: or org: to look wider
+      </>
+    );
+  const parts = [
+    kinds.has("gitea") &&
+      (kinds.size === 1
+        ? "every repository you can see"
+        : "every repository you can see on Gitea"),
+    kinds.has("github") &&
+      "on GitHub the pull requests you're part of (add repo: or org: to look wider)",
+    kinds.has("azure-devops") &&
+      "the newest 1,000 pull requests in each Azure DevOps organization",
+  ].filter(Boolean);
+  return <>Searching {parts.join(", and ")}</>;
 }
 
 function BoardSummary({
@@ -630,7 +641,17 @@ function SearchResults({
     .map((item) => relate(item, board, accounts));
   const missed = found.data.pages.find((page) => page.failed.length)?.failed[0];
   if (!pulls.length)
-    return <p className="pulls-none">No pull requests match “{query}”.</p>;
+    return (
+      <>
+        <p className="pulls-none">
+          {missed ? "Nothing that answered matches" : "No pull requests match"}{" "}
+          “{query}”.
+        </p>
+        {!!missed && (
+          <ErrorBox error={missed} retry={() => void found.refetch()} />
+        )}
+      </>
+    );
   return (
     <section className="pulls-section">
       <h2>

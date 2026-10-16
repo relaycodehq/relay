@@ -34,11 +34,19 @@ export function usePullHosts(
   );
   const answers = useQueries({ queries: cliServers.map(hostAccountQuery) });
   const found = answers.flatMap((a) => (a.data ? [a.data] : []));
-  const key = [gitea?.id, ...found.map((a) => `${a.server} ${a.id}`)].join();
+  const key = [gitea?.id, ...found.map(accountKey)].join();
   const accounts = useMemo(() => [...(gitea ? [gitea] : []), ...found], [key]);
   const failed = answers.findIndex((a) => a.error);
   return {
     accounts,
+    /** Hosts a project is on whose CLI answered that it isn't signed in. */
+    signedOut: cliServers.filter(
+      (s, i) =>
+        answers[i].data === null &&
+        projects?.some(
+          (p) => !!p.repository?.server && sameServer(p.repository.server, s),
+        ),
+    ),
     /** The servers that could be signed in to, for saying which CLIs to sign in with. */
     servers: servers.data ?? [],
     /** Nothing to show yet while a host hasn't answered; don't say there's none. */
@@ -62,6 +70,14 @@ export function usePullHosts(
     checking: servers.isFetching || answers.some((a) => a.isFetching),
   };
 }
+
+/** Who an account is: an `az` or `gh` login keeps its id when the user changes. */
+export const accountKey = (a: Account) =>
+  `${a.server} ${a.id} ${a.user.id} ${a.user.login}`;
+
+/** What to run in a terminal to sign in to `server`'s CLI. */
+export const signInCommand = (server: string) =>
+  hostKindOf(server) === "azure-devops" ? "az login" : "gh auth login";
 
 /**
  * The account a PR on `server` is reviewed as; a ref saved before refs named

@@ -222,6 +222,8 @@ export function asIssue(
     state: pr.status === "active" ? "open" : "closed",
     draft: !!pr.isDraft,
     html_url: webUrl(server, pr),
+    // Listings carry no date of the last push or comment, only the PR's
+    // iterations do, so an open PR sorts by when it was opened.
     updated_at: pr.closedDate ?? pr.creationDate,
     user: asUser(pr.createdBy),
     repository: {

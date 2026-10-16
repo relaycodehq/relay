@@ -16,45 +16,64 @@ const RECHECK = 5 * 60_000;
 export class AzureLogin {
   private clients = new Map<
     string,
-    { at: number; client: Promise<AzureDevOps> }
+    { at: number; client: Promise<AzureDevOps>; header?: string }
   >();
   constructor(
     private fetchRequest: FetchRequest,
     private tokens: AzureCliTokens,
   ) {}
 
-  /** The organization at `server`'s client, e.g. `https://dev.azure.com/org`. */
-  require(server: string) {
+  /**
+   * The organization at `server`'s client, e.g. `https://dev.azure.com/org`.
+   * A token other than the one it was connected with may be another `az`
+   * login, so the client asks who it is again rather than act as the last.
+   */
+  async require(server: string) {
     const known = this.clients.get(server);
-    if (known && Date.now() - known.at <= RECHECK) return known.client;
+    if (known && Date.now() - known.at <= RECHECK) {
+      const { header } = await this.tokens.token(server);
+      const entry = this.clients.get(server);
+      if (entry !== known || !known.header || known.header === header)
+        return (entry ?? known).client;
+    }
+    return this.connect(server);
+  }
+
+  private connect(server: string) {
+    const entry: { at: number; client: Promise<AzureDevOps>; header?: string } =
+      { at: Date.now(), client: undefined! };
     const drop = () => {
       // A late refusal of an old client mustn't discard its replacement.
-      if (this.clients.get(server)?.client === next)
-        this.clients.delete(server);
+      if (this.clients.get(server) === entry) this.clients.delete(server);
     };
-    const next = AzureDevOps.connect(
+    entry.client = AzureDevOps.connect(
       server,
-      () => this.tokens.token(server),
+      async () => {
+        const token = await this.tokens.token(server);
+        entry.header ??= token.header;
+        return token;
+      },
       this.fetchRequest,
       drop,
     );
-    this.clients.set(server, { at: Date.now(), client: next });
-    next.catch(drop);
-    return next;
+    this.clients.set(server, entry);
+    entry.client.catch(drop);
+    return entry.client;
   }
 
   /**
    * Who Relay acts as in the organization; null without an `az` login for
    * it. Throws when Azure DevOps didn't answer, so that isn't signed out.
+   * Asks `az` afresh, so checking again picks up a login made since.
    */
-  account(server: string) {
-    return this.require(server).then(
-      (c) => c.account,
-      (error: unknown) => {
-        if (error instanceof AzureCliSignedOut) return null;
-        throw error;
-      },
-    );
+  async account(server: string) {
+    try {
+      await this.tokens.renew(server);
+      return (await this.require(server)).account;
+    } catch (error) {
+      if (error instanceof AzureCliSignedOut) return null;
+      throw error;
+    }
   }
 
   /** Lets every organization go, as when Azure DevOps is turned off. */

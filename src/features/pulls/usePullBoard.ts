@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
 import type { Account, Progress, Review } from "../../../shared/types";
 import { api } from "../../lib/api";
+import { accountKey } from "./usePullHosts";
 import {
   buildBoard,
   linkedProjects,
@@ -36,14 +37,7 @@ export function usePullBoard(
   const searches = useQueries({
     queries: accounts.flatMap((account) =>
       FILTERS.map((filter) => ({
-        queryKey: [
-          PULL_BOARD,
-          "search",
-          account.server,
-          account.id,
-          filter,
-          state,
-        ],
+        queryKey: [PULL_BOARD, "search", accountKey(account), filter, state],
         queryFn: () => api.search(filter, "", state, 1, account.server),
       })),
     ),
@@ -178,13 +172,7 @@ export function usePullSearch(
     accounts.map((a) => [a.server, 1]),
   );
   return useInfiniteQuery({
-    queryKey: [
-      PULL_BOARD,
-      "find",
-      accounts.map((a) => `${a.server} ${a.id}`),
-      query,
-      state,
-    ],
+    queryKey: [PULL_BOARD, "find", accounts.map(accountKey), query, state],
     queryFn: async ({ pageParam }) => {
       const servers = Object.keys(pageParam);
       const answers = await Promise.allSettled(

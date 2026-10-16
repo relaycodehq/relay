@@ -126,7 +126,6 @@ const githubHost = (input: string) => {
   const u = linkUrl(input);
   return u && urlHostKind(u.href) === "github" ? u : null;
 };
-export const isGithubPullUrl = (input: string) => !!githubHost(input);
 
 /**
  * Whether a PR link's site says its host, as GitHub's and Azure DevOps' do;
@@ -136,10 +135,6 @@ export function isSitePullUrl(input: string) {
   const u = linkUrl(input);
   return !!u && urlHostKind(u.href) !== "gitea";
 }
-/** A GitHub or Azure DevOps PR link, as a ref that names its server. */
-export const parseSitePullUrl = (input: string) =>
-  isGithubPullUrl(input) ? parseGithubPullUrl(input) : parseAzurePullUrl(input);
-
 /**
  * `https://dev.azure.com/org/project/_git/repo/pullrequest/42`, or the same
  * on the older `org.visualstudio.com`, as a ref on the organization's server.

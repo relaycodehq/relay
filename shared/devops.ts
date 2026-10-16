@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  azureOrganization,
   azureServer,
   isAzureServer,
   type SourceControlProvider,
@@ -198,7 +199,8 @@ export function azureOrganizationServer(value: string) {
   }
   const visualStudio = /^https:\/\/([^.]+)\.visualstudio\.com$/.exec(url);
   if (visualStudio) return azureServer(visualStudio[1]);
-  return isAzureServer(url) ? url : null;
+  // Remotes name the organization lowercased; `MyOrg` here is the same one.
+  return isAzureServer(url) ? azureServer(azureOrganization(url)) : null;
 }
 
 /** How the organization reads in a sentence: `my-org`, or a server's host and path. */

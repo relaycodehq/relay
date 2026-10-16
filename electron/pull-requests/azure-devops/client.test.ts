@@ -106,3 +106,53 @@ it("lists a repository's PRs without making up how much they change", async () =
   expect(listed.items[0]).not.toHaveProperty("changed_files");
   expect(listed.items[0]).not.toHaveProperty("additions");
 });
+
+it("posts a comment again in a new review, but not twice in a retried one", async () => {
+  const said = (id: number, content: string) => ({
+    id,
+    publishedDate: "2026-10-01T00:00:00Z",
+    comments: [{ id: 1, content, author: { id: "me-id" } }],
+  });
+  const threads = [said(1, "LGTM")];
+  const posted: string[] = [];
+  let votes = 0;
+  const fetch = async (url: string, options: RequestInit) => {
+    const path = new URL(url).pathname.replace(
+      "/sample-org/Shop/_apis/git/repositories/api/pullrequests/7",
+      "",
+    );
+    if (path === "") return Response.json(pr);
+    if (path === "/iterations") return Response.json({ value: [iteration(1)] });
+    if (path === "/threads" && options.method === "POST") {
+      const content = JSON.parse(String(options.body)).comments[0].content;
+      posted.push(content);
+      threads.push(said(threads.length + 1, content));
+      return Response.json(threads.at(-1));
+    }
+    if (path === "/threads") return Response.json({ value: threads });
+    if (path.startsWith("/reviewers/") && ++votes === 1)
+      return new Response("down", { status: 503 });
+    if (path.startsWith("/reviewers/")) return Response.json({});
+    return new Response("missing " + path, { status: 404 });
+  };
+  const azure = new AzureDevOps(
+    {
+      id: server,
+      server,
+      user: { id: 1, login: "me@x.dev" },
+      persistent: true,
+    },
+    "me-id",
+    async () => ({ header: "Bearer t", rejected: () => true }),
+    fetch,
+    () => {},
+  );
+  // An older review already said it; this one still says it once.
+  await expect(
+    azure.submit(ref, "head1", "APPROVED", "LGTM", []),
+  ).rejects.toThrow();
+  expect(posted).toEqual(["LGTM"]);
+  await azure.submit(ref, "head1", "APPROVED", "LGTM", []);
+  expect(posted).toEqual(["LGTM"]);
+  expect(votes).toBe(2);
+});

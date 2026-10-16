@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
+import { pullHostName } from "../../shared/source-control";
 import { api } from "../lib/api";
 import { fitHeader } from "./header-fit";
 import {
@@ -21,7 +22,7 @@ import { useNewThreads } from "./useNewThreads";
 import { memeSetupDraft } from "../features/memes/meme-setup";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
-import { usePullHosts } from "../features/pulls/usePullHosts";
+import { signInCommand, usePullHosts } from "../features/pulls/usePullHosts";
 import { NoPullHost } from "../features/pulls/NoPullHost";
 import { ConnectHost } from "../features/pulls/ConnectHost";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
@@ -356,10 +357,14 @@ export default function ProjectShell() {
                 ref={pullsPage.page}
                 accounts={pullsHosts.accounts}
                 hostError={
-                  pullsHosts.error &&
-                  new Error(
-                    `${pullsHosts.error.host} didn't answer, so its pull requests are missing: ${pullsHosts.error.message}`,
-                  )
+                  pullsHosts.error
+                    ? new Error(
+                        `${pullsHosts.error.host} didn't answer, so its pull requests are missing: ${pullsHosts.error.message}`,
+                      )
+                    : pullsHosts.signedOut[0] &&
+                      new Error(
+                        `Not signed in to ${pullHostName(pullsHosts.signedOut[0])}, so its pull requests are missing. Run ${signInCommand(pullsHosts.signedOut[0])} in a terminal, then try again.`,
+                      )
                 }
                 onRecheckHosts={pullsHosts.recheck}
                 initialWorkspace={boot.data.workspace}

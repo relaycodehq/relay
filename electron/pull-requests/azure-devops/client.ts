@@ -54,6 +54,12 @@ const MAX_JSON = 8 * 1024 * 1024,
 const PAGE = 50;
 /** How many PRs a text search reads through, as Azure can't search them itself. */
 const SCANNED = 1000;
+/**
+ * The threads a PR had before a submission that hasn't gone through yet, by
+ * PR and head: a retry skips only what was posted since, not an older
+ * comment that happens to say the same.
+ */
+const unfinished = new Map<string, Set<number>>();
 
 /** Who the token is for, as Azure DevOps' connection data describes it. */
 interface ConnectionData {
@@ -75,6 +81,11 @@ export class AzureDevOps implements PullHost {
   private threadCache = new Map<
     string,
     { at: number; value: Promise<AzThread[]> }
+  >();
+  /** The newest PRs a text search reads, briefly: each keystroke filters the same read. */
+  private scanned = new Map<
+    PullState,
+    { at: number; value: Promise<AzPull[]> }
   >();
   constructor(
     public account: Account,
@@ -306,13 +317,28 @@ export class AzureDevOps implements PullHost {
         .toLowerCase();
       return words.every((w) => text.includes(w));
     };
-    const found: AzPull[] = [];
-    for (let at = 1; at <= SCANNED / 100; at++) {
-      const next = await this.listed({}, state, at, { size: 100 });
-      found.push(...next.items.filter(matches));
-      if (!next.nextPage) break;
-    }
-    return issues(found, null);
+    return issues((await this.scan(state)).filter(matches), null);
+  }
+
+  private scan(state: PullState) {
+    const known = this.scanned.get(state);
+    if (known && Date.now() - known.at < 30_000) return known.value;
+    const value = (async () => {
+      const first = await this.listed({}, state, 1, { size: 100 });
+      if (!first.nextPage) return first.items;
+      // Past the first page, read the rest at once rather than one by one.
+      const rest = await Promise.all(
+        Array.from({ length: SCANNED / 100 - 1 }, (_, i) =>
+          this.listed({}, state, i + 2, { size: 100 }),
+        ),
+      );
+      return [first, ...rest].flatMap((p) => p.items);
+    })();
+    this.scanned.set(state, { at: Date.now(), value });
+    value.catch(() => {
+      if (this.scanned.get(state)?.value === value) this.scanned.delete(state);
+    });
+    return value;
   }
 
   private async latestIteration(r: PullRef, signal?: AbortSignal) {
@@ -653,7 +679,11 @@ export class AzureDevOps implements PullHost {
         "Some draft comments belong to an older revision. Re-anchor them before submitting.",
       );
     this.forget(r);
-    const posted = await this.threads(r, latest.id);
+    const threads = await this.threads(r, latest.id);
+    const attempt = `${this.prPath(r)}@${head}`;
+    const before = unfinished.get(attempt) ?? new Set(threads.map((t) => t.id));
+    unfinished.set(attempt, before);
+    const posted = threads.filter((t) => !before.has(t.id));
     const mine = (t: AzThread, content: string) =>
       !t.isDeleted &&
       t.comments[0]?.author.id === this.me &&
@@ -709,6 +739,7 @@ export class AzureDevOps implements PullHost {
     } finally {
       this.forget(r);
     }
+    unfinished.delete(attempt);
     const vote = voteFor(event);
     return {
       id: vote === null ? 0 : 2 ** 40 + userId(this.me),

@@ -43,6 +43,11 @@ export class AzureCliTokens {
     this.asking.clear();
   }
 
+  /** Drops `base`'s token, so the next one is asked of `az`'s current login. */
+  async renew(base: string) {
+    this.tokens.delete(await this.tenantOf(base));
+  }
+
   /** A token for the organization at `base`, e.g. `https://dev.azure.com/org`. */
   async token(base: string): Promise<AzureCliToken> {
     const generation = this.generation;
@@ -126,9 +131,10 @@ export class AzureCliTokens {
         method: "HEAD",
         signal: AbortSignal.timeout(10_000),
       });
-      const tenant =
-        tenantOf(res.headers.get("x-vss-resourcetenant") ?? "") ?? "";
-      this.tenants.set(base, tenant);
+      const header = res.headers.get("x-vss-resourcetenant");
+      const tenant = tenantOf(header ?? "") ?? "";
+      // A throttled or failing answer may leave the header out; ask again next time.
+      if (header !== null || res.ok) this.tenants.set(base, tenant);
       return tenant;
     } catch {
       // Unreachable now; `az`'s default tenant may still do.
