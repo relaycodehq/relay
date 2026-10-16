@@ -119,8 +119,8 @@ test("a chat file link outside the project opens and saves in Files", async () =
     );
     const surface = editor.locator('[contenteditable="true"]').last();
     await expect(surface).toContainText("Unlink the old account.");
-    await surface.click();
-    await page.keyboard.press("Meta+End");
+    await surface.getByText("Unlink the old account.").click();
+    await page.keyboard.press("End");
     await page.keyboard.type(" Then relink.");
     await page
       .getByRole("button", { name: "Save locally", exact: true })

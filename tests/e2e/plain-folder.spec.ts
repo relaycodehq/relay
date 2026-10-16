@@ -81,6 +81,16 @@ test("works in a folder without Git: threads, files and saves, no Git controls",
       .poll(() => readFile(join(folder, "README.md"), "utf8"))
       .toContain("Saved without Git.");
     await expect(page.getByRole("alert")).toHaveCount(0);
+    // Without Git there's no committed version to mark changes against.
+    expect(
+      await page
+        .locator(".project-inline-editor [data-column-number]")
+        .evaluateAll((cells) =>
+          cells.some(
+            (cell) => getComputedStyle(cell, "::before").content !== "none",
+          ),
+        ),
+    ).toBe(false);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
