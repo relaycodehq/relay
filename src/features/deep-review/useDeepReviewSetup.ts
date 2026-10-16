@@ -30,6 +30,30 @@ import {
 import { useClaudeModels } from "../agents/useClaudeModels";
 
 /**
+ * Keeps `change` with the unsent review, and the setup it was made with the
+ * first time, so another review changing the project's setup can't swap it.
+ * Cleared down to a setup any new review would start with, it's no draft.
+ */
+export function keepReview(
+  projectId: string,
+  draftId: string,
+  setup: Setup,
+  change: Parameters<typeof updateReviewDraft>[1],
+) {
+  const review = { ...threadStorage(draftId).review.load(), ...change };
+  const more = Object.entries(review).some(
+    ([part, value]) => part !== "setup" && part !== "at" && !!value,
+  );
+  const kept =
+    !!review.setup &&
+    JSON.stringify(review.setup) !== JSON.stringify(firstSetup(projectId));
+  updateReviewDraft(draftId, {
+    ...change,
+    setup: more ? (review.setup ?? setup) : kept ? review.setup : undefined,
+  });
+}
+
+/**
  * The setup as you edit it and its focus note, kept with the unsent thread
  * once you change either; an edited setup is also where the project's next
  * review starts.
@@ -46,7 +70,7 @@ function useSetupDraft(projectId: string, draftId: string) {
   );
   const focus = useDraftRecord(draftId, (d) => d.review?.focus ?? "");
   const setFocus = (text: string) =>
-    updateReviewDraft(draftId, { focus: text || undefined });
+    keepReview(projectId, draftId, setup, { focus: text || undefined });
   // Notes were once kept per project; the first review with none takes it.
   useEffect(() => {
     const old = localStorage.getItem(focusKey(projectId));
@@ -119,7 +143,7 @@ function useTargetPick(
   const [chosenHead, setHead] = useState(saved.head ?? "");
   const [chosenBase, setBase] = useState(saved.base ?? "");
   const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
-    updateReviewDraft(draftId, change);
+    keepReview(projectId, draftId, setup, change);
   const { heads, head, bases, base } = reviewBranches(
     { head: chosenHead, base: chosenBase },
     branches.data?.branches ?? [],
