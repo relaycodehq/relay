@@ -14,6 +14,7 @@ import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
 import { watchOf, type ClaudeSession } from "./session";
 import { ToolRows } from "./tool-rows";
+import { forkStart } from "../forks";
 import { TurnWatcher } from "../../watch/watcher";
 import { ClaudeGoalWatch } from "./goal";
 
@@ -111,6 +112,10 @@ export class ClaudeTurnReader {
       this.rows.results(message.message.content, message.parent_tool_use_id);
     if (message.type === "system" && message.subtype === "task_progress")
       this.rows.progress(message);
+    const fork = forkStart(message);
+    if (fork) this.rows.fork(fork);
+    if (message.type === "system" && message.subtype === "task_notification")
+      this.rows.ended(message);
     if (message.type === "result") return this.result(message);
     return "more";
   }
@@ -202,7 +207,11 @@ export class ClaudeTurnReader {
       this.options.onCommentary?.(message.message.id, text);
     }
     for (const tool of tools) {
-      if (tool.name === "ReportFindings" && !parent)
+      // A forked /code-review reports for the turn: its answer is the turn's.
+      if (
+        tool.name === "ReportFindings" &&
+        (!parent || this.rows.isFork(parent))
+      )
         this.reported = reportedFindings(tool.input) ?? this.reported;
       this.rows.call(tool, parent);
     }

@@ -5,6 +5,9 @@ import type { HookFrame } from "../../../agent-host/protocol";
 import type { SDKMessage } from "./sdk";
 import { meterOf, watchOf, type ClaudeSession } from "./session";
 import { pendingChanged } from "./pending";
+import { ForkTails } from "./fork-tail";
+import { accountHome } from "../../accounts";
+import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 
 /** Frames read off the stream, waiting for the turn they belong to. */
 export class ClaudeFrames extends AsyncQueue<SDKMessage> {
@@ -32,12 +35,21 @@ export async function pump(
   iterator: AsyncIterator<SDKMessage>,
 ) {
   let failure: unknown;
+  // What a forked skill does, read off its transcript while it works.
+  const forks = new ForkTails(
+    () => accountHome("claude", session.account ?? SYSTEM_ACCOUNT),
+    (frame) => {
+      session.agents.observe(frame);
+      receive(session, frame);
+    },
+  );
   try {
     while (true) {
       const next = await iterator.next();
       if (next.done) break;
       // Here rather than in receive(): frames a turn leaves unread pass through that twice.
       session.agents.observe(next.value);
+      forks.observe(next.value);
       // Replayed after a restart, turns already shown only rebuild what's running.
       const seq = session.hosted?.seqOf(next.value);
       if (seq !== undefined && seq < session.hosted!.split)
@@ -54,6 +66,7 @@ export async function pump(
     // The turn reading the frames reports the stop.
     failure = error;
   } finally {
+    forks.close();
     session.agents.close();
     session.frames.end(failure);
     pendingChanged();

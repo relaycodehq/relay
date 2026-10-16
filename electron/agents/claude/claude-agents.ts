@@ -10,6 +10,7 @@ import type {
   SubagentStatus,
 } from "../../../shared/subagents";
 import { claudeActivity } from "../activity";
+import { ForkParents, forkStart } from "./forks";
 
 /**
  * How sure an ending is. The task's own word beats the Agent call's result,
@@ -80,12 +81,13 @@ export class SubagentTracker {
   private tasks = new Map<string, string>();
   /** The SDK's live background tasks; it usually lists one before saying it started. */
   private live = new Set<string>();
+  private forks = new ForkParents();
   constructor(private now = () => Date.now()) {}
 
   observe(message: SDKMessage) {
     if (message.type === "assistant")
       this.assistant(
-        message.parent_tool_use_id,
+        this.forks.resolve(message.parent_tool_use_id),
         message.message.id,
         message.message.content as Block[],
       );
@@ -180,7 +182,7 @@ export class SubagentTracker {
   private user(message: Extract<SDKMessage, { type: "user" }>) {
     const content = message.message.content;
     if (!Array.isArray(content)) return;
-    const parent = message.parent_tool_use_id;
+    const parent = this.forks.resolve(message.parent_tool_use_id);
     const owner = parent ? this.runs.get(parent) : undefined;
     for (const block of content) {
       if (block.type !== "tool_result") continue;
@@ -197,8 +199,10 @@ export class SubagentTracker {
       case "task_started": {
         if (message.ambient || message.skip_transcript) return;
         if (message.task_type && message.task_type !== "local_agent") return;
-        if (!message.tool_use_id) return;
-        const run = this.launch(message.tool_use_id, {
+        const fork = forkStart(message);
+        const id = message.tool_use_id ?? (fork && this.forks.start(fork));
+        if (!id) return;
+        const run = this.launch(id, {
           description: message.description,
           subagent_type: message.subagent_type,
           prompt: message.prompt,
