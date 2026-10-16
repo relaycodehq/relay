@@ -8,12 +8,15 @@ import {
   type LineHunk,
 } from "./line-changes";
 
+/** Characters of both sides past which the hover waits for the worker rather than diff them itself. */
+const SYNC_LIMIT = 200_000;
+
 /**
  * Blame for the editor's lines. Beside the committed side, the local side
  * reads as committed only while untouched; once edited, its lines point at
  * the committed side instead. The file by itself blames its unchanged lines
  * at their committed place: where `hunks` says, or before the worker has
- * caught up with the buffer, worked out here on hover.
+ * caught up with the buffer, worked out here on hover for a smaller file.
  */
 export function useEditorBlame(
   target: Pull | { projectId: string; head: { sha: string } },
@@ -39,7 +42,18 @@ export function useEditorBlame(
   const mapping = useRef({ shape, revision: 0 });
   if (shape !== undefined && mapping.current.shape !== shape)
     mapping.current = { shape, revision: mapping.current.revision + 1 };
-  let worked: readonly LineHunk[] | undefined = hunks;
+  // Worked out here once per buffer.
+  const worked = useRef<{
+    committed?: string;
+    buffer?: string;
+    hunks?: readonly LineHunk[];
+  }>({});
+  const comparing =
+    view.edited &&
+    !hunks &&
+    committed !== undefined &&
+    buffer !== undefined &&
+    committed.length + buffer.length > SYNC_LIMIT;
   let ends: number | undefined;
   const lineAt = (line: number) => {
     if (buffer === undefined) return line;
@@ -47,9 +61,18 @@ export function useEditorBlame(
     ends ??= linesOf(buffer).length;
     if (line > ends) return null;
     if (!view.edited) return line;
-    if (!worked && committed !== undefined)
-      worked = lineChanges(committed, buffer);
-    return worked ? committedLine(worked, line) : undefined;
+    if (hunks) return committedLine(hunks, line);
+    if (committed === undefined || comparing) return undefined;
+    if (
+      worked.current.committed !== committed ||
+      worked.current.buffer !== buffer
+    )
+      worked.current = {
+        committed,
+        buffer,
+        hunks: lineChanges(committed, buffer),
+      };
+    return committedLine(worked.current.hunks!, line);
   };
   const local = { revision, path, label: "Local checkout" };
   return useLineBlame(
@@ -79,7 +102,9 @@ export function useEditorBlame(
               ...(view.edited
                 ? {
                     mapping: mapping.current.revision,
-                    unavailable: `Changed here since ${base}, not committed yet.`,
+                    unavailable: comparing
+                      ? `Still comparing with ${base}. Hover again in a moment.`
+                      : `Changed here since ${base}, not committed yet.`,
                   }
                 : {}),
             },
