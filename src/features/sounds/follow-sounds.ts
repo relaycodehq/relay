@@ -34,10 +34,5 @@ export function followSounds(qc: QueryClient) {
       return true;
     },
   });
-  const messages = api.onProjectChat((e) => cues.message(e.chatId, e.message));
-  const lists = api.onProjectChats((e) => cues.list(e.projectId, e.chats));
-  return () => {
-    messages();
-    lists();
-  };
+  return api.onThreadNews((item) => cues.news(item));
 }

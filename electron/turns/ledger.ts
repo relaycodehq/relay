@@ -7,7 +7,13 @@ import type {
   TurnPhase,
 } from "../../shared/turns";
 import type { AgentProvider } from "../../shared/agents";
-import type { Owner, OwnedTurn, TurnStore } from "./store";
+import {
+  MemoryTurnStore,
+  openTurnStore,
+  type Owner,
+  type OwnedTurn,
+  type TurnStore,
+} from "./store";
 
 /** Ledgers open in this process; a turn whose owner is one of them isn't left over. */
 const liveOwners = new Set<string>();
@@ -31,6 +37,18 @@ export interface OpenTurnInput {
   parentTurnId?: string;
 }
 
+/** The ledger on the database in `path`; one that can't be read keeps turns in memory. */
+export function openTurnLedger(path: string) {
+  const store = openTurnStore(path);
+  try {
+    return new TurnLedger(store);
+  } catch (e) {
+    store.close();
+    console.warn("Could not read the turn ledger; keeping turns in memory:", e);
+    return new TurnLedger(new MemoryTurnStore());
+  }
+}
+
 /**
  * Every turn in every thread, and the one way to start, move or end one; see
  * docs/turn-lifecycle.md. A turn that ended stays ended: a late word about it
@@ -41,14 +59,12 @@ export class TurnLedger {
   private open = new Map<string, Turn>();
   /** Turns a Relay that's gone left open; recovered once reattaching is done. */
   private leftOver: OwnedTurn[];
-  private lastEnded = new Map<string, Turn>();
   private listeners = new Set<(event: TurnEvent) => void>();
   private closed = false;
 
   constructor(private store: TurnStore) {
-    liveOwners.add(this.owner.id);
     this.leftOver = store.open().filter((t) => !ownerAlive(t.owner));
-    for (const turn of store.lastEnded()) this.lastEnded.set(turn.threadId, turn);
+    liveOwners.add(this.owner.id);
   }
 
   start(input: OpenTurnInput): Turn {
@@ -84,7 +100,6 @@ export class TurnLedger {
     turn.endedAs = endedAs;
     turn.endedAt = Date.now();
     if (answerId) turn.answerId = answerId;
-    this.lastEnded.set(turn.threadId, turn);
     this.write("ended", turn);
   }
 
@@ -94,17 +109,6 @@ export class TurnLedger {
   /** The thread's open turns, oldest first. */
   inThread(threadId: string): Turn[] {
     return [...this.open.values()].filter((t) => t.threadId === threadId);
-  }
-  /** The last turn to end in the thread. */
-  lastTurn(threadId: string): Turn | undefined {
-    return this.lastEnded.get(threadId);
-  }
-  /** Events after `seq`, or undefined when a snapshot has to stand in for them. */
-  since(seq: number) {
-    return this.store.after(seq);
-  }
-  seq() {
-    return this.store.seq();
   }
   onEvent(listener: (event: TurnEvent) => void) {
     this.listeners.add(listener);
@@ -118,30 +122,30 @@ export class TurnLedger {
   recover() {
     const left = this.leftOver;
     this.leftOver = [];
-    for (const turn of left) {
-      const ended: Turn = {
+    for (const { owner: _, ...turn } of left)
+      this.write("ended", {
         ...turn,
         phase: "ended",
         endedAs: "interrupted",
         endedAt: Date.now(),
-      };
-      delete (ended as Partial<OwnedTurn>).owner;
-      const last = this.lastEnded.get(turn.threadId);
-      if (!last || (last.endedAt ?? 0) <= ended.endedAt!)
-        this.lastEnded.set(turn.threadId, ended);
-      this.write("ended", ended);
-    }
+      });
   }
 
-  /** Ends this Relay's open turns that `alive` no longer knows: they ended without saying. */
+  /**
+   * Ends this Relay's open turns that `alive` no longer knows: they ended
+   * without saying. Says which threads that changed.
+   */
   check(alive: (turnId: string) => boolean) {
+    const threads = new Set<string>();
     for (const turn of [...this.open.values()])
       if (!alive(turn.id)) {
         console.warn(
           `A ${turn.kind} turn in thread ${turn.threadId} ended without the ledger hearing of it.`,
         );
         this.end(turn.id, "lost");
+        threads.add(turn.threadId);
       }
+    return [...threads];
   }
 
   /** A turn that ends after this still ends, only no longer on disk. */
@@ -154,15 +158,21 @@ export class TurnLedger {
   }
 
   private write(type: TurnEvent["type"], turn: Turn) {
-    let event: TurnEvent = { seq: -1, at: Date.now(), type, turn };
+    let seq = -1;
     if (!this.closed)
       try {
-        event = this.store.write(type, turn, this.owner);
+        seq = this.store.write(type, turn, this.owner);
       } catch (e) {
         // A turn still runs if its record can't be saved; it just won't survive a restart.
         console.warn("Could not save the turn:", e);
       }
-    const copy = structuredClone(event);
-    for (const listener of this.listeners) listener(copy);
+    const event: TurnEvent = { seq, at: Date.now(), type, turn };
+    for (const listener of this.listeners)
+      try {
+        listener(structuredClone(event));
+      } catch (e) {
+        // What hears of turns never holds up the turn itself.
+        console.warn("A turn listener failed:", e);
+      }
   }
 }

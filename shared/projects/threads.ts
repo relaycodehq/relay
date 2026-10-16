@@ -1,4 +1,4 @@
-import type { EndedTurn, OpenTurn } from "../turns";
+import type { OpenTurn } from "../turns";
 import { z } from "zod";
 import type { AgentProvider } from "../agents";
 import type { AccountProvider } from "../agent-accounts";
@@ -141,8 +141,6 @@ export interface ChatSummary {
   stopping?: true;
   /** The turn holding the thread while it runs; see docs/turn-lifecycle.md. */
   turn?: OpenTurn;
-  /** The last turn to end in the thread. */
-  lastTurn?: EndedTurn;
   /** The thread's own agent first, then its reviewers, one per provider. */
   runningAgents?: AgentProvider[];
   /** Needs the user, even if an async question lets the agent continue. */

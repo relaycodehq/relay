@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { vi, type Mock } from "vitest";
@@ -16,11 +23,7 @@ import type {
   ChatSummary,
   ProjectChatSend,
 } from "../../shared/projects";
-import {
-  threadNews,
-  type LastAnswer,
-  type ThreadNews,
-} from "../../shared/thread-news";
+import type { NewsCursor, NewsItem } from "../../shared/thread-news";
 import { fakeCli } from "./fake-cli";
 
 /**
@@ -31,8 +34,8 @@ import { fakeCli } from "./fake-cli";
 export interface Scenario {
   root: string;
   chats: ProjectChats;
-  /** News as the window's sounds hear it, in order. */
-  news: ThreadNews[];
+  /** News that sounds in the window, in order. */
+  news: NewsItem[];
   thread(): Promise<string>;
   send(
     id: string,
@@ -43,9 +46,15 @@ export interface Scenario {
   summary(id: string): ChatSummary | undefined;
   messages(id: string): Promise<ChatMessage[]>;
   /** Waits for the thread's list entry to read `predicate`. */
-  until(id: string, predicate: (summary: ChatSummary) => boolean): Promise<ChatSummary>;
+  until(
+    id: string,
+    predicate: (summary: ChatSummary) => boolean,
+  ): Promise<ChatSummary>;
   /** Waits for a message pushed to the window to read `predicate`. */
-  message(id: string, predicate: (message: ChatMessage) => boolean): Promise<ChatMessage>;
+  message(
+    id: string,
+    predicate: (message: ChatMessage) => boolean,
+  ): Promise<ChatMessage>;
   /** Waits until the thread's turns have given it back. */
   ended(id: string): Promise<void>;
   /** The thread's answers whose latest push still said they stream. */
@@ -58,8 +67,8 @@ export interface Scenario {
 }
 
 export interface Phone {
-  /** News the phone showed, in order. */
-  news: ThreadNews[];
+  /** News the phone heard live or caught up on, in order. */
+  news: NewsItem[];
   drop(): void;
   reconnect(): void;
 }
@@ -71,7 +80,11 @@ export interface ScenarioOptions {
    * Plays `provider`'s recorded transcripts from tests/fixtures/replays
    * instead, through replay-agent.cjs; `fault` breaks the agent's last line.
    */
-  replay?: { provider: AgentProvider; scenario: string; fault?: "exit" | "close" };
+  replay?: {
+    provider: AgentProvider;
+    scenario: string;
+    fault?: "exit" | "close";
+  };
   /** More environment for the agents. */
   env?: Record<string, string>;
 }
@@ -93,7 +106,9 @@ export const recordedChoice = (provider: AgentProvider) => ({
 /** As tests/unit/setup.ts caps a wait. */
 const WAIT_MS = 20_000;
 
-export async function startScenario(options: ScenarioOptions): Promise<Scenario> {
+export async function startScenario(
+  options: ScenarioOptions,
+): Promise<Scenario> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-turns-")));
   const repo = join(root, "project");
   await mkdir(repo);
@@ -107,13 +122,17 @@ export async function startScenario(options: ScenarioOptions): Promise<Scenario>
   if (options.replay) {
     const { provider, scenario, fault } = options.replay;
     const dir = resolve("tests/fixtures/replays", provider, scenario);
-    const first = (await readFile(join(dir, "01.jsonl"), "utf8")).split("\n")[0];
+    const first = (await readFile(join(dir, "01.jsonl"), "utf8")).split(
+      "\n",
+    )[0];
     const player = await fakeCli(
       join(root, `${provider}-replay`),
       [
         `process.env.RELAY_REPLAY_AGENT = ${JSON.stringify(provider)};`,
         `process.env.RELAY_REPLAY_DIR = ${JSON.stringify(dir)};`,
-        fault ? `process.env.RELAY_REPLAY_FAULT = ${JSON.stringify(fault)};` : "",
+        fault
+          ? `process.env.RELAY_REPLAY_FAULT = ${JSON.stringify(fault)};`
+          : "",
         await readFile(resolve("tests/fixtures/replay-agent.cjs"), "utf8"),
       ].join("\n"),
       JSON.parse(first).meta.version,
@@ -133,11 +152,8 @@ export async function startScenario(options: ScenarioOptions): Promise<Scenario>
 
   const listeners = new Set<() => void>();
   const pushed: ProjectChatEvent[] = [];
-  const answers = new Map<string, LastAnswer & { created: number }>();
   const latest = new Map<string, Map<string, ChatMessage>>();
-  const news: ThreadNews[] = [];
-  let known = new Map<string, ChatSummary>();
-  const phones = new Set<{ list(chats: ChatSummary[]): void }>();
+  const news: NewsItem[] = [];
 
   const heard = (event: ProjectChatEvent) => {
     pushed.push(structuredClone(event));
@@ -145,32 +161,22 @@ export async function startScenario(options: ScenarioOptions): Promise<Scenario>
     const thread = latest.get(event.chatId) ?? new Map<string, ChatMessage>();
     thread.set(m.id, structuredClone(m));
     latest.set(event.chatId, thread);
-    if (m.role === "assistant" && !m.parentId && !m.compaction && !m.handoff && !m.reload) {
-      const last = answers.get(event.chatId);
-      if (!last || last.created <= m.created)
-        answers.set(event.chatId, {
-          status: m.status,
-          body: m.body,
-          error: m.error,
-          provider: m.provider,
-          created: m.created,
-        });
-    }
     for (const listener of listeners) listener();
-  };
-  const listed = (chats: ChatSummary[]) => {
-    // As shared/sound-cues: an agent's own started thread stays quiet when done.
-    for (const n of threadNews(known, chats, answers))
-      if (!(n.kind === "finished" && known.get(n.chatId)?.startedBy)) news.push(n);
-    known = new Map(chats.map((c) => [c.id, c]));
-    for (const phone of phones) phone.list(chats);
   };
 
   const chats = new ProjectChats(store, projects, join(root, "chats"), heard);
+  // The window's list feed, which the thread list stays in step with.
   const feed = new ChatSummaryFeed(
     (id) => chats.list(id),
-    (event) => listed(event.chats),
+    () => {},
   );
+  const phones = new Set<(item: NewsItem) => void>();
+  const stopNews = chats.onNews((item) => {
+    // As shared/sound-cues: an agent's own started thread stays quiet when done.
+    if (!(item.kind === "finished" && item.byAgent)) news.push(item);
+    for (const phone of phones) phone(item);
+    for (const listener of listeners) listener();
+  });
   const unsubscribe = chats.onSummaries((id) => {
     feed.changed(id);
     for (const listener of listeners) listener();
@@ -226,8 +232,10 @@ export async function startScenario(options: ScenarioOptions): Promise<Scenario>
     messages: async (id) => (await chats.get(id)).messages,
     until,
     message: (id, predicate) =>
-      waitFor("a pushed message", () =>
-        pushed.find((e) => e.chatId === id && predicate(e.message))?.message,
+      waitFor(
+        "a pushed message",
+        () =>
+          pushed.find((e) => e.chatId === id && predicate(e.message))?.message,
       ),
     async ended(id) {
       await waitFor("the thread's turns to end", () => {
@@ -248,28 +256,26 @@ export async function startScenario(options: ScenarioOptions): Promise<Scenario>
       return () => listeners.delete(listener);
     },
     phone() {
-      let before = new Map(known);
-      let online = true;
-      const phone: Phone & { list(chats: ChatSummary[]): void } = {
+      let away: NewsCursor | undefined;
+      const phone: Phone = {
         news: [],
-        list(now) {
-          if (!online) return;
-          phone.news.push(...threadNews(before, now, answers));
-          before = new Map(now.map((c) => [c.id, c]));
-        },
         drop() {
-          online = false;
+          away = chats.newsSince();
         },
         reconnect() {
-          online = true;
-          phone.list(chats.list(projectId));
+          const missed = chats.newsSince(away);
+          away = undefined;
+          phone.news.push(...(missed.items ?? []));
         },
       };
-      phones.add(phone);
+      phones.add((item) => {
+        if (!away) phone.news.push(item);
+      });
       return phone;
     },
     async dispose() {
       listeners.clear();
+      stopNews();
       unsubscribe();
       feed.dispose();
       await chats.dispose();

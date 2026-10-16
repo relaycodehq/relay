@@ -1,11 +1,11 @@
-// What a phone tells you about while it's in your pocket: a thread that
-// finished, failed or asked you something since the last list, worded for a
-// notification.
+// What a thread is news of, decided once on the computer for the window's
+// sounds, the menubar's and the phone's notifications alike: an answer that
+// finished or failed, a thread that needs you. See docs/turn-lifecycle.md.
 import { agentError } from "./agent-error";
 import { agentName } from "./agents";
-import { chatSettled, wakeLabel } from "./chat-activity";
 import type { ChatMessage } from "./projects";
 import type { RemoteChatSummary } from "./remote";
+import { answersKinds, type Turn } from "./turns";
 
 export interface ThreadNews {
   chatId: string;
@@ -20,16 +20,13 @@ export type LastAnswer = Pick<
   "status" | "body" | "error" | "provider"
 >;
 
-/** What news needs to know of a thread; the desktop's and the phone's lists both have it. */
+/** What news needs to know of a thread, as its list entry has it. */
 export type NewsChat = Pick<
   RemoteChatSummary,
   | "id"
   | "title"
   | "provider"
-  | "running"
-  | "runningSince"
   | "waiting"
-  | "limitResume"
   | "snoozedUntil"
   | "settledAt"
   | "settleWhenDone"
@@ -39,77 +36,81 @@ export type NewsChat = Pick<
 
 const previewLength = 240;
 
+/** News as the computer told it: numbered, so a phone that was away asks for what it missed. */
+export type NewsItem = ThreadNews & {
+  seq: number;
+  at: number;
+  projectId: string;
+  /** The turn whose end it is; a question has none. */
+  turnId?: string;
+  /** The thread was started by an agent, which is the one waiting on it. */
+  byAgent?: true;
+};
+/** Where a client is in the computer's news; `epoch` changes when Relay restarts. */
+export interface NewsCursor {
+  epoch: string;
+  seq: number;
+}
+/** What a client missed since its cursor, or no `items` when it's too far behind to say. */
+export type NewsCatchUp = NewsCursor & { items?: NewsItem[] };
+
 /**
- * Threads that moved from one list to the next. A thread new to the list
- * isn't news, nor one read where it happened: someone is watching it there.
+ * What a turn's end is news of, by the thread as it reads now: a finished or
+ * failed answer, never a compaction, a note or a side answer, nor an answer
+ * someone stopped or read where it ran.
  */
-export function threadNews(
-  before: ReadonlyMap<string, NewsChat>,
-  now: readonly NewsChat[],
-  answers: ReadonlyMap<string, LastAnswer>,
+export function answerNews(
+  turn: Pick<Turn, "kind" | "endedAs" | "startedAt" | "endedAt">,
+  chat: NewsChat,
+  answer: LastAnswer | undefined,
   at = Date.now(),
-): ThreadNews[] {
-  const news: ThreadNews[] = [];
-  for (const c of now) {
-    const was = before.get(c.id);
-    if (!was || read(c)) continue;
-    const agent = c.provider ? agentName(c.provider) : "The agent";
-    if (c.waiting && !was.waiting) {
-      news.push({
-        chatId: c.id,
-        kind: "waiting",
-        title: c.title,
-        body: `${agent} needs you`,
-      });
-      continue;
-    }
-    if (c.limitResume && !was.limitResume) {
-      news.push({
-        chatId: c.id,
-        kind: "failed",
-        title: c.title,
-        body: c.limitResume.off
-          ? `${agentName(c.limitResume.provider)} hit its usage limit`
-          : `${agentName(c.limitResume.provider)} hit its usage limit · resumes the answer at ${wakeLabel(c.limitResume.at, new Date(at))}`,
-      });
-      continue;
-    }
-    if (!was.running || c.running) continue;
-    // Every answer moves the thread past when its run started; a compaction
-    // while you were away doesn't, and isn't news. Not the last list's
-    // `updated`: a save near the turn's end can list the final one while the
-    // thread still reads as running.
-    if (c.updated <= (was.runningSince ?? was.updated)) continue;
-    // Snoozed: it comes back by itself when you said.
-    if (c.snoozedUntil && c.snoozedUntil > at) continue;
-    const answer = answers.get(c.id);
-    // An optional question must not hide a failure after the agent kept working.
-    if (c.waiting && answer?.status !== "failed") continue;
-    // Someone stopped it, so someone knows.
-    if (answer?.status === "cancelled") continue;
-    // Settled while it ran: it finishes out of sight, and news of it would
-    // leave you guessing which thread it was. A failure comes back to Activity.
-    if (answer?.status !== "failed" && (chatSettled(was) || chatSettled(c)))
-      continue;
-    news.push(
-      answer?.status === "failed"
-        ? {
-            chatId: c.id,
-            kind: "failed",
-            title: c.title,
-            body: answer.error?.trim()
-              ? agentError(answer.error).message
-              : `${agent}'s answer failed`,
-          }
-        : {
-            chatId: c.id,
-            kind: "finished",
-            title: c.title,
-            body: (answer && preview(answer.body)) || `${agent} finished`,
-          },
-    );
-  }
-  return news;
+): ThreadNews | undefined {
+  if (!answersKinds.includes(turn.kind)) return;
+  const failed = turn.endedAs === "failed";
+  if (!failed && turn.endedAs !== "completed") return;
+  if (chat.seenAt != null && chat.seenAt >= (turn.endedAt ?? at)) return;
+  // Snoozed: it comes back by itself when you said.
+  if (chat.snoozedUntil && chat.snoozedUntil > at) return;
+  const agent = chat.provider ? agentName(chat.provider) : "The agent";
+  if (failed)
+    return {
+      chatId: chat.id,
+      kind: "failed",
+      title: chat.title,
+      body: answer?.error?.trim()
+        ? agentError(answer.error).message
+        : `${agent}'s answer failed`,
+    };
+  // An optional question must not hide a failure, but a finished answer waits for it.
+  if (chat.waiting) return;
+  // Settled while it ran: it finishes out of sight, and news of it would
+  // leave you guessing which thread it was. A failure comes back to Activity.
+  if (
+    chat.settleWhenDone != null ||
+    (chat.settledAt != null && chat.settledAt >= turn.startedAt)
+  )
+    return;
+  return {
+    chatId: chat.id,
+    kind: "finished",
+    title: chat.title,
+    body: (answer && preview(answer.body)) || `${agent} finished`,
+  };
+}
+
+/** A thread that started needing you since the last list; one new to the list isn't news. */
+export function waitingNews(
+  was: NewsChat | undefined,
+  chat: NewsChat,
+): ThreadNews | undefined {
+  if (!was || was.waiting || !chat.waiting || read(chat)) return;
+  const agent = chat.provider ? agentName(chat.provider) : "The agent";
+  return {
+    chatId: chat.id,
+    kind: "waiting",
+    title: chat.title,
+    body: `${agent} needs you`,
+  };
 }
 
 /** Threads read since the last list, on the computer or another phone, whose notification can go. */

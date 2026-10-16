@@ -48,6 +48,7 @@ import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
+import type { NewsCatchUp, NewsCursor } from "../../shared/thread-news";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -69,6 +70,8 @@ export interface RemoteHost {
   shrinkImage?(dataUrl: string, max: number): string;
   /** A page an answer showed with show_html. */
   renderPage?(chatId: string, renderId: string, page: number): Promise<string>;
+  /** The news after `cursor`; see electron/turns/news. */
+  news?(cursor?: NewsCursor): NewsCatchUp;
   /** The speech engine phones dictate with. */
   dictation?: SpeechService;
   /** The voice phones hear answers in. */
@@ -100,6 +103,9 @@ export interface RemoteHost {
 }
 
 const pathSchema = z.string().min(1).max(1000);
+const newsCursorSchema = z
+  .object({ epoch: z.string().max(64), seq: z.number().int().min(0) })
+  .strict();
 const activityIdSchema = z.string().min(1).max(200);
 const knownIconsSchema = z
   .record(idSchema, z.string().max(64).nullable())
@@ -312,6 +318,10 @@ export class RemoteBridge {
       )) as string;
       return this.host.shrinkImage?.(dataUrl, max) ?? dataUrl;
     },
+    news: async (cursor) => {
+      if (!this.host.news) throw new Error("This desktop keeps no news.");
+      return this.host.news(cursor);
+    },
     renderPage: async (chatId, renderId, page) => {
       if (!this.host.renderPage)
         throw new Error("This desktop can't show pages.");
@@ -480,6 +490,10 @@ export class RemoteBridge {
         return a.image(
           imageSourceSchema.parse(args[0]),
           z.number().int().min(16).max(4096).parse(args[1]),
+        );
+      case "news":
+        return a.news(
+          args[0] == null ? undefined : newsCursorSchema.parse(args[0]),
         );
       case "renderPage":
         return a.renderPage(

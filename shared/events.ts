@@ -26,6 +26,7 @@ export interface ProjectChatsEvent {
 export interface RelayEvents {
   "relay:project-chat": ProjectChatEvent;
   "relay:project-chats": ProjectChatsEvent;
+  "relay:thread-news": import("./thread-news").NewsItem;
   "relay:read-aloud": ReadAloudEvent;
   "relay:read-aloud-state": ReadAloudState;
   "relay:project-adding": AddingJob | null;

@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import { join } from "node:path";
-import type { ProjectChatEvent, ProjectChatsEvent } from "../../shared/events";
+import type { NewsItem } from "../../shared/thread-news";
 import { pickSound, SoundCues } from "../../shared/sound-cues";
 import { customFileId } from "../../shared/sounds";
 import type { Store } from "../app/store";
@@ -35,12 +35,8 @@ export class MenubarSounds {
     });
   }
 
-  chatEvent(event: ProjectChatEvent) {
-    this.cues.message(event.chatId, event.message);
-  }
-
-  chatsEvent(event: ProjectChatsEvent) {
-    this.cues.list(event.projectId, event.chats);
+  news(item: NewsItem) {
+    this.cues.news(item);
   }
 
   dispose() {

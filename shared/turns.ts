@@ -8,23 +8,14 @@ import type { AgentProvider } from "./agents";
  * outgoing agent's note for the next, `aside` a `/btw` answer.
  */
 export type TurnKind =
-  | "answer"
-  | "adopt"
-  | "lead"
-  | "compaction"
-  | "handoff"
-  | "aside";
+  "answer" | "adopt" | "lead" | "compaction" | "handoff" | "aside";
 
 /**
  * `starting`: the thread is held, no agent runs yet. `finishing`: the answer
  * is written and saved. `stopping`: stopped, the agent winds down.
  */
 export type TurnPhase =
-  | "starting"
-  | "running"
-  | "finishing"
-  | "stopping"
-  | "ended";
+  "starting" | "running" | "finishing" | "stopping" | "ended";
 
 /**
  * How a turn ended. `unstarted`: stopped or failed before its agent ran.
@@ -32,12 +23,7 @@ export type TurnPhase =
  * it ended without saying so, which the ledger's check caught.
  */
 export type TurnEnd =
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "unstarted"
-  | "interrupted"
-  | "lost";
+  "completed" | "failed" | "cancelled" | "unstarted" | "interrupted" | "lost";
 
 export interface Turn {
   id: string;
@@ -66,11 +52,6 @@ export interface TurnEvent {
 
 /** The turn that holds a thread now, as its list entry says. */
 export type OpenTurn = Pick<Turn, "id" | "kind" | "phase" | "startedAt">;
-/** The last turn to end in a thread. */
-export type EndedTurn = Pick<
-  Turn,
-  "id" | "kind" | "endedAs" | "endedAt" | "answerId"
->;
 
 /** Kinds whose end is an answer someone may want to hear about. */
 export const answersKinds: readonly TurnKind[] = ["answer", "adopt", "lead"];

@@ -426,6 +426,7 @@ contextBridge.exposeInMainWorld("relay", {
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   onProjectChat: on("relay:project-chat"),
   onProjectChats: on("relay:project-chats"),
+  onThreadNews: on("relay:thread-news"),
   onProjectAdding: on("relay:project-adding"),
   onUpdate: subscribe("relay:update"),
   onDevBuild: subscribe("relay:dev-build"),

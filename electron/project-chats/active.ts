@@ -59,7 +59,10 @@ interface Side {
 }
 
 /** How a turn ended, from the message it wrote. */
-export function outcome(answer: ChatMessage | undefined, stopped: boolean): TurnEnd {
+export function outcome(
+  answer: ChatMessage | undefined,
+  stopped: boolean,
+): TurnEnd {
   switch (answer?.status) {
     case "complete":
       return "completed";
@@ -102,6 +105,10 @@ export class ActiveTurns {
   }
   ids() {
     return [...this.turns.keys()];
+  }
+  /** Threads with a turn at work, a turn the agent started beside another included. */
+  working() {
+    return [...new Set([...this.turns.keys(), ...this.riders.keys()])];
   }
   all() {
     return [...this.turns.values()];

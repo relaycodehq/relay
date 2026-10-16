@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RemoteChatSummary } from "./remote";
 import {
+  answerNews,
   preview,
-  threadNews,
   threadsRead,
+  waitingNews,
   type LastAnswer,
 } from "./thread-news";
+import type { Turn } from "./turns";
 
 const chat = (
   id: string,
@@ -28,154 +30,179 @@ const answer = (more: Partial<LastAnswer>): LastAnswer => ({
   provider: "claude",
   ...more,
 });
+/** A turn that ran from 10 to 20. */
+const turn = (
+  endedAs: Turn["endedAs"],
+  kind: Turn["kind"] = "answer",
+): Pick<Turn, "kind" | "endedAs" | "startedAt" | "endedAt"> => ({
+  kind,
+  endedAs,
+  startedAt: 10,
+  endedAt: 20,
+});
 
-describe("threadNews", () => {
-  it("keeps quiet about a compaction that ran while you were away", () => {
-    expect(
-      threadNews(
-        list(chat("a", { running: true })),
-        [chat("a")],
-        new Map([["a", answer({ body: "The answer before it" })]]),
-      ),
-    ).toEqual([]);
-    expect(
-      threadNews(
-        list(chat("a", { running: true, runningSince: 15 })),
-        [chat("a")],
-        new Map([["a", answer({ body: "The answer before it" })]]),
-      ),
-    ).toEqual([]);
-  });
-
-  it("tells of an answer whose end was listed while the thread still ran", () => {
-    expect(
-      threadNews(
-        list(chat("a", { running: true, runningSince: 15, updated: 20 })),
-        [chat("a", { updated: 20 })],
-        new Map([["a", answer({ body: "Done" })]]),
-      ),
-    ).toEqual([
-      { chatId: "a", kind: "finished", title: "Thread a", body: "Done" },
-    ]);
+describe("answerNews", () => {
+  it("keeps quiet about compactions, notes and side answers, and stopped answers", () => {
+    for (const kind of ["compaction", "handoff", "aside"] as const)
+      expect(
+        answerNews(turn("completed", kind), chat("a"), answer({ body: "Hi" })),
+      ).toBeUndefined();
+    for (const endedAs of [
+      "cancelled",
+      "unstarted",
+      "interrupted",
+      "lost",
+    ] as const)
+      expect(answerNews(turn(endedAs), chat("a"), answer({}))).toBeUndefined();
   });
 
   it("tells of a finished answer by its first words, a failed one by its error", () => {
-    const before = list(
-      chat("a", { running: true }),
-      chat("b", { running: true }),
-      chat("c", { running: true }),
-    );
-    const news = threadNews(
-      before,
-      [
-        chat("a", { updated: 20 }),
-        chat("b", { updated: 20 }),
-        chat("c", { updated: 20 }),
-      ],
-      new Map([
-        [
-          "a",
-          answer({
-            body: "## Done\n\nFixed **the** [race](src/x.ts) in `turn-run.ts`.",
-          }),
-        ],
-        ["b", answer({ status: "failed", error: "Claude's login expired." })],
-        [
-          "c",
-          answer({
-            status: "failed",
-            error:
-              'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
-          }),
-        ],
-      ]),
-    );
-    expect(news).toEqual([
-      {
-        chatId: "a",
-        kind: "finished",
-        title: "Thread a",
-        body: "Done: Fixed the race in turn-run.ts.",
-      },
-      {
-        chatId: "b",
-        kind: "failed",
-        title: "Thread b",
-        body: "Claude's login expired.",
-      },
-      // The provider's words, not the envelope around them.
-      { chatId: "c", kind: "failed", title: "Thread c", body: "Overloaded" },
-    ]);
+    expect(
+      answerNews(
+        turn("completed"),
+        chat("a"),
+        answer({
+          body: "## Done\n\nFixed **the** [race](src/x.ts) in `turn-run.ts`.",
+        }),
+      ),
+    ).toEqual({
+      chatId: "a",
+      kind: "finished",
+      title: "Thread a",
+      body: "Done: Fixed the race in turn-run.ts.",
+    });
+    expect(
+      answerNews(
+        turn("failed"),
+        chat("b"),
+        answer({ status: "failed", error: "Claude's login expired." }),
+      ),
+    ).toEqual({
+      chatId: "b",
+      kind: "failed",
+      title: "Thread b",
+      body: "Claude's login expired.",
+    });
+    // The provider's words, not the envelope around them.
+    expect(
+      answerNews(
+        turn("failed", "adopt"),
+        chat("c"),
+        answer({
+          status: "failed",
+          error:
+            'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+        }),
+      ),
+    ).toEqual({
+      chatId: "c",
+      kind: "failed",
+      title: "Thread c",
+      body: "Overloaded",
+    });
   });
 
-  it("tells of a question at once, even while the agent still runs", () => {
-    const news = threadNews(
-      list(chat("a", { running: true })),
-      [chat("a", { running: true, waiting: true, asking: true })],
-      new Map(),
-    );
-    expect(news).toEqual([
-      {
-        chatId: "a",
-        kind: "waiting",
-        title: "Thread a",
-        body: "Claude needs you",
-      },
-    ]);
-  });
-
-  it("stays quiet about new threads, stopped answers, snoozed ones and ones read where they ran", () => {
-    const before = list(
-      chat("stopped", { running: true }),
-      chat("snoozed", { running: true }),
-      chat("watched", { running: true }),
-    );
-    const news = threadNews(
-      before,
-      [
-        chat("new", { waiting: true }),
-        chat("stopped"),
+  it("stays quiet about snoozed threads and ones read where they ran", () => {
+    expect(
+      answerNews(
+        turn("completed"),
         chat("snoozed", { snoozedUntil: 5_000 }),
-        chat("watched", { updated: 20, seenAt: 20 }),
-      ],
-      new Map([["stopped", answer({ status: "cancelled" })]]),
-      1_000,
-    );
-    expect(news).toEqual([]);
+        answer({}),
+        1_000,
+      ),
+    ).toBeUndefined();
+    expect(
+      answerNews(
+        turn("completed"),
+        chat("watched", { seenAt: 20 }),
+        answer({}),
+      ),
+    ).toBeUndefined();
   });
 
   it("stays quiet when a thread settled while it ran finishes, but tells of one that woke up on its own", () => {
-    const whileRunning = { settledAt: 15, settleWhenDone: 15 };
-    const news = threadNews(
-      list(
-        chat("settling", { running: true, ...whileRunning }),
-        chat("settled", { running: true, ...whileRunning }),
-        chat("failed", { running: true, ...whileRunning }),
-        // Settled long ago; Claude started a turn itself since.
-        chat("woke", { running: true, settledAt: 5 }),
-      ),
-      [
-        chat("settling", { updated: 20, ...whileRunning }),
-        chat("settled", { updated: 20, settledAt: 21 }),
-        chat("failed", { updated: 20, ...whileRunning }),
-        chat("woke", { updated: 20, settledAt: 5 }),
-      ],
-      new Map([["failed", answer({ status: "failed", error: "Boom." })]]),
-    );
-    expect(news.map((n) => [n.chatId, n.kind])).toEqual([
-      ["failed", "failed"],
-      ["woke", "finished"],
-    ]);
+    const news = (
+      c: RemoteChatSummary,
+      endedAs: Turn["endedAs"] = "completed",
+    ) =>
+      answerNews(
+        turn(endedAs, "adopt"),
+        c,
+        answer({
+          status: endedAs === "failed" ? "failed" : "complete",
+          error: "Boom.",
+        }),
+      )?.kind;
+    expect(
+      news(chat("settling", { settledAt: 15, settleWhenDone: 15 })),
+    ).toBeUndefined();
+    expect(news(chat("settled", { settledAt: 21 }))).toBeUndefined();
+    expect(
+      news(chat("failed", { settledAt: 15, settleWhenDone: 15 }), "failed"),
+    ).toBe("failed");
+    // Settled long ago; Claude started a turn itself since.
+    expect(news(chat("woke", { settledAt: 5 }))).toBe("finished");
   });
 
-  it("clears a notification once the thread is read somewhere", () => {
+  it("still reports a failed turn while an earlier async question remains open, but not a finished one", () => {
+    const waiting = chat("a", { waiting: true, asking: true });
     expect(
-      threadsRead(list(chat("a", { updated: 20, seenAt: 10 }), chat("b")), [
-        chat("a", { updated: 20, seenAt: 20 }),
-        chat("b"),
-      ]),
-    ).toEqual(["a"]);
+      answerNews(
+        turn("failed"),
+        waiting,
+        answer({
+          status: "failed",
+          error: 'API Error: 529 {"error":{"message":"Overloaded"}}',
+        }),
+      ),
+    ).toEqual({
+      chatId: "a",
+      kind: "failed",
+      title: "Thread a",
+      body: "Overloaded",
+    });
+    expect(answerNews(turn("completed"), waiting, answer({}))).toBeUndefined();
   });
+});
+
+describe("waitingNews", () => {
+  it("tells of a question at once, even while the agent still runs", () => {
+    expect(
+      waitingNews(
+        chat("a", { running: true }),
+        chat("a", { running: true, waiting: true, asking: true }),
+      ),
+    ).toEqual({
+      chatId: "a",
+      kind: "waiting",
+      title: "Thread a",
+      body: "Claude needs you",
+    });
+  });
+
+  it("stays quiet about new threads, ones already waiting and ones read", () => {
+    expect(
+      waitingNews(undefined, chat("new", { waiting: true })),
+    ).toBeUndefined();
+    expect(
+      waitingNews(chat("a", { waiting: true }), chat("a", { waiting: true })),
+    ).toBeUndefined();
+    expect(
+      waitingNews(
+        chat("a"),
+        chat("a", { waiting: true, updated: 20, seenAt: 20 }),
+      ),
+    ).toBeUndefined();
+  });
+});
+
+it("clears a notification once the thread is read somewhere", () => {
+  expect(
+    threadsRead(list(chat("a", { updated: 20, seenAt: 10 }), chat("b")), [
+      chat("a", { updated: 20, seenAt: 20 }),
+      chat("b"),
+    ]),
+  ).toEqual(["a"]);
 });
 
 describe("preview", () => {
@@ -194,24 +221,4 @@ describe("preview", () => {
     expect(preview("## Summary")).toBe("Summary");
     expect(preview("word ".repeat(100), 80)).toHaveLength(80);
   });
-});
-
-it("still reports a failed turn while an earlier async question remains open", () => {
-  expect(
-    threadNews(
-      list(chat("a", { running: true, waiting: true, asking: true })),
-      [chat("a", { waiting: true, asking: true, updated: 20 })],
-      new Map([
-        [
-          "a",
-          answer({
-            status: "failed",
-            error: 'API Error: 529 {"error":{"message":"Overloaded"}}',
-          }),
-        ],
-      ]),
-    ),
-  ).toEqual([
-    { chatId: "a", kind: "failed", title: "Thread a", body: "Overloaded" },
-  ]);
 });

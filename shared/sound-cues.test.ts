@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatSummary } from "./projects";
 import { pickSound, SoundCues, type SoundCue } from "./sound-cues";
+import type { NewsItem } from "./thread-news";
 
-const chat = (patch: Partial<ChatSummary>): ChatSummary => ({
-  id: "a",
-  projectId: "p",
+let seq = 0;
+const news = (
+  chatId: string,
+  kind: NewsItem["kind"],
+  more: Partial<NewsItem> = {},
+): NewsItem => ({
+  chatId,
+  kind,
   title: "Thread",
-  scope: { kind: "project" },
-  created: 1,
-  updated: 1,
-  ...patch,
+  body: "",
+  projectId: "p",
+  seq: ++seq,
+  at: 1,
+  ...more,
 });
 
 describe("SoundCues", () => {
@@ -31,14 +37,8 @@ describe("SoundCues", () => {
   afterEach(() => vi.useRealTimers());
 
   it("sounds once for threads that land together", async () => {
-    cues.list("p", [
-      chat({ id: "a", running: true }),
-      chat({ id: "b", running: true }),
-    ]);
-    cues.list("p", [
-      chat({ id: "a", updated: 2 }),
-      chat({ id: "b", updated: 2, waiting: true }),
-    ]);
+    cues.news(news("a", "finished"));
+    cues.news(news("b", "waiting"));
     await vi.runAllTimersAsync();
     expect(heard).toEqual([
       [
@@ -49,56 +49,22 @@ describe("SoundCues", () => {
   });
 
   it("stays quiet for a done thread an agent started, and where it isn't heard", async () => {
-    const started = { chatId: "lead", agent: "claude" } as const;
-    cues.list("p", [
-      chat({ id: "a", running: true, startedBy: started }),
-      chat({ id: "b", running: true }),
-    ]);
     hears = (id) => id !== "b";
-    cues.list("p", [
-      chat({ id: "a", updated: 2, startedBy: started }),
-      chat({ id: "b", updated: 2 }),
-    ]);
+    cues.news(news("a", "finished", { byAgent: true }));
+    cues.news(news("b", "finished"));
     await vi.runAllTimersAsync();
     expect(heard).toEqual([]);
-  });
-
-  it("stays quiet when a thread settled while it ran finishes, not when it fails", async () => {
-    cues.list("p", [
-      chat({ id: "a", running: true, settledAt: 1, settleWhenDone: 1 }),
-      chat({ id: "b", running: true, settledAt: 1, settleWhenDone: 1 }),
-    ]);
-    cues.message("b", {
-      id: "m",
-      role: "assistant",
-      body: "",
-      status: "failed",
-      error: "boom",
-      created: 2,
-    } as never);
-    cues.list("p", [
-      chat({ id: "a", updated: 2, settledAt: 1, settleWhenDone: 1 }),
-      chat({ id: "b", updated: 2, settledAt: 1, settleWhenDone: 1 }),
-    ]);
+    // Its failure still sounds: the agent that started it may not notice.
+    cues.news(news("a", "failed", { byAgent: true }));
     await vi.runAllTimersAsync();
     expect(heard).toEqual([[{ event: "failed", projectId: "p" }]]);
   });
 
   it("plays a thread that needs you right after another sound once the rest is over", async () => {
-    cues.list("p", [
-      chat({ id: "a", running: true }),
-      chat({ id: "b", running: true }),
-    ]);
-    cues.list("p", [
-      chat({ id: "a", updated: 2 }),
-      chat({ id: "b", running: true }),
-    ]);
+    cues.news(news("a", "finished"));
     await vi.advanceTimersByTimeAsync(1000);
     expect(heard).toEqual([[{ event: "finished", projectId: "p" }]]);
-    cues.list("p", [
-      chat({ id: "a", updated: 2 }),
-      chat({ id: "b", updated: 3, waiting: true }),
-    ]);
+    cues.news(news("b", "waiting"));
     await vi.advanceTimersByTimeAsync(500);
     expect(heard).toHaveLength(1);
     await vi.runAllTimersAsync();

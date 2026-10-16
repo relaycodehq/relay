@@ -23,6 +23,7 @@ import type {
 import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
+import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
 import type { DirListing, FileInfo } from "../project-files";
 import type {
@@ -315,6 +316,8 @@ export interface ProjectChatApi {
   onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
   /** A project's thread list, pushed whenever any of its threads reads differently. */
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
+  /** What a thread is news of: an answer that finished or failed, a thread that needs you. */
+  onThreadNews(callback: (item: NewsItem) => void): () => void;
 }
 
 /** Deep reviews, run inside a thread. */

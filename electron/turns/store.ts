@@ -10,22 +10,19 @@ export interface Owner {
 }
 export type OwnedTurn = Turn & { owner: Owner };
 
-/** Where the ledger keeps turns and their events. */
+/** Where the ledger keeps the turns still open and what happened to every turn. */
 export interface TurnStore {
-  /** Saves the turn as it now stands and what happened to it, together. */
-  write(type: TurnEvent["type"], turn: Turn, owner: Owner): TurnEvent;
+  /**
+   * Saves the turn as it now stands and what happened to it, together, and
+   * says the event's number. An ended turn leaves only its events behind.
+   */
+  write(type: TurnEvent["type"], turn: Turn, owner: Owner): number;
   /** Turns that haven't ended, whoever opened them. */
   open(): OwnedTurn[];
-  /** Each thread's last turn to end. */
-  lastEnded(): Turn[];
-  /** Events after `seq`; undefined when some of them are gone. */
-  after(seq: number): TurnEvent[] | undefined;
-  /** The newest event's number. */
-  seq(): number;
   close(): void;
 }
 
-/** Events kept for a client catching up; one further behind gets a snapshot. */
+/** Events kept to look back on; older ones go. */
 const KEEP_EVENTS = 20_000;
 const PRUNE_EVERY = 500;
 
@@ -35,13 +32,17 @@ const PRUNE_EVERY = 500;
  */
 export function openTurnStore(path: string | undefined): TurnStore {
   if (!path) return new MemoryTurnStore();
+  let db: DatabaseSync | undefined;
   try {
     // Looked up here so a Node without it still runs, minus the persistence.
     const sqlite = process.getBuiltinModule("node:sqlite");
     if (!sqlite) throw new Error("This Node has no node:sqlite.");
     mkdirSync(dirname(path), { recursive: true });
-    return new SqliteTurnStore(new sqlite.DatabaseSync(path));
+    db = new sqlite.DatabaseSync(path);
+    return new SqliteTurnStore(db);
   } catch (e) {
+    // Held open, the file would stay locked on Windows.
+    db?.close();
     console.warn(
       "Keeping turns in memory; they won't be picked up after a restart:",
       e,
@@ -60,14 +61,10 @@ class SqliteTurnStore implements TurnStore {
       PRAGMA busy_timeout = 3000;
       CREATE TABLE IF NOT EXISTS turns (
         id TEXT PRIMARY KEY,
-        thread_id TEXT NOT NULL,
-        phase TEXT NOT NULL,
-        ended_at INTEGER,
         owner TEXT NOT NULL,
         pid INTEGER NOT NULL,
         data TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS turns_open ON turns (phase) WHERE phase != 'ended';
       CREATE TABLE IF NOT EXISTS events (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
         at INTEGER NOT NULL,
@@ -78,51 +75,28 @@ class SqliteTurnStore implements TurnStore {
     `);
     this.statements = {
       turn: db.prepare(`
-        INSERT INTO turns (id, thread_id, phase, ended_at, owner, pid, data)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET
-          phase = excluded.phase, ended_at = excluded.ended_at, data = excluded.data`),
+        INSERT INTO turns (id, owner, pid, data) VALUES (?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET data = excluded.data`),
+      ended: db.prepare("DELETE FROM turns WHERE id = ?"),
       event: db.prepare(
         "INSERT INTO events (at, type, turn_id, data) VALUES (?, ?, ?, ?)",
       ),
-      // A thread keeps only its last ended turn; the events keep the rest.
-      forget: db.prepare(
-        "DELETE FROM turns WHERE thread_id = ? AND phase = 'ended' AND id != ?",
-      ),
       prune: db.prepare("DELETE FROM events WHERE seq <= ?"),
-      open: db.prepare(
-        "SELECT owner, pid, data FROM turns WHERE phase != 'ended'",
-      ),
-      ended: db.prepare("SELECT data FROM turns WHERE phase = 'ended'"),
-      after: db.prepare(
-        "SELECT seq, at, type, data FROM events WHERE seq > ? ORDER BY seq",
-      ),
-      bounds: db.prepare(
-        "SELECT MIN(seq) AS first, MAX(seq) AS last FROM events",
-      ),
+      open: db.prepare("SELECT owner, pid, data FROM turns"),
     };
   }
-  write(type: TurnEvent["type"], turn: Turn, owner: Owner): TurnEvent {
-    const at = Date.now();
+  write(type: TurnEvent["type"], turn: Turn, owner: Owner) {
     const data = JSON.stringify(turn);
     const s = this.statements;
     this.db.exec("BEGIN");
     try {
-      s.turn.run(
-        turn.id,
-        turn.threadId,
-        turn.phase,
-        turn.endedAt ?? null,
-        owner.id,
-        owner.pid,
-        data,
-      );
-      if (turn.phase === "ended") s.forget.run(turn.threadId, turn.id);
-      const { lastInsertRowid } = s.event.run(at, type, turn.id, data);
-      if (++this.writes % PRUNE_EVERY === 0)
-        s.prune.run(Number(lastInsertRowid) - KEEP_EVENTS);
+      if (turn.phase === "ended") s.ended.run(turn.id);
+      else s.turn.run(turn.id, owner.id, owner.pid, data);
+      const { lastInsertRowid } = s.event.run(Date.now(), type, turn.id, data);
+      const seq = Number(lastInsertRowid);
+      if (++this.writes % PRUNE_EVERY === 0) s.prune.run(seq - KEEP_EVENTS);
       this.db.exec("COMMIT");
-      return { seq: Number(lastInsertRowid), at, type, turn };
+      return seq;
     } catch (e) {
       this.db.exec("ROLLBACK");
       throw e;
@@ -130,36 +104,15 @@ class SqliteTurnStore implements TurnStore {
   }
   open() {
     return (
-      this.statements.open.all() as { owner: string; pid: number; data: string }[]
+      this.statements.open.all() as {
+        owner: string;
+        pid: number;
+        data: string;
+      }[]
     ).map(({ owner, pid, data }) => ({
       ...(JSON.parse(data) as Turn),
       owner: { id: owner, pid },
     }));
-  }
-  lastEnded() {
-    return (this.statements.ended.all() as { data: string }[]).map(
-      ({ data }) => JSON.parse(data) as Turn,
-    );
-  }
-  after(seq: number) {
-    const { first, last } = this.statements.bounds.get() as {
-      first: number | null;
-      last: number | null;
-    };
-    if (last === null) return seq === 0 ? [] : undefined;
-    // Pruned past it, or a number from before this database.
-    if (seq < first! - 1 || seq > last) return undefined;
-    return (
-      this.statements.after.all(seq) as {
-        seq: number;
-        at: number;
-        type: TurnEvent["type"];
-        data: string;
-      }[]
-    ).map(({ data, ...event }) => ({ ...event, turn: JSON.parse(data) }));
-  }
-  seq() {
-    return (this.statements.bounds.get() as { last: number | null }).last ?? 0;
   }
   close() {
     this.db.close();
@@ -168,32 +121,14 @@ class SqliteTurnStore implements TurnStore {
 
 export class MemoryTurnStore implements TurnStore {
   private turns = new Map<string, OwnedTurn>();
-  private events: TurnEvent[] = [];
-  private last = 0;
-  write(type: TurnEvent["type"], turn: Turn, owner: Owner): TurnEvent {
-    this.turns.set(turn.id, { ...turn, owner });
-    if (turn.phase === "ended")
-      for (const [id, t] of this.turns)
-        if (t.threadId === turn.threadId && t.phase === "ended" && id !== turn.id)
-          this.turns.delete(id);
-    const event = { seq: ++this.last, at: Date.now(), type, turn };
-    this.events.push(event);
-    if (this.events.length > KEEP_EVENTS) this.events.shift();
-    return event;
+  private seq = 0;
+  write(_type: TurnEvent["type"], turn: Turn, owner: Owner) {
+    if (turn.phase === "ended") this.turns.delete(turn.id);
+    else this.turns.set(turn.id, { ...structuredClone(turn), owner });
+    return ++this.seq;
   }
   open() {
-    return [...this.turns.values()].filter((t) => t.phase !== "ended");
-  }
-  lastEnded() {
-    return [...this.turns.values()].filter((t) => t.phase === "ended");
-  }
-  after(seq: number) {
-    const first = this.events[0]?.seq ?? this.last + 1;
-    if (seq < first - 1 || seq > this.last) return undefined;
-    return this.events.filter((e) => e.seq > seq);
-  }
-  seq() {
-    return this.last;
+    return [...this.turns.values()].map((t) => structuredClone(t));
   }
   close() {}
 }

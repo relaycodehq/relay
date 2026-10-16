@@ -413,11 +413,15 @@ app
       (event) => {
         window.send("relay:project-chat", event);
         phoneRemote?.chatEvent(event);
-        menubarSounds?.chatEvent(event);
       },
       pullHosts.evidence,
     );
     projectChats = chats;
+    chats.onNews((item) => {
+      window.send("relay:thread-news", item);
+      phoneRemote?.news(item);
+      menubarSounds?.news(item);
+    });
     serveMedia();
     serveRenders((chatId, renderId, page) =>
       chats.renderPage(chatId, renderId, page),
@@ -525,7 +529,6 @@ app
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
       window.send("relay:project-chats", event);
       phoneRemote?.chatsEvent(event);
-      menubarSounds?.chatsEvent(event);
     });
     chats.onSummaries((projectId) => {
       summaries.changed(projectId);
@@ -578,6 +581,7 @@ app
         shrinkImage,
         renderPage: (chatId, renderId, page) =>
           chats.renderPage(chatId, renderId, page),
+        news: (cursor) => chats.newsSince(cursor),
         drafts: sharedDrafts,
         dictation: {
           status: () => dictation.current.status,

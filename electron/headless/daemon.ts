@@ -187,6 +187,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     (event) => phoneRemote?.chatEvent(event),
     pullHosts.evidence,
   );
+  chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
     {
       enabled: () => store.get().keepAwake ?? true,
@@ -364,6 +365,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       shrinkImage: (dataUrl) => compressImage(dataUrl),
       renderPage: (chatId, renderId, page) =>
         chats.renderPage(chatId, renderId, page),
+      news: (cursor) => chats.newsSince(cursor),
       drafts,
       dictation: speech.forPhones.dictation,
       readAloud: speech.forPhones.readAloud,

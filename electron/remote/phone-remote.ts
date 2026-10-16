@@ -4,10 +4,12 @@ import type { Store } from "../app/store";
 import type { ProjectChatsEvent } from "../../shared/events";
 import { toBase64Url } from "../../shared/remote-crypto";
 import type { DraftChange } from "../../shared/drafts";
+import type { NewsItem } from "../../shared/thread-news";
 import {
   computerMethods,
   defaultRemotePort,
   draftsBridge,
+  newsBridge,
   maxDictationChunk,
   maxReadAloudText,
   pairingUrl,
@@ -245,6 +247,14 @@ export class PhoneRemote {
     if (!this.server.listening) return;
     this.bridge.chatEvent(event);
     this.host.handoffs?.chatEvent?.(event);
+  }
+  /** News the computer decided; older phones read theirs off the thread lists. */
+  news(item: NewsItem) {
+    if (!this.server.listening) return;
+    this.server.broadcast(
+      { kind: "news", item },
+      (id, bridge) => !this.isComputer(id) && bridge >= newsBridge,
+    );
   }
   /** Someone may have come to the computer or left it. */
   presenceChanged() {

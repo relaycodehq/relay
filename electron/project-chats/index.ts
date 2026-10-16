@@ -39,7 +39,8 @@ import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
-import { openTurnStore, TurnLedger } from "../turns";
+import { openTurnLedger, TurnNews } from "../turns";
+import type { NewsCursor, NewsItem } from "../../shared/thread-news";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -106,6 +107,7 @@ export class ProjectChats {
   private questions: AsyncQuestions;
   private disposing = false;
   private leakCheck: ReturnType<typeof setInterval>;
+  private news: TurnNews;
   private councils: Councils;
   private watchNotes: WatchReviews;
   private core: ChatCore;
@@ -137,12 +139,12 @@ export class ProjectChats {
     this.active = new ActiveTurns(
       (id) => this.storage.chatChanged(id),
       // Beside the threads' folder, which holds nothing but threads.
-      new TurnLedger(openTurnStore(join(dirname(dir), "relay.db"))),
+      openTurnLedger(join(dirname(dir), "relay.db")),
     );
-    this.leakCheck = setInterval(
-      () => this.active.ledger.check((id) => this.active.holds(id)),
-      LEAK_CHECK_MS,
-    );
+    this.leakCheck = setInterval(() => {
+      for (const id of this.active.ledger.check((t) => this.active.holds(t)))
+        this.storage.chatChanged(id);
+    }, LEAK_CHECK_MS);
     this.leakCheck.unref();
     const core: ChatCore = {
       store,
@@ -206,6 +208,13 @@ export class ProjectChats {
     );
     this.files = new TurnFiles(core, this.worktrees);
     this.threads = new ThreadList(core);
+    this.news = new TurnNews(this.active.ledger, {
+      summary: (id) => this.summaryOf(id),
+      answer: (chatId, answerId) =>
+        this.storage.cached(chatId)?.messages.find((m) => m.id === answerId),
+      list: (projectId) => this.threads.list(projectId),
+    });
+    this.storage.onSummaries((projectId) => this.news.changed(projectId));
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
     this.creating = new ThreadCreate(core);
     this.notes = new ThreadNotes(core);
@@ -304,6 +313,22 @@ export class ProjectChats {
   }
   list(projectId: string) {
     return this.threads.list(projectId);
+  }
+  private summaryOf(id: string) {
+    const projectId = this.store
+      .get()
+      .chats?.find((c) => c.id === id)?.projectId;
+    return projectId
+      ? this.threads.list(projectId).find((c) => c.id === id)
+      : undefined;
+  }
+  /** What threads are news of, decided once for every window, menubar and phone. */
+  onNews(listener: (item: NewsItem) => void) {
+    return this.news.onNews(listener);
+  }
+  /** The news after `cursor`, for a client that was away. */
+  newsSince(cursor?: NewsCursor) {
+    return this.news.since(cursor);
   }
   /**
    * Removes the worktrees of threads settled long enough, where nothing is
@@ -844,7 +869,7 @@ export class ProjectChats {
   working() {
     const chats = new Map((this.store.get().chats ?? []).map((c) => [c.id, c]));
     return new Set(
-      this.active.ids().map((id) => {
+      this.active.working().map((id) => {
         const chat = chats.get(id);
         return chat?.reviewer?.parent ?? id;
       }),
@@ -1121,6 +1146,7 @@ export class ProjectChats {
   async dispose({ detach = false, save = true } = {}) {
     if (!this.disposing) await this.prepareToQuit({ detach, save });
     clearInterval(this.leakCheck);
+    this.news.dispose();
     this.liveHandoff.dispose();
     this.sessions.stopListening();
     await this.sessions.keepAllSubagents();

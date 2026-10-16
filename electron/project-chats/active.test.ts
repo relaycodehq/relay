@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { TurnEvent } from "../../shared/turns";
 import { ActiveTurns } from "./active";
 
-const input = { provider: "claude", body: "" } as Parameters<ActiveTurns["create"]>[1];
+const input = { provider: "claude", body: "" } as Parameters<
+  ActiveTurns["create"]
+>[1];
 
 describe("ActiveTurns", () => {
   it("stops a turn the agent started beside the one holding the thread", () => {
@@ -29,15 +32,18 @@ describe("ActiveTurns", () => {
 
   it("ends each turn in the ledger once, as its answer ended", () => {
     const turns = new ActiveTurns(() => {});
+    const ended: TurnEvent[] = [];
+    turns.ledger.onEvent((e) => e.type === "ended" && ended.push(e));
     const held = turns.claim("t", input);
     held.answer = () => ({ id: "a", status: "complete" }) as never;
     turns.release("t", held);
     turns.release("t", held);
-    expect(turns.ledger.lastTurn("t")).toMatchObject({
-      id: held.turnId,
-      endedAs: "completed",
-      answerId: "a",
-    });
-    expect(turns.ledger.seq()).toBe(2);
+    expect(ended.map((e) => e.turn)).toEqual([
+      expect.objectContaining({
+        id: held.turnId,
+        endedAs: "completed",
+        answerId: "a",
+      }),
+    ]);
   });
 });

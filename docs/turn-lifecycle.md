@@ -53,32 +53,34 @@ goal callbacks). Every one of its turns carries a ledger id, and every
 transition it makes goes through the ledger. Nothing else decides whether a
 turn runs.
 
-**One way to change a turn.** `TurnLedger.open`, `.phase` and `.end` write
+**One way to change a turn.** `TurnLedger.start`, `.phase` and `.end` write
 the turn and an event in one SQLite transaction, then tell subscribers in
-sequence order. A transition from a turn that already ended is ignored, so a
-late completion can't end the turn after it. Agents that report their own
-turn ids (Codex) drop events for any turn but the current one.
+sequence order; a subscriber that throws never holds up the turn. A
+transition from a turn that already ended is ignored, so a late completion
+can't end the turn after it. Codex, which names its turns, ignores a
+completion for any turn but the current one.
 
 ## What reads it
 
 - **The thread list.** `running` is true while the thread has a turn in
   `starting`, `running` or `finishing` that holds it, or a turn the agent
-  started by itself. `stopping` shows while a stopped turn winds down. Each
-  summary carries `turn` (the open one: id, kind, phase, since) and `lastTurn`
-  (the last one to end: id, kind, how, when). A review's summary runs while
-  any of its reviewers' turns does.
-- **News.** One place on the computer, `ThreadNews` in `electron/turns/`,
-  decides what is news: a `finished` or `failed` answer when a turn of kind
-  `answer`, `adopt` or `lead` ends, `waiting` when a thread starts needing
-  you, and a usage limit once per turn. A compaction, a handoff note or a side
-  answer is never news; a cancelled turn isn't either. Each item names its
-  turn, so the same turn is never news twice. The window's sounds, the
-  menubar's sounds and the phone all get the same items.
-- **The phone.** Every ledger event has a sequence number. A client asks for
-  the events after the last number it has; the computer answers with them, or
-  with a fresh snapshot when that number is older than what it kept. A turn
-  that started and ended while the phone was away is still in the events it
-  catches up on. The old list feed stays for apps that don't ask.
+  started by itself. `stopping` shows while a stopped turn winds down. A
+  running thread's summary carries `turn` (id, kind, phase, since). A
+  review's summary runs while any of its reviewers' turns does.
+- **News.** One place on the computer, `TurnNews` in `electron/turns/`,
+  decides what is news, by the rules in `shared/thread-news.ts`: a `finished`
+  or `failed` answer as a turn of kind `answer`, `adopt` or `lead` ends, and
+  `waiting` when a thread starts needing you. A usage limit is the failed
+  answer's news, once. A compaction, a handoff note or a side answer is never
+  news, and neither is a stopped or interrupted turn. It's decided as the turn
+  ends, from the thread as it reads then, never by comparing one thread list
+  with the next. The window's sounds (`relay:thread-news`), the menubar's
+  sounds and the phone all get the same items.
+- **The phone.** Each news item is numbered, under an epoch that changes when
+  Relay restarts. From bridge 24 a phone hears items as `news` events and asks
+  `news(cursor)` for what came after the last one it had; one too far behind,
+  or from before a restart, starts again from the thread list. The old list
+  feed stays for apps that don't ask, and the Kotlin app doesn't ask yet.
 
 ## Ending is guaranteed
 
@@ -87,7 +89,8 @@ turn ids (Codex) drop events for any turn but the current one.
    agent started by itself ends there too, not just its handles.
 2. **A check catches leaks.** Every 30s the ledger compares its open turns
    with the handles `ActiveTurns` holds. A turn with no handle ended without
-   telling the ledger, so it ends as `lost`, with a warning in the log.
+   telling the ledger, so it ends as `lost`, with a warning in the log, and
+   its thread lists again.
 3. **A restart settles the rest.** Turns left open by a Relay that is no
    longer running are looked at on launch. Those whose agent session the agent
    host kept are picked back up, deep review reviewers included, with their
@@ -98,17 +101,17 @@ turn ids (Codex) drop events for any turn but the current one.
 - One SQLite database, `relay.db`, beside the folder Relay keeps threads in,
   opened with `node:sqlite` (Electron's Node and the headless Relay's Node 22
   both have it). WAL journal, `synchronous = NORMAL`.
-- Tables: `turns` and `events (seq, at, thread_id, turn_id, type, data)`.
-  Events older than the newest 20,000 are pruned; a client further behind gets
-  a snapshot.
+- Tables: `turns`, the turns still open with who opened them, and
+  `events (seq, at, type, turn_id, data)`, what happened to every turn, to
+  look back on. Events older than the newest 20,000 are pruned.
 - Each Relay process writes its own `owner` id on the turns it opens. On
   launch, only turns whose owner process is gone are recovered, so a second
   Relay on the same folder (a dev switch, a test) can't end the first one's
   turns.
 - Messages stay in the thread's JSON file, written as before, so going back
   to an older Relay keeps working.
-- Without `node:sqlite` the ledger keeps its turns in memory: everything works
-  except recovery after a restart and catch-up past the process's own events.
+- Without `node:sqlite`, or with a database it can't read, the ledger keeps
+  its turns in memory: everything works except recovery after a restart.
 
 ## Tests
 

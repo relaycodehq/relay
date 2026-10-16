@@ -35,6 +35,7 @@ import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
 import type { RemoteSite } from "./remote-tunnel";
+import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -169,7 +170,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 23;
+export const remoteBridgeVersion = 24;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -215,6 +216,12 @@ export const previewBridge = 22;
 export const notesBridge = 22;
 /** From here a thread carries where it moved (`workspaceMoves`), for the line under its message. */
 export const workspaceMovesBridge = 22;
+/**
+ * From here a desktop sends phones its news as it decides it (`news` events,
+ * numbered), and phones catch up on what they missed with `news`. Older
+ * phones still read news off the thread lists.
+ */
+export const newsBridge = 24;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =
@@ -544,6 +551,8 @@ export interface RemoteApi {
   ): Promise<string | null>;
   /** The image as a data URL at most `max` pixels on its longer side; missing before `imageBridge`. */
   image(source: RemoteImageSource, max: number): Promise<string>;
+  /** The news after `cursor`, or where it is now without one; missing before `newsBridge`. */
+  news(cursor?: NewsCursor): Promise<NewsCatchUp>;
   /** One page of a thread's render, as the agent wrote it; missing before `renderBridge`. */
   renderPage(chatId: string, renderId: string, page: number): Promise<string>;
   /** Projects' tasks listening on a port, one per port; from `tunnelBridge`. */
@@ -628,6 +637,7 @@ export const remoteMethods = [
   "activityDetail",
   "image",
   "renderPage",
+  "news",
   "sites",
   "tunnelAllow",
   "saveDraft",
@@ -710,6 +720,8 @@ export type RemoteEvent =
   | { kind: "message"; chatId: string; message: ChatMessage; title?: string }
   /** Thread states moved: something started, finished or asked a question. */
   | { kind: "chats"; chats: RemoteChatSummary[] }
+  /** A thread finished, failed or needs you, as the computer decided; from `newsBridge`. */
+  | { kind: "news"; item: NewsItem }
   | { kind: "appearance"; appearance: PhoneAppearance }
   /**
    * `present` changed: someone came back (just before the thread list it

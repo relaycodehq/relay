@@ -30,7 +30,9 @@ vi.mock("../../electron/platform/executables", async (actual) => ({
 const agents = (process.env.RELAY_RECORD ?? "").split(",").filter(Boolean);
 const rawRoot = process.env.RELAY_RECORD_OUT ?? "/tmp/relay-replays-raw";
 const which = (name: string) =>
-  execFileSync("/bin/sh", ["-lc", `command -v ${name}`], { encoding: "utf8" }).trim();
+  execFileSync("/bin/sh", ["-lc", `command -v ${name}`], {
+    encoding: "utf8",
+  }).trim();
 
 /** Starts a scenario whose `provider` CLI is the real one behind replay-tee. */
 async function recording(provider: AgentProvider, scenario: string) {
@@ -38,7 +40,9 @@ async function recording(provider: AgentProvider, scenario: string) {
   await rm(out, { recursive: true, force: true });
   await mkdir(out, { recursive: true });
   const real = which(provider);
-  const version = execFileSync(real, ["--version"], { encoding: "utf8" }).trim();
+  const version = execFileSync(real, ["--version"], {
+    encoding: "utf8",
+  }).trim();
   // One per agent for the whole run: Codex's processes race to set up a
   // fresh folder's database, so it's set up once before the first scenario.
   const clean = join(rawRoot, ".config", provider);
@@ -53,7 +57,10 @@ async function recording(provider: AgentProvider, scenario: string) {
   if (provider === "codex") {
     env.CODEX_HOME = clean;
     if (fresh) {
-      await symlink(join(homedir(), ".codex", "auth.json"), join(clean, "auth.json"));
+      await symlink(
+        join(homedir(), ".codex", "auth.json"),
+        join(clean, "auth.json"),
+      );
       execFileSync(real, ["app-server"], {
         env: { ...process.env, CODEX_HOME: clean },
         input:
@@ -79,7 +86,10 @@ async function recording(provider: AgentProvider, scenario: string) {
       );
     }
   }
-  const s = await startScenario({ findExecutable: vi.mocked(findExecutable), env });
+  const s = await startScenario({
+    findExecutable: vi.mocked(findExecutable),
+    env,
+  });
   const tee = await readFile(resolve("tests/fixtures/replay-tee.cjs"), "utf8");
   const cli = await fakeCli(
     join(s.root, `${provider}-tee`),
@@ -95,7 +105,6 @@ async function recording(provider: AgentProvider, scenario: string) {
   );
   return s;
 }
-
 
 let s: Scenario | undefined;
 afterEach(async () => {
@@ -135,7 +144,7 @@ for (const provider of agents as AgentProvider[]) {
       const id = await s.thread();
       await send(
         id,
-        "Run this shell command in the foreground and wait for it: python3 -c \"import time; time.sleep(30)\" . Then reply with exactly: finished",
+        'Run this shell command in the foreground and wait for it: python3 -c "import time; time.sleep(30)" . Then reply with exactly: finished',
       );
       await s.message(
         id,

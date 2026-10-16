@@ -45,9 +45,11 @@ export class TurnRecovery {
     // Otherwise it rides beside the running one: Stop reaches it too, and
     // the thread runs until both have ended.
     const idle = !this.core.active.has(chat.id);
+    // A compaction a restart cut off goes on as one; it's never news.
+    const kind = resumed?.compaction ? "compaction" : "adopt";
     const active = idle
-      ? this.core.active.claim(chat.id, input, "adopt")
-      : this.core.active.create(chat.id, input, "adopt", { rides: true });
+      ? this.core.active.claim(chat.id, input, kind)
+      : this.core.active.create(chat.id, input, kind, { rides: true });
     const { abort } = active;
     const message: ChatMessage =
       resumed ??
@@ -68,7 +70,11 @@ export class TurnRecovery {
     } finally {
       // A resumed answer may be a review lead's, whose end settles the review.
       if (idle)
-        this.ends.run(chat, active, resumed ? { answer: resumed.id } : undefined);
+        this.ends.run(
+          chat,
+          active,
+          resumed ? { answer: resumed.id } : undefined,
+        );
       else this.ends.rider(chat, active);
     }
   }
@@ -178,8 +184,12 @@ export class TurnRecovery {
         // A review lead's answer revive kept going ends here; the review fails with it.
         if (failed && !chat.reviewer && message?.status === "failed")
           await this.councils.step(chat.id, { answer: message.id });
-        // A reviewer's: its review stops, and Resume runs it again.
-        if (failed) await this.councils.reviewerLost(chat);
+        // A reviewer's: its review stops, and Resume runs it again. One that
+        // had ended already may be the last its review waited for.
+        if (chat.reviewer)
+          await (failed
+            ? this.councils.reviewerLost(chat)
+            : this.councils.step(chat.id, {}));
       }
       console.warn("Could not pick a turn back up:", e);
     }

@@ -9,7 +9,7 @@ import type {
   ProjectSettings,
 } from "../../shared/projects";
 import { DEFAULT_WORKTREE_CLEANUP_DAYS } from "../../shared/projects";
-import { working, type EndedTurn, type Turn } from "../../shared/turns";
+import { working, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
 import type { CleanupCandidate } from "./worktree-cleanup";
 
@@ -140,14 +140,6 @@ export class ThreadList {
         // A stopped answer reads as stopping until its agent winds down.
         const stopping = !active && turns.some((t) => t.phase === "stopping");
         const running = [...new Set(crew.map((t) => t.provider))];
-        const last = ledger.lastTurn(c.id);
-        const lastTurn: EndedTurn | undefined = last && {
-          id: last.id,
-          kind: last.kind,
-          endedAs: last.endedAs,
-          endedAt: last.endedAt,
-          ...(last.answerId ? { answerId: last.answerId } : {}),
-        };
         const pending = [
           ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
@@ -164,10 +156,9 @@ export class ThreadList {
           (t) => !!this.core.active.handle(t.id)?.requests.list().length,
         );
         const waiting = blocked || (!!c.asking && !c.sentTo);
-        return active || stopping || lastTurn || pending.length || waiting
+        return active || stopping || pending.length || waiting
           ? {
               ...c,
-              ...(lastTurn ? { lastTurn } : {}),
               ...(active
                 ? {
                     running: true,

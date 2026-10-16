@@ -164,7 +164,6 @@ export class Compactions {
   }
 }
 
-
 /** The newest answer in a conversation: the main one, or a side one by its root. */
 const latestAnswer = (chat: ProjectChat, parentId?: string) =>
   [...chat.messages]

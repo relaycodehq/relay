@@ -89,7 +89,9 @@ const textOf = (content: unknown) =>
     : Array.isArray(content)
       ? content
           .map((part: { type?: string; text?: unknown }) =>
-            part?.type === "text" && typeof part.text === "string" ? part.text : "",
+            part?.type === "text" && typeof part.text === "string"
+              ? part.text
+              : "",
           )
           .join("\n")
       : undefined;

@@ -35,7 +35,10 @@ const leaks: [string, RegExp][] = [
   ["a GitHub token", /\b(ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{16,}/],
   ["a JWT", /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
   ["a bearer token", /Bearer\s+(?!REDACTED)[A-Za-z0-9._~+/-]{12,}/],
-  ["something synced from claude.ai", /\(claude\.ai sync\)|"claudeai"|mcp__claude_ai_/],
+  [
+    "something synced from claude.ai",
+    /\(claude\.ai sync\)|"claudeai"|mcp__claude_ai_/,
+  ],
 ];
 
 /** Keys that hold an id, a secret or the account's details with anything but a placeholder. */
@@ -52,7 +55,9 @@ function keyLeaks(value: unknown, found: string[] = []): string[] {
       if (
         typeof v !== "object" &&
         !kept &&
-        (idKeys.test(key) || accountKeys.test(key) || (secretKeys.test(key) && typeof v === "string"))
+        (idKeys.test(key) ||
+          accountKeys.test(key) ||
+          (secretKeys.test(key) && typeof v === "string"))
       )
         found.push(key);
       keyLeaks(v, found);
@@ -66,7 +71,9 @@ const lines = (text: string) =>
     .flatMap((line) => {
       const entry = JSON.parse(line) as { line?: string };
       try {
-        return entry.line === undefined ? [entry] : [entry, JSON.parse(entry.line)];
+        return entry.line === undefined
+          ? [entry]
+          : [entry, JSON.parse(entry.line)];
       } catch {
         return [entry];
       }
@@ -76,8 +83,14 @@ it("keeps paths, names, emails and keys out of the recorded transcripts", () => 
   const found = files(root).flatMap((file) => {
     const text = readFileSync(file, "utf8");
     return [
-      ...leaks.filter(([, pattern]) => pattern.test(text)).map(([what]) => what),
-      ...new Set(lines(text).flatMap((m) => keyLeaks(m)).map((key) => `"${key}"`)),
+      ...leaks
+        .filter(([, pattern]) => pattern.test(text))
+        .map(([what]) => what),
+      ...new Set(
+        lines(text)
+          .flatMap((m) => keyLeaks(m))
+          .map((key) => `"${key}"`),
+      ),
     ].map((what) => `${file}: ${what}`);
   });
   expect(found).toEqual([]);
