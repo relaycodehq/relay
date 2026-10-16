@@ -1003,6 +1003,8 @@
   right: 0;
   opacity: 0;
   transform: translateX(-10px);
+  /* Positioned, it sits over Settle and would take its hover and clicks. */
+  pointer-events: none;
   transition-duration: 0.1s;
   transition-delay: 0s;
 }
