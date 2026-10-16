@@ -377,10 +377,6 @@ export const RichText = memo(function RichText({
   /** Shows text a person typed with its lines and indentation, untypeset; see typedSyntax. */
   typed?: boolean;
 }) {
-  text = useMemo(
-    () => (typed || html ? text : normalizeFileCitations(text)),
-    [text, typed, html],
-  );
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
   const openFile = useRef(onOpenFile);
@@ -485,17 +481,33 @@ export const RichText = memo(function RichText({
     // A new renderer redraws text that was shown before it arrived.
     [projectRoot, linksFiles, inlineCode, image, link],
   );
-  const blocks = useMemo(
-    () => markdownBlocks(typed ? keepIndent(text) : normalizeMath(text)),
-    [text, typed],
-  );
+  // Citations are read block by block, each kept until its text changes:
+  // reading them parses the Markdown, and a streaming answer changes only its
+  // last block.
+  const citedBlocks = useRef<ReadonlyMap<string, string>>(new Map());
+  const blocks = useMemo(() => {
+    const split = markdownBlocks(
+      typed ? keepIndent(text) : normalizeMath(text),
+    );
+    if (typed || html) return split;
+    const last = citedBlocks.current,
+      next = new Map<string, string>();
+    const cited = split.map((block) => {
+      const out = last.get(block) ?? normalizeFileCitations(block);
+      next.set(block, out);
+      return out;
+    });
+    citedBlocks.current = next;
+    return cited;
+  }, [text, typed, html]);
+  const linkedText = typed || html ? text : blocks.join("\n");
   // Streaming changes the text every token; keep the map (and the chips
   // reading it) unchanged until a clash actually appears.
   const lastSuffixes = useRef<ReadonlyMap<string, string>>(new Map());
   const suffixes = useMemo(() => {
     const next =
       projectRoot && linksFiles
-        ? parentSuffixes(linkedProjectFiles(text, projectRoot))
+        ? parentSuffixes(linkedProjectFiles(linkedText, projectRoot))
         : new Map<string, string>();
     const last = lastSuffixes.current;
     if (
@@ -504,7 +516,7 @@ export const RichText = memo(function RichText({
     )
       lastSuffixes.current = next;
     return lastSuffixes.current;
-  }, [text, projectRoot, linksFiles]);
+  }, [linkedText, projectRoot, linksFiles]);
   return (
     <FileLinkSuffixes.Provider value={suffixes}>
       <div className={typed ? "markdown typed" : "markdown"}>
