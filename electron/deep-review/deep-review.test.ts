@@ -1568,6 +1568,103 @@ describe("reviewers in threads of their own", () => {
     expect((await capture()).filter((r) => r.review)).toHaveLength(1);
   });
 
+  it("waits for a reviewer's background agents, and gives the lead the answer they led to", async () => {
+    await chats.startDeepReview(
+      review,
+      config({
+        reviewers: [
+          {
+            provider: "claude",
+            choice: claudeChoice,
+            prompt: "fixture review in background",
+          },
+        ],
+      }),
+    );
+    const claude = await memberOf(review, 0);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain(
+      "The background reviewer found the queue reorder.",
+    );
+    expect(
+      (await chats.get(claude)).messages.map((m) => [m.role, m.unprompted]),
+    ).toEqual([
+      ["user", undefined],
+      ["assistant", undefined],
+      ["assistant", true],
+    ]);
+  });
+
+  it("ends a reviewer's background agents when the review stops, and Resume runs it again", async () => {
+    await chats.startDeepReview(
+      review,
+      config({
+        reviewers: [
+          {
+            provider: "claude",
+            choice: claudeChoice,
+            prompt: "fixture review in background slowly",
+          },
+        ],
+      }),
+    );
+    const claude = await memberOf(review, 0);
+    const pending = () =>
+      chats.list(projectId).find((c) => c.id === claude)?.pending;
+    // Its turn ended, but the review still waits for what the agent reports.
+    await vi.waitFor(async () => {
+      expect((await chats.get(claude)).messages.at(-1)).toMatchObject({
+        status: "complete",
+        body: "A reviewer is going through it in the background.",
+      });
+      expect(
+        chats.list(projectId).find((c) => c.id === claude)?.running,
+      ).toBeFalsy();
+    });
+    expect(pending()?.some((p) => p.kind === "task" && p.agent)).toBe(true);
+    expect(await statusOf(review)).toBe("reviewing");
+    await chats.cancel(review);
+    // Well before the agent would have reported.
+    await vi.waitFor(() => expect(pending()).toBeUndefined(), {
+      timeout: 1500,
+    });
+    // What it said only handed the work to the agent, so it isn't a report.
+    expect(
+      (await chats.get(claude)).messages.map((m) => [m.role, m.status]),
+    ).toEqual([
+      ["user", "complete"],
+      ["assistant", "cancelled"],
+    ]);
+    expect(await statusOf(review)).toBe("stopped");
+    expect(await leadPrompts()).toHaveLength(0);
+
+    await chats.resumeDeepReview(review);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"), {
+      timeout: 8000,
+    });
+    expect(
+      (await chats.get(claude)).messages.map((m) => [
+        m.role,
+        m.status,
+        m.unprompted,
+      ]),
+    ).toEqual([
+      ["user", "complete", undefined],
+      ["assistant", "cancelled", undefined],
+      ["user", "complete", undefined],
+      ["assistant", "complete", undefined],
+      ["assistant", "complete", true],
+    ]);
+    const lead = await leadPrompts();
+    expect(lead).toHaveLength(1);
+    expect(lead[0]).toContain(
+      "The background reviewer found the queue reorder.",
+    );
+    expect(lead[0]).not.toContain("didn't finish");
+  });
+
   it("stops one reviewer in its thread, and continuing it there takes the review to the lead", async () => {
     await chats.startDeepReview(
       review,

@@ -49,6 +49,11 @@ export class Councils {
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
       active: (id) => this.core.active.has(id),
+      // Only agents report back: a dev server it left up never ends.
+      waiting: (id) =>
+        this.core.sessions
+          .pending(id)
+          .some(({ item }) => item.kind === "task" && item.agent),
       finished: async (id) => {
         await this.core.active.finished(id);
         // A turn's end takes a review step; going on before it lands races it.

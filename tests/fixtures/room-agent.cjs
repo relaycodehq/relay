@@ -378,6 +378,38 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         else finish(leadAnswer);
+      } else if (text.includes("fixture review in background")) {
+        // Hands the review to a background agent and ends the turn; the
+        // report comes in the turn Claude starts once the agent is done.
+        const tasks = (running) =>
+          emit({
+            type: "system",
+            subtype: "background_tasks_changed",
+            session_id: "fixture-claude",
+            tasks: [
+              ...(running
+                ? [
+                    {
+                      task_id: "fixture-reviewer",
+                      task_type: "local_agent",
+                      description: "Review the queue",
+                    },
+                  ]
+                : []),
+              // Left up by the agent; it never ends, so nothing waits for it.
+              {
+                task_id: "fixture-dev-server",
+                task_type: "local_bash",
+                description: "Start the dev server",
+              },
+            ],
+          });
+        tasks(true);
+        finish("A reviewer is going through it in the background.");
+        setTimeout(() => {
+          tasks(false);
+          finish("The background reviewer found the queue reorder.");
+        }, text.includes("slowly") ? 2500 : 300);
       } else if (text.includes("fixture background task")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.

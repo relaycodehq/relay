@@ -60,6 +60,8 @@ export interface DeepReviewHost {
     prompt: string,
   ): Promise<void>;
   active(chatId: string): boolean;
+  /** Its agent has subagents at work in the background; they start another turn when they end. */
+  waiting(chatId: string): boolean;
   /** Waits for a turn that's stopped or finished to give its thread back, and the review step its end takes. */
   finished(chatId: string): Promise<void>;
   /** As `finished`, for a reviewer, and what its end does after: its queue and the review's next step. */
@@ -258,8 +260,30 @@ export class DeepReviews {
     const state = chat.deepReview;
     if (state?.status !== "reviewing") return;
     state.status = "stopped";
-    for (const r of state.reviewers) this.host.stop(r.chatId);
+    const abandoning: Promise<void>[] = [];
+    for (const r of state.reviewers) {
+      this.host.stop(r.chatId);
+      // Between turns, only closing its session ends the subagents it waits for.
+      if (!this.host.active(r.chatId) && this.host.waiting(r.chatId))
+        abandoning.push(
+          this.host.load(r.chatId).then((member) => this.abandon(member)),
+        );
+    }
+    await Promise.allSettled(abandoning);
     await this.host.touch(chat, state.request);
+  }
+
+  /**
+   * Ends a reviewer's subagents before they report. Its last answer only
+   * handed the work to them, so it reads as stopped, and Resume runs the
+   * reviewer again rather than taking that answer for its report.
+   */
+  private async abandon(member: ProjectChat) {
+    this.host.close(member.id);
+    const answer = memberAnswer(member.messages);
+    if (answer?.status !== "complete") return;
+    answer.status = "cancelled";
+    await this.host.touch(member, answer.id);
   }
 
   /** Messages wait for the lead while the reviewers work. */
@@ -285,9 +309,18 @@ export class DeepReviews {
     const chat = await this.host.load(chatId).catch(() => undefined);
     if (!chat) return;
     if (chat.reviewer) {
+      if (this.host.waiting(chat.id)) {
+        // Subagents still at work report in the turn they start, so its
+        // session stays open for that, unless the review stopped meanwhile.
+        const review = await this.host
+          .load(chat.reviewer.parent)
+          .catch(() => undefined);
+        if (review?.deepReview?.status === "stopped") await this.abandon(chat);
+      }
       // Its agent would idle until Relay quits; a message waiting for it, or
       // one sent since, picks its session back up.
-      if (!this.host.active(chat.id) && !queued(chat)) this.host.close(chat.id);
+      else if (!this.host.active(chat.id) && !queued(chat))
+        this.host.close(chat.id);
       return this.reviewerDone(chat.reviewer.parent);
     }
     const state = chat.deepReview;
@@ -351,8 +384,9 @@ export class DeepReviews {
   }
 
   /**
-   * A reviewer's turn ended, or never started: once none is at work or has
-   * a message waiting, the lead takes every reviewer's latest answer.
+   * A reviewer's turn ended, or never started: once none is at work, waiting
+   * for its subagents or has a message waiting, the lead takes every
+   * reviewer's latest answer.
    * `withReportsIn` goes on past a stopped reviewer, as long as one reported.
    */
   private async reviewerDone(parentId: string, withReportsIn = false) {
@@ -360,7 +394,9 @@ export class DeepReviews {
     const state = chat?.deepReview;
     if (!chat || !state || state.status !== "reviewing") return;
     const working = () =>
-      state.reviewers.some((r) => this.host.active(r.chatId));
+      state.reviewers.some(
+        (r) => this.host.active(r.chatId) || this.host.waiting(r.chatId),
+      );
     if (working()) return;
     const members = await Promise.all(
       state.reviewers.map((r) =>
