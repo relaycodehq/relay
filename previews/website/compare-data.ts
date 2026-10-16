@@ -38,7 +38,7 @@ export const rivals: Rival[] = [
     href: "https://github.com/pingdotgg/t3code",
     is: "A free, MIT-licensed app from ping.gg for the agents you already have. A server on your machine is driven from desktop, web, iOS and Android.",
     pickThem:
-      "You want an iPhone app from the store today, agents spread over several SSH machines, or GitLab, Bitbucket and Azure DevOps.",
+      "You want an iPhone app from the store today, agents spread over several SSH machines, or GitLab and Bitbucket.",
     pickRelay:
       "You want no usage analytics, a thread you can move to another computer while it runs, reviews checked by a lead, and voice both ways.",
   },
@@ -317,7 +317,7 @@ export const groups: { title: string; rows: Row[] }[] = [
         label: "Pull requests beyond GitHub",
         hint: "GitLab, Bitbucket, Azure DevOps",
         cells: {
-          relay: part("GitHub and Gitea"),
+          relay: part("GitHub, Gitea and Azure DevOps"),
           conductor: part("GitHub only"),
           "t3-code": yes("GitLab, Bitbucket, Azure DevOps and more"),
           superset: part("GitHub; GitLab only locally"),

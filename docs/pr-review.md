@@ -1,6 +1,6 @@
 # Pull request review
 
-Relay reviews GitHub and Gitea pull requests with lazy diffs, comments, viewed progress, agent-assisted grouping, blame and live project checks. The **Pull requests** page shows what needs you and groups PRs by project. A PR belonging to an added project opens in that project's thread and **Review** pane; other PRs open directly in the Pull requests page.
+Relay reviews GitHub, Gitea and Azure DevOps pull requests with lazy diffs, comments, viewed progress, agent-assisted grouping, blame and live project checks. The **Pull requests** page shows what needs you and groups PRs by project. A PR belonging to an added project opens in that project's thread and **Review** pane; other PRs open directly in the Pull requests page.
 
 ## Connect to GitHub
 
@@ -29,7 +29,7 @@ The app restores the Pull requests page's saved location, search and open/closed
 - **Finish review** submits comments, approval, or requested changes to the Git host. Replies and resolve/reopen act on existing server comments where supported. The Conversation tab contains PR discussion and review history.
 - Viewed marks and drafts are tied to the merge-base/head revision. New commits invalidate viewed status and block stale draft submission. Old drafts remain visible for editing/removal rather than silently attaching to a different line.
 - If you already have a pending review in Gitea, finish or discard that review there before submitting here. This avoids unexpectedly publishing comments drafted in another client.
-- **Open PR by URL** accepts GitHub and Gitea PR links, including `/files`. Installed builds also register `relay://open?url=<URL-encoded PR URL>`.
+- **Open PR by URL** accepts GitHub, Gitea and Azure DevOps PR links, including `/files`. Installed builds also register `relay://open?url=<URL-encoded PR URL>`.
 
 | Shortcut         | Action                     |
 | ---------------- | -------------------------- |

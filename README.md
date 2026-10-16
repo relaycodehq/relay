@@ -86,7 +86,7 @@ Relay combines thread handoffs between your own computers with deep reviews wher
 | **Edit and check files** | Browse and find files by name, edit with syntax highlighting, and preview Markdown. Supported TypeScript/JavaScript and Angular projects get language checks, definitions and usages. |
 | **Use a terminal** | Each thread has its own shell; Tasks shows processes agents left running, with stop and restart controls. |
 | **See the result** | Open a browser preview beside the thread. Agents can show interactive pages and visual choices inline; the Device tab embeds Android emulators and iOS simulators through Expo Device Hub. |
-| **Review pull requests** | GitHub through your `gh` login, or Gitea, with CI status in the title bar. |
+| **Review pull requests** | GitHub through your `gh` login, Azure DevOps through your `az` login, or Gitea, with CI status in the title bar. |
 | **Speak and listen** | Dictate messages and have answers read aloud using downloaded models on your computer. Phones use that same computer's speech engines over the encrypted connection. |
 | **Keep an eye on usage** | Claude and Codex plan meters, weekly pacing around your working hours, recorded token usage and cost estimates, and measured writing speeds for Claude and Codex. |
 | **Make it yours** | Built-in themes or imported VS Code colour themes from Open VSX, fonts, interface scale, keyboard shortcuts and notification sounds. Optional plugins add Clockify time tracking and Azure DevOps work items. |
