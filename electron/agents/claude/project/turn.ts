@@ -11,6 +11,7 @@ import { claudeImages } from "./sdk";
 import { pickableClaudeSkills } from "./catalog";
 import { planSkillDispatch } from "../../skill-dispatch";
 import { mayMentionSkill } from "../../../../shared/skill-mentions";
+import { claudeArgs } from "../../../../shared/settings";
 import { guardSteer } from "../../turn-kit";
 import {
   closeSession,
@@ -163,6 +164,14 @@ export async function runClaudeProject(
               });
             },
           ),
+        retune: async (choice) => {
+          const tuned = { ...session!.options, ...claudeArgs(choice), choice };
+          // Kept with the session, so the next turn on these settings reuses it.
+          if (await retune(session!, tuned)) {
+            session!.options = tuned;
+            session!.signature = sessionSignature(tuned);
+          }
+        },
       });
     while (true) {
       const message = await session.frames.next();

@@ -58,12 +58,14 @@ const result = (text: string) => ({
 /**
  * Claude Code as one scripted session: `script` reads what Relay sends and
  * yields the frames the CLI would write. The session stays open after it.
+ * `live` adds the controls a running session takes, such as `applyFlagSettings`.
  */
 function claude(
   script: (io: {
     next: () => Promise<Sent>;
     options: Options;
   }) => AsyncGenerator<object>,
+  live: object = {},
 ) {
   let options!: Options;
   vi.mocked(query).mockImplementation((params) => {
@@ -77,7 +79,7 @@ function claude(
         yield* script({ next, options });
         await new Promise(() => {});
       })(),
-      { close() {}, getContextUsage: async () => ({}) },
+      { close() {}, getContextUsage: async () => ({}), ...live },
     ) as unknown as ReturnType<typeof query>;
   });
   return () => options;
@@ -214,6 +216,53 @@ it("answers a steer below it once Claude reads it", async () => {
   await expect(steer("Late", "msg-3")).rejects.toThrow(
     "This turn has finished. Send the queued message as a new turn.",
   );
+});
+
+it("answers a steer at its new effort and keeps the session for that effort", async () => {
+  const heard: string[] = [];
+  let control!: Parameters<
+    NonNullable<Parameters<typeof runClaudeProject>[0]["onControl"]>
+  >[0];
+  claude(
+    async function* ({ next }) {
+      const prompt = await next();
+      yield lifecycle(prompt.uuid, "started");
+      yield says("m1", "Working on it");
+      const steered = await next();
+      heard.push(`steer ${steered.message.content}`);
+      yield lifecycle(steered.uuid, "queued");
+      yield lifecycle(steered.uuid, "started");
+      yield says("m2", "Thought harder.");
+      yield result("Thought harder.");
+      const again = await next();
+      yield lifecycle(again.uuid, "started");
+      yield result("Same session.");
+    },
+    {
+      applyFlagSettings: async (flags: { effortLevel: string }) => {
+        heard.push(`effort ${flags.effortLevel}`);
+      },
+    },
+  );
+  const session = { key: crypto.randomUUID(), id: session_id, async onId() {} };
+  const started = vi.mocked(query).mock.calls.length;
+  await run({
+    session,
+    effort: "high",
+    onControl: (c) => (control = c),
+    onText: (text) => {
+      if (text !== "Working on it") return;
+      void control.retune!({
+        model: "",
+        reasoningEffort: "max",
+        fast: false,
+      }).then(() => control.steer("Think harder", "msg-2"));
+    },
+  });
+  await expect(run({ session, effort: "max" })).resolves.toBe("Same session.");
+  expect(heard).toEqual(["effort max", "steer Think harder"]);
+  // On the settings it was retuned to, the next turn needs no new Claude Code.
+  expect(vi.mocked(query).mock.calls.length - started).toBe(1);
 });
 
 it("answers a steer that cut a running tool short", async () => {

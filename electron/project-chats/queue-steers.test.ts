@@ -20,6 +20,14 @@ it("steers with a follow-up to the same agent on the same settings", () => {
   expect(steers(send("@codex Also check the tests"), running)).toBe(true);
 });
 
+it("steers at another effort or speed, which the agent takes as it can", () => {
+  for (const choice of [
+    { model: "m", reasoningEffort: "xhigh" as const, fast: false },
+    { model: "m", reasoningEffort: "high" as const, fast: true },
+  ])
+    expect(steers(send("@codex Think harder", { choice }), running)).toBe(true);
+});
+
 it("waits when nothing runs or the message isn't for an agent", () => {
   expect(steers(send("@codex Also"), undefined)).toBe(false);
   expect(steers(send("A note to self"), running)).toBe(false);

@@ -80,6 +80,11 @@ export interface AgentOptions {
     ) => Promise<void>;
     /** Pauses or clears the goal the running turn pursues, without stopping the turn. */
     goal?: (command: "pause" | "clear") => Promise<void>;
+    /**
+     * Moves the running turn to another effort, for an agent that can take
+     * one mid-turn; the others take it from their next turn.
+     */
+    retune?: (choice: ModelChoice) => Promise<void>;
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;

@@ -25,9 +25,9 @@ export interface QueueHost {
 
 /**
  * Whether a queued message can join the answer running for `prior` instead of
- * waiting for it: the same agent, conversation and settings, and nothing the
- * agent only takes at the start of a turn (a selection, a skill, a command,
- * or a command).
+ * waiting for it: the same agent, conversation, model and modes, and nothing
+ * the agent only takes at the start of a turn (a selection, a skill or a
+ * command). Another effort or speed still steers; see `retune`.
  */
 export function steers(
   next: ProjectChatSend,
@@ -41,7 +41,7 @@ export function steers(
     next.parentId !== prior.parentId ||
     next.runtimeMode !== prior.runtimeMode ||
     next.interactionMode !== prior.interactionMode ||
-    JSON.stringify(next.choice) !== JSON.stringify(prior.choice) ||
+    next.choice.model !== prior.choice.model ||
     next.contextWindow !== prior.contextWindow ||
     next.selection ||
     mayMentionSkill(asked.question) ||
@@ -191,6 +191,9 @@ export class ChatQueue {
     // below this message only if it's there to find.
     chat.messages.push(message);
     try {
+      // Before the steer, so Claude answers it at the new effort. A steer
+      // that then fails still leaves it there, as its own turn would.
+      await active.retune?.(next.input.choice);
       await active.steer(
         asked.question +
           (next.input.viewing

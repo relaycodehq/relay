@@ -236,6 +236,7 @@ export class TurnRunner {
           if (active?.abort !== abort) return;
           active.steer = control.steer;
           active.goal = control.goal;
+          active.retune = control.retune;
         },
         ...(!branch && chat.goal?.provider === provider
           ? { goal: chat.goal }

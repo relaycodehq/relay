@@ -30,6 +30,7 @@ export interface ActiveChat {
   moved?: (root: string) => Promise<void>;
   /** Pauses or clears the goal the turn pursues; Codex only. */
   goal?: AgentControl["goal"];
+  retune?: AgentControl["retune"];
   /** Settles once the turn gives the thread back; see `release`. */
   ended: Promise<void>;
   /** The answer is written; the turn only saves before giving the thread back. */
