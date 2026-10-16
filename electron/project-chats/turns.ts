@@ -905,6 +905,9 @@ export class ChatTurns {
       throw new Error(
         `${agentName(provider)} compacts without custom instructions.`,
       );
+    // Quitting began while this looked for the session: one Relay started
+    // unasked waits for the next launch instead of holding up the quit.
+    if (unasked && this.core.closing()) return;
     const input = sessionInput(chat, provider, this.core.store, parentId);
     const active = this.core.active.claim(id, input);
     const { abort } = active;
