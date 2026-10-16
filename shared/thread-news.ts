@@ -15,10 +15,7 @@ export interface ThreadNews {
 }
 
 /** A thread's latest answer in the main conversation, as its message events left it. */
-export type LastAnswer = Pick<
-  ChatMessage,
-  "status" | "body" | "error" | "provider"
->;
+export type LastAnswer = Pick<ChatMessage, "body" | "error">;
 
 /** What news needs to know of a thread, as its list entry has it. */
 export type NewsChat = Pick<
@@ -57,10 +54,12 @@ export type NewsCatchUp = NewsCursor & { items?: NewsItem[] };
 /**
  * What a turn's end is news of, by the thread as it reads now: a finished or
  * failed answer, never a compaction, a note or a side answer, nor an answer
- * someone stopped or read where it ran.
+ * someone stopped. Whether someone watched it run can't be told yet, since a
+ * window marks it read only after it went idle: a window's sounds skip the
+ * thread it shows, and a phone keeps quiet while someone is at the computer.
  */
 export function answerNews(
-  turn: Pick<Turn, "kind" | "endedAs" | "startedAt" | "endedAt">,
+  turn: Pick<Turn, "kind" | "endedAs" | "startedAt">,
   chat: NewsChat,
   answer: LastAnswer | undefined,
   at = Date.now(),
@@ -68,7 +67,6 @@ export function answerNews(
   if (!answersKinds.includes(turn.kind)) return;
   const failed = turn.endedAs === "failed";
   if (!failed && turn.endedAs !== "completed") return;
-  if (chat.seenAt != null && chat.seenAt >= (turn.endedAt ?? at)) return;
   // Snoozed: it comes back by itself when you said.
   if (chat.snoozedUntil && chat.snoozedUntil > at) return;
   const agent = chat.provider ? agentName(chat.provider) : "The agent";
@@ -98,12 +96,15 @@ export function answerNews(
   };
 }
 
-/** A thread that started needing you since the last list; one new to the list isn't news. */
+/**
+ * A thread that started needing you since the last list, where `wasWaiting`
+ * is how that list had it; one new to the list isn't news.
+ */
 export function waitingNews(
-  was: NewsChat | undefined,
+  wasWaiting: boolean | undefined,
   chat: NewsChat,
 ): ThreadNews | undefined {
-  if (!was || was.waiting || !chat.waiting || read(chat)) return;
+  if (wasWaiting !== false || !chat.waiting || read(chat)) return;
   const agent = chat.provider ? agentName(chat.provider) : "The agent";
   return {
     chatId: chat.id,

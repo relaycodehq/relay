@@ -74,8 +74,15 @@ completion for any turn but the current one.
   answer's news, once. A compaction, a handoff note or a side answer is never
   news, and neither is a stopped or interrupted turn. It's decided as the turn
   ends, from the thread as it reads then, never by comparing one thread list
-  with the next. The window's sounds (`relay:thread-news`), the menubar's
-  sounds and the phone all get the same items.
+  with the next. A send that fails before its agent runs ends its turn as
+  `failed` too. While another answer runs beside it or a queued message goes
+  out next, a finished answer waits: the thread's last end tells, or the one
+  held back does if that end has no news of its own and wasn't a stop.
+  Whether someone watched it run can't be told when it ends (a window marks
+  a thread read only once it's idle), so a window's sounds skip the thread
+  it shows and a phone keeps quiet while someone is at the computer. The
+  window's sounds (`relay:thread-news`), the menubar's sounds and the phone
+  all get the same items.
 - **The phone.** Each news item is numbered, under an epoch that changes when
   Relay restarts. From bridge 24 a phone hears items as `news` events and asks
   `news(cursor)` for what came after the last one it had; one too far behind,

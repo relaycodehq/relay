@@ -21,6 +21,8 @@ export interface NewsThreads {
   summary(chatId: string): ChatSummary | undefined;
   /** The message a turn wrote, as the thread in memory has it. */
   answer(chatId: string, answerId: string): ChatMessage | undefined;
+  /** Messages wait in the thread's queue and will go out next. */
+  queued(chatId: string): boolean;
   list(projectId: string): ChatSummary[];
 }
 
@@ -35,8 +37,10 @@ export class TurnNews {
   private seq = 0;
   private items: NewsItem[] = [];
   private listeners = new Set<(item: NewsItem) => void>();
-  /** Each thread as the last list read it, to tell when it starts waiting. */
-  private known = new Map<string, ChatSummary>();
+  /** Whether each thread waited when the last list read it. */
+  private waited = new Map<string, boolean>();
+  /** A finished answer whose news waits for the thread's next end, by thread. */
+  private held = new Map<string, Turn>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private unsubscribe: () => void;
 
@@ -82,8 +86,8 @@ export class TurnNews {
         return; // The project is gone.
       }
       for (const chat of chats) {
-        const news = waitingNews(this.known.get(chat.id), chat);
-        this.known.set(chat.id, chat);
+        const news = waitingNews(this.waited.get(chat.id), chat);
+        this.waited.set(chat.id, !!chat.waiting);
         if (news) this.tell(news, chat.projectId);
       }
     }, LIST_MS);
@@ -96,31 +100,46 @@ export class TurnNews {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.listeners.clear();
+    this.held.clear();
   }
 
   private ended(turn: Turn) {
     if (!answersKinds.includes(turn.kind)) return;
-    // Another answer still runs in the thread; its end tells, unless this one failed.
+    const { threadId } = turn;
+    // Another answer still runs in the thread, or a queued message goes out
+    // next: the thread's last end tells, unless this one failed.
     if (
       turn.endedAs === "completed" &&
-      this.ledger
-        .inThread(turn.threadId)
-        .some((t) => answersKinds.includes(t.kind))
-    )
+      (this.threads.queued(threadId) ||
+        this.ledger
+          .inThread(threadId)
+          .some((t) => answersKinds.includes(t.kind)))
+    ) {
+      this.held.set(threadId, turn);
       return;
+    }
+    const held = this.held.get(threadId);
+    this.held.delete(threadId);
+    // The last one ended without news of its own and not by your hand: the
+    // finished one before it is the news.
+    if (!this.tellEnd(turn) && held && turn.endedAs !== "cancelled")
+      this.tellEnd(held);
+  }
+
+  private tellEnd(turn: Turn) {
     const answer = turn.answerId
       ? this.threads.answer(turn.threadId, turn.answerId)
       : undefined;
     const chat = this.threads.summary(turn.threadId);
-    if (!chat) return;
-    const news = answerNews(turn, chat, answer);
-    if (!news) return;
+    const news = chat && answerNews(turn, chat, answer);
+    if (!news) return false;
     this.tell(news, chat.projectId, {
       turnId: turn.id,
       ...(news.kind === "finished" && chat.startedBy
         ? { byAgent: true as const }
         : {}),
     });
+    return true;
   }
 
   private tell(
@@ -137,6 +156,11 @@ export class TurnNews {
     };
     this.items.push(item);
     if (this.items.length > KEEP_NEWS) this.items.shift();
-    for (const listener of this.listeners) listener(item);
+    for (const listener of this.listeners)
+      try {
+        listener(item);
+      } catch (e) {
+        console.warn("A news listener failed:", e);
+      }
   }
 }

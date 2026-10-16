@@ -25,20 +25,17 @@ const chat = (
 const list = (...chats: RemoteChatSummary[]) =>
   new Map(chats.map((c) => [c.id, c]));
 const answer = (more: Partial<LastAnswer>): LastAnswer => ({
-  status: "complete",
   body: "",
-  provider: "claude",
   ...more,
 });
-/** A turn that ran from 10 to 20. */
+/** A turn that started at 10. */
 const turn = (
   endedAs: Turn["endedAs"],
   kind: Turn["kind"] = "answer",
-): Pick<Turn, "kind" | "endedAs" | "startedAt" | "endedAt"> => ({
+): Pick<Turn, "kind" | "endedAs" | "startedAt"> => ({
   kind,
   endedAs,
   startedAt: 10,
-  endedAt: 20,
 });
 
 describe("answerNews", () => {
@@ -75,7 +72,7 @@ describe("answerNews", () => {
       answerNews(
         turn("failed"),
         chat("b"),
-        answer({ status: "failed", error: "Claude's login expired." }),
+        answer({ error: "Claude's login expired." }),
       ),
     ).toEqual({
       chatId: "b",
@@ -89,7 +86,6 @@ describe("answerNews", () => {
         turn("failed", "adopt"),
         chat("c"),
         answer({
-          status: "failed",
           error:
             'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
         }),
@@ -102,20 +98,13 @@ describe("answerNews", () => {
     });
   });
 
-  it("stays quiet about snoozed threads and ones read where they ran", () => {
+  it("stays quiet about snoozed threads", () => {
     expect(
       answerNews(
         turn("completed"),
         chat("snoozed", { snoozedUntil: 5_000 }),
         answer({}),
         1_000,
-      ),
-    ).toBeUndefined();
-    expect(
-      answerNews(
-        turn("completed"),
-        chat("watched", { seenAt: 20 }),
-        answer({}),
       ),
     ).toBeUndefined();
   });
@@ -125,14 +114,7 @@ describe("answerNews", () => {
       c: RemoteChatSummary,
       endedAs: Turn["endedAs"] = "completed",
     ) =>
-      answerNews(
-        turn(endedAs, "adopt"),
-        c,
-        answer({
-          status: endedAs === "failed" ? "failed" : "complete",
-          error: "Boom.",
-        }),
-      )?.kind;
+      answerNews(turn(endedAs, "adopt"), c, answer({ error: "Boom." }))?.kind;
     expect(
       news(chat("settling", { settledAt: 15, settleWhenDone: 15 })),
     ).toBeUndefined();
@@ -151,7 +133,6 @@ describe("answerNews", () => {
         turn("failed"),
         waiting,
         answer({
-          status: "failed",
           error: 'API Error: 529 {"error":{"message":"Overloaded"}}',
         }),
       ),
@@ -169,7 +150,7 @@ describe("waitingNews", () => {
   it("tells of a question at once, even while the agent still runs", () => {
     expect(
       waitingNews(
-        chat("a", { running: true }),
+        false,
         chat("a", { running: true, waiting: true, asking: true }),
       ),
     ).toEqual({
@@ -184,14 +165,9 @@ describe("waitingNews", () => {
     expect(
       waitingNews(undefined, chat("new", { waiting: true })),
     ).toBeUndefined();
+    expect(waitingNews(true, chat("a", { waiting: true }))).toBeUndefined();
     expect(
-      waitingNews(chat("a", { waiting: true }), chat("a", { waiting: true })),
-    ).toBeUndefined();
-    expect(
-      waitingNews(
-        chat("a"),
-        chat("a", { waiting: true, updated: 20, seenAt: 20 }),
-      ),
+      waitingNews(false, chat("a", { waiting: true, updated: 20, seenAt: 20 })),
     ).toBeUndefined();
   });
 });

@@ -413,7 +413,6 @@ export class TurnSends {
       });
     } catch (e) {
       // The send already went through, so the thread shows the failure.
-      this.core.active.release(id, active);
       const failed: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
@@ -427,6 +426,9 @@ export class TurnSends {
       };
       chat.messages.push(failed);
       if (chat.queue?.length) chat.queuePaused = true;
+      // Ends the turn as failed, news like an agent's failure; a stop is no news.
+      if (!active.abort.signal.aborted) active.answer = () => failed;
+      this.core.active.release(id, active);
       await this.core.storage
         .save(chat)
         .catch((e) => console.warn("Could not save the failed send:", e));

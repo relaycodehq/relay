@@ -212,6 +212,10 @@ export class ProjectChats {
       summary: (id) => this.summaryOf(id),
       answer: (chatId, answerId) =>
         this.storage.cached(chatId)?.messages.find((m) => m.id === answerId),
+      queued: (chatId) => {
+        const chat = this.storage.cached(chatId);
+        return !!chat?.queue?.length && !chat.queuePaused;
+      },
       list: (projectId) => this.threads.list(projectId),
     });
     this.storage.onSummaries((projectId) => this.news.changed(projectId));

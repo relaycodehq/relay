@@ -232,6 +232,29 @@ describe("bugs the turn ledger fixed", () => {
     expect(kinds(s!.news)).toEqual(["failed"]);
   });
 
+  it("is news when a send fails before its agent runs", async () => {
+    await start();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const storage = s!.chats["storage"];
+    const save = storage.save.bind(storage);
+    let full = true;
+    vi.spyOn(storage, "save").mockImplementation(async (chat, options) => {
+      if (full && chat.messages.at(-1)?.status === "streaming") {
+        full = false;
+        throw new Error("The disk is full.");
+      }
+      return save(chat, options);
+    });
+    const id = await s!.thread();
+    await s!.send(id, "fixture echo: never answered");
+    await s!.ended(id);
+    expect((await answers(id)).at(-1)).toMatchObject({
+      status: "failed",
+      error: "The disk is full.",
+    });
+    expect(kinds(s!.news)).toEqual(["failed"]);
+  });
+
   it("tells a phone about a turn that started and ended while it was away", async () => {
     await start();
     const id = await s!.thread();

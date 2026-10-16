@@ -417,11 +417,10 @@ app
       pullHosts.evidence,
     );
     projectChats = chats;
-    chats.onNews((item) => {
-      window.send("relay:thread-news", item);
-      phoneRemote?.news(item);
-      menubarSounds?.news(item);
-    });
+    // Apart, so one that fails doesn't keep the news from the others.
+    chats.onNews((item) => window.send("relay:thread-news", item));
+    chats.onNews((item) => phoneRemote?.news(item));
+    chats.onNews((item) => menubarSounds?.news(item));
     serveMedia();
     serveRenders((chatId, renderId, page) =>
       chats.renderPage(chatId, renderId, page),
