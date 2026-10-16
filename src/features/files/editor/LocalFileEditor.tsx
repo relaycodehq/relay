@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 import { FolderGit2 } from "lucide-react";
-import type { Pull } from "../../../shared/types";
-import { useContentHash } from "../checks/diagnostics";
+import type { Pull } from "../../../../shared/types";
+import { useContentHash } from "../../checks/diagnostics";
 import { editorKeys } from "./editor-keys";
-import { useShortcutLabel } from "../../lib/shortcuts";
-import { useBufferChecks } from "../checks/useBufferChecks";
+import { useShortcutLabel } from "../../../lib/shortcuts";
+import { useBufferChecks } from "../../checks/useBufferChecks";
 import { useEditableDiff } from "./useEditableDiff";
 import { useEditorCompare } from "./useEditorCompare";
 import { useLocalFile, type LocalProject } from "./useLocalFile";
-import type { ChecksController } from "../checks/useProjectChecks";
+import type { ChecksController } from "../../checks/useProjectChecks";
 import { useSaveShortcut } from "./useSaveShortcut";
-import { CheckPanel } from "./editor/CheckPanel";
-import { EditCode } from "./editor/EditCode";
-import { EditorBar } from "./editor/EditorBar";
-import { EditorFooter } from "./editor/EditorFooter";
+import { CheckPanel } from "./CheckPanel";
+import { EditCode } from "./EditCode";
+import { EditorBar } from "./EditorBar";
+import { EditorFooter } from "./EditorFooter";
 import {
   isMarkdown,
   MarkdownModes,
@@ -21,11 +21,11 @@ import {
   MarkdownSplitter,
   useMarkdownMode,
   useMarkdownSplit,
-} from "./editor/MarkdownPreview";
-import { FolderPrompt, UnsavedPrompt } from "./editor/prompts";
-import { useEditorBlame } from "./editor/useEditorBlame";
-import { useSymbolNavigation } from "../diff/SymbolNavigation";
-import { ErrorBox, Loading, Modal } from "../../ui/ui";
+} from "./MarkdownPreview";
+import { FolderPrompt, UnsavedPrompt } from "./prompts";
+import { useEditorBlame } from "./useEditorBlame";
+import { useSymbolNavigation } from "../../diff/SymbolNavigation";
+import { ErrorBox, Loading, Modal } from "../../../ui/ui";
 
 /** A file from a project's folder or a PR's checkout, edited against its committed version. */
 export default function LocalFileEditor({

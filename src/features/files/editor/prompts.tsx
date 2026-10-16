@@ -1,5 +1,5 @@
 import { FolderGit2 } from "lucide-react";
-import type { LocalFileSession } from "../useLocalFile";
+import type { LocalFileSession } from "./useLocalFile";
 import { Loading } from "../../../ui/ui";
 
 /** Asks before closing or reloading drops unsaved edits. */

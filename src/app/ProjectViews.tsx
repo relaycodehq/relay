@@ -32,7 +32,7 @@ import type { CodeReference } from "../../shared/code-references";
 import { ErrorBox, IconButton, Loading } from "../ui/ui";
 import { useStoredFlag } from "../lib/useStoredFlag";
 import type { PaneSlots } from "../ui/WorkspacePanes";
-const LocalFileEditor = lazy(() => import("../features/files/LocalFileEditor"));
+const LocalFileEditor = lazy(() => import("../features/files/editor/LocalFileEditor"));
 
 /**
  * Uncommitted work in the folder the thread works in (the checkout, or its

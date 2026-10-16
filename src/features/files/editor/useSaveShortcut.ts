@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { matches } from "../../lib/shortcuts";
+import { matches } from "../../../lib/shortcuts";
 
 /**
  * Calls the latest `save` on the save shortcut. Not useShortcut: saving works

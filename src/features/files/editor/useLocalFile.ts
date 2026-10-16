@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { LocalFile, Pull } from "../../../shared/types";
-import { api } from "../../lib/api";
-import { useHoldNavigation } from "../../lib/navigation-lock";
+import type { LocalFile, Pull } from "../../../../shared/types";
+import { api } from "../../../lib/api";
+import { useHoldNavigation } from "../../../lib/navigation-lock";
 
 /** `plain`: a folder without Git, so no HEAD to compare with or blame. */
 export type LocalProject = { id: string; head: string; plain?: boolean };

@@ -1,6 +1,6 @@
 import { Save } from "lucide-react";
-import type { FileEditor } from "../useEditableDiff";
-import type { LocalFileSession } from "../useLocalFile";
+import type { FileEditor } from "./useEditableDiff";
+import type { LocalFileSession } from "./useLocalFile";
 import { DiskState, EditHistory, ReloadButton } from "./controls";
 
 /** The modal editor's state and controls under the code, and where saves go. */

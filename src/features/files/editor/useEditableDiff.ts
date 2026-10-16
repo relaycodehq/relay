@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
 import type { EditorViewState, Marker } from "@pierre/diffs/edit";
 import type { CodeViewHandle, CodeViewProps } from "@pierre/diffs/react";
-import type { LocalFile } from "../../../shared/types";
-import { useFileDiff } from "../diff/useFileDiff";
+import type { LocalFile } from "../../../../shared/types";
+import { useFileDiff } from "../../diff/useFileDiff";
 
 type Handle = CodeViewHandle<undefined, undefined>;
 export type FileEditor = NonNullable<ReturnType<Handle["getEditor"]>>;

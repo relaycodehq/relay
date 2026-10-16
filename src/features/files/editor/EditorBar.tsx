@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Columns2, X } from "lucide-react";
-import type { FileEditor } from "../useEditableDiff";
-import type { LocalFileSession } from "../useLocalFile";
+import type { FileEditor } from "./useEditableDiff";
+import type { LocalFileSession } from "./useLocalFile";
 import { EditorPath } from "../EditorPath";
 import { IconButton } from "../../../ui/ui";
 import { DiskState, EditHistory, ReloadButton } from "./controls";

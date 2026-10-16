@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Redo2, RotateCw, Undo2 } from "lucide-react";
-import type { FileEditor } from "../useEditableDiff";
-import type { LocalFileSession } from "../useLocalFile";
+import type { FileEditor } from "./useEditableDiff";
+import type { LocalFileSession } from "./useLocalFile";
 import { IconButton } from "../../../ui/ui";
 
 export function EditHistory({
