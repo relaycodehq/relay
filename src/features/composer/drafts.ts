@@ -299,7 +299,17 @@ export function saveDraftScope(id: string, scope: ChatScope) {
   threadStorage(id).scope.save(scope);
   changedRecord(id, was);
 }
-/** Drops the scope and the workspace picked for it. */
+/**
+ * Drops the scope and the workspace picked for it, as for a fresh thread in
+ * the slot. A review set aside there stays for Deep review to be picked again.
+ */
+export function resetDraftScope(id: string) {
+  const was = isReviewDraft(id);
+  threadStorage(id).scope.clear();
+  clearDraftWorkspace(id);
+  changedRecord(id, was);
+}
+/** Drops the scope, the workspace picked for it and any review set up. */
 export function clearDraftScope(id: string) {
   const was = isReviewDraft(id);
   threadStorage(id).scope.clear();

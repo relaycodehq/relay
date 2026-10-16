@@ -7,6 +7,7 @@ import {
   clearDraftScope,
   freshNewThread,
   newThreadId,
+  resetDraftScope,
   writeDraft,
 } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
@@ -126,7 +127,7 @@ export function useNewThreads(
     if (!project || lock.blocked()) return;
     const from = spotNow();
     const id = freshNewThread(project.id);
-    clearDraftScope(id);
+    resetDraftScope(id);
     writeDraft(threadDraftKey(id), text);
     try {
       const sent =

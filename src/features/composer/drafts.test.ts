@@ -6,6 +6,7 @@ import {
   forgetNewThread,
   loadDraftScope,
   newThreadId,
+  resetDraftScope,
   reviewDraftIn,
   saveDraftScope,
   setCurrentNewThread,
@@ -115,6 +116,8 @@ it("keeps a deep review set up without text as a draft, and sets it aside once i
   saveDraftScope(review, { kind: "project" });
   expect(freshNewThread("p1")).toBe(review);
   expect(reviewDraftIn("p1")).toBeUndefined();
+  // A fresh thread in the slot, as navigating starts one, leaves it set aside.
+  resetDraftScope(review);
   // Back on Deep review, the picks are still there.
   saveDraftScope(review, { kind: "review" });
   expect(threadStorage(review).review.load()).toMatchObject({

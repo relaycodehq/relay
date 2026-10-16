@@ -9,10 +9,10 @@ import type {
 import { api } from "../lib/api";
 import { SCRATCH_CHATS } from "../lib/chat-events";
 import {
-  clearDraftScope,
   currentNewThread,
   freshNewThread,
   loadDraftScope,
+  resetDraftScope,
   reviewDraftIn,
   saveDraftScope,
   setCurrentNewThread,
@@ -145,7 +145,7 @@ export function useShellNavigation(
     if (fresh) {
       const id = fresh === true ? freshNewThread(p.id) : fresh;
       // Switching projects restores the saved scope, so a fresh thread drops it.
-      if (fresh === true) clearDraftScope(id);
+      if (fresh === true) resetDraftScope(id);
       setCurrentNewThread(p.id, id);
       setDraftScope(loadDraftScope(id));
       if (!next) panes.switchTo(id, fresh === true);
