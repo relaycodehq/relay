@@ -47,8 +47,10 @@ export async function pump(
     while (true) {
       const next = await iterator.next();
       if (next.done) break;
+      // A forked skill's replay, less what its transcript already showed.
+      const unseen = forks.unseen(next.value);
       // Here rather than in receive(): frames a turn leaves unread pass through that twice.
-      session.agents.observe(next.value);
+      if (unseen) session.agents.observe(unseen);
       forks.observe(next.value);
       // Replayed after a restart, turns already shown only rebuild what's running.
       const seq = session.hosted?.seqOf(next.value);
@@ -59,7 +61,7 @@ export async function pump(
         meterOf(session).observe(next.value, session.options.watch);
         if (session.options.watch || session.watch)
           watchOf(session).subagents.observe(next.value, session.options);
-        receive(session, next.value);
+        if (unseen) receive(session, unseen);
       }
     }
   } catch (error) {

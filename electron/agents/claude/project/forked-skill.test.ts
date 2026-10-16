@@ -111,6 +111,7 @@ it("shows a forked skill as a subagent, live from its transcript, then from its 
     ) as unknown as ReturnType<typeof query>;
   });
   const rows = new Map<string, AgentActivity>();
+  const bashStates: string[] = [];
   const key = crypto.randomUUID();
   const turn = runClaudeProject({
     job: { kind: "prompt" },
@@ -121,7 +122,10 @@ it("shows a forked skill as a subagent, live from its transcript, then from its 
     effort: "",
     signal: new AbortController().signal,
     onText() {},
-    onActivity: (a) => rows.set(a.id, a),
+    onActivity: (a) => {
+      rows.set(a.id, a);
+      if (a.id === "bash") bashStates.push(a.status);
+    },
     session: { key, id: session_id, async onId() {} },
   });
 
@@ -157,6 +161,13 @@ it("shows a forked skill as a subagent, live from its transcript, then from its 
     }),
   );
   expect(claudeAgentRun(key, "fork:t1")).toMatchObject({ calls: 1 });
+  await appendFile(
+    transcript,
+    JSON.stringify({ type: "user", uuid: "u2", message: bashDone }) + "\n",
+  );
+  await vi.waitFor(() =>
+    expect(rows.get("bash")).toMatchObject({ status: "complete" }),
+  );
 
   finish();
   await turn;
@@ -165,6 +176,8 @@ it("shows a forked skill as a subagent, live from its transcript, then from its 
     parentId: "fork:t1",
     status: "complete",
   });
+  // The replay carries the call again, but it doesn't start over.
+  expect(bashStates).toEqual(["running", "complete"]);
   expect(claudeAgentRun(key, "fork:t1")).toMatchObject({
     status: "completed",
     calls: 1,
