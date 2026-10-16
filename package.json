@@ -105,6 +105,14 @@
   "build": {
     "appId": "dev.relay.experimental",
     "productName": "Relay",
+    "protocols": [
+      {
+        "name": "Relay",
+        "schemes": [
+          "relay"
+        ]
+      }
+    ],
     "directories": {
       "output": "release"
     },

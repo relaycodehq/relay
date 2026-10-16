@@ -6,6 +6,33 @@ function isAppUrl(url: string) {
   return url.length <= 16384 && url.startsWith("relay:");
 }
 
+/**
+ * `relay://threads/<chatId>` shows that thread; a bare `relay://threads` only
+ * brings Relay forward. Other Relay links aren't thread links.
+ */
+export function threadLink(url: string): { chatId?: string } | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== "relay:" || parsed.hostname !== "threads")
+    return undefined;
+  const chatId = decodeURIComponent(parsed.pathname.replace(/^\/+|\/+$/g, ""));
+  return chatId ? { chatId } : {};
+}
+
+/**
+ * Claims `relay:` links for a packaged Relay. `npm run dev` runs the stock
+ * Electron app, whose bundle id other apps ship too (DaVinci Resolve does), so
+ * the OS can't route links to it; those come in as a second launch instead.
+ */
+function registerScheme() {
+  if (!process.defaultApp && !process.env.RELAY_TEST_DATA)
+    app.setAsDefaultProtocolClient("relay");
+}
+
 /** A launch's own arguments: `electron .` in development puts the app's folder first. */
 const launchArgs = (argv: string[]) => argv.slice(process.defaultApp ? 2 : 1);
 
@@ -15,12 +42,16 @@ const launchArgs = (argv: string[]) => argv.slice(process.defaultApp ? 2 : 1);
  */
 export class AppLinks {
   /** Kept until a signed-in window has taken it. */
-  pending = process.argv.find(isAppUrl);
+  pending = process.argv.find((arg) => isAppUrl(arg) && !threadLink(arg));
   /** The project a folder opened, kept until the window has taken it. */
   pendingProject?: string;
   /** Folders that came before Relay could look them up. */
   private folders: string[] = [];
   private openFolder?: (folder: string) => void;
+  /** A thread link that came before Relay could look the thread up. */
+  private pendingThread? = threadLink(process.argv.find(isAppUrl) ?? "")
+    ?.chatId;
+  private showThread?: (chatId: string) => void;
 
   constructor(
     private window: AppWindow,
@@ -28,6 +59,7 @@ export class AppLinks {
   ) {}
 
   listen() {
+    registerScheme();
     const first = launchFolder(launchArgs(process.argv), process.cwd());
     if (first) this.folders.push(first);
     app.on("second-instance", (_event, args, cwd) => {
@@ -54,6 +86,14 @@ export class AppLinks {
     for (const folder of this.folders.splice(0)) open(folder);
   }
 
+  /** Shows linked threads from now on, the one that came already first. */
+  onThread(show: (chatId: string) => void) {
+    this.showThread = show;
+    const chatId = this.pendingThread;
+    this.pendingThread = undefined;
+    if (chatId) show(chatId);
+  }
+
   /** Shows `id`'s project, now or once the window loads. */
   openProject(id: string) {
     this.pendingProject = id;
@@ -77,6 +117,16 @@ export class AppLinks {
 
   private receive(url: string) {
     if (!isAppUrl(url)) return;
+    const thread = threadLink(url);
+    if (thread) {
+      if (!thread.chatId) this.window.open();
+      else if (this.showThread) this.showThread(thread.chatId);
+      else this.pendingThread = thread.chatId;
+      // A link handed over by a second launch, as `npm run dev` gets them, doesn't
+      // activate Relay the way the OS does for open-url; it was asked for, so take focus.
+      if (process.platform === "darwin") app.focus({ steal: true });
+      return;
+    }
     this.pending = url;
     this.deliver("relay:open-url", url, () => {
       if (this.signedIn()) this.pending = undefined;
