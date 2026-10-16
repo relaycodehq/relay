@@ -623,6 +623,23 @@ if (args.includes("--permission-prompt-tool")) {
     } else if (m.method === "turn/start") {
       record({ provider: "codex", turn: m.params });
       planning = m.params.collaborationMode?.mode === "plan";
+      // Word that an earlier turn completed, arriving after this one started.
+      if (
+        m.params.input.some(
+          (i) => i.type === "text" && i.text.includes("fixture stale completion"),
+        )
+      )
+        setTimeout(
+          () =>
+            send({
+              method: "turn/completed",
+              params: {
+                threadId: "fixture-thread",
+                turn: { id: "fixture-stale-turn", status: "completed" },
+              },
+            }),
+          5,
+        );
       awaitingSteer = m.params.input.some(
         (i) => i.type === "text" && i.text.includes("fixture codex steer"),
       );

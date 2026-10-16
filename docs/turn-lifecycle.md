@@ -120,7 +120,7 @@ turn ids (Codex) drop events for any turn but the current one.
   from the real CLIs (`tests/fixtures/replays/`), waiting on what Relay sends
   instead of on time. Transcripts are recorded in a throwaway project with
   empty agent configs and redacted before they're committed; see
-  `scripts/record-replays.md`.
+  `tests/fixtures/replays/README.md`.
 - **Faults.** The replay player can drop the agent's last message, cut the
   stream, or exit mid-turn. Every scenario must still end its turn.
 - `waitForTurn(chats, threadId)` waits for the ledger to end the thread's
