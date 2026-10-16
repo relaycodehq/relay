@@ -19,7 +19,9 @@ import type { Account, Repo } from "../../../shared/types";
 import { api } from "../../lib/api";
 import {
   boardPull,
+  keyRepo,
   needsYou,
+  onServer,
   projectFor,
   pullKey,
   repoKey,
@@ -46,7 +48,8 @@ import {
   type PullContext,
 } from "./PullRows";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { isGithubServer } from "../../../shared/source-control";
+import { hostKindOf } from "../../../shared/source-control";
+import { accountOn } from "./usePullHosts";
 import "./pull-requests.css";
 
 /** The window title's trail back from a PR or a project's page. Back goes up
@@ -102,7 +105,9 @@ export function PullsTitle({
 }
 
 export function PullRequestsPage({
-  account,
+  accounts,
+  hostError,
+  onRecheckHosts,
   projects,
   repo,
   onRepo,
@@ -115,7 +120,11 @@ export function PullRequestsPage({
   onOpenProject,
   onAddProject,
 }: {
-  account: Account;
+  /** Every host you're signed in to; their PRs share the page. */
+  accounts: Account[];
+  /** A host you're signed in to didn't answer, so its PRs are missing. */
+  hostError?: unknown;
+  onRecheckHosts: () => void;
   projects: Project[];
   /** The project page showing, by `repoKey`; null for the board. */
   repo: string | null;
@@ -132,7 +141,7 @@ export function PullRequestsPage({
 }) {
   const qc = useQueryClient();
   const { board, verdicts, started, loading, error, fetching, retry } =
-    usePullBoard(account, projects, state);
+    usePullBoard(accounts, projects, state);
   const [typed, setTyped] = useState(query);
   useEffect(() => {
     const t = setTimeout(() => onQuery(typed.trim()), 250);
@@ -146,7 +155,7 @@ export function PullRequestsPage({
   const searchKeys = useShortcutLabel("find");
   const openKeys = useShortcutLabel("pr-open");
   const context: PullContext = { verdicts, started, onOpen };
-  const projectOf = (r: Repo) => projectFor(projects, account.server, r);
+  const projectOf = (r: Repo) => projectFor(projects, r);
   const group = repo ? board.groups.find((g) => g.key === repo) : undefined;
   // A quiet project has no card, but its page still opens from the quiet line.
   const pageProject =
@@ -160,14 +169,7 @@ export function PullRequestsPage({
   const head = query
     ? {
         title: "Pull requests",
-        summary: isGithubServer(account.server) ? (
-          <>
-            Searching pull requests you're part of; add repo: or org: to look
-            wider
-          </>
-        ) : (
-          <>Searching every repository you can see</>
-        ),
+        summary: <SearchSummary accounts={accounts} />,
       }
     : repo
       ? {
@@ -261,7 +263,7 @@ export function PullRequestsPage({
             ) : (
               <button
                 className="pulls-quiet-button"
-                onClick={() => onAddProject(refOf(repo, group?.repo))}
+                onClick={() => onAddProject(group?.ref ?? keyRepo(repo))}
               >
                 <FolderPlus size={14} />
                 Add its folder…
@@ -288,12 +290,16 @@ export function PullRequestsPage({
           </button>
         </div>
       </header>
-      {error && <ErrorBox error={error} retry={retry} />}
+      {error ? (
+        <ErrorBox error={error} retry={retry} />
+      ) : (
+        !!hostError && <ErrorBox error={hostError} retry={onRecheckHosts} />
+      )}
       {query ? (
         <SearchResults
           query={query}
           state={state}
-          account={account}
+          accounts={accounts}
           board={board}
           context={context}
           projectOf={projectOf}
@@ -303,7 +309,7 @@ export function PullRequestsPage({
           repo={repo}
           project={pageProject}
           state={state}
-          account={account}
+          accounts={accounts}
           board={board}
           context={context}
         />
@@ -321,6 +327,20 @@ export function PullRequestsPage({
         />
       )}
     </div>
+  );
+}
+
+/** GitHub searches only what you're part of unless asked wider; the rest search all. */
+function SearchSummary({ accounts }: { accounts: Account[] }) {
+  const github = accounts.some((a) => hostKindOf(a.server) === "github");
+  if (!github) return <>Searching every repository you can see</>;
+  return accounts.length === 1 ? (
+    <>Searching pull requests you're part of; add repo: or org: to look wider</>
+  ) : (
+    <>
+      Searching every repository you can see, and on GitHub the pull requests
+      you're part of; add repo: or org: to look wider there
+    </>
   );
 }
 
@@ -490,14 +510,14 @@ function ProjectPulls({
   repo,
   project,
   state,
-  account,
+  accounts,
   board,
   context,
 }: {
   repo: string;
   project?: Project;
   state: PullState;
-  account: Account;
+  accounts: Account[];
   board: Board;
   context: PullContext;
 }) {
@@ -510,7 +530,11 @@ function ProjectPulls({
   });
   const involved = board.pulls.filter((p) => repoKey(p.ref) === repo);
   const listed = (list.data?.pages.flatMap((p) => p.items) ?? []).map((item) =>
-    relate(item as ListedPull, board, account),
+    relate(
+      onServer(item as ListedPull, project!.repository!.server),
+      board,
+      accounts,
+    ),
   );
   const keys = new Set(listed.map((p) => pullKey(p.ref)));
   // Your PRs past the loaded pages still show; a repository with no clone
@@ -585,25 +609,26 @@ function ProjectPulls({
 function SearchResults({
   query,
   state,
-  account,
+  accounts,
   board,
   context,
   projectOf,
 }: {
   query: string;
   state: PullState;
-  account: Account;
+  accounts: Account[];
   board: Board;
   context: PullContext;
   projectOf: (r: Repo) => Project | undefined;
 }) {
-  const found = usePullSearch(query, state, account);
+  const found = usePullSearch(query, state, accounts);
   if (found.isPending) return <Loading text="Searching…" />;
   if (!found.data)
     return <ErrorBox error={found.error} retry={() => void found.refetch()} />;
   const pulls = found.data.pages
     .flatMap((page) => page.items)
-    .map((item) => relate(item, board, account));
+    .map((item) => relate(item, board, accounts));
+  const missed = found.data.pages.find((page) => page.failed.length)?.failed[0];
   if (!pulls.length)
     return <p className="pulls-none">No pull requests match “{query}”.</p>;
   return (
@@ -625,6 +650,9 @@ function SearchResults({
           />
         ))}
       </div>
+      {!found.error && !!missed && (
+        <ErrorBox error={missed} retry={() => void found.refetch()} />
+      )}
       {found.error && (
         <ErrorBox
           error={found.error}
@@ -648,22 +676,17 @@ function SearchResults({
   );
 }
 
-/** A listed PR, related to you the way the board already knows it. */
-function relate(item: ListedPull, board: Board, account: Account) {
+/** A listed PR, which names its server, related to you the way the board already knows it. */
+function relate(item: ListedPull, board: Board, accounts: Account[]) {
+  const server = item.repository.server!;
   const known = board.pulls.find(
     (p) =>
       p.ref.number === item.number &&
       repoKey(p.ref) === repoKey(item.repository),
   );
+  const login = accountOn(accounts, server)?.user.login.toLowerCase();
   const relation: Relation =
     known?.relation ??
-    (item.user.login.toLowerCase() === account.user.login.toLowerCase()
-      ? "mine"
-      : "other");
-  return boardPull(item, relation, account.server);
-}
-
-function refOf(key: string, repo?: string): Repo {
-  const [owner, name] = (repo ?? key).split("/");
-  return { owner, name };
+    (item.user.login.toLowerCase() === login ? "mine" : "other");
+  return boardPull(item, relation, server);
 }

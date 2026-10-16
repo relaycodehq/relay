@@ -161,7 +161,12 @@ test("restores the PR, late-page file and the page's search across reload/restar
     await current().selectOption(path);
     await expect(page!.locator("diffs-container")).toBeVisible();
     await expect.poll(workspace).toEqual({
-      pull: { owner: "Web", name: "web-store", number: 7 },
+      pull: {
+        server: fixture.serverUrl,
+        owner: "Web",
+        name: "web-store",
+        number: 7,
+      },
       file: path,
       filter: "review_requested",
       query: "reviews",

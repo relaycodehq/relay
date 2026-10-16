@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tenantOf } from "./auth";
+import { tenantOf } from "../../azure-devops/cli-token";
 import type { FoundItem } from "./client";
 import { compareField, sortItems } from "./order";
 import { toWorkItem } from "./parse";

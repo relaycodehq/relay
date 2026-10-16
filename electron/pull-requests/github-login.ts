@@ -1,5 +1,5 @@
 import { GitHub, GithubSignedOut } from "./github";
-import type { FetchRequest } from "./gitea";
+import type { FetchRequest } from "./host";
 
 /** How long a `gh` login is trusted before Relay asks `gh` again. */
 const RECHECK = 5 * 60_000;

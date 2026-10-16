@@ -21,7 +21,7 @@ import { useNewThreads } from "./useNewThreads";
 import { memeSetupDraft } from "../features/memes/meme-setup";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
-import { usePullsAccount } from "../features/pulls/usePullsAccount";
+import { usePullHosts } from "../features/pulls/usePullHosts";
 import { NoPullHost } from "../features/pulls/NoPullHost";
 import { ConnectHost } from "../features/pulls/ConnectHost";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
@@ -245,7 +245,7 @@ export default function ProjectShell() {
     void api.takeMainWindowCommand().then(runAsked).catch(setError);
     return api.onMainWindowCommand(runAsked);
   }, [loaded]);
-  const pullsHost = usePullsAccount(boot.data?.account);
+  const pullsHosts = usePullHosts(boot.data?.account, projects.data);
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
@@ -349,33 +349,38 @@ export default function ProjectShell() {
         </aside>
         {inbox ? (
           <div className="project-legacy" hidden={settings.open}>
-            {pullsHost.account ? (
+            {pullsHosts.accounts.length ? (
               <PullsSurface
-                key={pullsHost.account.id}
+                // The page's saved place is the Gitea account's, if any.
+                key={account?.id ?? "hosts"}
                 ref={pullsPage.page}
-                account={pullsHost.account}
+                accounts={pullsHosts.accounts}
+                hostError={
+                  pullsHosts.error &&
+                  new Error(
+                    `${pullsHosts.error.host} didn't answer, so its pull requests are missing: ${pullsHosts.error.message}`,
+                  )
+                }
+                onRecheckHosts={pullsHosts.recheck}
                 initialWorkspace={boot.data.workspace}
                 incomingLink={links.incoming}
                 projects={projects.data ?? NO_PROJECTS}
                 projectOf={(repo) =>
-                  projectFor(
-                    projects.data ?? NO_PROJECTS,
-                    pullsHost.account!.server,
-                    repo,
-                  )
+                  projectFor(projects.data ?? NO_PROJECTS, repo)
                 }
                 onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
                 onOpenProject={(p) => navigate(p)}
                 onAddProject={(repo) => void pullsPage.addProject(repo)}
                 onLocation={pullsPage.setWhere}
               />
-            ) : pullsHost.pending ? (
+            ) : pullsHosts.pending ? (
               <Loading />
             ) : (
               <NoPullHost
-                error={pullsHost.error}
-                checking={pullsHost.checking}
-                onRecheck={pullsHost.recheck}
+                servers={pullsHosts.servers}
+                error={pullsHosts.error}
+                checking={pullsHosts.checking}
+                onRecheck={pullsHosts.recheck}
                 onConnectGitea={
                   gitea ? () => void signIn.withAccount() : undefined
                 }
@@ -479,7 +484,8 @@ export default function ProjectShell() {
       )}
       {choosePR && project && !host.account && !host.pending && (
         <ConnectHost
-          github={host.github}
+          kind={host.kind}
+          error={host.error}
           checking={host.checking}
           onRecheck={host.recheck}
           onConnectGitea={gitea ? () => void linkProject() : undefined}

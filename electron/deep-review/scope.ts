@@ -1,7 +1,7 @@
 // What a deep review covers, resolved in the checkout when it starts: the
 // commits or changes, their range and stats, a pull request fetched to hidden refs.
 import { currentBranchOrNull, git } from "../git/git";
-import { isRemoteOf } from "../git/repository";
+import { isRemoteOfRepo } from "../git/repository";
 import type { Project } from "../../shared/projects";
 import type { ReviewScope, ReviewTarget } from "../../shared/deep-review";
 
@@ -11,6 +11,8 @@ export interface PullInfo {
   title: string;
   /** The branch it merges into. */
   base: string;
+  /** The ref its head commit is fetched from, as its host serves it. */
+  headRef: string;
 }
 
 function parseShortstat(text: string) {
@@ -38,7 +40,6 @@ async function commit(root: string, rev: string, missing: string) {
 async function forgeRemote(root: string, project: Project) {
   const repo = project.repository;
   if (!repo) throw new Error("Link this project to its repository first.");
-  const host = new URL(repo.server).hostname;
   // As configured: `remote -v` shows URLs after any insteadOf rewrite.
   const urls = await git(root, [
     "config",
@@ -48,7 +49,7 @@ async function forgeRemote(root: string, project: Project) {
   for (const row of urls.split("\n")) {
     const [key, raw] = row.split(/\s+/);
     const name = key?.slice("remote.".length, -".url".length);
-    if (name && isRemoteOf(raw ?? "", host, repo)) return name;
+    if (name && isRemoteOfRepo(raw ?? "", repo.server, repo)) return name;
   }
   throw new Error("This checkout has no remote for the project's repository.");
 }
@@ -143,7 +144,7 @@ export async function resolveScope(
           "--quiet",
           "--no-tags",
           remote,
-          `+refs/pull/${pull.number}/head:${head}`,
+          `+${pull.headRef}:${head}`,
           `+refs/heads/${pull.base}:${base}`,
         ],
         120000,

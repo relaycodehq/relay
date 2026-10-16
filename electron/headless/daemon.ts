@@ -62,11 +62,8 @@ import { Projects } from "../projects/projects";
 import { ProjectAdding } from "../project-add";
 import { TerminalSessions } from "../terminal-sessions";
 import { GithubLogin } from "../pull-requests/github-login";
-import type { Repo } from "../../shared/types";
-import { isGithubServer } from "../../shared/source-control";
-import { mergedPulls } from "../pull-requests/merged";
+import { pullRequestHosts } from "../pull-requests/setup";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
-import { questionContext } from "../pull-requests/questions";
 import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
 import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
@@ -166,19 +163,20 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const login = new GiteaLogin(teaTokenFor);
   const projects = new Projects(store);
   const github = new GithubLogin(fetcher);
-  const hostOf = async (repo: Repo) =>
-    isGithubServer(repo.server) ? github.require() : login.require();
-  async function projectHost(projectId: string) {
-    const repository = projects.get(projectId).repository;
-    if (!repository) return null;
-    return isGithubServer(repository.server) ? github.require() : login.client;
-  }
+  const pullHosts = pullRequestHosts({
+    store,
+    login,
+    github,
+    projects,
+    fetch: fetcher,
+  });
   const devops = new DevOps(
     store,
     fetcher,
     seal,
     unseal,
     join(home, "devops-relevance.json"),
+    pullHosts.azureTokens,
   );
   keepUsageHistory(join(home, "usage-history.json"));
   keepUsageLog(join(home, "usage.jsonl"));
@@ -187,22 +185,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     projects,
     join(home, "project-chats"),
     (event) => phoneRemote?.chatEvent(event),
-    async (chat, selection) => {
-      if (chat.scope.kind !== "pr")
-        throw new Error("This is not a pull request conversation.");
-      const client = await projectHost(chat.projectId);
-      if (!client)
-        throw new Error(
-          "Relay can't match this project to a GitHub or Gitea repository.",
-        );
-      const repo = await projects.linked(chat.projectId, client);
-      if (
-        repo.owner !== chat.scope.ref.owner ||
-        repo.name !== chat.scope.ref.name
-      )
-        throw new Error("The selected PR does not match this project.");
-      return questionContext(client, chat.scope.ref, selection);
-    },
+    pullHosts.evidence,
   );
   const keepAwake = new KeepAwake(
     {
@@ -213,16 +196,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   const pullMerges = new PullMerges({
     chats: () => store.get().chats ?? [],
-    repository: async (projectId) => {
-      const client = await projectHost(projectId).catch(() => null);
-      return client
-        ? projects.linked(projectId, client).catch(() => null)
-        : null;
-    },
-    mergedAmong: async (repo, numbers, signal) =>
-      mergedPulls(await hostOf(repo), repo, numbers, signal),
-    merged: async (repo, number) =>
-      !!(await (await hostOf(repo)).pull({ ...repo, number })).merged,
+    ...pullHosts.merges,
     record: (id) => chats.pullMerged(id),
     online: () => true,
   });
@@ -289,7 +263,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     phoneRemote: () => phoneRemote,
     handoffs: () => handoffs,
     login,
-    github,
+    hosts: pullHosts.hosts,
     window,
     menubar: new Menubar(
       () => {},

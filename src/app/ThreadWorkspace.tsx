@@ -297,7 +297,9 @@ export function ThreadWorkspace({
               opens={opens}
               review={{
                 account: host.account,
-                github: host.github,
+                kind: host.kind,
+                error: host.error,
+                checking: host.checking,
                 onRecheck: host.recheck,
                 onDiscuss: (target, pr) =>
                   void prs

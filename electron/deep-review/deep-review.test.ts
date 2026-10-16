@@ -1312,7 +1312,7 @@ describe("what a review covers", () => {
       work,
       { kind: "pr", ref: { owner: "team", name: "app", number: 4 } },
       project,
-      { number: 4, title: "Fix it", base: "main" },
+      { number: 4, title: "Fix it", base: "main", headRef: "refs/pull/4/head" },
     );
     expect(scope).toMatchObject({
       label: "PR #4",
@@ -1330,7 +1330,12 @@ describe("what a review covers", () => {
         work,
         { kind: "pr", ref: { owner: "team", name: "app", number: 4 } },
         { ...project, repository: { ...project.repository, name: "other" } },
-        { number: 4, title: "Fix it", base: "main" },
+        {
+          number: 4,
+          title: "Fix it",
+          base: "main",
+          headRef: "refs/pull/4/head",
+        },
       ),
     ).rejects.toThrow("no remote for the project's repository");
   });

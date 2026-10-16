@@ -1,14 +1,19 @@
 import { currentBranch, git } from "../git/git";
-import { remoteUrl, repoOf } from "../git/repository";
-import type { FetchRequest, Gitea } from "../pull-requests/gitea";
+import { azureRepoOf, remoteUrl, repoOf } from "../git/repository";
+import type { AzureDevOps } from "../pull-requests/azure-devops/client";
+import type { Gitea } from "../pull-requests/gitea";
+import type { FetchRequest } from "../pull-requests/host";
 import type { CiRun, CiStatus } from "../../shared/ci";
 import type { SourceControlKind } from "../../shared/source-control";
 import { GitHub } from "./github";
 import { giteaDefaultBranch, readGitea } from "./gitea";
+import { azureDefaultBranch, readAzure } from "./azure-devops";
 
 export interface CiRepo {
   owner: string;
   name: string;
+  /** Set for an Azure DevOps remote: the organization, whose project is `owner`. */
+  server?: string;
 }
 export interface CiReading {
   commit: CiStatus["commit"];
@@ -21,7 +26,11 @@ export async function remoteRepo(root: string) {
   const name = names.includes("origin") ? "origin" : names[0];
   if (!name) return null;
   const url = remoteUrl((await git(root, ["remote", "get-url", name])).trim());
-  const repo = url && repoOf(url);
+  if (!url) return null;
+  // Azure DevOps paths carry the organization and `_git`, and SSH has its own host.
+  const azure = azureRepoOf(url);
+  if (azure) return { host: "dev.azure.com", ...azure };
+  const repo = repoOf(url);
   return repo && { host: url.hostname.toLowerCase(), ...repo };
 }
 
@@ -46,10 +55,17 @@ interface CiSource {
   defaultBranch(repo: CiRepo): Promise<string>;
 }
 
+/** The signed-in hosts CI is read through besides GitHub, which needs no sign-in. */
+export interface CiHosts {
+  gitea: Gitea | null;
+  /** The organization's client; null without an `az` login for it. */
+  azure: (server: string) => Promise<AzureDevOps | null>;
+}
+
 /**
  * Where CI reports is read off the git remote: github.com through the `gh`
- * login, the connected Gitea server through its account. Anything else has
- * no status.
+ * login, the connected Gitea server through its account, an Azure DevOps
+ * organization's Pipelines through `az`. Anything else has no status.
  */
 export class Ci {
   private github: GitHub;
@@ -57,8 +73,26 @@ export class Ci {
     this.github = new GitHub(fetchRequest);
   }
 
-  private sources(gitea: Gitea | null): CiSource[] {
+  private sources({ gitea, azure }: CiHosts): CiSource[] {
+    const organization = async (repo: CiRepo) => {
+      const client = repo.server && (await azure(repo.server));
+      if (!client) throw new Error("Sign in to Azure DevOps with `az login`.");
+      return { client, repo: { ...repo, server: repo.server! } };
+    };
     return [
+      {
+        kind: "azure-devops",
+        host: "dev.azure.com",
+        name: "Azure Pipelines",
+        read: async (repo, branch) => {
+          const at = await organization(repo);
+          return readAzure(at.client, at.repo, branch);
+        },
+        defaultBranch: async (repo) => {
+          const at = await organization(repo);
+          return azureDefaultBranch(at.client, at.repo);
+        },
+      },
       {
         kind: "github",
         host: "github.com",
@@ -84,12 +118,12 @@ export class Ci {
   /** `isOn` says which hosts the user left turned on in Settings. */
   async status(
     root: string,
-    gitea: Gitea | null,
+    hosts: CiHosts,
     isOn: (kind: SourceControlKind) => boolean = () => true,
   ): Promise<CiStatus | null> {
     const remote = await remoteRepo(root);
     if (!remote) return null;
-    const source = this.sources(gitea).find(
+    const source = this.sources(hosts).find(
       (s) => s.host === remote.host && isOn(s.kind),
     );
     if (!source) return null;

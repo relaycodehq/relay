@@ -8,7 +8,7 @@ import type {
   SourceControlKind,
   SourceControlProvider,
 } from "../../../shared/source-control";
-import { GiteaMark, GitHubMark } from "../../ui/BrandIcons";
+import { AzureDevOpsMark, GiteaMark, GitHubMark } from "../../ui/BrandIcons";
 import {
   CliPathField,
   RescanButton,
@@ -20,16 +20,18 @@ import { ErrorBox } from "../../ui/ui";
 import { reloadAccount } from "./useSignIn";
 
 const queryKey = ["source-control"];
-// Azure DevOps is a plugin now, so it never reaches this list.
-const marks: Partial<Record<SourceControlKind, ReactNode>> = {
+const marks: Record<SourceControlKind, ReactNode> = {
   github: <GitHubMark />,
   gitea: <GiteaMark />,
+  "azure-devops": <AzureDevOpsMark />,
 };
 /** What the switch stops, said once it's off. */
-const offNotes: Partial<Record<SourceControlKind, string>> = {
+const offNotes: Record<SourceControlKind, string> = {
   github: "Turned off: Relay doesn't show GitHub CI status.",
   gitea:
     "Turned off: Relay doesn't sign in to Gitea, so nothing offers its pull requests or CI. A saved account stays for when you turn it back on.",
+  "azure-devops":
+    "Turned off: Relay doesn't show Azure DevOps pull requests or Pipelines. Work items have a switch of their own further down.",
 };
 const fixLabels: Record<SourceControlFix, string> = {
   link: "Link it…",
@@ -37,8 +39,8 @@ const fixLabels: Record<SourceControlFix, string> = {
   "sign-in": "Sign in…",
   "set-up": "Set up…",
 };
-/** What else follows a host: CI and the tea logins. */
-const followers = ["ci-status", "tea-setup"];
+/** What else follows a host: CI, the tea logins and whose pull requests show. */
+const followers = ["ci-status", "tea-setup", "pull-servers", "host-account"];
 
 type Apply = (
   run: () => Promise<SourceControlProvider[] | null>,
@@ -101,7 +103,9 @@ export function SourceControlSettings({
         retry={() => void providers.refetch()}
       />
     ) : (
-      <p className="setting-muted">Looking for GitHub and Gitea…</p>
+      <p className="setting-muted">
+        Looking for GitHub, Gitea and Azure DevOps…
+      </p>
     );
   return (
     <>

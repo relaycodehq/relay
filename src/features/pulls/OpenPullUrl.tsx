@@ -19,7 +19,7 @@ export function OpenPullUrl({
         }}
       >
         <label>
-          GitHub or Gitea pull request URL
+          GitHub, Azure DevOps or Gitea pull request URL
           <input
             autoFocus
             value={url}

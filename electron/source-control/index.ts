@@ -6,6 +6,7 @@ import {
 } from "../../shared/source-control";
 import { giteaOn, type GiteaLogin } from "../app/login";
 import type { Store } from "../app/store";
+import { azureCli } from "./azure-devops";
 import { gitea } from "./gitea";
 import { github } from "./github";
 
@@ -14,7 +15,7 @@ export { teaTokenFor } from "./tea";
 
 /**
  * The pull request and CI hosts, as the tools and accounts on this computer
- * report them. Azure DevOps is the work items plugin's, a row of its own.
+ * report them. Azure DevOps work items are the plugin's, with their own sign-in.
  */
 export function sourceControlStatus(
   store: Store,
@@ -25,6 +26,7 @@ export function sourceControlStatus(
   return Promise.all([
     github(on("github")),
     gitea(store, login, giteaOn(store.get())),
+    azureCli(on("azure-devops")),
   ]);
 }
 

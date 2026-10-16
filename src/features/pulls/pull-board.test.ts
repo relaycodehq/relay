@@ -1,10 +1,13 @@
 import { expect, it } from "vitest";
 import {
   buildBoard,
+  keyRepo,
   needsYou,
   projectFor,
   pullsLocation,
+  repoKey,
   verdictOf,
+  type BoardHost,
   type BoardInput,
 } from "./pull-board";
 import type { Project } from "../../../shared/projects";
@@ -40,16 +43,33 @@ const issue = (
     pull_request: { merged: false },
   } as unknown as Issue;
 };
-const input = (over: Partial<BoardInput>): BoardInput => ({
-  server,
-  login: "Me",
+type Searches = Pick<BoardHost, "review" | "assigned" | "created">;
+/** The Gitea account's searches, unless `hosts` gives every host's. */
+const input = ({
+  review = [],
+  assigned = [],
+  created = [],
+  ...over
+}: Partial<Searches & BoardInput>): BoardInput => ({
+  hosts: [{ server, login: "Me", review, assigned, created }],
   projects: [],
-  review: [],
-  assigned: [],
-  created: [],
   lists: {},
   ...over,
 });
+const host = (
+  server: string,
+  login: string,
+  searches: Partial<Searches>,
+): BoardHost => ({
+  server,
+  login,
+  review: [],
+  assigned: [],
+  created: [],
+  ...searches,
+});
+const on = (server: string, item: Issue) =>
+  ({ ...item, repository: { ...item.repository, server } }) as Issue;
 
 it("files each PR once, yours before a review request before an assignment", () => {
   const board = buildBoard(
@@ -70,18 +90,51 @@ it("matches a project to its repository on the same server, whatever the letter 
     repository: { server: "https://other.dev", owner: "web", name: "portal" },
   });
   expect(
-    projectFor([elsewhere, portal], server, { owner: "web", name: "portal" }),
+    projectFor([elsewhere, portal], { server, owner: "web", name: "portal" }),
   ).toBe(portal);
   expect(
-    projectFor(
-      [project("scratch", "web", "portal", { scratch: true })],
+    projectFor([project("scratch", "web", "portal", { scratch: true })], {
       server,
-      {
-        owner: "web",
-        name: "portal",
-      },
-    ),
+      owner: "web",
+      name: "portal",
+    }),
   ).toBeUndefined();
+});
+
+it("keeps the same repository name on two hosts apart, each relating PRs to your login there", () => {
+  const github = "https://github.com";
+  const azure = "https://dev.azure.com/acme";
+  const board = buildBoard({
+    projects: [project("portal", "web", "portal")],
+    hosts: [
+      host(server, "me", { created: [issue("web/portal", 1, "me")] }),
+      host(github, "octo", {
+        created: [on(github, issue("web/portal", 1, "octo"))],
+        review: [on(github, issue("web/portal", 2, "me"))],
+      }),
+      host(azure, "me@acme.dev", {
+        review: [
+          on(azure, {
+            ...issue("Shop/api", 3, "anna@acme.dev"),
+            user: { id: 5, login: "anna@acme.dev", full_name: "Anna Nová" },
+          } as Issue),
+        ],
+      }),
+    ],
+    lists: { portal: { items: [], total: 0 } },
+  });
+  const relation = (s: string, n: number) =>
+    board.pulls.find((p) => p.ref.server === s && p.ref.number === n)?.relation;
+  expect(board.pulls).toHaveLength(4);
+  expect(relation(server, 1)).toBe("mine");
+  expect(relation(github, 1)).toBe("mine");
+  // "me" is someone else on GitHub.
+  expect(relation(github, 2)).toBe("review");
+  expect(board.groups.find((g) => g.project)?.pulls).toHaveLength(1);
+  const shop = board.groups.find((g) => g.repo === "Shop/api")!;
+  expect(shop.ref).toEqual({ server: azure, owner: "Shop", name: "api" });
+  // Azure DevOps logins are email addresses.
+  expect(shop.pulls[0].author).toBe("Anna Nová");
 });
 
 it("puts PRs from a project's list and the searches on one card per repository", () => {
@@ -206,31 +259,46 @@ it("asks for you on requests and assignments, and on your own PRs only once revi
 });
 
 it("names the page's place after the project a repository is cloned to", () => {
-  const projectOf = (r: { owner: string; name: string }) =>
-    r.owner === "web" && r.name === "portal"
-      ? project("Portal", "web", "portal")
-      : undefined;
-  const ref = { owner: "web", name: "portal", number: 7 };
+  const portal = project("Portal", "web", "portal");
+  const projectOf = (r: { server?: string; owner: string; name: string }) =>
+    projectFor([portal], r);
+  const ref = { server, owner: "web", name: "portal", number: 7 };
+  const key = `${server}|web/portal`;
   expect(pullsLocation(ref, "Fix it", "other/repo", projectOf)).toEqual({
-    repo: { key: "web/portal", label: "Portal" },
+    repo: { key, label: "Portal" },
     pull: { number: 7, title: "Fix it" },
   });
   expect(
     pullsLocation({ ...ref, owner: "Ops" }, undefined, null, projectOf),
   ).toEqual({
-    repo: { key: "ops/portal", label: "Ops/portal" },
+    repo: { key: `${server}|ops/portal`, label: "Ops/portal" },
     pull: { number: 7, title: undefined },
   });
-  expect(pullsLocation(null, undefined, "web/portal", projectOf).repo).toEqual({
-    key: "web/portal",
+  expect(pullsLocation(null, undefined, key, projectOf).repo).toEqual({
+    key,
     label: "Portal",
   });
-  expect(pullsLocation(null, undefined, "ops/tools", projectOf)).toEqual({
-    repo: { key: "ops/tools", label: "ops/tools" },
+  expect(
+    pullsLocation(null, undefined, `${server}|ops/tools`, projectOf),
+  ).toEqual({
+    repo: { key: `${server}|ops/tools`, label: "ops/tools" },
     pull: null,
   });
   expect(pullsLocation(null, undefined, null, projectOf)).toEqual({
     repo: null,
     pull: null,
+  });
+});
+
+it("reads a repository back from its key, server and all", () => {
+  const azure = {
+    server: "https://dev.azure.com/acme",
+    owner: "shop",
+    name: "api",
+  };
+  expect(keyRepo(repoKey(azure))).toEqual(azure);
+  expect(keyRepo(repoKey({ owner: "web", name: "portal" }))).toEqual({
+    owner: "web",
+    name: "portal",
   });
 });

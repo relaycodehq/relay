@@ -332,18 +332,24 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, deepReviewStartSchema],
       async (id, config) => {
         // The forge knows which branch a pull request merges into.
-        const pull =
+        const host =
           config.target.kind === "pr"
-            ? await (await clientFor(config.target.ref)).pull(config.target.ref)
+            ? await clientFor(config.target.ref)
+            : undefined;
+        const pull =
+          host && config.target.kind === "pr"
+            ? await host.pull(config.target.ref)
             : undefined;
         return projectChats.startDeepReview(
           id,
           config,
-          pull && {
-            number: pull.number,
-            title: pull.title,
-            base: pull.base.ref,
-          },
+          host &&
+            pull && {
+              number: pull.number,
+              title: pull.title,
+              base: pull.base.ref,
+              headRef: host.headRef(pull),
+            },
         );
       },
     ),

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PullHost } from "./host";
+import type { PullHost, PullListing } from "./host";
 import { currentBranch, git } from "../git/git";
 import { workingTree, serializeRepo } from "../git/working-tree";
 import { remoteUrl } from "../git/repository";
@@ -28,14 +28,17 @@ function identity(raw: string) {
     ? `${u.protocol}//${u.host}${u.pathname.replace(/\.git\/?$/, "").replace(/\/$/, "")}`
     : null;
 }
-const asBranchPull = (repo: Repo, p: Pull): BranchPull => ({
+const asBranchPull = (
+  repo: Repo,
+  p: Pick<Pull, "number" | "title" | "base" | "html_url">,
+): BranchPull => ({
   ref: { ...repo, number: p.number },
   title: p.title,
   base: p.base.ref,
   url: p.html_url,
 });
 async function openPulls(client: PullHost, repo: Repo) {
-  const values: Pull[] = [];
+  const values: PullListing[] = [];
   for (let page = 1; page <= 100; page++) {
     const response = await client.pulls(repo, "open", page);
     values.push(...response.items);

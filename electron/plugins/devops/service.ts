@@ -10,6 +10,7 @@ import {
 } from "../../../shared/devops";
 import type { Project } from "../../../shared/projects";
 import type { Store } from "../../app/store";
+import type { AzureCliTokens } from "../../azure-devops/cli-token";
 import { DevOpsAuth } from "./auth";
 import { DevOpsClient, type Fetch } from "./client";
 import { DevOpsKeys, type Decrypt, type Encrypt } from "./keys";
@@ -42,9 +43,11 @@ export class DevOps {
     decrypt: Decrypt,
     /** Where the filter's answers are kept; none keeps them in memory. */
     cacheFile?: string,
+    /** The `az` tokens, shared with Azure DevOps pull requests. */
+    cli?: AzureCliTokens,
   ) {
     this.keys = new DevOpsKeys(store, encrypt, decrypt);
-    this.auth = new DevOpsAuth(fetch, () => this.keys.get("pat"));
+    this.auth = new DevOpsAuth(fetch, () => this.keys.get("pat"), cli);
     this.relevance = new RelevanceFilter(
       fetch,
       () => this.keys.get("openRouterKey"),

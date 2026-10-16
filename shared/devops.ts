@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { SourceControlProvider } from "./source-control";
+import {
+  azureServer,
+  isAzureServer,
+  type SourceControlProvider,
+} from "./source-control";
 import { agentMentionPattern } from "./agents";
 
 /** A field's display name, like `Priority`, or its reference name, like `System.State`. */
@@ -182,6 +186,19 @@ export function organizationUrl(value: string) {
   if (url.hostname.endsWith(".visualstudio.com")) return url.origin;
   // Azure DevOps Server keeps the collection in the path.
   return url.origin + url.pathname.replace(/\/+$/, "");
+}
+
+/** The organization as a repository's `server` names it; null for Azure DevOps Server or none. */
+export function azureOrganizationServer(value: string) {
+  let url: string;
+  try {
+    url = organizationUrl(value);
+  } catch {
+    return null;
+  }
+  const visualStudio = /^https:\/\/([^.]+)\.visualstudio\.com$/.exec(url);
+  if (visualStudio) return azureServer(visualStudio[1]);
+  return isAzureServer(url) ? url : null;
 }
 
 /** How the organization reads in a sentence: `my-org`, or a server's host and path. */

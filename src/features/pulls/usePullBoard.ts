@@ -6,8 +6,10 @@ import { api } from "../../lib/api";
 import {
   buildBoard,
   linkedProjects,
+  onServer,
   pullKey,
   verdictOf,
+  type BoardHost,
   type BoardInput,
   type BoardPull,
   type ListedPull,
@@ -19,19 +21,21 @@ export type PullState = "open" | "closed" | "all";
 /** Every query here starts with this, so one refresh reloads the page. */
 export const PULL_BOARD = "pull-board";
 
+const FILTERS = ["review_requested", "assigned", "created"] as const;
+
 /**
- * The page's PRs: the three searches for what you're part of and the first
- * page of each linked project's list. Only your own open PRs cost a request
- * each, for their reviewers' verdicts.
+ * The page's PRs: each host's three searches for what you're part of and
+ * the first page of each linked project's list. Only your own open PRs cost
+ * a request each, for their reviewers' verdicts.
  */
 export function usePullBoard(
-  account: Account,
+  accounts: Account[],
   projects: Project[],
   state: PullState,
 ) {
   const searches = useQueries({
-    queries: (["review_requested", "assigned", "created"] as const).map(
-      (filter) => ({
+    queries: accounts.flatMap((account) =>
+      FILTERS.map((filter) => ({
         queryKey: [
           PULL_BOARD,
           "search",
@@ -41,20 +45,26 @@ export function usePullBoard(
           state,
         ],
         queryFn: () => api.search(filter, "", state, 1, account.server),
-      }),
+      })),
     ),
   });
-  const linked = linkedProjects(projects, account.server);
+  const linked = linkedProjects(
+    projects,
+    accounts.map((a) => a.server),
+  );
   const lists = useQueries({
     queries: linked.map((p) => ({
       queryKey: [PULL_BOARD, "project", p.id, state],
       queryFn: () => api.projectPulls(p.id, state, 1),
     })),
   });
-  const [review, assigned, created] = searches;
-  // The number of lists follows the projects, so they key the memo as one string.
+  // The number of lists and searches follows the projects and hosts, so
+  // each keys the memo as one string.
   const listsKey = lists
     .map((l, i) => `${linked[i].id}:${l.dataUpdatedAt}:${l.errorUpdatedAt}`)
+    .join();
+  const searchesKey = searches
+    .map((q, i) => `${accounts[Math.floor(i / 3)].server}:${q.dataUpdatedAt}`)
     .join();
   const board = useMemo(() => {
     const input: BoardInput["lists"] = {};
@@ -67,24 +77,20 @@ export function usePullBoard(
           total: data.total ?? data.items.length,
         };
     });
-    return buildBoard({
-      server: account.server,
-      login: account.user.login,
-      projects,
-      review: review.data?.items ?? [],
-      assigned: assigned.data?.items ?? [],
-      created: created.data?.items ?? [],
-      lists: input,
+    const hosts = accounts.map((account, i): BoardHost => {
+      const [review, assigned, created] = searches
+        .slice(i * 3, i * 3 + 3)
+        .map((q) => q.data?.items ?? []);
+      return {
+        server: account.server,
+        login: account.user.login,
+        review,
+        assigned,
+        created,
+      };
     });
-  }, [
-    account.server,
-    account.user.login,
-    projects,
-    review.data,
-    assigned.data,
-    created.data,
-    listsKey,
-  ]);
+    return buildBoard({ hosts, projects, lists: input });
+  }, [accounts, projects, searchesKey, listsKey]);
   const verdicts = useVerdicts(
     board.pulls.filter(
       (p) => p.relation === "mine" && p.state === "open" && !p.draft,
@@ -127,7 +133,7 @@ function useVerdicts(pulls: BoardPull[]) {
   return verdicts;
 }
 
-/** Review progress is saved on this Mac, so asking is free. */
+/** Review progress is saved on this computer, so asking is free. */
 function useStarted(pulls: BoardPull[]) {
   const results = useQueries({
     queries: pulls.map((p) => ({
@@ -155,17 +161,64 @@ function useStarted(pulls: BoardPull[]) {
   return started;
 }
 
-/** The host's search across the repositories you can see, for the search box. */
+/** The next page each host still has, by server. */
+type SearchPages = Record<string, number>;
+
+/**
+ * Every host's search across the repositories you can see, for the search
+ * box. Each page asks the hosts that have more; one that fails is left out
+ * of the rest, its error kept, unless they all do.
+ */
 export function usePullSearch(
   query: string,
   state: PullState,
-  account: Account,
+  accounts: Account[],
 ) {
+  const first: SearchPages = Object.fromEntries(
+    accounts.map((a) => [a.server, 1]),
+  );
   return useInfiniteQuery({
-    queryKey: [PULL_BOARD, "find", account.server, account.id, query, state],
-    queryFn: ({ pageParam }) =>
-      api.search("all", query, state, pageParam, account.server),
-    initialPageParam: 1,
+    queryKey: [
+      PULL_BOARD,
+      "find",
+      accounts.map((a) => `${a.server} ${a.id}`),
+      query,
+      state,
+    ],
+    queryFn: async ({ pageParam }) => {
+      const servers = Object.keys(pageParam);
+      const answers = await Promise.allSettled(
+        servers.map((server) =>
+          api.search("all", query, state, pageParam[server], server),
+        ),
+      );
+      const failed = answers.flatMap((a) =>
+        a.status === "rejected" ? [a.reason as unknown] : [],
+      );
+      if (failed.length === answers.length) throw failed[0];
+      const next: SearchPages = {};
+      const items: ListedPull[] = [];
+      let total: number | undefined = 0;
+      answers.forEach((a, i) => {
+        if (a.status !== "fulfilled") return;
+        items.push(...a.value.items.map((item) => onServer(item, servers[i])));
+        if (a.value.nextPage) next[servers[i]] = a.value.nextPage;
+        total =
+          a.value.total === undefined || total === undefined
+            ? undefined
+            : total + a.value.total;
+      });
+      return {
+        items: items.sort(
+          (a, b) =>
+            (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0),
+        ),
+        total: failed.length ? undefined : total,
+        nextPage: Object.keys(next).length ? next : null,
+        failed,
+      };
+    },
+    initialPageParam: first,
     getNextPageParam: (page) => page.nextPage ?? undefined,
     enabled: !!query,
   });

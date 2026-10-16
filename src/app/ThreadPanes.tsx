@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
+import type { SourceControlKind } from "../../shared/source-control";
 import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
@@ -17,6 +18,7 @@ import type {
   Viewing,
 } from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
+import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
@@ -76,7 +78,9 @@ export function ThreadChanges({
   review: {
     /** Who Relay reviews as on the project's host; null until signed in. */
     account: Account | null;
-    github: boolean;
+    kind: SourceControlKind | null;
+    error: string | null;
+    checking: boolean;
     onRecheck: () => void;
     /** Asks the PR's thread about lines of its diff. */
     onDiscuss: (target: QuestionTarget, pr: Pull) => void;
@@ -128,36 +132,13 @@ export function ThreadChanges({
         ) : (
           <div className="empty pane-empty">
             <GitPullRequest size={28} />
-            {review.github ? (
-              <>
-                <h2>Sign in to GitHub</h2>
-                <p>
-                  Run <code>gh auth login</code> in a terminal; Relay reviews as
-                  that login.
-                </p>
-                <button onClick={review.onRecheck}>Check again</button>
-              </>
-            ) : (
-              <>
-                <h2>No pull request host</h2>
-                {review.onConnect ? (
-                  <>
-                    <p>
-                      Relay reviews pull requests on GitHub and Gitea. This
-                      folder has no github.com remote; for a Gitea one, connect
-                      Gitea.
-                    </p>
-                    <button onClick={review.onConnect}>Connect Gitea</button>
-                  </>
-                ) : (
-                  <p>
-                    Relay reviews pull requests on GitHub, and on Gitea once
-                    it's on in Settings → Integrations. This folder has no
-                    github.com remote.
-                  </p>
-                )}
-              </>
-            )}
+            <HostPrompt
+              kind={review.kind}
+              error={review.error}
+              checking={review.checking}
+              onRecheck={review.onRecheck}
+              onConnectGitea={review.onConnect}
+            />
           </div>
         )
       ) : project.plain ? (

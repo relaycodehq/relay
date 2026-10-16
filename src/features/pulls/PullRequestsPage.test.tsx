@@ -74,7 +74,8 @@ it("loads search results after the first fifty and keeps loaded rows when the ne
       root.render(
         <QueryClientProvider client={client}>
           <PullRequestsPage
-            account={account}
+            accounts={[account]}
+            onRecheckHosts={noop}
             projects={[]}
             repo={null}
             onRepo={noop}
