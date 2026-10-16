@@ -60,6 +60,10 @@ export interface DeepReviewHost {
     prompt: string,
   ): Promise<void>;
   active(chatId: string): boolean;
+  /** Waits for a turn that's stopped or finished to give its thread back, and the review step its end takes. */
+  finished(chatId: string): Promise<void>;
+  /** As `finished`, for a reviewer, and what its end does after: its queue and the review's next step. */
+  windDown(chatId: string): Promise<void>;
   /** Stops a reviewer's turn and holds what's queued for it, as its own Stop does. */
   stop(chatId: string): void;
   /** Ends a thread's agent processes; it resumes their sessions if it runs again. */
@@ -174,6 +178,14 @@ export class DeepReviews {
    * with the reports that are in.
    */
   async resume(chatId: string, only?: ResumeReview) {
+    const stopped = (await this.host.load(chatId)).deepReview;
+    if (!stopped) throw new Error("This thread has no review to continue.");
+    // A stopped answer reads as stopped while its agent winds down; going on
+    // waits for that rather than refusing.
+    await Promise.all([
+      this.host.finished(chatId),
+      ...stopped.reviewers.map((r) => this.host.windDown(r.chatId)),
+    ]);
     const chat = await this.host.load(chatId);
     const state = chat.deepReview;
     if (!state) throw new Error("This thread has no review to continue.");

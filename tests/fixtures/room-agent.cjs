@@ -1307,27 +1307,29 @@ if (args.includes("--permission-prompt-tool")) {
         method: "turn/started",
         params: { threadId: "fixture-thread", turn: { id: "fixture-review" } },
       });
-      setTimeout(() => {
-        send({
-          method: "item/completed",
-          params: {
-            threadId: "fixture-thread",
-            item: {
-              id: "fixture-review-exit",
-              type: "exitedReviewMode",
-              review:
-                "- [P1] Queue reorder can drop a message — src/queue.ts:3",
+      // Held, the review only ends when it's interrupted.
+      if (!process.env.RELAY_FIXTURE_REVIEW_HOLD)
+        setTimeout(() => {
+          send({
+            method: "item/completed",
+            params: {
+              threadId: "fixture-thread",
+              item: {
+                id: "fixture-review-exit",
+                type: "exitedReviewMode",
+                review:
+                  "- [P1] Queue reorder can drop a message — src/queue.ts:3",
+              },
             },
-          },
-        });
-        send({
-          method: "turn/completed",
-          params: {
-            threadId: "fixture-thread",
-            turn: { id: "fixture-review", status: "completed" },
-          },
-        });
-      }, 300);
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { id: "fixture-review", status: "completed" },
+            },
+          });
+        }, 300);
     } else if (m.method === "thread/compact/start") {
       record({ compact: m.params });
       send({ id: m.id, result: {} });

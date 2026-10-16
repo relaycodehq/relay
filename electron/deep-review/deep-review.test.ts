@@ -860,9 +860,13 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
     fixes: ["F1"],
   });
   expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed");
+    // The finding reads fixed before the answer that fixed it lets go.
+    expect(
+      chats.list(projectId).find((c) => c.id === chat.id)?.running,
+    ).toBeFalsy();
+  });
 
   // Settled, it goes, but not while it holds an edit.
   await chats.triage(chat.id, { kind: "settle" });
@@ -1071,6 +1075,40 @@ it("stops its reviewers with the review, and picks up where it stopped", async (
   // Nothing hands over to the lead after a stop.
   expect((await chats.get(chat.id)).messages).toHaveLength(1);
   await chats.resumeDeepReview(chat.id);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+  );
+});
+
+it("goes on with a stopped review once its reviewers let go, rather than refusing while they wind down", async () => {
+  // Codex lets go of a stopped review only once the test says so.
+  const release = join(root, "stop-release");
+  vi.stubEnv("RELAY_FIXTURE_STOP_RELEASE", release);
+  vi.stubEnv("RELAY_FIXTURE_REVIEW_HOLD", "1");
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ reviewers: [{ provider: "codex", choice }] }),
+  );
+  await vi.waitFor(async () =>
+    expect((await capture()).some((r) => r.review)).toBe(true),
+  );
+  await chats.cancel(chat.id);
+  const reviewer = (await chats.get(chat.id)).deepReview!.reviewers[0]!;
+  await vi.waitFor(async () =>
+    expect((await chats.get(reviewer.chatId)).messages.at(-1)?.status).toBe(
+      "cancelled",
+    ),
+  );
+  // It reads stopped, so Continue is offered while Codex still winds down.
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.running,
+  ).toBeFalsy();
+  vi.stubEnv("RELAY_FIXTURE_REVIEW_HOLD", "");
+  const resumed = chats.resumeDeepReview(chat.id);
+  await writeFile(release, "");
+  await resumed;
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
   );

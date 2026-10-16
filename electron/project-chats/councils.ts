@@ -49,6 +49,17 @@ export class Councils {
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
       active: (id) => this.core.active.has(id),
+      finished: async (id) => {
+        await this.core.active.finished(id);
+        // A turn's end takes a review step; going on before it lands races it.
+        await Promise.allSettled(this.stepping());
+      },
+      windDown: async (id) => {
+        await this.core.active.finished(id);
+        // A reviewer's end goes on in its thread: its queue, then another step.
+        await this.core.control(id, async () => {});
+        await Promise.allSettled(this.stepping());
+      },
       stop: (id) => this.stopReviewer(id),
       close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
