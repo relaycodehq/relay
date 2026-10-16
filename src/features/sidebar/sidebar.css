@@ -791,6 +791,7 @@
   opacity: 1;
 }
 .sb-card-top {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -962,16 +963,77 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-/* Hover trades the state for the triage actions, like the thread rows. */
-.sb-card:hover .sb-card-state,
-.sb-card:focus-visible .sb-card-state,
-.sb-card:has(:focus-visible) .sb-card-state,
-.sb-card:has(.sb-card-actions [data-popup-open]) .sb-card-state,
-.sb-card:has(.sb-card-actions [data-popup-shown]) .sb-card-state {
+/* Hover trades the state for the triage actions, like the thread rows. A
+   started thread's line swaps them at once. */
+.sb-card:hover .sb-card-meta .sb-card-state,
+.sb-card:focus-visible .sb-card-meta .sb-card-state,
+.sb-card:has(:focus-visible) .sb-card-meta .sb-card-state,
+.sb-card:has(.sb-card-actions [data-popup-open]) .sb-card-meta .sb-card-state,
+.sb-card:has(.sb-card-actions [data-popup-shown]) .sb-card-meta .sb-card-state {
   display: none;
 }
 .sb-cards.shortcuts .sb-card .sb-card-state {
   display: inline-flex;
+}
+/* The top row deals them in: the state slides off to the left, Settle comes
+   in from the right edge with Snooze behind it, and leaving takes them
+   straight back. The ⌘ numbers keep the state where it is. */
+.sb-card-top .sb-card-state {
+  transition:
+    opacity 0.14s ease-out 0.07s,
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) 0.07s;
+}
+.sb-cards:not(.shortcuts)
+  .sb-card:is(
+    :hover,
+    :focus-visible,
+    :has(
+      :focus-visible,
+      .sb-card-actions [data-popup-open],
+      .sb-card-actions [data-popup-shown]
+    )
+  )
+  .sb-card-top
+  .sb-card-state {
+  position: absolute;
+  right: 0;
+  opacity: 0;
+  transform: translateX(-10px);
+  transition-duration: 0.1s;
+  transition-delay: 0s;
+}
+/* Its buttons hide themselves, or they'd vanish before fading out. */
+.sb-card-top .sb-card-actions {
+  opacity: 1;
+}
+.sb-card-top .sb-card-action {
+  transition:
+    opacity 0.16s ease-out 0.03s,
+    transform 0.24s cubic-bezier(0.2, 0.9, 0.25, 1.1) 0.03s,
+    background-color 0.1s;
+}
+.sb-card-top .sb-card-action:not(:last-child) {
+  transition-delay: 0.09s, 0.09s, 0s;
+}
+/* Hidden is the exception, so a disabled button keeps its own opacity once
+   shown. */
+.sb-card:not(
+    :hover,
+    :focus-visible,
+    :has(
+      :focus-visible,
+      .sb-card-actions [data-popup-open],
+      .sb-card-actions [data-popup-shown]
+    )
+  )
+  .sb-card-top
+  .sb-card-action {
+  opacity: 0;
+  transform: translateX(14px);
+  transition:
+    opacity 0.09s ease-in,
+    transform 0.09s ease-in,
+    background-color 0.1s;
 }
 .sb-card-state i {
   width: 6px;
