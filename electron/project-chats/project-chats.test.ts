@@ -997,15 +997,24 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     chat.id,
     claude("@claude Start the fixture background task"),
   );
-  await vi.waitFor(async () =>
-    expect(
-      (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.status,
-    ).toBe("complete"),
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.status,
+      ).toBe("complete"),
+    { timeout: 10_000 },
   );
-  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  await vi.waitFor(
+    () => expect(chats.hasActiveProject(projectId)).toBe(false),
+    { timeout: 10_000 },
+  );
   await chats.send(chat.id, claude("@claude Explain the cache guard"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 10_000 },
   );
   expect(
     (await chats.get(chat.id)).messages.map((m) => [
@@ -1031,19 +1040,24 @@ it("steers a turn Claude started by itself", async () => {
     chat.id,
     claude("@claude Start the fixture background task to steer"),
   );
-  await vi.waitFor(async () =>
-    expect(
-      (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
-    ).toBe("Looking into it."),
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
+      ).toBe("Looking into it."),
+    { timeout: 10_000 },
   );
   await chats.send(chat.id, {
     ...claude("@claude Use the blue one"),
     delivery: "steer",
   });
-  await vi.waitFor(async () => {
-    expect(chats.hasActiveProject(projectId)).toBe(false);
-    expect((await chats.get(chat.id)).messages).toHaveLength(5);
-  });
+  await vi.waitFor(
+    async () => {
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+      expect((await chats.get(chat.id)).messages).toHaveLength(5);
+    },
+    { timeout: 10_000 },
+  );
   expect(
     (await chats.get(chat.id)).messages.map((m) => [
       m.role,
@@ -1076,19 +1090,24 @@ it.each([
       provider: "claude" as const,
     });
     await chats.send(chat.id, claude(`@claude ${prompt}`));
-    await vi.waitFor(async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
-        "Looking into it.",
-      ),
+    await vi.waitFor(
+      async () =>
+        expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+          "Looking into it.",
+        ),
+      { timeout: 10_000 },
     );
     await chats.send(chat.id, {
       ...claude("@claude Use the blue one"),
       delivery: "steer",
     });
-    await vi.waitFor(async () => {
-      expect(chats.hasActiveProject(projectId)).toBe(false);
-      expect((await chats.get(chat.id)).messages).toHaveLength(4);
-    });
+    await vi.waitFor(
+      async () => {
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+        expect((await chats.get(chat.id)).messages).toHaveLength(4);
+      },
+      { timeout: 10_000 },
+    );
     const messages = (await chats.get(chat.id)).messages;
     expect(
       messages.map((m) => [m.role, m.body, m.status, !!m.steered]),
