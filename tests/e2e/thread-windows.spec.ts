@@ -146,6 +146,10 @@ test("a thread pops out into its own window and back, and reopens after a restar
     await expect(page.locator(".project-composer")).toHaveCount(0);
     await expect(card("Pop me out")).toContainText("Own window");
 
+    // ⌘1–9 in its window open Activity's threads in the main window.
+    await own.keyboard.press("ControlOrMeta+Digit2");
+    await expect(page.getByText("Answer that stays")).toBeVisible();
+
     // Its card raises the window and leaves the main window where it was.
     await card("Stays here").click();
     await expect(page.getByText("Answer that stays")).toBeVisible();
@@ -155,6 +159,10 @@ test("a thread pops out into its own window and back, and reopens after a restar
     // Raised from here, it flashes its edges so it's found on another screen.
     await expect(own.locator(".window-flash")).toHaveCount(1);
     await expect(own.locator(".window-flash")).toHaveCount(0);
+    // Its own number only flashes it.
+    await own.keyboard.press("ControlOrMeta+Digit1");
+    await expect(own.locator(".window-flash")).toHaveCount(1);
+    await expect(page.getByText("Answer that stays")).toBeVisible();
 
     // Back: its window closes and the thread opens in the main window.
     const gone = own.waitForEvent("close");

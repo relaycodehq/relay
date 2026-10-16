@@ -15,6 +15,7 @@ import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import { useUnread } from "../features/sidebar/useUnread";
 import { BackButton } from "../features/thread-windows/ThreadWindowButtons";
 import { WindowFlash } from "../features/thread-windows/WindowFlash";
+import { useJumpInMainWindow } from "../features/thread-windows/useJumpInMainWindow";
 import { ErrorBox, Loading } from "../ui/ui";
 import { fitHeader } from "./header-fit";
 import { ProjectTitle } from "./ShellTitlebar";
@@ -59,6 +60,7 @@ export default function ThreadWindowShell({
   const everyThread = useEveryThread(realProjects);
   // Read while this window is in front, its "New" divider and all.
   useUnread(chat?.id, nav.chats.data ?? []);
+  useJumpInMainWindow(setError);
   useEffect(() => {
     document.title = chat?.title ?? "Relay";
   }, [chat?.title]);

@@ -8,10 +8,30 @@ export interface ThreadWindow {
 
 /**
  * What a thread's window asks the main window to do, as its own commands
- * would there: "meme" sets memes up in a new Scratchpad thread.
+ * would there: "meme" sets memes up in a new Scratchpad thread, "jump-N"
+ * opens Activity's Nth thread as `jump-thread` does.
  */
-export const mainWindowCommands = ["meme"] as const;
+export const mainWindowCommands = [
+  "meme",
+  "jump-1",
+  "jump-2",
+  "jump-3",
+  "jump-4",
+  "jump-5",
+  "jump-6",
+  "jump-7",
+  "jump-8",
+  "jump-9",
+] as const;
 export type MainWindowCommand = (typeof mainWindowCommands)[number];
+
+type JumpCommand = Extract<MainWindowCommand, `jump-${string}`>;
+
+/** The command opening Activity's `digit`th (1–9) thread in the main window. */
+export const jumpCommand = (digit: number) => `jump-${digit}` as JumpCommand;
+
+/** The 1–9 a "jump-N" command carries. */
+export const jumpDigitOf = (command: JumpCommand) => Number(command.slice(5));
 
 /** Which threads have their own window, and which of those is in front. */
 export interface ThreadWindowsState {

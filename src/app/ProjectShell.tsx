@@ -62,10 +62,12 @@ import {
   hasOwnWindow,
   useHasOwnWindow,
 } from "../features/thread-windows/thread-windows";
-import type {
-  MainWindowCommand,
-  ThreadWindow,
+import {
+  jumpDigitOf,
+  type MainWindowCommand,
+  type ThreadWindow,
 } from "../../shared/thread-windows";
+import { askJump } from "../features/sidebar/useActivityKeys";
 import { SignInDialog } from "../features/settings/SignInDialog";
 import { ErrorBox, IconButton, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
@@ -233,10 +235,11 @@ export default function ProjectShell() {
     void api.takeOpenThread().then(show).catch(setError);
     return api.onOpenThread(show);
   }, [loaded]);
-  // Asked from a thread's own window, which can't open a Scratchpad thread.
-  const runAsked = useStableCallback(
-    (command: MainWindowCommand | null) => command && runCommand(command),
-  );
+  // Asked from a thread's own window, which has no Scratchpad or Activity.
+  const runAsked = useStableCallback((command: MainWindowCommand | null) => {
+    if (command === "meme") runCommand(command);
+    else if (command) askJump(jumpDigitOf(command) - 1);
+  });
   useEffect(() => {
     if (!loaded) return;
     void api.takeMainWindowCommand().then(runAsked).catch(setError);

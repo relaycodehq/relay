@@ -7,6 +7,20 @@ import type { ThreadActions } from "./useThreadActions";
 import { noteUsed } from "../../lib/used";
 
 const CMD_HINT_DELAY_MS = 500;
+/** How long a jump asked for from a thread's window waits for the cards. */
+const ASKED_JUMP_TTL_MS = 10_000;
+
+let askedJump: { index: number; at: number } | undefined;
+const askedListeners = new Set<() => void>();
+
+/**
+ * `jump-thread` pressed in a thread's own window: opens Activity's
+ * `index`th card here, once the cards are in if this window just opened.
+ */
+export function askJump(index: number) {
+  askedJump = { index, at: Date.now() };
+  askedListeners.forEach((listener) => listener());
+}
 
 /**
  * The `settle` shortcut on the open thread, and `jump-thread`'s digits onto
@@ -89,5 +103,20 @@ export function useActivityKeys({
     open(c);
     return true;
   };
+  const takeAsked = useRef(() => {});
+  takeAsked.current = () => {
+    if (!askedJump) return;
+    if (Date.now() - askedJump.at > ASKED_JUMP_TTL_MS) askedJump = undefined;
+    else if (cards.length) {
+      jumpTo.current(askedJump.index);
+      askedJump = undefined;
+    }
+  };
+  useEffect(() => {
+    const take = () => takeAsked.current();
+    askedListeners.add(take);
+    return () => void askedListeners.delete(take);
+  }, []);
+  useEffect(() => takeAsked.current(), [cards.length]);
   return held;
 }
