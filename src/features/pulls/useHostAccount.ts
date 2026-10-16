@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
-import { hostKindOf } from "../../../shared/source-control";
+import { hostKindOf, hostOffMessage } from "../../../shared/source-control";
 import type { Account } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { errorMessage } from "../../lib/error-message";
@@ -27,11 +27,15 @@ export function useHostAccount(
     ...hostAccountQuery(repository?.server ?? ""),
     enabled: cli,
   });
+  const error = cli && host.error ? errorMessage(host.error) : null;
+  // Turned off, the account it had before stays in the cache but isn't used.
+  const off = !!kind && error === hostOffMessage(kind);
   return {
     kind,
-    account: !repository ? null : cli ? (host.data ?? null) : (gitea ?? null),
+    account:
+      !repository || off ? null : cli ? (host.data ?? null) : (gitea ?? null),
     /** The CLI is signed in but its host didn't answer, or the host is off. */
-    error: cli && host.error ? errorMessage(host.error) : null,
+    error,
     /** Asks the CLI again, after signing in in a terminal. */
     recheck: () => void host.refetch(),
     checking: cli && host.isFetching,

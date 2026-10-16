@@ -282,16 +282,25 @@ export function PullRequestsPage({
           <button
             className="pulls-icon-button"
             aria-label="Refresh pull requests"
-            onClick={() =>
-              void qc.invalidateQueries({ queryKey: [PULL_BOARD] })
-            }
+            onClick={() => {
+              // A login made since may be someone else: it decides which PRs are yours.
+              onRecheckHosts();
+              void qc.invalidateQueries({ queryKey: [PULL_BOARD] });
+            }}
           >
             <RefreshCw size={14} className={fetching ? "spin" : ""} />
           </button>
         </div>
       </header>
       {error ? (
-        <ErrorBox error={error} retry={retry} />
+        <ErrorBox
+          error={error}
+          retry={() => {
+            // A refused sign-in may come back as another account.
+            onRecheckHosts();
+            retry();
+          }}
+        />
       ) : (
         !!hostError && <ErrorBox error={hostError} retry={onRecheckHosts} />
       )}
