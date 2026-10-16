@@ -47,6 +47,42 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.search-select-prefix {
+  color: var(--muted);
+}
+.search-select-note {
+  flex: none;
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* The row under the list that shows and hides the folded options. */
+.search-select-popup .composer-select-item.search-select-fold {
+  justify-content: space-between;
+  margin: 0;
+  padding-inline: 13px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+}
+.search-select-popup .search-select-fold:hover {
+  color: var(--text);
+}
+.search-select-check-start {
+  display: flex;
+  flex: none;
+  width: 13px;
+  color: var(--accent);
+}
+/* For rows whose labels need the room, like branch names. */
+.search-select-popup.search-select-wide {
+  width: 420px;
+}
 .search-select-empty {
   margin: 0;
   padding: 10px;
@@ -73,6 +109,9 @@
 }
 .search-select-check {
   margin-left: auto;
+}
+.search-select-note + .search-select-check {
+  margin-left: 0;
 }
 /* The row under the list, e.g. Finder: it stays put while the list scrolls. */
 .search-select-popup .search-select-action {

@@ -67,6 +67,11 @@ function useTargetPick(
     queryFn: () => api.projectBranches(projectId),
     enabled: setup.kind === "branch",
   });
+  const counts = useQuery({
+    queryKey: ["project-branch-counts", projectId],
+    queryFn: () => api.projectBranchCounts(projectId),
+    enabled: setup.kind === "branch",
+  });
   const commits = useQuery({
     queryKey: ["recent-commits", projectId],
     queryFn: async () =>
@@ -98,6 +103,8 @@ function useTargetPick(
     bases,
     base,
     setBase,
+    branchList: branches.data,
+    branchCounts: counts.data,
     branchesPending: branches.isPending,
     pull,
     setPull,

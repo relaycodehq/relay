@@ -1,7 +1,14 @@
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { git } from "./git";
 import { gitOperation, serializeRepo } from "./working-tree";
 import { localTwin } from "../../shared/branches";
-import type { BranchAction, BranchList } from "../../shared/branches";
+import type {
+  BranchAction,
+  BranchCount,
+  BranchCounts,
+  BranchList,
+} from "../../shared/branches";
 /** The branches work usually merges into: origin's HEAD, then the usual names. */
 export async function baseCandidates(root: string) {
   const originHead = (
@@ -16,7 +23,7 @@ export async function baseCandidates(root: string) {
     .replace(/^origin\//, "");
   return [
     ...new Set(
-      [originHead, "main", "master", "trunk", "develop"].filter(Boolean),
+      [originHead, "main", "master", "trunk", "develop", "dev"].filter(Boolean),
     ),
   ];
 }
@@ -101,6 +108,102 @@ export async function branches(root: string): Promise<BranchList> {
           Number(b.current) - Number(a.current) ||
           Number(a.remote) - Number(b.remote),
       ),
+  };
+}
+/**
+ * Nothing was ever committed to local branch `name`: its reflog only records
+ * it being made or renamed. Without a reflog that's unknown, so false.
+ */
+async function neverCommitted(commonDir: string, name: string) {
+  const log = await readFile(
+    join(commonDir, "logs", "refs", "heads", name),
+    "utf8",
+  ).catch(() => "");
+  const entries = log
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.slice(line.indexOf("\t") + 1));
+  return (
+    entries.length > 0 &&
+    entries.every((e) => /^branch: (created|renamed)/i.test(e))
+  );
+}
+
+/**
+ * Where each branch stands against the bases. Ahead and behind count against
+ * every base that exists, locally and on origin; a branch takes whichever it's
+ * closest to, so work merged into any of them, on either side, reads as merged.
+ */
+export async function branchCounts(root: string): Promise<BranchCounts> {
+  const [refs, bases, commonDir] = await Promise.all([
+    git(root, [
+      "for-each-ref",
+      "--format=%(refname)",
+      "refs/heads/",
+      "refs/remotes/origin/",
+    ]),
+    baseCandidates(root),
+    git(root, ["rev-parse", "--git-common-dir"]).then(
+      (dir) => resolve(root, dir.trim()),
+      () => "",
+    ),
+  ]);
+  const existing = refs.split("\n");
+  const compareTo = bases.flatMap((base) =>
+    [`refs/heads/${base}`, `refs/remotes/origin/${base}`]
+      .filter((ref) => existing.includes(ref))
+      .map((ref) => ({ ref, base })),
+  );
+  const list = (counts: string) =>
+    git(root, [
+      "for-each-ref",
+      `--format=%(refname)%00%(symref)%00%(worktreepath)%00%(objectname)%00%(committerdate:unix)${counts}`,
+      "refs/heads/",
+      "refs/remotes/",
+    ]);
+  const counts = compareTo
+    .map(({ ref }) => `%00%(ahead-behind:${ref})`)
+    .join("");
+  // %(ahead-behind) arrived in git 2.41; older ones list without the counts.
+  const out = counts
+    ? await list(counts).catch(() => list(""))
+    : await list("");
+  const rows = out.trimEnd().split("\n").filter(Boolean);
+  const entries = await Promise.all(
+    rows.map(async (row): Promise<[string, BranchCount] | null> => {
+      const [ref, symref, worktree, sha, date, ...pairs] = row.split("\0");
+      if (symref) return null;
+      const remote = ref.startsWith("refs/remotes/");
+      const name = ref.slice(remote ? 13 : 11);
+      const closest = pairs
+        .map((p, i) => {
+          const [ahead, behind] = p.split(" ").map(Number);
+          return { ahead, behind, against: compareTo[i].base };
+        })
+        .filter((c) => Number.isFinite(c.ahead) && Number.isFinite(c.behind))
+        .sort((x, y) => x.ahead - y.ahead || x.behind - y.behind)[0];
+      // A worktree's branch the bases already have may just be new.
+      const noCommits =
+        !remote &&
+        !!worktree &&
+        closest?.ahead === 0 &&
+        !bases.includes(name) &&
+        !!commonDir &&
+        (await neverCommitted(commonDir, name));
+      return [
+        name,
+        {
+          sha,
+          date: Number(date) * 1000,
+          ...closest,
+          ...(noCommits ? { noCommits } : {}),
+        },
+      ];
+    }),
+  );
+  return {
+    compared: [...new Set(compareTo.map((c) => c.base))],
+    branches: Object.fromEntries(entries.filter((e) => e !== null)),
   };
 }
 export async function changeBranch(root: string, action: BranchAction) {

@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branches, changeBranch } from "./branches";
+import { branchCounts, branches, changeBranch } from "./branches";
+import type { BranchCounts } from "../../shared/branches";
 let root: string;
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", root, ...args], {
@@ -122,6 +123,7 @@ it("offers origin's default branch first as the base to merge into", async () =>
     "main",
     "master",
     "trunk",
+    "dev",
   ]);
 });
 it("marks a remote with unrelated history, but not one with an orphan branch", async () => {
@@ -159,4 +161,76 @@ it("marks a remote with unrelated history, but not one with an orphan branch", a
   } finally {
     await rm(other, { recursive: true, force: true });
   }
+});
+it("leaves the counting out of the plain list", async () => {
+  expect(Object.keys((await branches(root)).branches[0]).sort()).toEqual([
+    "current",
+    "name",
+    "ref",
+    "remote",
+    "unrelated",
+    "worktree",
+  ]);
+});
+it("counts what each branch has over the base, merged on origin counting as in it", async () => {
+  git("switch", "-q", "feature");
+  for (const n of [1, 2]) {
+    await writeFile(join(root, "file.ts"), `feature ${n}\n`);
+    git("commit", "-qam", `Feature ${n}`);
+  }
+  git("switch", "-q", "-c", "done", "main");
+  await writeFile(join(root, "done.ts"), "done\n");
+  git("add", ".");
+  git("commit", "-qm", "Done");
+  git("switch", "-q", "main");
+  // Merged upstream while the local main hasn't pulled it yet.
+  git("update-ref", "refs/remotes/origin/main", git("rev-parse", "done"));
+  const list = await branchCounts(root);
+  const named = (name: string) => list.branches[name];
+  expect(list.compared).toEqual(["main"]);
+  expect(named("feature")).toMatchObject({ ahead: 2, behind: 0 });
+  expect(named("done")).toMatchObject({
+    ahead: 0,
+    sha: git("rev-parse", "done"),
+  });
+  expect(named("main")!.date).toBeGreaterThan(Date.now() - 60_000);
+});
+it("counts a branch that landed on dev as merged, against dev", async () => {
+  git("switch", "-q", "-c", "dev");
+  await writeFile(join(root, "dev.ts"), "dev\n");
+  git("add", ".");
+  git("commit", "-qm", "Dev work");
+  git("switch", "-q", "-c", "landed", "main");
+  await writeFile(join(root, "landed.ts"), "landed\n");
+  git("add", ".");
+  git("commit", "-qm", "Landed");
+  git("switch", "-q", "dev");
+  git("merge", "-q", "--no-edit", "landed");
+  const list = await branchCounts(root);
+  const named = (name: string) => list.branches[name];
+  expect(list.compared).toEqual(["main", "dev"]);
+  expect(named("landed")).toMatchObject({ ahead: 0, against: "dev" });
+  // Branched off main and not on dev: counted against main.
+  expect(named("feature")).toMatchObject({ ahead: 0, against: "main" });
+  expect(named("dev")).toMatchObject({ ahead: 0, against: "dev" });
+});
+it("tells a worktree's branch with no commits yet from one that was merged", async () => {
+  git("worktree", "add", "-q", "-b", "fresh", join(root, "wt-fresh"), "main");
+  git("worktree", "add", "-q", "-b", "done", join(root, "wt-done"), "main");
+  git("-C", join(root, "wt-done"), "branch", "-m", "done-renamed");
+  await writeFile(join(root, "wt-done", "done.ts"), "done\n");
+  git("-C", join(root, "wt-done"), "add", ".");
+  git("-C", join(root, "wt-done"), "commit", "-qm", "Done");
+  git("merge", "-q", "--ff-only", "done-renamed");
+  git("-C", join(root, "wt-fresh"), "branch", "-m", "fresh-renamed");
+  const list = await branchCounts(root);
+  const named = (list: BranchCounts, name: string) => list.branches[name];
+  expect(named(list, "fresh-renamed")).toMatchObject({
+    ahead: 0,
+    noCommits: true,
+  });
+  expect(named(list, "done-renamed")).toMatchObject({ ahead: 0 });
+  expect(named(list, "done-renamed")!.noCommits).toBeUndefined();
+  // Not checked out anywhere: left as merged.
+  expect(named(list, "feature")!.noCommits).toBeUndefined();
 });

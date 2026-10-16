@@ -15,6 +15,29 @@ export interface BranchList {
   /** Names work usually merges into, most likely first; see `baseCandidates`. */
   bases: string[];
 }
+/**
+ * Where a branch stands against the bases. Kept apart from `BranchList`
+ * because counting walks history, which on a big repository without a
+ * commit-graph takes a good part of a second; only pickers that show it ask.
+ */
+export interface BranchCount {
+  sha: string;
+  /** Its last commit's committer date, in ms. */
+  date: number;
+  /** Commits it has that its closest base lacks, and the reverse; unknown on git before 2.41. */
+  ahead?: number;
+  behind?: number;
+  /** That closest base, of `BranchCounts.compared`. */
+  against?: string;
+  /** A worktree's branch nothing was committed to yet, rather than one that was merged. */
+  noCommits?: boolean;
+}
+export interface BranchCounts {
+  /** The bases that exist, locally or on origin, which the counts are against. */
+  compared: string[];
+  /** By branch name, as in `BranchRef.name`. */
+  branches: Record<string, BranchCount>;
+}
 export const branchActionSchema = z
   .object({
     kind: z.enum(["switch", "create"]),

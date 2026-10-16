@@ -22,7 +22,7 @@ import {
   mergePlan,
 } from "../git/branch-merge";
 import { rebaseOnUpstream } from "../git/branch-rebase";
-import { branches, changeBranch } from "../git/branches";
+import { branchCounts, branches, changeBranch } from "../git/branches";
 import { generateCommitMessage } from "../git/commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../git/commit-split";
 import { commitDetail, commitDiff, commitLog } from "../git/history";
@@ -79,6 +79,9 @@ export function gitHandlers(ctx: ApiContext) {
     ),
     projectBranches: takes([idSchema], async (id) =>
       branches(await projects.root(id)),
+    ),
+    projectBranchCounts: takes([idSchema], async (id) =>
+      branchCounts(await projects.root(id)),
     ),
     projectChangeBranch: takes(
       [idSchema, branchActionSchema],

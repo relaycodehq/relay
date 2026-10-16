@@ -10,6 +10,7 @@ import type { Project } from "../../../shared/projects";
 import type { TargetPick } from "./useDeepReviewSetup";
 import { SearchSelect } from "../../ui/SearchSelect";
 import { ProjectPullPicker } from "../pulls/ProjectPullPicker";
+import { branchOptions, branchSelect } from "../changes/branch-options";
 
 const targets: {
   kind: ReviewTarget["kind"];
@@ -86,7 +87,12 @@ export function TargetField({
                   value={pick.head ?? ""}
                   unset="Choose a branch"
                   onChange={pick.setHead}
-                  options={pick.heads.map((b) => ({ value: b, label: b }))}
+                  options={branchOptions(
+                    pick.heads,
+                    pick.branchList,
+                    pick.branchCounts,
+                  )}
+                  {...branchSelect}
                   placeholder="Search branches…"
                 />
                 <span className="deep-review-target-detail muted">into</span>
@@ -95,7 +101,12 @@ export function TargetField({
                     label="Base branch"
                     value={pick.base}
                     onChange={pick.setBase}
-                    options={pick.bases.map((b) => ({ value: b, label: b }))}
+                    options={branchOptions(
+                      pick.bases,
+                      pick.branchList,
+                      pick.branchCounts,
+                    )}
+                    {...branchSelect}
                     placeholder="Search branches…"
                   />
                 ) : (

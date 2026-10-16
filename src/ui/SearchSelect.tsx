@@ -1,18 +1,26 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Popover } from "@base-ui/react/popover";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import "./search-select.css";
 
 export interface SearchOption {
   value: string;
   label: string;
+  /** Muted text the label starts with, e.g. a branch's folder; the search reads it too. */
+  prefix?: string;
   /** Muted text after the label, e.g. a path; the search reads it too. */
   detail?: string;
   icon?: ReactNode;
+  /** Short muted text at the row's end that stays whole, e.g. an age. */
+  note?: string;
   /** A heading the option sits under; groups keep the order they first appear in. */
   group?: string;
+  /** Hidden behind a row under the list until that's opened or something is searched. */
+  folded?: boolean;
 }
+
+const fullLabel = (o: SearchOption) => (o.prefix ?? "") + o.label;
 
 /** A ComposerSelect for long lists: same trigger, a search over the options. */
 export function SearchSelect({
@@ -31,6 +39,8 @@ export function SearchSelect({
   disabled,
   onOpenChange,
   className = "",
+  foldNoun = "more",
+  checkStart,
 }: {
   label: string;
   /** The picked option, checked in the list; none for a menu of actions. */
@@ -54,35 +64,61 @@ export function SearchSelect({
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
+  /** What the folded options are, for the row that shows them: "Show 78 merged branches". */
+  foldNoun?: string;
+  /** The check goes in a column before the labels instead of at the row's end. */
+  checkStart?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [unfolded, setUnfolded] = useState<boolean>();
   const input = useRef<HTMLInputElement>(null);
-  const selectedLabel =
-    options.find((o) => o.value === value)?.label ?? (value || unset);
+  const foldHeading = useRef<HTMLDivElement>(null);
+  const picked = options.find((o) => o.value === value);
+  const selectedLabel = picked ? fullLabel(picked) : value || unset;
   const query = search.trim().toLowerCase();
   const matches = options.filter((o) =>
-    `${o.label} ${o.detail ?? ""}`.toLowerCase().includes(query),
+    `${fullLabel(o)} ${o.detail ?? ""}`.toLowerCase().includes(query),
   );
+  // A search reaches into the fold, and so does a pick made from it.
+  const foldOpen = !!query || (unfolded ?? !!picked?.folded);
+  const foldGroup = options.find((o) => o.folded)?.group;
+  const folded = options.filter((o) => o.folded).length;
   const groups = new Map<string | undefined, SearchOption[]>();
   for (const o of matches)
-    groups.set(o.group, [...(groups.get(o.group) ?? []), o]);
+    if (foldOpen || !o.folded)
+      groups.set(o.group, [...(groups.get(o.group) ?? []), o]);
   // Keyboard order follows what's on screen, group by group.
-  const ordered = [...groups.values()].flat();
+  const ordered = [...groups.values()].flat().map((o) => o.value);
+  const isChecked = (option: SearchOption) =>
+    checked
+      ? checked.includes(option.value)
+      : value !== undefined && option.value === value;
   const item = (option: SearchOption) => (
     <Combobox.Item
       key={option.value}
       value={option.value}
       className="composer-select-item"
     >
+      {checkStart && (
+        <span className="search-select-check-start">
+          {isChecked(option) && <Check size={13} />}
+        </span>
+      )}
       {option.icon}
-      <span className="search-select-label">{option.label}</span>
+      <span className="search-select-label">
+        {option.prefix && (
+          <span className="search-select-prefix">{option.prefix}</span>
+        )}
+        {option.label}
+      </span>
       {option.detail && (
         <small className="search-select-detail">{option.detail}</small>
       )}
-      {(checked
-        ? checked.includes(option.value)
-        : value !== undefined && option.value === value) && (
+      {option.note && (
+        <small className="search-select-note">{option.note}</small>
+      )}
+      {!checkStart && isChecked(option) && (
         <Check size={13} className="search-select-check" />
       )}
     </Combobox.Item>
@@ -93,7 +129,10 @@ export function SearchSelect({
       onOpenChange={(next) => {
         setOpen(next);
         onOpenChange?.(next);
-        if (next) setSearch("");
+        if (next) {
+          setSearch("");
+          setUnfolded(undefined);
+        }
       }}
     >
       <Popover.Trigger
@@ -126,7 +165,7 @@ export function SearchSelect({
               inline
               open
               autoHighlight
-              items={ordered.map((o) => o.value)}
+              items={ordered}
               filter={null}
               inputValue={search}
               onInputValueChange={setSearch}
@@ -163,7 +202,10 @@ export function SearchSelect({
                       list.map(item)
                     ) : (
                       <Combobox.Group key={group}>
-                        <Combobox.GroupLabel className="composer-menu-label">
+                        <Combobox.GroupLabel
+                          ref={group === foldGroup ? foldHeading : undefined}
+                          className="composer-menu-label"
+                        >
                           {group}
                         </Combobox.GroupLabel>
                         {list.map(item)}
@@ -177,6 +219,32 @@ export function SearchSelect({
                   </p>
                 )}
               </div>
+              {!query && folded > 0 && (
+                <button
+                  type="button"
+                  className="composer-select-item search-select-fold"
+                  aria-expanded={foldOpen}
+                  onClick={() => {
+                    setUnfolded(!foldOpen);
+                    // Bring what it opened into view, heading first.
+                    if (!foldOpen)
+                      requestAnimationFrame(() =>
+                        foldHeading.current?.scrollIntoView({ block: "start" }),
+                      );
+                  }}
+                >
+                  <span>
+                    {foldOpen
+                      ? `Hide ${foldNoun}`
+                      : `Show ${folded} ${foldNoun}`}
+                  </span>
+                  {foldOpen ? (
+                    <ChevronUp size={13} />
+                  ) : (
+                    <ChevronDown size={13} />
+                  )}
+                </button>
+              )}
               {action && (
                 <Popover.Close
                   className="composer-select-item search-select-action"

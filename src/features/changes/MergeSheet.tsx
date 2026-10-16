@@ -8,6 +8,7 @@ import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
 import "./create-pull.css";
 import { SearchSelect } from "../../ui/SearchSelect";
+import { branchOptions, branchSelect } from "./branch-options";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
 export function MergeSheet({
@@ -20,7 +21,8 @@ export function MergeSheet({
 }) {
   // A worktree can't switch to a branch the checkout has open, and its own
   // branch goes with the worktree.
-  const inWorktree = !!parseWorkspaceId(where).chatId;
+  const { projectId, chatId } = parseWorkspaceId(where);
+  const inWorktree = !!chatId;
   const qc = useQueryClient();
   const [base, setBase] = useState<string>();
   const plan = useQuery({
@@ -30,6 +32,14 @@ export function MergeSheet({
     gcTime: 0,
     retry: false,
     refetchOnWindowFocus: false,
+  });
+  const branchList = useQuery({
+    queryKey: ["project-branches", projectId],
+    queryFn: () => api.projectBranches(projectId),
+  });
+  const branchCounts = useQuery({
+    queryKey: ["project-branch-counts", projectId],
+    queryFn: () => api.projectBranchCounts(projectId),
   });
   const [push, setPush] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -42,7 +52,8 @@ export function MergeSheet({
     Promise.all(
       [
         workingTreeKey(where),
-        ["project-branches", where],
+        ["project-branches", projectId],
+        ["project-branch-counts", projectId],
         ["merge-plan", where],
       ].map((queryKey) => qc.invalidateQueries({ queryKey })),
     );
@@ -184,7 +195,12 @@ export function MergeSheet({
                       setResult(undefined);
                       setBase(next);
                     }}
-                    options={p.bases.map((b) => ({ value: b, label: b }))}
+                    options={branchOptions(
+                      p.bases,
+                      branchList.data,
+                      branchCounts.data,
+                    )}
+                    {...branchSelect}
                     placeholder="Search branches…"
                     triggerClassName="search-select-field"
                     disabled={busy}
