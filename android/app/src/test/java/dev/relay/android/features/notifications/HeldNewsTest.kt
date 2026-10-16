@@ -41,7 +41,7 @@ class HeldNewsTest {
         val now = list(chat("a"), chat("b"), chat("c") { copy(waiting = true) })
         // Read, ran again, answered, gone from the list.
         val held = holding(now, finished, failed, asked)
-        held.next(list(chat("a") { copy(seenAt = 10) }, chat("b") { copy(running = true) }, chat("c")), present = true, news = none, at = 100)
+        held.next(list(chat("a") { copy(seenAt = 10) }, chat("b", 20) { copy(running = true) }, chat("c")), present = true, news = none, at = 100)
         assertEquals(none, held.next(now, present = false, news = none, at = 100))
         assertEquals(none, holding(now, finished).next(emptyMap(), present = false, news = none, at = 100))
 
@@ -67,6 +67,15 @@ class HeldNewsTest {
         val now = list(chat("a"), chat("b"))
         val held = holding(now, finished, failed)
         assertEquals(none, held.next(list(chat("a", 30), chat("b", 30)), present = false, news = none, at = 100))
+    }
+
+    @Test fun keepsAnAnswerWhileRelayCompactsTheThread() {
+        // Compacting an unread thread before its cache goes cold runs it without moving `updated`.
+        val now = list(chat("a"), chat("b"))
+        val held = holding(now, finished, failed)
+        val compacting = list(chat("a") { copy(running = true) }, chat("b") { copy(running = true) })
+        assertEquals(none, held.next(compacting, present = true, news = none, at = 100))
+        assertEquals(listOf(finished, failed), held.next(now, present = false, news = none, at = 100))
     }
 
     @Test fun clearsOnRequest() {

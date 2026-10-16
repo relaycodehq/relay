@@ -95,6 +95,8 @@ class Remote(
     val overview: StateFlow<RemoteOverview?> = _overview.asStateFlow()
     /** Presence events heard, so an overview asked for before one doesn't undo it. */
     private var presenceHeard = 0
+    /** The newest presence event, which may come before there's an overview to keep it in. */
+    private var livePresent: Boolean? = null
     private val _client = MutableStateFlow<RemoteClient?>(null)
     /** The live client, for calls; null when nothing is paired. */
     val client: StateFlow<RemoteClient?> = _client.asStateFlow()
@@ -299,7 +301,7 @@ class Remote(
      * wire), and the desktop tells it again if not.
      */
     private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int) {
-        val kept = if (heard == presenceHeard) overview else overview.copy(present = _overview.value?.present)
+        val kept = if (heard == presenceHeard) overview else overview.copy(present = livePresent)
         setOverview(kept)
         _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept)) }
     }
@@ -311,8 +313,11 @@ class Remote(
         val cached = cache.load(id)
         // Tapped another computer while this one's copy was read.
         if (mine != switches) return
+        // Another computer's presence, or a saved copy's, never counts. Pairing
+        // the same one again keeps what it said until the fresh overview.
+        val same = id == _active.value
         _active.value = id
-        _overview.value = cached?.copy(present = null)
+        _overview.value = cached?.copy(present = if (same) _overview.value?.present else null)
         connect(start)
         persist()
     }
@@ -379,6 +384,7 @@ class Remote(
                     is RemoteEvent.Appearance -> _overview.value?.let { setOverview(it.copy(appearance = event.appearance)) }
                     is RemoteEvent.Presence -> {
                         presenceHeard++
+                        livePresent = event.present
                         _overview.value?.let { setOverview(it.copy(present = event.present)) }
                     }
                     else -> {}
@@ -388,7 +394,7 @@ class Remote(
         })
         val previous = live
         live = next
-        _overview.value = _overview.value?.copy(present = null)
+        livePresent = null
         previous?.close()
         _client.value = next
         _status.value = next.status.value

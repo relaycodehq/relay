@@ -39,7 +39,8 @@ class HeldNews {
     /**
      * Listed, unread, and neither snoozed, settled nor answered since. A turn
      * since (its news, if it had any, went by while the phone was away) makes
-     * the held answer an old one.
+     * the held answer an old one; sending one moves `updated`, while running
+     * alone may be Relay compacting an unread thread, which leaves it be.
      */
     private fun stillNews(held: Held, c: RemoteChatSummary?, at: Long): Boolean {
         if (c == null || read(c)) return false
@@ -47,8 +48,8 @@ class HeldNews {
         if ((c.snoozedUntil ?: 0) > at && c.snoozedUntil != then.snoozedUntil) return false
         return when (held.news.kind) {
             ThreadNews.Kind.Waiting -> c.waiting == true
-            ThreadNews.Kind.Failed -> c.running != true && c.updated == then.updated
-            ThreadNews.Kind.Finished -> c.running != true && c.updated == then.updated && !chatSettled(c)
+            ThreadNews.Kind.Failed -> c.updated == then.updated
+            ThreadNews.Kind.Finished -> c.updated == then.updated && !chatSettled(c)
         }
     }
 }

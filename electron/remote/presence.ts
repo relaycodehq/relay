@@ -30,7 +30,8 @@ export interface PresenceSignals {
 export class Presence {
   private leftAt = -Infinity;
   private asleep = false;
-  private inputAt?: number;
+  private inputAt = -Infinity;
+  private followingInput = false;
   private listeners = new Set<() => void>();
 
   constructor(
@@ -51,6 +52,7 @@ export class Presence {
     };
     signals.on("resume", awake);
     signals.on("unlock", awake);
+    if (this.idle() === undefined) this.followInput();
   }
 
   present() {
@@ -62,7 +64,7 @@ export class Presence {
     // The system can't tell, so Relay's own windows have to: a window left in
     // front mustn't keep the phone quiet all night.
     this.followInput();
-    return this.now() - this.inputAt! < idleSeconds * 1000;
+    return this.now() - this.inputAt < idleSeconds * 1000;
   }
 
   /** Calls `listener` whenever presence may have changed; it compares for itself. */
@@ -76,9 +78,10 @@ export class Presence {
     };
   }
 
+  /** Only input heard counts: being asked isn't someone at the keyboard. */
   private followInput() {
-    if (this.inputAt !== undefined) return;
-    this.inputAt = this.now();
+    if (this.followingInput) return;
+    this.followingInput = true;
     this.signals.on("input", () => (this.inputAt = this.now()));
   }
 

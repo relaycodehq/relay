@@ -54,6 +54,9 @@ it("hands the news back to the phone once the computer sits idle or locked, even
 it("goes by input in Relay's own windows where the system can't tell idle", () => {
   const { presence, state, at, leave, fire } = setup();
   state.idle = "unknown";
+  // Asked before anyone touched it, as when Relay restarts in front overnight.
+  expect(presence.present()).toBe(false);
+  fire("input");
   expect(presence.present()).toBe(true);
   // Left in front overnight.
   at.now = 3 * 60_000;
@@ -87,5 +90,21 @@ it("wakes on unlock too, as a resume can go missing", () => {
   fire("suspend");
   expect(presence.present()).toBe(false);
   fire("unlock");
+  expect(presence.present()).toBe(true);
+});
+
+it("hears input from launch where the system can't tell idle, before anyone asks", () => {
+  const listeners = new Map<PresenceEvent, () => void>();
+  const at = { now: 0 };
+  const presence = new Presence(
+    {
+      focused: () => true,
+      idleState: () => "unknown",
+      on: (event, listener) => listeners.set(event, listener),
+    },
+    () => at.now,
+  );
+  listeners.get("input")?.();
+  at.now = 60_000;
   expect(presence.present()).toBe(true);
 });

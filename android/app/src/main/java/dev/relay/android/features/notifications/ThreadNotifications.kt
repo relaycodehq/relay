@@ -201,9 +201,12 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         }
 
         // A computer that quits, crashes or loses the network can't say it was left.
+        // Only while the phone's own network works, or a dead spot would look like it.
         scope.launch {
-            remote.status.map { it.state == LinkState.Online }.distinctUntilChanged().collectLatest { online ->
-                if (online) return@collectLatest
+            combine(remote.status.map { it.state == LinkState.Online }, phoneNetwork(app)) { online, network ->
+                online to network
+            }.distinctUntilChanged().collectLatest { (online, network) ->
+                if (online || network == null) return@collectLatest
                 delay(GONE_MS)
                 val due = held.next(before, present = false, news = emptyList())
                 if (enabled.value && !foreground) due.forEach(::post)
