@@ -60,6 +60,18 @@ it("says so when a paste doesn't fit the message, instead of dropping it unseen"
   expect(onPasteRefused).toHaveBeenCalledOnce();
 });
 
+it("keeps quiet about a paste with no plain text, which has nothing to turn away", () => {
+  const onPasteRefused = vi.fn();
+  const editor = mount("draft", {
+    onChange: () => {},
+    onCursor: () => {},
+    onPasteRefused,
+  });
+  paste(editor(), "");
+  expect(promptText(editor().state.doc)).toBe("draft");
+  expect(onPasteRefused).not.toHaveBeenCalled();
+});
+
 it("copies a screenshot pill with its screenshot, so another draft gets the picture too", () => {
   const editor = mount("look at [Image #1] here", {
     onChange: () => {},

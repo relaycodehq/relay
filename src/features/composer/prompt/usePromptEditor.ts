@@ -52,7 +52,8 @@ export function usePromptEditor(
         if (event.clipboardData?.files.length) return false;
         const plain = event.clipboardData?.getData("text/plain");
         if (plain === undefined) return false;
-        if (!pasteText(view, pills, plain))
+        // An empty clipboard changes nothing either, but isn't too long.
+        if (!pasteText(view, pills, plain) && plain)
           callbacks.current.onPasteRefused?.();
         return true;
       },
