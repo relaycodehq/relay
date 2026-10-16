@@ -252,6 +252,34 @@ it("reads a thread back from disk once nothing holds it, with what was saved", a
   expect((await storage.load(id)).title).toBe("Saved title");
 });
 
+it("reads back a review it let go of mid-session as it left it, and stops it only after a restart", async () => {
+  const id = await (async () => {
+    const chat: ProjectChat = {
+      ...thread(),
+      deepReview: {
+        scope: { label: "PR #4" },
+        status: "reviewing",
+        reviewers: [],
+      } as unknown as ProjectChat["deepReview"],
+      queue: [{ input: { id: "q", runtimeMode: "full-access" }, created: 1 }],
+    } as ProjectChat;
+    await storage.add(chat);
+    return chat.id;
+  })();
+  await others(20);
+  await new Promise((r) => setImmediate(r));
+  setFlagsFromString("--expose-gc");
+  (runInNewContext("gc") as () => void)();
+  expect(storage.cached(id)).toBeUndefined();
+  const again = await storage.load(id);
+  expect(again.deepReview?.status).toBe("reviewing");
+  expect(again.queuePaused).toBeUndefined();
+  await open();
+  const restarted = await storage.load(id);
+  expect(restarted.deepReview?.status).toBe("stopped");
+  expect(restarted.queuePaused).toBe(true);
+});
+
 it("puts right a summary a crash left behind its thread", async () => {
   const chat = thread();
   await storage.add(chat);

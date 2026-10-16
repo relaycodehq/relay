@@ -135,6 +135,18 @@ it("stops reviews an earlier session left running, reopening findings being fixe
   expect(chat.deepReview).not.toHaveProperty("statuses");
 });
 
+it("keeps a review leading when the lead's session carries on through the restart", () => {
+  const lead = message({ status: "streaming", body: "Half" });
+  const chat = thread({
+    messages: [lead],
+    deepReview: { ...review(), status: "leading" },
+  });
+  reviveChat(chat, () => true);
+  expect(chat.deepReview).toMatchObject({ status: "leading" });
+  expect(chat.deepReview).not.toHaveProperty("leadStopped");
+  expect(lead.status).toBe("streaming");
+});
+
 it("drops worktrees no command of the thread made, and duplicate or unclaimed records", () => {
   const made = message({
     trace: [

@@ -140,6 +140,8 @@ export class ChatStorage {
   /** The threads used lately, least recent first. */
   private cache = new Map<string, ProjectChat>();
   private released = new Map<string, WeakRef<ProjectChat>>();
+  /** Threads this session held: one read back after being let go of left nothing running behind it. */
+  private held = new Set<string>();
   /** Saves still writing, and threads whose last save failed: kept until on disk. */
   private saving = new Map<string, number>();
   private unsaved = new Set<string>();
@@ -190,8 +192,10 @@ export class ChatStorage {
           if (chat.id !== id)
             throw new Error("Saved chat identity does not match.");
           this.readLinks(chat);
-          const changed = reviveChat(chat, (m) =>
-            this.resuming(chat.id, m.parentId ?? undefined),
+          const changed = reviveChat(
+            chat,
+            (m) => this.resuming(chat.id, m.parentId ?? undefined),
+            !this.held.has(id),
           );
           if (changed) await this.save(chat);
           this.use(chat);
@@ -230,6 +234,7 @@ export class ChatStorage {
 
   /** Marks the thread used now, letting go of the least recent past the limit. */
   private use(chat: ProjectChat) {
+    this.held.add(chat.id);
     this.released.delete(chat.id);
     this.cache.delete(chat.id);
     this.cache.set(chat.id, chat);
@@ -244,6 +249,7 @@ export class ChatStorage {
   private forget(id: string) {
     this.cache.delete(id);
     this.released.delete(id);
+    this.held.delete(id);
   }
 
   /** A new thread: saved, listed, and cached. */

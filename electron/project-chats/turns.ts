@@ -660,7 +660,9 @@ export class ChatTurns {
         resumed,
       });
     } finally {
-      if (idle) this.endRun(chat, active);
+      // A resumed answer may be a review lead's, whose end settles the review.
+      if (idle)
+        this.endRun(chat, active, resumed ? { answer: resumed.id } : undefined);
       else {
         unride!();
         active.requests.close();
@@ -724,10 +726,11 @@ export class ChatTurns {
   private async resumeTurn(key: string, provider: AgentProvider) {
     const { chatId, branch } = parseSessionKey(key);
     let chat: ProjectChat | undefined;
+    let message: ChatMessage | undefined;
     try {
       chat = await this.core.storage.load(chatId);
       this.core.sessions.resumed(key);
-      const message = [...chat.messages]
+      message = [...chat.messages]
         .reverse()
         .find(
           (m) =>
@@ -768,6 +771,9 @@ export class ChatTurns {
           await this.core.storage
             .save(chat)
             .catch((e) => console.warn("Could not save the thread:", e));
+        // A review lead's answer revive kept going ends here; the review fails with it.
+        if (failed && !chat.reviewer && message?.status === "failed")
+          await this.councils.step(chat.id, { answer: message.id });
       }
       console.warn("Could not pick a turn back up:", e);
     }

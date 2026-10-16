@@ -181,6 +181,47 @@ it("sends messages queued behind a turn that carried on through a restart once i
   );
 }, 30_000);
 
+it("finishes a deep review whose lead carried on through a restart", async () => {
+  const { agentRuntime } = await import("../agents");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.dispose();
+  const file = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  const lead = {
+    id: randomUUID(),
+    role: "assistant",
+    body: "Reading the reports",
+    status: "streaming",
+    created: 1,
+    provider: "codex",
+    version: 1,
+  };
+  saved.messages = [lead];
+  saved.deepReview = {
+    scope: { label: "PR #4" },
+    request: "request",
+    reviewers: [],
+    lead: { provider: "codex", choice: input("").choice },
+    runChecks: false,
+    runtimeMode: "full-access",
+    status: "leading",
+  };
+  await writeFile(file, JSON.stringify(saved));
+  const codex = agentRuntime("codex");
+  const key = JSON.stringify([join(root, "chats"), chat.id, "main"]);
+  vi.spyOn(codex, "reattach").mockResolvedValue([{ key, open: true }]);
+  vi.spyOn(codex, "run").mockResolvedValue("Findings are in.");
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  await chats.reattach();
+  await vi.waitFor(
+    async () => expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 10_000 },
+  );
+  const after = await chats.get(chat.id);
+  expect(after.messages.find((m) => m.id === lead.id)?.status).toBe("complete");
+  expect(after.deepReview).not.toHaveProperty("leadStopped");
+}, 30_000);
+
 it("refuses to take a queued message back once it went out", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "800");
   const chat = await chats.create(projectId, { kind: "project" });

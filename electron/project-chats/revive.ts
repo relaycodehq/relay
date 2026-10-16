@@ -19,12 +19,14 @@ export function interrupt(m: ChatMessage) {
 /**
  * Brings a thread read from disk up to date: older save formats, and what
  * an earlier session left running. `streams` keeps an answer streaming
- * whose session a restart left running. Says whether the thread needs
- * saving again.
+ * whose session a restart left running. A thread this session held before
+ * (`earlierSession` false) left nothing running behind it. Says whether the
+ * thread needs saving again.
  */
 export function reviveChat(
   chat: ProjectChat,
   streams: (m: ChatMessage) => boolean,
+  earlierSession = true,
 ) {
   let interrupted = migrateAgentSessions(chat);
   for (const input of [
@@ -47,7 +49,6 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  // A review whose agents ran in an earlier session can only be resumed.
   const review = chat.deepReview;
   if (
     review &&
@@ -60,16 +61,23 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  if (review?.status === "reviewing" || review?.status === "leading") {
+  if (
+    earlierSession &&
+    (review?.status === "reviewing" || review?.status === "leading")
+  ) {
     // The lead's answer the app closed on is where resuming the lead goes on.
     const lead =
       review.status === "leading" &&
       [...chat.messages]
         .reverse()
         .find((m) => m.role === "assistant" && !m.parentId);
-    if (lead) review.leadStopped = lead.id;
-    review.status = review.status === "reviewing" ? "stopped" : "failed";
-    interrupted = true;
+    // A review whose agents ran in an earlier session can only be resumed,
+    // unless its lead's session carries on in the turn; that turn's end settles it.
+    if (!(lead && lead.status === "streaming" && streams(lead))) {
+      if (lead) review.leadStopped = lead.id;
+      review.status = review.status === "reviewing" ? "stopped" : "failed";
+      interrupted = true;
+    }
   }
   // Ultraplan councils were retired; their state is dead weight now.
   if ("ultraplans" in chat) {
@@ -77,7 +85,7 @@ export function reviveChat(
     interrupted = true;
   }
   if (migrateFindings(chat)) interrupted = true;
-  if (reopenFixes(chat.findings)) interrupted = true;
+  if (earlierSession && reopenFixes(chat.findings)) interrupted = true;
   for (const m of chat.messages) {
     // Older saves kept every tool call twice; the trace alone is shown.
     if (m.trace) delete m.activity;
@@ -87,6 +95,7 @@ export function reviveChat(
     );
     if (changes?.length) m.changes = changes;
     else delete m.changes;
+    if (!earlierSession) continue;
     if (m.status === "streaming" && m.worktreeCommand) {
       // Its process went with the app; the row offers to run it again.
       m.status = "cancelled";
@@ -100,7 +109,11 @@ export function reviveChat(
     }
   }
   // Nothing sends the queue on its own now, unless an answer it waits for carries on.
-  if (chat.queue?.length && !chat.messages.some((m) => m.status === "streaming"))
+  if (
+    earlierSession &&
+    chat.queue?.length &&
+    !chat.messages.some((m) => m.status === "streaming")
+  )
     chat.queuePaused = true;
   return interrupted;
 }
