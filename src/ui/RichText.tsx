@@ -33,6 +33,7 @@ import {
 import { api } from "../lib/api";
 import { looksLikeColor } from "../lib/color-value";
 import { parentSuffixes } from "../lib/file-icons";
+import { normalizeFileCitations } from "../lib/file-citations";
 import {
   fenceClosed,
   markdownBlocks,
@@ -376,6 +377,10 @@ export const RichText = memo(function RichText({
   /** Shows text a person typed with its lines and indentation, untypeset; see typedSyntax. */
   typed?: boolean;
 }) {
+  text = useMemo(
+    () => (typed || html ? text : normalizeFileCitations(text)),
+    [text, typed, html],
+  );
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
   const openFile = useRef(onOpenFile);

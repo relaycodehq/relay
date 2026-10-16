@@ -6,6 +6,34 @@ import { RichText } from "./RichText";
 const render = (text: string, html?: boolean) =>
   renderToStaticMarkup(<RichText text={text} html={html} />);
 
+describe("RichText file citations", () => {
+  const text =
+    'I checked your PDF: :codex-file-citation{path="/Users/me/Downloads/source.pdf" purpose="source"}';
+
+  it("renders an outside citation as the existing clickable file chip", () => {
+    const out = renderToStaticMarkup(
+      <RichText text={text} projectRoot="/project" onOpenFile={() => {}} />,
+    );
+    expect(out).toContain('class="chat-file-link"');
+    expect(out).toContain('title="/Users/me/Downloads/source.pdf"');
+    expect(out).toContain("source.pdf</span>");
+    expect(out).not.toContain("codex-file-citation");
+  });
+
+  it("shows a readable filename without a file opener", () => {
+    expect(render(text)).toBe(
+      '<div class="markdown"><p>I checked your PDF: <span>source.pdf</span></p></div>',
+    );
+  });
+
+  it("keeps citations literal in user messages and file previews", () => {
+    expect(renderToStaticMarkup(<RichText text={text} typed />)).toContain(
+      "codex-file-citation",
+    );
+    expect(render(text, true)).toContain("codex-file-citation");
+  });
+});
+
 describe("RichText html", () => {
   const readme = [
     '<h1 align="center">Relay</h1>',
