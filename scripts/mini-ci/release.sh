@@ -244,7 +244,12 @@ step "Deploying relaycode.io"
 if [[ ! -f "$CLOUDFLARE" ]]; then
   echo "No Cloudflare token at $CLOUDFLARE; the site keeps its old version."
   echo skipped >"$ROOT/state/website"
-elif (set -a && . "$CLOUDFLARE" && set +a && npm run deploy:website); then
+# Only what npm and wrangler need: the signing passwords and GH_TOKEN this
+# script exported stay out of a package fetched from npm.
+elif (. "$CLOUDFLARE" && env -i PATH="$PATH" HOME="$HOME" \
+  CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}" \
+  CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-}" \
+  npm run deploy:website); then
   echo deployed >"$ROOT/state/website"
 else
   echo failed >"$ROOT/state/website"
