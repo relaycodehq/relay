@@ -1339,6 +1339,36 @@ describe("what a review covers", () => {
       ),
     ).rejects.toThrow("no remote for the project's repository");
   });
+
+  it("fetches a pull request by its head commit, as Azure DevOps serves a fork's", async () => {
+    const { resolveScope } = await import("./scope");
+    const forge = join(dir, "forge.git");
+    execFileSync("git", ["init", "--quiet", "--bare", forge]);
+    const url = "https://git.example.com/team/app.git";
+    git(work, "remote", "add", "origin", url);
+    git(work, "config", `url.${forge}.insteadOf`, url);
+    git(work, "push", "--quiet", "origin", "main");
+    // Upstream has a branch named like the fork's, with other code.
+    git(work, "checkout", "--quiet", "-b", "feature");
+    await commit("b.ts", "upstream\n", "Upstream");
+    git(work, "push", "--quiet", "origin", "feature");
+    git(work, "checkout", "--quiet", "main");
+    git(work, "checkout", "--quiet", "-b", "fork");
+    const head = await commit("a.ts", "one\nfixed\n", "Fix");
+    // On the forge but on none of its branches.
+    git(work, "push", "--quiet", "origin", "HEAD:refs/hidden/fork");
+    git(work, "checkout", "--quiet", "main");
+    git(work, "branch", "--quiet", "-D", "fork", "feature");
+
+    const scope = await resolveScope(
+      work,
+      { kind: "pr", ref: { owner: "team", name: "app", number: 4 } },
+      project,
+      { number: 4, title: "Fix it", base: "main", headRef: head },
+    );
+    expect(scope).toMatchObject({ head, stats: { files: 1, additions: 1 } });
+    expect(git(work, "rev-parse", "refs/relay/pulls/4/head")).toBe(head);
+  });
 });
 
 it("comes back stopped after Relay closes mid-review, ready to resume", async () => {

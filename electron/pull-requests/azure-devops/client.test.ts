@@ -89,6 +89,8 @@ it("counts a PR's changed files like its file list, across pages, once per push"
   const pushed = await azure.pull(ref);
   expect(pushed.head.sha).toBe("head3");
   expect(pushed.changed_files).toBe(1);
+  // Deep review fetches the commit itself; a fork's branch isn't upstream.
+  expect(azure.headRef(pushed)).toBe("head3");
 });
 
 it("lists a repository's PRs without making up how much they change", async () => {

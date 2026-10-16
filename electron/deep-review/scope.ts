@@ -11,7 +11,7 @@ export interface PullInfo {
   title: string;
   /** The branch it merges into. */
   base: string;
-  /** The ref its head commit is fetched from, as its host serves it. */
+  /** The ref its head commit is fetched from, as its host serves it, or the commit itself. */
   headRef: string;
 }
 
