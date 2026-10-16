@@ -245,10 +245,12 @@ export class DevServers {
           return;
         }
         if (this.now() - started > START_TIMEOUT_MS) {
-          terminate(child, { group: true });
+          // Before terminating: a hosted child exits at once, and its exit
+          // would fail the server without saying why.
           failed(
             `Nothing listened on port ${port} after ${START_TIMEOUT_MS / 60_000} minutes.`,
           );
+          terminate(child, { group: true });
           return;
         }
         await new Promise((r) => setTimeout(r, 400));
