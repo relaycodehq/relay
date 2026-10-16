@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Network
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -201,12 +202,19 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         }
 
         // A computer that quits, crashes or loses the network can't say it was left.
-        // Only while the phone's own network works, or a dead spot would look like it.
+        // Only while the phone's own network works, or a dead spot would look like it:
+        // one with the internet, or the one the computer was last reached over, as a
+        // Wi-Fi with no internet beyond the computer is.
         scope.launch {
+            var reachedOver: Network? = null
             combine(remote.status.map { it.state == LinkState.Online }, phoneNetwork(app)) { online, network ->
                 online to network
             }.distinctUntilChanged().collectLatest { (online, network) ->
-                if (online || network == null) return@collectLatest
+                if (online) {
+                    reachedOver = network?.network
+                    return@collectLatest
+                }
+                if (network == null || !(network.validated || network.network == reachedOver)) return@collectLatest
                 delay(GONE_MS)
                 val due = held.next(before, present = false, news = emptyList())
                 if (enabled.value && !foreground) due.forEach(::post)
