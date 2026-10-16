@@ -63,6 +63,8 @@ export interface RemoteHost {
   /** This Relay's version, which the phone compares with its own. */
   version?(): string;
   appearance?(): PhoneAppearance | undefined;
+  /** Someone at this computer working in Relay; see ./presence. */
+  present?(): boolean;
   /** `dataUrl` at most `max` pixels on its longer side; without it phones get images whole. */
   shrinkImage?(dataUrl: string, max: number): string;
   /** A page an answer showed with show_html. */
@@ -168,6 +170,7 @@ export class RemoteBridge {
     { timer: NodeJS.Timeout; event: Extract<RemoteEvent, { kind: "message" }> }
   >();
   private lastChats = "";
+  private lastPresent?: boolean;
   // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
   private sends = new Map<string, Promise<unknown>>();
   // A taken-back queue item no longer holds its id. Its lost answer still counts as a receipt.
@@ -193,6 +196,8 @@ export class RemoteBridge {
     overview: async () => {
       const projects = await this.host.projects();
       this.projectIds = projects.map((p) => p.id);
+      // This phone hears it here; the next list tells the rest again.
+      this.lastPresent = undefined;
       return {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
@@ -207,6 +212,7 @@ export class RemoteBridge {
           ? { appearance: this.host.appearance() }
           : {}),
         ...(this.host.drafts ? { drafts: this.host.drafts.list() } : {}),
+        ...(this.host.present ? { present: this.host.present() } : {}),
         projects: projects.map((p) => ({
           id: p.id,
           name: p.name,
@@ -538,7 +544,9 @@ export class RemoteBridge {
   /** Follows thread states while a phone is connected. */
   setWatching(watching: boolean) {
     this.watching = watching;
-    if (!watching) this.lastChats = "";
+    if (watching) return;
+    this.lastChats = "";
+    this.lastPresent = undefined;
   }
   /** A project's thread list changed; one new since the overview joins the watch. */
   chatsChanged(projectId: string) {
@@ -559,7 +567,19 @@ export class RemoteBridge {
     const signature = JSON.stringify(chats);
     if (signature === this.lastChats) return;
     this.lastChats = signature;
+    // Read again as the list moves, which is when a phone decides whether it's news.
+    this.sendPresence();
     this.broadcast({ kind: "chats", chats });
+  }
+  /** Someone came to the computer or left it: a phone holding news back hands it out. */
+  presenceChanged() {
+    if (this.watching && this.projectIds) this.sendPresence();
+  }
+  private sendPresence() {
+    const present = this.host.present?.();
+    if (present === undefined || present === this.lastPresent) return;
+    this.lastPresent = present;
+    this.broadcast({ kind: "presence", present });
   }
   dispose() {
     this.setWatching(false);

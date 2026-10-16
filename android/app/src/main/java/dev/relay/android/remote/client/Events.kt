@@ -53,6 +53,7 @@ internal fun rebuildEvent(
             RemoteEvent.Chats(list)
         }
         "appearance" -> RemoteEvent.Appearance(RemoteJson.decodeFromJsonElement<PhoneAppearance>(event["appearance"]!!))
+        "presence" -> RemoteEvent.Presence((event["present"] as? JsonPrimitive)?.contentOrNull == "true")
         "draft" -> RemoteEvent.Draft(RemoteJson.decodeFromJsonElement<DraftChange>(event["change"]!!))
         "handoff" -> RemoteEvent.Handoff(event)
         else -> null

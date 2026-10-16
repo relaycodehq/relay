@@ -83,6 +83,22 @@ fun threadNews(
     return news
 }
 
+/**
+ * News held back while someone sat at the computer that is still news once
+ * they leave: the thread is listed, unread, and neither ran again, was
+ * snoozed, settled nor answered its question since.
+ */
+fun stillNews(held: Collection<ThreadNews>, now: Map<String, RemoteChatSummary>, at: Long = System.currentTimeMillis()): List<ThreadNews> =
+    held.filter { news ->
+        val c = now[news.chatId] ?: return@filter false
+        if (read(c) || (c.snoozedUntil ?: 0) > at) return@filter false
+        when (news.kind) {
+            ThreadNews.Kind.Waiting -> c.waiting == true
+            ThreadNews.Kind.Failed -> c.running != true
+            ThreadNews.Kind.Finished -> c.running != true && !chatSettled(c)
+        }
+    }
+
 /** Threads read since the last list, on the computer or another phone, whose notification can go. */
 fun threadsRead(before: Map<String, RemoteChatSummary>, now: List<RemoteChatSummary>): List<String> =
     now.filter { read(it) && !read(before[it.id]) }.map { it.id }

@@ -54,6 +54,8 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
     private val enabled = MutableStateFlow(false)
     private var before = emptyMap<String, RemoteChatSummary>()
     private val answers = mutableMapOf<String, Pair<LastAnswer, Long>>()
+    /** News kept from the phone while someone sat at the computer, by thread; posted if still unread once they leave. */
+    private val held = mutableMapOf<String, ThreadNews>()
     private var resumed: WeakReference<Activity>? = null
 
     private val foreground get() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
@@ -164,11 +166,13 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
             remote.active.collect {
                 before = emptyMap()
                 answers.clear()
+                held.clear()
             }
         }
 
         scope.launch {
             remote.events.collect { e ->
+                if (e is RemoteEvent.Presence && !e.present) return@collect postHeld()
                 if (e !is RemoteEvent.Message) return@collect
                 val m = e.message
                 if (m.role != "assistant" || m.parentId != null || m.compaction == true || m.handoff != null || m.reload != null) return@collect
@@ -185,13 +189,29 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
                 before = chats.associateBy { it.id }
                 if (!enabled.value || was.isEmpty()) return@collect
                 for (id in threadsRead(was, chats)) WatchService.clear(app, id)
+                held.keys.retainAll(stillNews(held.values, before).map { it.chatId }.toSet())
                 // On screen the app shows it already.
                 if (foreground) return@collect
-                for (news in threadNews(was, chats, answers.mapValues { it.value.first }))
-                    WatchService.post(app, news.chatId, news.title, news.body, "relay-native://chat/${news.chatId}")
+                for (news in threadNews(was, chats, answers.mapValues { it.value.first })) {
+                    // Someone at the computer sees it there, unless they leave before reading it.
+                    if (remote.present.value) held[news.chatId] = news
+                    else {
+                        held.remove(news.chatId)
+                        post(news)
+                    }
+                }
             }
         }
     }
+
+    private fun postHeld() {
+        val news = stillNews(held.values, before)
+        held.clear()
+        if (enabled.value && !foreground) news.forEach(::post)
+    }
+
+    private fun post(news: ThreadNews) =
+        WatchService.post(app, news.chatId, news.title, news.body, "relay-native://chat/${news.chatId}")
 
     private companion object {
         const val TAG = "ThreadNotifications"

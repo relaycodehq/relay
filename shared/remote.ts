@@ -299,6 +299,8 @@ export interface RemoteOverview {
   dictation?: DictationModelState["status"];
   /** Whether the desktop has a voice ready to read answers to phones; missing before version 12. */
   readAloud?: boolean;
+  /** Someone is at the computer working in Relay, so phones keep news to themselves; missing where nobody can be. */
+  present?: boolean;
   /** Every unsent draft, the desktop's and the phones'; missing before `draftsBridge`. */
   drafts?: SharedDraft[];
   projects: RemoteProject[];
@@ -709,6 +711,8 @@ export type RemoteEvent =
   /** Thread states moved: something started, finished or asked a question. */
   | { kind: "chats"; chats: RemoteChatSummary[] }
   | { kind: "appearance"; appearance: PhoneAppearance }
+  /** `present` changed: just before the thread list it applies to, or when someone leaves or comes back. */
+  | { kind: "presence"; present: boolean }
   /** A draft changed; only to phones from `draftsBridge`. */
   | { kind: "draft"; change: DraftChange }
   /** To the computer a live handoff came from: what runs and waits in its thread now. */

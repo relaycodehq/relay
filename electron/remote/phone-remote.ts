@@ -239,6 +239,10 @@ export class PhoneRemote {
     this.bridge.chatEvent(event);
     this.host.handoffs?.chatEvent?.(event);
   }
+  /** Someone may have come to the computer or left it. */
+  presenceChanged() {
+    if (this.server.listening) this.bridge.presenceChanged();
+  }
   chatsEvent(event: ProjectChatsEvent) {
     if (!this.server.listening) return;
     this.bridge.chatsChanged(event.projectId);

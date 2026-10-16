@@ -104,6 +104,7 @@ import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
 import { ThreadPreviews, PreviewProjects } from "./preview";
 import { Devices } from "./devices";
+import { Presence } from "./remote/presence";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -586,6 +587,7 @@ app
         join(handoffDir, "out"),
       ),
     };
+    const presence = new Presence();
     phoneRemote = new PhoneRemote(
       loaded,
       seal,
@@ -597,6 +599,7 @@ app
         chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
         cost: (id) => chats.cost(id),
         version: () => app.getVersion(),
+        present: () => presence.present(),
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
         shrinkImage,
@@ -629,6 +632,7 @@ app
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );
+    presence.watch(() => phoneRemote?.presenceChanged());
     void phoneRemote.start();
     void computers.start();
     threadTerminals.connect((event) => window.send("relay:terminal", event));

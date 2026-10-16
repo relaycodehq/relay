@@ -13,6 +13,8 @@ data class RemoteOverview(
     /** "missing" | "downloading" | "ready" | "failed" | "unsupported"; null where dictation isn't offered. */
     val dictation: String? = null,
     val readAloud: Boolean? = null,
+    /** Someone at the computer working in Relay; missing from desktops that can't tell. */
+    val present: Boolean? = null,
     val drafts: List<SharedDraft>? = null,
     val projects: List<RemoteProject> = emptyList(),
     /** Unarchived threads with messages, newest first. */

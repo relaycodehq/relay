@@ -167,4 +167,27 @@ class ThreadNewsTest {
         assertEquals("Sat 9:30 AM", wakeLabel(at(17, 9), now, zone, Locale.US).replace("\u202F", " "))
         assertEquals("Oct 30, 9:30 AM", wakeLabel(at(30, 9), now, zone, Locale.US).replace("\u202F", " "))
     }
+
+    @Test fun keepsHeldNewsOnlyWhileItsThreadStillWaitsUnread() {
+        val finished = ThreadNews("a", ThreadNews.Kind.Finished, "Thread a", "Done")
+        val failed = ThreadNews("b", ThreadNews.Kind.Failed, "Thread b", "Overloaded")
+        val asked = ThreadNews("c", ThreadNews.Kind.Waiting, "Thread c", "Claude needs you")
+        val held = listOf(finished, failed, asked)
+        assertEquals(held, stillNews(held, list(chat("a"), chat("b"), chat("c") { copy(waiting = true) }), at = 100))
+
+        // Read on the computer, ran again, answered, gone from the list.
+        assertEquals(
+            emptyList<ThreadNews>(),
+            stillNews(held, list(chat("a") { copy(seenAt = 10) }, chat("b") { copy(running = true) }, chat("c")), at = 100),
+        )
+        // Settled or snoozed on the computer: handled, though a failure stays news when settled.
+        assertEquals(
+            listOf(failed),
+            stillNews(
+                held,
+                list(chat("a") { copy(settledAt = 10) }, chat("b") { copy(settledAt = 10) }, chat("c") { copy(waiting = true, snoozedUntil = 200) }),
+                at = 100,
+            ),
+        )
+    }
 }

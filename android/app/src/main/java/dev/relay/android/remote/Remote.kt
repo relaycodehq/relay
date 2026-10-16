@@ -89,6 +89,10 @@ class Remote(
     private val _overview = MutableStateFlow<RemoteOverview?>(null)
     /** The active computer's overview: its last saved copy until a fresh one comes, thread list kept live. */
     val overview: StateFlow<RemoteOverview?> = _overview.asStateFlow()
+
+    private val _present = MutableStateFlow(false)
+    /** Someone at the active computer working in Relay, as its live connection last said; never from a saved copy. */
+    val present: StateFlow<Boolean> = _present.asStateFlow()
     private val _client = MutableStateFlow<RemoteClient?>(null)
     /** The live client, for calls; null when nothing is paired. */
     val client: StateFlow<RemoteClient?> = _client.asStateFlow()
@@ -287,6 +291,7 @@ class Remote(
     }
 
     private fun setFresh(client: RemoteClient, overview: RemoteOverview) {
+        _present.value = overview.present == true
         setOverview(overview)
         _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, overview)) }
     }
@@ -309,6 +314,7 @@ class Remote(
         switches++
         _active.value = null
         _overview.value = null
+        _present.value = false
         live?.close()
         live = null
         _client.value = null
@@ -363,6 +369,7 @@ class Remote(
                 when (event) {
                     is RemoteEvent.Chats -> _overview.value?.let { setOverview(it.copy(chats = event.chats)) }
                     is RemoteEvent.Appearance -> _overview.value?.let { setOverview(it.copy(appearance = event.appearance)) }
+                    is RemoteEvent.Presence -> _present.value = event.present
                     else -> {}
                 }
                 _events.tryEmit(event)
@@ -370,6 +377,7 @@ class Remote(
         })
         val previous = live
         live = next
+        _present.value = false
         previous?.close()
         _client.value = next
         _status.value = next.status.value

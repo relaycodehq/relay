@@ -92,6 +92,51 @@ it("watches thread states only once the phone has the overview, and only reports
   expect(events.map((e) => e.kind)).toEqual(["chats"]);
 });
 
+it("tells phones whether someone is at the computer just before the list it applies to, when it changed", async () => {
+  let present = true;
+  let updated = 2;
+  const events: RemoteEvent[] = [];
+  const b = new RemoteBridge(
+    {
+      projects: async () => [{ id: projectId, name: "Relay" }],
+      chats: () => [
+        {
+          id: chatId,
+          projectId,
+          title: "New chat",
+          scope: { kind: "project" },
+          created: 1,
+          updated,
+        },
+      ],
+      name: () => "Studio",
+      present: () => present,
+    } as unknown as RemoteHost,
+    (e) => events.push(e),
+  );
+  const overview = (await b.handle("overview", [])) as RemoteOverview;
+  expect(overview.present).toBe(true);
+  const heard = () =>
+    events.map((e) => (e.kind === "presence" ? e.present : e.kind));
+
+  b.refresh();
+  updated++;
+  b.refresh();
+  present = false;
+  b.refresh();
+  updated++;
+  b.refresh();
+  expect(heard()).toEqual([true, "chats", "chats", false, "chats"]);
+
+  // Leaving moves no thread, so it goes out by itself, but only to a watching phone.
+  present = true;
+  b.presenceChanged();
+  b.setWatching(true);
+  b.presenceChanged();
+  b.presenceChanged();
+  expect(heard().slice(5)).toEqual([true]);
+});
+
 it("tells a watching phone about thread lists as they change, a new project's too", async () => {
   const otherId = randomUUID();
   const projects = [{ id: projectId, name: "Relay" }];
