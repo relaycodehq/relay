@@ -15,10 +15,11 @@ interface Source {
   path: string;
   label: string;
   /**
-   * The line at `revision` a shown line still is, or none for one changed
-   * since. Without it, every line is the same line at `revision`.
+   * The line at `revision` a shown line still is, none for one changed
+   * since, or null for one with no history at all, as the empty line after a
+   * final newline. Without it, every line is the same line at `revision`.
    */
-  lineAt?: (line: number) => number | undefined;
+  lineAt?: (line: number) => number | undefined | null;
   /** Changes whenever `lineAt` maps lines differently. */
   mapping?: number;
   /** Why a line has no history: every line's, or with `lineAt`, a changed one's. */
@@ -199,10 +200,12 @@ export function useLineBlame(
         : source.unavailable
           ? undefined
           : line;
-      if (at === undefined) {
+      if (at == null) {
         setHover({
           ...next,
-          error: source.unavailable ?? "This line has no history.",
+          error:
+            (at === undefined && source.unavailable) ||
+            "This line has no history.",
         });
         return;
       }

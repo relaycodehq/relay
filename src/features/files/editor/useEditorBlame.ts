@@ -1,7 +1,12 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { Pull } from "../../../../shared/types";
 import { useLineBlame } from "../../diff/LineBlame";
-import { committedLine, lineChanges, type LineHunk } from "./line-changes";
+import {
+  committedLine,
+  lineChanges,
+  linesOf,
+  type LineHunk,
+} from "./line-changes";
 
 /**
  * Blame for the editor's lines. Beside the committed side, the local side
@@ -27,17 +32,22 @@ export function useEditorBlame(
     hunks: readonly LineHunk[] | undefined;
   },
 ) {
-  // Changes whenever lines may map elsewhere, so an open hover asks again.
-  const mapping = useRef({ buffer: view.buffer, revision: 0 });
-  if (mapping.current.buffer !== view.buffer)
-    mapping.current = {
-      buffer: view.buffer,
-      revision: mapping.current.revision + 1,
-    };
   const { committed, buffer, hunks } = view;
+  // Changes when the worker finds lines moved, so an open hover goes; a
+  // keystroke inside a line gives the same hunks and leaves it be.
+  const shape = useMemo(() => hunks && JSON.stringify(hunks), [hunks]);
+  const mapping = useRef({ shape, revision: 0 });
+  if (shape !== undefined && mapping.current.shape !== shape)
+    mapping.current = { shape, revision: mapping.current.revision + 1 };
   let worked: readonly LineHunk[] | undefined = hunks;
+  let ends: number | undefined;
   const lineAt = (line: number) => {
-    if (!worked && committed !== undefined && buffer !== undefined)
+    if (buffer === undefined) return line;
+    // The empty line after a final newline is no line of the file's.
+    ends ??= linesOf(buffer).length;
+    if (line > ends) return null;
+    if (!view.edited) return line;
+    if (!worked && committed !== undefined)
       worked = lineChanges(committed, buffer);
     return worked ? committedLine(worked, line) : undefined;
   };
@@ -65,9 +75,9 @@ export function useEditorBlame(
             deletions: undefined,
             additions: {
               ...local,
+              lineAt,
               ...(view.edited
                 ? {
-                    lineAt,
                     mapping: mapping.current.revision,
                     unavailable: `Changed here since ${base}, not committed yet.`,
                   }

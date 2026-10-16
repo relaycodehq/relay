@@ -29,6 +29,16 @@ describe("lineChanges", () => {
     ]);
   });
 
+  it("marks the last line when only its final newline came or went", () => {
+    expect(lineChanges("a\nb\n", "a\nb")).toEqual([
+      { line: 2, added: 1, removed: 1 },
+    ]);
+    expect(lineChanges("a\nb", "a\nb\n")).toEqual([
+      { line: 2, added: 1, removed: 1 },
+    ]);
+    expect(lineChanges("a\r\nb", "a\nb")).toEqual([]);
+  });
+
   it("marks every line of a file new since the commit", () => {
     expect(lineChanges("", text("a", "b"))).toEqual([
       { line: 1, added: 2, removed: 0 },

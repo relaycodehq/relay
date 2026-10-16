@@ -72,9 +72,6 @@ function useLineChanges(
   return answer && answer.committed === committed ? answer : undefined;
 }
 
-const cells = (lines: number[]) =>
-  `:is(${lines.map((line) => `[data-column-number="${line}"]`).join(",")})`;
-
 const BAR = `content: "";
   position: absolute;
   top: 0;
@@ -93,39 +90,45 @@ const NOTCH = `content: "";
   pointer-events: none;
   z-index: 1;`;
 
-/** Bars beside the code for added and modified lines, a notch where lines went. */
-function changeBarsCSS(hunks: readonly LineHunk[]) {
-  const added: number[] = [],
-    modified: number[] = [],
-    below: number[] = [],
-    above: number[] = [];
+// A handful of rules on a mark each gutter cell carries, rather than one
+// selector per changed line: style matching over a rewritten file's thousands
+// of line numbers cost ~5ms for every batch of rows scrolled in.
+const CSS = `[data-change~="added"]::before { ${BAR} background: var(--diffs-addition-base); }
+[data-change~="modified"]::before { ${BAR} background: var(--diffs-modified-base); }
+[data-change~="below"]::after { ${NOTCH} top: -4px; }
+[data-change~="above"]::before { ${NOTCH} bottom: -4px; }`;
+
+const CELL = "[data-column-number]";
+
+/** Each changed line's marks: a bar for added or modified, a notch where lines went. */
+export function changeMarks(hunks: readonly LineHunk[]) {
+  const marks = new Map<number, string>();
+  const mark = (line: number, name: string) => {
+    const was = marks.get(line);
+    marks.set(line, was ? `${was} ${name}` : name);
+  };
   for (const { line, added: count, removed } of hunks) {
     if (!count) {
       // Both lines around the gap mark it, as lines removed from the end
-      // have no line below.
-      below.push(line);
-      if (line > 1) above.push(line - 1);
+      // have no line below. They are unchanged, so their ::before has no
+      // bar, and a line with removed lines on both sides shows both notches.
+      mark(line, "below");
+      if (line > 1) mark(line - 1, "above");
       continue;
     }
-    const into = removed ? modified : added;
-    for (let i = 0; i < count; i++) into.push(line + i);
+    for (let i = 0; i < count; i++)
+      mark(line + i, removed ? "modified" : "added");
   }
-  const rules: string[] = [];
-  if (added.length)
-    rules.push(
-      `${cells(added)}::before { ${BAR} background: var(--diffs-addition-base); }`,
-    );
-  if (modified.length)
-    rules.push(
-      `${cells(modified)}::before { ${BAR} background: var(--diffs-modified-base); }`,
-    );
-  if (below.length)
-    rules.push(`${cells(below)}::after { ${NOTCH} top: -4px; }`);
-  // The lines around removed ones are unchanged, so their ::before has no
-  // bar, and a line with removed lines on both sides shows both notches.
-  if (above.length)
-    rules.push(`${cells(above)}::before { ${NOTCH} bottom: -4px; }`);
-  return rules.join("\n");
+  return marks;
+}
+
+/** Puts `cell`'s marks on it; Pierre's rows come and go as it scrolls. */
+function markCell(cell: Element, marks: ReadonlyMap<number, string>) {
+  const want = marks.get(Number(cell.getAttribute("data-column-number")));
+  if (want === undefined) {
+    if (cell.hasAttribute("data-change")) cell.removeAttribute("data-change");
+  } else if (cell.getAttribute("data-change") !== want)
+    cell.setAttribute("data-change", want);
 }
 
 /**
@@ -140,28 +143,83 @@ export function useChangeBars(
 ) {
   const answer = useLineChanges(committed, buffer);
   const hunks = answer?.hunks;
-  // A keystroke inside a line gives the same hunks: no new stylesheet.
-  const shape = hunks && JSON.stringify(hunks);
   const [style] = useState(() => {
     const element = document.createElement("style");
     element.dataset.changeBars = "";
+    element.textContent = CSS;
     return element;
   });
-  const css = useMemo(
-    () => (committed === undefined || !hunks ? "" : changeBarsCSS(hunks)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- hunks by value
-    [committed, shape],
+  // Rebuilt per answer, not per render; a keystroke inside a line gives the
+  // same marks, and remarking only touches the rows on screen.
+  const marks = useMemo(
+    () =>
+      committed === undefined || !hunks
+        ? new Map<number, string>()
+        : changeMarks(hunks),
+    [committed, hunks],
   );
+  const current = useRef(marks);
+  const [watcher] = useState(() => {
+    let root: ShadowRoot | undefined;
+    const markAll = () =>
+      root
+        ?.querySelectorAll(CELL)
+        .forEach((cell) => markCell(cell, current.current));
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.type === "attributes") {
+          markCell(record.target as Element, current.current);
+          continue;
+        }
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue;
+          if (node.matches(CELL)) markCell(node, current.current);
+          node
+            .querySelectorAll(CELL)
+            .forEach((cell) => markCell(cell, current.current));
+        }
+      }
+    });
+    return {
+      markAll,
+      watch(next: ShadowRoot) {
+        if (next === root) return;
+        observer.disconnect();
+        root = next;
+        // Our own mark too, in case Pierre's patching takes it off a cell.
+        observer.observe(next, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ["data-column-number", "data-change"],
+        });
+        markAll();
+      },
+      stop() {
+        observer.disconnect();
+        root = undefined;
+      },
+    };
+  });
   useLayoutEffect(() => {
-    style.textContent = css;
-  }, [style, css]);
-  useEffect(() => () => style.remove(), [style]);
+    current.current = marks;
+    watcher.markAll();
+  }, [watcher, marks]);
+  useEffect(
+    () => () => {
+      watcher.stop();
+      style.remove();
+    },
+    [watcher, style],
+  );
   const attach = useCallback(
     (node: HTMLElement) => {
       const root = node.shadowRoot;
-      if (root && style.parentNode !== root) root.append(style);
+      if (!root) return;
+      if (style.parentNode !== root) root.append(style);
+      watcher.watch(root);
     },
-    [style],
+    [style, watcher],
   );
   return {
     /** The edits in `buffer` as it is now, once the worker has caught up. */

@@ -10,12 +10,23 @@ export type LineHunk = { line: number; added: number; removed: number };
 // Past this many differing lines the rest of the middle counts as one change.
 const MAX_EDIT = 4000;
 
-/** A text's lines as compared: no final empty line, no CR. */
+// Never in a line split on newlines, so a last line without one differs.
+const NO_EOL = "\n";
+
+/**
+ * A text's lines as compared: no final empty line and no CR, but a last line
+ * missing its newline differs from the same line with one, as Git sees it.
+ */
 export const linesOf = (text: string) => {
   const lines = text.split("\n");
-  if (lines.at(-1) === "") lines.pop();
+  const ended = lines.at(-1) === "";
+  if (ended) lines.pop();
   // A CRLF file over an LF commit (autocrlf) isn't a change on every line.
-  return lines.map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  const plain = lines.map((line) =>
+    line.endsWith("\r") ? line.slice(0, -1) : line,
+  );
+  if (!ended) plain[plain.length - 1] += NO_EOL;
+  return plain;
 };
 
 /** How the buffer's lines differ from the committed text, as an editor gutter marks them. */
