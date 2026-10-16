@@ -97,6 +97,18 @@ export const deepReviewStartSchema = z
   .strict();
 export type DeepReviewStart = z.infer<typeof deepReviewStartSchema>;
 
+/** A review's setup before it starts: what kind of change it covers, and who reviews and leads. */
+export const reviewDraftSetupSchema = deepReviewStartSchema
+  .pick({ reviewers: true, lead: true, runChecks: true })
+  .extend({
+    kind: z
+      .enum(["uncommitted", "branch", "pr", "commit"])
+      .catch("uncommitted"),
+  })
+  // Setups saved before the base stopped being kept still carry one.
+  .strip();
+export type ReviewDraftSetup = z.infer<typeof reviewDraftSetupSchema>;
+
 /** What a helper agent names a setup from, to find it again later. */
 export const reviewSetupSchema = deepReviewStartSchema.pick({
   reviewers: true,

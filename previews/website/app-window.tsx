@@ -360,7 +360,7 @@ function ReviewThread() {
         {phase === 0 ? (
           <DeepReviewSetup
             project={projects[0]}
-            settingsKey="website-review"
+            draftId="website-review"
             context={null}
             branch="main"
             changes={9}

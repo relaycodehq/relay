@@ -13,13 +13,20 @@ import {
   type CodeReference,
 } from "../../shared/code-references";
 import { pasteMarkdown, type PastedText } from "../../shared/pasted-texts";
+import type { PullRef } from "../../shared/types";
+import {
+  reviewDraftSetupSchema,
+  type ReviewDraftSetup,
+} from "../../shared/deep-review";
+import { refSchema } from "../../shared/validation";
 
 /**
  * Everything a thread's composers keep for an unsent message, as one record
  * under `relay-draft:<thread>`, so what is written together reads back
  * together: the text and the pills in it, the side conversations' drafts, a
  * selected line, a work item, code references and, for an unsent thread, the
- * scope and workspace it was written for. Screenshots stay in IndexedDB, as
+ * scope and workspace it was written for, and an unsent deep review's
+ * setup. Screenshots stay in IndexedDB, as
  * they are too big for localStorage.
  *
  * Before the record, each of these had a key of its own; `assembleLegacy`
@@ -34,6 +41,15 @@ export interface DraftBody {
   skills: Record<string, string>;
   quotes: string[];
   files: string[];
+}
+
+/** An unsent deep review's setup, and what it was pointed at. */
+export interface ReviewDraft {
+  setup?: ReviewDraftSetup;
+  head?: string;
+  base?: string;
+  commit?: string;
+  pull?: PullRef;
 }
 
 export interface ThreadDraft {
@@ -53,6 +69,7 @@ export interface ThreadDraft {
   /** The branch typed for an unsent thread's worktree, in place of Relay's pick. */
   branch?: string;
   links?: LinkedFolder[];
+  review?: ReviewDraft;
 }
 
 export const emptyBody = (): DraftBody => ({
@@ -82,7 +99,8 @@ export const isThreadDraftEmpty = (draft: ThreadDraft) =>
   !draft.scope &&
   draft.workspace === undefined &&
   !draft.branch &&
-  !draft.links?.length;
+  !draft.links?.length &&
+  !draft.review;
 
 export const bodyOf = (draft: ThreadDraft, reply?: string): DraftBody =>
   (reply ? draft.replies[reply] : draft.main) ?? emptyBody();
@@ -133,6 +151,17 @@ const readWorkspace = (value: unknown) =>
 /** A non-empty string, or nothing. */
 const readRoot = (value: unknown) =>
   typeof value === "string" && value ? value : undefined;
+function readReview(value: unknown): ReviewDraft | undefined {
+  if (!isRecord(value)) return;
+  const review: ReviewDraft = {
+    setup: reviewDraftSetupSchema.safeParse(value.setup).data,
+    head: readRoot(value.head),
+    base: readRoot(value.base),
+    commit: readRoot(value.commit),
+    pull: refSchema.safeParse(value.pull).data,
+  };
+  return Object.values(review).some(Boolean) ? review : undefined;
+}
 
 function readBody(value: unknown): DraftBody {
   if (!isRecord(value)) return emptyBody();
@@ -164,6 +193,7 @@ export function parseThreadDraft(saved: unknown): ThreadDraft {
     workspace: readWorkspace(saved.workspace),
     branch: readRoot(saved.branch),
     links: linkedFoldersSchema.safeParse(saved.links).data,
+    review: readReview(saved.review),
   };
 }
 
@@ -192,6 +222,7 @@ export function serializeThreadDraft(draft: ThreadDraft): string {
     ...(draft.workspace !== undefined ? { workspace: draft.workspace } : {}),
     ...(draft.branch ? { branch: draft.branch } : {}),
     ...(draft.links?.length ? { links: draft.links } : {}),
+    ...(draft.review ? { review: draft.review } : {}),
   });
 }
 
@@ -379,5 +410,6 @@ export function mergeLegacy(
     workspace: legacy.workspace ?? record.workspace,
     branch: record.branch,
     links: record.links,
+    review: record.review,
   };
 }

@@ -696,3 +696,104 @@ test("a reviewer runs the prompt you typed, and the setup waits by Start next ti
     await close();
   }
 });
+
+test("a deep review set up and left waits in Activity as a draft", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(repo);
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "README.md"), "# Queue\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  for (const branch of ["device-panel", "queue-fix"]) {
+    git("switch", "-qc", branch, "main");
+    await writeFile(join(repo, `${branch}.ts`), "export const a = 1;\n");
+    git("add", ".");
+    git("commit", "-qm", `Add ${branch}`);
+  }
+  git("switch", "-q", "main");
+  const app = await launch(root);
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page.getByRole("button", { name: "View activity" }).click();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page.getByRole("radio", { name: "Branch" }).click();
+    const head = page.getByRole("button", { name: "Branch to review" });
+    const picked = (await head.innerText()).trim();
+    const other = picked === "queue-fix" ? "device-panel" : "queue-fix";
+    await head.click();
+    await page.getByRole("option", { name: other }).click();
+    await expect(head).toHaveText(other);
+    const card = page.locator(".sb-card.draft", { hasText: "Deep review" });
+    // Set up and nothing typed, it's a draft already, its reviewers on its card.
+    await expect(card).toContainText("2 reviewers");
+    await expect(card.locator(".sb-card-provider svg")).toHaveCount(2);
+    await page.getByRole("button", { name: "Remove reviewer 2" }).click();
+    await expect(card).toContainText("1 reviewer");
+    await expect(card.locator(".sb-card-provider svg")).toHaveCount(1);
+    await page.getByLabel("Can run tests to verify").uncheck();
+    const focus = page.getByLabel("What to focus on");
+    await focus.fill("the panel");
+    await expect(card).toContainText("the panel");
+
+    // A new thread leaves it waiting, and its card takes you back.
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+N" : "Control+N",
+    );
+    await expect(page.getByLabel("Message project")).toBeVisible();
+    await expect(card).not.toHaveClass(/selected/);
+    await card.click();
+    await expect(head).toHaveText(other);
+    await expect(focus).toHaveValue("the panel");
+    await expect(page.getByLabel("Prompt for reviewer 2")).toHaveCount(0);
+    await expect(page.getByLabel("Can run tests to verify")).not.toBeChecked();
+    // Even after a reload, the draft keeps its own setup.
+    await page.evaluate(() => {
+      const [key] = Object.keys(localStorage).filter((k) =>
+        k.startsWith("deep-review-setup:"),
+      );
+      localStorage.removeItem(key!);
+    });
+    await page.reload();
+    await expect(head).toHaveText(other);
+    await expect(page.getByLabel("Prompt for reviewer 2")).toHaveCount(0);
+    await screenshot(page, { path: "test-results/deep-review-draft.png" });
+
+    // So does Deep review, rather than starting over.
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+N" : "Control+N",
+    );
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await expect(head).toHaveText(other);
+    await expect(page.locator(".sb-card.draft")).toHaveCount(1);
+
+    // Started, it's a thread and no longer a draft.
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+    await expect(page.locator(".deep-review-request")).toContainText(
+      `${other} → main`,
+    );
+    await expect(page.locator(".sb-card.draft")).toHaveCount(0);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

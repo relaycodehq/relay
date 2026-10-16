@@ -6,8 +6,10 @@ import {
   forgetNewThread,
   loadDraftScope,
   newThreadId,
+  reviewDraftIn,
   saveDraftScope,
   setCurrentNewThread,
+  useDraftKeys,
   writeDraft,
 } from "./drafts";
 import { threadStorage } from "../../lib/thread-storage";
@@ -69,6 +71,11 @@ it("opens a new slot only while the current new thread holds text", () => {
   expect(freshNewThread("p1")).toBe(base);
 });
 
+const pr = {
+  kind: "pr" as const,
+  ref: { owner: "relay", name: "relay", number: 7 },
+};
+
 it("clears what abandoned empty slots left behind", () => {
   const base = newThreadId("p1");
   const empty = newThreadId("p1", "a");
@@ -77,7 +84,7 @@ it("clears what abandoned empty slots left behind", () => {
   type(kept, "Second idea");
   for (const id of [empty, kept]) {
     store.set("composer-settings:" + id, "{}");
-    saveDraftScope(id, { kind: "review" });
+    saveDraftScope(id, pr);
     threadStorage(id).reply.save("r1");
   }
   setCurrentNewThread("p1", kept);
@@ -85,8 +92,26 @@ it("clears what abandoned empty slots left behind", () => {
   expect(store.has("composer-settings:" + empty)).toBe(false);
   expect(store.has("relay-draft:" + empty)).toBe(false);
   expect(store.has("composer-settings:" + kept)).toBe(true);
-  expect(loadDraftScope(kept)).toEqual({ kind: "review" });
+  expect(loadDraftScope(kept)).toEqual(pr);
   expect(loadDraftScope(empty)).toEqual({ kind: "project" });
+});
+
+it("keeps a deep review set up without text as a draft, and lets it go once it isn't one", () => {
+  const review = newThreadId("p1");
+  saveDraftScope(review, { kind: "review" });
+  threadStorage(review).review.update({ head: "feature", base: "main" });
+  expect(freshNewThread("p1")).not.toBe(review);
+  expect(reviewDraftIn("p1")).toBe(review);
+  const project = { id: "p1", name: "Relay" } as Project;
+  expect(
+    activityDrafts(useDraftKeys(), new Map([["p1", project]]), new Map()),
+  ).toEqual([
+    { key: "chat-draft:" + review, id: review, project, reply: false },
+  ]);
+  saveDraftScope(review, { kind: "project" });
+  expect(threadStorage(review).review.load()).toEqual({});
+  expect(freshNewThread("p1")).toBe(review);
+  expect(reviewDraftIn("p1")).toBeUndefined();
 });
 
 it("ignores a saved new thread from another project", () => {

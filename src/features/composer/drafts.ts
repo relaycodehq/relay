@@ -14,6 +14,7 @@ import {
   readDraftText,
   removeThreadDraft,
   threadDraftKey,
+  threadRecordIds,
   threadStorage,
   writeDraftBody,
   writeDraftText,
@@ -40,19 +41,20 @@ let index: string[] | undefined;
 
 export const readDraft = readDraftText;
 
+function reindex() {
+  index = undefined;
+  indexListeners.forEach((notify) => notify());
+}
+
 function changed(key: string, hadText: boolean, hasNow: boolean) {
   listeners.get(key)?.forEach((notify) => notify());
-  if (hadText !== hasNow) {
-    index = undefined;
-    indexListeners.forEach((notify) => notify());
-  }
+  if (hadText !== hasNow) reindex();
 }
 
 // A screenshot makes a draft as text does.
 onDraftImageCount((key) => {
   listeners.get(key)?.forEach((notify) => notify());
-  index = undefined;
-  indexListeners.forEach((notify) => notify());
+  reindex();
 });
 
 export function writeDraft(key: string, value: string) {
@@ -158,7 +160,8 @@ function useKeySubscription(key: string) {
 }
 
 export function useDraft(key: string): string {
-  return useSyncExternalStore(useKeySubscription(key), () => readDraft(key));
+  const read = () => readDraft(key);
+  return useSyncExternalStore(useKeySubscription(key), read, read);
 }
 
 /** How many screenshots without a pill the draft holds. */
@@ -171,7 +174,10 @@ export function useDraftImageCount(key: string): number {
 function readIndex(): string[] {
   let keys: string[];
   try {
-    keys = draftKeysWithText();
+    keys = [
+      ...draftKeysWithText(),
+      ...threadRecordIds().filter(isReviewDraft).map((id) => threadDraftKey(id)),
+    ];
   } catch {
     // Storage is a convenience here.
     keys = [];
@@ -204,7 +210,7 @@ const subscribeIndex = (notify: () => void) => {
   indexListeners.add(notify);
   return () => indexListeners.delete(notify);
 };
-/** The storage keys of every draft with text or a screenshot, sorted. */
+/** The storage keys of every draft with text or a screenshot, or set up as a deep review, sorted. */
 export const useDraftKeys = () =>
   useSyncExternalStore(subscribeIndex, draftKeys);
 
@@ -220,10 +226,24 @@ export function newThreadProject(id: string): string | undefined {
   return match?.[1];
 }
 const isSlot = (id: string) => id.split(":").length === 3;
+/** An unsent thread set up as a deep review, which is a draft before it has any text. */
+const isReviewDraft = (id: string) =>
+  !!newThreadProject(id) && loadDraftScope(id).kind === "review";
 export const hasDraft = (id: string) =>
   !!readDraft(threadDraftKey(id)).trim() ||
   !!draftImageCount(threadDraftKey(id)) ||
-  !!loadDraftLinks(id).length;
+  !!loadDraftLinks(id).length ||
+  isReviewDraft(id);
+
+/** The project's unsent deep review: the one it shows, else the newest. */
+export function reviewDraftIn(projectId: string): string | undefined {
+  const current = currentNewThread(projectId);
+  if (isReviewDraft(current)) return current;
+  return threadRecordIds()
+    .filter((id) => newThreadProject(id) === projectId && isReviewDraft(id))
+    .sort()
+    .at(-1);
+}
 
 /** The new thread a project last showed. */
 export function currentNewThread(projectId: string): string {
@@ -241,12 +261,19 @@ export const loadDraftLinks = (id: string): LinkedFolder[] =>
 /** The scope an unsent thread was written for; the repository by default. */
 export const loadDraftScope = (id: string): ChatScope =>
   threadStorage(id).scope.load();
-export const saveDraftScope = (id: string, scope: ChatScope) =>
+export function saveDraftScope(id: string, scope: ChatScope) {
+  const was = isReviewDraft(id);
   threadStorage(id).scope.save(scope);
+  if (scope.kind !== "review") threadStorage(id).review.clear();
+  if (was !== isReviewDraft(id)) reindex();
+}
 /** Drops the scope and the workspace picked for it. */
 export function clearDraftScope(id: string) {
+  const was = isReviewDraft(id);
   threadStorage(id).scope.clear();
+  threadStorage(id).review.clear();
   clearDraftWorkspace(id);
+  if (was) reindex();
 }
 
 /** Where a project's new threads start unless one picks otherwise. */

@@ -14,7 +14,7 @@ import { TargetField } from "./TargetField";
 /** Replaces the composer in a new deep review thread. */
 export function DeepReviewSetup({
   project,
-  settingsKey,
+  draftId,
   context,
   branch,
   changes,
@@ -24,8 +24,8 @@ export function DeepReviewSetup({
   onStart,
 }: {
   project: Project;
-  /** The unsent thread's composer settings. */
-  settingsKey: string;
+  /** The unsent thread, whose composer settings and draft the setup uses. */
+  draftId: string;
   /** The thread's context buttons, as the composer shows them. */
   context: ReactNode;
   branch?: string;
@@ -43,7 +43,7 @@ export function DeepReviewSetup({
   const { setup, update, focus, setFocus, pick, choice, start } =
     useDeepReviewSetup({
       projectId: project.id,
-      settingsKey,
+      draftId,
       branch,
       changes,
       busy,

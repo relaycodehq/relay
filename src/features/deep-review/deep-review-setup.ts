@@ -1,9 +1,9 @@
-// A new deep review's setup: who reviews and leads, what it covers, and how
-// it's kept per project until the next review.
-import { z } from "zod";
+// A new deep review's setup: who reviews and leads and what it covers. Each
+// unsent review keeps its own; the project's last one is where the next starts.
 import {
-  deepReviewStartSchema,
+  reviewDraftSetupSchema,
   type LeadAgent,
+  type ReviewDraftSetup,
   type ReviewAgent,
   type ReviewTarget,
 } from "../../../shared/deep-review";
@@ -22,26 +22,11 @@ const codexAgent = (model: string): ReviewAgent => ({
 });
 const defaultPair = [claudeAgent("high"), codexAgent("gpt-5.6-sol")];
 
-export interface Setup {
-  kind: ReviewTarget["kind"];
-  reviewers: ReviewAgent[];
-  lead: LeadAgent;
-  runChecks: boolean;
-}
+export type Setup = ReviewDraftSetup;
 export const setupKey = (projectId: string) => "deep-review-setup:" + projectId;
 export const focusKey = (projectId: string) => "deep-review-focus:" + projectId;
-// The start schema is strict, so the saved target has to be part of it.
-const setupSchema = deepReviewStartSchema
-  .pick({ reviewers: true, lead: true, runChecks: true })
-  .extend({
-    kind: z
-      .enum(["uncommitted", "branch", "pr", "commit"])
-      .catch("uncommitted"),
-  })
-  // Setups saved before the base stopped being kept still carry one.
-  .strip();
 export const savedSetup = (projectId: string): Setup | undefined =>
-  setupSchema.safeParse(readJson(setupKey(projectId))).data;
+  reviewDraftSetupSchema.safeParse(readJson(setupKey(projectId))).data;
 
 /** This project's last setup, else the last review's anywhere, else a pair. */
 export function firstSetup(projectId: string): Setup {

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Smartphone, SquarePen } from "lucide-react";
+import { ArrowUp, ScanSearch, Smartphone, SquarePen } from "lucide-react";
 import {
   loadDraftScope,
   useDraft,
@@ -17,8 +17,9 @@ import {
 } from "../agents/composer-settings";
 import { useAISettings } from "../agents/useAISettings";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { agentName } from "../../../shared/agents";
+import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
+import { onThreadRecord, threadStorage } from "../../lib/thread-storage";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
@@ -36,6 +37,7 @@ export function DraftCard({
 }) {
   const send = useDraftSend(draft, selected, onOpen, onSendOpen);
   const { project } = draft;
+  const review = loadDraftScope(draft.id).kind === "review";
   const open = () => {
     if (!selected) onOpen();
   };
@@ -45,7 +47,7 @@ export function DraftCard({
       tabIndex={0}
       aria-current={selected || undefined}
       className={`sb-card draft ${selected ? "selected" : ""}`}
-      title={`New thread in ${project.name}`}
+      title={`${review ? "Deep review" : "New thread"} in ${project.name}`}
       data-card={draft.key}
       onClick={open}
       onKeyDown={rowKeys(open)}
@@ -64,10 +66,18 @@ export function DraftCard({
           </div>
         )}
       </div>
-      <div className="sb-card-title untitled">New thread</div>
+      <div className="sb-card-title untitled">
+        {review ? "Deep review" : "New thread"}
+      </div>
       <div className="sb-card-meta">
-        <DraftLine draftKey={draft.key} />
-        <DraftAgent id={draft.id} />
+        {review ? (
+          <ReviewLine id={draft.id} draftKey={draft.key} />
+        ) : (
+          <>
+            <DraftLine draftKey={draft.key} />
+            <DraftAgent id={draft.id} />
+          </>
+        )}
       </div>
       {send.error && (
         <div className="sb-draft-error" role="alert">
@@ -98,6 +108,55 @@ export function DraftLine({ draftKey }: { draftKey: string }) {
       </span>
     </span>
   );
+}
+
+/** An unsent deep review: its focus note, else how many review it, and their agents. */
+function ReviewLine({ id, draftKey }: { id: string; draftKey: string }) {
+  const focus = useDraft(draftKey).replace(/\s+/g, " ").trim();
+  const reviewers = useReviewers(id);
+  const agents = [...new Set(reviewers)];
+  const count = `${reviewers.length} ${reviewers.length === 1 ? "reviewer" : "reviewers"}`;
+  return (
+    <>
+      <span className="sb-card-draft">
+        <ScanSearch size={11} aria-label="Deep review" />
+        <span>{focus || (reviewers.length ? count : "Set up, not started")}</span>
+      </span>
+      {!!agents.length && (
+        <span
+          className="sb-card-provider"
+          title={`${count}: ${agents.map(agentName).join(", ")}`}
+        >
+          {agents.map((p) => (
+            <ProviderIcon key={p} provider={p} />
+          ))}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The agents an unsent deep review's setup has review, in order, as its setup changes. */
+function useReviewers(id: string) {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const own = onThreadRecord((thread) => thread === id && notify());
+      // A thread's own window writes the same storage.
+      window.addEventListener("storage", notify);
+      return () => {
+        own();
+        window.removeEventListener("storage", notify);
+      };
+    },
+    [id],
+  );
+  // A string, so an unchanged setup reads as the same snapshot.
+  const read = () =>
+    (threadStorage(id).review.load().setup?.reviewers ?? [])
+      .map((r) => r.provider)
+      .join(",");
+  const joined = useSyncExternalStore(subscribe, read, read);
+  return joined ? (joined.split(",") as AgentProvider[]) : [];
 }
 
 /** The agent a new thread's draft will go to, as its composer would pick it. */

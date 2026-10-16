@@ -79,7 +79,7 @@ const setup = () =>
     <QueryClientProvider client={new QueryClient()}>
       <DeepReviewSetup
         project={project}
-        settingsKey="new:p1"
+        draftId="new:p1"
         context={null}
         branch="main"
         changes={2}
@@ -141,4 +141,42 @@ it("starts from the last review's setup when the project has none", () => {
   expect(html).toMatch(
     /aria-pressed="true"[^>]*>(?:<svg[^]*?<\/svg>)?Retry hunt</,
   );
+});
+
+it("a draft opens on its own setup, not the project's last", () => {
+  const codex = {
+    provider: "codex",
+    choice: { model: "gpt-5.5", reasoningEffort: "high", fast: false },
+  };
+  const claude = { ...codex, provider: "claude" };
+  store.set(
+    "deep-review-setup:p1",
+    JSON.stringify({
+      kind: "commit",
+      reviewers: [codex, codex, codex],
+      lead: codex,
+      runChecks: false,
+    }),
+  );
+  store.set(
+    "relay-draft:new:p1",
+    JSON.stringify({
+      v: 1,
+      scope: { kind: "review" },
+      review: {
+        setup: {
+          kind: "branch",
+          reviewers: [claude],
+          lead: claude,
+          runChecks: true,
+        },
+      },
+    }),
+  );
+  const html = setup();
+  expect(html).toContain("1 reviewer and a lead");
+  expect(html).toMatch(
+    /aria-checked="true">(?:(?!<\/button>)[^])*Branch<\/button>/,
+  );
+  expect(html).toContain('type="checkbox" checked=""');
 });

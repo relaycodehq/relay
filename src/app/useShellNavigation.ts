@@ -13,6 +13,7 @@ import {
   currentNewThread,
   freshNewThread,
   loadDraftScope,
+  reviewDraftIn,
   saveDraftScope,
   setCurrentNewThread,
 } from "../features/composer/drafts";
@@ -167,8 +168,12 @@ export function useShellNavigation(
   /** A thread keeps the scope it started with; another one takes a new thread. */
   function newThreadIn(next: ChatScope) {
     if (lock.blocked() || pinned) return;
+    // A deep review already set up opens again rather than starting over.
+    const review =
+      next.kind === "review" && project ? reviewDraftIn(project.id) : undefined;
+    if (review && project) setCurrentNewThread(project.id, review);
     // From a thread it starts afresh, not in a draft written for something else.
-    if (chat && project)
+    else if (chat && project)
       setCurrentNewThread(project.id, freshNewThread(project.id));
     setChatId(null);
     setDraftScope(next);

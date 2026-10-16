@@ -32,6 +32,7 @@ import {
   splitDraftKey,
   withBody,
   type DraftBody,
+  type ReviewDraft,
   type ThreadDraft,
 } from "./thread-draft";
 
@@ -293,6 +294,18 @@ export function threadStorage(id: string) {
     branch: {
       load: (): string => read().branch ?? "",
       save: (branch: string) => edit({ branch: branch || undefined }),
+    },
+    /** An unsent deep review's setup, and what it was pointed at. */
+    review: {
+      load: (): ReviewDraft => ({ ...read().review }),
+      /** Changes the parts given; one given as undefined goes. */
+      update: (change: Partial<ReviewDraft>) => {
+        const review = { ...read().review, ...change };
+        edit({
+          review: Object.values(review).some(Boolean) ? review : undefined,
+        });
+      },
+      clear: () => edit({ review: undefined }),
     },
   };
 }

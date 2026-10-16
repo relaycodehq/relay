@@ -505,8 +505,9 @@ export function ProjectChat({
         {!!error && <ErrorBox error={error} />}
         {isEmpty && scope.kind === "review" && !chat ? (
           <DeepReviewSetup
+            key={id}
             project={project}
-            settingsKey={id}
+            draftId={id}
             context={scopeButtons}
             branch={checkout.data?.branch}
             changes={checkout.data?.changes.length ?? 0}
