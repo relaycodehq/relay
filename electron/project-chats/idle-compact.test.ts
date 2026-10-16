@@ -64,13 +64,14 @@ it("compacts an unread thread five minutes before its cache expires", async () =
   expect(compact).toHaveBeenCalledWith("chat");
 });
 
-it("leaves a read thread to go cold unless it is pinned or snoozed", async () => {
-  const read = { seenAt: Date.now() };
+it("compacts a read thread but leaves a settled or agent-started one to go cold", async () => {
+  const started = { startedBy: { chatId: "lead", agent: "claude" } } as const;
   for (const [more, compacts] of [
-    [read, false],
-    [{ ...read, pinnedAt: 1 }, true],
-    [{ ...read, snoozedUntil: Date.now() + 3 * 60 * MINUTE }, true],
+    [{ seenAt: Date.now() }, true],
     [{ settledAt: Date.now() }, false],
+    [started, false],
+    [{ ...started, pinnedAt: 1 }, true],
+    [{ ...started, snoozedUntil: Date.now() + 3 * 60 * MINUTE }, true],
   ] as const) {
     chat = answered(56 * MINUTE, more);
     const { idle, compact } = planner();

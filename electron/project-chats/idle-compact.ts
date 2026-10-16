@@ -18,22 +18,20 @@ export interface IdleCompactHost {
 }
 
 /**
- * Whether you are likely to come back to it: you haven't read its answer, or
- * you pinned or snoozed it. A thread another thread's agent started is its
- * lead's to read.
+ * Whether you are likely to come back to it: you haven't settled it, read or
+ * not. A thread another thread's agent started is its lead's, so only once you
+ * pinned or snoozed it.
  */
 function comingBack(c: ChatSummary) {
-  const unread =
-    !c.startedBy && (!!c.markedUnread || (c.seenAt ?? 0) < c.updated);
   const snoozed = c.snoozedUntil != null && (c.seenAt ?? 0) < c.snoozedUntil;
-  return unread || snoozed || !!c.pinnedAt;
+  return !c.startedBy || snoozed || !!c.pinnedAt;
 }
 
 /**
  * Compacts a big conversation left idle a few minutes before its prompt
  * cache expires, while the compaction still reads the context cheaply; a
- * message after that only carries the summary. Only threads you are coming
- * back to: a settled one still compacts when a message finds it cold.
+ * message after that only carries the summary. Only threads you haven't
+ * settled: a settled one still compacts when a message finds it cold.
  */
 export class IdleCompactions {
   private timers = new Map<string, NodeJS.Timeout>();
