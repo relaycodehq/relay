@@ -10,6 +10,7 @@ import { sentAgent } from "../../shared/recipient";
 import { codexQuestionChoice } from "../../shared/settings";
 import { agentRuntimes, everyAgentRuntime } from "../agents";
 import {
+  claudeLive,
   claudePending,
   onClaudePending,
   readClaudeContext,
@@ -113,6 +114,7 @@ export class ProviderSessions {
   private resuming = new Set<string>();
   /** What the threads' agents ran, kept past the sessions that followed them. */
   private archive: SubagentArchive;
+  private pendingListeners = new Set<() => void>();
   /**
    * Claude's background work and wake-ups show in its threads' summaries;
    * its background agents start and end with them, between turns too.
@@ -122,6 +124,7 @@ export class ProviderSessions {
       this.changed(chatId);
       void this.keepSubagents(chatId);
     }
+    for (const listener of this.pendingListeners) listener();
   });
   private sweep = setInterval(() => this.closeIdle(), 60_000);
   constructor(
@@ -256,6 +259,17 @@ export class ProviderSessions {
     );
     this.keys.clear();
     this.used.clear();
+  }
+
+  /** Hears when Claude's background work may have changed, or a session ended with it. */
+  onPending(listener: () => void) {
+    this.pendingListeners.add(listener);
+    return () => void this.pendingListeners.delete(listener);
+  }
+
+  /** A Claude session of the thread still runs. */
+  live(chatId: string) {
+    return this.of(chatId).some(claudeLive);
   }
 
   stopListening() {

@@ -1700,6 +1700,46 @@ describe("reviewers in threads of their own", () => {
     expect(lead[0]).not.toContain("didn't finish");
   });
 
+  it("stops the review when a reviewer's session ends while its background agents work", async () => {
+    await chats.startDeepReview(
+      review,
+      config({
+        reviewers: [
+          {
+            provider: "claude",
+            choice: claudeChoice,
+            prompt: "fixture review in background slowly",
+          },
+        ],
+      }),
+    );
+    const claude = await memberOf(review, 0);
+    await vi.waitFor(async () => {
+      expect((await chats.get(claude)).messages.at(-1)).toMatchObject({
+        status: "complete",
+        body: "A reviewer is going through it in the background.",
+      });
+      expect(
+        chats.list(projectId).find((c) => c.id === claude)?.running,
+      ).toBeFalsy();
+    });
+    expect(await statusOf(review)).toBe("reviewing");
+    // As when Claude Code exits on its own: no turn is left to report in.
+    (
+      chats as unknown as { sessions: { close(id: string): void } }
+    ).sessions.close(claude);
+    await vi.waitFor(async () =>
+      expect(await statusOf(review)).toBe("stopped"),
+    );
+    expect(
+      (await chats.get(claude)).messages.map((m) => [m.role, m.status]),
+    ).toEqual([
+      ["user", "complete"],
+      ["assistant", "cancelled"],
+    ]);
+    expect(await leadPrompts()).toHaveLength(0);
+  });
+
   it("stops one reviewer in its thread, and continuing it there takes the review to the lead", async () => {
     await chats.startDeepReview(
       review,

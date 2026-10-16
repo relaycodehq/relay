@@ -62,6 +62,8 @@ export interface DeepReviewHost {
   active(chatId: string): boolean;
   /** Its agent has subagents at work in the background; they start another turn when they end. */
   waiting(chatId: string): boolean;
+  /** Its agent's session still runs, so what it waits for can start a turn. */
+  live(chatId: string): boolean;
   /** Waits for a turn that's stopped or finished to give its thread back, and the review step its end takes. */
   finished(chatId: string): Promise<void>;
   /** As `finished`, for a reviewer, and what its end does after: its queue and the review's next step. */
@@ -77,6 +79,8 @@ export interface DeepReviewHost {
 }
 
 export class DeepReviews {
+  /** Reviewers whose turn ended with their subagents still at work. */
+  private awaiting = new Set<string>();
   constructor(private host: DeepReviewHost) {}
 
   async start(chatId: string, config: DeepReviewStart, pull?: PullInfo) {
@@ -286,6 +290,23 @@ export class DeepReviews {
     await this.host.touch(member, answer.id);
   }
 
+  /**
+   * Background work changed somewhere. A reviewer whose session ended while
+   * its subagents worked never gets the turn they'd report in: it reads as
+   * stopped, so the review doesn't wait on it for good.
+   */
+  async sessionsChanged() {
+    for (const id of [...this.awaiting]) {
+      if (this.host.active(id)) this.awaiting.delete(id);
+      if (!this.awaiting.has(id) || this.host.live(id)) continue;
+      this.awaiting.delete(id);
+      const member = await this.host.load(id).catch(() => undefined);
+      if (!member?.reviewer) continue;
+      await this.abandon(member);
+      await this.reviewerDone(member.reviewer.parent);
+    }
+  }
+
   /** Messages wait for the lead while the reviewers work. */
   reviewing(chat: ProjectChat) {
     return chat.deepReview?.status === "reviewing";
@@ -309,6 +330,7 @@ export class DeepReviews {
     const chat = await this.host.load(chatId).catch(() => undefined);
     if (!chat) return;
     if (chat.reviewer) {
+      this.awaiting.delete(chat.id);
       if (this.host.waiting(chat.id)) {
         // Subagents still at work report in the turn they start, so its
         // session stays open for that, unless the review stopped meanwhile.
@@ -316,6 +338,7 @@ export class DeepReviews {
           .load(chat.reviewer.parent)
           .catch(() => undefined);
         if (review?.deepReview?.status === "stopped") await this.abandon(chat);
+        else this.awaiting.add(chat.id);
       }
       // Its agent would idle until Relay quits; a message waiting for it, or
       // one sent since, picks its session back up.

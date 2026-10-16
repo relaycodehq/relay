@@ -54,6 +54,7 @@ export class Councils {
         this.core.sessions
           .pending(id)
           .some(({ item }) => item.kind === "task" && item.agent),
+      live: (id) => this.core.sessions.live(id),
       finished: async (id) => {
         await this.core.active.finished(id);
         // A turn's end takes a review step; going on before it lands races it.
@@ -69,6 +70,10 @@ export class Councils {
       close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
       discard: (chat) => this.core.storage.remove(chat),
+    });
+    // Closing ends every session; reviews cut off then are stopped on the next start.
+    core.sessions.onPending(() => {
+      if (!core.closing()) void this.track(this.reviews.sessionsChanged());
     });
   }
 
@@ -116,9 +121,13 @@ export class Councils {
 
   /** A turn in the thread ended; a review at work takes its next step, settling once it has. */
   step(id: string, turn: { request?: string; answer?: string }) {
-    const step = this.reviews
-      .finished(id, turn)
-      .catch((e) => console.warn("Deep review could not continue:", e));
+    return this.track(this.reviews.finished(id, turn));
+  }
+
+  private track(work: Promise<void>) {
+    const step = work.catch((e) =>
+      console.warn("Deep review could not continue:", e),
+    );
     this.steps.add(step);
     void step.finally(() => this.steps.delete(step));
     return step;

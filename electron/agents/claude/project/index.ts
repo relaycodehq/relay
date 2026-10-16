@@ -7,6 +7,7 @@ export { reloadClaudeSession } from "./reload";
 export {
   claudeAgentRun,
   claudeAgents,
+  claudeLive,
   claudePending,
   claudeSubagents,
   readClaudeContext,

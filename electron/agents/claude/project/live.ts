@@ -12,6 +12,11 @@ export function claudePending(key: string): ChatPending[] {
   if (!session || session.frames.ended) return [];
   return session.work.list();
 }
+/** The session still runs: it can start the turn its background work reports in. */
+export function claudeLive(key: string) {
+  const session = sessions.get(key);
+  return !!session && !session.frames.ended;
+}
 /** Stops a background task; Claude hears it stopped and usually says so. */
 export async function stopClaudeTask(key: string, taskId: string) {
   const session = sessions.get(key);
