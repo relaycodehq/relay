@@ -31,7 +31,7 @@ sealed interface RemoteEvent {
     data class Message(val chatId: String, val message: ChatMessage, val title: String?) : RemoteEvent
     data class Chats(val chats: List<RemoteChatSummary>) : RemoteEvent
     data class Appearance(val appearance: PhoneAppearance) : RemoteEvent
-    /** Someone is at the computer working in Relay, or no longer; comes just before the thread list it applies to. */
+    /** Someone came to the computer (just before the thread list it applies to) or left it (just after). */
     data class Presence(val present: Boolean) : RemoteEvent
     data class Draft(val change: DraftChange) : RemoteEvent
     /** Computers only; a phone ignores it. */

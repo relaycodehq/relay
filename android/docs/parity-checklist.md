@@ -9,7 +9,7 @@ Base path: `/Users/lubomirmolin/Library/Application Support/Relay Experimental/w
 - [ ] Client frames: `pair`, `auth`, `call{id,method,args}`, `got{s}`. Server frames: `paired`, `ready`, `denied`, `result`, `event{event,s?}`, `tick` (every 15s; no tick means the link is stale).
 - [ ] Call timeouts are 15s, or 120s for slow methods. Reconnect uses exponential backoff; `wake()` runs on AppState active; while on a later route it keeps looking for a better one.
 - [ ] Routes are `local` or `tailscale` (100.64–127.x, `fd7a:115c:a1e0:`, `*.ts.net`). Order is user-set; `learnHosts` keeps up to 8. `M/../shared/remote-routes.ts`
-- [ ] Events: message, chats, appearance, draft, handoff. `messagePatch`/`chatsPatch` are applied by the delta code.
+- [ ] Events: message, chats, appearance, presence, draft, handoff. `messagePatch`/`chatsPatch` are applied by the delta code.
 - [ ] Bridge-version gates (remoteBridgeVersion 21): recipient 11, readAloud 12, activityDetail/away 13, image/compact 14, subagents/title/markedUnread 15, workspace 16, render 17, liveHandoff 18, drafts 19, folder/start handoff 20, skills 21.
 - [ ] RemoteApi methods: overview, chat, diff, desktop, projectIcons, subagents, subagentRun, phoneAppFile, reportApp, dictate, readAloud, activityDetail, image, renderPage, saveDraft, draftOther, sendDraft, computerInfo, updateNow.
 - [ ] The `desktop(method, …)` allowlist (`phoneDesktopMethods`) is the full set of desktop methods listed in the summary. Port all of them.

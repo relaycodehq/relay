@@ -1332,3 +1332,38 @@ it("tells only phones that know drafts when one changes; older ones would take i
   await older.untilEvents((events) => events.some((e) => e.kind === "chats"));
   expect(older.events().some((e) => e.kind === "draft")).toBe(false);
 });
+
+it("tells only phones that know drafts when someone leaves the computer; older ones would take it for a message", async () => {
+  let present = true;
+  const chats: ChatSummary[] = [];
+  const { remote, summary } = await desktop(undefined, undefined, {
+    chats: () => chats,
+    present: () => present,
+  });
+  chats.push(summary);
+  const pair = async (device: string) => {
+    const link = parsePairingUrl((await remote.pairing()).url)!;
+    const p = phone({ link, device });
+    await p.until("online");
+    return { link, credentials: p.credentials()!, p };
+  };
+  const old = await pair("Old phone");
+  old.p.client.close();
+  const current = await pair("Pixel");
+  await current.p.client.call("overview");
+  const older = await olderPhone(old.link.port, old.link.key, old.credentials);
+
+  present = false;
+  summary.updated++;
+  remote.chatsEvent({ projectId, chats });
+  await current.p.untilEvents((events) =>
+    events.some((e) => e.kind === "presence" && !e.present),
+  );
+  // What comes after leaving reaches the older phone, so leaving had its chance to.
+  summary.updated++;
+  remote.chatsEvent({ projectId, chats });
+  await older.untilEvents(
+    (events) => events.filter((e) => e.kind === "chats").length === 2,
+  );
+  expect(older.events().some((e) => e.kind === "presence")).toBe(false);
+});

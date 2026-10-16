@@ -51,9 +51,15 @@ it("hands the news back to the phone once the computer sits idle or locked, even
   expect(presence.present()).toBe(true);
 });
 
-it("trusts only a Relay window in front where the system can't tell idle", () => {
-  const { presence, state, leave } = setup();
+it("goes by input in Relay's own windows where the system can't tell idle", () => {
+  const { presence, state, at, leave, fire } = setup();
   state.idle = "unknown";
+  expect(presence.present()).toBe(true);
+  // Left in front overnight.
+  at.now = 3 * 60_000;
+  expect(presence.present()).toBe(false);
+  fire("input");
+  at.now += 60_000;
   expect(presence.present()).toBe(true);
   leave();
   expect(presence.present()).toBe(false);
@@ -74,4 +80,12 @@ it("counts nobody while the computer sleeps, and says so before it does", () => 
   stop();
   fire("suspend");
   expect(heard).toEqual([false, true]);
+});
+
+it("wakes on unlock too, as a resume can go missing", () => {
+  const { presence, fire } = setup();
+  fire("suspend");
+  expect(presence.present()).toBe(false);
+  fire("unlock");
+  expect(presence.present()).toBe(true);
 });

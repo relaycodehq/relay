@@ -567,16 +567,19 @@ export class RemoteBridge {
     const signature = JSON.stringify(chats);
     if (signature === this.lastChats) return;
     this.lastChats = signature;
-    // Read again as the list moves, which is when a phone decides whether it's news.
-    this.sendPresence();
+    // Read again as the list moves, which is when a phone decides whether it's
+    // news. Coming back goes before the list and leaving after it, so a list
+    // sent as presence changes is held, and leaving judges the newest one.
+    const present = this.host.present?.();
+    if (present) this.sendPresence(present);
     this.broadcast({ kind: "chats", chats });
+    if (present === false) this.sendPresence(present);
   }
   /** Someone came to the computer or left it: a phone holding news back hands it out. */
   presenceChanged() {
-    if (this.watching && this.projectIds) this.sendPresence();
+    if (this.watching && this.projectIds) this.sendPresence(this.host.present?.());
   }
-  private sendPresence() {
-    const present = this.host.present?.();
+  private sendPresence(present: boolean | undefined) {
     if (present === undefined || present === this.lastPresent) return;
     this.lastPresent = present;
     this.broadcast({ kind: "presence", present });

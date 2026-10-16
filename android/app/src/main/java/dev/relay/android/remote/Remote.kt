@@ -87,12 +87,14 @@ class Remote(
     private val _status = MutableStateFlow(RemoteStatus(LinkState.Offline))
     val status: StateFlow<RemoteStatus> = _status.asStateFlow()
     private val _overview = MutableStateFlow<RemoteOverview?>(null)
-    /** The active computer's overview: its last saved copy until a fresh one comes, thread list kept live. */
+    /**
+     * The active computer's overview: its last saved copy until a fresh one
+     * comes, thread list and `present` kept live. `present` is the live
+     * connection's word alone, never a saved copy's.
+     */
     val overview: StateFlow<RemoteOverview?> = _overview.asStateFlow()
-
-    private val _present = MutableStateFlow(false)
-    /** Someone at the active computer working in Relay, as its live connection last said; never from a saved copy. */
-    val present: StateFlow<Boolean> = _present.asStateFlow()
+    /** Presence events heard, so an overview asked for before one doesn't undo it. */
+    private var presenceHeard = 0
     private val _client = MutableStateFlow<RemoteClient?>(null)
     /** The live client, for calls; null when nothing is paired. */
     val client: StateFlow<RemoteClient?> = _client.asStateFlow()
@@ -221,10 +223,11 @@ class Remote(
     suspend fun refresh(): RemoteOverview? {
         val client = _client.value ?: return null
         if (client.status.value.state != LinkState.Online) return null
+        val heard = withContext(dispatcher) { presenceHeard }
         val fresh = client.overview()
         return withContext(dispatcher) {
             if (live !== client) return@withContext null
-            setFresh(client, fresh)
+            setFresh(client, fresh, heard)
             fresh
         }
     }
@@ -290,10 +293,15 @@ class Remote(
         if (overview != null && id != null) scope.launch { cache.save(id, overview) }
     }
 
-    private fun setFresh(client: RemoteClient, overview: RemoteOverview) {
-        _present.value = overview.present == true
-        setOverview(overview)
-        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, overview)) }
+    /**
+     * [heard] is [presenceHeard] when the overview was asked for. A presence
+     * event since is newer than the overview (it comes after the reply on the
+     * wire), and the desktop tells it again if not.
+     */
+    private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int) {
+        val kept = if (heard == presenceHeard) overview else overview.copy(present = _overview.value?.present)
+        setOverview(kept)
+        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept)) }
     }
 
     /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -304,7 +312,7 @@ class Remote(
         // Tapped another computer while this one's copy was read.
         if (mine != switches) return
         _active.value = id
-        _overview.value = cached
+        _overview.value = cached?.copy(present = null)
         connect(start)
         persist()
     }
@@ -314,7 +322,6 @@ class Remote(
         switches++
         _active.value = null
         _overview.value = null
-        _present.value = false
         live?.close()
         live = null
         _client.value = null
@@ -337,10 +344,11 @@ class Remote(
                             it.outcome.complete("")
                         }
                         // Every (re)connect starts from a fresh overview.
+                        val heard = presenceHeard
                         scope.launch {
                             try {
                                 val fresh = next.overview()
-                                if (live === next) setFresh(next, fresh)
+                                if (live === next) setFresh(next, fresh, heard)
                             } catch (_: Exception) {
                             }
                         }
@@ -369,7 +377,10 @@ class Remote(
                 when (event) {
                     is RemoteEvent.Chats -> _overview.value?.let { setOverview(it.copy(chats = event.chats)) }
                     is RemoteEvent.Appearance -> _overview.value?.let { setOverview(it.copy(appearance = event.appearance)) }
-                    is RemoteEvent.Presence -> _present.value = event.present
+                    is RemoteEvent.Presence -> {
+                        presenceHeard++
+                        _overview.value?.let { setOverview(it.copy(present = event.present)) }
+                    }
                     else -> {}
                 }
                 _events.tryEmit(event)
@@ -377,7 +388,7 @@ class Remote(
         })
         val previous = live
         live = next
-        _present.value = false
+        _overview.value = _overview.value?.copy(present = null)
         previous?.close()
         _client.value = next
         _status.value = next.status.value

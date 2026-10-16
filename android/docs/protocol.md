@@ -242,7 +242,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:106-157`. Arguments are positional in `args[]`.
 
 - **`overview()`** → `RemoteOverview` (`:284-303`):
-  - `{name, bridge?, version?, appearance?:PhoneAppearance, dictation?: "…status", readAloud?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
+  - `{name, bridge?, version?, appearance?:PhoneAppearance, dictation?: "…status", readAloud?:boolean, present?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
   - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?}`.
   - `RemoteChatSummary` (`:108-147`):
     - required: `id, projectId, title, scope, updated, created`;
@@ -358,6 +358,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
 - `message`: `{chatId, message, title?}`. Streaming messages are throttled to one per message every 150 ms on the desktop (`bridge.ts:160`, `:514-539`).
 - `chats`: `{chats}`, the whole list.
 - `appearance`.
+- `presence`: `{present}`, whether someone sits at the computer working in Relay (`electron/remote/presence.ts`), so the phone holds back news meanwhile. Sent when it changes: just before the `chats` it applies to when someone comes back, just after when they leave, and by itself when someone leaves without the list moving (checked every 15 s). A fresh overview's `present` starts it over. Only sent to bridge ≥ 19.
 - `draft`: `{change:{key, draft|null, sent?}}`. Only sent to bridge ≥ 19.
 - `handoff`: computers only.
 

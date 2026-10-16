@@ -711,7 +711,10 @@ export type RemoteEvent =
   /** Thread states moved: something started, finished or asked a question. */
   | { kind: "chats"; chats: RemoteChatSummary[] }
   | { kind: "appearance"; appearance: PhoneAppearance }
-  /** `present` changed: just before the thread list it applies to, or when someone leaves or comes back. */
+  /**
+   * `present` changed: someone came back (just before the thread list it
+   * applies to) or left (just after it). Only to phones from `draftsBridge`.
+   */
   | { kind: "presence"; present: boolean }
   /** A draft changed; only to phones from `draftsBridge`. */
   | { kind: "draft"; change: DraftChange }

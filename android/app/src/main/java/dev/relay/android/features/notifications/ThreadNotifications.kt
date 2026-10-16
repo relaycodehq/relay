@@ -22,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -54,8 +56,7 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
     private val enabled = MutableStateFlow(false)
     private var before = emptyMap<String, RemoteChatSummary>()
     private val answers = mutableMapOf<String, Pair<LastAnswer, Long>>()
-    /** News kept from the phone while someone sat at the computer, by thread; posted if still unread once they leave. */
-    private val held = mutableMapOf<String, ThreadNews>()
+    private val held = HeldNews()
     private var resumed: WeakReference<Activity>? = null
 
     private val foreground get() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
@@ -172,7 +173,6 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
 
         scope.launch {
             remote.events.collect { e ->
-                if (e is RemoteEvent.Presence && !e.present) return@collect postHeld()
                 if (e !is RemoteEvent.Message) return@collect
                 val m = e.message
                 if (m.role != "assistant" || m.parentId != null || m.compaction == true || m.handoff != null || m.reload != null) return@collect
@@ -183,31 +183,32 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         }
 
         scope.launch {
-            remote.overview.map { it?.chats }.distinctUntilChanged().collect { chats ->
+            // The list and whether someone sits at the computer come as one, so
+            // news is judged by the presence its own list came with.
+            remote.overview.map { it?.chats to (it?.present == true) }.distinctUntilChanged().collect { (chats, present) ->
                 if (chats == null) return@collect
                 val was = before
                 before = chats.associateBy { it.id }
-                if (!enabled.value || was.isEmpty()) return@collect
+                if (!enabled.value) return@collect held.clear()
+                if (was.isEmpty()) return@collect
                 for (id in threadsRead(was, chats)) WatchService.clear(app, id)
-                held.keys.retainAll(stillNews(held.values, before).map { it.chatId }.toSet())
                 // On screen the app shows it already.
-                if (foreground) return@collect
-                for (news in threadNews(was, chats, answers.mapValues { it.value.first })) {
-                    // Someone at the computer sees it there, unless they leave before reading it.
-                    if (remote.present.value) held[news.chatId] = news
-                    else {
-                        held.remove(news.chatId)
-                        post(news)
-                    }
-                }
+                val news = if (foreground) emptyList() else threadNews(was, chats, answers.mapValues { it.value.first })
+                // Someone at the computer sees it there, unless they leave before reading it.
+                val due = held.next(before, present, news)
+                if (!foreground) due.forEach(::post)
             }
         }
-    }
 
-    private fun postHeld() {
-        val news = stillNews(held.values, before)
-        held.clear()
-        if (enabled.value && !foreground) news.forEach(::post)
+        // A computer that quits, crashes or loses the network can't say it was left.
+        scope.launch {
+            remote.status.map { it.state == LinkState.Online }.distinctUntilChanged().collectLatest { online ->
+                if (online) return@collectLatest
+                delay(GONE_MS)
+                val due = held.next(before, present = false, news = emptyList())
+                if (enabled.value && !foreground) due.forEach(::post)
+            }
+        }
     }
 
     private fun post(news: ThreadNews) =
@@ -215,6 +216,8 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
 
     private companion object {
         const val TAG = "ThreadNotifications"
+        /** Long enough for Relay to restart or the link to come back. */
+        const val GONE_MS = 2 * 60_000L
         const val PREF_KEY = "relay-notifications"
         const val ASKED_KEY = "relay-notifications-asked"
     }

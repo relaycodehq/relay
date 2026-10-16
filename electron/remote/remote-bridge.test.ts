@@ -92,7 +92,7 @@ it("watches thread states only once the phone has the overview, and only reports
   expect(events.map((e) => e.kind)).toEqual(["chats"]);
 });
 
-it("tells phones whether someone is at the computer just before the list it applies to, when it changed", async () => {
+it("tells phones whether someone is at the computer around the list it applies to, when it changed", async () => {
   let present = true;
   let updated = 2;
   const events: RemoteEvent[] = [];
@@ -126,7 +126,8 @@ it("tells phones whether someone is at the computer just before the list it appl
   b.refresh();
   updated++;
   b.refresh();
-  expect(heard()).toEqual([true, "chats", "chats", false, "chats"]);
+  // Coming back goes before the list it applies to, leaving after it.
+  expect(heard()).toEqual([true, "chats", "chats", "chats", false]);
 
   // Leaving moves no thread, so it goes out by itself, but only to a watching phone.
   present = true;

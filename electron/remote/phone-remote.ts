@@ -140,7 +140,14 @@ export class PhoneRemote {
     const name = computerName;
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
-      (event) => this.server.broadcast(event, (id) => !this.isComputer(id)),
+      // Phones before drafts take any other event for a thread's message.
+      (event) =>
+        this.server.broadcast(
+          event,
+          (id, bridge) =>
+            !this.isComputer(id) &&
+            (event.kind !== "presence" || bridge >= draftsBridge),
+        ),
     );
     if (host.dictation) this.dictations = new PhoneDictations(host.dictation);
     if (host.readAloud) this.readings = new PhoneReadings(host.readAloud);
