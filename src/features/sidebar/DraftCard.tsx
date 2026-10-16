@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ScanSearch, Smartphone, SquarePen } from "lucide-react";
 import {
+  reviewSetUp,
   useDraftRecord,
   useDraft,
   useDraftImageCount,
@@ -109,9 +110,13 @@ export function DraftLine({ draftKey }: { draftKey: string }) {
   );
 }
 
-/** Whether an unsent thread is a deep review rather than a message. */
+/**
+ * Whether an unsent thread is a deep review rather than a message: a message
+ * written before Deep review was opened still reads as itself until a review
+ * is set up.
+ */
 const useIsReview = (id: string) =>
-  useDraftRecord(id, (d) => d.scope?.kind === "review");
+  useDraftRecord(id, (d) => reviewSetUp(id, d));
 
 /** An unsent deep review: its focus note, else how many review it, and their agents. */
 function ReviewLine({ id }: { id: string }) {
@@ -179,7 +184,10 @@ export function useDraftSend(
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   // A review starts from its setup, not from a message.
-  const review = useIsReview(draft?.id ?? "");
+  const review = useDraftRecord(
+    draft?.id ?? "",
+    (d) => d.scope?.kind === "review",
+  );
   const sendable = !!draft && !draft.reply && (!!draft.chat || !review);
   async function send() {
     if (!draft) return;

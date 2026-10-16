@@ -97,7 +97,7 @@ it("clears what abandoned empty slots left behind", () => {
   expect(loadDraftScope(empty)).toEqual({ kind: "project" });
 });
 
-it("keeps a deep review set up without text as a draft, and lets it go once it isn't one", () => {
+it("keeps a deep review set up without text as a draft, and sets it aside once it isn't one", () => {
   const review = newThreadId("p1");
   saveDraftScope(review, { kind: "review" });
   // Only opened, it's no draft yet.
@@ -113,9 +113,15 @@ it("keeps a deep review set up without text as a draft, and lets it go once it i
     { key: "chat-draft:" + review, id: review, project, reply: false },
   ]);
   saveDraftScope(review, { kind: "project" });
-  expect(threadStorage(review).review.load()).toEqual({});
   expect(freshNewThread("p1")).toBe(review);
   expect(reviewDraftIn("p1")).toBeUndefined();
+  // Back on Deep review, the picks are still there.
+  saveDraftScope(review, { kind: "review" });
+  expect(threadStorage(review).review.load()).toMatchObject({
+    head: "feature",
+    base: "main",
+  });
+  expect(reviewDraftIn("p1")).toBe(review);
 });
 
 it("opens the project's most recently changed review draft again", () => {

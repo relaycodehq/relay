@@ -249,7 +249,7 @@ const isSlot = (id: string) => id.split(":").length === 3;
  * An unsent thread with a deep review set up in it, which is a draft before
  * it has any text. Only opening the setup doesn't make one.
  */
-const reviewSetUp = (id: string, draft: ThreadDraft) =>
+export const reviewSetUp = (id: string, draft: ThreadDraft) =>
   !!newThreadProject(id) && draft.scope?.kind === "review" && !!draft.review;
 const isReviewDraft = (id: string) => reviewSetUp(id, loadThreadDraft(id));
 export const hasDraft = (id: string) =>
@@ -294,8 +294,9 @@ export const loadDraftScope = (id: string): ChatScope =>
   threadStorage(id).scope.load();
 export function saveDraftScope(id: string, scope: ChatScope) {
   const was = isReviewDraft(id);
+  // A review set up and then switched away from waits there, its note
+  // included, for Deep review to be picked again; only × or Start drops it.
   threadStorage(id).scope.save(scope);
-  if (scope.kind !== "review") threadStorage(id).review.clear();
   changedRecord(id, was);
 }
 /** Drops the scope and the workspace picked for it. */
