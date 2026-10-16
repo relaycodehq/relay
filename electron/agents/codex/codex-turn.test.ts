@@ -341,3 +341,152 @@ it("folds a subagent's calls under its agent row and keeps its words out of the 
   expect(rows.has("x")).toBe(false);
   expect(edits).toEqual(["/repo/c.txt"]);
 });
+
+const answered = {
+  method: "item/completed",
+  params: {
+    threadId: "thread",
+    item: {
+      id: "a",
+      type: "agentMessage",
+      phase: "final_answer",
+      text: "Done.",
+    },
+  },
+};
+
+it("reports each request's tokens on the thread's model, and how full the window is", async () => {
+  const usage: unknown[] = [];
+  const context: unknown[] = [];
+  const { answer } = await ask(
+    {
+      said: [
+        {
+          method: "thread/tokenUsage/updated",
+          params: {
+            threadId: "thread",
+            tokenUsage: {
+              last: {
+                totalTokens: 1200,
+                inputTokens: 1000,
+                cachedInputTokens: 400,
+                outputTokens: 200,
+              },
+              total: { totalTokens: 5000 },
+              modelContextWindow: 200000,
+            },
+          },
+        },
+        answered,
+      ],
+    },
+    {
+      onUsage: (u) => usage.push(u),
+      onContext: (c) => context.push(c),
+    },
+  );
+  expect(await answer).toBe("Done.");
+  expect(usage).toEqual([
+    expect.objectContaining({
+      model: "gpt-6-astra",
+      tokens: { input: 600, cacheRead: 400, cacheWrite: 0, output: 200 },
+      fast: false,
+    }),
+  ]);
+  expect(context).toEqual([
+    expect.objectContaining({
+      usedTokens: 1200,
+      maxTokens: 200000,
+      totalTokens: 5000,
+    }),
+  ]);
+});
+
+it("fails the turn on an error Codex won't retry, and waits out one it will", async () => {
+  const error = (message: string, willRetry: boolean) => ({
+    method: "error",
+    params: {
+      threadId: "thread",
+      error: { message, codexErrorInfo: null },
+      willRetry,
+    },
+  });
+  const retried = await ask({ said: [error("Hiccup", true), answered] });
+  expect(await retried.answer).toBe("Done.");
+  const failed = await ask({ said: [error("Boom", false)], ending: null });
+  await expect(failed.answer).rejects.toThrow("Boom");
+});
+
+it("answers with the plan when Codex plans, showing each new step list once", async () => {
+  const rows: AgentActivity[] = [];
+  const plans: string[] = [];
+  const steps = {
+    method: "turn/plan/updated",
+    params: {
+      threadId: "thread",
+      plan: [{ step: "Read the code", status: "completed" }],
+    },
+  };
+  const { answer } = await ask(
+    {
+      said: [
+        steps,
+        steps,
+        {
+          method: "item/plan/delta",
+          params: { threadId: "thread", delta: "1. Read" },
+        },
+        {
+          method: "item/plan/delta",
+          params: { threadId: "thread", delta: " the code" },
+        },
+        answered,
+      ],
+    },
+    {
+      onActivity: (a) => rows.push(a),
+      onPlan: (plan) => plans.push(plan),
+    },
+  );
+  expect(await answer).toBe("1. Read the code");
+  expect(plans).toEqual(["1. Read", "1. Read the code"]);
+  expect(rows.filter((r) => r.label === "Updated the plan")).toHaveLength(1);
+});
+
+it("interrupts the running turn when stopped, even if Codex refuses the interrupt", async () => {
+  const stop = new AbortController();
+  const { answer } = await ask(
+    {
+      said: [],
+      ending: null,
+      refusing: {
+        method: "turn/interrupt",
+        error: { code: -32600, message: "No turn." },
+      },
+    },
+    {
+      signal: stop.signal,
+      onControl: () => stop.abort(),
+    },
+  );
+  await expect(answer).rejects.toThrow("Cancelled by you.");
+});
+
+it("stops waiting when Codex never acknowledges the interrupt", async () => {
+  const stop = new AbortController();
+  let running!: () => void;
+  const started = new Promise<void>((resolve) => (running = resolve));
+  const { answer } = await ask(
+    { said: [], ending: null },
+    { signal: stop.signal, onControl: () => running() },
+  );
+  await started;
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    stop.abort();
+    vi.advanceTimersByTime(3000);
+    await expect(answer).rejects.toThrow("Cancelled by you.");
+  } finally {
+    vi.useRealTimers();
+  }
+});

@@ -10,6 +10,7 @@ import { codexSubagentBooks } from "./codex/codex-subagents";
 import {
   closeCodexConnection,
   reattachCodexSessions,
+  detachCodex,
 } from "./codex/codex-connection";
 import { runClaude } from "./claude/claude";
 import {
@@ -71,6 +72,7 @@ const codex: AgentRuntime = {
   commands: async (root) =>
     skillCommands((await codexSkills(root)).map(codexSkill)),
   reattach: (owns) => reattachCodexSessions(owns),
+  detach: detachCodex,
 };
 
 const claude: AgentRuntime = {

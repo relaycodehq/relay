@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codexContextUsage } from "../../electron/agents/codex/codex";
+import { codexContextUsage } from "../../electron/agents/codex/codex-turn";
 import {
   CODEX_CACHE_TTL,
   CodexCacheClock,

@@ -2,7 +2,7 @@ import type { RuntimeMode } from "../../../shared/agent-modes";
 import type { LinkedFolder } from "../../../shared/projects";
 
 /** What Codex is told about approvals and the sandbox for one of Relay's modes. */
-interface CodexPolicy {
+export interface CodexPolicy {
   approvalPolicy: "untrusted" | "on-request" | "never";
   sandbox: "read-only" | "workspace-write" | "danger-full-access";
   approvalsReviewer: "user" | "auto_review";

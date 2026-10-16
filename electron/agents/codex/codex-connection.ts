@@ -246,6 +246,10 @@ export async function acquireCodexConnection(
 export function closeCodexConnection(key: string) {
   return sessions.close(key);
 }
+/** Relay is restarting: let go of the app servers the agent host keeps running. */
+export function detachCodex() {
+  sessions.detach();
+}
 
 /**
  * Takes back the app servers the agent host kept running while Relay

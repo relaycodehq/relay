@@ -143,3 +143,58 @@ export class CodexGoalHold {
     this.release();
   }
 }
+
+/**
+ * Runs `/goal` on a thread: what to say back when it starts no turn, or the
+ * text of the turn that pursues the goal, which goes active once it runs.
+ */
+export async function codexGoalCommand(
+  wire: CodexTransport,
+  threadId: string,
+  command: GoalCommand,
+  hold: CodexGoalHold,
+): Promise<{ reply: string } | { turn: string }> {
+  const goal = codexGoals(wire, threadId);
+  const current = await goal.get().catch((e) => {
+    console.warn("Codex has no goals:", e);
+    throw new Error(
+      "This Codex CLI has no /goal. Update Codex CLI to set goals.",
+    );
+  });
+  hold.seen(current);
+  if (command.type === "set") {
+    // A new objective replaces the goal and its accounting, as in Codex's
+    // TUI. Paused until the first turn runs on this thread's settings,
+    // so Codex doesn't start one first on the last turn's.
+    if (current) await goal.clear();
+    hold.seen(
+      await goal.set({ objective: command.objective, status: "paused" }),
+    );
+    hold.activating = true;
+    return { turn: command.objective };
+  }
+  if (command.type === "resume" && current && current.status !== "complete") {
+    // Over its token budget, a goal goes on only once the budget does.
+    if (current.status === "budget_limited")
+      return { reply: goalReply("show", current, false) };
+    // A turn of its own first, on this message's model and permissions:
+    // one Codex starts by itself takes the last turn's.
+    hold.activating = true;
+    return { turn: "Continue toward the goal." };
+  }
+  let now = current,
+    cleared = false;
+  if (command.type === "clear") {
+    cleared = await goal.clear();
+    now = null;
+  } else if (command.type === "pause" && current)
+    now = await goal.set({ status: "paused" });
+  hold.seen(now);
+  return {
+    reply: goalReply(
+      command.type === "resume" ? "show" : command.type,
+      now,
+      cleared,
+    ),
+  };
+}
