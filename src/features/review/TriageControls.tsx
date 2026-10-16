@@ -53,7 +53,7 @@ export function TriageControls({
           title={`Find repeated whole-file changes. Analyzes this PR in small batches with ${activeChoice ? choiceLabel(activeChoice, activeChoice.provider) : agent}. Source changes are sent to your signed-in ${agent} account.`}
         >
           {running ? (
-            <Spinner size={14} />
+            <Spinner size={14} steady />
           ) : resume ? (
             <Play size={14} />
           ) : result ? (

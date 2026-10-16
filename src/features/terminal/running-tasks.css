@@ -243,12 +243,7 @@ button.running-task-title:hover > svg {
   visibility: visible;
 }
 .running-tasks-list li.restart .running-task-buttons button:first-child svg {
-  animation: running-task-spin 0.8s steps(16) infinite;
-}
-@keyframes running-task-spin {
-  to {
-    transform: rotate(1turn);
-  }
+  animation: spin 1.2s steps(24) infinite;
 }
 .running-tasks-error {
   margin: 0;

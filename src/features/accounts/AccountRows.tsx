@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu } from "@base-ui/react/menu";
-import { LoaderCircle, MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { api } from "../../lib/api";
+import { Spinner } from "../../ui/ui";
 import { agents } from "../../../shared/agents";
 import {
   accountsOf,
@@ -245,7 +246,7 @@ function AddAccount({
   if (waiting)
     return (
       <span className="accounts-adding" role="status">
-        <LoaderCircle size={12} className="spin" aria-hidden />
+        <Spinner size={12} steady />
         Finish signing in to <b>{waiting.label}</b> in your browser
         <button
           type="button"

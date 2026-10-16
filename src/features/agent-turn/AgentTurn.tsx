@@ -222,7 +222,7 @@ function ToolRow({
   const heading = (
     <>
       {a.status === "running" ? (
-        <Spinner size={14} />
+        <Spinner size={14} steady={isQuestionCall(a)} />
       ) : read ? (
         <ReadIcon image={read.image} />
       ) : (
