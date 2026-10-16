@@ -1,6 +1,6 @@
 import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
-import type { FetchRequest } from "../pull-requests/gitea";
+import type { FetchRequest } from "../pull-requests/host";
 import { ghToken } from "../pull-requests/github";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";

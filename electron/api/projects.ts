@@ -74,7 +74,7 @@ export function projectHandlers(ctx: ApiContext) {
     const known = projects.get(projectId).repository;
     if (!known)
       throw new Error(
-        "Relay can't match this project to a GitHub or Gitea repository.",
+        "Relay can't match this project to a repository on its host.",
       );
     const client = await clientFor(known);
     return { client, repo: await projects.linked(projectId, client) };
@@ -357,8 +357,13 @@ export function projectHandlers(ctx: ApiContext) {
               .catch(() => projects.root(id))
           : await projects.root(id);
         const settings = store.get().sourceControl;
-        return ci.status(root, ctx.login.client, (kind) =>
-          isSourceControlOn(settings, kind),
+        return ci.status(
+          root,
+          {
+            gitea: ctx.login.client,
+            azure: (server) => ctx.hosts.azureClient(server),
+          },
+          (kind) => isSourceControlOn(settings, kind),
         );
       },
     ),

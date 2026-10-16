@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 
-/** The repository the Pull requests page shows, `owner/name`, kept per account. */
-export function usePullsRepo(accountId: string) {
-  const key = `relay-pulls-repo:${accountId}`;
+/**
+ * The repository the Pull requests page shows, by `repoKey`, which names its
+ * server; the older per-account keys named none, so they're left behind.
+ */
+export function usePullsRepo() {
+  const key = "relay-pulls-repo";
   const [repo, setRepo] = useState(() => localStorage.getItem(key) || null);
   useEffect(() => {
     if (repo) localStorage.setItem(key, repo);

@@ -8,16 +8,97 @@ export const sourceControlNames: Record<SourceControlKind, string> = {
   "azure-devops": "Azure DevOps",
 };
 
+/** What asking a host that's switched off answers, told apart from a failure by it. */
+export const hostOffMessage = (kind: SourceControlKind) =>
+  `${sourceControlNames[kind]} is off in Settings → Integrations.`;
+
 /** GitHub's server, as a repository's `server` names it. */
 export const GITHUB_SERVER = "https://github.com";
 export const isGithubServer = (server: string | undefined) =>
   server === GITHUB_SERVER;
 
-/** Which host a PR, server or repository URL is on, for copy: GitHub or Gitea. */
+/**
+ * An Azure DevOps organization as a repository's `server` names it. Each
+ * organization is a server of its own, with its own sign-in tenant. Its
+ * name is case-blind, so it's lower-cased to keep one server per organization.
+ */
+export const azureServer = (organization: string) =>
+  `https://dev.azure.com/${encodeURIComponent(organization.toLowerCase())}`;
+export const isAzureServer = (server: string | undefined) =>
+  !!server && /^https:\/\/dev\.azure\.com\/[^/]+$/.test(server);
+export const azureOrganization = (server: string) =>
+  decodeURIComponent(new URL(server).pathname.slice(1));
+
+/**
+ * Where a repository sits in an Azure DevOps web path: `org/project/_git/repo`
+ * on dev.azure.com, `project/_git/repo` on `org.visualstudio.com`. A project
+ * of the repository's name may be left out, and old paths start with
+ * `DefaultCollection`. `git` is the index of `_git` in `parts`.
+ */
+export function azureGitPath(hostname: string, parts: string[]) {
+  const host = hostname.toLowerCase();
+  const site = host === "dev.azure.com";
+  const organization = site
+    ? parts[0]
+    : host.endsWith(".visualstudio.com")
+      ? host.slice(0, -".visualstudio.com".length)
+      : undefined;
+  const git = parts.indexOf("_git");
+  if (!organization || git < (site ? 1 : 0)) return null;
+  const project = parts
+    .slice(site ? 1 : 0, git)
+    .filter((p) => p.toLowerCase() !== "defaultcollection")
+    .at(-1);
+  return { server: azureServer(organization), project, git };
+}
+
+/** Whether two spellings of a server are the same one. */
+export const sameServer = (a: string, b: string) =>
+  a.replace(/\/+$/, "").toLowerCase() === b.replace(/\/+$/, "").toLowerCase();
+
+/** The host a repository's `server` is on; any other server is the Gitea account's. */
+export function hostKindOf(server: string | undefined): SourceControlKind {
+  if (isGithubServer(server)) return "github";
+  if (isAzureServer(server)) return "azure-devops";
+  return "gitea";
+}
+
+/** The host a web address is on, from its site alone: anything unknown is Gitea. */
+export function urlHostKind(url: string | undefined): SourceControlKind {
+  let host = "";
+  try {
+    host = url ? new URL(url).hostname.toLowerCase() : "";
+  } catch {
+    return "gitea";
+  }
+  if (host === "github.com" || host === "www.github.com") return "github";
+  if (host === "dev.azure.com" || host.endsWith(".visualstudio.com"))
+    return "azure-devops";
+  return "gitea";
+}
+
+/** Which host a PR, server or repository URL is on, for copy. */
 export const pullHostName = (url: string | undefined) =>
-  url && /^https?:\/\/(www\.)?github\.com(\/|$)/i.test(url)
-    ? "GitHub"
-    : "Gitea";
+  sourceControlNames[urlHostKind(url)];
+
+/** A pull request's page on its host. */
+export function pullWebUrl(ref: {
+  server: string;
+  owner: string;
+  name: string;
+  number: number;
+}) {
+  const at = (...parts: string[]) =>
+    [ref.server, ...parts.map(encodeURIComponent)].join("/");
+  switch (hostKindOf(ref.server)) {
+    case "azure-devops":
+      return `${at(ref.owner, "_git", ref.name, "pullrequest")}/${ref.number}`;
+    case "github":
+      return `${at(ref.owner, ref.name, "pull")}/${ref.number}`;
+    default:
+      return `${at(ref.owner, ref.name, "pulls")}/${ref.number}`;
+  }
+}
 
 /** What Settings keeps: hosts the user turned on or off, and the CLIs they linked. */
 export interface SourceControlSettings {

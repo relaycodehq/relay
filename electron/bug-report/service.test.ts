@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ApiError } from "../pull-requests/gitea";
+import { ApiError } from "../pull-requests/host";
 import type { SystemInfo } from "./report";
 import { BugReports, type BugReportDeps, type DesktopActions } from "./service";
 import type { CreatedIssue, Exec, IssueHost } from "./submit";

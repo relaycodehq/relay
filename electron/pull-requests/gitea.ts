@@ -3,6 +3,7 @@ import type {
   ChangedFile,
   Discussion,
   FilePair,
+  Issue,
   Page,
   Pull,
   PullRef,
@@ -15,32 +16,26 @@ import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
 import { diffPaths } from "./diff-paths";
 import { filePair } from "./file-pair";
+import {
+  ApiError,
+  type FetchRequest,
+  type PullHost,
+  type PullState,
+  type RepositoryInfo,
+  type SearchFilter,
+} from "./host";
+import { mergedPulls } from "./merged";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-export type PullState = "open" | "closed" | "all";
-export type FetchRequest = (
-  url: string,
-  options: RequestInit,
-) => Promise<Response>;
-export class Gitea {
+/** Pull requests on the connected Gitea server, as its account. */
+export class Gitea implements PullHost {
+  // Main-process only: the token never crosses the renderer IPC boundary.
   constructor(
     public account: Account,
     private token: string,
     private fetchRequest: FetchRequest,
   ) {}
-  // Main-process only: credentials never cross the renderer IPC boundary.
-  withRepositoryCredential<T>(send: (token: string) => Promise<T>): Promise<T> {
-    return send(this.token);
-  }
   /**
    * Another token when this one is refused. tea's OAuth logins hand out one
    * that expires within hours and refresh it only when asked again.
@@ -176,9 +171,25 @@ export class Gitea {
   pr(r: PullRef) {
     return `${this.repo(r)}/pulls/${r.number}`;
   }
+  headRef(p: Pull) {
+    return `refs/pull/${p.number}/head`;
+  }
   async pull(r: PullRef, signal?: AbortSignal) {
     const p = (await this.request<Pull>(this.pr(r), { signal })).data;
     return { ...p, ...r };
+  }
+  /** Gitea's issue search, narrowed to pulls; `filter` picks your part in them. */
+  search(filter: SearchFilter, q: string, state: PullState, page: number) {
+    const query = new URLSearchParams({
+      type: "pulls",
+      state,
+      q,
+      ...(filter === "all" ? {} : { [filter]: "true" }),
+    });
+    return this.page<Issue>(`/repos/issues/search?${query}`, page);
+  }
+  mergedAmong(r: Repo, numbers: number[], signal: AbortSignal) {
+    return mergedPulls(this, r, numbers, signal);
   }
   files(r: PullRef, page: number, signal?: AbortSignal) {
     return this.page<ChangedFile>(`${this.pr(r)}/files`, page, signal);
@@ -351,14 +362,21 @@ export class Gitea {
     );
   }
   async repository(r: Repo) {
+    return (await this.request<RepositoryInfo>(this.repo(r))).data;
+  }
+  async hasRepository(r: Repo) {
+    const found = await this.request<{ full_name: string }>(this.repo(r)).catch(
+      (e: unknown) => {
+        // A deleted repository, or one this account can't see, isn't it.
+        if (e instanceof ApiError && [403, 404].includes(e.status)) return null;
+        throw e;
+      },
+    );
     return (
-      await this.request<{
-        full_name: string;
-        default_branch: string;
-        clone_url: string;
-        ssh_url: string;
-      }>(this.repo(r))
-    ).data;
+      !!found &&
+      found.data.full_name.toLowerCase() ===
+        `${r.owner}/${r.name}`.toLowerCase()
+    );
   }
   async branches(r: Repo) {
     const values: { name: string }[] = [];
@@ -422,7 +440,10 @@ export class Gitea {
     client.account = { ...client.account, user, id: `${server}#${user.id}` };
     return client;
   }
-  parseUrl(url: string) {
-    return parsePullUrl(url, this.account.server);
+  parseUrl(url: string): PullRef {
+    return {
+      ...parsePullUrl(url, this.account.server),
+      server: this.account.server,
+    };
   }
 }

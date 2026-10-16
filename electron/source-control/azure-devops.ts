@@ -5,7 +5,58 @@ import {
 } from "../../shared/source-control";
 import { DevOpsUnreachable } from "../plugins/devops/client";
 import type { DevOps } from "../plugins/devops/service";
-import { cliFields, probeCli } from "./clis";
+import { runExecutable } from "../platform/executables";
+import { cliFields, probeCli, probeTimeout } from "./clis";
+
+/**
+ * Azure DevOps pull requests and Pipelines through the `az` login, which
+ * reaches every organization the account is in.
+ */
+export async function azureCli(
+  enabled: boolean,
+): Promise<SourceControlProvider> {
+  const cli = await probeCli("azure-devops");
+  const base = {
+    kind: "azure-devops",
+    name: sourceControlNames["azure-devops"],
+    cli: "az",
+    enabled,
+    ...cliFields(cli),
+  } as const;
+  if (!cli.path)
+    return {
+      ...base,
+      signIn: "unknown",
+      fix: "link",
+      detail: cli.error ?? "Install it with `brew install azure-cli`.",
+    };
+  if (!cli.version) return { ...base, signIn: "unknown", detail: cli.error };
+  const run = await runExecutable(
+    cli.path,
+    ["account", "show", "--query", "user.name", "--output", "tsv"],
+    probeTimeout,
+  );
+  return { ...base, ...parseAzAccount(run) };
+}
+
+/** What `az account show` says about the login. */
+export function parseAzAccount(run: {
+  code: number | null;
+  stdout: string;
+  output: string;
+  timedOut?: boolean;
+}): Pick<SourceControlProvider, "signIn" | "account" | "detail"> {
+  if (run.timedOut)
+    return { signIn: "unknown", detail: "`az` didn't answer in time." };
+  const account = run.stdout.trim();
+  if (run.code === 0 && account) return { signIn: "signed-in", account };
+  if (/az login/i.test(run.output))
+    return {
+      signIn: "signed-out",
+      detail: "Run `az login` in a terminal to sign in.",
+    };
+  return { signIn: "unknown", detail: run.output.trim().slice(-300) };
+}
 
 /**
  * Azure DevOps as the work items plugin reaches it: with a personal access

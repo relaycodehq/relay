@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GITHUB_SERVER } from "./source-control";
+import { azureGitPath, GITHUB_SERVER, urlHostKind } from "./source-control";
 const name = z
   .string()
   .min(1)
@@ -111,18 +111,60 @@ export function parsePullUrl(input: string, server: string) {
     number: Number(parts[3]),
   });
 }
-const githubHost = (input: string) => {
+/** A link as Relay was asked to open it, unwrapped from a `relay:` link. */
+const linkUrl = (input: string) => {
   try {
-    let u = new URL(input);
-    if (u.protocol === "relay:") u = new URL(u.searchParams.get("url") ?? "");
-    return u.hostname === "github.com" || u.hostname === "www.github.com"
-      ? u
-      : null;
+    const u = new URL(input);
+    return u.protocol === "relay:"
+      ? new URL(u.searchParams.get("url") ?? "")
+      : u;
   } catch {
     return null;
   }
 };
+const githubHost = (input: string) => {
+  const u = linkUrl(input);
+  return u && urlHostKind(u.href) === "github" ? u : null;
+};
 export const isGithubPullUrl = (input: string) => !!githubHost(input);
+
+/**
+ * Whether a PR link's site says its host, as GitHub's and Azure DevOps' do;
+ * a Gitea link needs the account's server to read.
+ */
+export function isSitePullUrl(input: string) {
+  const u = linkUrl(input);
+  return !!u && urlHostKind(u.href) !== "gitea";
+}
+/** A GitHub or Azure DevOps PR link, as a ref that names its server. */
+export const parseSitePullUrl = (input: string) =>
+  isGithubPullUrl(input) ? parseGithubPullUrl(input) : parseAzurePullUrl(input);
+
+/**
+ * `https://dev.azure.com/org/project/_git/repo/pullrequest/42`, or the same
+ * on the older `org.visualstudio.com`, as a ref on the organization's server.
+ */
+export function parseAzurePullUrl(input: string) {
+  const u = linkUrl(input);
+  const parts = (u?.pathname.split("/").filter(Boolean) ?? []).map(
+    decodeURIComponent,
+  );
+  const path = u && azureGitPath(u.hostname, parts);
+  const name = path && parts[path.git + 1];
+  if (
+    !path ||
+    !name ||
+    parts[path.git + 2]?.toLowerCase() !== "pullrequest" ||
+    !/^\d+$/.test(parts[path.git + 3] ?? "")
+  )
+    throw new Error("Paste an Azure DevOps pull request URL.");
+  return refSchema.parse({
+    owner: path.project ?? name,
+    name,
+    number: Number(parts[path.git + 3]),
+    server: path.server,
+  });
+}
 /** `https://github.com/owner/name/pull/42`, as a ref that names its server. */
 export function parseGithubPullUrl(input: string) {
   const u = githubHost(input);

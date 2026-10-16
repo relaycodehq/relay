@@ -19,8 +19,17 @@ import { GITHUB_SERVER } from "../../shared/source-control";
 import { parseGithubPullUrl } from "../../shared/validation";
 import { findExecutable } from "../platform/executables";
 import { networkError } from "../util/network-errors";
-import { ApiError, type FetchRequest, type PullState } from "./gitea";
+import {
+  ApiError,
+  type FetchRequest,
+  type PullHost,
+  type PullListing,
+  type PullState,
+  type RepositoryInfo,
+  type SearchFilter,
+} from "./host";
 import { filePair } from "./file-pair";
+import { mergedPulls } from "./merged";
 
 const exec = promisify(execFile);
 const API = "https://api.github.com";
@@ -41,8 +50,6 @@ export async function ghToken() {
     return null;
   }
 }
-
-export type SearchFilter = "review_requested" | "assigned" | "created" | "all";
 
 interface GithubIssue extends Omit<
   Issue,
@@ -161,7 +168,7 @@ export class GithubSignedOut extends Error {
  * Pull requests on github.com, signed in as whoever `gh` is. Answers in the
  * shapes the Gitea client gives, so the review UI doesn't care which it is.
  */
-export class GitHub {
+export class GitHub implements PullHost {
   private controllers = new Set<AbortController>();
   /** Merge bases by `base...head`; the pair is immutable, so its answer is too. */
   private mergeBases = new Map<string, string>();
@@ -207,9 +214,6 @@ export class GitHub {
       ...(user.name ? { full_name: user.name } : {}),
     };
     return client;
-  }
-  withRepositoryCredential<T>(send: (token: string) => Promise<T>): Promise<T> {
-    return send(this.token);
   }
   dispose() {
     for (const c of this.controllers) c.abort();
@@ -357,6 +361,9 @@ export class GitHub {
     this.mergeBases.set(key, data.merge_base_commit.sha);
     return data.merge_base_commit.sha;
   }
+  headRef(p: Pull) {
+    return `refs/pull/${p.number}/head`;
+  }
   async pull(r: PullRef, signal?: AbortSignal): Promise<Pull> {
     const p = (await this.request<GithubPull>(this.pr(r), { signal })).data;
     return {
@@ -372,7 +379,7 @@ export class GitHub {
     page: number,
     signal?: AbortSignal,
     order: "updated" | "created" = "created",
-  ): Promise<Page<Pull>> {
+  ): Promise<Page<PullListing>> {
     const found = await this.page<GithubPull>(
       `${this.repo(r)}/pulls?state=${state}&sort=${order}&direction=desc`,
       page,
@@ -380,11 +387,17 @@ export class GitHub {
     );
     return {
       ...found,
-      items: found.items.map((p) => ({
+      items: found.items.map((p): PullListing => ({
         ...asPull(p, ""),
+        additions: p.additions,
+        deletions: p.deletions,
+        changed_files: p.changed_files,
         server: GITHUB_SERVER,
       })),
     };
+  }
+  mergedAmong(r: Repo, numbers: number[], signal: AbortSignal) {
+    return mergedPulls(this, r, numbers, signal);
   }
   async search(
     filter: SearchFilter,
@@ -682,14 +695,20 @@ export class GitHub {
     );
   }
   async repository(r: Repo) {
+    return (await this.request<RepositoryInfo>(this.repo(r))).data;
+  }
+  async hasRepository(r: Repo) {
+    const found = await this.request<{ full_name: string }>(this.repo(r)).catch(
+      (e: unknown) => {
+        if (e instanceof ApiError && [403, 404].includes(e.status)) return null;
+        throw e;
+      },
+    );
     return (
-      await this.request<{
-        full_name: string;
-        default_branch: string;
-        clone_url: string;
-        ssh_url: string;
-      }>(this.repo(r))
-    ).data;
+      !!found &&
+      found.data.full_name.toLowerCase() ===
+        `${r.owner}/${r.name}`.toLowerCase()
+    );
   }
   async branches(r: Repo) {
     return this.all<{ name: string }>(`${this.repo(r)}/branches`);

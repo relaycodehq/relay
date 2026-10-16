@@ -6,7 +6,7 @@ const SWEEP_TIMEOUT_MS = 20_000;
 /** An open thread asking again within this gets the last answer. */
 const CHECK_EVERY_MS = 60_000;
 
-export interface PullHost {
+export interface PullMergeSource {
   chats(): readonly ChatSummary[];
   /** The project's repository on the signed-in Git host; null when signed out or not linked to it. */
   repository(projectId: string): Promise<Repo | null>;
@@ -42,7 +42,7 @@ function watching(chat: ChatSummary) {
 export class PullMerges {
   private sweeping = false;
   private checked = new Map<string, { at: number; merged: boolean }>();
-  constructor(private host: PullHost) {}
+  constructor(private host: PullMergeSource) {}
 
   private now() {
     return this.host.now?.() ?? Date.now();

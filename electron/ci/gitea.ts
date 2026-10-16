@@ -1,4 +1,5 @@
-import { ApiError, type Gitea } from "../pull-requests/gitea";
+import type { Gitea } from "../pull-requests/gitea";
+import { ApiError } from "../pull-requests/host";
 import type { CiRepo, CiReading } from "./index";
 import { statusRuns, type CommitStatus } from "./statuses";
 

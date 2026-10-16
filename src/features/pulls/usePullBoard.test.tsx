@@ -32,6 +32,7 @@ const account: Account = {
   user: { id: 1, login: "me" },
   persistent: true,
 };
+const accounts = [account];
 const issue = (author: string): Issue => ({
   id: 7,
   number: 7,
@@ -78,7 +79,7 @@ it("uses the latest reviewer verdict even when it occurs on a later page", async
   const root = createRoot(document.createElement("div"));
   let current!: ReturnType<typeof usePullBoard>;
   function Probe() {
-    current = usePullBoard(account, [], "open");
+    current = usePullBoard(accounts, [], "open");
     return null;
   }
   try {
@@ -91,7 +92,9 @@ it("uses the latest reviewer verdict even when it occurs on a later page", async
     );
     await vi.waitFor(async () => {
       await tick();
-      expect(current.verdicts.get("team/repo#7")).toBe("changes");
+      expect(current.verdicts.get(`${account.server}|team/repo#7`)).toBe(
+        "changes",
+      );
     });
     expect(vi.mocked(api.reviews).mock.calls.map(([, page]) => page)).toEqual([
       1, 2,
@@ -117,7 +120,7 @@ it("shares canonical progress with the review when Gitea search omits the server
   let board!: ReturnType<typeof usePullBoard>;
   let review!: ReturnType<typeof useReviewProgress>;
   function Probe() {
-    board = usePullBoard(account, [], "open");
+    board = usePullBoard(accounts, [], "open");
     review = useReviewProgress(board.board.pulls[0]?.ref ?? null, () => {});
     return null;
   }
@@ -141,7 +144,7 @@ it("shares canonical progress with the review when Gitea search omits the server
     });
     await vi.waitFor(async () => {
       await tick();
-      expect(board.started.has("team/repo#7")).toBe(true);
+      expect(board.started.has(`${account.server}|team/repo#7`)).toBe(true);
     });
     expect(api.progress).toHaveBeenCalledTimes(1);
     expect(api.progress).toHaveBeenCalledWith({

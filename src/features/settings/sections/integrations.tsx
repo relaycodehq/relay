@@ -29,9 +29,9 @@ export function integrationEntries(gitea: {
       category: "integrations",
       title: "Source control",
       description:
-        "CI and pull requests from GitHub and Gitea. Relay uses the CLIs and accounts on this computer.",
+        "CI and pull requests from GitHub, Gitea and Azure DevOps. Relay uses the CLIs and accounts on this computer.",
       keywords:
-        "github gitea forgejo gh tea cli ci actions pull request host account sign in login sign out disconnect logout link path token keychain",
+        "github gitea forgejo azure devops pipelines gh tea az cli ci actions pull request host account sign in login sign out disconnect logout link path token keychain",
       block: true,
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings {...gitea} />,

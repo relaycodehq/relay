@@ -1,14 +1,16 @@
-// What the Pull requests page shows: Gitea's search for the PRs you're part
-// of, and each local project's own PR list.
+// What the Pull requests page shows: each host's search for the PRs you're
+// part of, and each local project's own PR list.
 import type { Project } from "../../../shared/projects";
+import { hostKindOf } from "../../../shared/source-control";
 import type { Issue, Pull, PullRef, Repo, Review } from "../../../shared/types";
 
 export type Relation = "review" | "assigned" | "mine" | "other";
 export type Verdict = "approved" | "changes";
 
 export interface BoardPull {
+  /** Always names its server. */
   ref: PullRef;
-  /** `owner/name` as Gitea spells it. */
+  /** `owner/name` as its host spells it. */
   repo: string;
   title: string;
   author: string;
@@ -35,10 +37,12 @@ export type ListedPull = Issue &
   > & { merged?: boolean };
 
 export interface BoardGroup {
-  /** Lower-cased `owner/name`, for matching. */
+  /** Its `repoKey`, for matching. */
   key: string;
   repo: string;
-  /** The local project checked out from it; none for a repository only on Gitea. */
+  /** The repository as its host spells it, for adding its folder. */
+  ref: Repo;
+  /** The local project checked out from it; none for a repository only on its host. */
   project?: Project;
   pulls: BoardPull[];
   /** All the PRs the list has, past the page loaded. */
@@ -55,7 +59,20 @@ export interface Board {
   quiet: Project[];
 }
 
-export const repoKey = (r: Repo) => `${r.owner}/${r.name}`.toLowerCase();
+/**
+ * A repository as the page matches it: lower-cased `server|owner/name`, as
+ * the same name can be on two hosts. No host allows `|` in a name.
+ */
+export const repoKey = (r: Repo) =>
+  `${serverKey(r.server)}|${r.owner}/${r.name}`.toLowerCase();
+const serverKey = (server: string | undefined) =>
+  (server ?? "").replace(/\/+$/, "").toLowerCase();
+/** The repository a `repoKey` names, lower-cased. */
+export function keyRepo(key: string): Repo {
+  const bar = key.lastIndexOf("|");
+  const [owner, name] = key.slice(bar + 1).split("/");
+  return { ...(bar > 0 ? { server: key.slice(0, bar) } : {}), owner, name };
+}
 export const pullKey = (r: PullRef) => `${repoKey(r)}#${r.number}`;
 const itemRef = (item: Issue): PullRef => ({
   owner: item.repository.owner,
@@ -63,6 +80,11 @@ const itemRef = (item: Issue): PullRef => ({
   number: item.number,
   ...(item.repository.server ? { server: item.repository.server } : {}),
 });
+/** Gitea's answers leave out the server they came from. */
+export const onServer = <T extends Issue>(item: T, server: string): T =>
+  item.repository.server
+    ? item
+    : { ...item, repository: { ...item.repository, server } };
 
 /** Where the page is: a project's page, an open PR, both or neither. */
 export interface PullsLocation {
@@ -80,8 +102,8 @@ export function pullsLocation(
   projectOf: (repo: Repo) => Project | undefined,
 ): PullsLocation {
   const label = (key: string) => {
-    const [owner, name] = key.split("/");
-    return projectOf({ owner, name })?.name ?? key;
+    const repo = keyRepo(key);
+    return projectOf(repo)?.name ?? `${repo.owner}/${repo.name}`;
   };
   return {
     repo: selected
@@ -102,39 +124,44 @@ export type PullsPageHandle = {
   go: (target: PullsTarget) => void;
 };
 
-/** Projects whose clone is of a repository on this Gitea server. */
-export function linkedProjects(projects: Project[], server: string) {
+/** Projects whose clone is of a repository on one of these servers, one per repository. */
+export function linkedProjects(projects: Project[], servers: string[]) {
+  const on = new Set(servers.map(serverKey));
   const seen = new Set<string>();
   return projects.filter((p) => {
-    if (p.scratch || p.plain || p.repository?.server !== server) return false;
+    if (p.scratch || p.plain || !p.repository) return false;
     const key = repoKey(p.repository);
+    if (!on.has(serverKey(p.repository.server))) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
-export function projectFor(projects: Project[], server: string, repo: Repo) {
+/** The project checked out from `repo`, which names its server. */
+export function projectFor(projects: Project[], repo: Repo) {
   const key = repoKey(repo);
-  return linkedProjects(projects, server).find(
-    (p) => repoKey(p.repository!) === key,
+  return projects.find(
+    (p) =>
+      !p.scratch && !p.plain && !!p.repository && repoKey(p.repository) === key,
   );
 }
 
 export function boardPull(
   item: ListedPull,
   relation: Relation,
-  server?: string,
+  server: string,
 ): BoardPull {
   const merged = item.merged ?? item.pull_request?.merged ?? false;
+  const ref = itemRef(onServer(item, server));
   return {
-    ref: {
-      ...itemRef(item),
-      ...(server && !item.repository.server ? { server } : {}),
-    },
+    ref,
     repo: item.repository.full_name,
     title: item.title,
-    author: item.user.login,
+    // Azure DevOps logins are email addresses; its display names read better.
+    author:
+      (hostKindOf(ref.server) === "azure-devops" && item.user.full_name) ||
+      item.user.login,
     state: merged ? "merged" : item.state === "closed" ? "closed" : "open",
     // Gitea marks a draft by its title; search results have no draft field.
     draft: item.draft ?? /^\s*(\[wip\]|wip:)/i.test(item.title),
@@ -149,14 +176,19 @@ export function boardPull(
   };
 }
 
-export interface BoardInput {
+/** One host's searches: review requested from you, assigned to you, yours. */
+export interface BoardHost {
   server: string;
+  /** Who you are there. */
   login: string;
-  projects: Project[];
-  /** Gitea's searches: review requested from you, assigned to you, yours. */
   review: Issue[];
   assigned: Issue[];
   created: Issue[];
+}
+
+export interface BoardInput {
+  hosts: BoardHost[];
+  projects: Project[];
   /** Each linked project's PR list, by project id; missing while loading. */
   lists: Record<
     string,
@@ -165,29 +197,43 @@ export interface BoardInput {
 }
 
 export function buildBoard(input: BoardInput): Board {
-  const review = new Set(input.review.map((i) => pullKey(itemRef(i))));
-  const assigned = new Set(input.assigned.map((i) => pullKey(itemRef(i))));
-  const login = input.login.toLowerCase();
-  const relation = (item: Issue): Relation => {
-    const key = pullKey(itemRef(item));
+  const keysOf = (pick: (h: BoardHost) => Issue[]) =>
+    new Set(
+      input.hosts.flatMap((h) =>
+        pick(h).map((i) => pullKey(itemRef(onServer(i, h.server)))),
+      ),
+    );
+  const review = keysOf((h) => h.review);
+  const assigned = keysOf((h) => h.assigned);
+  const logins = new Map(
+    input.hosts.map((h) => [serverKey(h.server), h.login.toLowerCase()]),
+  );
+  const relation = (item: Issue, server: string): Relation => {
+    const ref = itemRef(onServer(item, server));
+    const key = pullKey(ref);
+    const login = logins.get(serverKey(ref.server));
     if (item.user.login.toLowerCase() === login) return "mine";
     if (review.has(key)) return "review";
     if (assigned.has(key)) return "assigned";
     return "other";
   };
   const byKey = new Map<string, BoardPull>();
-  const add = (item: ListedPull) => {
-    const key = pullKey(itemRef(item));
-    const next = boardPull(item, relation(item), input.server);
+  const add = (item: ListedPull, server: string) => {
+    const next = boardPull(item, relation(item, server), server);
+    const key = pullKey(next.ref);
     const known = byKey.get(key);
     // A project's list knows branches and sizes; keep what either one said.
     byKey.set(key, known ? { ...known, ...defined(next) } : next);
     return key;
   };
-  for (const item of [...input.review, ...input.assigned, ...input.created])
-    add(item);
+  for (const h of input.hosts)
+    for (const item of [...h.review, ...h.assigned, ...h.created])
+      add(item, h.server);
 
-  const linked = linkedProjects(input.projects, input.server);
+  const linked = linkedProjects(
+    input.projects,
+    input.hosts.map((h) => h.server),
+  );
   const groups: BoardGroup[] = [];
   const quiet: Project[] = [];
   const covered = new Set<string>();
@@ -201,6 +247,7 @@ export function buildBoard(input: BoardInput): Board {
       groups.push({
         key,
         repo,
+        ref: project.repository!,
         project,
         pulls: [],
         total: 0,
@@ -209,7 +256,9 @@ export function buildBoard(input: BoardInput): Board {
       });
       continue;
     }
-    const keys = new Set(list.items.map(add));
+    const keys = new Set(
+      list.items.map((item) => add(item, project.repository!.server)),
+    );
     // Involved PRs past the loaded page still belong on the card.
     for (const [k, p] of byKey) if (repoKey(p.ref) === key) keys.add(k);
     const pulls = [...keys].map((k) => byKey.get(k)!);
@@ -218,6 +267,7 @@ export function buildBoard(input: BoardInput): Board {
       groups.push({
         key,
         repo,
+        ref: project.repository!,
         project,
         pulls: newestFirst(pulls),
         total: Math.max(list.total, pulls.length),
@@ -234,6 +284,11 @@ export function buildBoard(input: BoardInput): Board {
     groups.push({
       key,
       repo: pulls[0].repo,
+      ref: {
+        server: pulls[0].ref.server,
+        owner: pulls[0].ref.owner,
+        name: pulls[0].ref.name,
+      },
       pulls: newestFirst(pulls),
       total: pulls.length,
       forYou: 0,

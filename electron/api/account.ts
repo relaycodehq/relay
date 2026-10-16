@@ -5,7 +5,8 @@ import { workspaceSchema } from "../../shared/validation";
 import { giteaOn, seal } from "../app/login";
 import { Gitea } from "../pull-requests/gitea";
 import { teaSetup, teaToken } from "../source-control/tea";
-import { GITHUB_SERVER } from "../../shared/source-control";
+import { GITHUB_SERVER, isAzureServer } from "../../shared/source-control";
+import { azureOrganizationServer } from "../../shared/devops";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /**
@@ -75,7 +76,21 @@ export function accountHandlers(ctx: ApiContext) {
         ),
       };
     },
-    githubAccount: () => ctx.github.account(),
+    hostAccount: takes([z.url().max(2048)], (server) =>
+      ctx.hosts.account(server),
+    ),
+    pullServers: () => {
+      const organizations = new Set<string>();
+      for (const p of store.get().projects ?? [])
+        if (!p.removed && isAzureServer(p.repository?.server))
+          organizations.add(p.repository!.server);
+      // A plugin that's off leaves no trace here.
+      const devops = ctx.devops.settings();
+      const plugin =
+        devops.enabled && azureOrganizationServer(devops.organization);
+      if (plugin) organizations.add(plugin);
+      return ctx.hosts.boardServers([...organizations]);
+    },
     retryLoginRestore: () => {
       void login.restoreSaved(store);
     },

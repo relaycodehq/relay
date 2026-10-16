@@ -6,9 +6,8 @@ import type { Api, ApiMethod, Repo } from "../../shared/types";
 import type { AgentUpdates } from "../agents/agent-updates";
 import type { AppLinks } from "../app/links";
 import type { GiteaLogin } from "../app/login";
-import type { GithubLogin } from "../pull-requests/github-login";
 import type { PullHost } from "../pull-requests/host";
-import { GITHUB_SERVER, isGithubServer } from "../../shared/source-control";
+import type { PullHosts } from "../pull-requests/hosts";
 import type { Menubar } from "../app/menubar";
 import type { AppWindow } from "../app/window";
 import type { BlameService } from "../git/blame";
@@ -51,7 +50,8 @@ export interface Services {
   /** Computers this one hands threads to; unset until Relay has started. */
   handoffs(): { computers: Computers; sender: Handoffs } | undefined;
   login: GiteaLogin;
-  github: GithubLogin;
+  /** GitHub, Gitea and Azure DevOps, picked by a repository's server. */
+  hosts: PullHosts;
   window: AppWindow;
   menubar: Menubar;
   links: AppLinks;
@@ -127,7 +127,7 @@ export const pageSchema = z.number().int().min(1).max(100000);
 
 /** The services, plus the lookups most handlers share. */
 export function apiContext(services: Services) {
-  const { store, projects, projectChats, login, github } = services;
+  const { store, projects, projectChats, login, hosts } = services;
   const requireClient = () => login.require();
   /**
    * The host a repository is on. Refs saved before they carried one belong to
@@ -149,12 +149,10 @@ export function apiContext(services: Services) {
   }
   const requireServer = (r: Repo) =>
     serverOf(r) ?? requireClient().account.server;
-  /** The client for a repository's host: GitHub through `gh`, or the Gitea account. */
-  const clientFor = async (r: Repo): Promise<PullHost> =>
-    isGithubServer(serverOf(r)) ? github.require() : requireClient();
-  // GitHub keys by the site, not the `gh` user, so they need no network to make.
-  const accountOf = (r: Repo) =>
-    isGithubServer(serverOf(r)) ? GITHUB_SERVER : requireClient().account.id;
+  /** The client for a repository's host. */
+  const clientFor = (r: Repo): Promise<PullHost> =>
+    hosts.require(requireServer(r));
+  const accountOf = (r: Repo) => hosts.accountKey(requireServer(r));
   const repoKey = (r: Repo) => JSON.stringify([accountOf(r), r.owner, r.name]);
   const prKey = (r: Repo & { number: number }) =>
     JSON.stringify([accountOf(r), r.owner, r.name, r.number]);
@@ -195,12 +193,15 @@ export function apiContext(services: Services) {
   const placeRoot = async (where: unknown) => (await place(where)).root;
   /** An unused PR thread is still a review in the making once files are viewed or drafted. */
   function reviewStarted(chat: ChatSummary) {
-    if (
-      chat.scope.kind !== "pr" ||
-      (!login.client && !isGithubServer(serverOf(chat.scope.ref)))
-    )
+    if (chat.scope.kind !== "pr") return false;
+    let key: string;
+    try {
+      key = prKey(chat.scope.ref);
+    } catch {
+      // A Gitea PR while signed out of Gitea keys by an account it can't name.
       return false;
-    const p = store.get().progress[prKey(chat.scope.ref)];
+    }
+    const p = store.get().progress[key];
     return (
       !!p &&
       (Object.keys(p.read).length > 0 ||

@@ -272,6 +272,7 @@ export function settingsHandlers(ctx: ApiContext) {
         // Off keeps the saved account, so turning it back on needs no token.
         if (kind === "gitea" && !enabled) releaseGitea(ctx);
         if (kind === "gitea" && enabled) await ctx.login.restoreSaved(store);
+        if (kind === "azure-devops" && !enabled) ctx.hosts.azure.release();
         return sourceControl();
       },
     ),

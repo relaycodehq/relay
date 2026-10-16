@@ -25,6 +25,7 @@ import { useShortcut } from "../lib/shortcuts";
 import { usePullReview } from "../features/review/usePullReview";
 import { usePullSelection } from "../features/review/usePullSelection";
 import { usePullsRepo } from "../features/pulls/usePullsRepo";
+import { accountOn } from "../features/pulls/usePullHosts";
 import { useSavedWorkspace } from "../features/pulls/useSavedWorkspace";
 import { useStoredFlag } from "../lib/useStoredFlag";
 // In the order ReviewSurface imported them, so their stylesheets keep their place in the
@@ -45,7 +46,9 @@ const LocalFileEditor = lazy(() => import("../features/files/LocalFileEditor"));
  */
 export function PullsSurface({
   ref,
-  account,
+  accounts,
+  hostError,
+  onRecheckHosts,
   projects,
   projectOf,
   onOpenInProject,
@@ -57,7 +60,10 @@ export function PullsSurface({
 }: {
   /** How the window title and sidebar leave a PR. */
   ref?: Ref<PullsPageHandle>;
-  account: Account;
+  /** Every host you're signed in to; never empty. */
+  accounts: Account[];
+  hostError?: unknown;
+  onRecheckHosts: () => void;
   projects: Project[];
   projectOf: (repo: Repo) => Project | undefined;
   onOpenInProject: (project: Project, ref: PullRef) => void;
@@ -77,7 +83,7 @@ export function PullsSurface({
   const { selected, file, select, deselect } = selection;
   const [query, setQuery] = useState(initialWorkspace.query),
     [state, setState] = useState(initialWorkspace.state),
-    [repo, setRepo] = usePullsRepo(account.id),
+    [repo, setRepo] = usePullsRepo(),
     [filesHidden, setFilesHidden] = useStoredFlag("relay-files-hidden"),
     [urlOpen, setUrlOpen] = useState(false),
     [error, setError] = useState<unknown>();
@@ -96,10 +102,18 @@ export function PullsSurface({
     },
     setError,
   );
+  // The open PR is reviewed as you on its host; without a sign-in there it
+  // still opens, and says why it can't load.
+  const account = accountOn(accounts, selected?.server) ?? accounts[0];
   const review = usePullReview(selection, account, setError);
   const { pull } = review;
+  const giteaServer = accountOn(accounts, undefined)?.server;
+  /** Refs saved before refs named their server are the Gitea account's. */
+  const located = (r: PullRef): PullRef =>
+    r.server || !giteaServer ? r : { ...r, server: giteaServer };
   /** A PR in one of your projects opens on its thread; any other one here. */
-  const open = (r: PullRef) => {
+  const open = (ref: PullRef) => {
+    const r = located(ref);
     const project = projectOf(r);
     if (project) onOpenInProject(project, r);
     else select(r);
@@ -111,7 +125,14 @@ export function PullsSurface({
     },
   }));
   useEffect(() => {
-    onLocation(pullsLocation(selected, pull.data?.title, repo, projectOf));
+    onLocation(
+      pullsLocation(
+        selected && located(selected),
+        pull.data?.title,
+        repo,
+        projectOf,
+      ),
+    );
   }, [selected, repo, pull.data?.title]);
   const openUrl = async (url: string) => {
     try {
@@ -126,12 +147,14 @@ export function PullsSurface({
   }, [incomingLink]);
   useShortcut("pr-open", true, () => setUrlOpen((v) => !v));
   useShortcut("review-files", true, () => setFilesHidden((v) => !v));
-  const localProject = selected ? projectOf(selected) : undefined;
+  const localProject = selected ? projectOf(located(selected)) : undefined;
   return (
     <>
       {!selected ? (
         <PullRequestsPage
-          account={account}
+          accounts={accounts}
+          hostError={hostError}
+          onRecheckHosts={onRecheckHosts}
           projects={projects}
           repo={repo}
           onRepo={setRepo}
@@ -152,12 +175,12 @@ export function PullsSurface({
           filesHidden={filesHidden}
           onHideFiles={() => setFilesHidden(true)}
           bare={false}
-          server={account.server}
+          server={selected.server ?? account.server}
           note={
             <LocalNote
               project={localProject}
               onOpenThread={(p) => onOpenInProject(p, selected)}
-              onAdd={() => onAddProject(selected)}
+              onAdd={() => onAddProject(located(selected))}
             />
           }
           paneControls={
@@ -215,7 +238,7 @@ export function PullsSurface({
   );
 }
 
-/** Whether the open PR's repository is cloned on this Mac, so it can open on its thread. */
+/** Whether the open PR's repository is cloned on this computer, so it can open on its thread. */
 function LocalNote({
   project,
   onOpenThread,

@@ -127,11 +127,14 @@ export interface Pull extends PullRef {
   labels: Issue["labels"];
   comments: number;
 }
+type Counts = "additions" | "deletions" | "changed_files";
+/** A PR in a repository's list, which may not say how much it changes. */
+export type PullListing = Omit<Pull, Counts> & Partial<Pick<Pull, Counts>>;
 /** A project's pull request as its list shows it: the pull, with the fields an issue search carries. */
-export interface ProjectPull extends Pull {
+export type ProjectPull = PullListing & {
   repository: Issue["repository"];
   pull_request: { merged: boolean };
-}
+};
 export interface ChangedFile {
   filename: string;
   previous_filename?: string;
@@ -515,8 +518,14 @@ export interface Api
   ): Promise<import("./agents").AgentDefaults | null>;
   askAboutLines(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
-  /** Who Relay reviews as on GitHub, through the `gh` CLI; null without a `gh` login. */
-  githubAccount(): Promise<Account | null>;
+  /** Who Relay reviews as on a host: the `gh` or `az` login, or the Gitea account; null without one. */
+  hostAccount(server: string): Promise<Account | null>;
+  /**
+   * The servers the Pull requests page gathers PRs from: GitHub, the Gitea
+   * account's, and each Azure DevOps organization a project or the work
+   * items plugin is on.
+   */
+  pullServers(): Promise<string[]>;
   retryLoginRestore(): Promise<void>;
   cancelLoginRestore(): Promise<void>;
   saveWorkspace(workspace: WorkspaceState): Promise<void>;

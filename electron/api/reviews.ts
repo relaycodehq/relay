@@ -1,21 +1,26 @@
 import { z } from "zod";
-import { emptyProgress, type Issue } from "../../shared/types";
+import { emptyProgress } from "../../shared/types";
 import {
   bodySchema,
   draftSchema,
   filePathSchema,
   progressSchema,
-  isGithubPullUrl,
-  parseGithubPullUrl,
   refSchema,
   shaSchema,
 } from "../../shared/validation";
-import { isGithubServer } from "../../shared/source-control";
 import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
-/** Reviewing a pull request on GitHub or Gitea: finding it, its files and discussion, the review itself. */
+/** Reviewing a pull request on its host: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
-  const { store, triage, requireClient, clientFor, prKey, projectChats } = ctx;
+  const {
+    store,
+    triage,
+    hosts,
+    requireClient,
+    clientFor,
+    prKey,
+    projectChats,
+  } = ctx;
 
   const triageArgs = [refSchema, shaSchema, shaSchema] as const;
 
@@ -28,26 +33,15 @@ export function reviewHandlers(ctx: ApiContext) {
         pageSchema,
         z.url().max(2048).optional(),
       ],
-      async (filter, q, state, page, server) => {
-        if (isGithubServer(server))
-          return (await ctx.github.require()).search(filter, q, state, page);
-        const query = new URLSearchParams({
-          type: "pulls",
-          state,
+      async (filter, q, state, page, server) =>
+        (await hosts.require(server ?? requireClient().account.server)).search(
+          filter,
           q,
-          ...(filter === "all" ? {} : { [filter]: "true" }),
-        });
-        return requireClient().page<Issue>(
-          `/repos/issues/search?${query}`,
+          state,
           page,
-        );
-      },
+        ),
     ),
-    parseUrl: takes([z.string().max(4096)], (url) =>
-      isGithubPullUrl(url)
-        ? parseGithubPullUrl(url)
-        : requireClient().parseUrl(url),
-    ),
+    parseUrl: takes([z.string().max(4096)], (url) => hosts.parseUrl(url)),
     pull: takes([refSchema], async (r) => (await clientFor(r)).pull(r)),
     files: takes([refSchema, pageSchema], async (r, page) =>
       (await clientFor(r)).files(r, page),

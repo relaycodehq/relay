@@ -18,8 +18,6 @@ import { createDispatch, serveApi, type Dispatch } from "./api";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
 import { GithubLogin } from "./pull-requests/github-login";
-import type { Repo } from "../shared/types";
-import { isGithubServer } from "../shared/source-control";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
@@ -70,9 +68,8 @@ import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
 import { Projects, repositoryRoot } from "./projects/projects";
 import { projectForFolder } from "./app/open-folder";
-import { mergedPulls } from "./pull-requests/merged";
+import { pullRequestHosts } from "./pull-requests/setup";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
-import { questionContext } from "./pull-requests/questions";
 import { PhoneRemote } from "./remote/phone-remote";
 import { DraftStore, Drafts } from "./drafts";
 import { DraftPages } from "./drafts/pages";
@@ -391,21 +388,21 @@ app
       if (chat) window.openThread({ projectId: chat.projectId, chatId });
       else window.open();
     });
-    const hostOf = async (repo: Repo) =>
-      isGithubServer(repo.server) ? github.require() : login.require();
-    async function projectHost(projectId: string) {
-      const repository = projects.get(projectId).repository;
-      if (!repository) return null;
-      return isGithubServer(repository.server)
-        ? github.require()
-        : login.client;
-    }
+    const pullHosts = pullRequestHosts({
+      store: loaded,
+      login,
+      github,
+      projects,
+      fetch: (url, init) => net.fetch(url, init),
+    });
+    const { hosts, azureTokens } = pullHosts;
     const devops = new DevOps(
       loaded,
       (url, init) => net.fetch(url, init),
       seal,
       unseal,
       join(app.getPath("userData"), "devops-relevance.json"),
+      azureTokens,
     );
     keepUsageHistory(join(app.getPath("userData"), "usage-history.json"));
     keepUsageLog(join(app.getPath("userData"), "usage.jsonl"));
@@ -418,22 +415,7 @@ app
         phoneRemote?.chatEvent(event);
         menubarSounds?.chatEvent(event);
       },
-      async (chat, selection) => {
-        if (chat.scope.kind !== "pr")
-          throw new Error("This is not a pull request conversation.");
-        const client = await projectHost(chat.projectId);
-        if (!client)
-          throw new Error(
-            "Relay can't match this project to a GitHub or Gitea repository.",
-          );
-        const repo = await projects.linked(chat.projectId, client);
-        if (
-          repo.owner !== chat.scope.ref.owner ||
-          repo.name !== chat.scope.ref.name
-        )
-          throw new Error("The selected PR does not match this project.");
-        return questionContext(client, chat.scope.ref, selection);
-      },
+      pullHosts.evidence,
     );
     projectChats = chats;
     serveMedia();
@@ -442,16 +424,7 @@ app
     );
     const pullMerges = new PullMerges({
       chats: () => loaded.get().chats ?? [],
-      repository: async (projectId) => {
-        const client = await projectHost(projectId).catch(() => null);
-        return client
-          ? projects.linked(projectId, client).catch(() => null)
-          : null;
-      },
-      mergedAmong: async (repo, numbers, signal) =>
-        mergedPulls(await hostOf(repo), repo, numbers, signal),
-      merged: async (repo, number) =>
-        !!(await (await hostOf(repo)).pull({ ...repo, number })).merged,
+      ...pullHosts.merges,
       record: (id) => chats.pullMerged(id),
       online: () => net.isOnline(),
     });
@@ -518,7 +491,7 @@ app
       phoneRemote: () => phoneRemote,
       handoffs: () => handoffs,
       login,
-      github,
+      hosts,
       window,
       menubar,
       links,

@@ -178,6 +178,10 @@ code,
 kbd {
   font-family: var(--font-mono);
 }
+/* A command to type, kept on one line; a no-break space would paste wrong. */
+.cli-command {
+  white-space: nowrap;
+}
 kbd {
   color: var(--muted);
   font-size: 10px;

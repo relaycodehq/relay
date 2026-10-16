@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { ApiError } from "../pull-requests/gitea";
+import { ApiError } from "../pull-requests/host";
 import type { GitHub } from "../pull-requests/github";
 
 export interface CreatedIssue {

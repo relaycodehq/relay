@@ -1,6 +1,6 @@
 import { it, expect, vi } from "vitest";
 import type { ChatSummary } from "../../shared/projects";
-import { PullMerges, type PullHost } from "./pull-merges";
+import { PullMerges, type PullMergeSource } from "./pull-merges";
 
 const NOW = 1_000_000;
 const repo = { owner: "acme", name: "app" };
@@ -16,7 +16,7 @@ function thread(id: string, extra: Partial<ChatSummary> = {}): ChatSummary {
   } as ChatSummary;
 }
 
-function setup(chats: ChatSummary[], host: Partial<PullHost> = {}) {
+function setup(chats: ChatSummary[], host: Partial<PullMergeSource> = {}) {
   const recorded: string[] = [];
   const mergedAmong = vi.fn(async (_repo, numbers: number[]) =>
     numbers.filter((n) => n === 1),

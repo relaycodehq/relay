@@ -2,9 +2,8 @@ import { lstat, mkdir, realpath } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "../app/store";
-import { ApiError, type Gitea } from "../pull-requests/gitea";
+import type { Gitea } from "../pull-requests/gitea";
 import type { PullHost } from "../pull-requests/host";
-import { GITHUB_SERVER } from "../../shared/source-control";
 import {
   folderGoneMessage,
   projectTitle,
@@ -29,6 +28,7 @@ import {
   remoteOnHost,
   remoteUrl,
   repoOf,
+  siteRepoOf,
 } from "../git/repository";
 import {
   readWorkingFile,
@@ -44,17 +44,18 @@ function repositoryFromRemote(
   const repo = repoOf(remote);
   return repo && { server, ...repo };
 }
-/** The github.com repository among a folder's remotes, `origin` first. */
-function githubRepository(remotes: string): Project["repository"] {
+/**
+ * The repository among a folder's remotes, `origin` first, whose site says
+ * its host: github.com or an Azure DevOps organization.
+ */
+function siteRepository(remotes: string): Project["repository"] {
   const rows = remotes
     .split("\n")
     .map((row) => row.split(/\s+/))
     .sort((a, b) => Number(b[0] === "origin") - Number(a[0] === "origin"));
   for (const [, raw] of rows) {
-    const remote = remoteUrl(raw ?? "");
-    const repo =
-      remote?.hostname.toLowerCase() === "github.com" && repoOf(remote);
-    if (repo) return { server: GITHUB_SERVER, ...repo };
+    const repo = siteRepoOf(raw ?? "");
+    if (repo) return repo;
   }
   return null;
 }
@@ -257,7 +258,7 @@ export class Projects {
     for (const p of projects)
       if (!p.repository && !p.plain && !this.linkAttempts.has(p.id)) {
         this.linkAttempts.add(p.id);
-        const linked = await this.linkGithub(p.id).catch(() => null);
+        const linked = await this.linkBySite(p.id).catch(() => null);
         if (linked) Object.assign(p, { repository: linked.repository });
       }
     if (client)
@@ -347,8 +348,8 @@ export class Projects {
       (s.projects ??= []).push(project);
     });
     if (repository) {
-      const github = await this.linkGithub(project.id).catch(() => null);
-      if (github) return withKind(github);
+      const linked = await this.linkBySite(project.id).catch(() => null);
+      if (linked) return withKind(linked);
     }
     if (client && repository) {
       try {
@@ -399,12 +400,13 @@ export class Projects {
       .map((p) => p.id);
   }
   /**
-   * Links a project whose remote is on github.com, from the remote alone:
-   * GitHub is one site, so there's no account to match it against first.
+   * Links a project whose remote is on github.com or Azure DevOps from the
+   * remote alone: its address names the host, so there's no account to match
+   * it against first.
    */
-  async linkGithub(id: string) {
+  async linkBySite(id: string) {
     const root = await this.root(id);
-    const repo = githubRepository(await git(root, ["remote", "-v"]));
+    const repo = siteRepository(await git(root, ["remote", "-v"]));
     if (!repo) return null;
     await this.store.update((s) => {
       s.projects!.find((p) => p.id === id)!.repository = repo;
@@ -412,11 +414,11 @@ export class Projects {
     return this.get(id);
   }
   async link(id: string, client: Gitea | null) {
-    const github = await this.linkGithub(id);
-    if (github) return withKind(github);
+    const linked = await this.linkBySite(id);
+    if (linked) return withKind(linked);
     if (!client)
       throw new Error(
-        "This folder has no github.com remote. Connect Gitea to match a Gitea one.",
+        "This folder has no GitHub or Azure DevOps remote. Connect Gitea to match a Gitea one.",
       );
     const root = await this.root(id),
       remotes = await git(root, ["remote", "-v"]);
@@ -426,20 +428,7 @@ export class Projects {
         client.account.server,
       );
       if (!repo) continue;
-      const response = await client
-        .request<{ full_name: string }>(client.repo(repo))
-        .catch((e: unknown) => {
-          // A deleted repository, or one this account can't see, isn't it.
-          if (e instanceof ApiError && [403, 404].includes(e.status))
-            return null;
-          throw e;
-        });
-      if (
-        !response ||
-        response.data.full_name.toLowerCase() !==
-          `${repo.owner}/${repo.name}`.toLowerCase()
-      )
-        continue;
+      if (!(await client.hasRepository(repo))) continue;
       await this.store.update((s) => {
         s.projects!.find((p) => p.id === id)!.repository = repo;
         s.folders[JSON.stringify([client.account.id, repo.owner, repo.name])] =
@@ -531,7 +520,7 @@ export class Projects {
     const p = this.get(id);
     if (!p.repository || p.repository.server !== client.account.server)
       throw new Error(
-        "Relay can't match this project to a GitHub or Gitea repository.",
+        "Relay can't match this project to a repository on its host.",
       );
     const local = await inspectRepository(
       await this.root(id),
