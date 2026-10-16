@@ -54,11 +54,14 @@ export function Modal({
   onClose,
   children,
   className = "",
+  actions,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  /** Beside the close button in the heading. */
+  actions?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const headingId = useId();
@@ -92,6 +95,7 @@ export function Modal({
     >
       <div className="modal-heading">
         <h2 id={headingId}>{title}</h2>
+        {actions}
         <IconButton label="Close dialog" onClick={onClose}>
           <X size={18} />
         </IconButton>

@@ -495,6 +495,10 @@ export default function ProjectShell() {
             starts.open(p);
           }}
           onAdd={() => starts.addProject()}
+          onScratch={() => {
+            starts.setPicking(false);
+            void starts.scratch();
+          }}
           onClose={() => starts.setPicking(false)}
         />
       )}

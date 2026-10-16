@@ -210,11 +210,52 @@
   color: var(--muted);
 }
 .new-thread-picker .modal-heading {
+  gap: 6px;
   margin: 0;
   padding: 14px 13px 4px 16px;
 }
 .new-thread-picker .modal-heading h2 {
+  flex: 1;
   font-size: 14px;
+}
+.new-thread-scratch {
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.new-thread-scratch:hover {
+  color: var(--text);
+}
+.new-thread-scratch .sb-project-badge {
+  width: 14px;
+  height: 14px;
+}
+.new-thread-scratch kbd {
+  margin-left: 4px;
+  font: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.new-thread-empty {
+  padding: 34px 28px 36px;
+  text-align: center;
+}
+.new-thread-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.new-thread-empty p {
+  margin: 0 auto;
+  max-width: 270px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 .headline-project-name {
   display: block;

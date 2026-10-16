@@ -63,13 +63,16 @@ export function useNewThreads(
     nav.setInbox(false);
     open(p);
   }
-  /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
+  /**
+   * ⌘N and the sidebar's New thread ask for the project unless there's only
+   * one; with none yet, the picker offers adding one or Scratchpad.
+   */
   function pick() {
-    if (lock.blocked()) return;
-    const real = projects.data?.filter((p) => !p.scratch) ?? [];
+    // Before the list loads, "no projects" isn't known yet.
+    if (lock.blocked() || !projects.data) return;
+    const real = projects.data.filter((p) => !p.scratch);
     if (real.length === 1) open(real[0]);
-    else if (real.length) setPicking(true);
-    else void scratch();
+    else setPicking(true);
   }
   /** ⌘⇧N: a chat about anything, in a folder of its own. */
   async function scratch() {

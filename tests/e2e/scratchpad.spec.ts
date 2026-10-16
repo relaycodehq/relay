@@ -46,7 +46,15 @@ test("⌘⇧N opens a Scratchpad chat in a folder of its own, outside Projects",
       page.getByText("Your project. Your conversation."),
     ).toBeVisible();
 
+    // With no projects yet, New thread still asks: add one or use Scratchpad,
+    // whose shortcut works inside the picker, where shortcuts otherwise rest.
+    await sidebar
+      .getByRole("button", { name: "New thread", exact: true })
+      .click();
+    const picker = page.getByRole("dialog", { name: "New thread in…" });
+    await expect(picker).toContainText("No projects yet");
     await page.keyboard.press("ControlOrMeta+Shift+N");
+    await expect(picker).toHaveCount(0);
     await expect(headline).toBeVisible();
     await expect(sidebar.locator(".sb-scratchpad")).toContainText("New chat");
     await expect(sidebar.locator(".sb-project")).toHaveCount(0);
@@ -105,6 +113,13 @@ test("⌘⇧N opens a Scratchpad chat in a folder of its own, outside Projects",
         () => (window as unknown as { draftSeen: boolean }).draftSeen,
       ),
     ).toBe(false);
+
+    // ⌘N from a chat asks the same, and the heading's button starts one.
+    await page.keyboard.press("ControlOrMeta+N");
+    await picker.getByRole("button", { name: /^Scratchpad/ }).click();
+    await expect(picker).toHaveCount(0);
+    await expect(headline).toBeVisible();
+    expect(await folders()).toHaveLength(3);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
