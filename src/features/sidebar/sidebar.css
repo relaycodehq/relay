@@ -133,6 +133,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* The sidebar never scrolls sideways; a row poking out shouldn't add a bar. */
+  overflow-x: hidden;
   padding: 2px 8px 14px;
   scrollbar-width: thin;
 }
@@ -752,6 +754,8 @@
   gap: 2px;
   padding: 6px 10px;
   border-radius: 10px;
+  /* The triage buttons wait off to the right before they slide in. */
+  overflow-x: clip;
   cursor: pointer;
   outline: none;
   transition:
