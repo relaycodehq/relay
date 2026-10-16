@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { Gitea } from "./gitea";
+import type { PullHost } from "./host";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import type { CreatePullRequest } from "../../shared/pull-request-create";
 let root: string,
@@ -214,4 +215,30 @@ it("creates from an already published branch without pushing", async () => {
       .ref.number,
   ).toBe(8);
   expect((await branchPulls(root, client, repo))[0].ref.number).toBe(8);
+});
+it("finds an Azure push remote however the clone names the organization", async () => {
+  const server = "https://dev.azure.com/sample-org";
+  const azure = {
+    account: { server },
+    repository: async () => ({
+      default_branch: "main",
+      clone_url: "https://sample-org@dev.azure.com/sample-org/Shop/_git/api",
+      ssh_url: "git@ssh.dev.azure.com:v3/sample-org/Shop/api",
+    }),
+    branches: async () => [],
+    pulls: async () => ({ items: [], nextPage: null }),
+    branchHead: async () => null,
+  } as unknown as PullHost;
+  git(
+    "remote",
+    "set-url",
+    "origin",
+    "https://Sample-Org.visualstudio.com/shop/_git/API",
+  );
+  const p = await service.prepare(root, azure, {
+    server,
+    owner: "Shop",
+    name: "api",
+  });
+  expect(p.remote).toBe("origin");
 });

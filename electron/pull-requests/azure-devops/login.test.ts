@@ -4,6 +4,8 @@ import { AzureLogin } from "./login";
 
 const az = vi.hoisted(() => ({
   token: "old-login" as string | null,
+  /** What a failing `az` prints, other than having no login. */
+  failure: undefined as string | undefined,
   asked: [] as string[][],
 }));
 vi.mock("../../platform/executables", () => ({
@@ -17,6 +19,12 @@ vi.mock("node:child_process", () => ({
     done: (error: Error | null, result?: { stdout: string }) => void,
   ) => {
     az.asked.push(args);
+    if (az.failure)
+      return done(
+        Object.assign(new Error(`Command failed: az\n${az.failure}`), {
+          stderr: az.failure,
+        }),
+      );
     if (!az.token)
       return done(new Error("Please run 'az login' to setup account."));
     done(null, {
@@ -33,6 +41,7 @@ const tenant = "11111111-2222-3333-4444-555555555555";
 
 beforeEach(() => {
   az.token = "old-login";
+  az.failure = undefined;
   az.asked = [];
 });
 afterEach(() => vi.useRealTimers());
@@ -212,6 +221,26 @@ it("reads no az login as signed out, and finds the account once you sign in", as
     server: org,
     user: { login: "ann@example.com", full_name: "Ann Example" },
   });
+  expect(az.asked).toHaveLength(2);
+});
+
+it("doesn't pass az failing to reach Entra off as signed out", async () => {
+  const { login } = server();
+  az.failure =
+    "ERROR: HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded";
+  await expect(login.account(org)).rejects.toThrow(/Max retries exceeded/);
+  az.failure = undefined;
+  await expect(login.account(org)).resolves.toMatchObject({ server: org });
+});
+
+it("doesn't run a signed-out az on every request, but checking again does", async () => {
+  const { tokens, login } = server();
+  az.token = null;
+  await expect(tokens.token(org)).rejects.toThrow(/az login/);
+  await expect(tokens.token(org)).rejects.toThrow(/az login/);
+  expect(az.asked).toHaveLength(1);
+  az.token = "new-login";
+  await expect(login.account(org)).resolves.toMatchObject({ server: org });
   expect(az.asked).toHaveLength(2);
 });
 

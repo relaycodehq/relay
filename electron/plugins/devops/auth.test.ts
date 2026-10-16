@@ -48,7 +48,7 @@ it("doesn't store a token an old organization's az call returns after the settin
 
   const stale = auth.credential("azure-cli", "https://dev.azure.com/old");
   await tick();
-  auth.forget();
+  auth.forget({ signIn: true });
 
   az.pending.shift()!.done();
   expect((await stale).header).toBe(

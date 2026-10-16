@@ -79,8 +79,8 @@ export function accountHandlers(ctx: ApiContext) {
     hostAccount: takes([z.url().max(2048)], (server) =>
       ctx.hosts.account(server),
     ),
-    pullServers: () => {
-      const organizations = new Set<string>();
+    pullServers: takes([z.array(z.url().max(2048)).max(8)], (linked) => {
+      const organizations = new Set<string>(linked.filter(isAzureServer));
       for (const p of store.get().projects ?? [])
         if (!p.removed && isAzureServer(p.repository?.server))
           organizations.add(p.repository!.server);
@@ -90,7 +90,7 @@ export function accountHandlers(ctx: ApiContext) {
         devops.enabled && azureOrganizationServer(devops.organization);
       if (plugin) organizations.add(plugin);
       return ctx.hosts.boardServers([...organizations]);
-    },
+    }),
     retryLoginRestore: () => {
       void login.restoreSaved(store);
     },

@@ -482,5 +482,11 @@ describe("changed files", () => {
         { changeType: "None", originalLinesCount: 9, modifiedLinesCount: 9 },
       ]),
     ).toEqual({ additions: 7, deletions: 3, changes: 10 });
+    expect(
+      lineCounts([
+        { changeType: 1, originalLinesCount: 0, modifiedLinesCount: 3 },
+        { changeType: 3, originalLinesCount: 1, modifiedLinesCount: 4 },
+      ]),
+    ).toEqual({ additions: 7, deletions: 1, changes: 8 });
   });
 });

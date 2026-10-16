@@ -66,7 +66,8 @@ export interface AzChange {
   item?: { path?: string; isFolder?: boolean; gitObjectType?: string };
 }
 export interface AzLineBlock {
-  changeType: string;
+  /** `add`, `delete` or `edit`; the numeric enum (1, 2, 3) in some responses. */
+  changeType: string | number;
   originalLinesCount: number;
   modifiedLinesCount: number;
 }
@@ -260,6 +261,7 @@ export function asChangedFile(change: AzChange): ChangedFile | null {
     ...(status === "renamed" && change.originalPath
       ? { previous_filename: relayPath(change.originalPath) }
       : {}),
+    ...(change.item?.gitObjectType === "commit" ? { submodule: true } : {}),
     status,
     additions: 0,
     deletions: 0,
@@ -272,7 +274,10 @@ export function lineCounts(blocks: AzLineBlock[]) {
   let additions = 0,
     deletions = 0;
   for (const b of blocks) {
-    const type = b.changeType.toLowerCase();
+    const type =
+      typeof b.changeType === "number"
+        ? ["none", "add", "delete", "edit"][b.changeType]
+        : b.changeType.toLowerCase();
     if (type === "add" || type === "edit") additions += b.modifiedLinesCount;
     if (type === "delete" || type === "edit") deletions += b.originalLinesCount;
   }

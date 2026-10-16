@@ -12,6 +12,13 @@ const devopsResource = "499b84ac-1321-427f-aa17-267ca6975798";
 /** `az` is missing or has no login for the organization, as opposed to Azure not answering. */
 export class AzureCliSignedOut extends Error {}
 
+/** How `az` says its login is missing or has lapsed; anything else isn't a sign-out. */
+const signedOutWords =
+  /az login|AADSTS\d+|interaction_required|invalid_grant|refresh token|MSAL token cache|not logged in|no subscriptions? found/i;
+
+/** How long a missing login is believed before `az` is run again for it. */
+const SIGNED_OUT_FOR = 60_000;
+
 /** One token, and how its user hands it back when Azure DevOps refuses it. */
 export interface AzureCliToken {
   header: string;
@@ -32,6 +39,11 @@ export class AzureCliTokens {
   private asking = new Map<string, Promise<string>>();
   /** Bumped by `forget`, so an `az` call that was already running can't store its token. */
   private generation = 0;
+  /** Tenants `az` just said it has no login for, so polls don't run it again and again. */
+  private signedOut = new Map<
+    string,
+    { at: number; error: AzureCliSignedOut }
+  >();
 
   constructor(private fetch: Fetch) {}
 
@@ -41,11 +53,14 @@ export class AzureCliTokens {
     this.tokens.clear();
     this.tenants.clear();
     this.asking.clear();
+    this.signedOut.clear();
   }
 
   /** Drops `base`'s token, so the next one is asked of `az`'s current login. */
   async renew(base: string) {
-    this.tokens.delete(await this.tenantOf(base));
+    const tenant = await this.tenantOf(base);
+    this.tokens.delete(tenant);
+    this.signedOut.delete(tenant);
   }
 
   /** A token for the organization at `base`, e.g. `https://dev.azure.com/org`. */
@@ -70,6 +85,9 @@ export class AzureCliTokens {
   }
 
   private shared(tenant: string, generation: number) {
+    const out = this.signedOut.get(tenant);
+    if (out && Date.now() - out.at < SIGNED_OUT_FOR)
+      return Promise.reject(out.error);
     const running = this.asking.get(tenant);
     if (running) return running;
     const next = this.ask(tenant, generation).finally(() => {
@@ -100,12 +118,24 @@ export class AzureCliTokens {
         ],
         { timeout: 30_000 },
       ));
-    } catch {
-      throw new AzureCliSignedOut(
+    } catch (e) {
+      const failure = e as Error & { stderr?: string; killed?: boolean };
+      const said = `${failure.stderr ?? ""}\n${failure.message ?? ""}`;
+      // Offline, a timeout or a broken `az` isn't a sign-out; Check again retries it.
+      if (failure.killed || !signedOutWords.test(said))
+        throw new Error(
+          failure.killed
+            ? "The Azure CLI didn't answer within 30s. Try again."
+            : `The Azure CLI couldn't get a token: ${lastLine(said)}`,
+        );
+      const error = new AzureCliSignedOut(
         tenant
           ? `The Azure CLI could not get a token for this organization. Run \`az login --tenant ${tenant}\` in a terminal and try again.`
           : "The Azure CLI could not get a token. Run `az login` in a terminal and try again.",
       );
+      if (generation === this.generation)
+        this.signedOut.set(tenant, { at: Date.now(), error });
+      throw error;
     }
     const token = JSON.parse(out) as {
       accessToken: string;
@@ -142,6 +172,16 @@ export class AzureCliTokens {
     }
   }
 }
+
+/** The last thing `az` said, which is where it explains a failure. */
+const lastLine = (text: string) =>
+  text
+    .trim()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .at(-1)
+    ?.slice(0, 300) ?? "it failed without saying why.";
 
 /** Organizations backed by Microsoft accounts report an empty GUID. */
 export const tenantOf = (header: string) =>

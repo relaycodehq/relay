@@ -246,7 +246,10 @@ export default function ProjectShell() {
     void api.takeMainWindowCommand().then(runAsked).catch(setError);
     return api.onMainWindowCommand(runAsked);
   }, [loaded]);
-  const pullsHosts = usePullHosts(boot.data?.account, projects.data);
+  const pullsHosts = usePullHosts(boot.data?.account, projects.data, [
+    links.azureServer,
+    boot.data?.workspace.pull?.server,
+  ]);
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;

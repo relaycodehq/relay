@@ -52,6 +52,7 @@ export function reviewHandlers(ctx: ApiContext) {
         z.object({
           filename: filePathSchema,
           previous_filename: filePathSchema.optional(),
+          submodule: z.boolean().optional(),
           status: z.string().max(30),
           additions: z.number(),
           deletions: z.number(),

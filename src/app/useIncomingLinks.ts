@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Bootstrap } from "../../shared/types";
-import { isSitePullUrl } from "../../shared/validation";
+import { isSitePullUrl, parseAzurePullUrl } from "../../shared/validation";
 import { api } from "../lib/api";
 import type { NavigationLock } from "../lib/navigation-lock";
 import type { ShellNavigation } from "./useShellNavigation";
@@ -50,5 +50,15 @@ export function useIncomingLinks(
   return {
     /** The link the Pull requests page opens on. */
     incoming,
+    /** The Azure DevOps organization the link is in, which no project may be. */
+    azureServer: incoming && azureServerOf(incoming.url),
   };
+}
+
+function azureServerOf(url: string) {
+  try {
+    return parseAzurePullUrl(url).server;
+  } catch {
+    return undefined;
+  }
 }

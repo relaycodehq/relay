@@ -49,9 +49,26 @@ import {
 } from "./shapes";
 
 const VERSION = "api-version=7.1";
+/** File diffs are only served as a preview; without the flag Azure refuses them. */
+const FILE_DIFFS_VERSION = "api-version=7.1-preview.1";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
 const PAGE = 50;
+
+/** `value`, or a cancellation as soon as `signal` aborts, leaving `value` running. */
+function untilAborted<T>(value: Promise<T>, signal?: AbortSignal) {
+  if (!signal) return value;
+  const cancelled = () =>
+    new Error("Request cancelled or timed out. Please retry.");
+  if (signal.aborted) return Promise.reject(cancelled());
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(cancelled());
+    signal.addEventListener("abort", abort, { once: true });
+    value
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+  });
+}
 /** How many PRs a text search reads through, as Azure can't search them itself. */
 const SCANNED = 1000;
 /**
@@ -274,18 +291,36 @@ export class AzureDevOps implements PullHost {
       items: items.map((p) => asIssue(this.account.server, p)),
       nextPage,
     });
+    // Azure has no text search; the typed words narrow what it lists.
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (p: AzPull) => {
+      const text = [
+        p.title,
+        `#${p.pullRequestId}`,
+        p.repository.project.name,
+        p.repository.name,
+        p.createdBy.displayName,
+        p.createdBy.uniqueName,
+        p.sourceRefName,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return words.every((w) => text.includes(w));
+    };
     // Azure DevOps has no assignees, only reviewers.
     if (filter === "assigned") return { items: [], nextPage: null };
     if (filter === "review_requested") {
       const found = await this.listed({ reviewerId: this.me }, state, page);
       return issues(
-        found.items.filter((p) => p.status !== "active" || waitsOn(p, this.me)),
+        found.items.filter(
+          (p) => (p.status !== "active" || waitsOn(p, this.me)) && matches(p),
+        ),
         found.nextPage,
       );
     }
     if (filter === "created") {
       const found = await this.listed({ creatorId: this.me }, state, page);
-      return issues(found.items, found.nextPage);
+      return issues(found.items.filter(matches), found.nextPage);
     }
     if (!q.trim()) {
       const [reviewing, created] = await Promise.all([
@@ -302,21 +337,6 @@ export class AzureDevOps implements PullHost {
     }
     // No text search for PRs in Azure: read through the newest ones instead.
     if (page > 1) return { items: [], nextPage: null };
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const matches = (p: AzPull) => {
-      const text = [
-        p.title,
-        `#${p.pullRequestId}`,
-        p.repository.project.name,
-        p.repository.name,
-        p.createdBy.displayName,
-        p.createdBy.uniqueName,
-        p.sourceRefName,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return words.every((w) => text.includes(w));
-    };
     return issues((await this.scan(state)).filter(matches), null);
   }
 
@@ -463,7 +483,7 @@ export class AzureDevOps implements PullHost {
       try {
         const { data } = await this.request<{
           value: { path: string; lineDiffBlocks?: AzLineBlock[] }[];
-        }>(`${this.repoPath(r)}/filediffs?${VERSION}`, {
+        }>(`${this.repoPath(r)}/filediffs?${FILE_DIFFS_VERSION}`, {
           method: "POST",
           signal,
           body: {
@@ -527,16 +547,21 @@ export class AzureDevOps implements PullHost {
   private threads(r: PullRef, latest: number, signal?: AbortSignal) {
     const key = `${this.prPath(r)}@${latest}`;
     const known = this.threadCache.get(key);
-    if (known && Date.now() - known.at < 15_000) return known.value;
+    if (known && Date.now() - known.at < 15_000)
+      return untilAborted(known.value, signal);
+    // Shared by every view that asks within the window, so no one view's
+    // cancellation may end it; each caller stops waiting on its own instead.
     const value = this.request<{ value: AzThread[] }>(
       `${this.prPath(r)}/threads?$iteration=${latest}&$baseIteration=0&${VERSION}`,
-      { signal },
     ).then((r) => r.data.value);
     this.threadCache.set(key, { at: Date.now(), value });
-    value.catch(() => this.threadCache.delete(key));
+    value.catch(() => {
+      if (this.threadCache.get(key)?.value === value)
+        this.threadCache.delete(key);
+    });
     if (this.threadCache.size > 20)
       this.threadCache.delete(this.threadCache.keys().next().value!);
-    return value;
+    return untilAborted(value, signal);
   }
   private forget(r: PullRef) {
     for (const key of this.threadCache.keys())
@@ -643,7 +668,8 @@ export class AzureDevOps implements PullHost {
         ).data;
       } catch (e) {
         // A submodule has no contents to read; show it as binary-like.
-        if (e instanceof ApiError && e.status === 404) return "\0";
+        if (file.submodule && e instanceof ApiError && e.status === 404)
+          return "\0";
         throw e;
       }
     });
@@ -712,8 +738,10 @@ export class AzureDevOps implements PullHost {
               [`${side}FileEnd`]: at,
             },
             pullRequestThreadContext: {
+              // Equal iterations mean Azure's common-commit comparison, the
+              // merge base against the latest push that the drafts were made on.
               iterationContext: {
-                firstComparingIteration: 1,
+                firstComparingIteration: latest.id,
                 secondComparingIteration: latest.id,
               },
               ...(tracking[d.path]

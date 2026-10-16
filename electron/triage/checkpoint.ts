@@ -37,6 +37,7 @@ const resultSchema = z.object({
       z.object({
         filename: filePathSchema,
         previous_filename: filePathSchema.optional(),
+        submodule: z.boolean().optional(),
         status: z.string(),
         additions: z.number(),
         deletions: z.number(),

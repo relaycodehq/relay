@@ -217,7 +217,8 @@ it("keeps the new settings' CLI sign-in even when its token matches a late refus
   finish(refused(401));
   await late;
   await devops.whoAmI();
-  expect(az.issued).toEqual(["old-login", "old-login"]);
+  // Saving without changing the sign-in keeps the shared az token too.
+  expect(az.issued).toEqual(["old-login"]);
 });
 
 it("doesn't let old fields arriving late overwrite the recovered account's cache", async () => {

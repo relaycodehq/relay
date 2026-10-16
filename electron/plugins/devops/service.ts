@@ -70,13 +70,17 @@ export class DevOps {
 
   async save(settings: DevOpsSettings, secrets: DevOpsSecrets) {
     if (settings.organization) organizationUrl(settings.organization);
+    const before = this.settings();
+    const signIn =
+      before.auth !== settings.auth ||
+      before.organization !== settings.organization;
     const writeKeys = await this.keys.seal(secrets);
     await this.store.update((s) => {
       s.devops = settings;
       writeKeys(s);
     });
     this.clearCaches();
-    this.auth.forget();
+    this.auth.forget({ signIn });
     return this.status();
   }
 

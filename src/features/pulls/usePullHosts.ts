@@ -18,6 +18,8 @@ import { hostAccountQuery } from "./useHostAccount";
 export function usePullHosts(
   gitea: Account | null | undefined,
   projects: Project[] | undefined,
+  /** Servers a PR link or the PR left open is on, though no project is. */
+  linked: (string | undefined)[] = [],
 ) {
   // A project from a new organization adds it to the page.
   const projectServers = [
@@ -25,9 +27,17 @@ export function usePullHosts(
   ]
     .sort()
     .join(" ");
+  const linkedServers = [
+    ...new Set(linked.filter((s): s is string => !!s)),
+  ].sort();
   const servers = useQuery({
-    queryKey: ["pull-servers", gitea?.id ?? null, projectServers],
-    queryFn: () => api.pullServers(),
+    queryKey: [
+      "pull-servers",
+      gitea?.id ?? null,
+      projectServers,
+      linkedServers.join(" "),
+    ],
+    queryFn: () => api.pullServers(linkedServers),
   });
   const cliServers = (servers.data ?? []).filter(
     (s) => hostKindOf(s) !== "gitea",

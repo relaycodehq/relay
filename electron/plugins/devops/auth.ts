@@ -17,26 +17,35 @@ export class DevOpsAuth {
     this.cli = cli ?? new AzureCliTokens(fetch);
   }
 
-  /** Drops the `az` token when settings change or Azure rejects it. */
-  forget() {
+  /**
+   * After the settings changed: refusals from before no longer count. The
+   * `az` tokens, shared with pull requests, go only when the sign-in itself
+   * changed, not for a sort order or a hidden project.
+   */
+  forget({ signIn }: { signIn: boolean }) {
     this.generation++;
-    this.cli.forget();
+    if (signIn) this.cli.forget();
   }
 
   async credential(
     kind: DevOpsSettings["auth"],
     base: string,
   ): Promise<DevOpsCredential> {
+    // Before anything is awaited, so a refusal can't clear a newer setup's caches.
+    const generation = this.generation;
     if (kind === "azure-cli") {
       const token = await this.cli.token(base);
-      return { kind, header: token.header, rejected: token.rejected };
+      return {
+        kind,
+        header: token.header,
+        rejected: () => generation === this.generation && token.rejected(),
+      };
     }
     const pat = await this.pat();
     if (!pat)
       throw new Error(
         "Add a personal access token for Azure DevOps in Settings.",
       );
-    const generation = this.generation;
     // A saved PAT is never deleted for being refused.
     return {
       kind,

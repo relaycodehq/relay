@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { PullHost, PullListing } from "./host";
 import { currentBranch, git } from "../git/git";
 import { workingTree, serializeRepo } from "../git/working-tree";
-import { remoteUrl } from "../git/repository";
+import { isRemoteOfRepo, remoteUrl } from "../git/repository";
+import { isAzureServer } from "../../shared/source-control";
 import type { Repo, Pull } from "../../shared/types";
 import type {
   BranchPull,
@@ -66,10 +67,21 @@ export async function branchPulls(
 }
 const remoteHead = (client: PullHost, repo: Repo, branch: string) =>
   client.branchHead(repo, branch);
-async function matchingRemote(root: string, info: RepositoryInfo) {
+async function matchingRemote(
+  root: string,
+  info: RepositoryInfo,
+  server: string,
+  repo: Repo,
+) {
   const accepted = [identity(info.clone_url), identity(info.ssh_url)].filter(
     Boolean,
   );
+  // An Azure clone may name its org another way (visualstudio.com, SSH, any
+  // case) than the URLs the API hands back.
+  const matches = (url: string) =>
+    isAzureServer(server)
+      ? isRemoteOfRepo(url, server, repo)
+      : accepted.includes(identity(url));
   const names = (await git(root, ["remote"]))
     .trim()
     .split("\n")
@@ -81,8 +93,7 @@ async function matchingRemote(root: string, info: RepositoryInfo) {
     )
       .trim()
       .split("\n");
-    if (urls.length === 1 && accepted.includes(identity(urls[0])))
-      return { name, url: urls[0] };
+    if (urls.length === 1 && matches(urls[0])) return { name, url: urls[0] };
   }
   return null;
 }
@@ -108,7 +119,12 @@ export class PullRequestCreation {
       branchPulls(root, client, repo),
       remoteHead(client, repo, state.branch),
     ]);
-    const remote = await matchingRemote(root, info);
+    const remote = await matchingRemote(
+      root,
+      info,
+      client.account.server,
+      repo,
+    );
     const base = info.default_branch;
     const targetHead = published ?? (await remoteHead(client, repo, base));
     let commits: { sha: string; subject: string }[] = [];
@@ -210,7 +226,12 @@ export class PullRequestCreation {
             "No push remote matches this repository. Configure a matching remote first.",
           );
         const info = await client.repository(repo);
-        const remote = await matchingRemote(root, info);
+        const remote = await matchingRemote(
+          root,
+          info,
+          client.account.server,
+          repo,
+        );
         if (remote?.name !== plan.remote || remote.url !== saved.pushUrl)
           throw new Error(
             "Your push destination changed. Reopen the PR preview.",

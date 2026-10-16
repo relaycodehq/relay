@@ -138,6 +138,8 @@ export type ProjectPull = PullListing & {
 export interface ChangedFile {
   filename: string;
   previous_filename?: string;
+  /** A submodule's commit pointer, which has no contents to read. */
+  submodule?: boolean;
   status: string;
   additions: number;
   deletions: number;
@@ -523,9 +525,9 @@ export interface Api
   /**
    * The servers the Pull requests page gathers PRs from: GitHub, the Gitea
    * account's, and each Azure DevOps organization a project or the work
-   * items plugin is on.
+   * items plugin is on, or that `linked` names (a PR link, the PR left open).
    */
-  pullServers(): Promise<string[]>;
+  pullServers(linked: string[]): Promise<string[]>;
   retryLoginRestore(): Promise<void>;
   cancelLoginRestore(): Promise<void>;
   saveWorkspace(workspace: WorkspaceState): Promise<void>;
