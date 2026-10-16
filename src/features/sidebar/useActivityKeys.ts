@@ -32,6 +32,7 @@ export function askJump(index: number) {
 export function useActivityKeys({
   active,
   cards,
+  loaded,
   chatId,
   jumping,
   actions: { open, settle },
@@ -40,6 +41,8 @@ export function useActivityKeys({
   active: ChatSummary[];
   /** The numbered cards, in order, for `jump-thread`. */
   cards: ChatSummary[];
+  /** Every project's list has answered, so `cards` won't fill in further. */
+  loaded: boolean;
   /** The open thread. */
   chatId: string | undefined;
   jumping: boolean;
@@ -107,7 +110,8 @@ export function useActivityKeys({
   takeAsked.current = () => {
     if (!askedJump) return;
     if (Date.now() - askedJump.at > ASKED_JUMP_TTL_MS) askedJump = undefined;
-    else if (cards.length) {
+    // Lists answer one project at a time; a card counted early may be another.
+    else if (loaded) {
       jumpTo.current(askedJump.index);
       askedJump = undefined;
     }
@@ -117,6 +121,6 @@ export function useActivityKeys({
     askedListeners.add(take);
     return () => void askedListeners.delete(take);
   }, []);
-  useEffect(() => takeAsked.current(), [cards.length]);
+  useEffect(() => takeAsked.current(), [cards.length, loaded]);
   return held;
 }

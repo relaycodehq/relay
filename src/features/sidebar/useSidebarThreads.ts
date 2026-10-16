@@ -6,10 +6,13 @@ import { SCRATCH_CHATS } from "../../lib/chat-events";
 import { useAwayViews, withAway } from "./useAwayViews";
 
 /** Every project's threads and Scratchpad's, as listed, in no order. */
-export function useEveryThread(
+export const useEveryThread = (
   /** Every project but Scratchpad's. */
   projects: Project[],
-) {
+) => useThreadLists(projects).threads;
+
+/** `useEveryThread`, and whether every list has answered yet. */
+function useThreadLists(projects: Project[]) {
   // Kept current by the desktop's pushes; see lib/chat-events.
   const lists = useQueries({
     queries: [
@@ -24,7 +27,10 @@ export function useEveryThread(
       },
     ],
   });
-  return lists.flatMap((q) => q.data ?? []);
+  return {
+    threads: lists.flatMap((q) => q.data ?? []),
+    loaded: lists.every((q) => !q.isPending),
+  };
 }
 
 /**
@@ -37,11 +43,11 @@ export function useSidebarThreads(
   projects: Project[],
   chatId: string | undefined,
 ) {
-  const threads = useEveryThread(projects);
+  const { threads, loaded } = useThreadLists(projects);
   const away = useAwayViews(threads);
   const all = threads
     .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
     .map((c) => withAway(c, away[c.id]))
     .sort((a, b) => b.updated - a.updated);
-  return { all, away };
+  return { all, away, loaded };
 }

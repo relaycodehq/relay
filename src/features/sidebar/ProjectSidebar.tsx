@@ -120,7 +120,7 @@ export function ProjectSidebar({
     if (p) onOpen(p, c);
   };
   const newThread = (p: Project) => onOpen(p, undefined, true);
-  const { all: listed, away } = useSidebarThreads(realProjects, chatId);
+  const { all: listed, away, loaded } = useSidebarThreads(realProjects, chatId);
   const unread = useUnread(chatId, listed);
   // A deep review shows as one thread: its reviewers open from the review,
   // which stays picked while one of them is open.
@@ -191,6 +191,7 @@ export function ProjectSidebar({
     active: sections.active,
     // ⌘1–9 count the cards, which started threads and settled leads don't get.
     cards: families.cards,
+    loaded,
     chatId: shown,
     jumping: activity,
     actions,
