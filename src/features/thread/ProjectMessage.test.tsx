@@ -40,12 +40,15 @@ it("shows a resume as a static divider while keeping an identical typed prompt v
   expect(resumed).not.toContain("Continue from where");
   expect(resumed).not.toContain("project-message user");
   expect(resumed).not.toContain("unread-divider");
+  expect(
+    render({ ...message, resumed: true, asyncQuestionAnswer: true }),
+  ).toContain("Resumed · ");
   const typed = render(message);
   expect(typed).toContain("project-message user");
   expect(typed).toContain("Continue from where");
 });
 
-it("shows a quiet awaiting status only for unread async-question answers", () => {
+it("keeps ordinary steering messages visible and hides generated question and page replies", () => {
   const message: ChatMessage = {
     id: "reply",
     role: "user",
@@ -62,16 +65,19 @@ it("shows a quiet awaiting status only for unread async-question answers", () =>
   expect(ordinary).toContain('class="spinner steady"');
   expect(ordinary).not.toContain("Sent · awaiting");
 
-  const awaiting = render({ ...message, asyncQuestionAnswer: true });
-  expect(awaiting).toContain("Sent · awaiting Codex");
-  expect(awaiting).toContain('role="status"');
-  expect(awaiting).not.toContain("spinner");
-
-  const read = render({
-    ...message,
-    asyncQuestionAnswer: true,
-    unread: false,
-  });
-  expect(read).not.toContain("Sent · awaiting");
-  expect(read).not.toContain("spinner");
+  for (const unread of [true, false]) {
+    expect(render({ ...message, unread, asyncQuestionAnswer: true })).toBe("");
+    expect(render({ ...message, unread, pageAnswer: { title: "Pick" } })).toBe(
+      "",
+    );
+    expect(
+      render({
+        ...message,
+        unread,
+        pageAnswer: { title: "Pick", skipped: true },
+      }),
+    ).toBe("");
+  }
+  const body = "Answer to your questions:\nWhich?\nPrivate";
+  expect(render({ ...message, body, unread: false })).toContain("Which?");
 });

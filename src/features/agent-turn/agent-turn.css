@@ -5,6 +5,9 @@
   color: var(--muted);
   margin: 8px 0 12px;
 }
+.agent-activity.continuation {
+  margin-top: 0;
+}
 .agent-run-heading {
   list-style: none;
   display: flex;

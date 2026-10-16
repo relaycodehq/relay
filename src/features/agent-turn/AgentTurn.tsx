@@ -54,13 +54,29 @@ import { StartedChip } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
-function WorkingTimer({ started }: { started: number }) {
+function WorkingTimer({
+  started,
+  elapsed = 0,
+}: {
+  started: number;
+  elapsed?: number;
+}) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  return <>{duration(now - started)}</>;
+  return <>{duration(elapsed + now - started)}</>;
+}
+
+/** Several backend turns can share one visible response without merging their saved content. */
+export interface TurnPresentation {
+  /** Only the first part draws the response's combined heading. */
+  summary?: ChatMessage;
+  elapsed: number;
+  waiting: boolean;
+  expanded: boolean;
+  onToggle: (expanded: boolean) => void;
 }
 
 const icons = {
@@ -326,6 +342,7 @@ export function AgentTurn({
   images,
   open,
   aside,
+  presentation,
 }: {
   message: ChatMessage;
   projectRoot: string;
@@ -336,6 +353,7 @@ export function AgentTurn({
   open?: boolean;
   /** Sits at the right end of the live thinking line. */
   aside?: ReactNode;
+  presentation?: TurnPresentation;
 }) {
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
@@ -344,35 +362,42 @@ export function AgentTurn({
   const [toggled, setToggled] = useState<boolean | undefined>(
     open || undefined,
   );
-  const expanded = toggled ?? live;
-  if (!live && !entries.length) return null;
+  const expanded = presentation?.expanded ?? toggled ?? live;
+  if (!live && !entries.length && !presentation?.summary) return null;
+  const headingMessage = presentation?.summary ?? message;
+  const headingTurn = presentation?.summary ? readTurn(headingMessage) : turn;
+  const headingLive = headingTurn.live;
+  const continuation = !!presentation && !presentation.summary;
+  const Container = continuation ? "div" : "details";
   const root = projectRoot.replace(/\/+$/, "") + "/";
   const display = (text: string) => text.split(root).join("");
-  const ended = message.ended ?? message.created;
-  const heading = turnHeading(message, expanded, turn);
+  const ended = headingMessage.ended ?? headingMessage.created;
+  const heading = turnHeading(headingMessage, expanded, headingTurn);
   // Folded, the turn still shows the threads it started.
   const starts = expanded
     ? []
-    : (message.trace ?? []).flatMap((e) =>
+    : (headingMessage.trace ?? []).flatMap((e) =>
         e.kind === "activity" && isStartThreads(e.activity) ? [e.activity] : [],
       );
   const startedBy = starts.map((a) => startedIds(a.detail));
-  const label =
-    heading.kind === "working" ? (
-      "Working for"
-    ) : heading.kind === "call" ? (
-      display(liveLabel(heading.activity))
-    ) : heading.kind === "writing" ? (
-      "Writing"
-    ) : heading.kind === "thinking" ? (
-      <ThinkingWord seed={message.id} />
-    ) : (
-      heading.text
-    );
+  const label = presentation?.waiting ? (
+    "Waiting for your answer"
+  ) : heading.kind === "working" ? (
+    "Working for"
+  ) : heading.kind === "call" ? (
+    display(liveLabel(heading.activity))
+  ) : heading.kind === "writing" ? (
+    "Writing"
+  ) : heading.kind === "thinking" ? (
+    <ThinkingWord seed={headingMessage.id} />
+  ) : (
+    heading.text
+  );
   // Expanded, the header is the whole run and stays still; the one live row
   // below it is what moves. Folded, the header stands in for that row.
-  const HeaderIcon =
-    heading.kind === "working"
+  const HeaderIcon = presentation?.waiting
+    ? MessageCircleQuestion
+    : heading.kind === "working"
       ? Clock3
       : heading.kind === "call"
         ? iconOf(heading.activity)
@@ -382,51 +407,65 @@ export function AgentTurn({
             : Brain
           : null;
   return (
-    <details
-      className={`agent-activity${live ? " live" : ""}`}
-      open={expanded}
-      onToggle={(event) => {
-        // React setting `open` fires toggle too; only a click changes the state.
-        if (event.currentTarget.open !== expanded)
-          setToggled(event.currentTarget.open);
-      }}
+    <Container
+      className={`agent-activity${live ? " live" : ""}${continuation ? " continuation" : ""}`}
+      open={continuation ? undefined : expanded}
+      onToggle={
+        continuation
+          ? undefined
+          : (event) => {
+              // React setting `open` fires toggle too; only a click changes the state.
+              const opened = event.currentTarget.hasAttribute("open");
+              if (opened !== expanded) {
+                if (presentation) presentation.onToggle(opened);
+                else setToggled(opened);
+              }
+            }
+      }
     >
-      <summary className="agent-run-heading">
-        {HeaderIcon ? (
-          <HeaderIcon size={14} />
-        ) : (
-          <ThinkingGlyph provider={message.provider} />
-        )}
-        <span
-          className={
-            live && !expanded && typeof label === "string"
-              ? "live-shine"
-              : undefined
-          }
-        >
-          {label}
-        </span>
-        <span className="agent-run-time">
-          {live ? (
-            <WorkingTimer started={message.created} />
-          ) : message.ended ? (
-            <>
-              {message.status === "cancelled" ? "Stopped after " : ""}
-              {duration(ended - message.created)}
-            </>
-          ) : null}
-        </span>
-        {starts.length > 0 && (
-          <StartedChip
-            ids={
-              startedBy.every(Boolean)
-                ? startedBy.flatMap((ids) => ids!)
+      {!continuation && (
+        <summary className="agent-run-heading">
+          {HeaderIcon ? (
+            <HeaderIcon size={14} />
+          ) : (
+            <ThinkingGlyph provider={message.provider} />
+          )}
+          <span
+            className={
+              headingLive && !expanded && typeof label === "string"
+                ? "live-shine"
                 : undefined
             }
-          />
-        )}
-        <ChevronRight size={13} className="agent-run-chevron" />
-      </summary>
+          >
+            {label}
+          </span>
+          <span className="agent-run-time">
+            {headingLive ? (
+              <WorkingTimer
+                started={headingMessage.created}
+                elapsed={presentation?.elapsed}
+              />
+            ) : headingMessage.ended ? (
+              <>
+                {headingMessage.status === "cancelled" ? "Stopped after " : ""}
+                {duration(
+                  (presentation?.elapsed ?? 0) + ended - headingMessage.created,
+                )}
+              </>
+            ) : null}
+          </span>
+          {starts.length > 0 && (
+            <StartedChip
+              ids={
+                startedBy.every(Boolean)
+                  ? startedBy.flatMap((ids) => ids!)
+                  : undefined
+              }
+            />
+          )}
+          <ChevronRight size={13} className="agent-run-chevron" />
+        </summary>
+      )}
       {expanded && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
           <TurnImages.Provider value={images}>
@@ -490,7 +529,7 @@ export function AgentTurn({
           </TurnImages.Provider>
         </Subagents.Provider>
       )}
-    </details>
+    </Container>
   );
 }
 

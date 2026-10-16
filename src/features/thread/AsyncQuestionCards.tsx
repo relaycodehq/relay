@@ -15,9 +15,11 @@ import { AgentRequestCard } from "./AgentRequestCard";
 export function AsyncQuestionCards({
   message,
   chatId,
+  answerMessages,
 }: {
   message: ChatMessage;
   chatId: string;
+  answerMessages?: ReadonlyMap<string, ChatMessage>;
 }) {
   if (!message.questions?.length || !chatId) return null;
   return (
@@ -26,6 +28,7 @@ export function AsyncQuestionCards({
         group.answers && group.page ? (
           <AnsweredQuestions
             key={group.id}
+            status={answerStatus(group, message.provider, answerMessages)}
             label={
               group.answers[PAGE_QUESTION_ID]
                 ? `Answered "${group.page.title}"`
@@ -43,6 +46,7 @@ export function AsyncQuestionCards({
           <AnsweredQuestions
             key={group.id}
             questions={questionAnswers(group.questions, group.answers)}
+            status={answerStatus(group, message.provider, answerMessages)}
           />
         ) : (
           <AsyncQuestionCard
@@ -56,6 +60,18 @@ export function AsyncQuestionCards({
       )}
     </div>
   );
+}
+
+function answerStatus(
+  group: AsyncAgentQuestions,
+  provider: AgentProvider,
+  messages: ReadonlyMap<string, ChatMessage> | undefined,
+) {
+  const reply = group.answerMessageId
+    ? messages?.get(group.answerMessageId)
+    : undefined;
+  if (reply?.missed) return "Not read · turn stopped";
+  if (reply?.unread) return `Sent · awaiting ${agentName(provider)}`;
 }
 
 /** The card a group shows as: a page the agent asked with, or its questions. */

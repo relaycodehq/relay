@@ -23,7 +23,7 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
-import { AgentTurn } from "../agent-turn/AgentTurn";
+import { AgentTurn, type TurnPresentation } from "../agent-turn/AgentTurn";
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
 import { HtmlRenders, type RenderCompose } from "../html-render/HtmlRenders";
 import { TurnPreview } from "../browser/TurnPreview";
@@ -33,7 +33,6 @@ import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { CompactionRow } from "./CompactionRow";
 import { SessionReloadRow } from "./SessionReloadRow";
-import { PageAnswerRow } from "./PageAnswerRow";
 import { WorktreeCommandRow } from "./WorktreeCommandRow";
 import {
   AnswerImage,
@@ -141,14 +140,7 @@ function HandoffRow({
 /** Message shows `m` as a one-line divider rather than a message. */
 export const drawsLine = (m: ChatMessage) =>
   !m.handedOver &&
-  !!(
-    m.resumed ||
-    m.handoff ||
-    m.reload ||
-    (m.role === "user" && m.pageAnswer) ||
-    m.worktreeCommand ||
-    m.compaction
-  );
+  !!(m.resumed || m.handoff || m.reload || m.worktreeCommand || m.compaction);
 
 export const Message = memo(function Message({
   message: m,
@@ -168,6 +160,10 @@ export const Message = memo(function Message({
   onCompose,
   onRerunSetup,
   unread,
+  answerMessages,
+  continuation,
+  continues,
+  activity,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -199,6 +195,12 @@ export const Message = memo(function Message({
   onRerunSetup?: (m: ChatMessage) => Promise<void>;
   /** The unread mark, on a row that draws its own line (see drawsLine) instead of a divider stacking against it. */
   unread?: ReactNode;
+  /** Saved question replies, used for delivery status on their original cards. */
+  answerMessages?: ReadonlyMap<string, ChatMessage>;
+  /** A question-linked follow-up shares the first part's header and activity heading. */
+  continuation?: boolean;
+  continues?: boolean;
+  activity?: TurnPresentation;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -338,6 +340,7 @@ export const Message = memo(function Message({
         </span>
       </LineDivider>
     );
+  if (m.role === "user" && (m.asyncQuestionAnswer || m.pageAnswer)) return null;
   if (m.handoff)
     return (
       <HandoffRow
@@ -349,8 +352,6 @@ export const Message = memo(function Message({
     );
   if (m.reload)
     return <SessionReloadRow message={m} reload={m.reload} unread={unread} />;
-  if (m.role === "user" && m.pageAnswer)
-    return <PageAnswerRow message={m} answer={m.pageAnswer} unread={unread} />;
   if (m.worktreeCommand)
     return (
       <WorktreeCommandRow
@@ -372,20 +373,18 @@ export const Message = memo(function Message({
     <article
       className={`project-message ${m.role}`}
       data-message-id={m.id}
+      data-response-continuation={continuation || undefined}
+      data-response-continues={continues || undefined}
       aria-label={m.role === "user" ? "Your message" : `${m.provider} answer`}
     >
-      <header>
+      <header hidden={continuation}>
         {m.role === "user" ? (
           <MessageAuthor message={m} />
         ) : (
           <MessageAgentName provider={m.provider} model={m.model} />
         )}
         {m.role === "user" && <time>{clock(m.created)}</time>}
-        {m.unread && m.asyncQuestionAnswer ? (
-          <span className="muted" role="status">
-            Sent · awaiting {agentName(m.provider)}
-          </span>
-        ) : m.unread ? (
+        {m.unread ? (
           <span
             className="steer-unread muted"
             role="status"
@@ -420,6 +419,7 @@ export const Message = memo(function Message({
       {m.role === "assistant" && (
         <AgentTurn
           message={m}
+          presentation={activity}
           projectRoot={projectRoot}
           onOpenFile={onOpenFile}
           onChanges={onChanges}
@@ -475,7 +475,11 @@ export const Message = memo(function Message({
       )}
       {after}
       {m.role === "assistant" && (
-        <AsyncQuestionCards message={m} chatId={chatId} />
+        <AsyncQuestionCards
+          message={m}
+          chatId={chatId}
+          answerMessages={answerMessages}
+        />
       )}
       {m.role === "assistant" && onSteer && (
         <WatchNotes
@@ -531,7 +535,7 @@ export const Message = memo(function Message({
       {onSignIn && m.signIn && (
         <SignIn provider={m.signIn} onSignIn={onSignIn} />
       )}
-      {m.role === "assistant" && (
+      {m.role === "assistant" && !continues && (
         <MessageActions
           id={m.id}
           text={text}

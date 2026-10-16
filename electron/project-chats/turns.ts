@@ -212,6 +212,9 @@ export class ChatTurns {
         body: missed
           ? `@${provider} Your previous response was stopped before you read what I wrote above. Check what has already been done before repeating any actions.`
           : `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
+        asyncQuestionAnswer: undefined,
+        questionMessageId: undefined,
+        pageAnswer: undefined,
         images: undefined,
         selection: undefined,
         delivery: undefined,

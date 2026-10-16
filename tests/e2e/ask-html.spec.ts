@@ -20,7 +20,7 @@ import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { screenshot } from "../fixtures/screenshot";
 
 // An agent asks with a page of its own (ask_html): the page stays in its
-// answer, and what the user sends from it, or a skip, is their next message.
+// answer, and its response stays there while a saved message carries it to the agent.
 
 /** Relay on a fresh project whose agent answers from the room fixture. */
 async function openProject(root: string) {
@@ -129,13 +129,17 @@ test("an agent asks with a page and gets back what the user picked, or that they
     await frame.getByRole("button", { name: "Marimba" }).click();
     await frame.getByRole("button", { name: "Glass" }).click();
     await expect(send).toBeEnabled();
-    await screenshot(page, { path: "test-results/screenshots/ask-html.png" });
+    await screenshot(page, { path: join(tmpdir(), "relay-ask-html.png") });
     await send.click();
     // The last thing the page handed over goes to the agent as the next
-    // message, which shows as a quiet line rather than words in the user's mouth.
-    await expect(page.getByText("You answered “Pick a sound”")).toBeVisible();
+    // message; the visible record belongs to the original page.
+    await expect(page.getByText("You answered “Pick a sound”")).toHaveCount(0);
     await expect(mine).toHaveCount(1);
     await expect(answers).toHaveCount(2, { timeout: 30_000 });
+    await expect(
+      page.locator(".project-message.assistant > header:not([hidden])"),
+    ).toHaveCount(1);
+    await expect(page.locator(".agent-run-heading")).toHaveCount(1);
     await expect
       .poll(told)
       .toContain(
@@ -143,6 +147,11 @@ test("an agent asks with a page and gets back what the user picked, or that they
       );
     await expect(card).toHaveCount(0);
     await expect(page.getByText('Answered "Pick a sound"')).toBeVisible();
+    const answered = page.locator(".async-question-cards .answered-questions");
+    await expect(answered).toHaveAttribute("open", "");
+    await expect(answered.locator(".answered-question-answer")).toHaveText(
+      '{"sound":"glass","volume":0.7}',
+    );
 
     // Skipping leaves the choice to the agent.
     await expect(stop).toHaveCount(0, { timeout: 30_000 });
@@ -151,15 +160,29 @@ test("an agent asks with a page and gets back what the user picked, or that they
     await again.getByRole("button", { name: "Skip" }).click();
     await expect(
       page.getByText("You skipped “Pick again” and left it to the agent"),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect
       .poll(told)
       .toContain(
         String.raw`I skipped your page \"Pick again\". Decide on your own`,
       );
     await expect(page.getByText('Skipped "Pick again"')).toBeVisible();
+    await expect(answered.last()).toHaveAttribute("open", "");
+    await expect(
+      answered.last().locator(".answered-question-answer"),
+    ).toHaveText("Skipped");
+    await expect(mine).toHaveCount(2);
+    await page.reload();
+    await expect(answered).toHaveCount(2);
+    await expect(
+      answered.first().locator(".answered-question-answer"),
+    ).toBeVisible();
+    await expect(page.getByText("You answered “Pick a sound”")).toHaveCount(0);
+    await expect(
+      page.getByText("You skipped “Pick again” and left it to the agent"),
+    ).toHaveCount(0);
     await screenshot(page, {
-      path: "test-results/screenshots/ask-html-answered.png",
+      path: join(tmpdir(), "relay-ask-html-answered.png"),
     });
   } finally {
     await app?.close();

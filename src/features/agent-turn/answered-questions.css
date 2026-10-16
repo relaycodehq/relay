@@ -7,6 +7,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: wrap;
   min-height: 24px;
   border-radius: 5px;
   cursor: pointer;
@@ -30,6 +31,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.answered-questions-heading > [role="status"] {
+  font-size: 11px;
+  white-space: normal;
 }
 .answered-questions-body {
   display: flex;

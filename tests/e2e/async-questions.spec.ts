@@ -46,6 +46,7 @@ test("async Codex questions allow explicit choices and free text during and afte
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
       RELAY_FIXTURE_STEER_DELAY: "3000",
+      RELAY_AGENT_TURN_MS: "1500",
     },
   });
   try {
@@ -136,7 +137,12 @@ test("async Codex questions allow explicit choices and free text during and afte
     await expect(
       answered.locator("summary").filter({ hasText: "Asked you 2 questions" }),
     ).toHaveCount(1);
-    await answered.locator("summary").click();
+    await expect(answered).toHaveAttribute("open", "");
+    await expect(
+      page
+        .locator(".project-message.user")
+        .getByText("Answer to your questions:", { exact: false }),
+    ).toHaveCount(0);
     await expect(answered).toContainText("Which visibility should I use?");
     await expect(answered.locator(".answered-question-answer")).toHaveText([
       "Private while preparing",
@@ -146,6 +152,9 @@ test("async Codex questions allow explicit choices and free text during and afte
       hasText: "Sent · awaiting Codex",
     });
     await expect(awaiting).toBeVisible();
+    await expect(answered.getByRole("status")).toHaveText(
+      "Sent · awaiting Codex",
+    );
     await expect(awaiting.locator(".spinner")).toHaveCount(0);
     await page.screenshot({
       path: join(root, "async-question-awaiting.png"),
@@ -169,6 +178,9 @@ test("async Codex questions allow explicit choices and free text during and afte
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
+    await expect(
+      page.getByText("Waiting for your answer", { exact: true }),
+    ).toBeVisible();
     // Reload once the turn ended: the question comes from saved messages.
     await page.reload();
     await expect(card).toBeVisible();
@@ -190,6 +202,20 @@ test("async Codex questions allow explicit choices and free text during and afte
       .getByRole("button", { name: "Send answer", exact: true })
       .click();
     await expect(card).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".project-message.assistant > header:not([hidden])"),
+    ).toHaveCount(2);
+    await expect(page.locator(".agent-run-heading")).toHaveCount(2);
+    await expect(
+      page.locator(".project-message[data-response-continuation]"),
+    ).toHaveCount(2);
+    await expect(answered.last()).toContainText("another-owner");
+    await page.screenshot({
+      path: join(tmpdir(), "relay-question-continuous-working.png"),
+    });
     await expect(
       answered.locator("summary").filter({ hasText: "Asked you 2 questions" }),
     ).toHaveCount(2);
@@ -226,10 +252,18 @@ test("async Codex questions allow explicit choices and free text during and afte
       }, theme);
       await page.reload();
       await expect(answered).toHaveCount(2);
-      await answered.last().locator("summary").click();
+      await expect(answered.last()).toHaveAttribute("open", "");
       await expect(
         answered.last().locator(".answered-question-answer"),
       ).toHaveText(["Internal preview", "another-owner"]);
+      await expect(
+        page
+          .locator(".project-message.user")
+          .getByText("Answer to your questions:", { exact: false }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("article", { name: "Your message", exact: true }),
+      ).toHaveCount(2);
       await page.screenshot({
         path: join(tmpdir(), `relay-async-answered-${theme}.png`),
       });

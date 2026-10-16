@@ -269,6 +269,16 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   );
   expect(waiting()).toBeFalsy();
   expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete");
+  const saved = await chats.get(chat.id);
+  const group = saved.messages.find((m) => m.id === message.id)!.questions![0];
+  expect(
+    saved.messages.find((m) => m.id === group.answerMessageId),
+  ).toMatchObject({
+    role: "user",
+    asyncQuestionAnswer: true,
+    questionMessageId: message.id,
+    body: expect.stringContaining("An unlisted choice"),
+  });
   const calls = (await agentCalls())
     .split("\n")
     .filter(Boolean)
@@ -278,6 +288,32 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect(turns[1].turn.input[0].text).toContain("An unlisted choice");
   expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
 });
+it("resumes after a question reply without carrying its hidden-response markers into the resume", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@codex wait for cancellation"),
+    asyncQuestionAnswer: true,
+    questionMessageId: "original-question",
+    pageAnswer: { title: "Pick a sound" },
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  await chats.resume(chat.id);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const resumed = (await chats.get(chat.id)).messages.find((m) => m.resumed)!;
+  expect(resumed).toBeDefined();
+  expect(resumed.asyncQuestionAnswer).toBeUndefined();
+  expect(resumed.questionMessageId).toBeUndefined();
+  expect(resumed.pageAnswer).toBeUndefined();
+});
+
 it("sends only messages the renderer doesn't hold at their current version", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
@@ -1179,7 +1215,9 @@ it("publishes no findings from a side question's answers", async () => {
   const answers = messages.filter((m) => m.role === "assistant" && m.parentId);
   for (const m of answers)
     expect(m.body).toMatch(/```relay-findings[\s\S]*```$/);
-  expect(messages.find((m) => m.id === side.id)?.sentSettings).toEqual(sentSettingsOf(side));
+  expect(messages.find((m) => m.id === side.id)?.sentSettings).toEqual(
+    sentSettingsOf(side),
+  );
   expect(lastComposerSettings(await chats.get(chat.id), side.id)).toEqual({
     ...sentSettingsOf(reply),
     id: reply.id,
@@ -1884,7 +1922,9 @@ it("runs a picked OpenCode skill through the thread's real prompt wrapper", asyn
       decision: "accept",
     });
     await vi.waitFor(async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
     );
     const calls = (await readFile(join(root, "opencode-capture.jsonl"), "utf8"))
       .trim()
@@ -1928,7 +1968,10 @@ it("lists Codex's enabled skills and sends a picked one as the `$name` Codex par
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
-  const turn = calls.find((c) => c.turn).turn.input as { type: string; text?: string }[];
+  const turn = calls.find((c) => c.turn).turn.input as {
+    type: string;
+    text?: string;
+  }[];
   expect(turn.map((i) => i.type)).not.toContain("skill");
   expect(turn.find((i) => i.type === "text")?.text).toContain(
     "Explain the cache using $explain",
@@ -1951,7 +1994,9 @@ it("steers an active Codex turn natively, and resumes its saved session with the
   await chats.send(chat.id, followup);
   expect((await chats.get(chat.id)).queue).toHaveLength(0);
   expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(followup.id);
-  expect((await chats.get(chat.id)).messages.at(-1)?.sentSettings).toEqual(sentSettingsOf(followup));
+  expect((await chats.get(chat.id)).messages.at(-1)?.sentSettings).toEqual(
+    sentSettingsOf(followup),
+  );
   await chats.cancel(chat.id);
   await vi.waitFor(async () =>
     expect(

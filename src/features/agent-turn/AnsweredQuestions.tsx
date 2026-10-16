@@ -6,15 +6,18 @@ import "./answered-questions.css";
 export function AnsweredQuestions({
   questions,
   label = `Asked you ${questions.length} ${questions.length === 1 ? "question" : "questions"}`,
+  status,
 }: {
   questions: AskedQuestion[];
   label?: string;
+  status?: string;
 }) {
   return (
-    <details className="answered-questions">
+    <details className="answered-questions" open>
       <summary className="answered-questions-heading">
         <MessageCircleQuestion size={14} aria-hidden />
         <span>{label}</span>
+        {status && <span role="status">{status}</span>}
       </summary>
       <div className="answered-questions-body">
         {questions.map((q, i) => (

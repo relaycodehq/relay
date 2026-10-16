@@ -30,6 +30,8 @@ export interface AsyncAgentQuestions {
   page?: HtmlRender;
   questions: AgentQuestion[];
   answers?: Record<string, string[]>;
+  /** The saved reply carrying these answers; its delivery status belongs here. */
+  answerMessageId?: string;
   /** Hidden by the user; can be reopened without answering or stopping the agent. */
   dismissed?: boolean;
 }
@@ -113,9 +115,11 @@ export interface ChatMessage {
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
-  /** Local: a reply to an async question sent into the running turn. */
+  /** Local: a question reply whose visible record stays with the original question. */
   asyncQuestionAnswer?: boolean;
-  /** Answers a page the agent asked with (ask_html): shown as a quiet line, its body is what the agent reads. */
+  /** The question's original assistant message, available before the follow-up starts streaming. */
+  questionMessageId?: string;
+  /** Answers a page the agent asked with (ask_html); its body is what the agent reads. */
   pageAnswer?: PageAnswer;
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;

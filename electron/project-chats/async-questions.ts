@@ -120,6 +120,7 @@ export class AsyncQuestions {
         );
       await this.core.active.finished(id);
       const active = this.core.active.get(id);
+      const answerMessageId = randomUUID();
       if (
         active?.steer &&
         !active.stopping &&
@@ -128,7 +129,7 @@ export class AsyncQuestions {
         (active.input.parentId ?? null) === (message.parentId ?? null)
       ) {
         const sent: ChatMessage = {
-          id: randomUUID(),
+          id: answerMessageId,
           role: "user",
           provider: message.provider,
           body,
@@ -137,6 +138,7 @@ export class AsyncQuestions {
           version: 1,
           steered: true,
           asyncQuestionAnswer: true,
+          questionMessageId: message.id,
           unread: true,
           ...(message.parentId ? { parentId: message.parentId } : {}),
           ...(pageAnswer ? { pageAnswer } : {}),
@@ -160,11 +162,15 @@ export class AsyncQuestions {
             this.core.store,
             message.parentId ?? undefined,
           ),
+          id: answerMessageId,
           body,
+          asyncQuestionAnswer: true,
+          questionMessageId: message.id,
           ...(pageAnswer ? { pageAnswer } : {}),
         });
       }
       group.answers = answers;
+      group.answerMessageId = answerMessageId;
       delete group.dismissed;
       message.version++;
       this.core.emit({ chatId: id, message: structuredClone(message) });

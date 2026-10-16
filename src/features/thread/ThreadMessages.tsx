@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { awayDuring, unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
@@ -34,6 +34,7 @@ import { landedNote, renamedNote } from "./WorktreeControls";
 import { MessageNotes, type MessageNote } from "./MessageNotes";
 import { terminalOriginNote } from "../continue-session/TerminalOrigin";
 import { agentError } from "../../../shared/agent-error";
+import { questionResponses } from "./question-responses";
 import {
   shownWorkspaceMoves,
   workspaceMoveLine,
@@ -154,11 +155,23 @@ export function ThreadMessages({
       ? listed.find((m) => m.role === "user" && !m.parentId)?.id
       : undefined;
   const arrival = useArrival(chat?.id);
+  const answerMessages = useMemo(
+    () =>
+      new Map(messages.filter((m) => m.role === "user").map((m) => [m.id, m])),
+    [messages],
+  );
   const unread = useMemo(
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
     [arrival, root, listed],
   );
   const onScreen = listed.slice(-visible);
+  const responses = useMemo(
+    () => questionResponses(onScreen),
+    [listed, visible],
+  );
+  const [expandedResponses, setExpandedResponses] = useState<
+    Record<string, boolean>
+  >({});
   const moves = shownWorkspaceMoves(chat?.workspaceMoves);
   const landed = worktree.status && landedNote(worktree.status);
   /** What happened under `m`, said on one line. */
@@ -250,100 +263,126 @@ export function ThreadMessages({
             Earlier messages
           </button>
         )}
-        {onScreen.flatMap((m) => [
-          m.id === unread?.id && !markOn && (
-            <UnreadDivider key="unread-divider" {...unreadProps!} />
-          ),
-          m.side ? (
-            <SideQuestion
-              key={m.id}
-              message={m}
-              thread={root ? undefined : sideThreads.get(m.id)}
-              onOpen={() => openReply(m)}
-            />
-          ) : review && m.id === review.request ? (
-            <Fragment key={m.id}>
-              <DeepReviewRequest message={m} state={review} />
-              <DeepReviewCouncil
-                state={review}
-                kept={reports[0]?.findings.length}
-                hasLead={leadAnswered}
-                leadHalted={leadStoppedLast(messages, review.leadStopped)}
-                busy={busy}
-                projectRoot={projectPath}
-                onOpenFile={openFile}
-                onResume={resumeReview}
-                onStop={stopReview}
-                onStopMember={stopReviewer}
-                onResumeMember={rerunReviewer}
-                onLead={leadWithReports}
+        {onScreen.flatMap((m) => {
+          const response = responses.get(m.id);
+          const first = response?.parts[0];
+          const continuation = !!first && first.id !== m.id;
+          return [
+            m.id === unread?.id && !markOn && (
+              <UnreadDivider key="unread-divider" {...unreadProps!} />
+            ),
+            m.side ? (
+              <SideQuestion
+                key={m.id}
+                message={m}
+                thread={root ? undefined : sideThreads.get(m.id)}
+                onOpen={() => openReply(m)}
               />
-            </Fragment>
-          ) : (
-            <Message
-              key={m.id}
-              message={m}
-              chatId={chat?.id ?? ""}
-              onReply={openReply}
-              onFork={
-                chat?.scope.kind === "review" || root?.side
-                  ? undefined
-                  : forkThread
-              }
-              onChanges={openChanges}
-              onTurnDiff={openTurnDiff}
-              onRewind={rewindTurn}
-              projectRoot={worktree.folder}
-              onOpenFile={openFile}
-              replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
-              onSignIn={
-                m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
-              }
-              onSteer={root?.side ? undefined : onSteer}
-              onCompose={onCompose}
-              unread={
-                m.id === markOn ? <UnreadMark {...unreadProps!} /> : undefined
-              }
-              onRerunSetup={
-                // Setup changes files the running answer may be using.
-                chat && !busy && !running && m.id === setupId
-                  ? () => api.rerunWorktreeSetup(chat.id, m.id)
-                  : undefined
-              }
-              {...(chat && m.provider && reportUnder(m.id)
-                ? {
-                    inlineCode: findingsCode,
-                    after: (
-                      <FindingsTray
-                        chatId={chat.id}
-                        report={reportUnder(m.id)!}
-                        statuses={findings?.statuses}
-                        reviewers={review?.reviewers}
-                        lead={review?.lead}
-                        // A fix asked for while the agent works would wait in the
-                        // queue, its findings still open to ask for again.
-                        busy={busy || running}
-                        onFix={(picked) =>
-                          void fixFindings(picked, m.provider!)
-                        }
-                        onStatus={setFindingStatus}
-                        onOpenFile={openFile}
-                      />
-                    ),
+            ) : review && m.id === review.request ? (
+              <Fragment key={m.id}>
+                <DeepReviewRequest message={m} state={review} />
+                <DeepReviewCouncil
+                  state={review}
+                  kept={reports[0]?.findings.length}
+                  hasLead={leadAnswered}
+                  leadHalted={leadStoppedLast(messages, review.leadStopped)}
+                  busy={busy}
+                  projectRoot={projectPath}
+                  onOpenFile={openFile}
+                  onResume={resumeReview}
+                  onStop={stopReview}
+                  onStopMember={stopReviewer}
+                  onResumeMember={rerunReviewer}
+                  onLead={leadWithReports}
+                />
+              </Fragment>
+            ) : (
+              <Message
+                key={m.id}
+                message={m}
+                continuation={continuation}
+                continues={!!response && response.parts.at(-1)!.id !== m.id}
+                activity={
+                  response && {
+                    summary: continuation ? undefined : response.summary,
+                    elapsed: response.elapsed,
+                    waiting: response.waiting,
+                    expanded:
+                      expandedResponses[first!.id] ??
+                      (response.waiting ||
+                        response.summary.status === "streaming"),
+                    onToggle: (expanded) =>
+                      setExpandedResponses((previous) => ({
+                        ...previous,
+                        [first!.id]: expanded,
+                      })),
                   }
-                : {})}
-            />
-          ),
-          <MessageNotes
-            key={`notes-${m.id}`}
-            notes={notesUnder(m)}
-            unread={
-              markOn === `notes-${m.id}` ? (
-                <UnreadMark {...unreadProps!} />
-              ) : undefined
-            }
-          />,
-        ])}
+                }
+                chatId={chat?.id ?? ""}
+                answerMessages={
+                  m.questions?.length ? answerMessages : undefined
+                }
+                onReply={openReply}
+                onFork={
+                  chat?.scope.kind === "review" || root?.side
+                    ? undefined
+                    : forkThread
+                }
+                onChanges={openChanges}
+                onTurnDiff={openTurnDiff}
+                onRewind={rewindTurn}
+                projectRoot={worktree.folder}
+                onOpenFile={openFile}
+                replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
+                onSignIn={
+                  m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
+                }
+                onSteer={root?.side ? undefined : onSteer}
+                onCompose={onCompose}
+                unread={
+                  m.id === markOn ? <UnreadMark {...unreadProps!} /> : undefined
+                }
+                onRerunSetup={
+                  // Setup changes files the running answer may be using.
+                  chat && !busy && !running && m.id === setupId
+                    ? () => api.rerunWorktreeSetup(chat.id, m.id)
+                    : undefined
+                }
+                {...(chat && m.provider && reportUnder(m.id)
+                  ? {
+                      inlineCode: findingsCode,
+                      after: (
+                        <FindingsTray
+                          chatId={chat.id}
+                          report={reportUnder(m.id)!}
+                          statuses={findings?.statuses}
+                          reviewers={review?.reviewers}
+                          lead={review?.lead}
+                          // A fix asked for while the agent works would wait in the
+                          // queue, its findings still open to ask for again.
+                          busy={busy || running}
+                          onFix={(picked) =>
+                            void fixFindings(picked, m.provider!)
+                          }
+                          onStatus={setFindingStatus}
+                          onOpenFile={openFile}
+                        />
+                      ),
+                    }
+                  : {})}
+              />
+            ),
+            <MessageNotes
+              key={`notes-${m.id}`}
+              notes={notesUnder(m)}
+              unread={
+                markOn === `notes-${m.id}` ? (
+                  <UnreadMark {...unreadProps!} />
+                ) : undefined
+              }
+            />,
+          ];
+        })}
         {!running &&
           resumable(listed, history.data?.lastInput, root?.id ?? null) && (
             <button

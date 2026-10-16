@@ -66,6 +66,7 @@ function thread(messages: ChatMessage[]) {
     root: undefined,
     shown: messages,
     listed: messages,
+    messages,
     running: messages.some((m) => m.status === "streaming"),
     replyCounts: new Map(),
     sideThreads: new Map(),
@@ -133,6 +134,98 @@ afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   document.body.innerHTML = "";
+  vi.restoreAllMocks();
+});
+
+it("keeps one header, timer and fold through a saved question and its follow-up", () => {
+  vi.spyOn(Date, "now").mockReturnValue(106000);
+  const asking = message("asking", "assistant", "", {
+    created: 1000,
+    ended: 48000,
+    activity: [
+      {
+        id: "web",
+        kind: "web",
+        label: "Find documentation",
+        status: "complete",
+      },
+    ],
+    questions: [
+      { id: "q", questions: [{ id: "pick", question: "Which?", options: [] }] },
+    ],
+  });
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => root!.render(view([asking])));
+  expect(host.querySelector(".agent-run-heading")?.textContent).toContain(
+    "Waiting for your answer",
+  );
+  expect(host.querySelector(".agent-run-time")?.textContent).toBe("47s");
+  const header = host.querySelector(".project-message.assistant > header");
+  const answered = {
+    ...asking,
+    questions: [
+      {
+        ...asking.questions![0]!,
+        answers: { pick: ["Private"] },
+        answerMessageId: "reply",
+      },
+    ],
+  };
+  const reply = message("reply", "user", "Answer to your questions", {
+    asyncQuestionAnswer: true,
+  });
+  const working = message("working", "assistant", "", {
+    created: 90000,
+    status: "streaming",
+  });
+  act(() => root!.render(view([answered, reply, working])));
+  expect(
+    host.querySelectorAll(".project-message.assistant > header:not([hidden])"),
+  ).toHaveLength(1);
+  expect(host.querySelector(".project-message.assistant > header")).toBe(
+    header,
+  );
+  expect(host.querySelectorAll(".agent-run-heading")).toHaveLength(1);
+  expect(host.querySelector(".agent-run-heading")?.textContent).toContain(
+    "Working for",
+  );
+  expect(host.querySelector(".agent-run-time")?.textContent).toBe("1m 3s");
+  expect(host.querySelectorAll(".thinking-glyph")).toHaveLength(1);
+  expect(host.textContent).toContain("Private");
+  expect(
+    host
+      .querySelector('[data-message-id="working"]')
+      ?.getAttribute("data-response-continuation"),
+  ).toBe("true");
+  act(() =>
+    root!.render(
+      view([
+        answered,
+        reply,
+        {
+          ...working,
+          body: "Done",
+          status: "complete",
+          ended: 110000,
+        },
+      ]),
+    ),
+  );
+  expect(host.querySelectorAll(".agent-run-heading")).toHaveLength(1);
+  expect(host.querySelector(".agent-run-time")?.textContent).toBe("1m 7s");
+  expect(host.querySelectorAll(".agent-trace")).toHaveLength(0);
+  expect(host.textContent).toContain("Done");
+  expect(host.textContent).toContain("Private");
+  const fold = host.querySelector<HTMLDetailsElement>(
+    "details.agent-activity",
+  )!;
+  act(() => {
+    fold.open = true;
+    fold.dispatchEvent(new Event("toggle"));
+  });
+  expect(host.textContent).toContain("Find documentation");
 });
 
 it("keeps every message and the lines under them as the thread grows, each row its own", () => {

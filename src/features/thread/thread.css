@@ -31,6 +31,16 @@
   font-size: 11px;
   margin-bottom: 10px;
 }
+.project-message > header[hidden] {
+  display: none;
+}
+/* Backend turns linked by a question read as one uninterrupted response. */
+.project-message[data-response-continues] {
+  padding-bottom: 0;
+}
+.project-message[data-response-continuation] {
+  padding-top: 0;
+}
 .project-message time {
   font-size: 10px;
   color: var(--muted);

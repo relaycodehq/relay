@@ -172,14 +172,17 @@ it("rolls back a refused steer and leaves the question answerable on retry", asy
   ).rejects.toThrow("Turn ended");
   expect(f.chat.messages).toEqual([f.message]);
   expect(f.message.questions![0].answers).toBeUndefined();
+  expect(f.message.questions![0].answerMessageId).toBeUndefined();
   await f.questions.answer("chat", "message", "item", answer);
   expect(f.chat.messages).toHaveLength(2);
   expect(f.chat.messages[1]).toMatchObject({
     asyncQuestionAnswer: true,
+    questionMessageId: "message",
     unread: true,
     status: "complete",
   });
   expect(f.message.questions![0].answers).toEqual(answer.answers);
+  expect(f.message.questions![0].answerMessageId).toBe(f.chat.messages[1].id);
 });
 
 it("serializes simultaneous replies so the question is answered once", async () => {
@@ -207,9 +210,14 @@ it("doesn't inject an answer into another agent or conversation, and preserves t
         provider: "codex",
         to: "codex",
         runtimeMode: "approval-required",
+        asyncQuestionAnswer: true,
+        questionMessageId: "message",
       }),
     );
     expect(f.send.mock.calls[0][1].delivery).toBeUndefined();
+    expect(f.message.questions![0].answerMessageId).toBe(
+      f.send.mock.calls[0][1].id,
+    );
   }
 });
 

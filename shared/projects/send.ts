@@ -62,6 +62,9 @@ export const projectChatSendSchema = z
       })
       .strict()
       .optional(),
+    /** The response is displayed under the original question instead of as a message. */
+    asyncQuestionAnswer: z.literal(true).optional(),
+    questionMessageId: z.string().min(1).optional(),
     /** Skills picked as pills in the composer, shown as pills again once sent. */
     skills: z
       .array(
@@ -112,13 +115,24 @@ export function sentSettingsOf(
   };
 }
 
-/** Who a message says it's from, when another thread's agent sent it, what page it answers, and its skill pills. */
+/** A message's sending thread, question/page response markers, and skill pills. */
 export const sentBy = (
-  input: Pick<ProjectChatSend, "fromThread" | "pageAnswer" | "skills">,
+  input: Pick<
+    ProjectChatSend,
+    | "fromThread"
+    | "pageAnswer"
+    | "asyncQuestionAnswer"
+    | "questionMessageId"
+    | "skills"
+  >,
 ) => ({
   ...(input.skills?.length ? { skills: input.skills } : {}),
   ...(input.fromThread
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
+  ...(input.asyncQuestionAnswer ? { asyncQuestionAnswer: true } : {}),
+  ...(input.questionMessageId
+    ? { questionMessageId: input.questionMessageId }
+    : {}),
 });
