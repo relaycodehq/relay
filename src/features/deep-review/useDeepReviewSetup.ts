@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { DeepReviewStart } from "../../../shared/deep-review";
-import type { PullRef } from "../../../shared/types";
+import type { PullRef, Repo } from "../../../shared/types";
 import { api } from "../../lib/api";
-import { threadDraftKey, threadStorage } from "../../lib/thread-storage";
+import { threadStorage } from "../../lib/thread-storage";
 import { loadComposerSettings } from "../agents/composer-settings";
-import { forgetNewThread, useDraft, writeDraft } from "../composer/drafts";
+import {
+  clearDraftScope,
+  forgetNewThread,
+  hasDraft,
+  updateReviewDraft,
+  useDraftRecord,
+} from "../composer/drafts";
 import {
   firstSetup,
   focusKey,
@@ -24,63 +30,74 @@ import {
 import { useClaudeModels } from "../agents/useClaudeModels";
 
 /**
- * The setup as you edit it, kept with the unsent thread and as where the
- * project's next review starts, and the focus note, kept as its text.
+ * The setup as you edit it and its focus note, kept with the unsent thread
+ * once you change either; an edited setup is also where the project's next
+ * review starts.
  */
 function useSetupDraft(projectId: string, draftId: string) {
   const claudeModels = useClaudeModels().models;
-  const [kept] = useState(() => threadStorage(draftId).review.load().setup);
   const [setup, setSetup] = useState<Setup>(
-    () => kept ?? firstSetup(projectId),
+    () => threadStorage(draftId).review.load().setup ?? firstSetup(projectId),
   );
-  const [touched, setTouched] = useState(
-    () => !!kept || !!savedSetup(projectId) || !!latestReviewSetup(),
+  // An untouched setup is only a default: not kept, and still free to take Opus.
+  const [edited, setEdited] = useState(false);
+  const [touched] = useState(
+    () => !!savedSetup(projectId) || !!latestReviewSetup(),
   );
-  const draftKey = threadDraftKey(draftId);
-  const focus = useDraft(draftKey);
-  const setFocus = (text: string) => writeDraft(draftKey, text);
-  // Notes were once kept per project.
+  const focus = useDraftRecord(draftId, (d) => d.review?.focus ?? "");
+  const setFocus = (text: string) =>
+    updateReviewDraft(draftId, { focus: text || undefined });
+  // Notes were once kept per project; the first review with none takes it.
   useEffect(() => {
     const old = localStorage.getItem(focusKey(projectId));
-    if (old === null) return;
-    if (!focus.trim()) writeDraft(draftKey, old);
+    if (old === null || threadStorage(draftId).review.load().focus) return;
+    updateReviewDraft(draftId, { focus: old || undefined });
     localStorage.removeItem(focusKey(projectId));
-  }, [projectId]);
+  }, [projectId, draftId]);
   const update = (patch: Partial<Setup>) => {
-    setTouched(true);
+    setEdited(true);
     setSetup((s) => ({ ...s, ...patch }));
   };
   useEffect(() => {
-    threadStorage(draftId).review.update({ setup });
-  }, [draftId, setup]);
-  useEffect(() => {
-    if (touched)
-      localStorage.setItem(setupKey(projectId), JSON.stringify(setup));
-  }, [projectId, setup, touched]);
+    if (!edited) return;
+    updateReviewDraft(draftId, { setup });
+    localStorage.setItem(setupKey(projectId), JSON.stringify(setup));
+  }, [projectId, draftId, setup, edited]);
   // Until someone picks otherwise, Claude reviews and leads with Opus.
   useEffect(() => {
     const opus = claudeModels?.find((m) => /opus/i.test(`${m.id} ${m.name}`));
-    if (touched || !opus) return;
+    if (touched || edited || !opus) return;
     setSetup((s) => withOpus(s, opus.id));
-  }, [claudeModels, touched]);
+  }, [claudeModels, touched, edited]);
   return { setup, update, focus, setFocus };
 }
 
 export type TargetPick = ReturnType<typeof useTargetPick>;
 
+const sameRepo = (a: Repo, b: Repo | null | undefined) =>
+  !!b &&
+  a.owner === b.owner &&
+  a.name === b.name &&
+  (!a.server || !b.server || a.server === b.server);
+
 /**
  * What the setup's kind of target points at: the branch and its base, the
- * pull request or the commit. Kept with the unsent thread until it starts.
+ * pull request or the commit. What you pick is kept with the unsent thread
+ * until it starts; what you leave follows the checkout.
  */
 function useTargetPick(
   projectId: string,
   draftId: string,
   setup: Setup,
+  repository: Repo | null | undefined,
   branch: string | undefined,
   changes: number,
 ) {
   const [saved] = useState(() => threadStorage(draftId).review.load());
-  const [pull, setPull] = useState<PullRef | null>(saved.pull ?? null);
+  // A pull request kept from a repository the project no longer points at is gone.
+  const [pull, setPull] = useState<PullRef | null>(() =>
+    saved.pull && sameRepo(saved.pull, repository) ? saved.pull : null,
+  );
   const [commit, setCommit] = useState(saved.commit ?? "");
   const branches = useQuery({
     queryKey: ["project-branches", projectId],
@@ -101,22 +118,18 @@ function useTargetPick(
   // Once it starts, neither branch is kept: the next review starts from the checkout into the repository's base.
   const [chosenHead, setHead] = useState(saved.head ?? "");
   const [chosenBase, setBase] = useState(saved.base ?? "");
-  useEffect(() => {
-    if (pull || commit || chosenHead || chosenBase)
-      threadStorage(draftId).review.update({
-        head: chosenHead || undefined,
-        base: chosenBase || undefined,
-        commit: commit || undefined,
-        pull: pull ?? undefined,
-      });
-  }, [draftId, pull, commit, chosenHead, chosenBase]);
+  const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
+    updateReviewDraft(draftId, change);
   const { heads, head, bases, base } = reviewBranches(
     { head: chosenHead, base: chosenBase },
     branches.data?.branches ?? [],
     branches.data?.bases ?? [],
     branch,
   );
-  const chosenCommit = commit || commits.data?.[0]?.sha;
+  // A kept commit that is no longer among the recent ones gives way to the newest.
+  const chosenCommit = commits.data?.some((c) => c.sha === commit)
+    ? commit
+    : commits.data?.[0]?.sha;
   const target = reviewTarget(setup.kind, {
     changes,
     head,
@@ -128,19 +141,31 @@ function useTargetPick(
     target,
     heads,
     head,
-    setHead,
+    setHead: (name: string) => {
+      setHead(name);
+      keep({ head: name || undefined });
+    },
     bases,
     base,
-    setBase,
+    setBase: (name: string) => {
+      setBase(name);
+      keep({ base: name || undefined });
+    },
     branchList: branches.data,
     branchCounts: counts.data,
     branchesPending: branches.isPending,
     pull,
-    setPull,
+    setPull: (ref: PullRef | null) => {
+      setPull(ref);
+      keep({ pull: ref ?? undefined });
+    },
     commits: commits.data ?? [],
     commitsPending: commits.isPending,
     commit: chosenCommit,
-    setCommit,
+    setCommit: (sha: string) => {
+      setCommit(sha);
+      keep({ commit: sha || undefined });
+    },
   };
 }
 
@@ -148,6 +173,7 @@ function useTargetPick(
 export function useDeepReviewSetup({
   projectId,
   draftId,
+  repository,
   branch,
   changes,
   busy,
@@ -155,13 +181,21 @@ export function useDeepReviewSetup({
 }: {
   projectId: string;
   draftId: string;
+  repository?: Repo | null;
   branch?: string;
   changes: number;
   busy: boolean;
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const { setup, update, focus, setFocus } = useSetupDraft(projectId, draftId);
-  const pick = useTargetPick(projectId, draftId, setup, branch, changes);
+  const pick = useTargetPick(
+    projectId,
+    draftId,
+    setup,
+    repository,
+    branch,
+    changes,
+  );
   const choice: ReviewSetupChoice = {
     reviewers: setup.reviewers,
     lead: setup.lead,
@@ -182,9 +216,10 @@ export function useDeepReviewSetup({
     });
     if (!started) return;
     recordReviewSetup(choice, focus.trim());
-    // Like a sent message, the note and what it pointed at go with this review only.
-    writeDraft(threadDraftKey(draftId), "");
-    forgetNewThread(draftId);
+    // The setup, its note and what it pointed at go with this review; a
+    // message written before it was one stays a draft of its own.
+    clearDraftScope(draftId);
+    if (!hasDraft(draftId)) forgetNewThread(draftId);
   }
   return { setup, update, focus, setFocus, pick, choice, start };
 }

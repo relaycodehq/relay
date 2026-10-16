@@ -180,3 +180,18 @@ it("a draft opens on its own setup, not the project's last", () => {
   );
   expect(html).toContain('type="checkbox" checked=""');
 });
+
+it("keeps its focus note apart from the message the composer had", () => {
+  store.set(
+    "relay-draft:new:p1",
+    JSON.stringify({
+      v: 1,
+      main: { text: "fix the login bug" },
+      scope: { kind: "review" },
+      review: { focus: "the queue" },
+    }),
+  );
+  const html = setup();
+  expect(html).toContain(">the queue</textarea>");
+  expect(html).not.toContain("fix the login bug");
+});

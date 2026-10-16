@@ -9,6 +9,7 @@ import {
   reviewDraftIn,
   saveDraftScope,
   setCurrentNewThread,
+  updateReviewDraft,
   useDraftKeys,
   writeDraft,
 } from "./drafts";
@@ -99,7 +100,10 @@ it("clears what abandoned empty slots left behind", () => {
 it("keeps a deep review set up without text as a draft, and lets it go once it isn't one", () => {
   const review = newThreadId("p1");
   saveDraftScope(review, { kind: "review" });
-  threadStorage(review).review.update({ head: "feature", base: "main" });
+  // Only opened, it's no draft yet.
+  expect(freshNewThread("p1")).toBe(review);
+  expect(useDraftKeys()).toEqual([]);
+  updateReviewDraft(review, { head: "feature", base: "main" });
   expect(freshNewThread("p1")).not.toBe(review);
   expect(reviewDraftIn("p1")).toBe(review);
   const project = { id: "p1", name: "Relay" } as Project;
@@ -112,6 +116,26 @@ it("keeps a deep review set up without text as a draft, and lets it go once it i
   expect(threadStorage(review).review.load()).toEqual({});
   expect(freshNewThread("p1")).toBe(review);
   expect(reviewDraftIn("p1")).toBeUndefined();
+});
+
+it("opens the project's most recently changed review draft again", () => {
+  const now = vi.spyOn(Date, "now");
+  const slot = newThreadId("p1", "a");
+  const base = newThreadId("p1");
+  for (const [id, at] of [
+    [slot, 1],
+    [base, 2],
+  ] as const) {
+    now.mockReturnValue(at);
+    saveDraftScope(id, { kind: "review" });
+    updateReviewDraft(id, { focus: "queue" });
+  }
+  setCurrentNewThread("p1", newThreadId("p1", "b"));
+  expect(reviewDraftIn("p1")).toBe(base);
+  now.mockReturnValue(3);
+  updateReviewDraft(slot, { focus: "panel" });
+  expect(reviewDraftIn("p1")).toBe(slot);
+  now.mockRestore();
 });
 
 it("ignores a saved new thread from another project", () => {

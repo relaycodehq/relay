@@ -43,14 +43,22 @@ export interface DraftBody {
   files: string[];
 }
 
-/** An unsent deep review's setup, and what it was pointed at. */
+/** An unsent deep review's setup, what it was pointed at and its focus note. */
 export interface ReviewDraft {
   setup?: ReviewDraftSetup;
+  focus?: string;
   head?: string;
   base?: string;
   commit?: string;
   pull?: PullRef;
+  /** When it was last changed, so the newest of a project's unsent reviews opens again. */
+  at?: number;
 }
+
+/** Whether anything was set up; `at` alone isn't. */
+export const isReviewDraftSet = (review: ReviewDraft | undefined) =>
+  !!review &&
+  Object.entries(review).some(([part, value]) => part !== "at" && !!value);
 
 export interface ThreadDraft {
   /** The thread's main composer. */
@@ -155,12 +163,14 @@ function readReview(value: unknown): ReviewDraft | undefined {
   if (!isRecord(value)) return;
   const review: ReviewDraft = {
     setup: reviewDraftSetupSchema.safeParse(value.setup).data,
+    focus: readRoot(value.focus),
     head: readRoot(value.head),
     base: readRoot(value.base),
     commit: readRoot(value.commit),
     pull: refSchema.safeParse(value.pull).data,
+    at: typeof value.at === "number" ? value.at : undefined,
   };
-  return Object.values(review).some(Boolean) ? review : undefined;
+  return isReviewDraftSet(review) ? review : undefined;
 }
 
 function readBody(value: unknown): DraftBody {

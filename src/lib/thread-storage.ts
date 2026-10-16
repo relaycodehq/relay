@@ -24,6 +24,7 @@ import {
   bodyOf,
   draftKeyOf,
   emptyThreadDraft,
+  isReviewDraftSet,
   isThreadDraftEmpty,
   mergeLegacy,
   parseLegacyKey,
@@ -226,18 +227,25 @@ export function moveDraftBody(from: string, to: string) {
   );
 }
 
-/** The draft keys of every composer with text. */
-export function draftKeysWithText(): string[] {
+/**
+ * The draft keys of every composer with text, and the main key of each
+ * thread whose record `counts` without any, in one pass over storage.
+ */
+export function draftKeysWithText(
+  counts?: (thread: string, draft: ThreadDraft) => boolean,
+): string[] {
   migrateDrafts();
   const keys: string[] = [];
-  for (const [thread, { draft }] of unwritten)
+  const add = (thread: string, draft: ThreadDraft) => {
     keys.push(...textKeys(thread, draft));
+    if (counts?.(thread, draft)) keys.push(draftKeyOf(thread));
+  };
+  for (const [thread, { draft }] of unwritten) add(thread, draft);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key?.startsWith(RECORD_PREFIX)) continue;
     const thread = key.slice(RECORD_PREFIX.length);
-    if (!unwritten.has(thread))
-      keys.push(...textKeys(thread, readRecord(thread)));
+    if (!unwritten.has(thread)) add(thread, readRecord(thread));
   }
   return keys;
 }
@@ -295,15 +303,13 @@ export function threadStorage(id: string) {
       load: (): string => read().branch ?? "",
       save: (branch: string) => edit({ branch: branch || undefined }),
     },
-    /** An unsent deep review's setup, and what it was pointed at. */
+    /** An unsent deep review's setup, what it was pointed at and its focus note. */
     review: {
       load: (): ReviewDraft => ({ ...read().review }),
       /** Changes the parts given; one given as undefined goes. */
       update: (change: Partial<ReviewDraft>) => {
-        const review = { ...read().review, ...change };
-        edit({
-          review: Object.values(review).some(Boolean) ? review : undefined,
-        });
+        const review = { ...read().review, ...change, at: Date.now() };
+        edit({ review: isReviewDraftSet(review) ? review : undefined });
       },
       clear: () => edit({ review: undefined }),
     },

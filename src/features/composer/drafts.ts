@@ -10,6 +10,7 @@ import {
   composerSettingsKey,
   currentNewThreadKey,
   draftKeysWithText,
+  loadThreadDraft,
   moveDraftBody,
   readDraftText,
   removeThreadDraft,
@@ -24,6 +25,8 @@ import {
   RECORD_PREFIX,
   splitDraftKey,
   type DraftBody,
+  type ReviewDraft,
+  type ThreadDraft,
 } from "../../lib/thread-draft";
 import {
   draftImageCount,
@@ -49,6 +52,12 @@ function reindex() {
 function changed(key: string, hadText: boolean, hasNow: boolean) {
   listeners.get(key)?.forEach((notify) => notify());
   if (hadText !== hasNow) reindex();
+}
+
+/** Something besides a new thread's text changed; it may have become a draft, or stopped being one. */
+function changedRecord(id: string, wasDraft: boolean) {
+  listeners.get(threadDraftKey(id))?.forEach((notify) => notify());
+  if (wasDraft !== isReviewDraft(id)) reindex();
 }
 
 // A screenshot makes a draft as text does.
@@ -159,6 +168,19 @@ function useKeySubscription(key: string) {
   );
 }
 
+/** Part of a thread's draft record, as it changes here or in another window. */
+export function useDraftRecord<T extends string | number | boolean | undefined>(
+  id: string,
+  select: (draft: ThreadDraft) => T,
+): T {
+  const read = () => select(loadThreadDraft(id));
+  return useSyncExternalStore(
+    useKeySubscription(threadDraftKey(id)),
+    read,
+    read,
+  );
+}
+
 export function useDraft(key: string): string {
   const read = () => readDraft(key);
   return useSyncExternalStore(useKeySubscription(key), read, read);
@@ -174,10 +196,7 @@ export function useDraftImageCount(key: string): number {
 function readIndex(): string[] {
   let keys: string[];
   try {
-    keys = [
-      ...draftKeysWithText(),
-      ...threadRecordIds().filter(isReviewDraft).map((id) => threadDraftKey(id)),
-    ];
+    keys = draftKeysWithText(reviewSetUp);
   } catch {
     // Storage is a convenience here.
     keys = [];
@@ -226,9 +245,13 @@ export function newThreadProject(id: string): string | undefined {
   return match?.[1];
 }
 const isSlot = (id: string) => id.split(":").length === 3;
-/** An unsent thread set up as a deep review, which is a draft before it has any text. */
-const isReviewDraft = (id: string) =>
-  !!newThreadProject(id) && loadDraftScope(id).kind === "review";
+/**
+ * An unsent thread with a deep review set up in it, which is a draft before
+ * it has any text. Only opening the setup doesn't make one.
+ */
+const reviewSetUp = (id: string, draft: ThreadDraft) =>
+  !!newThreadProject(id) && draft.scope?.kind === "review" && !!draft.review;
+const isReviewDraft = (id: string) => reviewSetUp(id, loadThreadDraft(id));
 export const hasDraft = (id: string) =>
   !!readDraft(threadDraftKey(id)).trim() ||
   !!draftImageCount(threadDraftKey(id)) ||
@@ -239,10 +262,18 @@ export const hasDraft = (id: string) =>
 export function reviewDraftIn(projectId: string): string | undefined {
   const current = currentNewThread(projectId);
   if (isReviewDraft(current)) return current;
+  const at = (id: string) => loadThreadDraft(id).review?.at ?? 0;
   return threadRecordIds()
     .filter((id) => newThreadProject(id) === projectId && isReviewDraft(id))
-    .sort()
+    .sort((a, b) => at(a) - at(b))
     .at(-1);
+}
+
+/** Changes an unsent deep review's setup, target or note. */
+export function updateReviewDraft(id: string, change: Partial<ReviewDraft>) {
+  const was = isReviewDraft(id);
+  threadStorage(id).review.update(change);
+  changedRecord(id, was);
 }
 
 /** The new thread a project last showed. */
@@ -265,7 +296,7 @@ export function saveDraftScope(id: string, scope: ChatScope) {
   const was = isReviewDraft(id);
   threadStorage(id).scope.save(scope);
   if (scope.kind !== "review") threadStorage(id).review.clear();
-  if (was !== isReviewDraft(id)) reindex();
+  changedRecord(id, was);
 }
 /** Drops the scope and the workspace picked for it. */
 export function clearDraftScope(id: string) {
@@ -273,7 +304,7 @@ export function clearDraftScope(id: string) {
   threadStorage(id).scope.clear();
   threadStorage(id).review.clear();
   clearDraftWorkspace(id);
-  if (was) reindex();
+  changedRecord(id, was);
 }
 
 /** Where a project's new threads start unless one picks otherwise. */

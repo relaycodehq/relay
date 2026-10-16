@@ -44,6 +44,7 @@ export function DeepReviewSetup({
     useDeepReviewSetup({
       projectId: project.id,
       draftId,
+      repository: project.repository,
       branch,
       changes,
       busy,

@@ -1,8 +1,8 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ScanSearch, Smartphone, SquarePen } from "lucide-react";
 import {
-  loadDraftScope,
+  useDraftRecord,
   useDraft,
   useDraftImageCount,
   type ActivityDraft,
@@ -19,7 +19,6 @@ import { useAISettings } from "../agents/useAISettings";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
-import { onThreadRecord, threadStorage } from "../../lib/thread-storage";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
@@ -37,7 +36,7 @@ export function DraftCard({
 }) {
   const send = useDraftSend(draft, selected, onOpen, onSendOpen);
   const { project } = draft;
-  const review = loadDraftScope(draft.id).kind === "review";
+  const review = useIsReview(draft.id);
   const open = () => {
     if (!selected) onOpen();
   };
@@ -71,7 +70,7 @@ export function DraftCard({
       </div>
       <div className="sb-card-meta">
         {review ? (
-          <ReviewLine id={draft.id} draftKey={draft.key} />
+          <ReviewLine id={draft.id} />
         ) : (
           <>
             <DraftLine draftKey={draft.key} />
@@ -110,10 +109,20 @@ export function DraftLine({ draftKey }: { draftKey: string }) {
   );
 }
 
+/** Whether an unsent thread is a deep review rather than a message. */
+const useIsReview = (id: string) =>
+  useDraftRecord(id, (d) => d.scope?.kind === "review");
+
 /** An unsent deep review: its focus note, else how many review it, and their agents. */
-function ReviewLine({ id, draftKey }: { id: string; draftKey: string }) {
-  const focus = useDraft(draftKey).replace(/\s+/g, " ").trim();
-  const reviewers = useReviewers(id);
+function ReviewLine({ id }: { id: string }) {
+  const focus = useDraftRecord(id, (d) => d.review?.focus ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  // A string, so an unchanged setup reads as the same snapshot.
+  const joined = useDraftRecord(id, (d) =>
+    (d.review?.setup?.reviewers ?? []).map((r) => r.provider).join(","),
+  );
+  const reviewers = joined ? (joined.split(",") as AgentProvider[]) : [];
   const agents = [...new Set(reviewers)];
   const count = `${reviewers.length} ${reviewers.length === 1 ? "reviewer" : "reviewers"}`;
   return (
@@ -134,29 +143,6 @@ function ReviewLine({ id, draftKey }: { id: string; draftKey: string }) {
       )}
     </>
   );
-}
-
-/** The agents an unsent deep review's setup has review, in order, as its setup changes. */
-function useReviewers(id: string) {
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      const own = onThreadRecord((thread) => thread === id && notify());
-      // A thread's own window writes the same storage.
-      window.addEventListener("storage", notify);
-      return () => {
-        own();
-        window.removeEventListener("storage", notify);
-      };
-    },
-    [id],
-  );
-  // A string, so an unchanged setup reads as the same snapshot.
-  const read = () =>
-    (threadStorage(id).review.load().setup?.reviewers ?? [])
-      .map((r) => r.provider)
-      .join(",");
-  const joined = useSyncExternalStore(subscribe, read, read);
-  return joined ? (joined.split(",") as AgentProvider[]) : [];
 }
 
 /** The agent a new thread's draft will go to, as its composer would pick it. */
@@ -193,10 +179,8 @@ export function useDraftSend(
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   // A review starts from its setup, not from a message.
-  const sendable =
-    !!draft &&
-    !draft.reply &&
-    (!!draft.chat || loadDraftScope(draft.id).kind !== "review");
+  const review = useIsReview(draft?.id ?? "");
+  const sendable = !!draft && !draft.reply && (!!draft.chat || !review);
   async function send() {
     if (!draft) return;
     if (selected && onSendOpen) return onSendOpen();
