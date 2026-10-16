@@ -1,6 +1,6 @@
 import { checksCover, type ProjectDiagnostic } from "../../../../shared/checks";
 import { checkStatus } from "../../checks/editor-checks";
-import type { FileEditor } from "../useEditableDiff";
+import type { FileEditor } from "./useEditableDiff";
 import type { ChecksController } from "../../checks/useProjectChecks";
 import { DiagnosticMessage } from "../../checks/ProjectChecks";
 

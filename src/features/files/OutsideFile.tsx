@@ -12,7 +12,7 @@ import {
   RevealButtons,
   VideoFile,
 } from "./FileViews";
-const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
+const LocalFileEditor = lazy(() => import("./editor/LocalFileEditor"));
 
 const noBuffer = async () => {};
 

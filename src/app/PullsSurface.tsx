@@ -36,7 +36,7 @@ import { ErrorToast, ReviewPanes } from "../features/review/ReviewPanes";
 import { PullRequestsPage } from "../features/pulls/PullRequestsPage";
 import { OpenPullUrl } from "../features/pulls/OpenPullUrl";
 
-const LocalFileEditor = lazy(() => import("../features/files/LocalFileEditor"));
+const LocalFileEditor = lazy(() => import("../features/files/editor/LocalFileEditor"));
 
 /**
  * The Pull requests page: its board while no PR is open, else the PR's

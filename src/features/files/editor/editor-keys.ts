@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from "react";
-import { matches } from "../../lib/shortcuts";
+import { matches } from "../../../lib/shortcuts";
 import { indentedNewline } from "./newline-indent";
 import type { FileEditor } from "./useEditableDiff";
 

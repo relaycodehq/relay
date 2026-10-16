@@ -1,5 +1,5 @@
 import { EditProvider } from "@pierre/diffs/react";
-import type { useEditableDiff } from "../useEditableDiff";
+import type { useEditableDiff } from "./useEditableDiff";
 import { useSyntaxThemes } from "../../../lib/appearance";
 import { useTheme } from "../../../lib/useTheme";
 import { DiffCodeView } from "../../diff/DiffCodeView";
