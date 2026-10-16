@@ -5,6 +5,38 @@ export const ANSWER_LIMIT = 100_000;
 export const answerLimitError = (length: number) =>
   length > ANSWER_LIMIT ? new Error("Answer size limit reached.") : undefined;
 
+/**
+ * How a turn ends: the first answer or error settles it, and anything after
+ * is dropped. Nobody may be awaiting it yet when it fails, so a failure is
+ * never reported as unhandled.
+ */
+export class TurnEnd<T> {
+  readonly promise: Promise<T>;
+  settled = false;
+  private resolve!: (value: T) => void;
+  private reject!: (error: Error) => void;
+
+  constructor() {
+    this.promise = new Promise<T>((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    void this.promise.catch(() => {});
+  }
+
+  succeed(value: T) {
+    if (this.settled) return;
+    this.settled = true;
+    this.resolve(value);
+  }
+
+  fail(error: Error) {
+    if (this.settled) return;
+    this.settled = true;
+    this.reject(error);
+  }
+}
+
 const turnFinished =
   "This turn has finished. Send the queued message as a new turn.";
 

@@ -85,6 +85,97 @@ async function turn(sessionID, text) {
     emit("session.idle", { sessionID });
     return;
   }
+  const say = async (message, parts, text) => {
+    const part = {
+      id: id("prt"),
+      messageID: message.id,
+      sessionID,
+      type: "text",
+      text,
+    };
+    parts.push(part);
+    emit("message.part.updated", { sessionID, part });
+    await tick();
+  };
+  const idle = (message) => {
+    message.time.completed = Date.now();
+    busy.delete(sessionID);
+    emit("session.status", { sessionID, status: { type: "idle" } });
+    emit("session.idle", { sessionID });
+  };
+  // A question for the user; the answer is what it picked, or that it skipped.
+  if (text.includes("fixture question")) {
+    const question = {
+      id: id("que"),
+      sessionID,
+      questions: [
+        {
+          question: "Which file?",
+          header: "File",
+          options: [{ label: "a.ts" }, { label: "b.ts", description: "B" }],
+        },
+      ],
+    };
+    const reply = await new Promise((resolve) => {
+      waiting.set(question.id, resolve);
+      emit("question.asked", question);
+    });
+    await say(
+      first,
+      firstParts,
+      reply ? `Picked ${reply.flat().join(", ")}.` : "No answer.",
+    );
+    idle(first);
+    return;
+  }
+  // Works until a steer arrives, then answers it in a message of its own.
+  if (text.includes("fixture hold")) {
+    await say(first, firstParts, "Working on it.");
+    const steer = await new Promise((resolve) => (session.onSteer = resolve));
+    delete session.onSteer;
+    const asked = {
+      id: id("msg"),
+      role: "user",
+      time: { created: Date.now() },
+    };
+    session.messages.push({
+      info: asked,
+      parts: [
+        { id: id("prt"), messageID: asked.id, type: "text", text: steer },
+      ],
+    });
+    first.time.completed = Date.now();
+    await tick();
+    const next = {
+      id: id("msg"),
+      sessionID,
+      role: "assistant",
+      time: { created: Date.now() },
+    };
+    const nextParts = [];
+    session.messages.push({ info: next, parts: nextParts });
+    emit("message.updated", { sessionID, info: next });
+    await say(next, nextParts, `Done with: ${steer}`);
+    idle(next);
+    return;
+  }
+  // Goes idle without a word on the event stream.
+  if (text.includes("fixture silent idle")) {
+    first.time.completed = Date.now();
+    busy.delete(sessionID);
+    // The text comes last, so a client that has it can trust the status.
+    await say(first, firstParts, "Quiet answer.");
+    return;
+  }
+  // The provider stumbles once before the turn gets going.
+  if (text.includes("fixture retry")) {
+    emit("session.status", {
+      sessionID,
+      status: { type: "retry", attempt: 1, message: "Overloaded" },
+    });
+    await tick();
+    emit("session.status", { sessionID, status: { type: "busy" } });
+  }
   // A turn OpenCode ends in the failure JSON that follows: announced by
   // session.error, or only left on the stored message for the session to read.
   const failing = /fixture (stored )?error: (.*)$/m.exec(text);
@@ -523,8 +614,51 @@ const server = http.createServer(async (req, res) => {
   }
   if ((m = /^\/session\/([^/]+)\/prompt_async$/.exec(path))) {
     send(204);
-    void turn(m[1], json.parts.map((p) => p.text ?? "").join("\n"));
+    const text = json.parts.map((p) => p.text ?? "").join("\n");
+    const session = sessions.get(m[1]);
+    // Sent while a turn runs, it steers that turn.
+    if (session?.onSteer) session.onSteer(text);
+    else void turn(m[1], text);
     return;
+  }
+  if ((m = /^\/session\/([^/]+)\/summarize$/.exec(path))) {
+    send(200, true);
+    const session = sessions.get(m[1]);
+    const sessionID = m[1];
+    // Like OpenCode, the compaction is a prompt of its own.
+    session.messages.push({
+      info: { id: id("msg"), role: "user", time: { created: Date.now() } },
+      parts: [],
+    });
+    const info = {
+      id: id("msg"),
+      sessionID,
+      role: "assistant",
+      summary: true,
+      time: { created: Date.now() },
+    };
+    const part = {
+      id: id("prt"),
+      messageID: info.id,
+      sessionID,
+      type: "text",
+      text: "Summary so far.",
+    };
+    session.messages.push({ info, parts: [part] });
+    busy.add(sessionID);
+    emit("session.status", { sessionID, status: { type: "busy" } });
+    emit("message.updated", { sessionID, info });
+    emit("message.part.updated", { sessionID, part });
+    info.time.completed = Date.now();
+    busy.delete(sessionID);
+    emit("session.status", { sessionID, status: { type: "idle" } });
+    emit("session.idle", { sessionID });
+    return;
+  }
+  if ((m = /^\/question\/([^/]+)\/(reply|reject)$/.exec(path))) {
+    waiting.get(m[1])?.(m[2] === "reply" ? json.answers : null);
+    waiting.delete(m[1]);
+    return send(200, true);
   }
   // A command runs as a turn of its own, like the prompt it expands to.
   if ((m = /^\/session\/([^/]+)\/command$/.exec(path))) {

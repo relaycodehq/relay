@@ -4,7 +4,7 @@ import { renderPrompt } from "../../../shared/html-render";
 import { CodexPlanRows } from "../activity";
 import { TurnText } from "../cursor/activity";
 import { signedOutError, usageLimitError } from "../errors";
-import { answerLimitError, guardSteer } from "../turn-kit";
+import { answerLimitError, guardSteer, TurnEnd } from "../turn-kit";
 import type { AgentOptions } from "../types";
 import { museActivity, museEditedPaths, todoPlan } from "./activity";
 import { MuseRequestError } from "./connection";
@@ -182,13 +182,9 @@ export async function runMuse(options: AgentOptions): Promise<string> {
   const steers = new Map<string, string>();
   let compaction: MuseItem | undefined;
 
-  let complete!: (done: MuseTurnCompleted | "compacted") => void;
-  let fail!: (error: Error) => void;
-  const ended = new Promise<MuseTurnCompleted | "compacted">((resolve, reject) => {
-    complete = resolve;
-    fail = reject;
-  });
-  void ended.catch(() => {});
+  const ended = new TurnEnd<MuseTurnCompleted | "compacted">();
+  const complete = (done: MuseTurnCompleted | "compacted") => ended.succeed(done);
+  const fail = (error: Error) => ended.fail(error);
 
   /** The answer item text last went to; another one after it is a new paragraph. */
   let speaking: string | undefined;
@@ -415,7 +411,7 @@ export async function runMuse(options: AgentOptions): Promise<string> {
       }
     }
     if (signal.aborted) interrupt();
-    const done = await ended;
+    const done = await ended.promise;
     if (done === "compacted") {
       const c = compaction;
       return c?.tokensBefore && c.tokensAfter

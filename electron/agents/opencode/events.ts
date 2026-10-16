@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { lenient, named } from "../schema-kit";
+import type { SessionCall } from "./client";
 
 /** OpenCode sent something Relay reads, without a field the turn can't go on without. */
 export class OpenCodeShapeError extends Error {}
@@ -210,6 +211,15 @@ export function parseOpenCodeResponse<T>(
     `OpenCode sent an unexpected ${what} response (${named(parsed.error.issues[0]!)}).`,
   );
 }
+
+/** Asks OpenCode for `path` and checks the answer against `schema`. */
+export const fetched = <T>(
+  call: SessionCall,
+  what: string,
+  schema: z.ZodType<T>,
+  path: string,
+) =>
+  call("GET", path).then((value) => parseOpenCodeResponse(what, schema, value));
 
 /** The session's messages, oldest first; a message's `parts` are its own. */
 export const messageListSchema = z.array(

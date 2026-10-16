@@ -452,6 +452,144 @@ it("turns a steer away when the turn ends while its screenshot is read", async (
   }
 });
 
+it("answers a steer below it once a step that started after it reads it", async () => {
+  const steered: string[] = [];
+  let sent: Promise<void> | undefined;
+  const { seen, run } = turn("fixture hold", {
+    onSteered: (id) => steered.push(id),
+    onControl: (control) => {
+      void vi
+        .waitFor(() => expect(seen.texts).toContain("Working on it."))
+        .then(() => (sent = control.steer("And this", "msg-2")));
+    },
+  });
+  expect(await run).toBe("Done with: And this");
+  await sent;
+  expect(steered).toEqual(["msg-2"]);
+  expect(seen.texts.at(-1)).toBe("Done with: And this");
+  const prompts = (await captured()).filter((c) =>
+    c.path.endsWith("/prompt_async"),
+  );
+  expect(prompts.map((p) => p.body.parts)).toEqual([
+    [{ type: "text", text: "fixture hold" }],
+    [{ type: "text", text: "And this" }],
+  ]);
+});
+
+it("notes a provider retry while it lasts", async () => {
+  const notes: (string | null)[] = [];
+  const { run } = turn("Write notes.md fixture retry", {
+    onCommentary: (id, text) => {
+      if (id === "opencode-retry") notes.push(text);
+    },
+  });
+  expect(await run).toBe("Wrote notes.md.");
+  expect(notes).toEqual(["Retrying (attempt 1): Overloaded", null]);
+});
+
+it("puts OpenCode's questions to the user, and skips them where nobody can answer", async () => {
+  const asked: unknown[] = [];
+  const answered = turn("fixture question", {
+    onRequest: async (request) => {
+      asked.push(request);
+      return { kind: "question", answers: { "0": ["b.ts"] } };
+    },
+  });
+  expect(await answered.run).toBe("Picked b.ts.");
+  expect(asked).toEqual([
+    expect.objectContaining({
+      kind: "question",
+      questions: [
+        {
+          id: "0",
+          header: "File",
+          question: "Which file?",
+          multiple: false,
+          options: [
+            { label: "a.ts", description: "" },
+            { label: "b.ts", description: "B" },
+          ],
+        },
+      ],
+    }),
+  ]);
+  const reviewer = turn("fixture question", { readOnly: true });
+  expect(await reviewer.run).toBe("No answer.");
+  expect(asked).toHaveLength(1);
+});
+
+it("compacts the session on its own model, answering with the summary", async () => {
+  const first = turn("Write notes.md");
+  await first.run;
+  const compact = turn("", {
+    job: { kind: "compact" },
+    choice: { model: "", reasoningEffort: "", fast: false },
+    session: { key: "k", id: first.seen.session, onId: async () => {} },
+  });
+  expect(await compact.run).toBe("Summary so far.");
+  const summarize = (await captured()).find((c) =>
+    c.path.endsWith("/summarize"),
+  );
+  expect(summarize.body).toEqual({ providerID: "zen", modelID: "pickle" });
+});
+
+it("settles a turn that went idle without a word on the event stream", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval"] });
+  try {
+    const { seen, run } = turn("fixture silent idle");
+    // Not vi.waitFor: it polls on the faked setInterval.
+    while (!seen.texts.includes("Quiet answer."))
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    vi.advanceTimersByTime(5000);
+    expect(await run).toBe("Quiet answer.");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("picks up a turn a restart cut off, answering the request still waiting", async () => {
+  // A key of its own: an earlier test's Always holds for "k".
+  let session: string | undefined;
+  const first = turn("Write notes.md", {
+    onRequest: () => new Promise(() => {}),
+    session: { key: "adopt", onId: async (id) => void (session = id) },
+  });
+  void first.run.catch(() => {});
+  await vi.waitFor(async () =>
+    expect(
+      (await captured()).some((c) => c.path.endsWith("/prompt_async")),
+    ).toBe(true),
+  );
+  await vi.waitFor(() => expect(first.seen.texts).toContain("Let me check."));
+  let point: string | undefined;
+  const adopted = turn("", {
+    job: { kind: "adopt" },
+    session: {
+      key: "adopt",
+      id: session,
+      onId: async () => {},
+      onPoint: (at) => (point = at),
+    },
+  });
+  expect(await adopted.run).toBe("Wrote notes.md.");
+  // What was said before the restart is replayed into the trace.
+  expect([...adopted.seen.commentary.values()]).toContain("Let me check.");
+  expect(adopted.seen.requests).toEqual(["Allow these file changes? +hello"]);
+  expect(point).toMatch(/^msg_/);
+  const calls = await captured();
+  expect(calls.filter((c) => c.path.endsWith("/prompt_async"))).toHaveLength(1);
+});
+
+it("picks up a turn that finished while Relay was away from what OpenCode stored", async () => {
+  const first = turn("Write notes.md");
+  await first.run;
+  const adopted = turn("", {
+    job: { kind: "adopt" },
+    session: { key: "k", id: first.seen.session, onId: async () => {} },
+  });
+  expect(await adopted.run).toBe("Wrote notes.md.");
+});
+
 it("stops when aborted", async () => {
   const abort = new AbortController();
   const { run } = turn("abort please", { signal: abort.signal });
@@ -464,6 +602,20 @@ it("stops when aborted", async () => {
   abort.abort();
   await expect(run).rejects.toThrow("Cancelled by you.");
   expect((await captured()).some((c) => c.path.endsWith("/abort"))).toBe(true);
+});
+
+it("stops waiting when OpenCode never reports the abort", async () => {
+  const abort = new AbortController();
+  const { seen, run } = turn("fixture hold", { signal: abort.signal });
+  await vi.waitFor(() => expect(seen.texts).toContain("Working on it."));
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    abort.abort();
+    vi.advanceTimersByTime(5000);
+    await expect(run).rejects.toThrow("Cancelled by you.");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 /** What the turn ends in when OpenCode fails it with `error`, announced or only stored. */

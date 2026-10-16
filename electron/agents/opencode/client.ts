@@ -96,6 +96,13 @@ export async function openCode<T = unknown>(
   return (body ? JSON.parse(body) : undefined) as T;
 }
 
+/** A request to OpenCode for the directory a turn works in. */
+export type SessionCall = (
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+) => Promise<unknown>;
+
 const listeners = new Map<string, Set<Listener>>();
 let stream: Promise<void> | undefined;
 
