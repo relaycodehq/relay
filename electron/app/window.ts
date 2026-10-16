@@ -13,9 +13,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { join } from "node:path";
 import { threadTerminals } from "../terminal/thread-terminals";
 import type { RelayEvents } from "../../shared/events";
-import type {
-  MainWindowCommand,
-  ThreadWindow,
+import {
+  placeOnScreen,
+  type MainWindowCommand,
+  type SavedMainWindow,
+  type ThreadWindow,
 } from "../../shared/thread-windows";
 import { isRelayPage, loadPage } from "./page";
 import { ThreadWindows } from "./thread-windows";
@@ -25,6 +27,12 @@ const callers = new AsyncLocalStorage<BrowserWindow | null>();
 const pageErrorLimit = 100;
 /** The main window's narrowest, with the projects sidebar and without it (a thread window's). */
 const MAIN_MIN_WIDTH = { sidebar: 1050, alone: 560 };
+
+/** Where the main window's size and state are kept between runs. */
+export interface MainWindowStore {
+  load(): SavedMainWindow | null;
+  save(window: SavedMainWindow): void;
+}
 
 /** Runs `call` as one made from `win`'s page; see `AppWindow.caller`. */
 export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
@@ -68,6 +76,8 @@ export class AppWindow {
   private sidebarMin = MAIN_MIN_WIDTH.sidebar;
   /** Hidden pages of Relay's own that may call the API, as a phone's draft send opens. */
   private helpers = new Set<BrowserWindow>();
+  private place?: MainWindowStore;
+  private placing?: NodeJS.Timeout;
 
   constructor(
     private hooks: {
@@ -259,13 +269,24 @@ export class AppWindow {
     return !!wc && this.all().some((w) => w.webContents === wc);
   }
 
+  /** Opens the main window where the last one was, and keeps track as it moves. */
+  keepPlace(store: MainWindowStore) {
+    this.place = store;
+  }
+
   create() {
     // Hidden while Relay sat in the menubar alone.
     if (process.platform === "darwin") void app.dock?.show();
+    const saved = this.place?.load();
     const win = this.build(
       {
-        width: 1500,
-        height: 960,
+        ...(saved
+          ? placeOnScreen(
+              saved.bounds,
+              screen.getAllDisplays().map((d) => d.workArea),
+              screen.getPrimaryDisplay().workArea,
+            )
+          : { width: 1500, height: 960 }),
         minWidth: MAIN_MIN_WIDTH.sidebar,
         minHeight: 650,
       },
@@ -296,8 +317,38 @@ export class AppWindow {
         app.quit();
       }
     });
-    win.once("ready-to-show", () => this.show());
+    win.once("ready-to-show", () => {
+      if (saved?.maximized) win.maximize();
+      this.show();
+      if (saved?.fullScreen) win.setFullScreen(true);
+      // Only from here on: before, it would save the size it was built with.
+      for (const event of [
+        "resize",
+        "move",
+        "maximize",
+        "unmaximize",
+        "enter-full-screen",
+        "leave-full-screen",
+      ] as const)
+        win.on(event as "resize", () => this.savePlaceSoon(win));
+      win.on("close", () => this.savePlace(win));
+    });
     void loadPage(win);
+  }
+
+  private savePlaceSoon(win: BrowserWindow) {
+    clearTimeout(this.placing);
+    this.placing = setTimeout(() => this.savePlace(win), 500);
+  }
+
+  private savePlace(win: BrowserWindow) {
+    clearTimeout(this.placing);
+    if (!this.place || win.isDestroyed()) return;
+    this.place.save({
+      bounds: win.getNormalBounds(),
+      maximized: win.isMaximized(),
+      fullScreen: win.isFullScreen(),
+    });
   }
 
   /**

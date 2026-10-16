@@ -29,7 +29,7 @@ import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
-import { savedThreadWindows } from "../shared/thread-windows";
+import { savedMainWindow, savedThreadWindows } from "../shared/thread-windows";
 import {
   askAboutCrashLoop,
   offerCrashReport,
@@ -385,6 +385,11 @@ app
         })
         .catch((e) => console.warn("Could not open", folder, e));
     });
+    links.onThread((chatId) => {
+      const chat = loaded.get().chats?.find((c) => c.id === chatId);
+      if (chat) window.openThread({ projectId: chat.projectId, chatId });
+      else window.open();
+    });
     const hostOf = async (repo: Repo) =>
       isGithubServer(repo.server) ? github.require() : login.require();
     async function projectHost(projectId: string) {
@@ -674,6 +679,19 @@ app
     // Test runs stay off the user's menubar, as their windows stay off the desktop.
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
       menubar.start();
+    // Test runs park their windows off-screen and size them as each test needs.
+    if (!process.env.RELAY_TEST_DATA)
+      window.keepPlace({
+        load: () => savedMainWindow(loaded.get().mainWindow),
+        save: (place) =>
+          void loaded
+            .update((s) => {
+              s.mainWindow = place;
+            })
+            .catch((e) =>
+              console.warn("Could not save the window's place:", e),
+            ),
+      });
     window.create();
     window.win?.webContents.once("did-finish-load", windowLoaded);
     window.threads.restore({

@@ -25,16 +25,38 @@ export interface SavedThreadWindow extends ThreadWindow {
   bounds: { x: number; y: number; width: number; height: number };
 }
 
+const boundsSchema = z.object({
+  x: z.number().int(),
+  y: z.number().int(),
+  width: z.number().int().min(100).max(20_000),
+  height: z.number().int().min(100).max(20_000),
+});
+
 const savedSchema = z.object({
   projectId: z.string().min(1),
   chatId: z.string().min(1),
-  bounds: z.object({
-    x: z.number().int(),
-    y: z.number().int(),
-    width: z.number().int().min(100).max(20_000),
-    height: z.number().int().min(100).max(20_000),
-  }),
+  bounds: boundsSchema,
 });
+
+/** Where the main window was and how, so the next launch opens it the same. */
+export interface SavedMainWindow {
+  /** Its unmaximized, windowed size, which un-maximizing goes back to. */
+  bounds: SavedThreadWindow["bounds"];
+  maximized: boolean;
+  fullScreen: boolean;
+}
+
+const savedMainSchema = z.object({
+  bounds: boundsSchema,
+  maximized: z.boolean(),
+  fullScreen: z.boolean(),
+});
+
+/** The saved main window if it still reads right, else null. */
+export const savedMainWindow = (saved: unknown): SavedMainWindow | null => {
+  const parsed = savedMainSchema.safeParse(saved);
+  return parsed.success ? parsed.data : null;
+};
 
 /** The saved windows that still read right; hand edits or old shapes drop out. */
 export const savedThreadWindows = (saved: unknown): SavedThreadWindow[] =>
