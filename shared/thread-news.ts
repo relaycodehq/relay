@@ -27,6 +27,7 @@ export type NewsChat = Pick<
   | "title"
   | "provider"
   | "running"
+  | "runningSince"
   | "waiting"
   | "limitResume"
   | "snoozedUntil"
@@ -74,9 +75,11 @@ export function threadNews(
       continue;
     }
     if (!was.running || c.running) continue;
-    // Every answer moves the thread on; a compaction while you were away
-    // doesn't, and isn't news.
-    if (c.updated <= was.updated) continue;
+    // Every answer moves the thread past when its run started; a compaction
+    // while you were away doesn't, and isn't news. Not the last list's
+    // `updated`: a save near the turn's end can list the final one while the
+    // thread still reads as running.
+    if (c.updated <= (was.runningSince ?? was.updated)) continue;
     // Snoozed: it comes back by itself when you said.
     if (c.snoozedUntil && c.snoozedUntil > at) continue;
     const answer = answers.get(c.id);

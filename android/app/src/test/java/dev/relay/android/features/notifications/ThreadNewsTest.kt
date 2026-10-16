@@ -20,6 +20,13 @@ class ThreadNewsTest {
     @Test fun keepsQuietAboutACompactionThatRanWhileYouWereAway() {
         val news = threadNews(list(chat("a") { copy(running = true) }), listOf(chat("a")), mapOf("a" to answer(body = "The answer before it")))
         assertEquals(emptyList<ThreadNews>(), news)
+        val started = threadNews(list(chat("a") { copy(running = true, runningSince = 15) }), listOf(chat("a")), mapOf("a" to answer(body = "The answer before it")))
+        assertEquals(emptyList<ThreadNews>(), started)
+    }
+
+    @Test fun tellsOfAnAnswerWhoseEndWasListedWhileTheThreadStillRan() {
+        val news = threadNews(list(chat("a", 20) { copy(running = true, runningSince = 15) }), listOf(chat("a", 20)), mapOf("a" to answer(body = "Done")))
+        assertEquals(listOf(ThreadNews("a", ThreadNews.Kind.Finished, "Thread a", "Done")), news)
     }
 
     @Test fun tellsOfAFinishedAnswerByItsFirstWordsAndAFailedOneByItsError() {

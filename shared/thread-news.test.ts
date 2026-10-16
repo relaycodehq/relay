@@ -38,6 +38,25 @@ describe("threadNews", () => {
         new Map([["a", answer({ body: "The answer before it" })]]),
       ),
     ).toEqual([]);
+    expect(
+      threadNews(
+        list(chat("a", { running: true, runningSince: 15 })),
+        [chat("a")],
+        new Map([["a", answer({ body: "The answer before it" })]]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("tells of an answer whose end was listed while the thread still ran", () => {
+    expect(
+      threadNews(
+        list(chat("a", { running: true, runningSince: 15, updated: 20 })),
+        [chat("a", { updated: 20 })],
+        new Map([["a", answer({ body: "Done" })]]),
+      ),
+    ).toEqual([
+      { chatId: "a", kind: "finished", title: "Thread a", body: "Done" },
+    ]);
   });
 
   it("tells of a finished answer by its first words, a failed one by its error", () => {
