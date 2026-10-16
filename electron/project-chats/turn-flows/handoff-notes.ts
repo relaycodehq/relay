@@ -2,14 +2,14 @@ import type {
   AgentProvider,
   ChatMessage,
   ProjectChat,
-} from "../../shared/projects";
-import { agentName } from "../../shared/agents";
-import { streamingAnswer } from "./answer-recorder";
-import type { ActiveChat } from "./active";
-import type { ChatCore } from "./core";
-import { relayNote } from "./relay-note";
-import { sessionInput } from "./sessions";
-import type { TurnRunner } from "./turn-run";
+} from "../../../shared/projects";
+import { agentName } from "../../../shared/agents";
+import { streamingAnswer } from "../answer-recorder";
+import type { ActiveChat } from "../active";
+import type { ChatCore } from "../core";
+import { relayNote } from "../relay-note";
+import { sessionInput } from "../sessions";
+import type { TurnRunner } from "../turn-run";
 
 /** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
 const HANDOFF_TIMEOUT = 120000;
@@ -25,7 +25,7 @@ const handoffPrompt = (to: AgentProvider, computer?: string) =>
  * Notes that brief the agent taking a thread over: one the outgoing agent
  * writes in its own session, or one Relay writes when it can't.
  */
-export class AgentHandoffs {
+export class TurnHandoffs {
   constructor(
     private core: ChatCore,
     private runner: TurnRunner,

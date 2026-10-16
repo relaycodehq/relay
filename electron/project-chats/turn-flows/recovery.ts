@@ -2,16 +2,16 @@ import type {
   AgentProvider,
   ChatMessage,
   ProjectChat,
-} from "../../shared/projects";
-import { agentRuntime, agentRuntimes } from "../agents";
-import { streamingAnswer } from "./answer-recorder";
-import type { ChatCore } from "./core";
-import type { Councils } from "./councils";
-import { interrupt } from "./revive";
-import { parseSessionKey, sessionInput } from "./sessions";
-import type { RunEnds } from "./turn-end";
-import type { TurnRunner } from "./turn-run";
-import type { ThreadWorktrees } from "./worktrees";
+} from "../../../shared/projects";
+import { agentRuntime, agentRuntimes } from "../../agents";
+import { streamingAnswer } from "../answer-recorder";
+import type { ChatCore } from "../core";
+import type { Councils } from "../councils";
+import { interrupt } from "../revive";
+import { parseSessionKey, sessionInput } from "../sessions";
+import type { TurnEndings } from "./end";
+import type { TurnRunner } from "../turn-run";
+import type { ThreadWorktrees } from "../worktrees";
 
 /**
  * Turns no message started: Claude's own, and the ones a restart cut off
@@ -23,7 +23,7 @@ export class TurnRecovery {
     private worktrees: ThreadWorktrees,
     private runner: TurnRunner,
     private councils: Councils,
-    private ends: RunEnds,
+    private ends: TurnEndings,
   ) {}
   /**
    * Claude started a turn itself, e.g. when a background command it launched

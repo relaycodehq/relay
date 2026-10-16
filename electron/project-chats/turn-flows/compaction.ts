@@ -1,27 +1,27 @@
-import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
-import { agentAsked } from "../../shared/recipient";
-import { agentName, agentInfo } from "../../shared/agents";
-import { compactsCold, latestContext } from "../../shared/context-usage";
-import { streamingAnswer } from "./answer-recorder";
-import type { ChatCore } from "./core";
-import type { Councils } from "./councils";
-import { assertHere } from "./handoff";
-import type { ChatQueue } from "./queue";
-import { agentSession, sessionInput } from "./sessions";
-import type { RunEnds } from "./turn-end";
-import type { TurnRunner } from "./turn-run";
-import type { ThreadWorktrees } from "./worktrees";
+import type { ProjectChat, ProjectChatSend } from "../../../shared/projects";
+import { replyRoot } from "../../../shared/projects";
+import { agentAsked } from "../../../shared/recipient";
+import { agentName, agentInfo } from "../../../shared/agents";
+import { compactsCold, latestContext } from "../../../shared/context-usage";
+import { streamingAnswer } from "../answer-recorder";
+import type { ChatCore } from "../core";
+import type { Councils } from "../councils";
+import { assertHere } from "../handoff";
+import type { ChatQueue } from "../queue";
+import { agentSession, sessionInput } from "../sessions";
+import type { TurnEndings } from "./end";
+import type { TurnRunner } from "../turn-run";
+import type { ThreadWorktrees } from "../worktrees";
 
 /** Compacting an agent's session: asked for, before a cold cache, or while idle. */
-export class Compactions {
+export class TurnCompactions {
   constructor(
     private core: ChatCore,
     private worktrees: ThreadWorktrees,
     private runner: TurnRunner,
     private councils: Councils,
     private queue: ChatQueue,
-    private ends: RunEnds,
+    private ends: TurnEndings,
   ) {}
   /**
    * Compacts the provider session behind the newest answer on this branch,

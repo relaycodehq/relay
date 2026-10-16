@@ -63,11 +63,11 @@ import { ThreadList } from "./thread-list";
 import { ThreadNotes } from "./notes";
 import { ThreadTriage } from "./thread-triage";
 import { TurnRunner } from "./turn-run";
-import { ChatTurns } from "./turns";
-import { Compactions } from "./turn-compaction";
-import { RunEnds } from "./turn-end";
-import { AgentHandoffs } from "./turn-handoff";
-import { TurnRecovery } from "./turn-recovery";
+import { TurnSends } from "./turn-flows/send";
+import { TurnCompactions } from "./turn-flows/compaction";
+import { TurnEndings } from "./turn-flows/end";
+import { TurnHandoffs } from "./turn-flows/handoff-notes";
+import { TurnRecovery } from "./turn-flows/recovery";
 import { ThreadWorktrees, type WorktreeRequest } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
@@ -100,9 +100,9 @@ export class ProjectChats {
   private runner: TurnRunner;
   private asides: SideQuestions;
   private queue: ChatQueue;
-  private turns: ChatTurns;
+  private turns: TurnSends;
   private recovery: TurnRecovery;
-  private compactions: Compactions;
+  private compactions: TurnCompactions;
   private control = threadControl();
   private questions: AsyncQuestions;
   private disposing = false;
@@ -249,18 +249,18 @@ export class ProjectChats {
       env: (chat) => this.worktrees.setup.env(chat),
       keepShown: (chat, message) => this.files.keepShown(chat, message),
     });
-    const handoffs = new AgentHandoffs(core, this.runner);
+    const handoffs = new TurnHandoffs(core, this.runner);
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(core, this.schedule, this.councils, {
       sendNow: (id, input) => this.turns.sendNow(id, input),
       compactNow: (id, parentId, instructions) =>
         this.compactions.now(id, parentId, instructions),
     });
-    const ends = new RunEnds(core, this.councils, this.queue, (id) => {
+    const ends = new TurnEndings(core, this.councils, this.queue, (id) => {
       void this.idle.arm(id);
       return this.triaging.ended(id);
     });
-    this.turns = new ChatTurns(
+    this.turns = new TurnSends(
       core,
       this.worktrees,
       this.runner,
@@ -277,7 +277,7 @@ export class ProjectChats {
       this.councils,
       ends,
     );
-    this.compactions = new Compactions(
+    this.compactions = new TurnCompactions(
       core,
       this.worktrees,
       this.runner,

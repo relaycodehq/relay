@@ -4,34 +4,34 @@ import type {
   ProjectChat,
   ProjectChatSend,
   ResumeSettings,
-} from "../../shared/projects";
+} from "../../../shared/projects";
 import {
   replyRoot,
   sentBy,
   sentSettingsOf,
   threadWorktree,
-} from "../../shared/projects";
-import type { LineQuestion } from "../../shared/questions";
-import { agentAsked, sentAgent } from "../../shared/recipient";
-import { agentInfo } from "../../shared/agents";
-import { parseGoalCommand } from "../../shared/goal";
-import { streamingAnswer } from "./answer-recorder";
-import type { ChatTurn } from "./chat-turn";
-import { checkedOutOr } from "../git/git";
-import { promptTitle } from "../agents/thread-titles";
-import { turnPrompt } from "./turn-prompt";
-import type { ActiveChat } from "./active";
-import type { ChatCore } from "./core";
-import type { Councils } from "./councils";
-import { assertHere } from "./handoff";
-import { supersedeQuestions } from "./async-questions";
-import { startFixing } from "../findings";
-import { agentSession } from "./sessions";
-import type { ThreadTitles } from "./titles";
-import type { RunEnds } from "./turn-end";
-import type { AgentHandoffs } from "./turn-handoff";
-import { forkFor, type TurnRunner } from "./turn-run";
-import type { ThreadWorktrees } from "./worktrees";
+} from "../../../shared/projects";
+import type { LineQuestion } from "../../../shared/questions";
+import { agentAsked, sentAgent } from "../../../shared/recipient";
+import { agentInfo } from "../../../shared/agents";
+import { parseGoalCommand } from "../../../shared/goal";
+import { streamingAnswer } from "../answer-recorder";
+import type { ChatTurn } from "../chat-turn";
+import { checkedOutOr } from "../../git/git";
+import { promptTitle } from "../../agents/thread-titles";
+import { turnPrompt } from "../turn-prompt";
+import type { ActiveChat } from "../active";
+import type { ChatCore } from "../core";
+import type { Councils } from "../councils";
+import { assertHere } from "../handoff";
+import { supersedeQuestions } from "../async-questions";
+import { startFixing } from "../../findings";
+import { agentSession } from "../sessions";
+import type { ThreadTitles } from "../titles";
+import type { TurnEndings } from "./end";
+import type { TurnHandoffs } from "./handoff-notes";
+import { forkFor, type TurnRunner } from "../turn-run";
+import type { ThreadWorktrees } from "../worktrees";
 
 /** How long a new worktree's first turn waits for the title it's named after. */
 const TITLE_WAIT_MS = 8000;
@@ -39,9 +39,9 @@ const TITLE_WAIT_MS = 8000;
 /**
  * A message going out and the answer to it, a council's lead, and carrying
  * on after a stop. Handoff notes, recovery, compaction and how a run ends
- * live in turn-handoff, turn-recovery, turn-compaction and turn-end.
+ * live beside this in handoff-notes, recovery, compaction and end.
  */
-export class ChatTurns {
+export class TurnSends {
   /** Sends whose message is in and whose answer hasn't started its agent yet. */
   private starts = new Set<Promise<unknown>>();
   constructor(
@@ -50,8 +50,8 @@ export class ChatTurns {
     private runner: TurnRunner,
     private titles: ThreadTitles,
     private councils: Councils,
-    private handoffs: AgentHandoffs,
-    private ends: RunEnds,
+    private handoffs: TurnHandoffs,
+    private ends: TurnEndings,
     private evidence:
       | ((chat: ProjectChat, selection: LineQuestion) => Promise<unknown>)
       | undefined,

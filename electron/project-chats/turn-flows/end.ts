@@ -1,11 +1,11 @@
-import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import type { ActiveChat } from "./active";
-import type { ChatCore } from "./core";
-import type { Councils } from "./councils";
-import type { ChatQueue } from "./queue";
+import type { ProjectChat, ProjectChatSend } from "../../../shared/projects";
+import type { ActiveChat } from "../active";
+import type { ChatCore } from "../core";
+import type { Councils } from "../councils";
+import type { ChatQueue } from "../queue";
 
 /** What every turn in a thread does when it ends, whichever flow ran it. */
-export class RunEnds {
+export class TurnEndings {
   constructor(
     private core: ChatCore,
     private councils: Councils,
