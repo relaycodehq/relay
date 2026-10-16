@@ -141,9 +141,14 @@ export function isSitePullUrl(input: string) {
  */
 export function parseAzurePullUrl(input: string) {
   const u = linkUrl(input);
-  const parts = (u?.pathname.split("/").filter(Boolean) ?? []).map(
-    decodeURIComponent,
-  );
+  let parts: string[];
+  try {
+    parts = (u?.pathname.split("/").filter(Boolean) ?? []).map(
+      decodeURIComponent,
+    );
+  } catch {
+    parts = [];
+  }
   const path = u && azureGitPath(u.hostname, parts);
   const name = path && parts[path.git + 1];
   if (

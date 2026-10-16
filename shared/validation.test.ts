@@ -55,6 +55,7 @@ describe("parseAzurePullUrl", () => {
       "https://dev.azure.com/sample-org/Sample%20Project/_workitems/edit/42",
       "https://github.com/o/r/pull/42",
       "https://git.example.com/Sample/_git/web-store/pullrequest/42",
+      "https://dev.azure.com/sample-org/p/_git/r%E0/pullrequest/1",
       "not a url",
     ])
       expect(() => parseAzurePullUrl(url), url).toThrow(

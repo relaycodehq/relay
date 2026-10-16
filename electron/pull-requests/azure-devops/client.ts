@@ -249,7 +249,7 @@ export class AzureDevOps implements PullHost {
     return ref;
   }
 
-  /** PRs across the organization, `status` as Azure names it. */
+  /** PRs across the organization, or under `path`, newest first. */
   private async listed(
     criteria: Record<string, string>,
     state: PullState,
@@ -260,25 +260,63 @@ export class AzureDevOps implements PullHost {
       signal,
     }: { size?: number; path?: string; signal?: AbortSignal } = {},
   ) {
+    const read = (status: string, top: number, skip: number) =>
+      this.listedAs(criteria, status, top, skip, path, signal);
+    if (state !== "closed") {
+      const found = await read(
+        state === "open" ? "active" : "all",
+        size,
+        (page - 1) * size,
+      );
+      return {
+        items: found,
+        nextPage: found.length === size ? page + 1 : null,
+      };
+    }
+    // Azure filters by one status at a time, and closed is both of the
+    // others: each is read up to this page, so active PRs leave no gaps.
+    const top = page * size;
+    const [completed, abandoned] = await Promise.all([
+      read("completed", top, 0),
+      read("abandoned", top, 0),
+    ]);
+    const merged = [...completed, ...abandoned].sort(
+      (a, b) =>
+        b.creationDate.localeCompare(a.creationDate) ||
+        b.pullRequestId - a.pullRequestId,
+    );
+    return {
+      items: merged.slice(top - size, top),
+      nextPage:
+        merged.length > top ||
+        completed.length === top ||
+        abandoned.length === top
+          ? page + 1
+          : null,
+    };
+  }
+
+  private async listedAs(
+    criteria: Record<string, string>,
+    status: string,
+    top: number,
+    skip: number,
+    path: string,
+    signal?: AbortSignal,
+  ) {
     const query = new URLSearchParams({
       ...Object.fromEntries(
         Object.entries(criteria).map(([k, v]) => [`searchCriteria.${k}`, v]),
       ),
-      "searchCriteria.status": state === "open" ? "active" : "all",
-      $top: String(size),
-      $skip: String((page - 1) * size),
+      "searchCriteria.status": status,
+      $top: String(top),
+      $skip: String(skip),
     });
     const { data } = await this.request<{ value: AzPull[] }>(
       `${path || `${this.account.server}/_apis/git/pullrequests`}?${query}&${VERSION}`,
       { signal },
     );
-    return {
-      // Azure filters by one status at a time; closed is both of the others.
-      items: data.value.filter(
-        (p) => state !== "closed" || p.status !== "active",
-      ),
-      nextPage: data.value.length === size ? page + 1 : null,
-    };
+    return data.value;
   }
 
   async search(
@@ -344,15 +382,29 @@ export class AzureDevOps implements PullHost {
     const known = this.scanned.get(state);
     if (known && Date.now() - known.at < 30_000) return known.value;
     const value = (async () => {
-      const first = await this.listed({}, state, 1, { size: 100 });
-      if (!first.nextPage) return first.items;
-      // Past the first page, read the rest at once rather than one by one.
-      const rest = await Promise.all(
-        Array.from({ length: SCANNED / 100 - 1 }, (_, i) =>
-          this.listed({}, state, i + 2, { size: 100 }),
-        ),
-      );
-      return [first, ...rest].flatMap((p) => p.items);
+      // Every status at once, filtered after: the scan isn't paged, so
+      // active PRs leave no gaps in it.
+      const status = state === "open" ? "active" : "all";
+      const read = (page: number) =>
+        this.listedAs({}, status, 100, (page - 1) * 100, "");
+      const found = await read(1);
+      // Past the first page, read ahead in doubling batches: a few requests
+      // for an organization just over a page, few rounds for a big one.
+      let next = 2;
+      let batch = 1;
+      let full = found.length === 100;
+      while (full && next <= SCANNED / 100) {
+        const pages = Array.from(
+          { length: Math.min(batch, SCANNED / 100 - next + 1) },
+          (_, i) => next + i,
+        );
+        const answers = await Promise.all(pages.map(read));
+        for (const items of answers) found.push(...items);
+        full = answers.every((items) => items.length === 100);
+        next += pages.length;
+        batch *= 2;
+      }
+      return found.filter((p) => state !== "closed" || p.status !== "active");
     })();
     this.scanned.set(state, { at: Date.now(), value });
     value.catch(() => {

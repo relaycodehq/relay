@@ -12,9 +12,27 @@ const devopsResource = "499b84ac-1321-427f-aa17-267ca6975798";
 /** `az` is missing or has no login for the organization, as opposed to Azure not answering. */
 export class AzureCliSignedOut extends Error {}
 
+/**
+ * Entra's codes for a login that is missing, lapsed or needs the user again
+ * (MFA, consent, an expired or revoked refresh token).
+ */
+const signedOutCodes = [
+  16000, 16001, 50020, 50034, 50058, 50076, 50078, 50079, 50132, 50133, 50173,
+  65001, 70043, 500133, 700082, 700084,
+];
 /** How `az` says its login is missing or has lapsed; anything else isn't a sign-out. */
 const signedOutWords =
-  /az login|AADSTS\d+|interaction_required|invalid_grant|refresh token|MSAL token cache|not logged in|no subscriptions? found/i;
+  /az login|interaction_required|invalid_grant|refresh token|MSAL token cache|not logged in|no subscriptions? found/i;
+/**
+ * `az` can advise `az login` after any Entra failure, an outage too, so a
+ * code it names decides, not its advice.
+ */
+function saysSignedOut(said: string) {
+  const code = /AADSTS(\d+)/i.exec(said)?.[1];
+  return code
+    ? signedOutCodes.includes(Number(code))
+    : signedOutWords.test(said);
+}
 
 /** How long a missing login is believed before `az` is run again for it. */
 const SIGNED_OUT_FOR = 60_000;
@@ -122,7 +140,7 @@ export class AzureCliTokens {
       const failure = e as Error & { stderr?: string; killed?: boolean };
       const said = `${failure.stderr ?? ""}\n${failure.message ?? ""}`;
       // Offline, a timeout or a broken `az` isn't a sign-out; Check again retries it.
-      if (failure.killed || !signedOutWords.test(said))
+      if (failure.killed || !saysSignedOut(said))
         throw new Error(
           failure.killed
             ? "The Azure CLI didn't answer within 30s. Try again."

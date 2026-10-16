@@ -8,6 +8,13 @@ import type { DevOps } from "../plugins/devops/service";
 import { runExecutable } from "../platform/executables";
 import { cliFields, probeCli, probeTimeout } from "./clis";
 
+const installAz =
+  process.platform === "darwin"
+    ? "Install it with `brew install azure-cli`."
+    : process.platform === "win32"
+      ? "Install it with `winget install -e --id Microsoft.AzureCLI`."
+      : "Install it from https://aka.ms/InstallAzureCLI.";
+
 /**
  * Azure DevOps pull requests and Pipelines through the `az` login, which
  * reaches every organization the account is in.
@@ -28,7 +35,7 @@ export async function azureCli(
       ...base,
       signIn: "unknown",
       fix: "link",
-      detail: cli.error ?? "Install it with `brew install azure-cli`.",
+      detail: cli.error ?? installAz,
     };
   if (!cli.version) return { ...base, signIn: "unknown", detail: cli.error };
   const run = await runExecutable(
@@ -93,7 +100,7 @@ export async function azureDevOps(
       server,
       signIn: "unknown",
       fix: "link",
-      detail: cli.error ?? "Install it with `brew install azure-cli`.",
+      detail: cli.error ?? installAz,
     };
   try {
     const account = await devops.whoAmI();

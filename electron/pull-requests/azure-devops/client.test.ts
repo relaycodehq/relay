@@ -35,7 +35,7 @@ const folder: AzChange = {
 };
 
 /** A client whose host answers from `routes`, counting each request by path. */
-function client(routes: Record<string, () => unknown>) {
+function client(routes: Record<string, (url: URL) => unknown>) {
   const asked: string[] = [];
   const fetch = async (url: string) => {
     const u = new URL(url);
@@ -47,7 +47,7 @@ function client(routes: Record<string, () => unknown>) {
     asked.push(key);
     const answer = routes[key];
     if (!answer) return new Response("missing " + key, { status: 404 });
-    return Response.json(answer());
+    return Response.json(answer(u));
   };
   const azure = new AzureDevOps(
     {
@@ -105,6 +105,40 @@ it("lists a repository's PRs without making up how much they change", async () =
   expect(listed.items[0]).toMatchObject({ number: 7, title: "Checkout" });
   expect(listed.items[0]).not.toHaveProperty("changed_files");
   expect(listed.items[0]).not.toHaveProperty("additions");
+});
+
+it("fills a page of closed PRs past newer active ones", async () => {
+  const at = (n: number) =>
+    new Date(Date.UTC(2026, 0, 1) + n * 3600_000).toISOString();
+  const pull = (n: number, status: AzPull["status"]) => ({
+    ...pr,
+    pullRequestId: n,
+    status,
+    creationDate: at(n),
+  });
+  // Azure answers one status at a time, newest first.
+  const all = [
+    ...Array.from({ length: 60 }, (_, i) => pull(90 - i, "active")),
+    pull(20, "completed"),
+    pull(19, "abandoned"),
+    pull(18, "completed"),
+  ];
+  const { azure } = client({
+    "/Shop/_apis/git/repositories/api/pullrequests": (u) => {
+      const status = u.searchParams.get("searchCriteria.status");
+      const skip = Number(u.searchParams.get("$skip"));
+      const top = Number(u.searchParams.get("$top"));
+      return {
+        value: all
+          .filter((p) => status === "all" || p.status === status)
+          .slice(skip, skip + top),
+      };
+    },
+  });
+  const repo = { server, owner: "Shop", name: "api" };
+  const first = await azure.pulls(repo, "closed", 1);
+  expect(first.items.map((p) => p.number)).toEqual([20, 19, 18]);
+  expect(first.nextPage).toBeNull();
 });
 
 it("posts a comment again in a new review, but not twice in a retried one", async () => {

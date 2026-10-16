@@ -6,6 +6,13 @@ import {
 import { runExecutable } from "../platform/executables";
 import { cliFields, probeCli, probeTimeout } from "./clis";
 
+const installGh =
+  process.platform === "darwin"
+    ? "Install it with `brew install gh`."
+    : process.platform === "win32"
+      ? "Install it with `winget install -e --id GitHub.cli`."
+      : "Install it from https://cli.github.com.";
+
 /** GitHub through the `gh` CLI and whoever it is logged in as. */
 export async function github(enabled: boolean): Promise<SourceControlProvider> {
   const cli = await probeCli("github");
@@ -21,7 +28,7 @@ export async function github(enabled: boolean): Promise<SourceControlProvider> {
       ...base,
       signIn: "unknown",
       fix: "link",
-      detail: cli.error ?? "Install it with `brew install gh`.",
+      detail: cli.error ?? installGh,
     };
   if (!cli.version) return { ...base, signIn: "unknown", detail: cli.error };
   const auth = await runExecutable(
