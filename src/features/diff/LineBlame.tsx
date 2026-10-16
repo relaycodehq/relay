@@ -19,6 +19,8 @@ interface Source {
    * since. Without it, every line is the same line at `revision`.
    */
   lineAt?: (line: number) => number | undefined;
+  /** Changes whenever `lineAt` maps lines differently. */
+  mapping?: number;
   /** Why a line has no history: every line's, or with `lineAt`, a changed one's. */
   unavailable?: string;
 }

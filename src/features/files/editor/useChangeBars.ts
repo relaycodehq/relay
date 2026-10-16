@@ -9,28 +9,32 @@ import {
 import type { LineHunk } from "./line-changes";
 import LineChangesWorker from "./line-changes.worker?worker";
 
-type Pair = { committed: string; buffer: string };
+type Answer = { committed: string; buffer: string; hunks: LineHunk[] };
 
 /**
  * The buffer's edits against `committed`, worked out off the main thread with
- * one question in flight, the latest buffer asked next. Undefined until the
- * first answer for this committed text.
+ * one question in flight, the latest buffer asked next. The worker keeps the
+ * committed text, so only a new one goes along with the buffer. Undefined
+ * until the first answer for this committed text; it may be for an older
+ * buffer meanwhile.
  */
 function useLineChanges(
   committed: string | undefined,
   buffer: string | undefined,
 ) {
-  const [answer, setAnswer] = useState<Pair & { hunks: LineHunk[] }>();
-  const ask = useRef<(pair: Pair) => void>(() => {});
+  const [answer, setAnswer] = useState<Answer>();
+  const ask = useRef<(committed: string, buffer: string) => void>(() => {});
   useEffect(() => {
     let worker: Worker | undefined;
-    let asked: Pair | undefined;
-    let waiting: Pair | undefined;
-    const send = (pair: Pair) => {
+    // What the worker compares against, once it has been sent.
+    let known: string | undefined;
+    let asked: { committed: string; buffer: string } | undefined;
+    let waiting: typeof asked;
+    const send = (pair: NonNullable<typeof asked>) => {
       if (!worker) {
         worker = new LineChangesWorker();
-        worker.onmessage = (event: MessageEvent<{ hunks: LineHunk[] }>) => {
-          setAnswer({ ...asked!, hunks: event.data.hunks });
+        worker.onmessage = (event: MessageEvent<LineHunk[]>) => {
+          setAnswer({ ...asked!, hunks: event.data });
           next();
         };
         worker.onerror = (event) => {
@@ -39,7 +43,12 @@ function useLineChanges(
         };
       }
       asked = pair;
-      worker.postMessage(pair);
+      worker.postMessage(
+        pair.committed === known
+          ? { buffer: pair.buffer }
+          : { committed: pair.committed, buffer: pair.buffer },
+      );
+      known = pair.committed;
     };
     const next = () => {
       asked = undefined;
@@ -47,9 +56,9 @@ function useLineChanges(
       waiting = undefined;
       if (pair) send(pair);
     };
-    ask.current = (pair) => {
-      if (asked) waiting = pair;
-      else send(pair);
+    ask.current = (committed, buffer) => {
+      if (asked) waiting = { committed, buffer };
+      else send({ committed, buffer });
     };
     return () => {
       ask.current = () => {};
@@ -58,9 +67,9 @@ function useLineChanges(
   }, []);
   useEffect(() => {
     if (committed !== undefined && buffer !== undefined)
-      ask.current({ committed, buffer });
+      ask.current(committed, buffer);
   }, [committed, buffer]);
-  return answer && answer.committed === committed ? answer.hunks : undefined;
+  return answer && answer.committed === committed ? answer : undefined;
 }
 
 const cells = (lines: number[]) =>
@@ -112,8 +121,10 @@ function changeBarsCSS(hunks: readonly LineHunk[]) {
     );
   if (below.length)
     rules.push(`${cells(below)}::after { ${NOTCH} top: -4px; }`);
+  // The lines around removed ones are unchanged, so their ::before has no
+  // bar, and a line with removed lines on both sides shows both notches.
   if (above.length)
-    rules.push(`${cells(above)}::after { ${NOTCH} bottom: -4px; }`);
+    rules.push(`${cells(above)}::before { ${NOTCH} bottom: -4px; }`);
   return rules.join("\n");
 }
 
@@ -127,7 +138,10 @@ export function useChangeBars(
   committed: string | undefined,
   buffer: string | undefined,
 ) {
-  const hunks = useLineChanges(committed, buffer);
+  const answer = useLineChanges(committed, buffer);
+  const hunks = answer?.hunks;
+  // A keystroke inside a line gives the same hunks: no new stylesheet.
+  const shape = hunks && JSON.stringify(hunks);
   const [style] = useState(() => {
     const element = document.createElement("style");
     element.dataset.changeBars = "";
@@ -135,7 +149,8 @@ export function useChangeBars(
   });
   const css = useMemo(
     () => (committed === undefined || !hunks ? "" : changeBarsCSS(hunks)),
-    [committed, hunks],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hunks by value
+    [committed, shape],
   );
   useLayoutEffect(() => {
     style.textContent = css;
@@ -148,5 +163,10 @@ export function useChangeBars(
     },
     [style],
   );
-  return { hunks: committed === undefined ? undefined : hunks, attach };
+  return {
+    /** The edits in `buffer` as it is now, once the worker has caught up. */
+    hunks:
+      committed !== undefined && answer?.buffer === buffer ? hunks : undefined,
+    attach,
+  };
 }

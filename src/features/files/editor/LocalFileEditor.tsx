@@ -84,6 +84,8 @@ export default function LocalFileEditor({
     plain,
     compare,
     edited: source?.original !== file.buffer,
+    committed: source?.original,
+    buffer: file.buffer,
     hunks: bars.hunks,
   });
   const symbols = useSymbolNavigation(

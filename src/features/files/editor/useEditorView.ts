@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CodeViewItem } from "@pierre/diffs";
-import type { EditorViewState, Marker } from "@pierre/diffs/edit";
+import type {
+  EditState,
+  EditorInitialState,
+  EditorType,
+  EditorViewState,
+  Marker,
+} from "@pierre/diffs/edit";
 import type { CodeViewHandle, CodeViewProps } from "@pierre/diffs/react";
 import type { LocalFile } from "../../../../shared/types";
 import { useFileDiff } from "../../diff/useFileDiff";
 
 type Handle = CodeViewHandle<undefined, undefined>;
 export type FileEditor = NonNullable<ReturnType<Handle["getEditor"]>>;
+/** An editor's document, handed to the one that replaces it. */
+type Carried = Pick<EditState<EditorType, undefined>, "document" | "fileInfo">;
 
 /** Pierre ends an item's edit session by its id, so the file and its comparison each need their own. */
 const itemId = (path: string, compare: boolean) =>
@@ -116,19 +124,36 @@ export function useEditorView({
     opened?: typeof opened;
     view?: EditorViewState;
     focused?: Element | null;
+    document?: Carried;
   }>({});
   if (kept.current.opened !== opened) {
     const previous = kept.current.opened;
     let view: EditorViewState | undefined;
+    let carried: Carried | undefined;
     try {
-      if (previous)
-        view = viewer.current
-          ?.getEditor(itemId(path, previous.compare))
-          ?.getViewState();
+      const editor =
+        previous && viewer.current?.getEditor(itemId(path, previous.compare));
+      view = editor?.getViewState();
+      // Switching between the file and its comparison keeps the undo history:
+      // the new editor takes over the old one's document, when it holds the
+      // same text. A reload starts a new history.
+      const state =
+        opened &&
+        previous?.source === opened.source &&
+        previous.compare !== opened.compare
+          ? editor?.getEditState()
+          : undefined;
+      if (state && state.document.getText() === opened?.contents)
+        carried = { document: state.document, fileInfo: state.fileInfo };
     } catch {
       // Not attached yet: nothing to keep.
     }
-    kept.current = { opened, view, focused: document.activeElement };
+    kept.current = {
+      opened,
+      view,
+      focused: document.activeElement,
+      document: carried,
+    };
   }
   const quietRef = useRef(quiet);
   quietRef.current = quiet;
@@ -176,6 +201,14 @@ export function useEditorView({
     CodeViewProps<undefined, undefined>["editorOptions"]
   >(
     () => ({
+      ...(opened && kept.current.document
+        ? {
+            initialState: {
+              type: opened.compare ? "file-diff" : "file",
+              ...kept.current.document,
+            } as EditorInitialState<EditorType, undefined>,
+          }
+        : {}),
       onAttach: (editor) => {
         editor.setMarkers(markersRef.current);
         if (focusedItem.current === opened) return;

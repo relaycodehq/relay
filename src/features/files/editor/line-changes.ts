@@ -10,7 +10,8 @@ export type LineHunk = { line: number; added: number; removed: number };
 // Past this many differing lines the rest of the middle counts as one change.
 const MAX_EDIT = 4000;
 
-const linesOf = (text: string) => {
+/** A text's lines as compared: no final empty line, no CR. */
+export const linesOf = (text: string) => {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
   // A CRLF file over an LF commit (autocrlf) isn't a change on every line.
@@ -19,8 +20,14 @@ const linesOf = (text: string) => {
 
 /** How the buffer's lines differ from the committed text, as an editor gutter marks them. */
 export function lineChanges(committed: string, buffer: string): LineHunk[] {
-  const before = linesOf(committed),
-    after = linesOf(buffer);
+  return lineChangesOf(linesOf(committed), linesOf(buffer));
+}
+
+/** `lineChanges` over lines already split by `linesOf`. */
+export function lineChangesOf(
+  before: readonly string[],
+  after: readonly string[],
+): LineHunk[] {
   let head = 0;
   while (
     head < before.length &&

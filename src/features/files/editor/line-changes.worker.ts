@@ -1,9 +1,14 @@
-import { lineChanges } from "./line-changes";
+import { lineChangesOf, linesOf } from "./line-changes";
 
-/** Off the main thread: a file rewritten throughout takes most of a second. */
+/**
+ * Off the main thread: a file rewritten throughout takes most of a second.
+ * The committed text comes once, with the first buffer compared to it.
+ */
+let committed: string[] = [];
 self.onmessage = (
-  event: MessageEvent<{ id: number; committed: string; buffer: string }>,
+  event: MessageEvent<{ committed?: string; buffer: string }>,
 ) => {
-  const { id, committed, buffer } = event.data;
-  self.postMessage({ id, hunks: lineChanges(committed, buffer) });
+  if (event.data.committed !== undefined)
+    committed = linesOf(event.data.committed);
+  self.postMessage(lineChangesOf(committed, linesOf(event.data.buffer)));
 };

@@ -1,12 +1,14 @@
+import { useRef } from "react";
 import type { Pull } from "../../../../shared/types";
 import { useLineBlame } from "../../diff/LineBlame";
-import { committedLine, type LineHunk } from "./line-changes";
+import { committedLine, lineChanges, type LineHunk } from "./line-changes";
 
 /**
  * Blame for the editor's lines. Beside the committed side, the local side
  * reads as committed only while untouched; once edited, its lines point at
  * the committed side instead. The file by itself blames its unchanged lines
- * at their committed place, once `hunks` says where that is.
+ * at their committed place: where `hunks` says, or before the worker has
+ * caught up with the buffer, worked out here on hover.
  */
 export function useEditorBlame(
   target: Pull | { projectId: string; head: { sha: string } },
@@ -19,10 +21,26 @@ export function useEditorBlame(
     plain: boolean;
     compare: boolean;
     edited: boolean;
-    /** The buffer's edits since `revision`, once known. */
+    committed: string | undefined;
+    buffer: string | undefined;
+    /** The buffer's edits since `revision`, once known for this buffer. */
     hunks: readonly LineHunk[] | undefined;
   },
 ) {
+  // Changes whenever lines may map elsewhere, so an open hover asks again.
+  const mapping = useRef({ buffer: view.buffer, revision: 0 });
+  if (mapping.current.buffer !== view.buffer)
+    mapping.current = {
+      buffer: view.buffer,
+      revision: mapping.current.revision + 1,
+    };
+  const { committed, buffer, hunks } = view;
+  let worked: readonly LineHunk[] | undefined = hunks;
+  const lineAt = (line: number) => {
+    if (!worked && committed !== undefined && buffer !== undefined)
+      worked = lineChanges(committed, buffer);
+    return worked ? committedLine(worked, line) : undefined;
+  };
   const local = { revision, path, label: "Local checkout" };
   return useLineBlame(
     target,
@@ -49,9 +67,8 @@ export function useEditorBlame(
               ...local,
               ...(view.edited
                 ? {
-                    lineAt: view.hunks
-                      ? (line: number) => committedLine(view.hunks!, line)
-                      : () => undefined,
+                    lineAt,
+                    mapping: mapping.current.revision,
                     unavailable: `Changed here since ${base}, not committed yet.`,
                   }
                 : {}),

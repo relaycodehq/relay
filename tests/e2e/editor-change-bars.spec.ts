@@ -83,13 +83,20 @@ test("the Files editor marks changes against HEAD in its gutter, not as a diff",
       editor.locator("[data-column-number]").evaluateAll((cells) =>
         Object.fromEntries(
           cells.map((cell) => {
-            const bar = getComputedStyle(cell, "::before");
-            const notch = getComputedStyle(cell, "::after");
+            // A notch is clipped to a triangle, on either pseudo-element.
+            const before = getComputedStyle(cell, "::before");
+            const after = getComputedStyle(cell, "::after");
+            const shown = (s: CSSStyleDeclaration) => s.content !== "none";
+            const notch = [before, after].some(
+              (s) => shown(s) && s.clipPath !== "none",
+            );
             return [
               cell.getAttribute("data-column-number"),
               [
-                bar.content === "none" ? "" : bar.backgroundColor,
-                notch.content === "none" ? "" : "notch",
+                shown(before) && before.clipPath === "none"
+                  ? before.backgroundColor
+                  : "",
+                notch ? "notch" : "",
               ]
                 .join(" ")
                 .trim(),
@@ -172,6 +179,27 @@ test("the Files editor marks changes against HEAD in its gutter, not as a diff",
     await expect(editor.locator(".editor-versions")).toBeHidden();
     await expect(textbox).toContainText("const extra = 13;");
     await expect.poll(async () => (await marks())["7"]).toBe(modified);
+    // The round trip kept the undo history.
+    await editor.locator('[data-column-number="1"]').last().click();
+    await expect(textbox).toBeFocused();
+    await expect(async () => {
+      await page.keyboard.press("ControlOrMeta+z");
+      await expect(textbox).not.toContainText("const extra = 13;", {
+        timeout: 200,
+      });
+    }).toPass({ timeout: 5000 });
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(editor.locator(".editor-bar-state")).toHaveText("Saved");
+
+    // Committed, the file is HEAD again: no bars, and it still saves.
+    git("commit", "-qam", "Edits");
+    await expect
+      .poll(async () => Object.values(await marks()).filter(Boolean).length)
+      .toBe(0);
+    await page.keyboard.type("// after");
+    await expect.poll(async () => (await marks())["1"]).toBe(modified);
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(editor.locator(".editor-bar-state")).toHaveText("Saved");
   } finally {
     await app.close().catch(() => {});
   }
