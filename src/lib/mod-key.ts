@@ -5,8 +5,11 @@ export const mac = navigator.platform.startsWith("Mac");
 export const keys = (onMac: string, elsewhere: string) =>
   mac ? onMac : elsewhere;
 
-export const revealLabel = mac
-  ? "Show in Finder"
+/** What this platform calls its file browser. */
+export const fileManager = mac
+  ? "Finder"
   : navigator.platform.startsWith("Win")
-    ? "Show in Explorer"
-    : "Show in file manager";
+    ? "Explorer"
+    : "file manager";
+
+export const revealLabel = `Show in ${fileManager}`;

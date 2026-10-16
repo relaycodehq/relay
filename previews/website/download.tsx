@@ -131,7 +131,7 @@ function DownloadPage() {
         <section className="centered dl-list">
           <h2>Desktop</h2>
           <Files builds={platforms} os={os} release={live} />
-          <h2>Phone and other Macs</h2>
+          <h2>Phone and other computers</h2>
           <Files builds={otherBuilds} os={os} release={live} />
         </section>
 
@@ -139,7 +139,7 @@ function DownloadPage() {
           <span className="eyebrow">Headless</span>
           <h2>A computer you never sit at</h2>
           <p className="lede">
-            A Mac mini in a cupboard, a Linux box or a cloud server runs Relay
+            An old desktop in a cupboard, a Linux box or a cloud server runs Relay
             without its window. One command installs it, starts it with the
             computer and pairs your phone. Then hand it threads from your
             laptop and follow them from anywhere. It needs Node.js 22, Git and

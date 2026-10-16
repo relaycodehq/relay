@@ -1,5 +1,17 @@
 # Working on Relay
 
+## Relay runs on macOS, Windows and Linux
+
+- **Don't write "Mac" into the product.** Say "this computer", "here", or
+  name the thing ("Not cloned here"), not "this Mac". The file browser's name
+  comes from `fileManager`/`revealLabel` in `src/lib/mod-key.ts` (Finder,
+  Explorer or file manager), and shortcuts go through `keys()`, never a bare ⌘.
+- **The computer a thread is handed off to is any paired Relay**, a desktop,
+  a laptop or a headless server, not "the Mac mini". The release Mac mini is
+  our build machine, nothing users have.
+- Mac-only wording is fine only behind a platform check (the Keychain prompt,
+  macOS font smoothing, `relay .` opening the desktop app).
+
 ## Where code goes
 
 - **Group by feature, not by kind.** A feature's components, hooks, CSS and

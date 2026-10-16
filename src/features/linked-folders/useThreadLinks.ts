@@ -14,6 +14,7 @@ import {
 } from "../../../shared/projects";
 import { threadStorage } from "../../lib/thread-storage";
 import { api } from "../../lib/api";
+import { fileManager } from "../../lib/mod-key";
 
 export type ThreadLinks = ReturnType<typeof useThreadLinks>;
 
@@ -196,7 +197,7 @@ export function useThreadLinks({
           value: CHOOSE,
           label: "Choose a folder…",
           description: "Or type a path, like ~/work/",
-          source: "Finder",
+          source: fileManager,
           folder: true,
         },
       ];

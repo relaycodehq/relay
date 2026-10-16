@@ -7,7 +7,7 @@ export const words = [
     id: "handoff",
     category: "threads",
     title: "Hand a running thread to another computer",
-    text: "Send it to your Mac mini mid-answer. You keep chatting from the laptop while it runs there, then bring it back.",
+    text: "Send it to your desktop at home mid-answer. You keep chatting from the laptop while it runs there, then bring it back.",
   },
   {
     id: "drive",
@@ -113,9 +113,9 @@ export const words = [
 }[];
 
 export const quiet = [
-  "Plugged in, your Mac stays awake. On battery, only while an agent works.",
+  "Plugged in, your computer stays awake. On battery, only while an agent works.",
   "On a server, Relay updates itself once no thread is working.",
-  "Send later and limit resumes go out on time after your Mac sleeps.",
+  "Send later and limit resumes go out on time after your computer sleeps.",
   "A settled thread finishes quietly.",
   "New worktrees link your node_modules and copy the ignored files your .worktreeinclude names, like .env.",
   "A second Claude account keeps your skills and CLAUDE.md.",

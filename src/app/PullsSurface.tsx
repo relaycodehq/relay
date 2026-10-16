@@ -234,7 +234,7 @@ function LocalNote({
         </>
       ) : (
         <>
-          <span>Not on this Mac</span>
+          <span>Not cloned here</span>
           <button onClick={onAdd}>Add its folder…</button>
         </>
       )}

@@ -19,6 +19,7 @@ import { initWindowFocus } from "../../src/lib/window-focus";
 import { AppWindow, scriptMs, type Stop } from "./app-window";
 import {
   PhoneSync,
+  QuickKeys,
   QuickSwitchDemo,
   UsageDemo,
 } from "./sections";
@@ -189,7 +190,13 @@ const rows = [
   {
     eyebrow: "Agents",
     title: "Switch agents mid-thread",
-    text: "Each thread has its own agent, model and effort. Press ⌃⌘← or ⌃⌘→ to select the next preset. A new agent gets a note about the earlier work.",
+    text: (
+      <>
+        Each thread has its own agent, model and effort. Press{" "}
+        <QuickKeys arrows="←" /> or <QuickKeys arrows="→" /> to select the
+        next preset. A new agent gets a note about the earlier work.
+      </>
+    ),
     demo: <QuickSwitchDemo />,
   },
   {

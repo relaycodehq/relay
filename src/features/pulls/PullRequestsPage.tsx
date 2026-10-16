@@ -367,7 +367,7 @@ function RepoSummary({
       {project?.repository
         ? `${project.repository.owner}/${project.repository.name}`
         : repo}{" "}
-      · {project ? tildePath(project.path) : "not on this Mac"}
+      · {project ? tildePath(project.path) : "not cloned here"}
       {waiting > 0 && (
         <>
           {" · "}

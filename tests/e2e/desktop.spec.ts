@@ -68,7 +68,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     page.getByRole("button", { name: /Make pull request reviews/ }),
   ).toHaveCount(2);
   await expect(
-    page.getByRole("button", { name: /Web\/web-store\s*Not on this Mac/ }),
+    page.getByRole("button", { name: /Web\/web-store\s*Not cloned here/ }),
   ).toBeVisible();
   expect(fixture.requests.some((r) => r.path.includes("/raw/"))).toBe(false);
   await openPull(page, /Make pull request reviews/);

@@ -239,7 +239,7 @@ export function ProjectCard({
         <RepoMark project={project} />
         <span className="pulls-card-name">
           <strong>{project?.name ?? group.repo}</strong>
-          <small>{project ? group.repo : "Not on this Mac"}</small>
+          <small>{project ? group.repo : "Not cloned here"}</small>
         </span>
         <span className="pulls-card-count">
           {group.error

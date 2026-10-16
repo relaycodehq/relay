@@ -46,6 +46,7 @@ import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
 import "../../ui/palette.css";
 import "./add-project.css";
+import { fileManager } from "../../lib/mod-key";
 
 type Page = "root" | "folder" | "github" | "url" | "new";
 
@@ -239,7 +240,7 @@ export function AddProjectPalette({
       items.push({
         key: "finder",
         icon: <Folder size={15} />,
-        label: "Choose in Finder…",
+        label: `Choose in ${fileManager}…`,
         section: q ? undefined : " ",
         run: () =>
           void api.chooseFolder("Add a project folder").then((path) => {

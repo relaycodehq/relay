@@ -42,6 +42,7 @@ import {
   type SidebarRows,
 } from "./SidebarThread";
 import { IconButton, Spinner } from "../../ui/ui";
+import { fileManager } from "../../lib/mod-key";
 
 /** What every group and project in the tree works with. */
 export interface ProjectTree {
@@ -421,7 +422,7 @@ function ProjectMenu({
         icon={<FolderOpen size={13} />}
         onClick={() => groups.reveal(p.id)}
       >
-        Open in Finder
+        Open in {fileManager}
       </MenuAction>
       <MenuAction
         icon={<Copy size={13} />}

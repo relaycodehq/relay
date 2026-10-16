@@ -200,7 +200,7 @@ export function PhoneSidebar({
     <aside className="ph-sidebar">
       <header className="ph-home-head">
         <strong>
-          studio-mac
+          studio
           <ChevronDown size={16} />
         </strong>
         <Plus size={22} />

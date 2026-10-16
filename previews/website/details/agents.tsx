@@ -96,7 +96,7 @@ export const driveLoop: Loop = {
 const asks: [ask: string, tool: string, result: string][] = [
   ["Give each failing test its own thread", "start_threads", "Started 3 threads"],
   ["How much of my week is left?", "usage_limits", "Claude 62% · Codex 81%"],
-  ["Hand this thread to the Mac mini", "hand_off_thread", "Continued on macmini"],
+  ["Hand this thread to my desktop at home", "hand_off_thread", "Continued on studio"],
 ];
 export function DriveTile({ s }: { s: number }) {
   return (
@@ -154,14 +154,14 @@ export function VoiceTile({ s }: { s: number }) {
                     <b key={i} className="dt-loop-eq" style={{ animationDelay: `${-i * 0.23}s` }} />
                   ))}
                 </i>
-                Reading with Pocket, on this Mac
+                Reading with Pocket, on this computer
               </span>
             </span>
           </div>
         </div>
       </div>
       <p className="a-vlabel dt-in" data-on={listening ? "" : undefined}>
-        Parakeet, on this Mac · nothing leaves it
+        Parakeet, on this computer · nothing leaves it
       </p>
       <div className="dt-composer a-vcomposer">
         <span className="a-vdraft">

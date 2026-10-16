@@ -33,6 +33,7 @@ import type { MessageNote } from "./MessageNotes";
 import { Modal, Spinner } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
+import { fileManager } from "../../lib/mod-key";
 
 /** The composer's workspace slot: where an unsent thread will work, then where it does. */
 export function WorkspaceControl({
@@ -314,7 +315,7 @@ export function CheckoutControl({
                   className="composer-select-item worktree-item"
                   onClick={() => onReveal(selected.path)}
                 >
-                  Open active worktree in Finder
+                  Open active worktree in {fileManager}
                 </Menu.Item>
               </>
             )}
@@ -494,7 +495,7 @@ export function WorktreeMenu({
               className="composer-select-item worktree-item"
               onClick={onReveal}
             >
-              Open in Finder
+              Open in {fileManager}
             </Menu.Item>
             <Menu.Separator className="composer-menu-separator" />
             <Menu.Item

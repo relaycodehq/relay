@@ -36,7 +36,7 @@ Relay is an **early preview**. Grab your build from the [latest release](https:/
 
 No Relay account or Relay subscription. Agents use their own subscriptions, credits or API keys; their billing and limits still apply. Installed desktop builds check for updates and offer **Restart** to install them.
 
-For a server or a spare computer, like a Mac mini in a cupboard, the [headless Relay](docs/headless.md) installs with one command, sets up a background service and pairs with your phone:
+For a server or a spare computer, like an old desktop in a cupboard, the [headless Relay](docs/headless.md) installs with one command, sets up a background service and pairs with your phone:
 
 ```console
 curl -fsSL https://relaycode.io/install.sh | sh

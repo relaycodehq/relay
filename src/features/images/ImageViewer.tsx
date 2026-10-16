@@ -34,7 +34,7 @@ import { CopyImageMenu } from "./CopyImageMenu";
 import { imageQuery, useImageSource, type PreviewImage } from "./ImagePreview";
 import { Spinner } from "../../ui/ui";
 import "./image-viewer.css";
-import { mac } from "../../lib/mod-key";
+import { mac, revealLabel } from "../../lib/mod-key";
 
 const mod = mac ? "⌘" : "Ctrl+";
 
@@ -192,7 +192,7 @@ export function ImageViewer({
     if (path) run("copy path", () => api.writeClipboard(path));
   };
   const reveal = () => {
-    if (image.reveal) run("show in Finder", image.reveal);
+    if (image.reveal) run("reveal", image.reveal);
   };
 
   // Keys belong to the viewer while it's open, except inside its copy menu.
@@ -389,8 +389,8 @@ export function ImageViewer({
           {image.reveal && (
             <button
               type="button"
-              title={mac ? "Show in Finder" : "Show in folder"}
-              aria-label={mac ? "Show in Finder" : "Show in folder"}
+              title={revealLabel}
+              aria-label={revealLabel}
               onClick={reveal}
             >
               <FolderOpen size={15} />

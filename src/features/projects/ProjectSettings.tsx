@@ -17,6 +17,7 @@ import { ComposerSelect } from "../../ui/ComposerSelect";
 import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { fileManager } from "../../lib/mod-key";
 
 /** Project settings are scoped to the project their entry point asked for. */
 export function useSettingsProject(
@@ -140,7 +141,7 @@ export function ProjectFolderRow({ project }: { project: Project }) {
         onClick={() => void api.revealProject(project.id).catch(setError)}
       >
         <FolderOpen size={13} />
-        Open in Finder
+        Open in {fileManager}
       </button>
       {!!error && <ErrorBox error={error} />}
     </>

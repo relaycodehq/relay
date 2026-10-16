@@ -24,6 +24,7 @@ import {
 import { agentName } from "../../shared/agents";
 import { chats, projectRoot, turnMessages, turns } from "./sample";
 import { reducedMotion, useActive, useLiveTurn } from "./motion";
+import { useOs } from "./live";
 import { PhoneSidebar, PhoneStatus, PhoneThread } from "./phone";
 
 const HOUR = 60 * 60 * 1000;
@@ -175,7 +176,17 @@ const presets: QuickItem[] = [
   { id: "5", provider: "cursor", name: "Cursor default", effort: "Default", fast: false },
 ];
 
-/** The composer's quick switch, stepping through presets as ⌃⌘←/→ does. */
+/**
+ * Quick switch's default keys on the visitor's system, as shared/shortcuts.ts
+ * binds them; Android visitors and the first render read the macOS ones.
+ */
+export function QuickKeys({ arrows }: { arrows: string }) {
+  const os = useOs();
+  const mod = os === "win" || os === "linux" ? "Ctrl+Alt+Shift+" : "⌃⌘";
+  return <>{mod + arrows}</>;
+}
+
+/** The composer's quick switch, stepping through presets as its keys do. */
 export function QuickSwitchDemo() {
   const [ref, active] = useActive<HTMLDivElement>();
   const [index, setIndex] = useState(0);
@@ -225,7 +236,9 @@ export function QuickSwitchDemo() {
           >
             <ChevronLeft size={15} />
           </button>
-          <kbd>⌃⌘← →</kbd>
+          <kbd>
+            <QuickKeys arrows="← →" />
+          </kbd>
           <button
             type="button"
             className="icon-button"
@@ -347,7 +360,7 @@ export function PhoneSync() {
             <i />
             <i />
             <i />
-            <span>Relay on studio-mac</span>
+            <span>Relay on studio</span>
           </header>
           <div className="thread-message-column">{thread}</div>
         </div>

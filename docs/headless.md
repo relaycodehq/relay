@@ -1,6 +1,6 @@
 # Headless Relay
 
-`relay` is Relay without its window, for a computer you only ever reach from somewhere else: a Mac mini in a cupboard, a Linux box, a cloud server. Set it up once and it runs in the background, starts automatically with your user service and keeps your agents working there. You start, follow and answer threads from the Relay phone app, and hand threads to it (and take them back) from Relay on your laptop. See [how it runs](#how-it-runs) for login and boot behavior on each platform.
+`relay` is Relay without its window, for a computer you only ever reach from somewhere else: an old desktop in a cupboard, a Linux box, a cloud server. Set it up once and it runs in the background, starts automatically with your user service and keeps your agents working there. You start, follow and answer threads from the Relay phone app, and hand threads to it (and take them back) from Relay on your laptop. See [how it runs](#how-it-runs) for login and boot behavior on each platform.
 
 It is the desktop's own code, so threads, worktrees, approvals, questions, queues, Relay's tools for agents, usage and handoffs behave as they do on the desktop. The terminal is only for setting it up and checking on it; it is not a terminal UI for the work.
 

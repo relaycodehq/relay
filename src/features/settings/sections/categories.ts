@@ -82,7 +82,7 @@ export const categories: {
     id: "computers",
     label: "Computers",
     description:
-      "Hand a thread to another computer running Relay, like a Mac mini at home, and bring it back later.",
+      "Hand a thread to another computer running Relay, like an always-on desktop or server at home, and bring it back later.",
     icon: MonitorUp,
   },
   {
