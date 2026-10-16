@@ -24,7 +24,10 @@ export interface BranchCount {
   sha: string;
   /** Its last commit's committer date, in ms. */
   date: number;
-  /** Commits it has that its closest base lacks, and the reverse; unknown on git before 2.41. */
+  /**
+   * Commits it has that its closest base lacks, and the reverse. Git before
+   * 2.41 can't count: there it's 0 for a branch a base merged, else unknown.
+   */
   ahead?: number;
   behind?: number;
   /** That closest base, of `BranchCounts.compared`. */

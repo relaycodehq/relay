@@ -133,8 +133,12 @@ async function neverCommitted(commonDir: string, name: string) {
  * Where each branch stands against the bases. Ahead and behind count against
  * every base that exists, locally and on origin; a branch takes whichever it's
  * closest to, so work merged into any of them, on either side, reads as merged.
+ * `aheadBehind` off counts the way git before 2.41 has to, for its tests.
  */
-export async function branchCounts(root: string): Promise<BranchCounts> {
+export async function branchCounts(
+  root: string,
+  aheadBehind = true,
+): Promise<BranchCounts> {
   const [refs, bases, commonDir] = await Promise.all([
     git(root, [
       "for-each-ref",
@@ -164,10 +168,32 @@ export async function branchCounts(root: string): Promise<BranchCounts> {
   const counts = compareTo
     .map(({ ref }) => `%00%(ahead-behind:${ref})`)
     .join("");
-  // %(ahead-behind) arrived in git 2.41; older ones list without the counts.
-  const out = counts
-    ? await list(counts).catch(() => list(""))
-    : await list("");
+  // %(ahead-behind) arrived in git 2.41. Older ones, like the Apple Git
+  // macOS ships, still tell what each base has merged, just not by how much.
+  const counted =
+    counts && aheadBehind ? await list(counts).catch(() => null) : null;
+  const [out, merged] = await Promise.all([
+    counted ?? list(""),
+    counted || !compareTo.length
+      ? []
+      : Promise.all(
+          compareTo.map(async ({ ref }) =>
+            (
+              await git(root, [
+                "for-each-ref",
+                "--format=%(refname)",
+                `--merged=${ref}`,
+                "refs/heads/",
+                "refs/remotes/",
+              ])
+            ).split("\n"),
+          ),
+        ),
+  ]);
+  const mergedInto = (ref: string) => {
+    const i = merged.findIndex((refs) => refs.includes(ref));
+    return i < 0 ? undefined : { ahead: 0, against: compareTo[i].base };
+  };
   const rows = out.trimEnd().split("\n").filter(Boolean);
   const entries = await Promise.all(
     rows.map(async (row): Promise<[string, BranchCount] | null> => {
@@ -175,13 +201,18 @@ export async function branchCounts(root: string): Promise<BranchCounts> {
       if (symref) return null;
       const remote = ref.startsWith("refs/remotes/");
       const name = ref.slice(remote ? 13 : 11);
-      const closest = pairs
-        .map((p, i) => {
-          const [ahead, behind] = p.split(" ").map(Number);
-          return { ahead, behind, against: compareTo[i].base };
-        })
-        .filter((c) => Number.isFinite(c.ahead) && Number.isFinite(c.behind))
-        .sort((x, y) => x.ahead - y.ahead || x.behind - y.behind)[0];
+      const closest:
+        Pick<BranchCount, "ahead" | "behind" | "against"> | undefined = counted
+        ? pairs
+            .map((p, i) => {
+              const [ahead, behind] = p.split(" ").map(Number);
+              return { ahead, behind, against: compareTo[i].base };
+            })
+            .filter(
+              (c) => Number.isFinite(c.ahead) && Number.isFinite(c.behind),
+            )
+            .sort((x, y) => x.ahead - y.ahead || x.behind - y.behind)[0]
+        : mergedInto(ref);
       // A worktree's branch the bases already have may just be new.
       const noCommits =
         !remote &&
