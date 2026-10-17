@@ -143,20 +143,20 @@ public func doneLabel(_ a: AgentActivity) -> String {
     case ("failed", "search"): return "Search failed: \(a.label)"
     case ("failed", "web"): return "Web search failed"
     case ("failed", "agent"): return "Agent failed: \(a.label)"
-    case ("failed", "tool"): return "Tool failed: \(a.label)"
+    case ("failed", "tool"): return "Tool failed: \(callLabel(a))"
     case ("stopped", "command"): return "Stopped \(program())"
     case ("stopped", "read"): return "Stopped reading \(baseName(a.label))"
     case ("stopped", "file"): return "Stopped editing \(baseName(a.label))"
     case ("stopped", "search"): return "Search stopped: \(a.label)"
     case ("stopped", "web"): return "Web search stopped"
     case ("stopped", "agent"): return "Agent stopped: \(a.label)"
-    case ("stopped", "tool"): return "Stopped: \(a.label)"
+    case ("stopped", "tool"): return "Stopped: \(callLabel(a))"
     case (_, "command"): return "Ran \(program())"
     case (_, "read"): return "Read \(baseName(a.label))"
     case (_, "file"): return "Edited \(baseName(a.label))"
     case (_, "search"): return "Searched for \(a.label)"
     case (_, "web"): return "Searched the web"
-    default: return a.label
+    default: return callLabel(a)
     }
 }
 
@@ -169,6 +169,44 @@ public func liveLabel(_ a: AgentActivity) -> String {
     case "file": return "Editing \(baseName(a.label))"
     case "search": return "Searching for \(a.label)"
     case "web": return "Searching the web"
-    default: return a.label
+    default: return callLabel(a)
     }
+}
+
+/// electron/agents/activity.ts relayToolLabels: keep the two the same. The desktop words
+/// Relay's own tools when the call is made, so a turn from before a tool had its words
+/// still says "relay: add_note"; the phone words those again.
+let relayToolLabels = [
+    "start_threads": "Started threads",
+    "list_threads": "Checked on started threads",
+    "find_threads": "Looked through threads",
+    "read_thread": "Read a thread",
+    "send_to_thread": "Messaged a started thread",
+    "wait_for_threads": "Waited for started threads",
+    "stop_thread": "Stopped a started thread",
+    "hand_off_thread": "Moved a thread to another computer",
+    "settle_thread": "Settled a started thread",
+    "settle_this_thread": "Settles this thread when done",
+    "move_to_worktree": "Moved the thread to its own worktree",
+    "list_notes": "Read the notes",
+    "add_note": "Added a note",
+    "tick_note": "Ticked an item in the notes",
+    "usage_limits": "Checked usage limits",
+    "list_agents": "Listed agents",
+    "list_projects": "Listed projects",
+    "add_project": "Added a project",
+    "restart_relay": "Restarted Relay",
+    "report_relay_problem": "Drafted a report about Relay",
+    "show_html": "Showed a page",
+    "preview_html": "Looked at a page",
+    "ask_html": "Asked with a page",
+    "open_preview": "Opened the preview",
+    "screenshot": "Looked at the preview",
+    "console_errors": "Read the preview's console",
+]
+
+/// A call's label, with Relay's own tools in words even where the desktop sent their raw name.
+public func callLabel(_ a: AgentActivity) -> String {
+    guard let mcp = a.mcp, mcp.server == "relay", a.label == "relay: \(mcp.tool)" else { return a.label }
+    return relayToolLabels[mcp.tool] ?? a.label
 }

@@ -26,6 +26,17 @@ struct TraceTests {
         }
     }
 
+    @Test func relaysOwnToolsAreWordedWhereTheDesktopSentTheirRawName() throws {
+        let raw: AgentActivity = try JSON.parse(
+            #"{"id":"a","kind":"tool","label":"relay: add_note","status":"complete","mcp":{"server":"relay","tool":"add_note"}}"#
+        ).decode()
+        #expect(doneLabel(raw) == "Added a note")
+        var other = raw
+        other.mcp = McpCall(server: "linear", tool: "add_note")
+        other.label = "linear: add_note"
+        #expect(doneLabel(other) == "linear: add_note")
+    }
+
     @Test func summariesMatch() {
         for row in ts["summaries"]!.array! {
             let list = row["ids"]!.array!.map { activities[$0.string!]! }

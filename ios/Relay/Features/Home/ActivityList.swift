@@ -6,10 +6,12 @@ private let snoozeColor = Color(red: 0xD9 / 255, green: 0x9A / 255, blue: 0x2B /
 
 /// The desktop sidebar's Activity view (Android's ActivityList.kt): one card per open thread,
 /// the ones that need nothing from you faded back, and Snoozed and Settled folded away below.
-/// Swipe right settles, left snoozes; holding one brings up the rest.
+/// Swipe right settles, left snoozes; holding one brings up the rest. Threads holding unsent
+/// text come first, new threads' drafts above them.
 struct ActivityList: View {
     let open: (String) -> Void
     @Environment(Connection.self) private var connection
+    @Environment(\.navigate) private var navigate
     @Environment(\.colors) private var colors
     @Environment(\.threadFilter) private var filter
     @AppStorage("relay.family-folds") private var foldsData = Data()
@@ -34,20 +36,42 @@ struct ActivityList: View {
 
     private func list(now: Int64) -> some View {
         let filter = connection.current(filter)
-        let sections = chatActivitySections(connection.chats.filter(filter.keeps), now: now)
+        let drafts = connection.drafts.listed(connection.active)
+        let drafted = Set(drafts.keys.filter { !$0.hasPrefix("new:") }.map { String($0.prefix { $0 != ":" }) })
+        let fresh = drafts.values.compactMap { draft -> (ListedDraft, RemoteProject)? in
+            guard let project = newDraftProject(draft.key).flatMap(connection.project),
+                filter.projects.isEmpty || filter.projects.contains(project.id)
+            else { return nil }
+            return (draft, project)
+        }
+        .sorted { $0.0.at > $1.0.at }
+        let chats = connection.chats.filter(filter.keeps)
+        let sections = draftsFirst(chatActivitySections(chats, now: now), all: chats, drafted: drafted)
         let families = startedFamilies(sections.active, settled: sections.settled)
         let folds = folds
         return List {
+            if !fresh.isEmpty {
+                Section {
+                    ForEach(fresh, id: \.0.key) { draft, project in
+                        Button { navigate(.newThread(projectId: project.id, draftKey: draft.key)) } label: {
+                            NewDraftCard(draft: draft, project: project)
+                        }
+                        .activityRow()
+                    }
+                } header: {
+                    SectionLabel(title: "New threads", count: fresh.count)
+                }
+            }
             ForEach(groupByState(families.top, started: families.started), id: \.label) { group in
                 if !group.chats.isEmpty {
                     Section {
-                        ForEach(group.chats) { chat in family(chat, families, folds, now) }
+                        ForEach(group.chats) { chat in family(chat, families, folds, now, drafted) }
                     } header: {
                         SectionLabel(title: group.label, count: group.chats.count)
                     }
                 }
             }
-            if sections.active.isEmpty { InboxZero(filtered: filter.count > 0).activityRow() }
+            if sections.active.isEmpty && fresh.isEmpty { InboxZero(filtered: filter.count > 0).activityRow() }
             shelf("snoozed", "Snoozed", sections.snoozed, now)
             shelf("settled", "Settled", sections.settled.filter { !families.headers.contains($0.id) }, now)
         }
@@ -58,9 +82,9 @@ struct ActivityList: View {
     private func name(_ chat: RemoteChatSummary) -> String { connection.project(chat.projectId)?.name ?? "?" }
 
     @ViewBuilder
-    private func family(_ chat: RemoteChatSummary, _ families: StartedFamilies, _ folds: FamilyFolds, _ now: Int64)
-        -> some View
-    {
+    private func family(
+        _ chat: RemoteChatSummary, _ families: StartedFamilies, _ folds: FamilyFolds, _ now: Int64, _ drafted: Set<String>
+    ) -> some View {
         let started = families.started[chat.id] ?? []
         if families.headers.contains(chat.id) {
             ShelfRow(
@@ -68,18 +92,23 @@ struct ActivityList: View {
                 actionLabel: "Move back to activity", open: { open(chat.id) }, action: { triage(chat, .unsettle) }
             )
             .activityRow()
-            ForEach(started) { card($0, now, compact: true) }
+            ForEach(started) { card($0, now, compact: true, drafted: drafted) }
         } else {
             // A family's fold as the user left it; until then open while any of it needs a look.
             let isOpen = !started.isEmpty && (folds[chat.id] ?? !familySettled(started, unread: connection.unread))
-            card(chat, now, family: started.isEmpty ? nil : CardFamily(started: started, open: isOpen) { fold(chat.id, !isOpen) })
-            if isOpen { ForEach(started) { card($0, now, compact: true) } }
+            card(
+                chat, now, family: started.isEmpty ? nil : CardFamily(started: started, open: isOpen) { fold(chat.id, !isOpen) },
+                drafted: drafted)
+            if isOpen { ForEach(started) { card($0, now, compact: true, drafted: drafted) } }
         }
     }
 
-    private func card(_ chat: RemoteChatSummary, _ now: Int64, family: CardFamily? = nil, compact: Bool = false)
-        -> some View
-    {
+    private func card(
+        _ chat: RemoteChatSummary, _ now: Int64, family: CardFamily? = nil, compact: Bool = false, drafted: Set<String>
+    ) -> some View {
+        // A draft keeps it here: neither swipe would move it off the top.
+        let swipes = !drafted.contains(chat.id)
+        return
         Button { open(chat.id) } label: {
             ActivityCard(
                 chat: chat, projectName: name(chat), unread: connection.unread(chat), now: now, family: family,
@@ -92,19 +121,21 @@ struct ActivityList: View {
         }
         // The same guards as the hold menu: nothing settles while working or asking.
         .swipeActions(edge: .leading) {
-            if settles(chat) {
+            if swipes && settles(chat) {
                 Button("Settle", systemImage: "checkmark") { swiped(chat, .settle, done: "Settled") }
                     .tint(colors.accent)
             }
         }
         .swipeActions(edge: .trailing) {
-            Button("Snooze", systemImage: "moon.zzz") {
-                // Taken now: `now` only ticks every half minute.
-                let at = nowMs()
-                let until = Clock().snoozePresets(at)[0].until
-                swiped(chat, .snooze(until: until), done: "Snoozed until \(Clock().wakeLabel(until, now: at))")
+            if swipes {
+                Button("Snooze", systemImage: "moon.zzz") {
+                    // Taken now: `now` only ticks every half minute.
+                    let at = nowMs()
+                    let until = Clock().snoozePresets(at)[0].until
+                    swiped(chat, .snooze(until: until), done: "Snoozed until \(Clock().wakeLabel(until, now: at))")
+                }
+                .tint(snoozeColor)
             }
-            .tint(snoozeColor)
         }
         .contextMenu { holdMenu(chat, now) }
     }
@@ -264,5 +295,31 @@ extension View {
         listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20 + indent, bottom: 0, trailing: 20))
+    }
+}
+
+/// A new thread's unsent draft, maybe started on the computer: tapping it carries on writing it.
+private struct NewDraftCard: View {
+    let draft: ListedDraft
+    let project: RemoteProject
+    @Environment(\.colors) private var colors
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                ProjectCardBadge(projectId: project.id, name: project.name)
+                Text(project.name).foregroundStyle(colors.muted)
+            }
+            .font(.footnote)
+            Text("New thread").font(.body.weight(.medium)).foregroundStyle(colors.muted)
+            draftText(draft).font(.footnote).foregroundStyle(colors.waiting)
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 9)
+        .draftTint()
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Carry on writing this new thread")
     }
 }

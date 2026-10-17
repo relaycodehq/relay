@@ -78,11 +78,26 @@ private struct Dismissed: View {
     let messageId: String
     let group: AsyncAgentQuestions
     @Environment(Connection.self) private var connection
+    @State private var open = false
 
     var body: some View {
-        HStack {
-            Label("Dismissed question", systemImage: "questionmark.bubble")
-            Spacer()
+        HStack(alignment: .firstTextBaseline) {
+            let title = Label("Dismissed \(group.questions.count > 1 ? "questions" : "question")", systemImage: "questionmark.bubble")
+            if group.questions.isEmpty {
+                title
+                Spacer()
+            } else {
+                // Folds open on what was asked.
+                DisclosureGroup(isExpanded: $open) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(group.questions.enumerated()), id: \.offset) { _, q in Text(q.question) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 6)
+                } label: {
+                    title
+                }
+            }
             Button("Reopen") {
                 Task { try? await connection.dismissQuestion(chatId, message: messageId, group: group.id, false) }
             }

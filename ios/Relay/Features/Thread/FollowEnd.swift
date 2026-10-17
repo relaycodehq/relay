@@ -1,10 +1,18 @@
 import SwiftUI
 
 extension View {
-    /// Keeps a thread's scroll view at its end while it should be there.
-    func followingEnd(live: Bool, last: String?, mine: Bool) -> some View {
-        modifier(FollowEnd(live: live, last: last, mine: mine))
+    /// Keeps a thread's scroll view at its end while it should be there; `jump` scrolls to a message.
+    func followingEnd(live: Bool, last: String?, mine: Bool, jump: MessageJump? = nil) -> some View {
+        modifier(FollowEnd(live: live, last: last, mine: mine, jump: jump))
     }
+}
+
+/// A message to scroll the thread to, each ask its own even for the same message.
+struct MessageJump: Equatable {
+    let id: String
+    private let ask = UUID()
+
+    init(id: String) { self.id = id }
 }
 
 /// A thread stays at its end while it settles after opening, a new message or
@@ -20,6 +28,7 @@ private struct FollowEnd: ViewModifier {
     let last: String?
     /// The newest message is one you sent.
     let mine: Bool
+    let jump: MessageJump?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var following = true
     @State private var settling = true
@@ -43,6 +52,19 @@ private struct FollowEnd: ViewModifier {
             .onChange(of: last) {
                 if mine { following = true }
                 if following { position.scrollTo(edge: .bottom) }
+            }
+            .task(id: jump) {
+                guard let jump else { return }
+                following = false
+                settling = false
+                // The lazy stack only guessed the heights of rows it hadn't drawn: aimed again
+                // once the ones passed on the way are measured, it lands on the message.
+                withAnimation { position.scrollTo(id: jump.id, anchor: .top) }
+                for _ in 0..<3 {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    if Task.isCancelled || touching { return }
+                    withAnimation(.snappy) { position.scrollTo(id: jump.id, anchor: .top) }
+                }
             }
             .task(id: Settle(last: last, live: live)) {
                 settling = true

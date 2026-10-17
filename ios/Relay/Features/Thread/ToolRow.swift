@@ -11,6 +11,7 @@ struct ToolRow: View {
     /// A subagent's own calls.
     let calls: [AgentActivity]
     let root: String?
+    var looked: [MessageImage] = []
     @Environment(Connection.self) private var connection
     @State private var open = false
     @State private var full: String?
@@ -43,10 +44,19 @@ struct ToolRow: View {
             }
             .accessibilityAddTraits(opens ? .isButton : [])
             .selectsOnHold(question ? doneLabel(activity) : activity.label, mono: activity.kind == "command")
+            // A subagent's run has no turn to read its pictures from.
+            if !chatId.isEmpty, looksAtImage(activity), let path = imagePath(activity) {
+                ReadPreview(
+                    source: .read(chatId: chatId, messageId: messageId, path: path), name: fileName(path),
+                    done: activity.status == "complete", among: looked
+                )
+                .padding(.leading, 24)
+                .id(path)
+            }
             if open {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(calls) { call in
-                        ToolRow(chatId: chatId, messageId: messageId, activity: call, calls: [], root: root)
+                        ToolRow(chatId: chatId, messageId: messageId, activity: call, calls: [], root: root, looked: looked)
                     }
                     if question, let asked = askedQuestions(activity) {
                         ForEach(Array(asked.enumerated()), id: \.offset) { _, pair in

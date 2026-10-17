@@ -32,10 +32,16 @@ struct MarkdownView: View {
     }
 }
 
+extension EnvironmentValues {
+    /// Draws an answer's `![alt](src)` that isn't on the web; without it the picture stays in the text.
+    @Entry var markdownImage: ((MdImage) -> AnyView)?
+}
+
 private struct BlockView: View {
     let block: MdBlock
     let small: Bool
     let secondary: Bool
+    @Environment(\.markdownImage) private var markdownImage
 
     private var look: TextLook { TextLook(style: small ? .subheadline : .body, secondary: secondary) }
 
@@ -43,6 +49,16 @@ private struct BlockView: View {
         switch block {
         case .paragraph(let text):
             SelectableText(text: text, look: look)
+        case .figure(let text, let whole, let images):
+            // The text stays whole and its pictures follow: one that doesn't load leaves the sentence as it reads.
+            if let markdownImage {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !text.characters.allSatisfy(\.isWhitespace) { SelectableText(text: text, look: look) }
+                    ForEach(images, id: \.self) { markdownImage($0) }
+                }
+            } else {
+                SelectableText(text: whole, look: look)
+            }
         case .heading(let level, let text):
             SelectableText(
                 text: text,

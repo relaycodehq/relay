@@ -96,6 +96,7 @@ struct MessageActions: View {
             if forks {
                 Button("Fork from here", systemImage: "arrow.triangle.branch") { fork() }
             }
+            QuoteItem(text: message.body)
             if !message.body.isEmpty {
                 ShareLink(item: message.body)
             }

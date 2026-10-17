@@ -104,6 +104,7 @@ struct CompactionRow: View {
                     }
                 }
             }
+            if let provider = message.signIn { SignInNote(provider: provider) }
         }
     }
 
@@ -114,17 +115,29 @@ struct CompactionRow: View {
             "Context compacted \(compactedTokens(message.compactedFrom, message.context.map { Double($0.usedTokens) }))"
                 .trimmingCharacters(in: .whitespaces)
         case "cancelled": "Compaction stopped"
-        default: message.signIn == nil ? message.error ?? "Compaction failed" : "Compaction failed"
+        default: message.signIn == nil ? message.error.map { agentError($0).message } ?? "Compaction failed" : "Compaction failed"
         }
     }
 }
 
-/// What the project's setup or teardown printed.
+/// What the project's setup or teardown printed, and running setup again when it didn't get through.
 struct WorktreeCommandRow: View {
+    let chatId: String
     let message: ChatMessage
     let run: WorktreeCommandRun
+    /// On the main conversation, where the thread's setup is.
+    var main = true
     @State private var open = false
+    @State private var rerunning = false
+    @State private var failure: String?
+    @Environment(Connection.self) private var connection
     @Environment(\.colors) private var colors
+
+    /// Offered on the thread's latest setup, while nothing runs.
+    private var canRerun: Bool {
+        main && setupCanRerun(message) && !connection.running(chatId)
+            && latestSetup(connection.conversation(chatId))?.id == message.id
+    }
 
     var body: some View {
         let output = worktreeCommandOutput(run)
@@ -133,6 +146,18 @@ struct WorktreeCommandRow: View {
                 worktreeCommandNote(run, status: message.status),
                 failed: message.status == "failed" || message.status == "cancelled",
                 action: output.isEmpty ? nil : (open ? "Hide output" : "Show output", { open.toggle() }))
+            if canRerun {
+                Button(rerunning ? "Running setup…" : "Run setup again") { rerun() }
+                    .font(.caption)
+                    .foregroundStyle(colors.accent)
+                    .buttonStyle(.plain)
+                    .disabled(rerunning)
+                    .alert("Couldn't run setup again", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                        Button("OK") {}
+                    } message: {
+                        Text(failure ?? "")
+                    }
+            }
             if open, !output.isEmpty {
                 NoteBox {
                     Text("$ \(run.command)\n\(String(output.suffix(4000)))")
@@ -140,6 +165,19 @@ struct WorktreeCommandRow: View {
                         .foregroundStyle(colors.muted)
                         .selectsOnHold("$ \(run.command)\n\(output)", mono: true)
                 }
+            }
+        }
+    }
+
+    private func rerun() {
+        rerunning = true
+        Task {
+            defer { rerunning = false }
+            do {
+                try await connection.liveClient().rerunWorktreeSetup(chatId: chatId, messageId: message.id)
+                await connection.load(chatId)
+            } catch {
+                failure = error.localizedDescription
             }
         }
     }

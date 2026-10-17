@@ -20,7 +20,8 @@ public struct RemoteChat: Codable, Sendable, Equatable, Identifiable {
     public var cost: ThreadCost?
     public var queue: [RemoteQueued]?
     public var scheduled: [RemoteQueued]?
-    public var settings: ResumeSettings?
+    /// The last input's, which an old one may hold without a `choice`.
+    @Lenient public var settings: ResumeSettings?
     public var lastParentId: String?
     public var hasSend: Bool?
     public var sendPending: Bool?
@@ -47,6 +48,8 @@ public struct ChatWorktree: Codable, Sendable, Equatable {
     public var start: String?
     public var base: String?
     public var landed: JSON?
+    /// Its pull request on the Git host, once there is one.
+    public var pr: PullLink?
 }
 
 /// `shared/projects/worktrees.ts` WorkspaceMove: the thread works somewhere else from `after` on.
@@ -95,32 +98,9 @@ public struct RemoteQueued: Codable, Sendable, Equatable, Identifiable {
     public var error: String?
     public var parentId: String?
     public var to: String?
-    public var settings: ResumeSettings?
+    @Lenient public var settings: ResumeSettings?
     /// Only on scheduled ones: when it goes out.
     public var at: Int64?
-}
-
-/// Draft sync (bridge 19): the composer's text shared between the desktop and phones.
-public struct SharedDraft: Codable, Sendable, Equatable {
-    public var key: String
-    public var rev: Int64
-    public var at: Int64
-    /// "desktop" or "phone:<deviceId>"
-    public var by: String
-    public var origin: String
-    public var text: String
-    public var skills: [String: String]?
-    public var quotes: [String]?
-    public var files: [String]?
-    public var workspace: String?
-    public var extras: JSON?
-    public var other: JSON?
-}
-
-public struct DraftChange: Codable, Sendable, Equatable {
-    public var key: String
-    public var draft: SharedDraft?
-    public var sent: Bool?
 }
 
 /// A thread list change patched onto the last list (`chatsPatch`).

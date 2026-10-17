@@ -34,10 +34,34 @@ final class Connection {
     @ObservationIgnored let tunnels = TunnelListeners()
     /// Which of each computer's ports the browser may open: listed in Sites, or typed.
     @ObservationIgnored let tunnelPorts = TunnelPorts()
-    /// What a new thread opens on, and each agent's remembered model; asked once per connection.
+    /// What a new thread opens on, and each agent's remembered model; asked once per connection,
+    /// the copy saved last time standing in until then.
     private(set) var newThread: (settings: ResumeSettings, models: NewThreadModels)?
+    /// The agents listed and the new thread asked on this connection, past the saved copies.
+    private var listedModels: Set<String> = []
+    private var askedNewThread = false
+    @ObservationIgnored private let saves = ComposerSaves()
     /// Which threads moved since this phone last looked, kept past a restart.
     private(set) var seen = Connection.loadSeen()
+    /// Unsent composer text per computer, kept here and shared with the computer.
+    @ObservationIgnored let drafts = DraftStore(dir: URL.applicationSupportDirectory.appending(path: "relay-drafts"))
+    /// Threads kept for reading offline, by computer.
+    @ObservationIgnored let offline = ThreadCache(root: URL.cachesDirectory.appending(path: "relay-offline"))
+    /// Copies the latest threads before they're opened; one per connection.
+    @ObservationIgnored private var readAhead: ReadAhead?
+    /// How many of a thread's latest messages to hold, where Load earlier asked for more.
+    private(set) var history: [String: Int] = [:]
+    /// Messages on their way to a computer, shown in their threads until it has them (ConnectionSends.swift).
+    let outbox = Outbox(dir: URL.applicationSupportDirectory.appending(path: "relay-outbox"))
+    /// Each computer's last overview, shown while it can't be reached.
+    @ObservationIgnored let cache = OfflineCache(dir: URL.cachesDirectory.appending(path: "relay-overview"))
+    /// When this phone last reached each computer, by key.
+    private(set) var reached = ComputerSeen.app.load()
+    /// Which way the link runs now; nil while it's down.
+    private(set) var route: RemoteRoute?
+    /// Other threads finishing, failing or needing you, told while the app is open.
+    @ObservationIgnored let notices = ThreadNotices()
+    @ObservationIgnored var caching: Task<Void, Never>?
 
     private var client: RemoteClient?
     private var listening: Task<Void, Never>?
@@ -56,6 +80,7 @@ final class Connection {
         let saved = store.load()
         computers = saved.computers
         active = saved.active ?? saved.computers.last?.key
+        outbox.onSent = { [weak self] sent in self?.sentFromHere(sent) }
         if let computer { connect(.saved(computer)) }
     }
 
@@ -110,6 +135,13 @@ final class Connection {
 
     func forget(_ key: String) {
         computers.removeAll { $0.key == key }
+        drafts.forget(key)
+        saves.forget(key)
+        cache.forget(key)
+        outbox.forget(computer: key)
+        reached[key] = nil
+        ComputerSeen.app.save(reached)
+        offline.forget(key)
         if active == key {
             active = computers.last?.key
             disconnect()
@@ -134,19 +166,32 @@ final class Connection {
         overview = nil
         chats = []
         threads = [:]
+        history = [:]
+        readAhead = nil
         present = nil
         catalogs = [:]
         commandLists = [:]
         usage = [:]
         newThread = nil
+        listedModels = []
+        askedNewThread = false
         missing = MissingProjects()
         missingRefetch?.cancel()
+        route = nil
+        notices.reset()
     }
 
     private func connect(_ start: RemoteStart) {
         disconnect()
         let next = RemoteClient(start)
         client = next
+        if let key = computer?.key {
+            catalogs = saves.models(key)
+            newThread = saves.newThread(key).map { ($0.settings, $0.models) }
+        }
+        readAhead = ReadAhead(cache: offline) { id, saved in try await next.chat(id, previous: saved) }
+        if let computer { drafts.device(computer.key, computer.deviceId) }
+        showCached()
         tunnels.streams = next.tunnel
         listening = Task { [weak self] in
             for await update in next.updates {
@@ -162,7 +207,16 @@ final class Connection {
         case .status(let s):
             let cameOnline = s.state == .online && status.state != .online
             status = s
-            if cameOnline { Task { await refresh(client) } }
+            if cameOnline {
+                Task { await refresh(client) }
+                backOnline(client)
+            }
+            if s.state != .online, let active { drafts.offline(active) }
+            if s.state != .online { Task { [readAhead] in await readAhead?.want([]) } }
+            Task {
+                let now = await client.route
+                if self.client === client { route = now }
+            }
         case .paired(let c), .credentials(let c):
             if let at = computers.firstIndex(where: { $0.key == c.key }) { computers[at] = c }
             store.save(computers, active: active)
@@ -175,19 +229,34 @@ final class Connection {
         switch event {
         case .chats(let list):
             let before = Dictionary(chats.map { ($0.id, $0.needs) }, uniquingKeysWith: { a, _ in a })
+            notices.listed(list)
             chats = list
+            cacheSoon()
             lookForMissingProjects()
+            if let active, status.state == .online {
+                let wanted = ReadAhead.wanted(list, computer: active)
+                Task { [readAhead] in await readAhead?.want(wanted) }
+            }
             // A request, a question or the queue comes with no message of its own: the list says, the thread is fetched.
             for summary in list where threads[summary.id] != nil && before[summary.id] != summary.needs {
                 Task { await load(summary.id) }
             }
         case .presence(let p): present = p
         case .message(let chatId, let message, let title):
+            notices.heard(chatId, message)
             guard let held = threads[chatId] else { return }
             var thread = applyMessage(held, message)
             if let title { thread.title = title }
             threads[chatId] = thread
-        case .appearance, .draft, .handoff: break
+            took(chatId, thread, fetched: 0)
+            // What a turn leaves besides its messages (stopped work, moves, the queue) comes with the thread.
+            if !message.streaming { Task { await load(chatId) } }
+        case .draft(let change):
+            if let active { drafts.heard(active, change) }
+        case .appearance(let appearance):
+            // "Match computer" follows a theme changed there at once.
+            overview?.appearance = appearance
+        case .handoff: break
         }
     }
 
@@ -216,9 +285,14 @@ final class Connection {
         let fresh = try await client.overview()
         guard self.client === client else { return }
         overview = fresh
+        notices.listed(fresh.chats)
         chats = fresh.chats
         present = fresh.present
+        if let active { cache.save(active, fresh) }
         lookForMissingProjects()
+        if status.state == .online, let active {
+            await drafts.online(active, link: ClientDrafts(client: client), overview: fresh)
+        }
     }
 
     /// A thread in a project the phone hasn't heard of (one just added on the computer, or a
@@ -286,16 +360,42 @@ final class Connection {
     /// Fetches a thread, reusing the messages already held.
     func load(_ id: String) async {
         guard let client else { return }
+        openSaved(id)
+        let fetched = OutboxClock.stamp()
         do {
-            let chat = try await client.chat(id, previous: threads[id])
+            let chat: RemoteChat
+            do {
+                chat = try await client.chat(id, previous: threads[id], history: history[id])
+            } catch is MissingMessage {
+                chat = try await client.chat(id, history: history[id])
+            }
             guard self.client === client else { return }
             // A message the stream moved on while this was asked stays as the stream left it.
             threads[id] = keepNewer(chat, threads[id])
+            offline.save(active, id, chat)
             loadErrors[id] = nil
+            took(id, threads[id]!, fetched: fetched)
         } catch {
             log.error("Couldn't load thread \(id, privacy: .public): \(String(describing: error), privacy: .public)")
             loadErrors[id] = "Couldn't load this thread: \(error)"
         }
+    }
+
+    /// The offline copy, until the thread loads.
+    func openSaved(_ id: String) {
+        if threads[id] == nil, let saved = offline.now(active, id) { threads[id] = saved }
+    }
+
+    /// A page more of the thread's history, up to what the bridge hands out.
+    func loadEarlier(_ id: String) async {
+        history[id] = min(Bridge.maxRemoteHistory, (history[id] ?? Bridge.remoteHistory) + Bridge.remoteHistory)
+        await load(id)
+    }
+
+    /// The live client, for a feature's own calls.
+    func liveClient() throws -> RemoteClient {
+        guard let client else { throw PairingError("Not connected to your computer.") }
+        return client
     }
 
     /// What a conversation's next message goes with unless the composer picks otherwise: what the
@@ -337,20 +437,27 @@ final class Connection {
 
     /// Queued behind a running answer, or with `steer` into it. `rootId` makes it a reply in that
     /// side conversation; `/btw` on the main one asks beside it, as the desktop's composer does.
+    /// `throughDraft` sends it from the computer's composer, which adds what it holds of that draft.
     func send(
         _ text: String, images: [PastedImage] = [], to chatId: String, with picked: ResumeSettings? = nil,
-        steer: Bool = false, rootId: String? = nil, sendAt: Int64? = nil
+        steer: Bool = false, rootId: String? = nil, sendAt: Int64? = nil, throughDraft: String? = nil,
+        id: String = UUID().uuidString.lowercased()
     ) async throws {
         guard let client else { throw PairingError("Not connected.") }
         guard let settings = picked ?? settings(of: chatId, rootId: rootId)
         else { throw PairingError("Pick an agent for this thread first.") }
         let delivery = sendAt != nil || !running(chatId, rootId: rootId) ? nil : steer ? "steer" : "queue"
         let btw = rootId == nil ? text.range(of: "^/btw\\s+", options: [.regularExpression, .caseInsensitive]) : nil
-        try await client.sendProjectChat(
-            chatId: chatId,
-            ProjectChatSend(
-                body: btw.map { String(text[$0.upperBound...]) } ?? text, settings: settings, delivery: delivery,
-                images: images, parentId: rootId, side: btw != nil, sendAt: sendAt))
+        let send = ProjectChatSend(
+            id: id, body: btw.map { String(text[$0.upperBound...]) } ?? text, settings: settings, delivery: delivery,
+            images: images, parentId: rootId, side: btw != nil, sendAt: sendAt)
+        deliver(send, to: chatId, through: client, draft: throughDraft)
+    }
+
+    /// Whether a send of this draft goes through the computer, which holds part of it.
+    func sendsThroughComputer(_ key: String) -> Bool {
+        guard let active, (overview?.bridge ?? 1) >= Bridge.drafts else { return false }
+        return drafts.shared(active, key)?.extras?.any == true
     }
 
     func rename(_ chatId: String, to name: String) async throws {
@@ -403,15 +510,31 @@ final class Connection {
         return try await client.queuedImages(chatId: chatId, itemId: item)
     }
 
+    /// An empty thread in the project, for `send` to give its first message.
+    func createThread(in projectId: String, workspace: String?) async throws -> CreatedChat {
+        guard let client else { throw PairingError("Not connected.") }
+        return try await client.createProjectChat(projectId: projectId, workspace: workspace)
+    }
+
     /// Makes the thread, then sends its first message; the thread's id.
     func start(
         in projectId: String, workspace: String?, _ text: String, images: [PastedImage], with settings: ResumeSettings,
-        sendAt: Int64? = nil
+        sendAt: Int64? = nil, throughDraft: String? = nil
     ) async throws -> String {
         guard let client else { throw PairingError("Not connected.") }
+        if let throughDraft {
+            return try await client.sendDraft(
+                key: throughDraft, chatId: nil, ProjectChatSend(body: text, settings: settings, images: images, sendAt: sendAt))
+        }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
-        try await client.sendProjectChat(
-            chatId: made.id, ProjectChatSend(body: text, settings: settings, images: images, sendAt: sendAt))
+        let send = ProjectChatSend(body: text, settings: settings, images: images, sendAt: sendAt)
+        // One for later goes to the desktop's queue, which the thread shows; through the outbox it
+        // would sit there twice. A plain one follows the thread, as a worktree or images can take a while.
+        if sendAt != nil {
+            try await client.sendProjectChat(chatId: made.id, send)
+        } else {
+            deliver(send, to: made.id, through: client)
+        }
         return made.id
     }
 
@@ -431,6 +554,17 @@ final class Connection {
     }
 
     var canRender: Bool { (overview?.bridge ?? 1) >= Bridge.render }
+
+    /// A picture as a data URL, `max` pixels at most on its longer side; whole without one,
+    /// and from older computers.
+    func image(_ source: ImageSource, max: Int?) async throws -> String {
+        if case .attached(_, let imageId) = source, let outgoing = outbox.outgoingImage(imageId) { return outgoing }
+        guard let client else { throw PairingError("Not connected.") }
+        if let max, canShrinkImages { return try await client.image(source, max: max) }
+        return try await client.wholeImage(source)
+    }
+
+    var canShrinkImages: Bool { (overview?.bridge ?? 1) >= Bridge.image }
 
     /// An unused Scratchpad folder, or a fresh one: where a new Scratchpad chat starts.
     /// Whether the computer tunnels its localhost to the phone's browser.
@@ -463,11 +597,15 @@ final class Connection {
 
     /// The agent's models, from this connection's list once it has one.
     func models(_ provider: String) async throws -> [AgentModel] {
-        if let known = catalogs[provider], !known.isEmpty { return known }
+        if listedModels.contains(provider), let known = catalogs[provider], !known.isEmpty { return known }
         guard let client else { throw PairingError("Not connected.") }
         let list = try await client.agentModels(provider)
         // Empty while the agent's CLI starts: asked again next time.
-        if self.client === client, !list.isEmpty { catalogs[provider] = list }
+        if self.client === client, !list.isEmpty {
+            catalogs[provider] = list
+            listedModels.insert(provider)
+            if let active { saves.saveModels(active, catalogs) }
+        }
         return list
     }
 
@@ -477,9 +615,17 @@ final class Connection {
     }
 
     func loadNewThread() async {
-        guard newThread == nil, let client, status.state == .online else { return }
+        guard !askedNewThread, let client, status.state == .online else { return }
+        askedNewThread = true
         let defaults = await client.newThreadDefaults()
-        if self.client === client { newThread = defaults }
+        guard self.client === client else { return }
+        newThread = defaults
+        saveNewThread()
+    }
+
+    private func saveNewThread() {
+        guard let active, let newThread else { return }
+        saves.saveNewThread(active, SavedNewThread(settings: newThread.settings, models: newThread.models))
     }
 
     /// The next new thread, here or on the computer, opens on what was picked:
@@ -488,6 +634,7 @@ final class Connection {
         guard let client, settings != before else { return }
         newThread?.settings = settings
         if settings.provider == before.provider { newThread?.models[settings.provider] = NewThreadModel(settings) }
+        saveNewThread()
         Task {
             do {
                 if settings.provider != before.provider {
@@ -558,9 +705,8 @@ final class Connection {
         return conflicts
     }
 
-    func diff(_ chatId: String, turn messageId: String, path: String) async throws -> RemoteDiff {
-        guard let client else { throw PairingError("Not connected.") }
-        return try await client.turnDiff(chatId: chatId, messageId: messageId, path: path)
+    func diff(_ source: DiffSource) async throws -> RemoteDiff {
+        try await liveClient().diff(source)
     }
 
     var canReadAloud: Bool { overview?.readAloud == true && (overview?.bridge ?? 0) >= Bridge.readAloud }
@@ -569,12 +715,47 @@ final class Connection {
         guard let client else { throw PairingError("Not connected to your computer.") }
         return try await client.readAloud(request)
     }
+
+    // MARK: Offline (the rest in ConnectionSends.swift)
+
+    /// The computer's last seen lists while it connects; `present` is only ever the live link's word.
+    private func showCached() {
+        guard let active, let cached = cache.load(active) else { return }
+        overview = cached
+        chats = cached.chats
+    }
+
+    /// Through the live client, or refusing while there's none.
+    var link: OutboxLink { ClientOutboxLink(client) }
+
+    private func backOnline(_ client: RemoteClient) {
+        guard let active else { return }
+        reached[active] = nowMs()
+        ComputerSeen.app.save(reached)
+        outbox.resendFailed(ClientOutboxLink(client), computer: active)
+        Task { try? await client.reportApp(PhoneAppReport(version: Self.appVersion)) }
+    }
+
+    var canUseProjectFolder: Bool { (overview?.bridge ?? 0) >= Bridge.workspace }
+
+    /// The thread's agent works in the project folder from now on, as the desktop's workspace menu can.
+    func useProjectFolder(_ chatId: String) async throws {
+        guard let client else { throw PairingError("Not connected.") }
+        _ = try await client.desktop("selectAgentWorktree", [.string(chatId), nil])
+    }
+
+    /// Local network or Tailscale first; the client keeps it with the pairing and moves if it's shorter.
+    func setRoutes(_ routes: [RouteKind]) {
+        guard let client else { return }
+        Task { await client.setRoutes(routes) }
+    }
 }
 
 private extension RemoteChatSummary {
     /// What changes when a thread starts or stops needing the user, or its queue moves.
     var needs: [String] {
-        [running == true, waiting == true, asking == true, blocked == true].map(\.description) + [queueMark ?? ""]
+        [running == true, waiting == true, asking == true, blocked == true].map(\.description)
+            + [queueMark ?? "", branch ?? "", "\(worktree == true)"]
     }
 }
 
@@ -582,4 +763,12 @@ struct PairingError: LocalizedError {
     let message: String
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
+}
+
+/// The computer's side of the drafts, through the live client.
+private struct ClientDrafts: DraftLink {
+    let client: RemoteClient
+
+    func save(_ write: DraftWrite) async throws -> SharedDraft? { try await client.saveDraft(write) }
+    func other(key: String, drop: Bool) async throws -> SharedDraft? { try await client.draftOther(key: key, drop: drop) }
 }

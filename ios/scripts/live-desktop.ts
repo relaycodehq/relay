@@ -11,35 +11,51 @@
 // streamed answer back, and dictation hears the same sentence whatever is said.
 // Either way the first project runs a stand-in dev server on a free 127.0.0.1
 // port, which Sites lists as "Dev server" and the phone's tunnel opens.
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { watchFile } from "node:fs";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { filesFixture } from "./live-desktop-files.ts";
 
 const root = resolve(import.meta.dirname, "../..");
+const { DraftStore: DesktopDrafts } = await import("../../electron/drafts/store");
+type DraftChange = import("../../shared/drafts").DraftChange;
+type DraftWrite = import("../../shared/drafts").DraftWrite;
+type DraftDevice = import("../../shared/drafts").DraftDevice;
 const { Store } = await import(join(root, "electron/app/store.ts"));
 const { PhoneRemote } = await import(join(root, "electron/remote/phone-remote.ts"));
+const { remoteBridgeVersion } = await import(join(root, "shared/remote.ts"));
 
 const out = process.argv[2];
 if (!out) throw new Error("Usage: live-desktop.ts <file for the pairing link> [--seed]");
 const seeded = process.argv.includes("--seed");
 // Replies slow enough to queue behind or steer by hand.
 const slow = process.argv.includes("--slow");
-const store = new Store(join(await mkdtemp(join(tmpdir(), "relay-ios-live-")), "state"));
+// A thread made from the phone takes a while to load and to take its first message.
+const slowNew = process.argv.includes("--slow-new");
+const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+// --state <dir>: keep the pairing and port there, so a restarted stand-in is the same computer.
+const stateAt = process.argv.indexOf("--state");
+const stateDir = stateAt > 0 ? process.argv[stateAt + 1] : await mkdtemp(join(tmpdir(), "relay-ios-live-"));
+await mkdir(stateDir, { recursive: true });
+const store = new Store(join(stateDir, "state"));
 await store.load();
 // --lan: listen on this computer's Wi-Fi address too, for a real phone, with no tailnet.
 const lan = process.argv.includes("--lan");
 await store.update((s: any) => {
-  s.phoneRemote = { lan };
+  s.phoneRemote = { ...s.phoneRemote, lan };
 });
-const port = await new Promise<number>((done) => {
+const keptPort = Number(await readFile(join(stateDir, "port"), "utf8").catch(() => "")) || undefined;
+const port = keptPort ?? await new Promise<number>((done) => {
   const probe = createServer();
   probe.listen(0, "127.0.0.1", () => {
     const p = (probe.address() as any).port;
     probe.close(() => done(p));
   });
 });
+await writeFile(join(stateDir, "port"), String(port));
 
 const now = Date.now();
 const min = 60_000;
@@ -62,6 +78,8 @@ const projects = seeded
 
 type Thread = { summary: any; messages: any[]; requests?: any[]; lastInput?: any; lastParentId?: string | null; queue?: any[]; scheduled?: any[]; queuePaused?: boolean };
 const threads = new Map<string, Thread>();
+/** Each thread's subagents, as projectChatAgents lists them. */
+const subagents = new Map<string, any[]>();
 let n = 0;
 const id = () => `44444444-4444-4444-8444-${String(++n).padStart(12, "0")}`;
 const lastInput = {
@@ -205,7 +223,10 @@ if (!seeded) {
   {
     const swift = [...threads.values()].at(-1)!;
     const later = (body: string) => ({ ...queuedSend(body), id: id() });
-    swift.queue = [later("@claude then wire it into the composer"), later("@claude and run the live test against a real desktop")];
+    // The last one is a reply, waiting for its side conversation under the first answer.
+    const answer = swift.messages.find((m: any) => m.role === "assistant");
+    swift.queue = [later("@claude then wire it into the composer"), later("@claude and run the live test against a real desktop"),
+      ...(answer ? [{ ...later("@claude does that hold for the tunnel too?"), parentId: answer.id }] : [])];
     swift.scheduled = [{ ...later("@claude check the TestFlight build went through"), at: now + 20 * min }];
     swift.summary.queueMark = "seed";
   }
@@ -293,10 +314,129 @@ So every exponent is $\le 0$ and the biggest term is exactly $1$. A ragged one s
   thread(site, "Tidy the footer links", 50, [message("assistant", "Done: the footer links all point at the new pages.", 50)], { markedUnread: true, branch: "site/footer" });
   const lead = thread(relay, "Split the settings page", 12, [message("assistant", "Started two threads: one per half of the page.", 12)]);
   thread(relay, "Settings: account half", 6, [message("assistant", "", 6, { status: "streaming" })], { startedBy: { chatId: lead, agent: "claude" }, running: true, runningSince: now - 6 * min, created: 2 });
-  thread(relay, "Settings: appearance half", 8, [message("assistant", "Moved the theme rows.", 8)], { startedBy: { chatId: lead, agent: "claude" }, created: 3 });
+  // Asked by the lead's agent: its name opens the lead.
+  thread(relay, "Settings: appearance half", 8, [
+    message("user", "Move the theme rows into their own section.", 9, { author: "Claude", fromThread: lead }),
+    message("assistant", "Moved the theme rows.", 8),
+  ], { startedBy: { chatId: lead, agent: "claude" }, created: 3 });
+  {
+    // The lead's turn names the threads its start_threads call made, as the thread lists them.
+    const started = [...threads.entries()].filter(([, t]) => t.summary.startedBy?.chatId === lead).map(([chatId, t]) => ({ id: chatId, title: t.summary.title }));
+    const call = step("Started threads", "tool", { mcp: { server: "relay", tool: "start_threads" }, detail: JSON.stringify(started) });
+    Object.assign(threads.get(lead)!.messages[0], { trace: [{ kind: "activity", id: call.id, activity: call }], created: now - 13 * min, ended: now - 12 * min });
+  }
+  seedThreadStates();
+}
+
+/** The thread screen's states: subagents out, a stopped turn, a waiting plan, a goal, a long history and the strips. */
+function seedThreadStates() {
+  // A fan-out: two agents still out, one back.
+  const audit = thread(relay, "Audit the bridge for races", 1, [
+    message("user", "Audit the remote bridge for races. Fan out if it helps.", 6),
+    message("assistant", "Splitting it three ways: the client, the tunnel and the drafts.", 5, {
+      status: "streaming",
+      trace: [{ kind: "activity", id: "toolu_agent_a", activity: { id: "toolu_agent_a", kind: "agent", label: "Read the remote client", status: "running", progress: "12 calls" } },
+        { kind: "activity", id: "toolu_agent_b", activity: { id: "toolu_agent_b", kind: "agent", label: "Check the tunnel's credit", status: "running" } },
+        { kind: "activity", id: "toolu_agent_c", activity: { id: "toolu_agent_c", kind: "agent", label: "Look at draft merges", status: "complete" } }],
+    }),
+  ], { running: true, runningSince: now - 5 * min, pending: [
+    { kind: "task", id: "task-a", description: "Read the remote client", since: now - 5 * min, agent: true },
+    { kind: "task", id: "task-b", description: "Check the tunnel's credit", since: now - 4 * min, agent: true },
+  ] });
+  const read = (path: string) => step(path, "read");
+  subagents.set(audit, [
+    { id: "toolu_agent_a", taskId: "task-a", description: "Read the remote client", type: "Explore", model: "claude-sonnet-5-5", status: "running", started: now - 5 * min, calls: 12,
+      summary: "Following the reconnect path through Dial.swift", recent: [read("/tmp/relay/ios/RelayKit/Sources/RelayRemote/Client/Dial.swift")], provider: "claude",
+      brief: "Read ios/RelayKit/Sources/RelayRemote/Client end to end. Look for any state touched off the client's queue, any continuation resumed twice, and any timer that outlives a closed socket. ".repeat(3).trim(),
+      trace: [{ kind: "commentary", id: "c1", text: "Starting with how a call waits for its answer." },
+        ...[read("/tmp/relay/ios/RelayKit/Sources/RelayRemote/Client/RemoteClient.swift"), step("rg -n 'resume(' ios/RelayKit", "search"), read("/tmp/relay/ios/RelayKit/Sources/RelayRemote/Client/Dial.swift")].map((a) => ({ kind: "activity", id: a.id, activity: a })),
+        { kind: "commentary", id: "c2", text: "Each continuation is removed from `pending` before it resumes, so a late answer finds nothing." }] },
+    { id: "toolu_agent_b", taskId: "task-b", description: "Check the tunnel's credit", type: "general-purpose", status: "running", started: now - 4 * min, calls: 3,
+      recent: [{ ...step("swift test --filter TunnelStreams"), status: "running" }], provider: "claude", trace: [] },
+    { id: "toolu_agent_c", description: "Look at draft merges", type: "Explore", model: "claude-haiku-5-5", status: "completed", started: now - 5 * min, ended: now - 2 * min, calls: 7,
+      outcome: "No race: every write goes through the store's serial queue. The merge keeps the newest rev.", recent: [], provider: "claude",
+      brief: "Check whether two devices writing one draft can lose text.",
+      trace: [read("/tmp/relay/electron/drafts/store.ts"), read("/tmp/relay/shared/drafts.ts")].map((a) => ({ kind: "activity", id: a.id, activity: a })),
+      report: "No race: every write goes through the store's serial queue. The merge keeps the newest rev, and a stale base comes back as a conflict the phone shows." },
+  ]);
+  // Stopped by hand: Resume answer picks it back up.
+  thread(relay, "Rename the settings keys", 25, [
+    message("user", "Rename the old settings keys to the new scheme and migrate stored values.", 30),
+    message("assistant", "Renamed `theme` and `font` so far; the migration is half written.", 26, {
+      status: "cancelled", ended: now - 25 * min, activity: [step("src/settings/keys.ts", "file"), step("npm run typecheck")],
+    }),
+  ]);
+  // A plan waiting for its go-ahead.
+  thread(relay, "Plan the offline mode", 35, [
+    message("user", "Plan offline mode for the phone. Don't change anything yet.", 40),
+    message("assistant", "## Plan\n\n1. Save each opened thread to disk, per computer\n2. Copy the latest eight ahead of time\n3. Show the saved copy while the link is down\n\nNothing changed yet.", 35, { proposedPlan: true }),
+  ]);
+  // Codex's /goal at work.
+  thread(relay, "Get the e2e suite green", 2, [
+    message("user", "/goal All e2e specs pass on CI", 50),
+    message("assistant", "Fixed the quit spec; on the thread-scroll one now.", 2, { status: "streaming", provider: "codex", activity: [step("npx playwright test thread-scroll")] }),
+  ], { running: true, runningSince: now - 50 * min, provider: "codex",
+    goal: { provider: "codex", objective: "All e2e specs pass on CI", status: "active", tokensUsed: 182_000, tokenBudget: 1_000_000, timeUsedSeconds: 2_460, checks: 3, updated: now - 2 * min } });
+  // A usage limit stopped the answer; it carries on at the reset.
+  {
+    const reset = new Date(now + 40 * min).toTimeString().slice(0, 5);
+    const hit = message("assistant", "", 20, { status: "failed", error: `Claude's usage limit was reached. It resets at ${reset}.`, ended: now - 20 * min });
+    thread(relay, "Refactor the store", 20, [message("user", "Split the store into one file per slice.", 22), hit],
+      { limitResume: { messageId: hit.id, provider: "claude", at: now + 40 * min } });
+  }
+  // Background work Claude left running, and work that stopped when Relay closed.
+  thread(relay, "Keep the dev server up", 11, [
+    message("user", "Start the dev server and check back on the build in half an hour.", 13),
+    message("assistant", "It's running in the background, and I'll check back on the build.", 11),
+  ], { pending: [
+    { kind: "task", id: "bash-1", description: "npm run dev", since: now - 12 * min },
+    { kind: "wakeup", id: "wake-1", prompt: "Check the build", recurring: false, at: now + 25 * min },
+  ] });
+  thread(relay, "Babysit the migration", 90, [
+    message("user", "Run the migration and watch it.", 95),
+    message("assistant", "The migration runs in the background; I'll report when it's done.", 90),
+  ], { stopped: { at: now - 60 * min, items: [
+    { kind: "task", id: "bash-2", description: "Run the database migration", since: now - 92 * min },
+    { kind: "wakeup", id: "wake-2", prompt: "Check it", recurring: true },
+  ] } });
+  // An old thread whose last input was kept before `choice` was: it still loads.
+  threads.get(thread(relay, "From before choices", 600, [
+    message("user", "Rename the build script.", 602),
+    message("assistant", "Renamed it to `scripts/build.mjs`.", 600),
+  ]))!.lastInput = { id: "old-input", body: "@claude Rename the build script.", provider: "claude", runtimeMode: "full-access", interactionMode: "default" };
+  // A long history: the phone holds the latest 100 and loads the rest a page at a time.
+  thread(relay, "A very long history", 400, Array.from({ length: 130 }, (_, i) => [
+    message("user", `Note ${i + 1}: anything else?`, 1000 - i * 4),
+    message("assistant", `Reply ${i + 1}.${i === 0 ? " This is the very first answer." : ""}`, 999 - i * 4),
+  ]).flat());
+  // Where the thread moved, setup that failed, and an answer that failed twice.
+  {
+    const asked = message("user", "Try the change in a worktree of its own.", 70);
+    const setup = message("assistant", "", 69, { status: "failed", worktreeCommand: { kind: "setup", command: "npm ci", output: "npm ERR! code ERESOLVE\nnpm ERR! Could not resolve dependency", exitCode: 1 } });
+    const done = message("assistant", "Tried it there; the change holds. Back in the project folder now.", 60);
+    thread(relay, "Try the worktree flow", 60, [asked, setup, done], {
+      branch: "relay/try-worktree", worktree: true,
+      workspaceMoves: [
+        { at: now - 70 * min, after: asked.id, how: "moved", to: "/tmp/wt/relay-try", branch: "relay/try-worktree", unasked: true, by: "claude" },
+        { at: now - 60 * min, after: done.id, how: "switched" },
+      ],
+    });
+  }
+  thread(relay, "Summarise the RFC", 8, [
+    message("user", "Summarise the sync RFC.", 12),
+    message("assistant", "", 11, { status: "failed", signIn: "claude", error: "Not logged in · Please run /login", ended: now - 11 * min }),
+    message("user", "Signed in, try again.", 9),
+    message("assistant", "", 8, { status: "failed", ended: now - 8 * min,
+      error: 'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}\n\nTechnical details:\nrequest_id: req_011CTx' }),
+  ]);
 }
 
 const summaries = () => [...threads.values()].map((t) => t.summary);
+const { gitStandIn } = await import("./live-git");
+const worktreeThread = [...threads.values()].find((t) => t.summary.worktree)?.summary;
+const git = seeded
+  ? gitStandIn({ now, relay, site, worktree: worktreeThread && { chatId: worktreeThread.id, branch: worktreeThread.branch, from: "main" } })
+  : undefined;
 
 // What the composer's model picker asks for.
 const efforts = ["low", "medium", "high", "xhigh", "max"];
@@ -374,12 +514,92 @@ const devServer = await new Promise<number>((done) => {
 });
 const devTask = { id: "dev-server", command: "npm run dev", kind: "server", title: "Dev server", origin: "detached", started: now, ports: [devServer], pids: 1 };
 // An answer that links to the dev server, which the phone opens through the tunnel.
-if (seeded) thread(relay, "Is the preview up?", 12, [
+const previewChat = seeded && thread(relay, "Is the preview up?", 12, [
   message("user", "Is the preview server running?", 13),
   message("assistant", `It is, at http://localhost:${devServer}/about. Have a look.`, 12),
 ]);
 
+// Files, tasks, the working tree, notes and the updater (live-desktop-files.ts).
+const extras = filesFixture({ seeded, root, now, min, relay, site, bridge: remoteBridgeVersion, threads: threads as any, thread, message, step, devTask, changed: (p) => changed(p) });
+
+// Pictures by attached id, read path or preview shot, as the desktop hands them out.
+const picture = async (path: string) => `data:image/png;base64,${(await readFile(join(root, path))).toString("base64")}`;
+const pictures = new Map<string, string>();
+if (seeded) {
+  const [now1, like] = [id(), id()];
+  pictures.set(now1, await picture("docs/media/relay-preview.png"));
+  pictures.set(like, await picture("previews/website/public/og.png"));
+  pictures.set("/tmp/relay/shots/review.png", await picture("docs/media/deep-review.png"));
+  pictures.set("/tmp/relay/shots/after.png", await picture("ios/Relay/Resources/Assets.xcassets/AppIcon.appiconset/icon.png"));
+  const review = step("/tmp/relay/shots/review.png", "read");
+  const edit = step("src/features/home/EmptyState.tsx", "file");
+  const answered = message("assistant", "Looked at both, and at the review screen for its spacing. It now reads like this:\n\n![after](shots/after.png)\n\nThe mark sits centred with the hint under it.", 5, {
+    ended: now - 4 * min,
+    trace: [review, edit].map((a) => ({ kind: "activity", id: a.id, activity: a })),
+    preview: { url: `http://localhost:${devServer}/`, title: "Relay", at: now - 4 * min, shot: true },
+  });
+  pictures.set(`shot:${answered.id}`, await picture("previews/website/public/og.png"));
+  thread(relay, "Make the empty state friendlier", 5, [
+    message("user", "The empty state looks bare. Here's how it is now and what I'd like.", 7, {
+      images: [
+        { id: now1, name: "now.png", mimeType: "image/png", sizeBytes: 267246 },
+        { id: like, name: "like-this.png", mimeType: "image/png", sizeBytes: 258294 },
+      ],
+    }),
+    answered,
+  ]);
+}
+const pictureOf = (key: string) => {
+  const url = pictures.get(key);
+  if (!url) throw new Error("That image isn't there any more.");
+  return url;
+};
+
+// The desktop's own draft store, so writes merge as they do there. Writing
+// {"key", "text"} to /tmp/relay-desktop-draft.json types it on the "computer".
+const draftStore = new DesktopDrafts(join(await mkdtemp(join(tmpdir(), "relay-ios-drafts-")), "drafts.json"));
+const draftChanged = (change: DraftChange | undefined) => change && remote.draftChanged(change);
+if (previewChat) {
+  draftStore.write({ key: previewChat, base: 0, at: now - 5 * min, text: "Also check the dark theme of", extras: { screenshots: [1] } }, "desktop");
+}
+// A new thread written on the computer, in its own worktree: Home lists it above the threads,
+// and the phone carries on writing it.
+if (seeded) {
+  draftStore.write({ key: `new:${site}:fixture1`, base: 0, at: now - 3 * min, text: "Rewrite the pricing section so it reads like the compare page", workspace: "worktree" }, "desktop");
+}
+const desktopDraftFile = "/tmp/relay-desktop-draft.json";
+watchFile(desktopDraftFile, { interval: 300 }, async () => {
+  const typed = JSON.parse(await readFile(desktopDraftFile, "utf8").catch(() => "null"));
+  if (!typed?.key) return;
+  const before = draftStore.get(typed.key);
+  draftChanged(draftStore.write({ key: typed.key, base: before?.rev ?? 0, at: Date.now(), text: typed.text ?? "", ...(before?.extras ? { extras: before.extras } : {}) }, "desktop"));
+  console.error("desktop typed", JSON.stringify(typed));
+});
+const draftsHost = {
+  list: () => draftStore.list(),
+  write: (write: DraftWrite, by: DraftDevice) => {
+    draftChanged(draftStore.write(write, by));
+    console.error("draft write", by, JSON.stringify({ key: write.key, base: write.base, text: write.text, workspace: write.workspace, sent: write.sent }));
+    return draftStore.get(write.key) ?? null;
+  },
+  other: (key: string, drop: boolean) => {
+    draftChanged(draftStore.other(key, drop));
+    return draftStore.get(key) ?? null;
+  },
+  holds: (key: string) => !!draftStore.get(key)?.extras,
+  sendHeld: async (key: string, chatId: string | undefined, send: any) => {
+    const target = chatId ?? created(projects[0].id).id;
+    console.error("send held", key, target, send.body);
+    sent(target, { ...send, id: send.id ?? id() });
+    for (const change of draftStore.remove([key])) draftChanged({ ...change, sent: true });
+    return { chatId: target };
+  },
+};
+
 const host = {
+  drafts: seeded ? draftsHost : undefined,
+  version: extras.version,
+  handoffs: extras.handoffs,
   renderPage: async (_chatId: string, renderId: string, page: number) => {
     const html = pages[renderId]?.[page];
     if (html == null) throw new Error("That page isn't there any more.");
@@ -390,8 +610,9 @@ const host = {
   chats: (pid: string) => summaries().filter((c) => c.projectId === pid),
   chat: async (chatId: string) => {
     const t = threads.get(chatId)!;
+    if (slowNew && t.summary.empty) await pause(8000);
     // A summary says only whether there's a worktree; the thread says which.
-    const worktree = t.summary.worktree ? { branch: t.summary.branch } : undefined;
+    const worktree = t.summary.worktree ? { branch: t.summary.branch, path: `/tmp/relay-worktrees/${t.summary.branch}`, from: "main" } : undefined;
     const root = t.summary.projectId === site ? "/tmp/site" : "/tmp/relay";
     const last = t.lastInput ?? (seeded ? lastInput : undefined);
     const queued = {
@@ -403,10 +624,16 @@ const host = {
   },
   dispatch: async (method: string, args: any[]) => {
     console.error("dispatch", method, method === "sendProjectChat" ? JSON.stringify({ body: args[1].body, to: args[1].to, mode: args[1].interactionMode, runtime: args[1].runtimeMode, parentId: args[1].parentId, side: args[1].side, sendAt: args[1].sendAt, images: args[1].images?.map((i: any) => [i.name, i.dataUrl.length]) }) : JSON.stringify(args).slice(0, 300));
+    if (method === "sendProjectChat" && refusing) throw new Error("The selected worktree is unavailable. Choose another workspace.");
+    if (method === "selectAgentWorktree") refusing = false;
+    if (method === "sendProjectChat" && slowNew && threads.get(args[0])?.summary.empty) await pause(8000);
     if (method === "sendProjectChat") sent(args[0], args[1]);
     if (method === "cancelProjectChat") stopped.add(args[0]);
     if (method === "projectChatQueueAction") queueAction(args[0], args[1], args[2], args[3]);
     if (method === "projectChatQueuedImages") return [];
+    if (method === "projectChatImage") return pictureOf(args[1]);
+    if (method === "projectChatReadImage") return pictureOf(args[2]);
+    if (method === "projectChatPreviewShot") return pictureOf(`shot:${args[1]}`);
     if (method === "triageProjectChat") return triaged(args[0], args[1]);
     if (method === "markProjectChatSeen") seenUpTo(args[0], args[1]);
     if (method === "renameProjectChat") renamed(args[0], args[1]);
@@ -430,8 +657,16 @@ const host = {
     if (method === "projectTurnDiff") return turnDiff(args[2]);
     if (method === "projectIcon") return args[0] === relay ? relayIcon : null;
     if (method === "createScratch") return scratched();
-    if (method === "projectTasks") return args[0] === relay ? [devTask] : [];
-    return undefined;
+    if (method === "projectTasks") return extras.tasks(args[0]);
+    if (method === "projectChatAgents") return (subagents.get(args[0]) ?? []).map(({ trace: _t, report: _r, ...run }) => run);
+    if (method === "projectChatAgent") return subagents.get(args[0])?.find((r) => r.id === args[1]) ?? null;
+    if (method === "stopProjectChatAgent") return stopAgent(args[0], args[1]);
+    if (method === "resumeProjectChat") return resumed(args[0], args[1]);
+    if (method === "stopProjectChatPending") return stopPending(args[0], args[1]);
+    if (method === "resolveStoppedWork") return resolveStopped(args[0], args[1]);
+    if (method === "setLimitResume") return limitResume(args[0], args[1]);
+    if (method === "rerunWorktreeSetup") return rerunSetup(args[0], args[1]);
+    return extras.dispatch(method, args) ?? git?.(method, args);
   },
   name: () => "Stand-in Mac",
   // The desktop's default "relay" theme, as src/lib/appearance.ts sends it.
@@ -655,6 +890,46 @@ function compacted(chatId: string) {
   remote.chatEvent({ chatId, message: m });
 }
 
+function stopAgent(chatId: string, agentId: string) {
+  const run = subagents.get(chatId)?.find((r) => r.id === agentId);
+  if (!run) throw new Error("That agent isn't there any more.");
+  if (run.status !== "running") throw new Error("That agent already finished.");
+  Object.assign(run, { status: "stopped", ended: Date.now() });
+  const t = threads.get(chatId)!;
+  t.summary.pending = t.summary.pending?.filter((p: any) => p.id !== run.taskId);
+  changed(t.summary.projectId);
+}
+/** Picks the stopped answer back up: a new answer streams, with no message of the user's. */
+function resumed(chatId: string, settings: any) {
+  const { provider, ...rest } = settings ?? {};
+  answer(chatId, { id: id(), body: "Carry on where you stopped.", ...(provider ? { to: provider, ...rest } : {}) }, true);
+}
+function stopPending(chatId: string, itemId: string) {
+  const c = threads.get(chatId)!.summary;
+  c.pending = c.pending?.filter((p: any) => p.id !== itemId);
+  if (!c.pending?.length) delete c.pending;
+  c.updated = Date.now();
+  changed(c.projectId);
+}
+function resolveStopped(chatId: string, action: string) {
+  const t = threads.get(chatId)!;
+  delete t.summary.stopped;
+  t.summary.updated = Date.now();
+  changed(t.summary.projectId);
+  if (action === "resume") answer(chatId, { id: id(), body: "Pick the migration back up." }, true);
+}
+function limitResume(chatId: string, on: boolean) {
+  const c = threads.get(chatId)!.summary;
+  if (c.limitResume) c.limitResume = { ...c.limitResume, ...(on ? { off: undefined } : { off: true }) };
+  changed(c.projectId);
+}
+function rerunSetup(chatId: string, messageId: string) {
+  const t = threads.get(chatId)!;
+  const m = t.messages.find((x) => x.id === messageId);
+  Object.assign(m, { status: "complete", version: m.version + 1, worktreeCommand: { ...m.worktreeCommand, output: "added 812 packages in 9s", exitCode: 0 } });
+  remote.chatEvent({ chatId, message: m });
+}
+
 function seenUpTo(chatId: string, at: number) {
   const c = threads.get(chatId)?.summary;
   if (!c) return;
@@ -672,6 +947,9 @@ function queueMoved(t: Thread) {
 function sent(chatId: string, send: any) {
   const t = threads.get(chatId);
   if (!t) return;
+  // "needs you" in a message makes another thread ask something a moment later, so the
+  // phone's banner over the open thread can be seen.
+  if (seeded && /needs you/i.test(send.body ?? "")) setTimeout(() => askElsewhere(chatId), 4000);
   if (send.sendAt) {
     (t.scheduled ??= []).push({ ...send, at: send.sendAt });
     t.summary.nextSend = Math.min(t.summary.nextSend ?? Infinity, send.sendAt);
@@ -694,6 +972,16 @@ function sent(chatId: string, send: any) {
   }
   answer(chatId, send);
 }
+// Touching <pairing file>.ask does the same from outside, whatever the phone has open.
+if (seeded) watchFile(`${out}.ask`, { interval: 300 }, (now) => now.mtimeMs && askElsewhere(""));
+/** The first thread other than `chatId` that isn't waiting starts waiting on a question. */
+function askElsewhere(chatId: string) {
+  const t = [...threads.values()].find((c) => c.summary.id !== chatId && !c.summary.waiting && !c.summary.running && !c.summary.snoozedUntil);
+  if (!t) return;
+  Object.assign(t.summary, { waiting: true, asking: true, updated: Date.now() });
+  changed(t.summary.projectId);
+  console.error("asking in", t.summary.title);
+}
 /** A seeded answer that only looks like it runs, ended where it stands. */
 function cutSeeded(chatId: string, t: Thread) {
   const reply = t.messages.findLast((m) => m.status === "streaming");
@@ -714,12 +1002,19 @@ function queueAction(chatId: string, action: string, messageId: string, index?: 
 /** Ends a running answer at once: a steer takes over from it. */
 const cut = new Map<string, () => void>();
 
+/** A pasted picture as the desktop keeps it, by an id of its own. */
+function kept(image: { name: string; mimeType: string; dataUrl: string }) {
+  const imageId = id();
+  pictures.set(imageId, image.dataUrl);
+  return { id: imageId, name: image.name, mimeType: image.mimeType, sizeBytes: Math.round((image.dataUrl.length * 3) / 4) };
+}
+
 /** The user's message, then a reply streamed word by word, as an agent's would. */
-function answer(chatId: string, send: any) {
+function answer(chatId: string, send: any, silent = false) {
   const t = threads.get(chatId);
   if (!t) return;
   stopped.delete(chatId);
-  const asked = { ...message("user", send.body, 0), id: send.id, created: Date.now(), ...(send.parentId ? { parentId: send.parentId } : {}), ...(send.side ? { side: true } : {}) };
+  const asked = { ...message("user", send.body, 0), id: send.id, created: Date.now(), ...(send.parentId ? { parentId: send.parentId } : {}), ...(send.side ? { side: true } : {}), ...(send.images?.length ? { images: send.images.map(kept) } : {}) };
   // A reply or a `/btw` runs beside the thread, answered under what it asked.
   const beside = !!(send.parentId || send.side);
   t.lastParentId = send.parentId ?? null;
@@ -731,14 +1026,16 @@ function answer(chatId: string, send: any) {
     t.summary.empty = undefined;
     t.summary.title = send.body.replace(/^@\w+\s*/, "").slice(0, 40) || "New thread";
   }
-  t.messages.push(asked);
-  remote.chatEvent({ chatId, message: asked });
+  if (!silent) {
+    t.messages.push(asked);
+    remote.chatEvent({ chatId, message: asked });
+  }
   const reply = { ...message("assistant", "", 0), created: Date.now(), status: "streaming", activity: [] as any[], ...(beside ? { parentId: asked.id } : {}) };
   t.messages.push(reply);
   if (beside) Object.assign(t.summary, { updated: Date.now() });
   else Object.assign(t.summary, { running: true, runningSince: Date.now(), waiting: undefined, asking: undefined, updated: Date.now() });
   changed(t.summary.projectId);
-  const on = send.choice ? `${send.to} on ${send.choice.model || "its default model"}, ${send.choice.reasoningEffort || "default"} effort${send.choice.fast ? ", fast" : ""}${send.contextWindow ? ", " + send.contextWindow : ""}` : send.to;
+  const on = send.choice ? `${send.to} on ${send.choice.model || "its default model"}, ${send.choice.reasoningEffort || "default"} effort${send.choice.fast ? ", fast" : ""}${send.contextWindow ? ", " + send.contextWindow : ""}` : send.to ?? t.summary.provider;
   const words = `Got it (${on}). You said: "${send.body}". This is the stand-in desktop, so here's a streamed reply to show the phone keeps up, one word at a time, with a step or two on the way.`.split(" ");
   let i = 0;
   cut.set(chatId, () => {
@@ -786,6 +1083,45 @@ function answer(chatId: string, send: any) {
     }
     remote.chatEvent({ chatId, message: { ...reply, activity: [...reply.activity], ...(busy ? { trace: [...trace] } : {}) } });
   }, slow ? 400 : 120);
+}
+
+// --control <file>: writing {"do": …} to it acts as the computer would. "offline" and "online"
+// turn phone access off and on, keeping the pairing; "pair" writes a fresh pairing link; "wait", "run", "finish" and "fail" move the
+// thread whose title contains "chat" ("finish" with "body", "fail" with "error"); "refuse" turns
+// sends away as a gone worktree would, until "accept" or the phone picks the project folder.
+const controlAt = process.argv.indexOf("--control");
+let refusing = false;
+if (controlAt > 0) {
+  const controlFile = process.argv[controlAt + 1];
+  await writeFile(controlFile, "{}");
+  watchFile(controlFile, { interval: 300 }, async () => {
+    let order: any;
+    try {
+      order = JSON.parse(await readFile(controlFile, "utf8"));
+    } catch {
+      return console.error("control: not JSON");
+    }
+    const t = order.chat ? [...threads.values()].find((x) => x.summary.title.includes(order.chat)) : undefined;
+    const c = t?.summary;
+    console.error("control", JSON.stringify(order), c?.id ?? "");
+    if (order.do === "offline") await remote.setEnabled(false);
+    if (order.do === "online") await remote.setEnabled(true);
+    if (order.do === "pair") await writeFile(out, (await remote.pairing()).url);
+    if (order.do === "refuse") refusing = true;
+    if (order.do === "accept") refusing = false;
+    if (!t || !c) return;
+    const end = (status: string, body: string, error?: string) => {
+      const reply = { ...message("assistant", body, 0), created: Date.now(), status, ...(error ? { error } : {}) };
+      t.messages.push(reply);
+      remote.chatEvent({ chatId: c.id, message: reply });
+      Object.assign(c, { running: undefined, runningSince: undefined, updated: Date.now() });
+    };
+    if (order.do === "wait") Object.assign(c, { waiting: true, asking: true, updated: Date.now() });
+    if (order.do === "run") Object.assign(c, { running: true, runningSince: Date.now(), waiting: undefined, asking: undefined });
+    if (order.do === "finish") end("complete", order.body ?? "All done: the tests pass again.");
+    if (order.do === "fail") end("failed", "", order.error ?? "Claude's login expired.");
+    changed(c.projectId);
+  });
 }
 
 await remote.setEnabled(true);

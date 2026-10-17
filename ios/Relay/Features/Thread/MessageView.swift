@@ -1,3 +1,4 @@
+import RelayMarkdown
 import RelayRemote
 import SwiftUI
 
@@ -15,6 +16,10 @@ struct MessageView: View {
     var main = true
     @Environment(\.colors) private var colors
     @Environment(\.navigate) private var navigate
+    /// Read pictures show under their calls while the trace is open, in the row under it otherwise.
+    @State private var traceOpen = false
+
+    private var images: MessageImages { MessageImages(chatId: chatId, message: message, root: root) }
 
     var body: some View {
         let m = message
@@ -24,7 +29,7 @@ struct MessageView: View {
         } else if let handoff = m.handoff {
             HandoffRow(message: m, handoff: handoff)
         } else if let run = m.worktreeCommand {
-            WorktreeCommandRow(message: m, run: run)
+            WorktreeCommandRow(chatId: chatId, message: m, run: run, main: main)
         } else if m.role == "user", let page = m.pageAnswer {
             StatusRow(
                 page.skipped == true
@@ -42,9 +47,14 @@ struct MessageView: View {
 
     private var mine: some View {
         let text = withoutAgentMention(message.body)
+        let images = images
         return VStack(alignment: .trailing, spacing: 6) {
             if message.author != nil || message.unprompted == true {
-                byline(message.author ?? "You")
+                byline(message.author ?? "You").opensSender(message.fromThread)
+            }
+            // Above what you wrote, as on the desktop.
+            if !images.strip.isEmpty {
+                MessageImageRow(images: images.strip, among: images.all)
             }
             // A screenshot sent on its own leaves nothing for the bubble to hold.
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -65,40 +75,71 @@ struct MessageView: View {
                         .opacity(message.pending == true ? 0.6 : 1)
                 }
             }
-            Text(message.pending == true && message.error == nil ? "Sending…" : Clock().clock(message.created))
-                .font(.caption)
-                .foregroundStyle(colors.faint)
+            HStack(spacing: 2) {
+                Text(message.pending == true && message.error == nil ? "Sending…" : Clock().clock(message.created))
+                    .font(.caption)
+                    .foregroundStyle(colors.faint)
+                if message.pending != true { UserMessageMenu(chatId: chatId, message: message, replies: main) }
+            }
             repliesLink
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private var answer: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let images = images
+        let strip = traceOpen ? images.pasted : images.strip
+        return VStack(alignment: .leading, spacing: 10) {
             byline(agentName(message.provider), mark: message.provider)
             if message.streaming || !Turn(message).shown.isEmpty {
-                TurnTrace(chatId: chatId, message: message, root: root)
+                TurnTrace(chatId: chatId, message: message, root: root, looked: images.looked) { traceOpen = $0 }
+            }
+            if !startCalls(message).isEmpty {
+                StartedInTurn(chatId: chatId, message: message)
             }
             if let renders = message.renders {
                 MessageRenders(chatId: chatId, renders: renders)
             }
             if !message.body.isEmpty {
                 MarkdownView(message.body)
+                    .environment(\.markdownImage, answerImage(among: images.all))
+            }
+            if let preview = message.preview, !message.streaming {
+                TurnPreviewCard(chatId: chatId, messageId: message.id, preview: preview)
+            }
+            if !strip.isEmpty {
+                MessageImageRow(images: strip, among: images.all)
             }
             AsyncQuestions(chatId: chatId, message: message)
+            WatchNotesView(chatId: chatId, message: message)
             if let changes = message.changes, !changes.isEmpty, !message.streaming {
                 ChangedFiles(chatId: chatId, message: message, files: changes)
             }
             if message.status == "cancelled" {
                 Text(stoppedNote(message)).font(.footnote).foregroundStyle(colors.muted)
             }
-            if let error = message.error, message.status != "cancelled" {
-                Text(error).font(.footnote).foregroundStyle(colors.destructive)
+            // A lost login's error only says to sign in again, which the note says better from here.
+            if let provider = message.signIn {
+                SignInNote(provider: provider)
+            } else if let error = message.error, message.status != "cancelled" {
+                AgentErrorNote(error: error)
             }
             if !message.streaming {
                 MessageActions(chatId: chatId, message: message, replies: main)
             }
             repliesLink
+        }
+        .openingFileLinks(chatId: chatId, message: message, root: root)
+    }
+
+    /// An answer's own pictures in the thread's folder, drawn where it puts them once it's done.
+    private func answerImage(among: [MessageImage]) -> ((MdImage) -> AnyView)? {
+        guard let root else { return nil }
+        let chatId = chatId, message = message
+        return { image in
+            guard !message.streaming, let path = localImagePath(image.source, root: root) else { return AnyView(EmptyView()) }
+            return AnyView(
+                AnswerImage(source: .read(chatId: chatId, messageId: message.id, path: path), alt: image.alt, among: among))
         }
     }
 

@@ -96,19 +96,32 @@ struct ReadAloudButton: View {
     var body: some View {
         if connection.canReadAloud {
             let going = reader.key == messageId
-            Button {
-                if going {
-                    reader.stop()
-                } else {
-                    reader.start(messageId, markdown) { try await connection.readAloud($0) }
+            HStack(spacing: 6) {
+                button(going)
+                // Why it stopped, beside the button that started it, for a few seconds.
+                if let failed = reader.failed, failed.key == messageId {
+                    Text(failed.message)
+                        .font(.footnote)
+                        .foregroundStyle(colors.destructive)
+                        .lineLimit(2)
                 }
-            } label: {
-                Image(systemName: going ? "stop.fill" : "speaker.wave.2")
-                    .foregroundStyle(going && !reader.loading ? colors.foreground : going ? colors.faint : colors.muted)
-                    .symbolEffect(.pulse, isActive: going && reader.loading)
             }
-            .accessibilityLabel(
-                going && reader.loading ? "Getting the voice ready, tap to stop" : going ? "Stop reading" : "Read aloud")
         }
+    }
+
+    private func button(_ going: Bool) -> some View {
+        Button {
+            if going {
+                reader.stop()
+            } else {
+                reader.start(messageId, markdown) { try await connection.readAloud($0) }
+            }
+        } label: {
+            Image(systemName: going ? "stop.fill" : "speaker.wave.2")
+                .foregroundStyle(going && !reader.loading ? colors.foreground : going ? colors.faint : colors.muted)
+                .symbolEffect(.pulse, isActive: going && reader.loading)
+        }
+        .accessibilityLabel(
+            going && reader.loading ? "Getting the voice ready, tap to stop" : going ? "Stop reading" : "Read aloud")
     }
 }

@@ -17,14 +17,16 @@ struct ActivityCard: View {
     var family: CardFamily?
     /// A started thread under its lead: no project line, its state beside the title.
     var compact = false
+    @Environment(Connection.self) private var connection
     @Environment(\.colors) private var colors
 
     var body: some View {
         // A question in a started thread is the lead's to bring up while they're folded together.
         let asking = family?.started.contains { $0.waiting == true } == true
         let shown = asking ? chat.with(waiting: true) : chat
-        // Only unread news and questions stay bright.
-        let bright = unread || chat.waiting == true || asking
+        let draft = connection.draft(of: chat.id)
+        // Only unread news, questions and unsent text stay bright.
+        let bright = unread || chat.waiting == true || asking || draft != nil
         Group {
             if compact {
                 HStack(spacing: 10) {
@@ -38,7 +40,7 @@ struct ActivityCard: View {
                 .frame(minHeight: 44)
             } else {
                 HStack(spacing: 12) {
-                    StateGlyph(chat: shown, unread: unread).frame(width: 16, height: 16)
+                    StateGlyph(chat: shown, unread: unread, draft: draft != nil).frame(width: 16, height: 16)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(chat.title)
                             .font(.body.weight(.medium))
@@ -61,6 +63,7 @@ struct ActivityCard: View {
             }
         }
         .opacity(bright ? 1 : 0.6)
+        .draftTint(draft != nil)
         .contentShape(.rect)
     }
 
@@ -78,6 +81,10 @@ struct ActivityCard: View {
             .highPriorityGesture(TapGesture().onEnded(family.fold))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(family.open ? "Fold the threads it started" : "Show the threads it started")
+        } else if let draft = connection.draft(of: shown.id) {
+            // A draft's text where the branch would be.
+            let before = [projectName, stateLine(shown, now: now)].compactMap { $0 }.joined(separator: " · ")
+            Text("\(before) · \(draftText(draft).foregroundStyle(colors.waiting))")
         } else {
             let place = shown.scope == "pr" ? "Pull request" : shown.branch
             Text([projectName, stateLine(shown, now: now), place].compactMap { $0 }.joined(separator: " · "))
@@ -99,6 +106,7 @@ private func stateLine(_ chat: RemoteChatSummary, now: Int64) -> String? {
 private struct StateGlyph: View {
     let chat: RemoteChatSummary
     let unread: Bool
+    let draft: Bool
     @Environment(\.colors) private var colors
 
     var body: some View {
@@ -106,6 +114,9 @@ private struct StateGlyph: View {
             Circle().fill(colors.waiting).frame(width: 8, height: 8).accessibilityLabel("Needs you")
         } else if chat.running == true || agentsSince(chat.pending) != nil {
             ProgressView().controlSize(.mini).accessibilityLabel("Working")
+        } else if draft {
+            Image(systemName: "pencil").font(.system(size: 13, weight: .medium)).foregroundStyle(colors.waiting)
+                .accessibilityLabel("Draft")
         } else if unread {
             Circle().fill(colors.accent).frame(width: 8, height: 8).accessibilityLabel("Unread")
         } else {

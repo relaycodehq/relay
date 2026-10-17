@@ -46,11 +46,14 @@ private nonisolated func scale(_ image: UIImage, longSide: CGFloat) -> UIImage {
     }
 }
 
-/// The photos going with the next message, each with a way to take it back out.
+/// The photos going with the next message, each with a way to take it back out, and the
+/// screenshots the computer's composer has in this draft, which go with it from there.
 struct PhotoStrip: View {
     let photos: [PickedPhoto]
     let loading: Int
+    var computerShots: [Int] = []
     let remove: (PickedPhoto.ID) -> Void
+    @Environment(\.colors) private var colors
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -75,6 +78,17 @@ struct PhotoStrip: View {
                     ProgressView()
                         .frame(width: 56, height: 56)
                         .background(.quietFill, in: .rect(cornerRadius: 12))
+                }
+                ForEach(computerShots, id: \.self) { n in
+                    VStack(spacing: 2) {
+                        Image(systemName: "laptopcomputer").font(.system(size: 15))
+                        Text("On computer").font(.system(size: 10)).multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(colors.muted)
+                    .frame(width: 56, height: 56)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(colors.border))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(n != 0 ? "Screenshot \(n), on your computer" : "Screenshot on your computer")
                 }
             }
         }

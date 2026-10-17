@@ -6,6 +6,7 @@ struct ThreadRow: View {
     let chat: RemoteChatSummary
     /// The project's name; left out inside the project itself.
     var project: String?
+    @Environment(Connection.self) private var connection
     @Environment(\.colors) private var colors
 
     var body: some View {
@@ -30,9 +31,13 @@ struct ThreadRow: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(colors.foreground)
                     .lineLimit(1)
+                let draft = connection.draft(of: chat.id)
                 TimelineView(.everyMinute) { context in
                     let now = Int64(context.date.timeIntervalSince1970 * 1000)
-                    Text("\(Text(state(now, agents: agents, blocked: blocked)).foregroundStyle(chat.waiting == true ? colors.accent : colors.muted))\(Text(place).foregroundStyle(colors.muted))")
+                    // A draft's text where the branch would be.
+                    let rest = draft.map { Text(" · \(draftText($0))").foregroundStyle(colors.waiting) }
+                        ?? Text(place).foregroundStyle(colors.muted)
+                    Text("\(Text(state(now, agents: agents, blocked: blocked)).foregroundStyle(chat.waiting == true ? colors.accent : colors.muted))\(draft == nil ? Text("") : Text(project.map { " · \($0)" } ?? "").foregroundStyle(colors.muted))\(rest)")
                         .font(.footnote)
                         .lineLimit(1)
                 }
@@ -40,6 +45,7 @@ struct ThreadRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 9)
+        .draftTint(connection.draft(of: chat.id) != nil)
         .contentShape(.rect)
     }
 

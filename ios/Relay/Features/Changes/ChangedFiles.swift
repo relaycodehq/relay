@@ -15,7 +15,7 @@ struct ChangedFiles: View {
         let redo = reverted == files.count
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                NavigationLink(value: Route.turn(chatId: chatId, messageId: message.id)) {
+                NavigationLink(value: Route.git(.turn(chatId: chatId, messageId: message.id))) {
                     Text(files.count == 1 ? "1 file changed" : "\(files.count) files changed")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(colors.foreground)
@@ -44,7 +44,7 @@ struct ChangedFiles: View {
             .padding(.vertical, 10)
             Rectangle().fill(colors.border).frame(height: 1)
             ForEach(files, id: \.path) { f in
-                NavigationLink(value: Route.diff(chatId: chatId, messageId: message.id, path: f.path)) {
+                NavigationLink(value: Route.git(.diff(.turn(chatId: chatId, messageId: message.id, path: f.path)))) {
                     FileLine(file: f)
                         .padding(.horizontal, 12)
                         .frame(minHeight: 40)

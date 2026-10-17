@@ -52,6 +52,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
+        # Read aloud keeps pulling and playing the computer's voice with the screen off.
+        UIBackgroundModes: [audio]
         # The R the splash pulls apart (App/Splash), centred on the app's background.
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -78,3 +80,7 @@ targets:
           - CFBundleURLName: dev.relay.pair
             CFBundleURLSchemes:
               - relay-remote
+          # relay-native://chat/<id> opens a thread, as on Android.
+          - CFBundleURLName: dev.relay.native
+            CFBundleURLSchemes:
+              - relay-native

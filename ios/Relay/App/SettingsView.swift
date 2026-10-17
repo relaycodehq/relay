@@ -1,54 +1,82 @@
 import RelayRemote
 import SwiftUI
 
-/// The paired computers, which one is active, and pairing another.
+/// Android's SettingsScreen: theme, this app's version and licences, the paired computers,
+/// and how to reach the one in use.
 struct SettingsView: View {
     @Environment(Connection.self) private var connection
-    @State private var pairing = false
+    @Environment(\.navigate) private var navigate
+    @AppStorage(ThemeMode.key) private var theme = ThemeMode.computer
+    @AppStorage(ThreadNotices.switchKey) private var notices = true
 
     var body: some View {
+        let name = connection.computerName
         List {
-            Section("Computers") {
-                ForEach(connection.computers, id: \.key) { computer in
-                    Button {
-                        connection.switchTo(computer.key)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(computer.name).foregroundStyle(.primary)
-                                Text(computer.hosts.joined(separator: ", "))
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            if computer.key == connection.active {
-                                Image(systemName: "checkmark").foregroundStyle(.tint)
-                            }
-                        }
-                    }
-                    .swipeActions {
-                        Button("Forget", role: .destructive) { connection.forget(computer.key) }
-                    }
+            Section("Theme") {
+                ForEach(ThemeMode.allCases, id: \.self) { mode in
+                    let (label, hint) = choice(mode, name: name, known: connection.overview?.appearance != nil)
+                    ChoiceRow(label: label, hint: hint, chosen: theme == mode) { theme = mode }
                 }
-                Button("Pair another computer", systemImage: "plus") { pairing = true }
             }
             .cardRow()
-            if let overview = connection.overview {
-                Section("Connected") {
-                    LabeledContent("Relay", value: overview.version ?? "unknown")
-                    LabeledContent("Bridge", value: overview.bridge.map(String.init) ?? "unknown")
+            Section("App") {
+                LabeledContent("Relay \(Connection.appVersion)") {}
+                Button { navigate(.licences) } label: {
+                    HStack {
+                        Label("Open-source licences", systemImage: "doc.plaintext").foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
                 }
-                .cardRow()
             }
+            .cardRow()
+            ComputersSection()
+            RouteSection().cardRow()
             Section {
-                LabeledContent(
-                    "This app",
-                    value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                Toggle(isOn: $notices) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("When another thread finishes or fails")
+                        Text("A note at the top while Relay is open; tap it to open the thread.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .cardRow()
         }
         .relayBackground()
-        .fullScreenCover(isPresented: $pairing) { PairingView() }
+    }
+
+    private func choice(_ mode: ThemeMode, name: String, known: Bool) -> (String, String) {
+        switch mode {
+        case .computer:
+            ("Match \(name)", known ? "Its theme, light or dark as it is set there." : "Relay's theme until your computer shares its own.")
+        case .phone: ("Follow this phone", "The same theme, light or dark with the phone.")
+        case .light: ("Light", "The theme's light colours.")
+        case .dark: ("Dark", "The theme's dark colours.")
+        }
+    }
+}
+
+/// A row of a pick-one list: a check on the chosen one.
+struct ChoiceRow: View {
+    let label: String
+    let hint: String
+    let chosen: Bool
+    let pick: () -> Void
+
+    var body: some View {
+        Button(action: pick) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).foregroundStyle(.primary)
+                    Text(hint).font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if chosen { Image(systemName: "checkmark").foregroundStyle(.tint) }
+            }
+            .contentShape(.rect)
+        }
+        .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 }

@@ -44,8 +44,6 @@ struct QueueList: View {
 
     private func row(_ item: RemoteQueued, index: Int, of count: Int, later: Bool) -> some View {
         let working = busy.contains(item.id)
-        // A reply waits for its side conversation, which this app doesn't show yet.
-        let canTakeBack = item.parentId == nil
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(withoutAgentMention(item.body))
@@ -74,19 +72,18 @@ struct QueueList: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            if canTakeBack {
-                Button {
-                    act(item) { try await takeBack(item) }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(colors.muted)
-                        .frame(width: 28, height: 28)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cancel and return to the composer")
+            // A reply goes back into its side conversation's composer.
+            Button {
+                act(item) { try await takeBack(item) }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(colors.muted)
+                    .frame(width: 28, height: 28)
+                    .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel and return to the composer")
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)
@@ -111,9 +108,7 @@ struct QueueList: View {
                     }
                 }
             }
-            if canTakeBack {
-                Button("Edit", systemImage: "pencil") { act(item) { try await takeBack(item) } }
-            }
+            Button("Edit", systemImage: "pencil") { act(item) { try await takeBack(item) } }
             Button("Delete", systemImage: "trash", role: .destructive) {
                 act(item) { try await connection.queue(chatId, .remove, messageId: item.id) }
             }

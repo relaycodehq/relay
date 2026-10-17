@@ -28,6 +28,12 @@ public struct PlacedDictation: Equatable, Sendable {
     /// Where the words landed, in characters.
     public var start: Int
     public var end: Int
+
+    public init(text: String, start: Int, end: Int) {
+        self.text = text
+        self.start = start
+        self.end = end
+    }
 }
 
 /// Dictated `words` in `text` in place of characters `from`–`to`, spaced from the text around them.

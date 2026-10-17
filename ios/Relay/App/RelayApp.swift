@@ -6,18 +6,28 @@ struct RelayApp: App {
     @State private var connection = Connection()
     @State private var readAloud = ReadAloud()
     @State private var icons = ProjectIconStore()
+    @State private var updates = ComputerUpdates()
     @State private var incoming: IncomingPair?
+    /// A thread a relay-native://chat link asked for.
+    @State private var linked: LinkedThread?
     @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
-            SplashHost { RootView(incoming: $incoming) }
+            SplashHost { RootView(incoming: $incoming, linked: $linked) }
                 // Inside the environment: the theme reads the desktop's appearance.
                 .relayTheme()
                 .environment(connection)
                 .environment(readAloud)
                 .environment(icons)
-                .onOpenURL { url in incoming = parsePairingURL(url.absoluteString).map(IncomingPair.init) }
+                .environment(updates)
+                .onOpenURL { url in
+                    switch parseDeepLink(url.absoluteString) {
+                    case .pair(let link): incoming = IncomingPair(link: link)
+                    case .thread(let id): linked = LinkedThread(chatId: id)
+                    case nil: break
+                    }
+                }
                 .task { connection.launch() }
                 .onChange(of: phase) { _, now in
                     if now == .active { connection.wake() }
@@ -33,6 +43,7 @@ struct RootView: View {
     @Binding var incoming: IncomingPair?
     /// A first pairing keeps its screen up until Continue, past the moment the computer says yes.
     @State private var pairing = false
+    @Binding var linked: LinkedThread?
     @State private var tab = HomeTab.threads
     @Environment(\.colors) private var colors
     /// Each tab's own: a push redraws that tab's stack, not the root and every tab under it.
@@ -45,8 +56,22 @@ struct RootView: View {
         Binding(
             get: { tab },
             set: { next in
-                if next == .new { stacks[tab]?.routes.append(.newThread()) } else { tab = next }
+                guard next == .new else { return tab = next }
+                stacks[tab]?.routes.append(.newThread())
+                // UIKit took the circle for picked all the same; left so, the next tap on it
+                // would show its empty page.
+                if let index = HomeTab.allCases.firstIndex(of: tab) {
+                    DispatchQueue.main.async { keepTabSelected(index) }
+                }
             })
+    }
+
+    /// The thread on screen, which needs no telling about.
+    private var openThread: String? {
+        switch stacks[tab]?.routes.last {
+        case .thread(let id)?, .replies(let id, _)?: id
+        default: nil
+        }
     }
 
     private var filter: Binding<ThreadFilter> {
@@ -61,12 +86,12 @@ struct RootView: View {
             // bar's search field only then. Each stack drops the tab bar as it pushes.
             TabView(selection: picked) {
                 Tab(value: HomeTab.threads) {
-                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(filter: filter) }
+                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(filter: filter).connectionLine() }
                 } label: {
                     Label { Text("Threads") } icon: { TabIcon.threads.image(picked: tab == .threads, accent: colors.accent, ink: colors.foreground) }
                 }
                 Tab(value: HomeTab.projects) {
-                    RouteStack(stack: stacks[.projects]!) { _ in ProjectsHome().tabChrome(.projects) }
+                    RouteStack(stack: stacks[.projects]!) { _ in ProjectsHome().tabChrome(.projects).connectionLine() }
                 } label: {
                     Label { Text("Projects") } icon: { TabIcon.projects.image(picked: tab == .projects, accent: colors.accent, ink: colors.foreground) }
                 }
@@ -83,6 +108,22 @@ struct RootView: View {
             }
             .tabViewSearchActivation(.searchTabSelection)
             .environment(\.threadFilter, filter.wrappedValue)
+            .overlay(alignment: .top) {
+                NeedsYou(stack: stacks[tab]!, atList: tab == .threads) { stacks[tab]?.routes.append(.thread($0)) }
+            }
+            .threadNotices(openId: openThread, hidden: tab == .threads && stacks[.threads]!.routes.isEmpty) {
+                stacks[tab]?.routes.append(.thread($0))
+            }
+            // Whatever was open belongs to the computer being left.
+            .onChange(of: connection.active) {
+                for stack in stacks.values { stack.routes = [] }
+            }
+            .onChange(of: linked?.id, initial: true) {
+                guard let linked else { return }
+                self.linked = nil
+                tab = .threads
+                stacks[.threads]?.routes = [.thread(linked.chatId)]
+            }
             .fullScreenCover(item: $incoming) { _ in
                 PairingView(incoming: $incoming, holding: .constant(false))
             }
@@ -144,7 +185,7 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
             .toolbar(removing: .title)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    TabTitle(title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine)
+                    TabTitle(title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine, switches: tab != .settings)
                 }
                 .sharedBackgroundVisibility(.hidden)
                 actions
@@ -156,16 +197,30 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
 private struct TabTitle: View {
     let title: String
     let subtitle: String?
+    /// Tapping it opens the computers to switch to.
+    var switches = false
     @Environment(\.colors) private var colors
+    @State private var computers = false
 
     var body: some View {
+        if switches {
+            Button { computers = true } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityHint("Switch computer")
+                .sheet(isPresented: $computers) { ComputerSheet() }
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
         // As Photos: the title centred on the bar's buttons, the subtitle hanging below that row.
         Text(title)
             .font(.largeTitle.bold())
             .foregroundStyle(colors.foreground)
             .overlay(alignment: .bottomLeading) {
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
+                    Text(switches ? "\(subtitle) \(Text(Image(systemName: "chevron.down")).font(.caption.weight(.bold)))" : "\(subtitle)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(colors.muted)
                         .fixedSize()
@@ -190,6 +245,12 @@ enum HomeTab: Hashable, CaseIterable {
         case .new: "New thread"
         }
     }
+}
+
+/// A thread link opened from outside, once per opening.
+struct LinkedThread: Identifiable {
+    let id = UUID()
+    let chatId: String
 }
 
 /// A pairing link opened from outside, once per opening: the same code

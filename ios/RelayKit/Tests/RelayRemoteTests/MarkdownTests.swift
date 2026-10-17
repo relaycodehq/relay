@@ -46,6 +46,15 @@ struct MarkdownTests {
         #expect(blocks[7] == .rule)
     }
 
+    @Test func localPicturesFollowTheirParagraph() {
+        let blocks = markdownBlocks("Before ![shot](out/a.png) after ![](https://x.dev/r.png).")
+        guard case .figure(let text, let whole, let images) = blocks.first else { Issue.record("\(blocks)"); return }
+        #expect(String(text.characters) == "Before after https://x.dev/r.png.")
+        #expect(String(whole.characters) == "Before shot after https://x.dev/r.png.")
+        #expect(images == [MdImage(source: "out/a.png", alt: "shot")])
+        guard case .paragraph = markdownBlocks("Only ![](https://x.dev/r.png)").first else { Issue.record("web"); return }
+    }
+
     @Test func bareAddressesAreLinksAsOnAndroid() {
         let md = "It is at http://localhost:5173/about. Or (see www.relaycode.io/docs), mail hi@relaycode.io; not `http://x.dev` or [a](https://a.dev)."
         guard case .paragraph(let p) = markdownBlocks(md).first else { Issue.record("not a paragraph"); return }

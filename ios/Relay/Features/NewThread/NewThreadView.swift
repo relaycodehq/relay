@@ -4,6 +4,7 @@ import SwiftUI
 /// What the project choice holds for a Scratchpad chat, in whichever folder the desktop hands out.
 private let scratchWhere = "scratch"
 private let scratchHint = "A chat of its own, outside your projects"
+private let asideNeedsAnswer = "Ask the agent something first, then ask on the side."
 
 /// Starts a thread the way the desktop's new-thread composer does: in the
 /// project used last, on the agent and model picked last, then opens it.
@@ -18,10 +19,17 @@ struct NewThreadView: View {
     @State private var scratchId: String?
     @State private var scratchError: String?
     @State private var placed = false
+    /// The draft being written for the project picked, its text following the pick.
+    @State private var draftKey: String?
+    /// A new thread's draft picked from Home, written on while its project stays picked.
+    private let opened: String?
+    /// The thread made for a send that then failed, used again on the next try to the same place.
+    @State private var made: (place: String, chat: CreatedChat)?
     @FocusState private var composing: Bool
 
-    init(projectId: String? = nil, scratch: Bool = false, started: @escaping (String) -> Void) {
-        _projectId = State(initialValue: scratch ? scratchWhere : projectId)
+    init(projectId: String? = nil, scratch: Bool = false, draftKey: String? = nil, started: @escaping (String) -> Void) {
+        _projectId = State(initialValue: scratch ? scratchWhere : projectId ?? draftKey.flatMap(newDraftProject))
+        opened = draftKey
         self.started = started
     }
 
@@ -29,10 +37,29 @@ struct NewThreadView: View {
 
     private var projects: [RemoteProject] { projectsByUse(connection.overview?.projects ?? [], connection.chats) }
     private var project: RemoteProject? { projects.first { $0.id == projectId } }
-    /// None for a folder that isn't a git checkout.
+    /// None for a folder that isn't a git checkout. A pick here, else the draft's own (picked
+    /// here before, or on the computer), else where the project's settings say.
     private var workspace: String? {
         guard let project, project.plain != true else { return nil }
-        return workspaces[project.id] ?? project.workspace ?? "checkout"
+        let drafted = connection.active.flatMap { pc in draftKey.flatMap { connection.drafts.workspace(pc, $0) } }
+        return workspaces[project.id] ?? drafted ?? project.workspace ?? "checkout"
+    }
+
+    private func pickWorkspace(_ id: String, for project: RemoteProject) {
+        workspaces[project.id] = id
+        // Kept with the draft, so the computer's composer and a later visit start there too.
+        guard let pc = connection.active, let draftKey, !scratch else { return }
+        connection.drafts.edit(pc, draftKey) { body in
+            var next = body
+            next.workspace = id
+            return next
+        }
+    }
+
+    /// Open threads in the project picked, to carry on one rather than start another.
+    private var recent: [RemoteChatSummary] {
+        guard let project else { return [] }
+        return Array(connection.chats.filter { $0.projectId == project.id && !chatSettled($0) }.prefix(5))
     }
 
     /// Picks here are what the next new thread opens on too, here or on the computer.
@@ -54,6 +81,9 @@ struct NewThreadView: View {
                     description: Text("Add one in Relay on your computer to start a thread in it."))
             } else {
                 place
+                if !recent.isEmpty {
+                    RecentThreads(chats: recent, open: started).padding(.top, 20)
+                }
             }
             Spacer()
         }
@@ -63,16 +93,31 @@ struct NewThreadView: View {
         .onTapGesture { composing = false }
         .safeAreaInset(edge: .bottom) {
             Composer(
-                chatId: nil, projectId: scratch ? scratchId : projectId, settings: settings,
+                chatId: nil, projectId: scratch ? scratchId : projectId, draftKey: draftKey, settings: settings,
                 remembered: connection.newThread?.models,
                 placeholder: scratch ? "Ask anything" : "What should we work on?", focused: $composing
             ) { sent in
+                if relayCommand(sent.text)?.name == "btw" { throw PairingError(asideNeedsAnswer) }
+                if let through = sent.throughDraft {
+                    // Started on the computer with a screenshot or a branch of its own: it starts it.
+                    return started(
+                        try await connection.start(
+                            in: projectId ?? "", workspace: workspace, sent.text, images: sent.images,
+                            with: sent.settings, sendAt: sent.sendAt, throughDraft: through))
+                }
                 let place = scratch ? try await scratchFolder() : projectId
                 guard let place else { throw PairingError("Pick a project first.") }
-                started(
-                    try await connection.start(
-                        in: place, workspace: workspace, sent.text, images: sent.images, with: sent.settings,
-                        sendAt: sent.sendAt))
+                let at = "\(place):\(workspace ?? "")"
+                let chat: CreatedChat
+                if let made, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace) }
+                made = (at, chat)
+                try await connection.send(
+                    sent.text, images: sent.images, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id)
+                made = nil
+                // Titled as the computer titles it once the message is in.
+                let title = sent.sendAt == nil ? promptTitle(sent.text) : chat.title ?? ""
+                MadeHere.add(Made(id: chat.id, projectId: place, title: title))
+                started(chat.id)
             }
         }
         .relayBackground()
@@ -87,6 +132,23 @@ struct NewThreadView: View {
             guard !placed, connection.overview != nil else { return }
             projectId = startingWhere()
             placed = true
+        }
+        .onChange(of: DraftPlace(computer: connection.active, projectId: projectId), initial: true) { before, now in
+            guard let computer = now.computer else { return draftKey = nil }
+            let next: String
+            if now.projectId == scratchWhere || now.projectId == nil {
+                // A Scratchpad's draft stays on this phone: the computer keys drafts by project.
+                next = "~scratch"
+            } else if let opened, newDraftProject(opened) == now.projectId {
+                connection.drafts.pickNewThread(computer, now.projectId!, key: opened)
+                next = opened
+            } else {
+                next = connection.drafts.newThreadKey(computer, now.projectId!)
+            }
+            if let draftKey, before.computer == computer, draftKey != next {
+                connection.drafts.move(computer, from: draftKey, to: next)
+            }
+            draftKey = next
         }
         .onChange(of: projects.map(\.id)) { _, ids in
             // The project went away on the computer: the next one used.
@@ -148,7 +210,7 @@ struct NewThreadView: View {
                 Menu {
                     // Toggles rather than a Picker: a menu shows a toggle's second line.
                     ForEach(Workspace.all) { w in
-                        Toggle(isOn: Binding(get: { workspace == w.id }, set: { if $0 { workspaces[project.id] = w.id } })) {
+                        Toggle(isOn: Binding(get: { workspace == w.id }, set: { if $0 { pickWorkspace(w.id, for: project) } })) {
                             Text(w.label)
                             Text(w.hint)
                         }
@@ -190,4 +252,30 @@ func projectsByUse(_ projects: [RemoteProject], _ chats: [RemoteChatSummary]) ->
         .filter { $0.element.scratch != true }
         .sorted { (order[$0.element.id] ?? .max, $0.offset) < (order[$1.element.id] ?? .max, $1.offset) }
         .map(\.element)
+}
+
+private struct DraftPlace: Equatable {
+    let computer: String?
+    let projectId: String?
+}
+
+/// The project's open threads, under its name: one may be the place to carry on.
+private struct RecentThreads: View {
+    let chats: [RemoteChatSummary]
+    let open: (String) -> Void
+    @Environment(\.colors) private var colors
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Open here")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(colors.muted)
+                .padding(.bottom, 2)
+            ForEach(chats) { chat in
+                Button { open(chat.id) } label: { ThreadRow(chat: chat) }
+                    .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: 420)
+    }
 }

@@ -37,6 +37,9 @@ RELAY_PAIR_URL_FILE=/tmp/pair.txt swift test --filter LiveBridgeTests
 phone sends; the Simulator shares this computer's network, so
 `xcrun simctl openurl <sim> "$(cat /tmp/pair.txt)"` pairs it. Use a
 simulator of your own (`xcrun simctl create`), headless; Maestro drives it.
+Maestro's iOS driver listens on localhost:22087 for every simulator, so with
+several running its taps land on whichever holds the port: drive parallel
+sims with `axe --udid <sim>` instead.
 Kill the stand-in by its PID.
 
 ## Rules
@@ -72,3 +75,14 @@ Each with how to tell it's fixed, so the workaround can go.
 - **Negative `additionalSafeAreaInsets` are ignored**, so a pushed screen
   can't give back the dropped tab bar's room that way; `overTabBar()` does it
   in SwiftUI.
+- **The search circle is picked in UIKit before SwiftUI can refuse it.** New
+  is a `Tab(role: .search)` whose pick the selection binding swallows to push
+  New instead. UIKit switches to the circle for a moment anyway: the tab's
+  root hears it's leaving with nothing pushed (so `TabBarDrop` also follows
+  the stack's depth), and UIKit keeps the circle picked, so the next tap
+  showed its empty page (`keepTabSelected` puts it back). Fixed when tapping
+  New twice in a row works without either.
+- **A row line split into views loops layout under a pushed screen.** An
+  `HStack` of a fixed-size `Text` and a label as a `ThreadRow`'s second line
+  spun the main thread at 100% once New was pushed over Projects. Keep that
+  line one `Text`, pieces interpolated into it.

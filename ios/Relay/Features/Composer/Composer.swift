@@ -4,6 +4,8 @@ import SwiftUI
 
 /// What the composer hands over to send.
 struct ComposerSend {
+    /// The message's own id: a draft that failed to go is sent again with it, so it can't land twice.
+    var id = UUID().uuidString.lowercased()
     var text: String
     var images: [PastedImage]
     var settings: ResumeSettings
@@ -11,6 +13,8 @@ struct ComposerSend {
     var steer = false
     /// Set for later rather than now.
     var sendAt: Int64?
+    /// The draft to send from the computer's composer, which holds part of it.
+    var throughDraft: String?
 }
 
 /// A composer: one glass box with the text on top and its controls under
@@ -23,6 +27,8 @@ struct Composer: View {
     var rootId: String?
     /// Where the agent's defaults come from.
     let projectId: String?
+    /// The draft it writes, kept here and shared with the computer; nil keeps nothing.
+    var draftKey: String?
     /// What the next message goes with; nil until the computer says.
     @Binding var settings: ResumeSettings?
     /// A new thread's agents keep the model they last ran with.
@@ -38,6 +44,7 @@ struct Composer: View {
     @Environment(Connection.self) private var connection
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colors) private var colors
+    @Environment(ReadAloud.self) private var reader
     @State private var draft = ""
     @State private var photos: [PickedPhoto] = []
     @State private var picked: [PhotosPickerItem] = []
@@ -45,6 +52,8 @@ struct Composer: View {
     @State private var sending = false
     @State private var error: String?
     @State private var dictation = DictationSession()
+    /// Where dictated words go while typing (Android's DictationInput).
+    @State private var cursor: SwiftUI.TextSelection?
     @State private var picking = false
     @State private var library = false
     @State private var camera = false
@@ -57,10 +66,39 @@ struct Composer: View {
     @State private var menuDismissed: String?
     /// `/context`'s usage page.
     @State private var showingUsage = false
+    /// Whose draft the field holds, `computer\nkey`; nil until one loaded.
+    @State private var draftLoaded: String?
+    /// The send that failed last, tried again as it was while the draft stays the same.
+    @State private var failed: Attempt?
+
+    private var draftAt: (computer: String, key: String)? {
+        guard let computer = connection.active, let draftKey else { return nil }
+        return (computer, draftKey)
+    }
+    private var draftID: String? { draftAt.map { "\($0.computer)\n\($0.key)" } }
 
     private var running: Bool { chatId.map { connection.running($0, rootId: rootId) } ?? false }
     private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var empty: Bool { text.isEmpty && photos.isEmpty }
+    private var empty: Bool { text.isEmpty && photos.isEmpty && computerShots.isEmpty }
+
+    /// Screenshots the computer's composer has in this draft; they go with it from there.
+    private var computerShots: [Int] {
+        guard let at = draftAt, (connection.overview?.bridge ?? 1) >= Bridge.drafts else { return [] }
+        return connection.drafts.shared(at.computer, at.key)?.extras?.screenshots ?? []
+    }
+
+    /// The send as it'd go now, for telling a retry of the one that failed from a new one.
+    private func attempt(steer: Bool, sendAt: Int64?) -> Attempt {
+        Attempt(
+            target: draftID ?? chatId ?? projectId ?? "", text: text, photos: photos.map(\.id), settings: settings,
+            steer: steer, sendAt: sendAt)
+    }
+
+    /// The failed send will go at the time it was set for.
+    private var retryingScheduled: Bool {
+        guard let failed, failed.sendAt != nil else { return false }
+        return failed.same(as: attempt(steer: false, sendAt: nil))
+    }
     private var stops: Bool { running && empty && dictation.phase == .idle }
     private var steers: Bool { running && !stops }
 
@@ -72,7 +110,9 @@ struct Composer: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 // Inside the glass: over the thread it reads through whatever scrolls behind.
-                if let shown = error ?? dictation.error {
+                if let shown = error.map({ retryingScheduled ? "\($0) Tap send to retry at the original time." : $0 })
+                    ?? dictation.error
+                {
                     Text(shown)
                         .font(.footnote)
                         .foregroundStyle(.red)
@@ -86,11 +126,16 @@ struct Composer: View {
                             }
                         }
                 }
-                if !photos.isEmpty || loadingPhotos > 0 {
-                    PhotoStrip(photos: photos, loading: loadingPhotos) { id in photos.removeAll { $0.id == id } }
-                        .padding(.top, 4)
+                if let at = draftAt {
+                    DraftNotes(computer: at.computer, key: at.key)
                 }
-                TextField(running ? "Queue a message" : placeholder, text: $draft, axis: .vertical)
+                if !photos.isEmpty || loadingPhotos > 0 || !computerShots.isEmpty {
+                    PhotoStrip(photos: photos, loading: loadingPhotos, computerShots: computerShots) { id in
+                        photos.removeAll { $0.id == id }
+                    }
+                    .padding(.top, 4)
+                }
+                TextField(running ? "Queue a message" : placeholder, text: $draft, selection: $cursor, axis: .vertical)
                     .lineLimit(1...8)
                     .focused(focused)
                     .padding(.horizontal, 4)
@@ -134,9 +179,32 @@ struct Composer: View {
             if phase != .active { dictation.stop() }
         }
         .onDisappear { dictation.stop() }
+        // One voice at a time: reading aloud ends dictation, and dictating ends a reading.
+        .onChange(of: reader.key) { _, key in
+            if key != nil { dictation.stop() }
+        }
+        .task(id: draftID) { loadDraft() }
+        .onChange(of: draft) { _, now in
+            if let at = draftAt, draftLoaded == draftID { connection.drafts.editText(at.computer, at.key, now) }
+        }
+        // Changed on the computer or another phone: the field takes it.
+        .onChange(of: draftAt.map { connection.drafts.changes($0.computer, $0.key) }) {
+            guard let at = draftAt, draftLoaded == draftID else { return }
+            let now = connection.drafts.text(at.computer, at.key)
+            if now != draft { draft = now }
+        }
         .onAppear {
             handle?.restore = restore
             handle?.compose = { text, earlier in draft = composeInto(draft, text, earlier: earlier) }
+            handle?.quote = { markdown in
+                Task {
+                    // Keep the words already spoken; a dictation update mustn't overwrite the quote.
+                    if dictation.phase != .idle { await dictation.finish() }
+                    draft = appendQuote(draft, markdown)
+                    cursor = SwiftUI.TextSelection(insertionPoint: draft.endIndex)
+                    focused.wrappedValue = true
+                }
+            }
         }
         .sheet(isPresented: $picking) {
             if let current = settings {
@@ -221,9 +289,26 @@ struct Composer: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Commands")
             }
+            if dictation.phase == .listening {
+                Button("Discard dictation", systemImage: "xmark") { dictation.cancel() }
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 36)
+                    .contentShape(.rect)
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+            }
             if connection.canDictate {
                 DictationButton(session: dictation) {
-                    dictation.start(after: draft, with: connection) { draft = $0 }
+                    reader.stop()
+                    // At the cursor while typing, after the draft otherwise.
+                    let at = focused.wrappedValue ? cursor.flatMap { characterRange($0, in: draft) } : nil
+                    dictation.start(in: draft, at: at, with: connection) { placed in
+                        draft = placed.text
+                        let end = draft.index(draft.startIndex, offsetBy: min(placed.end, draft.count))
+                        cursor = SwiftUI.TextSelection(insertionPoint: end)
+                    }
                 }
             }
             if steers {
@@ -329,7 +414,15 @@ struct Composer: View {
             if dictation.phase != .idle { await dictation.finish() }
             let body = text
             let sent = photos
-            guard !body.isEmpty || !sent.isEmpty else { return }
+            let at = draftAt
+            let through = draftKey.map(connection.sendsThroughComputer) ?? false
+            guard !body.isEmpty || !sent.isEmpty || through else { return }
+            // Sent again unchanged after failing: as it was, under its own id, so it can't go twice.
+            let fresh = attempt(steer: steer, sendAt: sendAt)
+            let attempt = !steer && sendAt == nil ? failed.flatMap { $0.same(as: fresh) ? $0 : nil } ?? fresh : fresh
+            failed = nil
+            // Cleared as it goes, so leaving mid-send keeps no draft; it comes back if sending fails.
+            if let at { connection.drafts.hold(at.computer, at.key) }
             sending = true
             error = nil
             draft = ""
@@ -337,19 +430,24 @@ struct Composer: View {
             defer { sending = false }
             do {
                 guard let settings else { throw PairingError("Wait for your computer to say which agent answers.") }
-                try await send(ComposerSend(text: body, images: sent.map(\.image), settings: settings, steer: steer, sendAt: sendAt))
+                try await send(
+                    ComposerSend(
+                        id: attempt.id, text: body, images: sent.map(\.image), settings: settings, steer: attempt.steer,
+                        sendAt: attempt.sendAt, throughDraft: through ? draftKey : nil))
+                if let at { connection.drafts.went(at.computer, at.key, text: body, throughComputer: through) }
             } catch {
+                if let at { connection.drafts.release(at.computer, at.key) }
+                failed = attempt
                 self.error = error.localizedDescription
                 if draft.isEmpty { draft = body }
                 if photos.isEmpty { photos = sent }
             }
+            // The draft ignored edits while the send held it: what was typed meanwhile goes in now.
+            if let at { connection.drafts.editText(at.computer, at.key, draft) }
         }
     }
 
     // MARK: Commands
-
-    /// Relay's actions this phone can't do yet, left out of the menu.
-    private static let notHere: Set = ["openpr", "changes", "files"]
 
     /// The conversation's context window, and what the thread cost.
     private var context: ContextUsage? { chatId.flatMap { latestContext(connection.conversation($0, rootId: rootId)) } }
@@ -364,7 +462,7 @@ struct Composer: View {
 
     private var menuItems: [CommandMenuItem]? {
         guard menuDismissed != draft, let provider = settings?.provider else { return nil }
-        return commandItems(draft, provider: provider, commands: agentCommands, hidden: Self.notHere)
+        return commandItems(draft, provider: provider, commands: agentCommands, hidden: [])
     }
 
     /// Which agent's commands the menu wants, while one may open.
@@ -502,14 +600,40 @@ struct Composer: View {
     }
 
     /// A message taken back out of the queue, after what's typed.
+    /// The draft's saved text into the field. What the field held for another draft stays
+    /// with that one; only text put in before any draft loaded goes after the saved text.
+    private func loadDraft() {
+        guard let at = draftAt, let id = draftID else {
+            draftLoaded = nil
+            return
+        }
+        connection.drafts.load(at.computer)
+        let saved = connection.drafts.text(at.computer, at.key).trimmingCharacters(in: .whitespacesAndNewlines)
+        let typed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if draftLoaded != nil {
+            draft = saved
+        } else if !saved.isEmpty {
+            draft = !typed.isEmpty && typed != saved ? "\(saved)\n\n\(typed)" : saved
+        }
+        draftLoaded = id
+        connection.drafts.editText(at.computer, at.key, draft)
+    }
+
     private func restore(_ text: String, _ images: [PastedImage]) throws -> () -> Void {
         let back = images.compactMap(PickedPhoto.init(restoring:))
         guard photos.count + loadingPhotos + back.count <= PastedImage.maxPerMessage else {
             throw PairingError("Remove a photo first: a message can hold three.")
         }
-        let before = (draft, photos)
-        draft = [draft, text].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        // A side question stays one only at the start of the message.
+        if text.hasPrefix("/btw "), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty {
+            throw PairingError("Send or clear the current draft before restoring this side question.")
+        }
+        let body = [draft, text].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             .joined(separator: "\n\n")
+        guard body.count <= 32_000 else { throw PairingError("Send or shorten the current draft before restoring this message.") }
+        let before = (draft, photos)
+        draft = body
+        cursor = SwiftUI.TextSelection(insertionPoint: draft.endIndex)
         photos += back
         error = nil
         return {
@@ -528,3 +652,18 @@ struct Composer: View {
 
 /// The desktop's .composer-stop red, the same in light and dark.
 private let stopRed = Color(red: 0xED / 255, green: 0x39 / 255, blue: 0x49 / 255)
+
+/// A send as it went: where, what, on which settings, and its id.
+private struct Attempt {
+    let target: String
+    let text: String
+    let photos: [PickedPhoto.ID]
+    let settings: ResumeSettings?
+    let steer: Bool
+    let sendAt: Int64?
+    var id = UUID().uuidString.lowercased()
+
+    func same(as other: Attempt) -> Bool {
+        target == other.target && text == other.text && photos == other.photos && settings == other.settings
+    }
+}

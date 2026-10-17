@@ -68,6 +68,26 @@ struct PairingRoutesDeltaTests {
         }
     }
 
+    @Test func aLastInputWithoutAChoiceStillLoadsTheThread() throws {
+        let broken = #""settings":{"provider":"claude","runtimeMode":"full-access","interactionMode":"default"}"#
+        let chat = try applyChatPatch(
+            JSON.parse(
+                #"{"id":"c","projectId":"p","title":"T","scope":{"kind":"project"},"messages":[],"#
+                    + #""queue":[{"id":"q","body":"next",\#(broken)}],\#(broken)}"#
+            ).object!, previous: nil)
+        #expect(chat.settings == nil)
+        #expect(chat.queue?.first?.settings == nil)
+        #expect(chat.queue?.first?.body == "next")
+        // Kept and read back the same in the offline copy.
+        let saved = try JSONDecoder().decode(RemoteChat.self, from: JSONEncoder().encode(chat))
+        #expect(saved == chat)
+        let good = #"{"provider":"codex","choice":{"model":"gpt-5","fast":false},"runtimeMode":"full-access","interactionMode":"default"}"#
+        let whole = try applyChatPatch(
+            JSON.parse(#"{"id":"c","projectId":"p","title":"T","scope":{"kind":"project"},"messages":[],"settings":\#(good)}"#).object!,
+            previous: nil)
+        #expect(whole.settings?.choice.model == "gpt-5")
+    }
+
     @Test func newerVersionComparesFourNumericParts() {
         #expect(newerVersion("0.12.1", "0.12.0"))
         #expect(newerVersion("0.12.0.3", "0.12.0"))

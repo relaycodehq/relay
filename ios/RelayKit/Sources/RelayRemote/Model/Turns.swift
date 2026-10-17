@@ -25,12 +25,6 @@ public struct RemoteDiff: Codable, Sendable, Equatable {
 }
 
 public extension RemoteClient {
-    /// One file as a turn changed it, from Relay's snapshots.
-    func turnDiff(chatId: String, messageId: String, path: String) async throws -> RemoteDiff {
-        let source: JSON = ["kind": "turn", "chatId": .string(chatId), "messageId": .string(messageId), "path": .string(path)]
-        return try await call("diff", [source]).decode()
-    }
-
     /// A new thread with the conversation up to this answer; its id.
     func fork(chatId: String, messageId: String) async throws -> String {
         let made: CreatedChat = try await desktop("forkProjectChat", [.string(chatId), .string(messageId)]).decode()

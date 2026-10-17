@@ -24,6 +24,14 @@ struct ComposerTests {
         #expect(placeDictation("Done.  Ship it", from: 6, to: 6, words: "Test it.").text == "Done. Test it. Ship it")
     }
 
+    @Test func aThreadMadeHereIsTitledAsTheComputerTitlesIt() {
+        #expect(promptTitle("@claude Fix the login bug") == "Fix the login bug")
+        #expect(promptTitle("@acp:goose  tidy up") == "tidy up")
+        #expect(promptTitle("@codex ") == "Screenshot")
+        #expect(promptTitle("@claude\n\nPasted text #1:\n\n```\n  first line\nsecond\n```") == "first line")
+        #expect(promptTitle(String(repeating: "word ", count: 20)).count == 65)
+    }
+
     @Test func chunksGoAsLittleEndianPCM() {
         #expect(Data(base64Encoded: encodePCM([1, -2])).map(Array.init) == [1, 0, 0xfe, 0xff])
         #expect(meanSquare([1, 2] as [Int16]) == (pow(1.0 / 32768, 2) + pow(2.0 / 32768, 2)) / 2)

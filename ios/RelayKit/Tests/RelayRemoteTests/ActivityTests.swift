@@ -182,3 +182,27 @@ private func child(_ id: String, _ lead: String, _ created: Int64, _ fields: [St
     #expect(clock.wakeLabel(clock.sendLaterPresets(late).last!.at, now: late).hasPrefix("tomorrow "))
     #expect(modeLabel("auto-accept-edits") == "Auto-accept edits" && modeLabel("odd") == "odd")
 }
+
+@Test func draftsGoFirstEvenFromSettledButSnoozedStayOnTheirShelf() {
+    let a = chat("a", updated: 900)
+    let b = chat("b", updated: 800, ["settledAt": 850])
+    let c = chat("c", updated: 700, ["snoozedUntil": 5_000])
+    let d = chat("d", updated: 600)
+    let all = [a, b, c, d]
+    let s = draftsFirst(chatActivitySections(all, now: 1_000), all: all, drafted: ["b", "c", "d"])
+    #expect(s.active.map(\.id) == ["b", "d", "a"])
+    #expect(s.snoozed.map(\.id) == ["c"])
+    #expect(s.settled.isEmpty)
+}
+
+@Test func onlyThreadsThatStartWaitingOnTheSameComputerCount() {
+    // First overview after launch: everything already waiting is old news.
+    #expect(freshlyWaiting(nil, computer: "a", waiting: ["x"], openId: nil) == nil)
+    let before = WaitingBaseline(computer: "a", waiting: ["x"])
+    #expect(freshlyWaiting(before, computer: "a", waiting: ["x"], openId: nil) == nil)
+    #expect(freshlyWaiting(before, computer: "a", waiting: ["x", "y"], openId: nil) == "y")
+    // Just switched computers: its waiting threads aren't news either.
+    #expect(freshlyWaiting(before, computer: "b", waiting: ["x", "y"], openId: nil) == nil)
+    // The thread on screen needs no telling, but another fresh one still does.
+    #expect(freshlyWaiting(before, computer: "a", waiting: ["y", "z"], openId: "y") == "z")
+}

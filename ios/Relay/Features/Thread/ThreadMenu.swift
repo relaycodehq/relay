@@ -139,6 +139,10 @@ private struct ThreadMenu: ViewModifier {
                     Text("\(sides.count) beside this one")
                 }
             }
+            if let thread {
+                Button("Files", systemImage: "doc.text") { navigate(.files(place: thread.bridgeWhere)) }
+                GitMenuItems(thread: thread)
+            }
             if connection.canTunnel {
                 Button { navigate(.browser()) } label: {
                     Label("Sites", systemImage: "globe")

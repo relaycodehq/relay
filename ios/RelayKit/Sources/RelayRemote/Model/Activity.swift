@@ -34,6 +34,38 @@ public func chatActivitySections(_ chats: [RemoteChatSummary], now: Int64) -> Ac
     return out
 }
 
+/// Activity with the threads holding unsent text first, settled ones included: the draft waits
+/// on you. Snoozed threads stay on their shelf.
+public func draftsFirst(_ sections: ActivitySections, all: [RemoteChatSummary], drafted: Set<String>) -> ActivitySections {
+    guard !drafted.isEmpty else { return sections }
+    let active = Set(sections.active.map(\.id))
+    let snoozed = Set(sections.snoozed.map(\.id))
+    let awake = all.filter { !snoozed.contains($0.id) }
+    return ActivitySections(
+        active: awake.filter { drafted.contains($0.id) }
+            + awake.filter { !drafted.contains($0.id) && active.contains($0.id) }.sorted { $0.updated > $1.updated },
+        snoozed: sections.snoozed,
+        settled: sections.settled.filter { !drafted.contains($0.id) })
+}
+
+/// The waiting threads last seen, and on which computer.
+public struct WaitingBaseline: Sendable, Equatable {
+    public var computer: String?
+    public var waiting: Set<String>
+
+    public init(computer: String?, waiting: Set<String>) {
+        self.computer = computer
+        self.waiting = waiting
+    }
+}
+
+/// A thread that started waiting since `before`, to tell about. Only the same computer counts:
+/// threads already waiting at launch or on a computer just switched to aren't news.
+public func freshlyWaiting(_ before: WaitingBaseline?, computer: String?, waiting: [String], openId: String?) -> String? {
+    guard let before, before.computer == computer else { return nil }
+    return waiting.first { !before.waiting.contains($0) && $0 != openId }
+}
+
 /// Only blocking requests or questions left after the turn stops end an orchestration wait.
 public func inputBlocksThread(_ chat: RemoteChatSummary) -> Bool {
     chat.waiting == true && (chat.running != true || chat.asking != true || chat.blocked == true)

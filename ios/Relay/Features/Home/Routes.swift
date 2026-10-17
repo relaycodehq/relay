@@ -6,14 +6,22 @@ enum Route: Hashable {
     case thread(String)
     /// A side conversation: the message it starts from and the replies under it.
     case replies(chatId: String, rootId: String)
-    /// In the project given, else the one used last; or a Scratchpad chat.
-    case newThread(projectId: String? = nil, scratch: Bool = false)
-    /// What one turn changed.
-    case turn(chatId: String, messageId: String)
-    case diff(chatId: String, messageId: String, path: String)
+    /// In the project given, else the one used last; or a Scratchpad chat. `draftKey` carries
+    /// on a new thread's draft picked from Home, maybe started on the computer.
+    case newThread(projectId: String? = nil, scratch: Bool = false, draftKey: String? = nil)
+    /// Changes, branches, history, a commit, a turn or worktree, a diff (Features/Changes/GitRoute).
+    case git(GitRoute)
     case project(String)
     /// The computer's localhost through the tunnel: a page there, or what runs there.
     case browser(url: String? = nil)
+    /// A project's or a thread worktree's files (`place` as the bridge takes it), from `dir` down.
+    case files(place: String, dir: String? = nil)
+    case file(place: String, path: String)
+    /// Dev servers and processes the project's agents left running.
+    case tasks(projectId: String)
+    case licences
+    /// One subagent's run in a thread: its brief, calls and report.
+    case subagentRun(chatId: String, agentId: String)
 }
 
 extension EnvironmentValues {
@@ -36,8 +44,8 @@ struct RouteStack<Root: View>: View {
     var body: some View {
         NavigationStack(path: $stack.routes) {
             root { stack.routes.append($0) }
-                .background(TabBarDrop())
-                .navigationDestination(for: Route.self) { destination($0).overTabBar() }
+                .background(TabBarDrop(depth: stack.routes.count))
+                .navigationDestination(for: Route.self) { destination($0).overTabBar().connectionLine() }
         }
         .environment(\.navigate) { stack.routes.append($0) }
         // A link to the computer's own localhost opens in Relay's browser, through the tunnel.
@@ -56,15 +64,19 @@ struct RouteStack<Root: View>: View {
         case .thread(let id): ThreadView(chatId: id)
         case .replies(let chatId, let rootId): ThreadView(chatId: chatId, rootId: rootId)
         // Started: the thread takes the new one's place, so Back skips it.
-        case .newThread(let projectId, let scratch):
-            NewThreadView(projectId: projectId, scratch: scratch) { id in
+        case .newThread(let projectId, let scratch, let draftKey):
+            NewThreadView(projectId: projectId, scratch: scratch, draftKey: draftKey) { id in
                 stack.routes.removeLast()
                 stack.routes.append(.thread(id))
             }
-        case .turn(let chatId, let messageId): TurnView(chatId: chatId, messageId: messageId)
-        case .diff(let chatId, let messageId, let path): DiffView(chatId: chatId, messageId: messageId, path: path)
+        case .git(let git): GitScreen(route: git)
         case .project(let id): ProjectView(projectId: id)
         case .browser(let url): BrowserView(url: url)
+        case .files(let place, let dir): FilesView(place: place, dir: dir)
+        case .file(let place, let path): FileView(place: place, path: path)
+        case .tasks(let projectId): TasksView(projectId: projectId)
+        case .licences: LicencesView()
+        case .subagentRun(let chatId, let agentId): SubagentRunView(chatId: chatId, agentId: agentId)
         }
     }
 }

@@ -18,16 +18,7 @@ struct HomeView: View {
                 ActivityList { open(.thread($0)) }
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if connection.outdated {
-                Text("Relay on \(connection.computer?.name ?? "your computer") is older than this app. Update it there.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
-            }
-        }
+        .safeAreaInset(edge: .top, spacing: 0) { ComputerUpdateBanner() }
         .relayBackground()
     }
 }
@@ -46,9 +37,15 @@ struct ComputerWaiting: View {
                 "Can't reach \(connection.computer?.name ?? "your computer")", systemImage: "wifi.slash",
                 description: Text(connection.status.detail ?? "Check that Relay is running there."))
         case .denied:
-            ContentUnavailableView(
-                "Pair again", systemImage: "lock",
-                description: Text("Pair this phone again from Relay’s Settings → Phone on your computer."))
+            ContentUnavailableView {
+                Label("Pair again", systemImage: "lock")
+            } description: {
+                Text("Pair this phone again from Relay’s Settings → Phone on your computer.")
+            } actions: {
+                // The old pairing is no use any more; forgetting it opens pairing.
+                Button("Pair again") { if let key = connection.active { connection.forget(key) } }
+                    .buttonStyle(.glassProminent)
+            }
         }
     }
 }

@@ -9,12 +9,18 @@ struct TurnTrace: View {
     let message: ChatMessage
     /// The thread's folder, left off the paths it shows.
     let root: String?
+    /// The pictures its calls looked at, which their previews open among.
+    var looked: [MessageImage] = []
+    /// Told whether the trace is open, where the read pictures show under their calls.
+    var onOpen: (Bool) -> Void = { _ in }
+    /// Open even once it's ended, as a subagent's whole run.
+    var startsOpen = false
     /// Nil follows the turn: open while it runs.
     @State private var expanded: Bool?
 
     var body: some View {
         let turn = Turn(message)
-        let open = expanded ?? turn.live
+        let open = expanded ?? (turn.live || startsOpen)
         VStack(alignment: .leading, spacing: 8) {
             Button {
                 withAnimation(.snappy(duration: 0.25)) { expanded = !open }
@@ -40,6 +46,7 @@ struct TurnTrace: View {
                 .transition(.opacity)
             }
         }
+        .onChange(of: open, initial: true) { onOpen(open) }
     }
 
     @ViewBuilder private func run(_ activity: [AgentActivity], batch: Bool, alone: Bool, turn: Turn) -> some View {
@@ -61,7 +68,8 @@ struct TurnTrace: View {
     }
 
     private func row(_ a: AgentActivity, _ turn: Turn) -> some View {
-        ToolRow(chatId: chatId, messageId: message.id, activity: a, calls: turn.calls[a.id] ?? [], root: root)
+        ToolRow(
+            chatId: chatId, messageId: message.id, activity: a, calls: turn.calls[a.id] ?? [], root: root, looked: looked)
     }
 
     private func heading(_ heading: TurnHeading, open: Bool) -> some View {

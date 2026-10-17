@@ -10,4 +10,6 @@ final class ComposerHandle {
     }
     /// What a page composed with relay.compose(), in place of what it composed before.
     var compose: (_ text: String, _ earlier: String?) -> Void = { _, _ in }
+    /// A quoted passage after what's typed, the field focused.
+    var quote: (_ markdown: String) -> Void = { _ in }
 }

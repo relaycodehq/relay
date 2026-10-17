@@ -13,13 +13,32 @@ struct ThreadView: View {
     private var thread: RemoteChat? { connection.threads[chatId] }
     private var summary: RemoteChatSummary? { connection.chats.first { $0.id == chatId } }
     private var live: Bool { thread?.messages.last?.streaming == true }
+    /// A reply's conversation runs while one of its answers does.
+    private var running: Bool {
+        rootId == nil ? thread?.running ?? summary?.running ?? false : connection.running(chatId, rootId: rootId)
+    }
+    /// The agent whose plan waits for a go-ahead here.
+    private var plan: String? {
+        guard !running, let thread else { return nil }
+        return openPlan(thread.messages, view: connection.conversation(chatId, rootId: rootId))
+    }
     private var context: ContextUsage? { latestContext(connection.conversation(chatId, rootId: rootId)) }
+    /// One made here has no summary until its first message is in.
+    private var made: Made? { MadeHere.of(chatId) }
+    private var projectId: String? { thread?.projectId ?? summary?.projectId ?? made?.projectId }
+    /// Replies live in their side conversations. This phone's sends the thread doesn't hold yet
+    /// come last, shown at once, before the thread itself has loaded.
+    private var shown: [ChatMessage] { connection.conversation(chatId, rootId: rootId) + connection.outgoing(chatId, rootId: rootId) }
+    /// A note's message to scroll to.
+    @State private var jump: MessageJump?
     /// A model picked here; until then the thread's own.
     @State private var picked: ResumeSettings?
     @FocusState private var composing: Bool
     @State private var composer = ComposerHandle()
     /// Marked unread on the way out: a trailing seen mark mustn't clear it.
     @State private var leavingUnread = false
+    @State private var viewing: Viewing?
+    @Namespace private var pictures
 
     /// A thread with nothing sent yet goes with what a new thread would.
     private var settings: Binding<ResumeSettings?> {
@@ -30,24 +49,41 @@ struct ThreadView: View {
 
     var body: some View {
         Group {
-            if let thread {
-                // Replies live in their side conversations.
-                let shown = rootId.map { sideConversation(thread.messages, root: $0) } ?? mainMessages(thread.messages)
-                let counts = rootId == nil ? replyCounts(thread.messages) : [:]
+            let shown = self.shown
+            if thread != nil || !shown.isEmpty {
+                let counts = rootId == nil ? replyCounts(thread?.messages ?? []) : [:]
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
+                        if rootId == nil, let earlier = thread?.earlier, earlier > 0 {
+                            EarlierMessages(chatId: chatId, earlier: earlier)
+                        }
                         ForEach(shown) { message in
                             MessageView(
-                                chatId: chatId, message: message, root: thread.root, replies: counts[message.id] ?? 0,
+                                chatId: chatId, message: message, root: thread?.root, replies: counts[message.id] ?? 0,
                                 main: rootId == nil)
+                            if rootId == nil { WorkspaceMoveLine(moves: thread?.workspaceMoves, messageId: message.id) }
+                        }
+                        if running, let newest = shown.last, newest.role == "user" {
+                            AwaitingAnswer(provider: settings.wrappedValue?.provider ?? thread?.settings?.provider ?? "claude", seed: newest.id)
+                        }
+                        if let thread, canResume(thread, conversation: shown, rootId: rootId, running: running) {
+                            ResumeAnswer(chatId: chatId, settings: settings.wrappedValue ?? thread.settings)
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
                 // Built only once the thread is here, so it opens at the end.
-                .followingEnd(live: live, last: shown.last?.id, mine: shown.last?.role == "user")
+                .followingEnd(live: live, last: shown.last?.id, mine: shown.last?.role == "user", jump: jump)
                 .environment(\.renderCompose, { [composer] in composer.compose($0, $1) })
+                .environment(\.quoteMessage, { [composer] in composer.quote($0) })
+                .environment(\.openImage, OpenImage(space: pictures) { source, among in
+                    // The list is fixed while it's open; ones that failed to load are left out.
+                    let shown = among.filter { $0.source == source || !Pictures.failed($0.source, connection) }
+                    if let index = shown.firstIndex(where: { $0.source == source }) {
+                        viewing = Viewing(images: shown, index: index)
+                    }
+                })
                 // A drag or a tap on the thread puts the keyboard away; the tap still reaches what's under it.
                 .scrollDismissesKeyboard(.immediately)
                 .scrollEdgeEffectStyle(.soft, for: .bottom)
@@ -56,46 +92,72 @@ struct ThreadView: View {
                         composing = false
                         TextSelection.clear()
                     })
+            } else if connection.status.state != .online {
+                ContentUnavailableView(
+                    "Not on this phone yet", systemImage: "icloud.slash",
+                    description: Text(
+                        "This thread hasn’t been opened on this phone, so there’s no copy to read until \(connection.overview?.name ?? "your computer") is back."))
             } else if let failed = connection.loadErrors[chatId] {
-                ContentUnavailableView("Not loaded", systemImage: "exclamationmark.triangle", description: Text(failed))
+                ContentUnavailableView {
+                    Label("Not loaded", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(failed)
+                } actions: {
+                    Button("Try again") { Task { await connection.load(chatId) } }
+                }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         // A bar rather than an inset: the thread blurs out under it, as it does under the title.
         .safeAreaBar(edge: .bottom) {
-            if let requests = thread?.requests, let first = requests.first {
-                RequestCard(chatId: chatId, request: first, more: requests.count - 1)
-                    .id(first.id)
-            } else {
-                VStack(spacing: 0) {
-                    if let thread, rootId == nil {
-                        QueueList(chatId: chatId, thread: thread, running: summary?.running == true, takeBack: takeBack)
-                    }
-                    Composer(
-                        chatId: chatId, rootId: rootId, projectId: thread?.projectId ?? summary?.projectId,
-                        settings: settings, placeholder: rootId == nil ? "Message" : "Reply",
-                        focused: $composing, handle: composer, onCommand: command
-                    ) {
-                        try await connection.send(
-                            $0.text, images: $0.images, to: chatId, with: $0.settings, steer: $0.steer, rootId: rootId,
-                            sendAt: $0.sendAt)
+            VStack(spacing: 0) {
+                if rootId == nil {
+                    ThreadDock(chatId: chatId, thread: thread, summary: summary, running: running)
+                }
+                if let requests = thread?.requests, let first = requests.first {
+                    RequestCard(chatId: chatId, request: first, more: requests.count - 1)
+                        .id(first.id)
+                } else {
+                    VStack(spacing: 0) {
+                        if let thread, rootId == nil {
+                            QueueList(chatId: chatId, thread: thread, running: summary?.running == true, takeBack: takeBack)
+                        }
+                        if let planner = plan {
+                            ImplementPlan(chatId: chatId, rootId: rootId, planner: planner, settings: settings)
+                        }
+                        UnsentList(chatId: chatId, rootId: rootId, restore: { [composer] in try composer.restore($0, $1) })
+                        Composer(
+                            chatId: chatId, rootId: rootId, projectId: projectId,
+                            draftKey: rootId.map { "\(chatId):\($0)" } ?? chatId, settings: settings, placeholder: rootId == nil ? "Message" : "Reply",
+                            focused: $composing, handle: composer, onCommand: command
+                        ) {
+                            try await connection.send(
+                                $0.text, images: $0.images, to: chatId, with: $0.settings, steer: $0.steer, rootId: rootId,
+                                sendAt: $0.sendAt, throughDraft: $0.throughDraft, id: $0.id)
+                        }
                     }
                 }
             }
         }
         .relayBackground()
-        .navigationTitle(rootId != nil ? "Replies" : thread?.title ?? summary?.title ?? "Thread")
+        .fullScreenCover(item: $viewing) { Lightbox($0, space: pictures) }
+        .navigationTitle(rootId != nil ? "Replies" : thread?.title ?? summary?.title ?? made?.title ?? "Thread")
         // Android's header line: how full the conversation's context is.
         .navigationSubtitle(contextPercent(context).map { "\($0)% context" } ?? "")
         .usageToolbar(
             provider: settings.wrappedValue?.provider, context: context,
             cost: thread.flatMap { $0.cost ?? threadCost($0.messages) },
             compact: { try await connection.compact(chatId, rootId: rootId) })
+        .ciStatus(projectId: projectId, chatId: chatId, running: summary?.running == true, shown: rootId == nil)
         .navigationBarTitleDisplayMode(.inline)
         // Open on the phone counts as read, but only while the app is in front:
         // answers that land in the background are marked when it comes back.
         .threadMenu(chatId: chatId, shown: rootId == nil, leavingUnread: $leavingUnread)
+        .threadNotes(chatId: chatId, shown: rootId == nil, present: Set(shown.map(\.id))) { [composer] in
+            composer.compose($0, nil)
+        } show: { jump = MessageJump(id: $0) }
+        .turnHaptics(rootId == nil ? summary : nil, answer: thread.flatMap { mainMessages($0.messages).last(where: isAnswer) })
         .task(id: SeenMark(updated: summary?.updated, snoozedUntil: summary?.snoozedUntil, front: phase == .active,
                 online: connection.status.state == .online)) {
             guard let updated = summary?.updated, phase == .active, !leavingUnread else { return }
@@ -106,7 +168,14 @@ struct ThreadView: View {
             try? await Task.sleep(for: .milliseconds(until + 1 - nowMs()))
             if !Task.isCancelled { connection.markSeen(chatId, updated: updated, snoozedUntil: until) }
         }
+        // A queued reply taken back on the main screen arrives here, once the composer is up.
+        .task(id: thread != nil) {
+            guard thread != nil, let rootId, let item = HandedBacks.take("\(chatId):\(rootId)") else { return }
+            await Task.yield()
+            do { try await takeBack(item) } catch { HandedBacks.hand("\(chatId):\(rootId)", item) }
+        }
         .task(id: connection.status.state) {
+            connection.openSaved(chatId)
             guard connection.status.state == .online else { return }
             await connection.load(chatId)
             if connection.settings(of: chatId) == nil { await connection.loadNewThread() }
@@ -121,11 +190,19 @@ struct ThreadView: View {
         case "new", "clear": navigate(.newThread(projectId: thread.projectId))
         case "compact": try await connection.compact(chatId, rootId: rootId, instructions: args)
         case "reload": try await connection.reloadSession(chatId)
+        case "files": navigate(.files(place: thread.bridgeWhere))
+        case "changes": navigate(.git(.changes(where: thread.gitWhere)))
+        case "openpr": try await openPullRequest(thread, connection)
         default: throw PairingError("Open that one on your computer for now.")
         }
     }
 
     private func takeBack(_ item: RemoteQueued) async throws {
+        // A queued reply goes back in its side conversation, whose screen takes it out of the queue.
+        if rootId == nil, let parentId = item.parentId {
+            HandedBacks.hand("\(chatId):\(parentId)", item)
+            return navigate(.replies(chatId: chatId, rootId: parentId))
+        }
         let back = TakenBack(item)
         // Only a computer that sends `settings` can hand the photos over; older ones give the text alone.
         let images =

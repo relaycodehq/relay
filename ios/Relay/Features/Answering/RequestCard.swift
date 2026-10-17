@@ -47,7 +47,8 @@ struct RequestCard: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 26))
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
-        .sensoryFeedback(.success, trigger: busy) { was, now in was && !now && error == nil }
+        // A tap, not Success: that one is the turn's end, often a moment later.
+        .sensoryFeedback(.impact(weight: .light), trigger: busy) { was, now in was && !now && error == nil }
     }
 
     private var approval: some View {

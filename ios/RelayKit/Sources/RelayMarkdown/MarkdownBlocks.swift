@@ -6,6 +6,9 @@ import Markdown
 /// SwiftUI's Text draws, and formulas inside a sentence `inlineMath`.
 public indirect enum MdBlock: Hashable, Sendable {
     case paragraph(AttributedString)
+    /// A paragraph with pictures that aren't on the web: its `text` without them, the
+    /// pictures under it. `whole` is the paragraph as it reads where they can't be drawn.
+    case figure(text: AttributedString, whole: AttributedString, images: [MdImage])
     case heading(level: Int, AttributedString)
     /// `language` is the first word of the fence's info string.
     case code(language: String?, text: String)
@@ -19,6 +22,16 @@ public indirect enum MdBlock: Hashable, Sendable {
     case rule
     /// Raw HTML, shown as written.
     case html(String)
+}
+
+public struct MdImage: Hashable, Sendable {
+    public var source: String
+    public var alt: String
+
+    public init(source: String, alt: String) {
+        self.source = source
+        self.alt = alt
+    }
 }
 
 public struct MdItem: Hashable, Sendable {
@@ -73,7 +86,7 @@ private struct Reader {
 
     private func block(_ markup: Markup) -> MdBlock? {
         switch markup {
-        case let p as Paragraph: return .paragraph(inline(p.children))
+        case let p as Paragraph: return paragraph(p)
         case let h as Heading: return .heading(level: h.level, inline(h.children))
         case let c as CodeBlock:
             if let formula = math.display(c) { return .math(tex: formula.tex, closed: formula.closed) }
@@ -93,6 +106,33 @@ private struct Reader {
             let text = math.restoring(markup.format())
             return text.isEmpty ? nil : .paragraph(AttributedString(text))
         }
+    }
+
+    private func paragraph(_ p: Paragraph) -> MdBlock {
+        let whole = inline(p.children)
+        let drawn = { (markup: Markup) -> MdImage? in
+            guard let i = markup as? Image, let source = i.source.map(math.restoring), !isWebImage(source)
+            else { return nil }
+            return MdImage(source: source, alt: math.restoring(i.plainText))
+        }
+        let images = p.children.compactMap(drawn)
+        guard !images.isEmpty else { return .paragraph(whole) }
+        // "Before ![](a.png) after" reads "Before after", not with the picture's two spaces.
+        var text = AttributedString()
+        var gap = false
+        for child in p.children {
+            if drawn(child) != nil {
+                gap = true
+                continue
+            }
+            var run = inline(child, [], link: nil)
+            if gap, text.characters.last?.isWhitespace == true {
+                run = AttributedString(run[(run.characters.firstIndex { !$0.isWhitespace } ?? run.endIndex)...])
+            }
+            text += run
+            gap = false
+        }
+        return .figure(text: text, whole: whole, images: images)
     }
 
     private func items(_ list: some Sequence<ListItem>) -> [MdItem] {
@@ -155,7 +195,8 @@ private struct Reader {
             let label = inline(l.children, intent, link: url ?? link)
             return label.characters.isEmpty ? text(destination ?? "") : label
         case let i as Image:
-            // Web images stay links, as on Android; the phone draws none inline yet.
+            // A web image stays a link: loading it would tell its server the thread was read.
+            // Others are drawn under their paragraph; here only inside a link or emphasis.
             let source = i.source.map(math.restoring)
             let alt = math.restoring(i.plainText)
             var run = text(alt.isEmpty ? (source ?? "image") : alt)
@@ -167,4 +208,8 @@ private struct Reader {
         default: return text(math.restoring(markup.format()))
         }
     }
+}
+
+private func isWebImage(_ source: String) -> Bool {
+    source.range(of: "^https?://", options: [.regularExpression, .caseInsensitive]) != nil
 }

@@ -6,11 +6,24 @@ import UIKit
 /// it as far as the finger has gone, and a swipe let go of drops it again. Pushed screens
 /// take back the room the bar leaves with `overTabBar()`.
 struct TabBarDrop: UIViewControllerRepresentable {
+    /// How many screens the stack has pushed.
+    let depth: Int
+
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
+    func updateUIViewController(_ controller: Controller, context: Context) { controller.pushed(depth) }
 
     final class Controller: UIViewController {
         private weak var watched: UINavigationController?
+        private var depth = 0
+
+        /// The circle beside the tab bar takes the tab for a moment before New pushes: the root
+        /// hears it's leaving then, with nothing pushed, and not again for the push itself.
+        func pushed(_ now: Int) {
+            guard now != depth else { return }
+            depth = now
+            // Once UIKit has started the push, with its transition to go along with.
+            DispatchQueue.main.async { self.move() }
+        }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
@@ -109,5 +122,21 @@ private struct OverTabBar: ViewModifier {
                 Color.clear.onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.bottom }) { keyboard = $0 }
             }
             .ignoresSafeArea(.container, edges: .bottom)
+    }
+}
+
+
+/// Selects the tab at `index` in UIKit, where SwiftUI's selection already is.
+@MainActor
+func keepTabSelected(_ index: Int) {
+    let roots = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        .compactMap(\.rootViewController)
+    var stack = roots
+    while let next = stack.popLast() {
+        if let tabs = next as? UITabBarController {
+            if index < tabs.tabs.count, tabs.selectedTab !== tabs.tabs[index] { tabs.selectedTab = tabs.tabs[index] }
+            return
+        }
+        stack += next.children
     }
 }

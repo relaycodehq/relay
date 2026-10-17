@@ -20,11 +20,12 @@ struct SelectableText: View {
     @Environment(\.colors) private var colors
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.openURL) private var openURL
+    @Environment(\.openPath) private var openPath
 
     var body: some View {
         // The type size is read so a change sets the fonts again.
         let _ = typeSize
-        TextViewRepresentable(text: uiText(), link: UIColor(colors.accent), openURL: openURL)
+        TextViewRepresentable(text: uiText(), link: UIColor(colors.accent), openURL: openURL, openPath: openPath)
     }
 
     private func uiText() -> NSAttributedString {
@@ -60,8 +61,14 @@ struct SelectableText: View {
             var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: runColor]
             if intent.contains(.code) { attributes[.backgroundColor] = UIColor.secondaryLabel.withAlphaComponent(0.18) }
             if intent.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-            if let link = run.link { attributes[.link] = link }
-            out.append(NSAttributedString(string: String(text[run.range].characters), attributes: attributes))
+            let string = String(text[run.range].characters)
+            if let link = run.link {
+                attributes[.link] = link
+            } else if intent.contains(.code), openPath?(string.trimmingCharacters(in: .whitespaces), true) != nil {
+                // A path or a tunnelled address in backticks opens like a link.
+                attributes[.link] = PathLink.url(string.trimmingCharacters(in: .whitespaces))
+            }
+            out.append(NSAttributedString(string: string, attributes: attributes))
         }
         return out
     }
@@ -88,6 +95,7 @@ private struct TextViewRepresentable: UIViewRepresentable {
     let text: NSAttributedString
     let link: UIColor
     let openURL: OpenURLAction
+    let openPath: OpenPath?
 
     func makeUIView(context: Context) -> UITextView {
         // TextKit 1, so the size measured below is the size it lays out at.
@@ -108,6 +116,7 @@ private struct TextViewRepresentable: UIViewRepresentable {
         if view.attributedText != text { view.attributedText = text }
         view.linkTextAttributes = [.foregroundColor: link]
         context.coordinator.openURL = openURL
+        context.coordinator.openPath = openPath
     }
 
     /// As wide as the text needs up to what's offered, as tall as it wraps to.
@@ -124,14 +133,21 @@ private struct TextViewRepresentable: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var openURL: OpenURLAction?
+        var openPath: OpenPath?
 
         func textViewDidChangeSelection(_ view: UITextView) {
             if view.selectedRange.length > 0 { TextSelection.began(in: view) }
         }
 
-        /// A tapped link goes where SwiftUI's links go, so the computer's localhost opens in Relay's browser.
+        /// A tapped link goes where SwiftUI's links go, so the computer's localhost opens in Relay's browser;
+        /// one naming a file in the thread's folder opens it here.
         func textView(_ view: UITextView, primaryActionFor item: UITextItem, defaultAction: UIAction) -> UIAction? {
-            guard case .link(let url) = item.content, let openURL else { return defaultAction }
+            guard case .link(let url) = item.content else { return defaultAction }
+            if let code = PathLink.code(in: url) {
+                return openPath?(code, true).map { open in UIAction { _ in open() } }
+            }
+            if let open = openPath?(url.absoluteString, false) { return UIAction { _ in open() } }
+            guard let openURL else { return defaultAction }
             return UIAction { _ in openURL(url) }
         }
     }

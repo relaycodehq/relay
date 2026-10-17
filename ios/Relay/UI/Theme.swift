@@ -142,19 +142,33 @@ extension View {
     func relayBackground() -> some View { modifier(RelayBackground()) }
 }
 
+/// Whose light or dark the app wears: the computer's, the phone's, or one of them always.
+enum ThemeMode: String, CaseIterable {
+    case computer, phone, light, dark
+
+    static let key = "relay.theme"
+}
+
 private struct RelayTheme: ViewModifier {
     @Environment(Connection.self) private var connection
     @Environment(\.colorScheme) private var system
     @Environment(\.dynamicTypeSize) private var dynamicType
     /// The last appearance a desktop sent, so the app opens in it before connecting.
     @AppStorage("appearance") private var saved: Data?
+    @AppStorage(ThemeMode.key) private var themeMode = ThemeMode.computer
 
     private var appearance: PhoneAppearance? {
         connection.overview?.appearance ?? saved.flatMap { try? JSONDecoder().decode(PhoneAppearance.self, from: $0) }
     }
 
     func body(content: Content) -> some View {
-        let mode = appearance?.mode ?? "system"
+        let mode =
+            switch themeMode {
+            case .computer: appearance?.mode ?? "system"
+            case .phone: "system"
+            case .light: "light"
+            case .dark: "dark"
+            }
         let dark = mode == "dark" || (mode != "light" && system == .dark)
         let colors = appearance.map { RelayColors(dark ? $0.dark : $0.light) } ?? (dark ? .relayDark : .relayLight)
         content
