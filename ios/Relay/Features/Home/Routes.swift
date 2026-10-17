@@ -21,25 +21,31 @@ extension EnvironmentValues {
     @Entry var navigate: (Route) -> Void = { _ in }
 }
 
+/// What a tab's stack has pushed.
+@Observable final class StackPath {
+    var routes: [Route] = []
+}
+
 /// A tab's navigation, every route reachable from its root. Pushing drops the tab bar.
 struct RouteStack<Root: View>: View {
+    /// Held by the tabs, so the bar's New can push onto the tab that's showing.
+    @Bindable var stack: StackPath
     @ViewBuilder let root: (_ open: @escaping (Route) -> Void) -> Root
-    @State private var path: [Route] = []
     @Environment(Connection.self) private var connection
 
     var body: some View {
-        NavigationStack(path: $path) {
-            root { path.append($0) }
+        NavigationStack(path: $stack.routes) {
+            root { stack.routes.append($0) }
                 .background(TabBarDrop())
-                .navigationDestination(for: Route.self) { destination($0) }
+                .navigationDestination(for: Route.self) { destination($0).overTabBar() }
         }
-        .environment(\.navigate) { path.append($0) }
+        .environment(\.navigate) { stack.routes.append($0) }
         // A link to the computer's own localhost opens in Relay's browser, through the tunnel.
         .environment(
             \.openURL,
             OpenURLAction { url in
                 guard connection.canTunnel, LocalUrls.link(url.absoluteString) != nil else { return .systemAction }
-                path.append(.browser(url: url.absoluteString))
+                stack.routes.append(.browser(url: url.absoluteString))
                 return .handled
             })
     }
@@ -52,8 +58,8 @@ struct RouteStack<Root: View>: View {
         // Started: the thread takes the new one's place, so Back skips it.
         case .newThread(let projectId, let scratch):
             NewThreadView(projectId: projectId, scratch: scratch) { id in
-                path.removeLast()
-                path.append(.thread(id))
+                stack.routes.removeLast()
+                stack.routes.append(.thread(id))
             }
         case .turn(let chatId, let messageId): TurnView(chatId: chatId, messageId: messageId)
         case .diff(let chatId, let messageId, let path): DiffView(chatId: chatId, messageId: messageId, path: path)

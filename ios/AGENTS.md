@@ -47,3 +47,28 @@ Kill the stand-in by its PID.
 - Native components first: let the system draw the glass (bars, sheets,
   `.buttonStyle(.glass)`), no custom chrome copied from Android.
 - No pill badges as decoration; muted text instead.
+
+## System bugs we work around
+
+Each with how to tell it's fixed, so the workaround can go.
+
+- **Minimized search's ✕ doesn't reach SwiftUI (iOS 27).** With
+  `.searchToolbarBehavior(.minimize)`, ✕ closes the field in UIKit only;
+  `isPresented` stays true and the query keeps its text, so the bar opens
+  again with the old text, or turns into an empty capsule nothing can be
+  typed into. A bare `TabView` > `NavigationStack` > `List` with
+  `.searchable(...).searchToolbarBehavior(.minimize)` shows it.
+  `onSearchClosed` (`Relay/UI/SearchClosed.swift`) watches the field stop
+  editing with `searchController.isActive` false and closes it in SwiftUI
+  too. Fixed when that bare repro, with `isPresented` bound and logged, sees
+  it go false on ✕ without the hook.
+- **Search circle needs a stack per tab.** `Tab(role: .search)` opens into
+  the bar's field only when each tab has its own `NavigationStack` and the
+  `.searchable` sits on the search tab's content; inside one outer stack the
+  field never opens, and `.searchable` on the `TabView` spreads to every tab.
+- **The tab bar's glass is drawn by its group view.** Moving `UITabBar` shows
+  nothing; `TabBarDrop` moves the `_UIBottomTabBarGroupView` through
+  `bounds.origin.y` (its `transform` is UIKit's and jumps on a device).
+- **Negative `additionalSafeAreaInsets` are ignored**, so a pushed screen
+  can't give back the dropped tab bar's room that way; `overTabBar()` does it
+  in SwiftUI.

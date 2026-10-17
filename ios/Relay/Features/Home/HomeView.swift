@@ -1,8 +1,10 @@
 import RelayRemote
 import SwiftUI
 
-/// The thread list: what needs you first, then what's running, then the rest.
+/// The thread list: what needs you first, then what's running, then the rest; while
+/// something's typed in the search, every thread that matches, whatever the filter.
 struct HomeView: View {
+    let query: String
     @Environment(Connection.self) private var connection
     @Environment(\.navigate) private var open
 
@@ -10,6 +12,8 @@ struct HomeView: View {
         Group {
             if connection.overview == nil {
                 ComputerWaiting()
+            } else if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                SearchResults(query: query) { open(.thread($0)) }
             } else {
                 ActivityList { open(.thread($0)) }
             }
@@ -24,30 +28,6 @@ struct HomeView: View {
                     .padding(.vertical, 6)
             }
         }
-        .relayBackground()
-    }
-}
-
-/// The search tab: every thread whose title or project matches, whatever the filter. Its
-/// field is the tab bar's, which the tab turns into.
-struct SearchTab: View {
-    let query: String
-    @Environment(Connection.self) private var connection
-    @Environment(\.navigate) private var open
-
-    var body: some View {
-        ZStack {
-            if connection.overview == nil {
-                ComputerWaiting()
-            } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                ContentUnavailableView(
-                    "Search threads", systemImage: "magnifyingglass",
-                    description: Text("By title or project, settled and snoozed ones too."))
-            } else {
-                SearchResults(query: query) { open(.thread($0)) }
-            }
-        }
-        .scrollDismissesKeyboard(.immediately)
         .relayBackground()
     }
 }

@@ -3,8 +3,8 @@ import UIKit
 
 /// Drops the tab bar below the screen as a screen is pushed over a tab's root, and lifts it
 /// back as that screen leaves. It rides the navigation transition, so a slow swipe back lifts
-/// it as far as the finger has gone, and a swipe let go of drops it again. Pushed screens lay
-/// out to the screen's edge, as if the bar weren't there.
+/// it as far as the finger has gone, and a swipe let go of drops it again. Pushed screens
+/// take back the room the bar leaves with `overTabBar()`.
 struct TabBarDrop: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
     func updateUIViewController(_ controller: Controller, context: Context) {}
@@ -47,11 +47,6 @@ struct TabBarDrop: UIViewControllerRepresentable {
                 String(describing: type(of: $0)).contains("TabBarGroup")
             } ?? tabBar
             let home = view.window?.safeAreaInsets.bottom ?? 34
-            // What the bar adds to the bottom inset, taken back from the screens it leaves.
-            let share = max(0, root.view.safeAreaInsets.bottom - home)
-            for pushed in nav.viewControllers where pushed !== root && pushed.additionalSafeAreaInsets.bottom != -share {
-                pushed.additionalSafeAreaInsets.bottom = -share
-            }
             // Through its bounds rather than its transform, which the tab bar animates itself.
             let down = -(tabBar.frame.height + home + 12)
             let place = { (y: CGFloat) in
@@ -71,13 +66,48 @@ struct TabBarDrop: UIViewControllerRepresentable {
             let before = toRoot ? down : 0
             bar.isUserInteractionEnabled = false
             let target = toRoot ? 0 : down
-            // Along with the transition, committed with it: a push builds the new screen while
-            // its slide already plays, and nothing set after that shows until it's built.
+            guard coordinator.isInteractive else {
+                // A tap's push runs on the clock from its start, and building the new screen holds
+                // the first frames back: along with it, the bar would be found at its end. On its
+                // own, the bar's slide starts with the first frame drawn.
+                UIView.animate(springDuration: coordinator.transitionDuration, bounce: 0) {
+                    bar.bounds.origin.y = target
+                } completion: { _ in
+                    place(target)
+                }
+                return
+            }
+            // A swipe's along with it, so the bar follows the finger.
             coordinator.animate { _ in
                 bar.bounds.origin.y = target
             } completion: { context in
                 place(context.isCancelled ? before : target)
             }
         }
+    }
+}
+
+extension View {
+    /// Lays a pushed screen out to the bottom edge, its bars as low as the tab bar sat:
+    /// the tab bar it drops still counts in the inset, which UIKit won't take a negative
+    /// inset against. With the keyboard up, the keyboard's own inset stands.
+    func overTabBar() -> some View { modifier(OverTabBar()) }
+}
+
+private struct OverTabBar: ViewModifier {
+    @State private var keyboard: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        let home = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?
+            .safeAreaInsets.bottom ?? 34
+        content
+            // As low as the tab bar it takes over, which floats 12pt into the home indicator's
+            // room; the bars along the bottom keep 6pt of their own.
+            .safeAreaPadding(.bottom, keyboard > 0 ? 0 : max(home - 18, 2))
+            // Outside the padding, so it reads the keyboard alone.
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.bottom }) { keyboard = $0 }
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
     }
 }
