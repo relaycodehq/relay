@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +44,7 @@ import dev.relay.android.ui.SectionHeader
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.TextField
 import dev.relay.android.ui.pressable
+import dev.relay.android.ui.ribbon.RibbonRefreshBox
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Minus
@@ -74,7 +74,7 @@ fun ChangesScreen(remote: Remote, where: String) {
             tree == null && state.error != null -> LoadFailed(state.error!!, model::load)
             tree == null -> Loading()
             else -> Column(Modifier.fillMaxSize().imePadding()) {
-                PullToRefreshBox(state.refreshing, model::refresh, Modifier.weight(1f).fillMaxWidth()) {
+                RibbonRefreshBox(state.refreshing, model::refresh, Modifier.weight(1f).fillMaxWidth()) {
                     ChangesList(model, tree, state, onOpen = { change, area ->
                         nav.push(diffRoute(RemoteDiffSource.working(where, change.path, area)))
                     })

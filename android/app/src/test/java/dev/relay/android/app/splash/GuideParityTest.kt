@@ -1,5 +1,6 @@
 package dev.relay.android.app.splash
 
+import dev.relay.android.ui.ribbon.GuideSample
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray

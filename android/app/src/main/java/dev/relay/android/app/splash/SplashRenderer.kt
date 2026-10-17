@@ -4,6 +4,9 @@ import android.content.Context
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import dev.relay.android.R
+import dev.relay.android.ui.ribbon.GuideSample
+import dev.relay.android.ui.ribbon.RelayR
+import dev.relay.android.ui.ribbon.cross
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer

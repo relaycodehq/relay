@@ -1,4 +1,4 @@
-package dev.relay.android.app.splash
+package dev.relay.android.ui.ribbon
 
 import kotlin.math.PI
 import kotlin.math.abs

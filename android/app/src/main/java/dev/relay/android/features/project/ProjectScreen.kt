@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +54,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import dev.relay.android.ui.listPadding
+import dev.relay.android.ui.ribbon.RibbonRefreshBox
 
 private val operationNames = mapOf(
     "MERGE_HEAD" to "merge",
@@ -124,7 +124,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
 
     CompositionLocalProvider(LocalProjectIconPath provides { projectIconPath(iconIndex, active, it) }) {
         Screen(project?.name ?: "Project", onBack = navigator.backAction) {
-            PullToRefreshBox(refreshing, {
+            RibbonRefreshBox(refreshing, {
                 refreshing = true
                 scope.launch {
                     try {

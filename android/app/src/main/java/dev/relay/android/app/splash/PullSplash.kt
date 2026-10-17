@@ -1,5 +1,8 @@
 package dev.relay.android.app.splash
 
+import dev.relay.android.ui.ribbon.Guide
+import dev.relay.android.ui.ribbon.Knot
+import dev.relay.android.ui.ribbon.RelayR
 import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.sin

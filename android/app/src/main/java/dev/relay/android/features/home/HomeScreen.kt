@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -63,6 +62,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import dev.relay.android.ui.SectionHeader
 import dev.relay.android.ui.listPadding
+import dev.relay.android.ui.ribbon.RibbonRefreshBox
 
 private val LIST_BOTTOM = 16.dp
 
@@ -200,7 +200,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                     }
                 }
             } else {
-                PullToRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
+                RibbonRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
                     when (tab) {
                         Tab.Activity -> ActivityList(
                             chats = o.chats,
