@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,7 +96,10 @@ fun TextField(
             singleLine = singleLine,
             minLines = minLines,
             maxLines = maxLines,
-            keyboardOptions = if (singleLine && keyboardOptions == KeyboardOptions.Default) KeyboardOptions(imeAction = ImeAction.Done) else keyboardOptions,
+            // Prose unless the caller says otherwise: a capital after a full stop. Branches and paths pass None.
+            keyboardOptions = if (keyboardOptions == KeyboardOptions.Default) {
+                KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = if (singleLine) ImeAction.Done else ImeAction.Default)
+            } else keyboardOptions,
             keyboardActions = keyboardActions,
             interactionSource = interaction,
             cursorBrush = SolidColor(c.foreground),

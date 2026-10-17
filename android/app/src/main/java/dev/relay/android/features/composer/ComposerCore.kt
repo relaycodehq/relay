@@ -20,6 +20,8 @@ import androidx.compose.foundation.content.consume
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -486,6 +488,7 @@ internal fun ComposerCore(
                         .semantics { contentDescription = "Message" },
                     textStyle = RelayTheme.type.base.copy(color = c.foreground),
                     cursorBrush = SolidColor(c.accent),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     inputTransformation = { error = null },
                 )
             }
