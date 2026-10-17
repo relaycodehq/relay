@@ -7,6 +7,17 @@ export type ContextCategoryKind = "used" | "free" | "buffer" | "deferred";
 
 export type ContextItem = { name: string; tokens: number; source?: string };
 
+/** What Relay itself put in the window; the categories already count it. */
+export type RelayShare = {
+  /** Its lines in the system prompt, estimated from their length. */
+  instructions: number;
+  /** Context hooks added to prompts: Relay's environment notes, and any the user's own hooks add. */
+  notes: number;
+  /** Relay's tools; `loaded` of their tokens sit in the window, the rest load only when used. */
+  tools: ContextItem[];
+  loaded: number;
+};
+
 export type ContextReport = {
   model: string;
   totalTokens: number;
@@ -19,6 +30,8 @@ export type ContextReport = {
   mcpTools: ContextItem[];
   agents: ContextItem[];
   skills: ContextItem[];
+  /** Counted live only; `/context`'s markdown doesn't say. */
+  relay?: RelayShare;
 };
 
 /** The kind Claude reports, or the one its markdown implies by the row's name. */

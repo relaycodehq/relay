@@ -74,7 +74,48 @@ it("reads Claude Code's live counts into the report /context's markdown gives", 
       { name: "release", source: "Project", tokens: 63 },
       { name: "xlsx", source: "claude.ai sync", tokens: 6 },
     ],
+    relay: { instructions: 0, notes: 0, tools: [], loaded: 0 },
   });
+});
+
+// Shapes as Claude Code 2.1.288 answered with Relay-like tools and a
+// UserPromptSubmit hook's added context.
+it("finds what Relay added among Claude's counts", () => {
+  const relayTool = (name: string, tokens: number, isLoaded: boolean) => ({
+    name: `mcp__relay__${name}`,
+    serverName: "relay",
+    tokens,
+    isLoaded,
+  });
+  const usage = {
+    ...counted,
+    mcpTools: [
+      ...counted.mcpTools,
+      relayTool("show_html", 261, true),
+      relayTool("list_threads", 70, false),
+    ],
+    messageBreakdown: {
+      attachmentsByType: [
+        { name: "skill_listing", tokens: 1754 },
+        { name: "hook_additional_context", tokens: 395 },
+      ],
+    },
+  } as SDKControlGetContextUsageResponse;
+  expect(claudeContextReport(usage, 620).relay).toEqual({
+    instructions: 620,
+    notes: 395,
+    tools: [
+      { name: "mcp__relay__show_html", tokens: 261 },
+      { name: "mcp__relay__list_threads", tokens: 70 },
+    ],
+    loaded: 261,
+  });
+  // Without tool search every tool sits in the window, though none says it's loaded.
+  const undeferred = {
+    ...usage,
+    categories: counted.categories.filter((c) => c.kind !== "deferred"),
+  };
+  expect(claudeContextReport(undeferred, 620).relay?.loaded).toBe(331);
 });
 
 it("leaves the compaction mark off when autocompact is off", () => {

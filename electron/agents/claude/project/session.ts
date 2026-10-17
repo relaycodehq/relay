@@ -29,6 +29,7 @@ import {
   type ClaudeRunOptions,
 } from "./config";
 import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
+import { relayPromptTokens } from "./context";
 import { ClaudeWork } from "./pending";
 import { hostedHandlers, sessionCallbacks } from "./requests";
 import { readSettings, sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
@@ -38,6 +39,7 @@ import { ClaudeFrames, holdOpen, pump, type ClaudeTurn } from "./stream";
 export const hostedMetaSchema = z
   .object({
     signature: z.string(),
+    relayPrompt: z.number().optional().catch(undefined),
     skipsPermissions: z.boolean(),
     options: z
       .object({
@@ -92,6 +94,8 @@ export type ClaudeSession = {
   threadId?: string;
   /** Asked for as the session starts; each result confirms it. */
   contextWindow?: number;
+  /** What Relay's addition to its system prompt costs, roughly. */
+  relayPrompt?: number;
   /** The cache lifetime Claude last reported writing with. */
   cacheTtl?: number;
   busy: boolean;
@@ -232,6 +236,7 @@ export async function startSession(
   config: Options,
   key?: string,
 ) {
+  holder.relayPrompt = relayPromptTokens(config);
   const hosted = await openHosted(holder, config, key);
   if (hosted) useHosted(holder, hosted);
   else {
@@ -282,6 +287,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
   const { options } = holder;
   const meta: HostedMeta = {
     signature: holder.signature,
+    relayPrompt: holder.relayPrompt,
     skipsPermissions: holder.skipsPermissions,
     options: {
       cwd: options.cwd,
@@ -359,6 +365,7 @@ function restoreSession(
       },
     },
     signature: meta.signature,
+    relayPrompt: meta.relayPrompt,
     skipsPermissions: meta.skipsPermissions,
     account: meta.options.account,
     frames: new ClaudeFrames(),

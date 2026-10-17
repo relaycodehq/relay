@@ -1,5 +1,6 @@
 import type {
   ModelUsage,
+  Options,
   SDKAssistantMessage,
   SDKControlGetContextUsageResponse,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -8,9 +9,10 @@ import {
   contextSourceLabel,
   type ContextItem,
   type ContextReport,
+  type RelayShare,
 } from "../../../../shared/context-report";
 import type { ContextUsage, PromptCache } from "../../../../shared/projects";
-import type { ClaudeRunOptions } from "./config";
+import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
 import type { ClaudeSession } from "./session";
 
 /** How full a turn's context window is, and how long its cache stays warm. */
@@ -127,9 +129,51 @@ export function claudeContextTokens(usage: unknown): number {
   );
 }
 
-/** Claude Code's live /context counts, in the shape its markdown reads into. */
+/**
+ * Roughly what Relay's addition to the system prompt costs. Claude Code counts
+ * the prompt as a whole, so Relay estimates its own part, at about four
+ * characters a token.
+ */
+export function relayPromptTokens(config: Options) {
+  const prompt = config.systemPrompt;
+  const append =
+    typeof prompt === "object" &&
+    !Array.isArray(prompt) &&
+    prompt.type === "preset"
+      ? prompt.append
+      : undefined;
+  return append ? Math.ceil(append.length / 4) : 0;
+}
+
+function relayShare(
+  usage: SDKControlGetContextUsageResponse,
+  instructions: number,
+): RelayShare {
+  const tools = usage.mcpTools.filter((t) => t.serverName === RELAY_SERVER);
+  // `isLoaded` reads false for every tool when none are deferred.
+  const deferring = usage.categories.some(
+    (c) => /^MCP tools/.test(c.name) && (c.kind === "deferred" || c.isDeferred),
+  );
+  return {
+    instructions,
+    notes:
+      usage.messageBreakdown?.attachmentsByType.find(
+        (a) => a.name === "hook_additional_context",
+      )?.tokens ?? 0,
+    tools: tools.map((t) => ({ name: t.name, tokens: t.tokens })),
+    loaded: tools
+      .filter((t) => !deferring || t.isLoaded)
+      .reduce((sum, t) => sum + t.tokens, 0),
+  };
+}
+
+/**
+ * Claude Code's live /context counts, in the shape its markdown reads into,
+ * and Relay's share of them.
+ */
 export function claudeContextReport(
   usage: SDKControlGetContextUsageResponse,
+  relayPrompt = 0,
 ): ContextReport {
   const items = <T>(
     list: T[] | undefined,
@@ -169,5 +213,6 @@ export function claudeContextReport(
       source: contextSourceLabel(s.source),
       tokens: s.tokens,
     })),
+    relay: relayShare(usage, relayPrompt),
   };
 }

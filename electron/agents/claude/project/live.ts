@@ -72,5 +72,5 @@ export async function readClaudeContext(
     15000,
     "Claude did not count its context.",
   );
-  return claudeContextReport(usage);
+  return claudeContextReport(usage, session.relayPrompt);
 }
