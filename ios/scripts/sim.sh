@@ -22,7 +22,8 @@ done
 
 cd $ios
 if (( build )); then
-  [[ -e Relay.xcodeproj ]] || xcodegen generate >/dev/null
+  # The project is made from project.yml and lists every file, so a new file needs it made again.
+  xcodegen generate --use-cache >/dev/null
   log=$(mktemp)
   if ! xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Debug \
       -destination "id=$sim" build -quiet >$log 2>&1; then
