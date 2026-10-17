@@ -50,6 +50,7 @@ private struct FieldUniforms {
     var modules: Int32
     var front: Float
     var entering: Float
+    var develop: Float
 }
 
 /// Laid out as Ripples.metal's CameraUniforms.
@@ -61,12 +62,12 @@ private struct CameraUniforms {
     var fill: SIMD2<Float>
     var unit: Float
     var front: Float
-    var gather: Float
     var entrance: Float
     var alpha: Float
     var shade: Float
     var lifted: Float
     var light: Float
+    var develop: Float
 }
 
 /// Laid out as Ripples.metal's Glow.
@@ -236,7 +237,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             viewProjection: vp, code: s.code, window: s.window, eye: eye, base: palette.base, hot: palette.hot,
             scan: scanHot, screen: screen, time: Float(time), px: px, unit: unit, baseAlpha: palette.baseAlpha,
             gather: s.gather, clear: s.clear, rest: s.rest, lock: s.lock, charge: s.charge, burst: s.burst,
-            modules: Int32(moduleBytes.isEmpty ? 0 : f.modules), front: s.front, entering: s.entering ? 1 : 0)
+            modules: Int32(moduleBytes.isEmpty ? 0 : f.modules), front: s.front, entering: s.entering ? 1 : 0,
+            develop: s.develop)
         var waves = [SIMD4<Float>](repeating: .zero, count: Self.slots)
         for (i, p) in pulses.enumerated() { waves[i] = p }
         waves += packets
@@ -248,8 +250,9 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             let fill = screen / (image * max(screen.x / image.x, screen.y / image.y))
             var camera = CameraUniforms(
                 uncode: s.code.inverse, window: s.window, accent: scanHot, screen: screen, fill: fill, unit: unit,
-                front: s.front, gather: s.gather, entrance: s.entrance, alpha: s.cameraAlpha, shade: s.shade,
-                lifted: s.lifted ? 1 : 0, light: palette.light ? 1 : 0)
+                front: s.front, entrance: s.entrance, alpha: s.cameraAlpha, shade: s.shade,
+                lifted: s.lifted ? 1 : 0, light: palette.light ? 1 : 0,
+                develop: s.develop)
             encoder.setRenderPipelineState(picture)
             encoder.setFragmentBytes(&camera, length: MemoryLayout<CameraUniforms>.stride, index: 0)
             encoder.setFragmentTexture(texture, index: 0)

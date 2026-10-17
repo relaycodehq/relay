@@ -39,6 +39,8 @@ struct ScanScene {
     var front = Halftone.from
     /// The way in, 0..1: the lens settles over it.
     var entrance: Float = 0
+    /// How far the viewfinder's landed dots have taken the camera's light, 0..1.
+    var develop: Float = 0
     /// How much of the screen the camera covers: the scanner's dots lighten over it.
     var covers: Float = 0
     var shade: Float = 0
@@ -46,12 +48,15 @@ struct ScanScene {
     var lifted = false
 }
 
-/// Seconds and points of the way in. The landed dots take the camera's light, then a front runs out
-/// of the viewfinder: ahead of it the field, on it new dots, behind it the dots swell shut into the picture.
+/// Seconds and points of the way in. The field's near dots fold up into the viewfinder's grid, the
+/// grid's dots take the camera's light from its middle out, then a front runs out of the viewfinder:
+/// ahead of it the field, on it new dots, behind it the dots swell shut into the picture.
 nonisolated enum Halftone {
     static let land: Float = 0.6
-    static let frontAt: Float = 0.42
-    static let frontFor: Float = 1.2
+    static let developAt: Float = 0.55
+    static let developFor: Float = 0.4
+    static let frontAt: Float = 0.85
+    static let frontFor: Float = 1.15
     static let from: Float = -125
     static let duration = frontAt + frontFor
 
@@ -61,6 +66,9 @@ nonisolated enum Halftone {
         let u = min(1, max(0, (seconds - frontAt) / frontFor))
         return from + (to - from) * (u * (1.4 - 0.4 * u))
     }
+
+    /// How far the viewfinder's dots have taken the camera's light, 0..1, as Ripples.metal's develop.
+    static func developed(_ seconds: Float) -> Float { min(1, max(0, (seconds - developAt) / developFor)) }
 
     /// Points from the viewfinder's edge, negative inside, `p` from its middle; rounder at the
     /// corners than the viewfinder, as Ripples.metal's frontDistance.
@@ -87,7 +95,7 @@ nonisolated enum Halftone {
     /// Called with a code's text once one's read; says whether it's a Relay pairing code.
     @ObservationIgnored var onRead: (String) -> Bool = { _ in false }
     @ObservationIgnored var reduceMotion = false
-    /// The camera has given a picture: the way in holds before the front until it has.
+    /// The camera has given a picture: the landed dots wait for it before they take its light.
     @ObservationIgnored var cameraLive = false
     /// The code being paired with, and its corners on the screen (NDC: top left, top right, bottom right, bottom left).
     @ObservationIgnored private(set) var code: SeenCode?
@@ -208,7 +216,7 @@ nonisolated enum Halftone {
         switch phase {
         case .opening:
             open = min(1, open + dt / Self.opening)
-            if !cameraLive { open = min(open, Double(Halftone.frontAt / Halftone.duration)) }
+            if !cameraLive { open = min(open, Double(Halftone.developAt / Halftone.duration)) }
             if open >= 1 { go(.looking) }
         case .closing:
             open = max(0, open - dt / 0.9)
@@ -249,6 +257,7 @@ nonisolated enum Halftone {
             let far = [SIMD2<Float>(-1, 1), [1, 1], [-1, -1], [1, -1]].map { Halftone.distance($0 * points / 2 - middle) }.max() ?? 0
             s.camera = true
             s.gather = clamp(seconds / Halftone.land)
+            s.develop = Halftone.developed(seconds)
             s.front = Halftone.front(seconds, to: max(640, far + 280))
             s.entering = phase == .opening || phase == .closing
             s.entrance = clamp((Float(open) - 0.38) / 0.62)

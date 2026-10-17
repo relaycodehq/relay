@@ -55,6 +55,8 @@ struct FieldUniforms {
     /// The halftone's front, points from the viewfinder's edge, and whether the way in or out is playing.
     float front;
     float entering;
+    /// How far the viewfinder's landed dots have taken the camera's light, 0..1.
+    float develop;
 };
 
 struct DotOut {
@@ -82,6 +84,12 @@ static float ease(float x) { return x * x * (3.0 - 2.0 * x); }
 /// How far a viewfinder dot has got from the field to its place, near rows first.
 static float landing(float gather, uint iid, float gy) {
     return ease(clamp(gather * 1.6 - gy * 0.45 - rand(iid, 1u) * 0.15, 0.0, 1.0));
+}
+
+/// How far the landed dot at `cell` (points from the viewfinder's middle) has taken the camera's
+/// light: from the middle out, the corners last.
+static float developed(float develop, float2 cell) {
+    return clamp((develop * 1.35 - length(cell) / 177.0) / 0.35, 0.0, 1.0);
 }
 
 /// Points from the viewfinder's edge, negative inside; p from its middle. Rounder at the corners
@@ -163,8 +171,8 @@ vertex DotOut dotVertex(
         float winPx = u.window.z * u.screen.x / float(GRID) * (bracket ? 0.75 : 0.55);
         size = mix(size, winPx, p) * (1.0 + 1.6 * sin(M_PI_F * p));
         size = mix(size, modulePx * 0.95, l) * (1.0 - 0.15 * u.charge);
-        // As it lands, the camera's dot in its cell takes over from it.
-        if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.75, 1.0, p);
+        // Landed, it holds until the camera's dot in its cell takes over from it.
+        if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.2, 0.9, developed(u.develop, (g - 0.5) * 250.0));
         if (p + l > 0.0) at = float4(xy, 0.0, 1.0);
         fade = 1.0 - p;
     } else if (u.entering > 0.5) {
@@ -280,12 +288,12 @@ struct CameraUniforms {
     float2 fill;
     float unit;
     float front;
-    float gather;
     float entrance;
     float alpha;
     float shade;
     float lifted;
     float light;
+    float develop;
 };
 
 struct CameraOut {
@@ -315,11 +323,8 @@ fragment float4 cameraFragment(
     float2 k = floor(p / PITCH);
     float2 cell = (k + 0.5) * PITCH;
     float dist = frontDistance(cell);
-    // Inside the viewfinder each dot is born as the field's dot lands on it.
-    uint iid = uint((k.y + float(GRID / 2)) * float(COLS) + k.x + float(GRID / 2 + G0));
-    float born = all(abs(cell) < float2(125.0))
-        ? smoothstep(0.75, 1.0, landing(u.gather, iid, (k.y + float(GRID / 2) + 0.5) / float(GRID)))
-        : clamp((u.front - dist) / 34.0, 0.0, 1.0);
+    // Inside the viewfinder each dot is born from the field's dot that landed on it, the middle first.
+    float born = all(abs(cell) < float2(125.0)) ? developed(u.develop, cell) : clamp((u.front - dist) / 34.0, 0.0, 1.0);
     float closed = ease(clamp((u.front - dist - 120.0) / 150.0, 0.0, 1.0));
     // The lens eases in by a few percent as the picture closes up.
     float zoom = 1.0 + 0.05 * (1.0 - u.entrance) * (1.0 - u.entrance);
