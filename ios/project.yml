@@ -68,6 +68,9 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
         NSLocalNetworkUsageDescription: Relay connects to Relay on your computer over your network.
+        # Pairing asks for the local network up front by finding a service of its own (Features/Pairing/ScanPermissions).
+        NSBonjourServices:
+          - _relay-probe._tcp
         NSCameraUsageDescription: Scan the pairing code Relay shows on your computer, and take photos to send with a message.
         NSMicrophoneUsageDescription: Dictate messages. Your computer turns the speech into text; nothing is kept on this phone.
         # The desktop's QR code is a relay-remote:// link, so the Camera app opens it here too.

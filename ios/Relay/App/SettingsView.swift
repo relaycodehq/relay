@@ -49,6 +49,6 @@ struct SettingsView: View {
             .cardRow()
         }
         .relayBackground()
-        .sheet(isPresented: $pairing) { PairingView() }
+        .fullScreenCover(isPresented: $pairing) { PairingView() }
     }
 }

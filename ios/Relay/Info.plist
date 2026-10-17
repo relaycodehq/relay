@@ -40,6 +40,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_relay-probe._tcp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan the pairing code Relay shows on your computer, and take photos to send with a message.</string>
 	<key>NSLocalNetworkUsageDescription</key>

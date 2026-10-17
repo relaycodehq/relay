@@ -31,6 +31,8 @@ struct RootView: View {
     @Environment(Connection.self) private var connection
     @Environment(ProjectIconStore.self) private var icons
     @Binding var incoming: IncomingPair?
+    /// A first pairing keeps its screen up until Continue, past the moment the computer says yes.
+    @State private var pairing = false
     @State private var tab = HomeTab.threads
     @Environment(\.colors) private var colors
     /// Each tab's own: a push redraws that tab's stack, not the root and every tab under it.
@@ -54,7 +56,7 @@ struct RootView: View {
     }
 
     var body: some View {
-        if connection.paired {
+        if connection.paired && !pairing {
             // A stack per tab, as iOS means tabs to be: the search tab's circle turns into the
             // bar's search field only then. Each stack drops the tab bar as it pushes.
             TabView(selection: picked) {
@@ -81,8 +83,8 @@ struct RootView: View {
             }
             .tabViewSearchActivation(.searchTabSelection)
             .environment(\.threadFilter, filter.wrappedValue)
-            .sheet(item: $incoming) { _ in
-                PairingView(incoming: $incoming)
+            .fullScreenCover(item: $incoming) { _ in
+                PairingView(incoming: $incoming, holding: .constant(false))
             }
             .task(id: IconWant(connection)) {
                 icons.prune(keeping: Set(connection.computers.map(\.key)))
@@ -90,7 +92,7 @@ struct RootView: View {
                 await icons.keep(connection, projectIds: connection.overview?.projects.map(\.id) ?? [])
             }
         } else {
-            PairingView(incoming: $incoming)
+            PairingView(incoming: $incoming, holding: $pairing)
         }
     }
 }
