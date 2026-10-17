@@ -101,6 +101,7 @@
   gap: 2px;
 }
 .settings-screen .shortcut-action {
+  display: none;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -112,9 +113,6 @@
 .settings-screen .shortcut-action:hover {
   background: var(--hover);
   color: var(--text);
-}
-.settings-screen .shortcut-action {
-  display: none;
 }
 .settings-screen .shortcut-action[data-shown],
 .setting:hover .shortcut-add,

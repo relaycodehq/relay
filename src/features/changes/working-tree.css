@@ -263,8 +263,6 @@
 .working-review > header strong {
   flex: 1;
   font-weight: 500;
-}
-.working-review > header strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

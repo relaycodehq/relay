@@ -89,6 +89,8 @@
 .changed-files-row .diff-stat {
   margin-left: auto;
   font-size: 11px;
+  grid-template-columns: 5ch 5ch;
+  text-align: right;
 }
 .diff-stat {
   display: inline-grid;
@@ -97,10 +99,6 @@
   flex: none;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-}
-.changed-files-row .diff-stat {
-  grid-template-columns: 5ch 5ch;
-  text-align: right;
 }
 .diff-stat-add {
   color: light-dark(#1a7f45, #4cc38a);

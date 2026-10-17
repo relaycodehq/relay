@@ -270,6 +270,10 @@
   position: absolute;
   right: 10px;
   transform: translateY(-50%);
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .clockify-day-hours span[data-edge="start"] {
   transform: none;
@@ -278,12 +282,6 @@
 .clockify-day-hours span[data-edge="end"] {
   transform: translateY(-100%);
   color: var(--text);
-}
-.clockify-day-hours span {
-  font-size: 10.5px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 .clockify-day-track {
   position: relative;
