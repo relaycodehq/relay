@@ -1,5 +1,4 @@
 import AVFoundation
-import CoreMotion
 import MetalKit
 import SwiftUI
 
@@ -36,10 +35,6 @@ final class ScanStageController: UIViewController {
     private var starting = false
     private var last: CFTimeInterval = 0
     private var clock = 0.0
-    private let motion = CMMotionManager()
-    /// Where the phone's usually held, followed slowly, so the tilt is how far it's turned from that.
-    private var rest: SIMD2<Double>?
-    private var aim = SIMD2<Float>.zero
     /// Where a dragging finger last left a ring.
     private var dragged: CGPoint?
     private let tap = UIImpactFeedbackGenerator(style: .soft)
@@ -97,13 +92,11 @@ final class ScanStageController: UIViewController {
         super.viewWillAppear(animated)
         last = 0
         metal.isPaused = false
-        if motion.isDeviceMotionAvailable { motion.startDeviceMotionUpdates() }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         metal.isPaused = true
-        motion.stopDeviceMotionUpdates()
         dropCamera()
     }
 
@@ -141,7 +134,6 @@ final class ScanStageController: UIViewController {
         scan.advance(dt)
         if scan.wantsCamera, camera == nil, !starting { startCamera() }
         if !scan.wantsCamera, camera != nil { dropCamera() }
-        follow(dt)
 
         let points = SIMD2<Float>(Float(view.bounds.width), Float(view.bounds.height))
         let s = scan.scene(points: points)
@@ -161,7 +153,7 @@ final class ScanStageController: UIViewController {
         }
         CATransaction.commit()
         return RippleFrame(
-            time: clock, aim: aim, scene: s, modules: scan.code?.size ?? 0, answer: scan.takeAnswer())
+            time: clock, scene: s, modules: scan.code?.size ?? 0, answer: scan.takeAnswer())
     }
 
     /// The code's square on the screen, in points.
@@ -174,16 +166,6 @@ final class ScanStageController: UIViewController {
         }
         path.close()
         return path.cgPath
-    }
-
-    /// The tilt, eased; the resting angle catches up over a few seconds.
-    private func follow(_ dt: Double) {
-        guard let attitude = motion.deviceMotion?.attitude else { return }
-        let now = SIMD2(attitude.roll, attitude.pitch)
-        let held = rest ?? now
-        rest = held + (now - held) * min(1, dt / 3)
-        let turned = simd_clamp((now - held) / 0.35, SIMD2(repeating: -1), SIMD2(repeating: 1))
-        aim += (SIMD2<Float>(Float(turned.x), Float(turned.y)) - aim) * Float(min(1, dt * 4))
     }
 
     private func startCamera() {

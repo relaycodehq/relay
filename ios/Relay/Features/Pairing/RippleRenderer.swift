@@ -16,8 +16,6 @@ struct RipplePalette: Equatable {
 struct RippleFrame {
     /// The field's own clock, which stands still under Reduce Motion.
     var time: Double
-    /// The phone's tilt, -1...1 each way.
-    var aim: SIMD2<Float>
     var scene: ScanScene
     /// Modules a side of the code being scanned, and the modules; 0 and empty before one's seen.
     var modules: Int
@@ -70,6 +68,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     private var cycle0 = 0.0
     private var answeredAt = -Double.infinity
     /// The last frame's camera and clock, which a touch's ring starts from.
+    /// How far the view has turned round the computer, radians.
+    private var yaw: Float = 0
     private var shown: (viewProjection: simd_float4x4, eye: SIMD3<Float>, time: Double)?
 
     var palette: RipplePalette
@@ -86,8 +86,9 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    private static let cols = 72
-    private static let rows = 112
+    /// As Ripples.metal's COLS and ROWS.
+    private static let cols = 118
+    private static let rows = 140
     private static let slots = 24
     private static let fov: Float = 50
     /// The picture moved up the screen, so the field sits above the words.
@@ -95,6 +96,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     private static let eye = SIMD3<Float>(0, 2.4, 7)
     private static let target = SIMD3<Float>(0, 0, -8)
     private static let phone = SIMD2<Float>(0, 6.5)
+    /// Seconds for the view to go once round the computer.
+    private static let turnSeconds = 90.0
     static let computer = SIMD3<Float>(0, 0.05, -13)
     private static let others: [SIMD2<Float>] = [[-7, -11], [8, -17], [-3.5, -21], [5.5, -8]]
     private static let flight = 2.0
@@ -145,8 +148,11 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
 
         let screen = SIMD2<Float>(Float(size.width), Float(size.height))
         let unit = Float(size.width / view.bounds.width)
-        let eye = Self.orbit(Self.eye, Self.target, f.aim, 0.25, 0.12)
-        let vp = Self.camera(eye: eye, target: Self.target, aspect: screen.x / screen.y)
+        // The view turns slowly round the computer on the field's clock; eye and aim turn together,
+        // so the framing holds.
+        yaw = Float((time / Self.turnSeconds).truncatingRemainder(dividingBy: 1) * 2 * .pi)
+        let eye = turn(Self.eye)
+        let vp = Self.camera(eye: eye, target: turn(Self.target), aspect: screen.x / screen.y)
         shown = (vp, eye, time)
         let px = screen.y / (2 * tan(Self.fov * .pi / 360))
         let s = f.scene
@@ -175,7 +181,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             let t = (phase - start) / Self.flight
             guard phase >= 0, t > 0, t < 1.12 else { return }
             if t < 1 {
-                let p = Self.arc(Float(t * t * (3 - 2 * t)), back: back)
+                let p = arc(Float(t * t * (3 - 2 * t)), back: back)
                 packets[back ? 1 : 0] = [p.x, p.z, p.y, Float(sin(.pi * min(1, t * 1.1))) * field]
             }
             for k in 0..<26 {
@@ -183,7 +189,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
                 guard at > 0, at < 1 else { continue }
                 let eased = Float(at * at * (3 - 2 * at))
                 let fall = 1 - Float(k) / 26
-                world(Self.arc(eased, back: back), k == 0 ? 0.5 : 0.2 * fall, (k == 0 ? 1 : 0.55 * fall) * field)
+                world(arc(eased, back: back), k == 0 ? 0.5 : 0.2 * fall, (k == 0 ? 1 : 0.55 * fall) * field)
             }
         }
         packet(0, back: false)
@@ -271,10 +277,11 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             return k >= 0 && at + k * every > from ? at + k * every : nil
         }
         let c = cycle0
-        if let t = crossed(c, Self.cycle) { pulse(Self.phone.x, Self.phone.y, t, 0.45) }
+        let phone = turn([Self.phone.x, 0, Self.phone.y])
+        if let t = crossed(c, Self.cycle) { pulse(phone.x, phone.z, t, 0.45) }
         if let t = crossed(c + Self.flight, Self.cycle) { pulse(Self.computer.x, Self.computer.z, t, 1.15) }
         if let t = crossed(c + Self.flight + 0.6, Self.cycle) { pulse(Self.computer.x, Self.computer.z, t, 0.4) }
-        if let t = crossed(c + 2 * Self.flight + 0.6, Self.cycle) { pulse(Self.phone.x, Self.phone.y, t, 1.0) }
+        if let t = crossed(c + 2 * Self.flight + 0.6, Self.cycle) { pulse(phone.x, phone.z, t, 1.0) }
         if let t = crossed(1.3, 2.9) {
             let o = Self.others[min(Self.others.count - 1, Int(random() * Double(Self.others.count)))]
             pulse(o.x, o.y, t, Float(0.3 + random() * 0.15))
@@ -282,14 +289,21 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     }
 
     /// Where a packet is `s` of the way along its arc; the two directions bow to opposite sides.
-    private static func arc(_ s: Float, back: Bool) -> SIMD3<Float> {
+    private func arc(_ s: Float, back: Bool) -> SIMD3<Float> {
         let u = back ? 1 - s : s
         let side: Float = back ? -1 : 1
-        return [
+        let phone = Self.phone, computer = Self.computer
+        return turn([
             phone.x + 1.6 * side * (1 - u) + 1.3 * side * sin(.pi * u),
             0.1 + 1.7 * sin(.pi * u),
             phone.y - 1.5 + (computer.z - phone.y + 1.5) * u,
-        ]
+        ])
+    }
+
+    /// A point on your side of the field carried round the computer as far as the view has turned.
+    private func turn(_ p: SIMD3<Float>) -> SIMD3<Float> {
+        let d = p - Self.computer
+        return [Self.computer.x + d.x * cos(yaw) + d.z * sin(yaw), p.y, Self.computer.z - d.x * sin(yaw) + d.z * cos(yaw)]
     }
 
     /// Perspective from `eye` toward `target`, the picture moved up by `shift` without turning the camera.
@@ -311,11 +325,4 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         return vp
     }
 
-    /// The eye swung around `target` by the tilt.
-    private static func orbit(_ eye: SIMD3<Float>, _ target: SIMD3<Float>, _ aim: SIMD2<Float>, _ yawMax: Float, _ pitchMax: Float) -> SIMD3<Float> {
-        let d = eye - target
-        let yaw = aim.x * yawMax, pitch = aim.y * pitchMax
-        let y1 = d.y * cos(pitch) - d.z * sin(pitch), z1 = d.y * sin(pitch) + d.z * cos(pitch)
-        return [target.x + d.x * cos(yaw) + z1 * sin(yaw), target.y + y1, target.z - d.x * sin(yaw) + z1 * cos(yaw)]
-    }
 }

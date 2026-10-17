@@ -5,8 +5,13 @@ using namespace metal;
 // phone and the computer. Scanning, the near middle of it folds up into the viewfinder, its dots
 // lock onto the code, and the code bursts back out into the whole field.
 
-constant int COLS = 72;
-constant int ROWS = 112;
+/// Wide enough to fill a disc round the computer, so the view can turn all the way round it.
+constant int COLS = 118;
+/// Rows running away from you, then a few in front of the first, filling the disc on the near side.
+constant int AWAY = 128;
+constant int ROWS = AWAY + 12;
+/// The computer, which the view turns round.
+constant float2 COMPUTER = float2(0.0, -13.0);
 constant float STEP = 0.36;
 /// Ring slots, room for a finger's too, then the two packets.
 constant int SLOTS = 24;
@@ -74,8 +79,9 @@ vertex DotOut dotVertex(
 ) {
     int ci = int(iid) % COLS;
     int ri = int(iid) / COLS;
-    float c = float(ci), r = float(ri);
-    float2 xz = float2((c - float(COLS - 1) * 0.5 + fmod(r, 2.0) * 0.5) * STEP, 5.5 - r * STEP * 0.866);
+    float c = float(ci);
+    float r = ri < AWAY ? float(ri) : float(AWAY - 1 - ri);
+    float2 xz = float2((c - float(COLS - 1) * 0.5 + fmod(abs(r), 2.0) * 0.5) * STEP, 5.5 - r * STEP * 0.866);
     float swell = 0.11 * sin(xz.x * 0.55 + u.time * 0.6) * cos(xz.y * 0.42 - u.time * 0.45)
                 + 0.05 * sin(xz.y * 0.9 + xz.x * 0.2 + u.time * 0.8);
     float lift = 0.0;
@@ -100,7 +106,7 @@ vertex DotOut dotVertex(
     float3 pos = float3(xz.x, swell + lift * 0.5 + wash * 0.08, xz.y);
     float4 clip = u.viewProjection * float4(pos, 1.0);
     float dist = distance(pos, u.eye);
-    float fog = (1.0 - smoothstep(15.0, 31.0, dist)) * (1.0 - smoothstep(7.0, 12.0, abs(xz.x)))
+    float fog = (1.0 - smoothstep(15.0, 31.0, dist)) * (1.0 - smoothstep(17.0, 21.0, distance(xz, COMPUTER)))
               * smoothstep(0.4, 1.6, clip.w);
     float size = min(u.px * (0.042 + 0.07 * h) / max(clip.w, 0.01), 30.0 * u.unit);
     float4 col = float4(mix(u.base, u.hot, h), 1.0) * (u.baseAlpha + (1.0 - u.baseAlpha) * h) * fog;
