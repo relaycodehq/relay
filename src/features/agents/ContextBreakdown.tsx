@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type {
   ContextItem,
   ContextReport,
+  RelayShare,
 } from "../../../shared/context-report";
 import { formatTokens } from "../../../shared/tokens";
 import "./context-breakdown.css";
@@ -64,7 +65,7 @@ function Section({
   children,
 }: {
   title: string;
-  count: number;
+  count?: number;
   tokens: number;
   children: ReactNode;
 }) {
@@ -72,7 +73,8 @@ function Section({
     <details className="context-section">
       <summary>
         <span>
-          {title} <span className="muted">{count}</span>
+          {title}{" "}
+          {count !== undefined && <span className="muted">{count}</span>}
         </span>
         <span>{formatTokens(tokens)}</span>
       </summary>
@@ -108,9 +110,59 @@ function byServer(tools: ContextItem[]) {
   }));
 }
 
+/** Relay's parts, each named after the category Claude counts it in. */
+function relayItems(relay: RelayShare) {
+  const tools = total(relay.tools);
+  const state =
+    relay.loaded >= tools
+      ? ""
+      : relay.loaded
+        ? ` · ${formatTokens(relay.loaded)} loaded`
+        : " · when used";
+  return [
+    {
+      key: "instructions",
+      name: (
+        <>
+          Instructions <span className="muted">system prompt</span>
+        </>
+      ),
+      title: "Relay's lines added to Claude Code's system prompt, estimated",
+      tokens: relay.instructions,
+    },
+    {
+      key: "notes",
+      name: (
+        <>
+          Environment notes <span className="muted">messages</span>
+        </>
+      ),
+      title:
+        "What Relay tells Claude with each prompt, like servers already running. Context your own hooks add counts here too.",
+      tokens: relay.notes,
+    },
+    {
+      key: "tools",
+      name: (
+        <>
+          Tools{" "}
+          <span className="muted">
+            {relay.tools.length}
+            {state}
+          </span>
+        </>
+      ),
+      title: relay.tools
+        .map((t) => t.name.replace("mcp__relay__", ""))
+        .join(", "),
+      tokens: tools,
+    },
+  ].filter((item) => item.tokens > 0);
+}
+
 /**
  * What fills the context window: a bar by category, then the files, tools,
- * skills and agents behind the larger ones.
+ * skills and agents behind the larger ones, and what Relay added itself.
  */
 export function ContextBreakdown({
   report,
@@ -204,6 +256,17 @@ export function ContextBreakdown({
       </Section>
     ),
   ].filter(Boolean);
+  const relay = report.relay && relayItems(report.relay);
+  if (relay?.length)
+    sections.push(
+      <Section
+        key="relay"
+        title="Relay"
+        tokens={relay.reduce((sum, item) => sum + item.tokens, 0)}
+      >
+        <ItemList label="Relay" items={relay} />
+      </Section>,
+    );
   return (
     <div className="context-breakdown">
       <div className="usage-meter-top">
