@@ -1,6 +1,6 @@
 import {
-  useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -16,7 +16,8 @@ import {
 import { agentMentionPattern } from "../../../shared/agents";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { parseCodeReferences } from "../../../shared/code-references";
-import { pastedTexts, replacePastedTexts } from "../../../shared/pasted-texts";
+import { onlyImageTokens } from "../../../shared/image-refs";
+import type { ProjectFileLink } from "../../../shared/project-file-links";
 import type {
   ProjectChat as ProjectChatData,
   ProjectChatSend,
@@ -32,36 +33,93 @@ import {
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { Spinner } from "../../ui/ui";
 import { SentMemes, useSentMemes } from "../memes/SentMemes";
+import { ImageThumbnail } from "../images/ImagePreview";
+import { ImageViewer } from "../images/ImageViewer";
+import { CodeReferenceList } from "./CodeReferenceChip";
+import type { SentImage } from "./SentPills";
+import { pilledImages, UserText } from "./UserText";
 import { useDragSort } from "../../lib/useDragSort";
 import "./queued-messages.css";
 
-/** A queued message's text, with its attachments counted rather than shown; folded, its blank lines close up. */
+/** A queued screenshot as a sent one: it has no id yet, so it loads from what the queue holds. */
+function queuedImages(input: ProjectChatSend): SentImage[] {
+  return (input.images ?? []).map((image, i) => ({
+    image: {
+      id: `${input.id}-${i}`,
+      name: image.name,
+      mimeType: image.mimeType,
+      sizeBytes: Math.floor(
+        ((image.dataUrl.length - image.dataUrl.indexOf(",") - 1) * 3) / 4,
+      ),
+    },
+    preview: {
+      key: `queued:${input.id}:${i}`,
+      name: image.name,
+      load: () => Promise.resolve(image.dataUrl),
+    },
+  }));
+}
+
+/** A queued message as it will read once sent: its screenshots, code references, memes and pills. */
 function QueuedBody({
   input,
-  folded,
+  projectRoot,
+  onOpenFile,
 }: {
   input: ProjectChatSend;
-  folded: boolean;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
 }) {
-  const code = parseCodeReferences(input.body);
-  const pastes = pastedTexts(code.body);
-  const memes = useSentMemes(
-    replacePastedTexts(code.body, () => "\n\n")
-      .trim()
-      .replace(agentMentionPattern, ""),
-  );
-  const body = memes.rest?.trim() ?? "";
+  const [viewing, setViewing] = useState<string>();
+  const code = useMemo(() => parseCodeReferences(input.body), [input.body]);
+  const said = code.body.replace(agentMentionPattern, "");
+  const text = onlyImageTokens(said) ? "" : said;
+  const memes = useSentMemes(text);
+  const images = useMemo(() => queuedImages(input), [input]);
+  const pilled = useMemo(() => pilledImages(text), [text]);
+  const strip = images.filter((_, i) => !pilled.has(i + 1));
+  const previews = images.map((sent) => sent.preview);
+  const viewingIndex = previews.findIndex((image) => image.key === viewing);
   return (
     <>
-      {!!memes.memes.length && <SentMemes memes={memes.memes} />}
-      {body && <p>{folded ? body.replace(/\n\s*\n+/g, "\n") : body}</p>}
+      {!!strip.length && (
+        <div className="message-images">
+          {strip.map(({ preview }) => (
+            <ImageThumbnail
+              key={preview.key}
+              image={preview}
+              onOpen={() => setViewing(preview.key)}
+            />
+          ))}
+        </div>
+      )}
       {!!code.refs.length && (
-        <small>{code.refs.length} code reference(s)</small>
+        <CodeReferenceList
+          references={code.refs}
+          onOpen={(ref) =>
+            onOpenFile({ path: ref.path, line: ref.start, directory: false })
+          }
+        />
       )}
-      {!!input.images?.length && (
-        <small>{input.images.length} screenshot(s)</small>
+      {!!memes.memes.length && <SentMemes memes={memes.memes} />}
+      {!!memes.rest?.trim() && (
+        <UserText
+          text={memes.rest}
+          skills={input.skills}
+          images={images}
+          onOpenImage={setViewing}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+        />
       )}
-      {!!pastes.length && <small>{pastes.length} pasted text(s)</small>}
+      {viewingIndex >= 0 && (
+        <ImageViewer
+          images={previews}
+          index={viewingIndex}
+          onIndex={(index) => setViewing(previews[index].key)}
+          onClose={() => setViewing(undefined)}
+        />
+      )}
     </>
   );
 }
@@ -69,19 +127,24 @@ function QueuedBody({
 function QueuedCompact({ body }: { body: string }) {
   const instructions = compactInstructions(body);
   return (
-    <>
+    <div className="user-text">
       <p className="queued-compact">
         <Minimize2 size={13} aria-hidden /> Compact context
       </p>
       {instructions && <small>{instructions}</small>}
-    </>
+    </div>
   );
 }
-/** One waiting message: its unsent bubble, its place in line, and its buttons on hover. Long ones fold to three lines and open with a click. */
+/**
+ * One waiting message, shaped like the sent message it will become and dimmed
+ * until hovered: its place in line, its buttons where a sent one's copy button
+ * sits. Long ones fold to five lines and open with a click.
+ */
 function QueuedRow({
   order,
   sortable,
   text,
+  when,
   justDropped,
   children,
   actions,
@@ -90,27 +153,48 @@ function QueuedRow({
   sortable?: boolean;
   /** The message's text, to measure again whether it folds when it changes. */
   text: string;
+  /** Where a sent message shows its time. */
+  when?: ReactNode;
   justDropped?: () => boolean;
-  children: (folded: boolean) => ReactNode;
+  children: ReactNode;
   actions: ReactNode;
 }) {
-  const bubble = useRef<HTMLDivElement>(null);
-  const id = useId();
+  const row = useRef<HTMLLIElement>(null);
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
   useLayoutEffect(() => {
-    const p = bubble.current?.querySelector("p");
-    if (!p || open) return;
-    const measure = () => setLong(p.scrollHeight > p.clientHeight + 1);
+    const box = row.current?.querySelector(":scope > .user-text");
+    if (!box || open) return;
+    const measure = () => setLong(box.scrollHeight > box.clientHeight + 1);
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(p);
+    observer.observe(box);
     return () => observer.disconnect();
   }, [text, open]);
   return (
     <li
-      className={`queued-message${sortable ? " sortable" : ""}`}
+      ref={row}
+      className={[
+        "project-message user queued-message",
+        sortable && "sortable",
+        long && "long",
+        open && "open",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       title={sortable ? "Drag to reorder" : undefined}
+      onClick={(e) => {
+        // Only the text box folds; its pills, and the viewer a screenshot opens, keep their clicks.
+        const target = e.target as Element;
+        const box = target.closest?.(".user-text");
+        if (
+          !box ||
+          target.closest("button, a") ||
+          box.parentElement !== row.current
+        )
+          return;
+        if (!justDropped?.() && (long || open)) setOpen(!open);
+      }}
     >
       {order !== undefined && (
         <span className="queued-order" aria-hidden>
@@ -118,33 +202,22 @@ function QueuedRow({
           {sortable && <GripVertical size={13} />}
         </span>
       )}
-      <div
-        ref={bubble}
-        id={id}
-        className={["queued-bubble", long && "long", open && "open"]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={() => {
-          if (!justDropped?.() && (long || open)) setOpen(!open);
-        }}
-      >
-        {children(!open)}
-        {(long || open) && (
-          <button
-            type="button"
-            className="queued-expand"
-            aria-expanded={open}
-            aria-controls={id}
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen(!open);
-            }}
-          >
-            {open ? "Show less" : "Show more"}
-          </button>
-        )}
-      </div>
-      <span className="queued-actions">{actions}</span>
+      <header>
+        <strong>You</strong>
+        {when}
+        <span className="queued-actions">{actions}</span>
+      </header>
+      {children}
+      {(long || open) && (
+        <button
+          type="button"
+          className="queued-expand"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Show less" : "Show more"}
+        </button>
+      )}
     </li>
   );
 }
@@ -169,6 +242,8 @@ export function QueuedMessages({
   onMove,
   onReturn,
   onRemove,
+  projectRoot,
+  onOpenFile,
 }: {
   queue?: ProjectChatData["queue"];
   paused?: boolean;
@@ -184,6 +259,8 @@ export function QueuedMessages({
   onReturn: (input: ProjectChatSend) => void;
   /** Drops a queued compaction, which has nothing to take back. */
   onRemove: (messageId: string) => void;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
 }) {
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
@@ -292,17 +369,17 @@ export function QueuedMessages({
                     </>
                   }
                 >
-                  {(folded) => (
-                    <>
-                      {queued.compact ? (
-                        <QueuedCompact body={queued.input.body} />
-                      ) : (
-                        <QueuedBody input={queued.input} folded={folded} />
-                      )}
-                      {paused && queued.error && (
-                        <small className="queued-error">{queued.error}</small>
-                      )}
-                    </>
+                  {queued.compact ? (
+                    <QueuedCompact body={queued.input.body} />
+                  ) : (
+                    <QueuedBody
+                      input={queued.input}
+                      projectRoot={projectRoot}
+                      onOpenFile={onOpenFile}
+                    />
+                  )}
+                  {paused && queued.error && (
+                    <small className="queued-error">{queued.error}</small>
                   )}
                 </QueuedRow>
               );
@@ -334,6 +411,20 @@ export function QueuedMessages({
                 <QueuedRow
                   key={scheduled.input.id}
                   text={scheduled.input.body}
+                  when={
+                    scheduled.error ? (
+                      <span className="queued-error" title={scheduled.error}>
+                        Didn't send
+                      </span>
+                    ) : (
+                      <time
+                        dateTime={new Date(scheduled.at).toISOString()}
+                        title={new Date(scheduled.at).toLocaleString()}
+                      >
+                        Sends {wakeLabel(scheduled.at, new Date())}
+                      </time>
+                    )
+                  }
                   actions={
                     <>
                       <button
@@ -363,22 +454,11 @@ export function QueuedMessages({
                     </>
                   }
                 >
-                  {(folded) => (
-                    <>
-                      <QueuedBody input={scheduled.input} folded={folded} />
-                      <small
-                        className={`queued-when${scheduled.error ? " queued-error" : ""}`}
-                        title={
-                          scheduled.error ??
-                          new Date(scheduled.at).toLocaleString()
-                        }
-                      >
-                        {scheduled.error
-                          ? "Didn't send"
-                          : `Sends ${wakeLabel(scheduled.at, new Date())}`}
-                      </small>
-                    </>
-                  )}
+                  <QueuedBody
+                    input={scheduled.input}
+                    projectRoot={projectRoot}
+                    onOpenFile={onOpenFile}
+                  />
                 </QueuedRow>
               ))}
           </ol>

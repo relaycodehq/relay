@@ -1,5 +1,4 @@
-/* Messages sent while a turn runs, waiting under the thread for their turn:
-   unsent bubbles shaped like the user's sent ones, dashed and dimmed. */
+/* Messages sent while a turn runs, waiting under the thread for their turn. */
 .chat-queue {
   margin: 20px 0;
   display: flex;
@@ -21,9 +20,21 @@
   flex-direction: column;
   gap: 8px;
 }
-.queued-message {
+/* Shaped like the sent message it becomes (.project-message.user), dimmed
+   until hovered. */
+.queued-message.project-message {
   position: relative;
-  transition: transform 180ms ease;
+  padding: 0;
+  content-visibility: visible;
+  opacity: 0.6;
+  transition:
+    transform 180ms ease,
+    opacity 120ms;
+}
+.queued-message:hover,
+.queued-message:focus-within,
+.queued-message.lifted {
+  opacity: 1;
 }
 .queued-message.sortable {
   cursor: grab;
@@ -37,43 +48,26 @@
   z-index: 2;
   cursor: grabbing;
 }
-.queued-bubble {
-  border: 1px dashed var(--border);
-  border-radius: 13px;
-  padding: 11px 64px 11px 16px;
-  background: var(--background);
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-  font-size: 14px;
-  line-height: 1.75;
-  transition:
-    color 120ms,
-    box-shadow 160ms;
-}
-.queued-message:hover .queued-bubble,
-.queued-message.lifted .queued-bubble {
-  color: var(--text);
-}
-.queued-message.lifted .queued-bubble {
-  border-style: solid;
+.queued-message.lifted > .user-text {
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
-.queued-bubble > p {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: calc(1.75em * 3);
+/* Folded to five lines, its last one fading into the box. */
+.queued-message:not(.open) > .user-text {
+  position: relative;
+  max-height: calc(1.65em * 5 + 26px);
   overflow: hidden;
 }
-.queued-bubble.long,
-.queued-bubble.open {
+.queued-message.long:not(.open) > .user-text::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: calc(1.65em + 12px);
+  background: linear-gradient(transparent, var(--toolbar));
+  pointer-events: none;
+}
+.queued-message.long > .user-text,
+.queued-message.open > .user-text {
   cursor: pointer;
-}
-.queued-bubble.long > p {
-  mask-image: linear-gradient(#000 55%, transparent);
-}
-.queued-bubble.open > p {
-  max-height: none;
-  mask-image: none;
 }
 .queued-expand {
   display: block;
@@ -90,39 +84,30 @@
 .queued-expand:focus-visible {
   color: var(--text);
 }
-.queued-bubble > p.queued-compact {
+.queued-compact {
   display: flex;
   align-items: center;
   gap: 7px;
+  margin: 0;
   color: var(--muted);
 }
-/* A queued meme is a reminder of what's going out, not the reply itself. */
-.queued-bubble .sent-meme {
-  max-width: 140px;
-}
-.queued-bubble .sent-meme :is(img, canvas) {
-  max-height: 100px;
-}
-.queued-bubble .sent-meme .meme-caption {
-  font-size: 11px;
-}
-.queued-bubble .sent-memes + p {
-  margin-top: 6px;
-}
-.queued-bubble small {
-  margin-right: 10px;
+.queued-message .user-text small {
   color: var(--muted);
   font-size: 11px;
 }
-.queued-bubble small.queued-error {
-  display: block;
+.queued-message .queued-error {
   color: var(--danger);
+}
+.queued-message > small.queued-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
 }
 /* Place in line in the gutter, swapped for a grip while hovered. */
 .queued-order {
   position: absolute;
   left: -24px;
-  top: 12px;
+  top: 0;
   width: 18px;
   text-align: center;
   font-size: 11px;
@@ -141,10 +126,8 @@
   display: block;
 }
 .queued-actions {
-  position: absolute;
-  top: 7px;
-  right: 7px;
   display: flex;
+  margin: -6px -5px -6px auto;
   gap: 2px;
   opacity: 0;
   transition: opacity 120ms;

@@ -414,6 +414,8 @@ export function ThreadMessages({
           onMove={move}
           onReturn={returnToComposer}
           onRemove={remove}
+          projectRoot={worktree.folder}
+          onOpenFile={openFile}
         />
         {root && shown.length === 1 && (
           <p className="thread-reply-empty">

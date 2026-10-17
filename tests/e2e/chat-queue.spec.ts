@@ -116,7 +116,8 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
       .click();
     await expect(queue.locator(".queued-message")).toHaveCount(2);
     // Dragging reorders the queue, both below and above another message.
-    const order = () => queue.locator(".queued-bubble > p").allTextContents();
+    const order = () =>
+      queue.locator(".queued-message > .user-text").allTextContents();
     const queued = queue.locator(".queued-message");
     const below = (await queued.last().boundingBox())!.height - 4;
     await queued.first().dragTo(queued.last(), {
