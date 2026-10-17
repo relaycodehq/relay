@@ -411,10 +411,11 @@ export function useComposerDraft(
         : Array.from(event.clipboardData.items)
             .map((item) => item.getAsFile())
             .filter((file): file is File => !!file);
-      if (files.some((file) => file.type.startsWith("image/"))) {
+      // Files copied in Finder or Explorer paste like they drop.
+      if (files.length) {
         event.preventDefault();
         event.stopPropagation();
-        void addImages(files);
+        addFiles(files);
         return;
       }
       // A long paste becomes a pill at the caret instead of flooding the draft.
