@@ -109,8 +109,7 @@ struct ActivityList: View {
     ) -> some View {
         // A draft keeps it here: neither swipe would move it off the top.
         let swipes = !drafted.contains(chat.id)
-        return
-        Button { open(chat.id) } label: {
+        return Button { open(chat.id) } label: {
             ActivityCard(
                 chat: chat, projectName: name(chat), unread: connection.unread(chat), now: now, family: family,
                 compact: compact)

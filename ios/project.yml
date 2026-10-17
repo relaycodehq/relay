@@ -10,6 +10,10 @@ options:
 packages:
   RelayKit:
     path: RelayKit
+  # Hot reload in the Simulator (ios/AGENTS.md); compiles to nothing outside Debug.
+  InjectionLite:
+    url: https://github.com/johnno1962/InjectionLite
+    from: 3.0.2
 
 settings:
   base:
@@ -37,7 +41,13 @@ targets:
         product: RelayRemote
       - package: RelayKit
         product: RelayMarkdown
+      - package: InjectionLite
     settings:
+      configs:
+        # InjectionLite recompiles a saved file from the build log's commands and swaps it in.
+        Debug:
+          OTHER_LDFLAGS: [-Xlinker, -interposable]
+          EMIT_FRONTEND_COMMAND_LINES: YES
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.relay.ios
         PRODUCT_NAME: Relay

@@ -3,8 +3,11 @@ import SwiftUI
 
 /// Whether the splash is still up, and the app's scale under it.
 @Observable final class SplashState {
-    var showing = true
-    var appScale = PullSplash.appScaleFrom
+    /// `RELAY_NO_SPLASH` set (`SIMCTL_CHILD_RELAY_NO_SPLASH=1 xcrun simctl launch …`) opens straight
+    /// onto the app, for the many relaunches of checking a change in the Simulator.
+    private static let skipped = ProcessInfo.processInfo.environment["RELAY_NO_SPLASH"] != nil
+    var showing = !skipped
+    var appScale = skipped ? 1 : PullSplash.appScaleFrom
 
     func finish() {
         showing = false

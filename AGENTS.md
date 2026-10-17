@@ -141,6 +141,13 @@
   end state a stopped animation leaves wrong (a half-drawn stroke, a sheen still
   showing) or to beat another stylesheet's `!important`.
 
+## The phone apps
+
+- **Working in `ios/`? Read `ios/AGENTS.md` first**, and `android/AGENTS.md`
+  for `android/`. They hold how to build, run and check each app quickly;
+  for the iPhone that's `ios/scripts/sim.sh`, hot reload, and the habits that
+  keep a layout tweak from taking a dozen 60s builds.
+
 ## Releases
 
 - **Pushing to main ships nothing; a `v*` tag does.** The Mac mini builds

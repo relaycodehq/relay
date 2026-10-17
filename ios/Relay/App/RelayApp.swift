@@ -107,6 +107,7 @@ struct RootView: View {
                 }
             }
             .tabViewSearchActivation(.searchTabSelection)
+            .hotReloads()
             .environment(\.threadFilter, filter.wrappedValue)
             .overlay(alignment: .top) {
                 NeedsYou(stack: stacks[tab]!, atList: tab == .threads) { stacks[tab]?.routes.append(.thread($0)) }

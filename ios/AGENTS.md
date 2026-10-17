@@ -42,6 +42,53 @@ several running its taps land on whichever holds the port: drive parallel
 sims with `axe --udid <sim>` instead.
 Kill the stand-in by its PID.
 
+## Working in the Simulator
+
+Most of an iOS session goes into builds and waiting, not code. Measured on
+2026-10-17: 35 builds took 24min of 88, fixed sleeps 9min, and a layout fix
+placed by eye took five builds that one logged number would have saved.
+
+- **One command to see a change:** `ios/scripts/sim.sh <sim> --wait "<label>"`
+  builds, installs, opens without the splash and returns once that
+  accessibility label is on screen (`--no-build` to relaunch only). No
+  `sleep 12` after a launch: Relay is up within ~3s without the splash.
+- **`RELAY_NO_SPLASH`** skips the launch animation
+  (`SIMCTL_CHILD_RELAY_NO_SPLASH=1 xcrun simctl launch …`); the splash costs
+  ~4s a launch.
+- **xcodebuild prints `error: … failed with exit code 0 but produced no
+  further output` on builds that worked.** Trust the exit status; don't
+  build twice to make the line go away.
+- **Hot reload instead of a rebuild** for a change inside function bodies
+  (layout, text, colours, a view's `body`). InjectionLite is linked into
+  Debug builds: run a build made with `sim.sh` (it needs Xcode's own
+  DerivedData, not `-derivedDataPath`, to find the build log), then save a
+  `.swift` file; the console (`xcrun simctl launch --console-pty …`) says
+  `Compiled in 1151ms` / `Hot reload complete`, and `hotReloads()` on the
+  tab view draws everything afresh, each tab's stack kept. It can't take
+  new stored properties, new types or files, or `project.yml` changes:
+  rebuild for those. After a reload on a pushed screen the tab bar shows
+  again (`TabBarDrop` starts over); go back and in. Simulator only.
+- **Measure, then move things.** When something lands in the wrong place,
+  log its frame (`onGeometryChange` + `print`, read with `--console-pty`)
+  on the first build instead of tinting it and nudging. Toolbar items are
+  hosted on their own: their `.global` frame counts from the nav bar, not
+  the screen.
+- **Look at full resolution for edges and lines.** A 900px screenshot hid a
+  1px rule under the bar; crop the top of `xcrun simctl io <sim> screenshot`
+  at full size (`ffmpeg -vf crop=…`) before calling a line gone.
+- **Gestures:** `axe tap` and `axe swipe` for taps and scrolls, `axe drag`
+  for anything that has to overscroll (pull to refresh); `axe swipe` never
+  pulls a list past its top. Each `axe describe-ui` takes ~2s, so poll with
+  a time limit, not a count.
+- **Record motion** with `xcrun simctl io <sim> recordVideo` and a contact
+  sheet (`ffmpeg -vf "fps=4,scale=200:-1,tile=8x2"`); start recording ~1.5s
+  before the action, it starts late.
+- **Check where the app opened.** It reopens the thread that was showing,
+  so a relaunch may not be on the list your taps aim at.
+- **The stand-in desktop gets new keys each start**, so a restart means
+  pairing again (`xcrun simctl keychain <sim> reset`, `openurl` the link,
+  Continue). Keep it running between checks; stop it by its PID.
+
 ## Rules
 
 - `RemoteClient` is an actor on its own serial queue; socket callbacks land
