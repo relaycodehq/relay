@@ -49,6 +49,8 @@ interface State {
   threadWindows?: import("../../shared/thread-windows").SavedThreadWindow[];
   /** The main window's size and state when it last changed. */
   mainWindow?: import("../../shared/thread-windows").SavedMainWindow;
+  /** Frosted glass was on when the page last said; windows then start clear. */
+  glass?: boolean;
   /** Days without activity before a thread settles; null never, unset the default. */
   autoSettleDays?: number | null;
   /** Days after settling before a thread's worktree is removed; null never, unset the default. */

@@ -77,6 +77,11 @@ export class AppWindow {
   /** Hidden pages of Relay's own that may call the API, as a phone's draft send opens. */
   private helpers = new Set<BrowserWindow>();
   private place?: MainWindowStore;
+  /**
+   * Frosted glass (macOS): windows are built clear, so the vibrancy shows from
+   * the first frame instead of once the page has loaded its appearance.
+   */
+  clear = false;
   private placing?: NodeJS.Timeout;
 
   constructor(
@@ -372,7 +377,12 @@ export class AppWindow {
       ...size,
       show: false,
       title: "Relay",
-      backgroundColor: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
+      backgroundColor:
+        this.clear && process.platform === "darwin"
+          ? "#00000000"
+          : nativeTheme.shouldUseDarkColors
+            ? "#202124"
+            : "#f6f6f6",
       ...(process.platform === "darwin"
         ? {
             titleBarStyle: "hiddenInset" as const,

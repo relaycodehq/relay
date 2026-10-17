@@ -16,7 +16,7 @@ import { takes, type ApiContext, type Handlers } from "./context";
 
 /** The window and the OS around it: chrome, zoom, badge, clipboard, links. */
 export function desktopHandlers(ctx: ApiContext) {
-  const { window, menubar } = ctx;
+  const { window, menubar, store } = ctx;
   const interfaceScales = new WeakMap<WebContents, number>();
   return {
     applyAppearance: takes(
@@ -41,6 +41,14 @@ export function desktopHandlers(ctx: ApiContext) {
         const icon = nativeImage.createFromDataURL(appearance.icon);
         if (!icon.isEmpty() && process.platform === "darwin")
           app.dock?.setIcon(icon);
+        // Remembered, so the next windows, and the next launch, start clear.
+        window.clear = appearance.glass;
+        if ((store.get().glass === true) !== appearance.glass)
+          void store
+            .update((s) => {
+              s.glass = appearance.glass;
+            })
+            .catch((e) => console.warn("Could not save frosted glass:", e));
         for (const win of window.all()) {
           // A clear window lets its macOS vibrancy show through the page.
           win.setBackgroundColor(
