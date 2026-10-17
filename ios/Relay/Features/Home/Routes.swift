@@ -21,7 +21,7 @@ extension EnvironmentValues {
     @Entry var navigate: (Route) -> Void = { _ in }
 }
 
-/// The app's navigation, every route reachable from the tabs at its root.
+/// A tab's navigation, every route reachable from its root. Pushing drops the tab bar.
 struct RouteStack<Root: View>: View {
     @ViewBuilder let root: (_ open: @escaping (Route) -> Void) -> Root
     @State private var path: [Route] = []
@@ -30,6 +30,7 @@ struct RouteStack<Root: View>: View {
     var body: some View {
         NavigationStack(path: $path) {
             root { path.append($0) }
+                .background(TabBarDrop())
                 .navigationDestination(for: Route.self) { destination($0) }
         }
         .environment(\.navigate) { path.append($0) }

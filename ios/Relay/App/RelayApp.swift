@@ -43,50 +43,42 @@ struct RootView: View {
 
     var body: some View {
         if connection.paired {
-            // One stack with the tabs at its root: a thread is pushed over the tab bar, which
-            // drops away and follows a slow swipe back up, rather than being hidden and shown
-            // again only once the swipe has finished.
-            RouteStack { open in
-                TabView(selection: $tab) {
-                    Tab("Threads", systemImage: "bubble.left.and.bubble.right", value: .threads) { HomeView() }
-                    Tab("Projects", systemImage: "square.grid.2x2", value: .projects) { ProjectsHome() }
-                    Tab("Settings", systemImage: "gearshape", value: .settings) { SettingsView() }
-                    // Apart from the tabs at the bar's end, turning into the search field when picked.
-                    Tab(value: .search, role: .search) { SearchTab(query: $query) }
-                }
-                .environment(\.threadFilter, filter.wrappedValue)
-                .background(TabBarDrop())
-                // The tabs' bar is the stack's: what a tab's own view sets doesn't reach it.
-                // The title sits in the bar's own row, beside its buttons, rather than in a row below.
-                .navigationTitle(tab.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar(removing: .title)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        TabTitle(title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine)
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                    if tab == .threads {
-                        ToolbarItem(placement: .primaryAction) {
-                            FilterMenu(filter: filter).badge(connection.current(filter.wrappedValue).count)
-                        }
-                        ToolbarSpacer(.fixed, placement: .primaryAction)
-                    }
-                    if tab == .threads || tab == .projects {
-                        ToolbarItem(placement: .primaryAction) {
-                            // Its own label: a toolbar shows a Label's icon alone.
-                            Button { open(.newThread()) } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "square.and.pencil")
-                                    Text("New")
-                                }
+            // A stack per tab, as iOS means tabs to be: the search tab's circle turns into the
+            // bar's search field only then. Each stack drops the tab bar as it pushes.
+            TabView(selection: $tab) {
+                Tab("Threads", systemImage: "bubble.left.and.bubble.right", value: .threads) {
+                    RouteStack { open in
+                        HomeView().tabChrome(.threads) {
+                            ToolbarItem(placement: .primaryAction) {
+                                FilterMenu(filter: filter).badge(connection.current(filter.wrappedValue).count)
                             }
-                            .accessibilityLabel("New thread")
-                            .disabled(connection.status.state != .online)
+                            ToolbarSpacer(.fixed, placement: .primaryAction)
+                            ToolbarItem(placement: .primaryAction) { NewButton { open(.newThread()) } }
                         }
+                    }
+                }
+                Tab("Projects", systemImage: "square.grid.2x2", value: .projects) {
+                    RouteStack { open in
+                        ProjectsHome().tabChrome(.projects) {
+                            ToolbarItem(placement: .primaryAction) { NewButton { open(.newThread()) } }
+                        }
+                    }
+                }
+                Tab("Settings", systemImage: "gearshape", value: .settings) {
+                    RouteStack { _ in SettingsView().tabChrome(.settings) }
+                }
+                // A circle apart from the tabs, turning into the search field when picked. On the
+                // TabView, the search would reach every tab's bar.
+                Tab(value: .search, role: .search) {
+                    RouteStack { _ in
+                        SearchTab(query: query)
+                            .tabChrome(.search)
+                            .searchable(text: $query, prompt: "Threads and projects")
                     }
                 }
             }
+            .tabViewSearchActivation(.searchTabSelection)
+            .environment(\.threadFilter, filter.wrappedValue)
             .sheet(item: $incoming) { _ in
                 PairingView(incoming: $incoming)
             }
@@ -98,6 +90,55 @@ struct RootView: View {
         } else {
             PairingView(incoming: $incoming)
         }
+    }
+}
+
+extension View {
+    /// A tab's bar: its title in the bar's own row, beside `actions`, rather than in a row below.
+    func tabChrome(_ tab: HomeTab, @ToolbarContentBuilder actions: () -> some ToolbarContent) -> some View {
+        modifier(TabChrome(tab: tab, actions: actions()))
+    }
+
+    func tabChrome(_ tab: HomeTab) -> some View {
+        tabChrome(tab) { ToolbarItemGroup(placement: .primaryAction) {} }
+    }
+}
+
+private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
+    let tab: HomeTab
+    let actions: Actions
+    @Environment(Connection.self) private var connection
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(tab.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(removing: .title)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    TabTitle(title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine)
+                }
+                .sharedBackgroundVisibility(.hidden)
+                actions
+            }
+    }
+}
+
+/// Starts a thread; "New" beside its icon, to fill the bar as Photos' Select does.
+private struct NewButton: View {
+    let action: () -> Void
+    @Environment(Connection.self) private var connection
+
+    var body: some View {
+        // Its own label: a toolbar shows a Label's icon alone.
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.pencil")
+                Text("New")
+            }
+        }
+        .accessibilityLabel("New thread")
+        .disabled(connection.status.state != .online)
     }
 }
 

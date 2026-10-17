@@ -29,16 +29,13 @@ struct HomeView: View {
 }
 
 /// The search tab: every thread whose title or project matches, whatever the filter. Its
-/// field sits at the bottom, over the tab bar, and is ready to type in when the tab opens.
+/// field is the tab bar's, which the tab turns into.
 struct SearchTab: View {
-    @Binding var query: String
+    let query: String
     @Environment(Connection.self) private var connection
     @Environment(\.navigate) private var open
-    @FocusState private var typing: Bool
 
     var body: some View {
-        // One view rather than a Group, whose modifiers each branch gets anew: typing would
-        // swap the field for another and drop the keyboard.
         ZStack {
             if connection.overview == nil {
                 ComputerWaiting()
@@ -50,31 +47,8 @@ struct SearchTab: View {
                 SearchResults(query: query) { open(.thread($0)) }
             }
         }
-        .safeAreaBar(edge: .bottom) { field }
         .scrollDismissesKeyboard(.immediately)
         .relayBackground()
-        .onAppear { typing = true }
-    }
-
-    private var field: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Threads and projects", text: $query)
-                .focused($typing)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button("Clear", systemImage: "xmark.circle.fill") { query = "" }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 48)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
     }
 }
 
