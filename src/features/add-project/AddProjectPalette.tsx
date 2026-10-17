@@ -32,6 +32,7 @@ import {
 import { api } from "../../lib/api";
 import { timeAgo } from "../../lib/relative-date";
 import { useReturnFocus } from "../../lib/focus-return";
+import { useBackdropClose } from "../../lib/backdrop-close";
 import { ErrorBox } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { GitHubMark } from "../../ui/BrandIcons";
@@ -89,6 +90,9 @@ export function AddProjectPalette({
   const adding = useAdding(projects);
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const backdropClose = useBackdropClose(() => {
+    if (!adding.busy && !linking) onClose();
+  });
   const [page, setPage] = useState<Page>("root");
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -392,9 +396,7 @@ export function AddProjectPalette({
         e.preventDefault();
         if (!adding.busy && !linking) onClose();
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !adding.busy && !linking) onClose();
-      }}
+      {...backdropClose}
     >
       {linking ? (
         <LinkStep

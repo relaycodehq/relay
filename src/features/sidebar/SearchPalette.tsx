@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { relativeDate } from "../../lib/relative-date";
 import { useReturnFocus } from "../../lib/focus-return";
+import { useBackdropClose } from "../../lib/backdrop-close";
 import { ProjectBadge } from "../projects/ProjectBadge";
 import "../../ui/palette.css";
 
@@ -88,6 +89,7 @@ export function SearchPalette({
     }
   }
 
+  const backdropClose = useBackdropClose(onClose);
   return createPortal(
     <dialog
       ref={dialog}
@@ -97,9 +99,7 @@ export function SearchPalette({
         e.preventDefault();
         onClose();
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropClose}
     >
       <div className="headline-project-search palette-search">
         <Search size={15} />

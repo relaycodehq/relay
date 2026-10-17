@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { X, AlertCircle } from "lucide-react";
 import { useReturnFocus } from "../lib/focus-return";
+import { useBackdropClose } from "../lib/backdrop-close";
 /**
  * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
  * or in a menu they open, bubble up here and are left to them.
@@ -66,6 +67,18 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   useReturnFocus();
+  // The panel is the dialog itself, so its ::backdrop is a press on the
+  // dialog outside its box.
+  const backdropClose = useBackdropClose(onClose, (e) => {
+    if (e.target !== e.currentTarget) return false;
+    const r = e.currentTarget.getBoundingClientRect();
+    return (
+      e.clientX < r.left ||
+      e.clientX > r.right ||
+      e.clientY < r.top ||
+      e.clientY > r.bottom
+    );
+  });
   useEffect(() => {
     ref.current?.showModal();
   }, []);
@@ -80,18 +93,7 @@ export function Modal({
         event.preventDefault();
         onClose();
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          const r = e.currentTarget.getBoundingClientRect();
-          if (
-            e.clientX < r.left ||
-            e.clientX > r.right ||
-            e.clientY < r.top ||
-            e.clientY > r.bottom
-          )
-            onClose();
-        }
-      }}
+      {...backdropClose}
     >
       <div className="modal-heading">
         <h2 id={headingId}>{title}</h2>
