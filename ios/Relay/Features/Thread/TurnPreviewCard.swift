@@ -63,33 +63,29 @@ struct TurnPreviewCard: View {
 private struct Frame: View {
     let source: ImageSource
     let name: String
-    @Environment(\.openImage) private var openImage
     @Environment(\.displayScale) private var scale
     @Environment(\.colors) private var colors
 
     var body: some View {
         RemoteImage(source: source, max: Int(430 * scale)) { loaded in
             if !loaded.failed {
-                Button { openImage?(source, among: [MessageImage(source: source, name: name)]) } label: {
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
-                        .overlay(alignment: .top) {
-                            if let picture = loaded.image {
-                                Image(uiImage: picture).resizable().scaledToFill()
-                            }
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .overlay(alignment: .top) {
+                        if let picture = loaded.image {
+                            Image(uiImage: picture).resizable().scaledToFill()
                         }
-                        .clipped()
-                        .mask {
-                            LinearGradient(
-                                stops: [.init(color: .black, location: 0.72), .init(color: .clear, location: 1)],
-                                startPoint: .top, endPoint: .bottom)
-                        }
-                }
-                .buttonStyle(.plain)
-                .disabled(loaded.image == nil)
-                .accessibilityLabel("Preview of \(name)")
-                .zoomSource(source)
+                    }
+                    .clipped()
+                    .mask {
+                        LinearGradient(
+                            stops: [.init(color: .black, location: 0.72), .init(color: .clear, location: 1)],
+                            startPoint: .top, endPoint: .bottom)
+                    }
+                    .accessibilityElement()
+                    .accessibilityLabel("Preview of \(name)")
+                    .accessibilityAddTraits(.isImage)
             }
         }
     }

@@ -2,7 +2,7 @@ package dev.relay.android.features.thread
 
 // The desktop's TurnPreview (src/features/browser/TurnPreview.tsx): the page a
 // turn's agent left the thread's preview on, under its answer, as a small
-// browser strip over the frame it kept. The frame opens in the lightbox. The
+// browser strip over the frame it kept. Only the address opens anything; the frame is a picture. The
 // phone can't reach the computer's own addresses, so a local page is only text.
 
 import androidx.compose.foundation.Image
@@ -19,10 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,11 +33,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.images.ImageSource
-import dev.relay.android.features.images.Lightbox
-import dev.relay.android.features.images.LightboxImage
 import dev.relay.android.features.images.rememberImage
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.model.TurnPreview
@@ -122,11 +116,9 @@ private fun Frame(chatId: String, messageId: String, name: String, edge: Color) 
     val wide = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
     val loaded = rememberImage(remote, source, wide)
     if (loaded.failed) return
-    var viewing by remember { mutableStateOf(false) }
     val bitmap = loaded.bitmap
     Box(
         Modifier.fillMaxWidth().height(FRAME_HEIGHT)
-            .then(if (bitmap != null) Modifier.pressable({ viewing = true }, role = Role.Image, scale = false) else Modifier)
             // The sides fade out with the frame, so its lower edge never shows.
             .drawWithContent {
                 drawContent()
@@ -146,5 +138,4 @@ private fun Frame(chatId: String, messageId: String, name: String, edge: Color) 
             contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
         )
     }
-    if (viewing) Lightbox(remote, listOf(LightboxImage(source, name)), 0) { viewing = false }
 }
