@@ -28,7 +28,10 @@ struct SelectableText: View {
     }
 
     private func uiText() -> NSAttributedString {
-        var base = UIFont.preferredFont(forTextStyle: look.style)
+        // At the app's type size, which runs smaller than the phone's: UIKit reads the phone's.
+        var base = UIFont.preferredFont(
+            forTextStyle: look.style,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
         if let weight = look.weight {
             base = UIFont.systemFont(ofSize: base.pointSize, weight: weight)
         }

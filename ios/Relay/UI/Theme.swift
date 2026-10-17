@@ -145,6 +145,7 @@ extension View {
 private struct RelayTheme: ViewModifier {
     @Environment(Connection.self) private var connection
     @Environment(\.colorScheme) private var system
+    @Environment(\.dynamicTypeSize) private var dynamicType
     /// The last appearance a desktop sent, so the app opens in it before connecting.
     @AppStorage("appearance") private var saved: Data?
 
@@ -161,6 +162,9 @@ private struct RelayTheme: ViewModifier {
             // .secondary and .tertiary across the app are the desktop's muted and faint.
             .foregroundStyle(colors.foreground, colors.muted, colors.faint)
             .tint(colors.accent)
+            // Android's scale is a body of 15, iOS's 17: two steps down from whatever size the
+            // phone is set to, so the setting still counts.
+            .dynamicTypeSize(dynamicType.smaller(by: 2))
             .preferredColorScheme(mode == "system" ? nil : dark ? .dark : .light)
             .onChange(of: connection.overview?.appearance) { _, next in
                 if let next { saved = try? JSONEncoder().encode(next) }
@@ -207,4 +211,13 @@ extension ShapeStyle where Self == ThemeFill {
 extension View {
     /// A grouped list's row on the theme's raised surface.
     func cardRow() -> some View { listRowBackground(Rectangle().fill(.card)) }
+}
+
+extension DynamicTypeSize {
+    /// `steps` sizes smaller, stopping at the smallest.
+    func smaller(by steps: Int) -> DynamicTypeSize {
+        let all = DynamicTypeSize.allCases
+        let at = all.firstIndex(of: self) ?? 0
+        return all[max(at - steps, 0)]
+    }
 }
