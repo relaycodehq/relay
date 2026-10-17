@@ -256,7 +256,7 @@ struct UsagePage: View {
                 if !reportsUsage(provider) {
                     Text("\(agentName(provider)) doesn't report plan limits.").foregroundStyle(colors.muted)
                 } else if usage == nil {
-                    ProgressView().frame(maxWidth: .infinity)
+                    Spinner(size: 20).frame(maxWidth: .infinity)
                 } else if meters.isEmpty {
                     Text(usage?.message ?? "No usage limits reported").foregroundStyle(colors.muted)
                 } else {

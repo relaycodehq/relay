@@ -13,6 +13,9 @@ final class Connection {
     private(set) var computers: [RemoteCredentials] = []
     private(set) var active: String?
     private(set) var status = RemoteStatus(.offline)
+    /// The last attempt to reach the computer failed. Each retry passes through Connecting, so
+    /// what shows the link holds on to this until one gets through, rather than flipping each time.
+    private(set) var failing = false
     private(set) var overview: RemoteOverview?
     private(set) var chats: [RemoteChatSummary] = []
     /// Someone at the computer working in Relay.
@@ -163,6 +166,7 @@ final class Connection {
         client = nil
         tunnels.streams = nil
         status = RemoteStatus(.offline)
+        failing = false
         overview = nil
         chats = []
         threads = [:]
@@ -207,6 +211,11 @@ final class Connection {
         case .status(let s):
             let cameOnline = s.state == .online && status.state != .online
             status = s
+            switch s.state {
+            case .offline: failing = true
+            case .online, .denied: failing = false
+            case .connecting: break
+            }
             if cameOnline {
                 Task { await refresh(client) }
                 backOnline(client)

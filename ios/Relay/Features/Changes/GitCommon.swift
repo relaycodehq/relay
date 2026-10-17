@@ -101,7 +101,7 @@ struct Loading<Value, Content: View>: View {
                 .disabled(trying)
             }
         } else {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            Spinner.page
         }
     }
 }

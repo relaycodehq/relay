@@ -69,6 +69,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+        # Lets Spinner (UI/Spinner.swift) ask for ProMotion's 120Hz; iPhones cap Core Animation at 60 without it.
+        CADisableMinimumFrameDurationOnPhone: true
         NSLocalNetworkUsageDescription: Relay connects to Relay on your computer over your network.
         # Pairing asks for the local network up front by finding a service of its own (Features/Pairing/ScanPermissions).
         NSBonjourServices:

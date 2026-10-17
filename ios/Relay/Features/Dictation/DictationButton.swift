@@ -48,7 +48,7 @@ struct DictationButton: View {
                     if session.phase == .listening && !session.loading {
                         LevelBars(levels: session.levels)
                     } else {
-                        ProgressView().controlSize(.small)
+                        Spinner(size: 16)
                     }
                     RoundedRectangle(cornerRadius: 2.5).frame(width: 10, height: 10)
                 }

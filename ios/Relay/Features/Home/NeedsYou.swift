@@ -44,6 +44,10 @@ struct NeedsYou: View {
             }
             before = WaitingBaseline(computer: now.computer, waiting: Set(now.waiting))
         }
+        // The thread list says so itself: seen there, it's been told.
+        .onChange(of: atList && stack.routes.isEmpty && shown != nil, initial: true) { _, told in
+            if told { shown = nil }
+        }
         .task(id: shown) {
             guard shown != nil else { return }
             try? await Task.sleep(for: shownFor)

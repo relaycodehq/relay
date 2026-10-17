@@ -37,12 +37,18 @@ extension Connection {
 struct FilterMenu: View {
     @Binding var filter: ThreadFilter
     @Environment(Connection.self) private var connection
+    @Environment(ProjectIconStore.self) private var icons
+    @Environment(\.colors) private var colors
+    @Environment(\.displayScale) private var scale
 
     var body: some View {
         let shown = connection.current(filter)
         let agents = Set(connection.chats.compactMap(\.provider)).sorted { agentName($0) < agentName($1) }
         let latest = Dictionary(connection.chats.map { ($0.projectId, $0.updated) }, uniquingKeysWith: max)
-        let projects = (connection.overview?.projects ?? []).sorted { (latest[$0.id] ?? 0) > (latest[$1.id] ?? 0) }
+        let sorted = (connection.overview?.projects ?? []).sorted { (latest[$0.id] ?? 0) > (latest[$1.id] ?? 0) }
+        // Every computer's Scratchpad reads the same, so they're one row that ticks them all.
+        let scratch = sorted.filter { $0.scratch == true }.map(\.id)
+        let projects = sorted.filter { $0.scratch != true || $0.id == scratch.first }
         Menu {
             if shown.count > 0 {
                 Button("Clear filter", systemImage: "xmark") { filter = ThreadFilter() }
@@ -50,14 +56,20 @@ struct FilterMenu: View {
             if agents.count > 1 {
                 Section("Agents") {
                     ForEach(agents, id: \.self) { agent in
-                        Toggle(agentName(agent), isOn: ticked(\.agents, agent))
+                        Toggle(isOn: ticked(\.agents, [agent])) {
+                            Label { Text(agentName(agent)) } icon: { icon(ProviderMark(provider: agent, size: 18).foregroundStyle(colors.foreground)) }
+                        }
                             .menuActionDismissBehavior(.disabled)
                     }
                 }
             }
             Section("Projects") {
                 ForEach(projects) { project in
-                    Toggle(project.scratch == true ? "Scratchpad" : project.name, isOn: ticked(\.projects, project.id))
+                    Toggle(isOn: ticked(\.projects, project.scratch == true ? scratch : [project.id])) {
+                        Label { Text(project.scratch == true ? "Scratchpad" : project.name) } icon: {
+                            icon(ProjectIcon(project: project, size: 18).environment(connection).environment(icons).environment(\.colors, colors))
+                        }
+                    }
                         // Several can be ticked in one go, as on the desktop.
                         .menuActionDismissBehavior(.disabled)
                 }
@@ -67,11 +79,18 @@ struct FilterMenu: View {
         }
     }
 
-    private func ticked(_ kind: WritableKeyPath<ThreadFilter, Set<String>>, _ id: String) -> Binding<Bool> {
+    private func ticked(_ kind: WritableKeyPath<ThreadFilter, Set<String>>, _ ids: [String]) -> Binding<Bool> {
         Binding(
-            get: { filter[keyPath: kind].contains(id) },
+            get: { ids.contains { filter[keyPath: kind].contains($0) } },
             set: { on in
-                if on { filter[keyPath: kind].insert(id) } else { filter[keyPath: kind].remove(id) }
+                if on { filter[keyPath: kind].formUnion(ids) } else { filter[keyPath: kind].subtract(ids) }
             })
+    }
+
+    /// A menu row shows only an Image, so a mark drawn as a view is rendered into one.
+    private func icon(_ view: some View) -> Image {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        return renderer.uiImage.map { Image(uiImage: $0).renderingMode(.original) } ?? Image(systemName: "circle")
     }
 }

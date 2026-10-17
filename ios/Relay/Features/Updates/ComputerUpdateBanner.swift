@@ -2,7 +2,8 @@ import RelayRemote
 import SwiftUI
 
 /// The computer in use is behind this phone: a button to update it, then how that goes
-/// (Android's ComputerUpdateBanner). Home shows it over its list.
+/// (Android's ComputerUpdateBanner). Home floats it over the bottom of its list, a glass bar
+/// as tall as the tab bar under it.
 struct ComputerUpdateBanner: View {
     @Environment(Connection.self) private var connection
     @Environment(ComputerUpdates.self) private var updates
@@ -26,16 +27,15 @@ struct ComputerUpdateBanner: View {
                     icon: "exclamationmark.triangle", tone: colors.waiting, dismiss: dismiss)
             } else if action.can && !action.dismissed {
                 banner(
-                    action.hint, message: "Update \(name) from here; its agents keep going.",
+                    "Update \(name)",
+                    message: connection.overview?.version.map { "Relay \($0) → \(Connection.appVersion)" }
+                        ?? "Its agents keep going",
                     icon: "arrow.triangle.2.circlepath", tone: colors.foreground,
                     act: ("Update", { connection.startUpdate(updates) }), dismiss: dismiss)
             } else if connection.outdated {
-                Text("Relay on \(name) is older than this app. Update it there.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
+                banner(
+                    "Relay on \(name) is older than this app", message: "Update it there.",
+                    icon: "exclamationmark.triangle", tone: colors.foreground, dismiss: nil)
             }
         }
         .task(id: ProbeWant(connection, needed: action.needed && action.askable)) {
@@ -55,29 +55,44 @@ struct ComputerUpdateBanner: View {
         _ title: String, message: String? = nil, icon: String?, tone: Color,
         act: (String, () -> Void)? = nil, dismiss: (() -> Void)?
     ) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            if let icon { Image(systemName: icon).foregroundStyle(tone).padding(.top, 2) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(tone)
-                if let message { Text(message).font(.footnote).foregroundStyle(colors.muted) }
-                if let act {
-                    Button(act.0, action: act.1).buttonStyle(.glassProminent).controlSize(.small).padding(.top, 4)
-                }
+        HStack(spacing: 12) {
+            if let icon { Image(systemName: icon).font(.body.weight(.medium)).foregroundStyle(tone) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(tone)
+                if let message { Text(message).font(.caption).foregroundStyle(colors.muted) }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
             Spacer(minLength: 0)
+            if let act {
+                // As the pairing screen's buttons: the accent as glass, white on it.
+                Button(action: act.1) {
+                    Text(act.0)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .frame(height: 38)
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.clear.tint(colors.accent.opacity(colors.dark ? 0.6 : 0.8)).interactive(), in: .capsule)
+            }
             if let dismiss {
-                Button(action: dismiss) { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless)
-                    .font(.footnote)
-                    .foregroundStyle(colors.muted)
-                    .accessibilityLabel("Dismiss")
+                Button(action: dismiss) {
+                    Image(systemName: "xmark").font(.footnote.weight(.semibold)).frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(colors.muted)
+                .accessibilityLabel("Dismiss")
             }
         }
-        .padding(12)
-        .background(colors.card, in: .rect(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(colors.border, lineWidth: 0.5))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.leading, 20)
+        .padding(.trailing, act == nil ? 14 : 10)
+        // The tab bar's own height, so the two read as a pair.
+        .frame(height: 62)
+        .glassEffect(.regular, in: .capsule)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
 }
 

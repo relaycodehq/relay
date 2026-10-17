@@ -49,25 +49,25 @@ struct ActivityList: View {
         let sections = draftsFirst(chatActivitySections(chats, now: now), all: chats, drafted: drafted)
         let families = startedFamilies(sections.active, settled: sections.settled)
         let folds = folds
+        let groups = groupByState(families.top, started: families.started)
+        let lead = fresh.isEmpty ? groups.first { !$0.chats.isEmpty }?.label : nil
         return List {
             if !fresh.isEmpty {
                 Section {
+                    SectionLabel(title: "New threads", count: fresh.count).labelRow(first: true)
                     ForEach(fresh, id: \.0.key) { draft, project in
                         Button { navigate(.newThread(projectId: project.id, draftKey: draft.key)) } label: {
                             NewDraftCard(draft: draft, project: project)
                         }
                         .activityRow()
                     }
-                } header: {
-                    SectionLabel(title: "New threads", count: fresh.count)
                 }
             }
-            ForEach(groupByState(families.top, started: families.started), id: \.label) { group in
+            ForEach(groups, id: \.label) { group in
                 if !group.chats.isEmpty {
                     Section {
+                        SectionLabel(title: group.label, count: group.chats.count).labelRow(first: group.label == lead)
                         ForEach(group.chats) { chat in family(chat, families, folds, now, drafted) }
-                    } header: {
-                        SectionLabel(title: group.label, count: group.chats.count)
                     }
                 }
             }
@@ -76,6 +76,7 @@ struct ActivityList: View {
             shelf("settled", "Settled", sections.settled.filter { !families.headers.contains($0.id) }, now)
         }
         .listStyle(.plain)
+        .labelRows()
         .ribbonRefresh { await connection.reloadList() }
     }
 
@@ -177,6 +178,13 @@ struct ActivityList: View {
         if !items.isEmpty {
             let shown = shelves[kind] ?? 0
             Section {
+                // A group label like the ones above, that folds its rows away.
+                Button { shelves[kind] = shown > 0 ? 0 : shelfPage } label: {
+                    SectionLabel(title: label, count: items.count, folded: shown == 0)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(shown > 0 ? "Fold \(label)" : "Show \(label)")
+                .labelRow()
                 ForEach(items.prefix(shown)) { chat in
                     let snoozed = kind == "snoozed"
                     ShelfRow(
@@ -196,13 +204,6 @@ struct ActivityList: View {
                         .frame(minHeight: 44)
                         .activityRow()
                 }
-            } header: {
-                // A group label like the ones above, that folds its rows away.
-                Button { shelves[kind] = shown > 0 ? 0 : shelfPage } label: {
-                    SectionLabel(title: label, count: items.count, folded: shown == 0)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(shown > 0 ? "Fold \(label)" : "Show \(label)")
             }
         }
     }
@@ -295,6 +296,22 @@ extension View {
         listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20 + indent, bottom: 0, trailing: 20))
+    }
+
+    /// A section's label as its first row: a plain list pins headers under the bar on a solid
+    /// strip of their own, where Photos lets its labels scroll away under the soft edge.
+    /// A list holding `labelRow`s, which are shorter than a row's usual least height.
+    func labelRows() -> some View {
+        environment(\.defaultMinListRowHeight, 0)
+    }
+
+    /// `first`: the list's top label, which the room under the bar already sets apart.
+    func labelRow(first: Bool = false) -> some View {
+        frame(minHeight: 28)
+            .padding(.top, first ? 2 : 16)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
     }
 }
 

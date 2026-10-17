@@ -106,7 +106,7 @@ struct ThreadView: View {
                     Button("Try again") { Task { await connection.load(chatId) } }
                 }
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spinner.page
             }
         }
         // A bar rather than an inset: the thread blurs out under it, as it does under the title.

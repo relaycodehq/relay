@@ -115,7 +115,7 @@ struct ModelSheet: View {
                 row(m.name, m.group.map { "\($0) · \(m.description)" } ?? m.description, m.id == model?.id) { pick(m.id) }
             }
             if list == nil {
-                ProgressView().frame(maxWidth: .infinity)
+                Spinner(size: 20).frame(maxWidth: .infinity)
             }
         } header: {
             Text("Model")

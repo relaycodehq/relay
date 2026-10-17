@@ -39,7 +39,7 @@ struct SubagentRunView: View {
                     Button("Retry") { Task { await model.refresh(connection) } }.buttonStyle(.glass)
                 }
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spinner.page
             }
         }
         .safeAreaBar(edge: .bottom) {

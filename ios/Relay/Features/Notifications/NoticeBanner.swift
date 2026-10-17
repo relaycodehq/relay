@@ -34,11 +34,17 @@ private struct NoticeHost: ViewModifier {
                     .id(notice.id)
                     .padding(.horizontal, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    .task(id: notice.id) {
-                        try? await Task.sleep(for: shownFor)
-                        if !Task.isCancelled { notices.dismiss(notice.id) }
-                    }
                 }
+            }
+            // Out here, so a banner hidden for a moment doesn't start its time over when it's back.
+            .task(id: notice?.id) {
+                guard let notice else { return }
+                try? await Task.sleep(for: shownFor)
+                if !Task.isCancelled { notices.dismiss(notice.id) }
+            }
+            // The thread list shows the news itself: told there, it's been told.
+            .onChange(of: Seen(hidden: hidden, id: notice?.id), initial: true) { _, now in
+                if now.hidden, let id = now.id { notices.dismiss(id) }
             }
             .animation(.snappy(duration: 0.3), value: hidden ? nil : notice?.id)
             .onChange(of: openId, initial: true) { _, id in
@@ -49,6 +55,11 @@ private struct NoticeHost: ViewModifier {
     private func project(_ chatId: String) -> String? {
         connection.chats.first { $0.id == chatId }.flatMap { connection.project($0.projectId)?.name }
     }
+}
+
+private struct Seen: Equatable {
+    let hidden: Bool
+    let id: UUID?
 }
 
 private struct NoticeBanner: View {

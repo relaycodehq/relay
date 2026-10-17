@@ -69,6 +69,8 @@ private struct RibbonRefresh: ViewModifier {
                 )
                 .padding(.top, scroll.top)
                 .allowsHitTesting(false)
+                // The insets already count the bars; laid out inside them it came down twice as far.
+                .ignoresSafeArea(.container, edges: .top)
             }
             .sensoryFeedback(.impact(weight: .light), trigger: arms)
     }

@@ -29,7 +29,7 @@ struct EarlierMessages: View {
             }
         } label: {
             HStack(spacing: 6) {
-                if loading { ProgressView().controlSize(.mini) }
+                if loading { Spinner(size: 13) }
                 Text(label)
             }
             .font(.footnote)
@@ -65,7 +65,7 @@ struct AwaitingAnswer: View {
     var body: some View {
         HStack(spacing: 8) {
             ProviderMark(provider: provider, size: 13)
-            ProgressView().controlSize(.mini)
+            Spinner(size: 13)
             TimelineView(.periodic(from: .now, by: 6)) { context in
                 Text(thinkingWord(seed, now: Int64(context.date.timeIntervalSince1970 * 1000)))
             }

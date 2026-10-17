@@ -25,7 +25,11 @@ private struct ConnectionLineHost: ViewModifier {
     func body(content: Content) -> some View {
         // Nothing listed yet says why itself, in full.
         if connection.paired && connection.overview != nil {
-            content.safeAreaBar(edge: .top) { ConnectionLine() }
+            content
+                .safeAreaBar(edge: .top) { ConnectionLine() }
+                // With a line under the bar iOS draws the hard edge, a rule under the line; the
+                // soft one fades out under it as it does under the bar alone.
+                .scrollEdgeEffectStyle(.soft, for: .top)
         } else {
             content
         }

@@ -40,7 +40,7 @@ struct FilesView: View {
             } else if let error {
                 RetryNote(message: error) { await load() }.activityRow()
             } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24).activityRow()
+                Spinner(size: 20).frame(maxWidth: .infinity).padding(.vertical, 24).activityRow()
             }
         }
         .listStyle(.plain)

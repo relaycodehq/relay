@@ -56,6 +56,7 @@ struct ProjectView: View {
                 }
             }
             Section {
+                SectionLabel(title: "Threads", count: chats.count).labelRow()
                 ForEach(chats) { chat in
                     Button { navigate(.thread(chat.id)) } label: { ThreadRow(chat: chat) }
                         .activityRow()
@@ -67,8 +68,6 @@ struct ProjectView: View {
                         .padding(.vertical, 12)
                         .activityRow()
                 }
-            } header: {
-                SectionLabel(title: "Threads", count: chats.count)
             }
         }
         .listStyle(.plain)

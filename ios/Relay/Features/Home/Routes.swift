@@ -40,12 +40,26 @@ struct RouteStack<Root: View>: View {
     @Bindable var stack: StackPath
     @ViewBuilder let root: (_ open: @escaping (Route) -> Void) -> Root
     @Environment(Connection.self) private var connection
+    @State private var name = NameSpot()
 
     var body: some View {
         NavigationStack(path: $stack.routes) {
             root { stack.routes.append($0) }
                 .background(TabBarDrop(depth: stack.routes.count))
                 .navigationDestination(for: Route.self) { destination($0).overTabBar().connectionLine() }
+        }
+        .environment(name)
+        // The bar takes no touches below itself, where the tab title's computer name hangs, so
+        // one menu sits over the title and the name both, growing from the title either way.
+        .overlay(alignment: .topLeading) {
+            if stack.routes.isEmpty, let title = name.title, let at = name.frame.map({ $0.union(title) }) {
+                GeometryReader { space in
+                    let origin = space.frame(in: .global).origin
+                    ComputerMenu { Color.clear.frame(width: at.width + 16, height: at.height + 14).contentShape(.rect) }
+                        .offset(x: at.minX - 8 - origin.x, y: at.minY - 7 - origin.y)
+                }
+                .accessibilityHidden(true)
+            }
         }
         .environment(\.navigate) { stack.routes.append($0) }
         // A link to the computer's own localhost opens in Relay's browser, through the tunnel.

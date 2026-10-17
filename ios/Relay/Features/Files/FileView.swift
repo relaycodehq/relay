@@ -48,7 +48,7 @@ struct FileView: View {
                 RetryNote(message: error) { await load() }
                     .frame(maxHeight: .infinity)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spinner.page
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {

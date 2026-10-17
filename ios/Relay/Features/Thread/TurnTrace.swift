@@ -79,13 +79,13 @@ struct TurnTrace: View {
                 Image(systemName: "wrench.and.screwdriver")
                 Text("Working")
             case .call(let a):
-                ProgressView().controlSize(.mini)
+                Spinner(size: 13)
                 Text(liveLabel(a)).lineLimit(1)
             case .writing:
                 Image(systemName: "text.cursor")
                 Text("Writing")
             case .thinking:
-                ProgressView().controlSize(.mini)
+                Spinner(size: 13)
                 TimelineView(.periodic(from: .now, by: 6)) { context in
                     Text(thinkingWord(message.id, now: Int64(context.date.timeIntervalSince1970 * 1000)))
                 }
@@ -153,7 +153,7 @@ private struct ThinkingLine: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ProgressView().controlSize(.mini)
+            Spinner(size: 13)
             TimelineView(.periodic(from: .now, by: 6)) { context in
                 Text(thinkingWord(seed, now: Int64(context.date.timeIntervalSince1970 * 1000)))
             }

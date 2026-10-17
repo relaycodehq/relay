@@ -86,12 +86,12 @@ struct RootView: View {
             // bar's search field only then. Each stack drops the tab bar as it pushes.
             TabView(selection: picked) {
                 Tab(value: HomeTab.threads) {
-                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(filter: filter).connectionLine() }
+                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(filter: filter) }
                 } label: {
                     Label { Text("Threads") } icon: { TabIcon.threads.image(picked: tab == .threads, accent: colors.accent, ink: colors.foreground) }
                 }
                 Tab(value: HomeTab.projects) {
-                    RouteStack(stack: stacks[.projects]!) { _ in ProjectsHome().tabChrome(.projects).connectionLine() }
+                    RouteStack(stack: stacks[.projects]!) { _ in ProjectsHome().tabChrome(.projects) }
                 } label: {
                     Label { Text("Projects") } icon: { TabIcon.projects.image(picked: tab == .projects, accent: colors.accent, ink: colors.foreground) }
                 }
@@ -177,6 +177,7 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
     let tab: HomeTab
     let actions: Actions
     @Environment(Connection.self) private var connection
+    @Environment(NameSpot.self) private var name: NameSpot?
 
     func body(content: Content) -> some View {
         content
@@ -185,11 +186,85 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
             .toolbar(removing: .title)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    TabTitle(title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine, switches: tab != .settings)
+                    TabTitle(
+                        title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine, switches: tab != .settings,
+                        name: name)
                 }
                 .sharedBackgroundVisibility(.hidden)
                 actions
             }
+            // The computer's name hangs below the bar: room for it, so the bar's soft edge
+            // reaches past it as Photos' does past its count, instead of stopping at its middle.
+            .safeAreaBar(edge: .top) { Color.clear.frame(height: tab == .settings ? 0 : 26) }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+}
+
+/// The paired computers to switch to, pairing another and managing them, in a menu that grows
+/// out of `label` as the filter's does. Unreached, it leads with why and what would help: the
+/// tabs say no more than "offline" under the title.
+struct ComputerMenu<Label: View>: View {
+    @ViewBuilder let label: Label
+    @Environment(Connection.self) private var connection
+    @State private var pairing = false
+    @State private var managing = false
+
+    var body: some View {
+        Menu {
+            let lines = ComputerLines(
+                computers: connection.computers, active: connection.active, status: connection.status,
+                version: connection.overview?.version, reached: connection.reached, now: nowMs())
+            Section {
+                ForEach(connection.computers, id: \.key) { computer in
+                    let here = computer.key == connection.active
+                    Button {
+                        if !here { connection.switchTo(computer.key) }
+                    } label: {
+                        Image(systemName: here ? "checkmark" : "desktopcomputer")
+                        Text(computer.name)
+                        // The title already says it's offline; when it was last there is what's left.
+                        Text(here && connection.failing ? lines.lastReached(computer) : lines.hint(computer))
+                    }
+                }
+                // The computer's row already says it can't be reached; this is what would help.
+                switch trouble {
+                case .tailnet:
+                    Button { connection.wake() } label: {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Try Now")
+                        Text("Is Tailscale on here?")
+                    }
+                case .rescan:
+                    Button("Scan Again", systemImage: "qrcode.viewfinder") { pairing = true }
+                case nil:
+                    EmptyView()
+                }
+            }
+            Section {
+                Button("Pair Another", systemImage: "plus") { pairing = true }
+                Button("Manage", systemImage: "slider.horizontal.3") { managing = true }
+            }
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Switch computer")
+        .sheet(isPresented: $managing) { ComputerSheet() }
+        .fullScreenCover(isPresented: $pairing) { PairingView() }
+    }
+
+    private enum Trouble { case tailnet, rescan }
+
+    /// What would help once the computer can't be reached: on Tailscale another try, since this
+    /// phone can't see whether it's on; otherwise the code again, as the address may have moved.
+    private var trouble: Trouble? {
+        switch connection.status.state {
+        case .online: return nil
+        case .connecting where !connection.failing: return nil
+        case .denied: return .rescan
+        case .offline, .connecting:
+            return connection.computer?.hosts.contains { Routes.kind($0) == .tailscale } == true ? .tailnet : .rescan
+        }
     }
 }
 
@@ -197,41 +272,50 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
 private struct TabTitle: View {
     let title: String
     let subtitle: String?
-    /// Tapping it opens the computers to switch to.
+    /// Tapping it opens the computers to switch to; the screen lays the menu over it.
     var switches = false
+    /// Where the title and the computer's name are drawn, for the menu the screen lays over them.
+    var name: NameSpot?
     @Environment(\.colors) private var colors
-    @State private var computers = false
 
     var body: some View {
-        if switches {
-            Button { computers = true } label: { label }
-                .buttonStyle(.plain)
-                .accessibilityHint("Switch computer")
-                .sheet(isPresented: $computers) { ComputerSheet() }
-        } else {
-            label
-        }
+        label
+            .overlay(alignment: .bottomLeading) { hanging }
+            .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { [name, switches] in
+                if switches { name?.title = $0 }
+            }
     }
-
     private var label: some View {
-        // As Photos: the title centred on the bar's buttons, the subtitle hanging below that row.
         Text(title)
             .font(.largeTitle.bold())
             .foregroundStyle(colors.foreground)
-            .overlay(alignment: .bottomLeading) {
-                if let subtitle, !subtitle.isEmpty {
-                    Text(switches ? "\(subtitle) \(Text(Image(systemName: "chevron.down")).font(.caption.weight(.bold)))" : "\(subtitle)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(colors.muted)
-                        .fixedSize()
-                        .frame(height: 0, alignment: .top)
-                }
-            }
             .lineLimit(1)
             .fixedSize()
-            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
     }
+
+    /// As Photos: the title centred on the bar's buttons, the subtitle hanging below that row.
+    @ViewBuilder private var hanging: some View {
+        if let subtitle, !subtitle.isEmpty {
+            Text(switches ? "\(subtitle) \(Text(Image(systemName: "chevron.down")).font(.system(size: 9, weight: .bold)).baselineOffset(1))" : "\(subtitle)")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(colors.muted)
+                .lineLimit(1)
+                .fixedSize()
+                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { [name, switches] in
+                    if switches { name?.frame = $0 }
+                }
+                .frame(height: 0, alignment: .top)
+        }
+    }
+}
+
+/// Where a tab title and its computer name sit on screen. The bar takes no touches below
+/// itself, where the name hangs, so the screen lays one menu over both and it grows from the title.
+@Observable
+final class NameSpot {
+    var title: CGRect?
+    var frame: CGRect?
 }
 
 enum HomeTab: Hashable, CaseIterable {

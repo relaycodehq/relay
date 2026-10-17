@@ -19,7 +19,7 @@ struct ThreadRow: View {
                     Image(systemName: "questionmark.circle").foregroundStyle(colors.accent)
                         .accessibilityLabel("Waiting for you")
                 } else if working {
-                    ProgressView().controlSize(.mini)
+                    Spinner(size: 13)
                 } else if let provider = chat.provider {
                     ProviderMark(provider: provider).foregroundStyle(colors.muted)
                 }

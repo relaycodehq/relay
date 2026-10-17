@@ -18,7 +18,7 @@ struct HomeView: View {
                 ActivityList { open(.thread($0)) }
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { ComputerUpdateBanner() }
+        .safeAreaInset(edge: .bottom, spacing: 0) { ComputerUpdateBanner() }
         .relayBackground()
     }
 }
@@ -30,8 +30,11 @@ struct ComputerWaiting: View {
     var body: some View {
         switch connection.status.state {
         case .online, .connecting:
-            ProgressView("Connecting to \(connection.computer?.name ?? "your computer")…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 12) {
+                Spinner(size: 26)
+                Text("Connecting to \(connection.computer?.name ?? "your computer")…").foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .offline:
             ContentUnavailableView(
                 "Can't reach \(connection.computer?.name ?? "your computer")", systemImage: "wifi.slash",
@@ -56,7 +59,7 @@ extension Connection {
         let name = computer?.name ?? "Relay"
         switch status.state {
         case .online: return present == true ? "\(name) · you're there" : name
-        case .connecting: return "Connecting to \(name)…"
+        case .connecting: return failing ? "\(name) · offline" : "Connecting to \(name)…"
         case .offline: return "\(name) · offline"
         case .denied: return "\(name) · pair again"
         }
@@ -77,6 +80,7 @@ private struct SearchResults: View {
         }
         List {
             Section {
+                SectionLabel(title: "Results", count: results.count).labelRow(first: true)
                 ForEach(results) { chat in
                     Button { open(chat.id) } label: {
                         ThreadRow(chat: chat, project: connection.project(chat.projectId)?.name)
@@ -91,10 +95,9 @@ private struct SearchResults: View {
                         .padding(.vertical, 24)
                         .activityRow()
                 }
-            } header: {
-                SectionLabel(title: "Results", count: results.count)
             }
         }
         .listStyle(.plain)
+        .labelRows()
     }
 }

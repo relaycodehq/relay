@@ -40,6 +40,17 @@ private struct ProjectsList: View {
         let byProject = Dictionary(grouping: overview.chats, by: \.projectId)
         return List {
             Section {
+                HStack {
+                    Text("Scratchpad").fontWeight(.medium).foregroundStyle(colors.muted)
+                    Spacer()
+                    Button("New Scratchpad chat", systemImage: "plus") { open(.newThread(scratch: true)) }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(colors.muted)
+                        .disabled(connection.status.state != .online)
+                }
+                .font(.caption)
+                .buttonStyle(.borderless)
+                .labelRow(first: true)
                 ForEach(allScratch ? scratch : Array(scratch.prefix(scratchPage))) { chat in
                     Button { open(.thread(chat.id)) } label: { ThreadRow(chat: chat) }
                         .activityRow()
@@ -59,20 +70,10 @@ private struct ProjectsList: View {
                         .padding(.vertical, 8)
                         .activityRow()
                 }
-            } header: {
-                HStack {
-                    Text("Scratchpad").fontWeight(.medium).foregroundStyle(colors.muted)
-                    Spacer()
-                    Button("New Scratchpad chat", systemImage: "plus") { open(.newThread(scratch: true)) }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(colors.muted)
-                        .disabled(connection.status.state != .online)
-                }
-                .font(.caption)
-                .textCase(nil)
             }
             ForEach(projectFolders(overview.projects), id: \.title) { folder in
                 Section {
+                    SectionLabel(title: folder.title, count: folder.projects.count).labelRow()
                     ForEach(folder.projects) { project in
                         Button { open(.project(project.id)) } label: {
                             ProjectRow(title: project.name, line: projectLine(byProject[project.id] ?? [], now: now)) {
@@ -81,12 +82,11 @@ private struct ProjectsList: View {
                         }
                         .activityRow()
                     }
-                } header: {
-                    SectionLabel(title: folder.title, count: folder.projects.count)
                 }
             }
         }
         .listStyle(.plain)
+        .labelRows()
         .ribbonRefresh { await connection.reloadList() }
     }
 }

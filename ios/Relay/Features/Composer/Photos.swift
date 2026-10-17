@@ -75,7 +75,7 @@ struct PhotoStrip: View {
                         }
                 }
                 ForEach(0..<loading, id: \.self) { _ in
-                    ProgressView()
+                    Spinner()
                         .frame(width: 56, height: 56)
                         .background(.quietFill, in: .rect(cornerRadius: 12))
                 }

@@ -42,7 +42,7 @@ struct TasksView: View {
                     .padding(.vertical, 24)
                     .activityRow()
             } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24).activityRow()
+                Spinner(size: 20).frame(maxWidth: .infinity).padding(.vertical, 24).activityRow()
             }
         }
         .listStyle(.plain)

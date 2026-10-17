@@ -98,7 +98,7 @@ private struct Page: View {
             } else if loaded.failed {
                 Text("This image couldn’t be loaded.").font(.subheadline).foregroundStyle(.secondary)
             } else {
-                ProgressView()
+                Spinner(size: 26, color: .white)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

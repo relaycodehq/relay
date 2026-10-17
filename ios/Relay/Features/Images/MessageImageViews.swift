@@ -56,7 +56,7 @@ private struct Thumb: View {
                     } else if loaded.failed {
                         Image(systemName: "photo").foregroundStyle(colors.faint)
                     } else {
-                        ProgressView().controlSize(.small)
+                        Spinner(size: 16)
                     }
                 }
                 .frame(width: thumb, height: thumb)

@@ -51,7 +51,7 @@ struct SitesList: View {
                 } else if let error {
                     note("Couldn't see what runs there: \(error)")
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12).activityRow()
+                    Spinner(size: 20).frame(maxWidth: .infinity).padding(.vertical, 12).activityRow()
                 }
             } header: {
                 SectionLabel(title: "Running on \(name)", count: shown?.count ?? 0)

@@ -113,7 +113,7 @@ private struct StateGlyph: View {
         if inputBlocksThread(chat) {
             Circle().fill(colors.waiting).frame(width: 8, height: 8).accessibilityLabel("Needs you")
         } else if chat.running == true || agentsSince(chat.pending) != nil {
-            ProgressView().controlSize(.mini).accessibilityLabel("Working")
+            Spinner(size: 13).accessibilityLabel("Working")
         } else if draft {
             Image(systemName: "pencil").font(.system(size: 13, weight: .medium)).foregroundStyle(colors.waiting)
                 .accessibilityLabel("Draft")

@@ -78,7 +78,7 @@ struct ToolRow: View {
 
     @ViewBuilder private var icon: some View {
         if activity.status == "running" {
-            ProgressView().controlSize(.mini)
+            Spinner(size: 13)
         } else {
             Image(systemName: symbol)
                 .foregroundStyle(activity.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))

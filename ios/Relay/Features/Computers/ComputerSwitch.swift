@@ -56,6 +56,8 @@ struct ComputerSheet: View {
     @Environment(ComputerUpdates.self) private var updates
     @State private var forgetting: RemoteCredentials?
     @State private var pairing = false
+    /// The list's own height, so the sheet opens as tall as its rows instead of at half the screen.
+    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -87,6 +89,11 @@ struct ComputerSheet: View {
                         }
                     }
                 }
+                .listSectionSpacing(.compact)
+                .contentMargins(.top, 8, for: .scrollContent)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom }) {
+                    listHeight = $1
+                }
                 .confirmationDialog(
                     "Forget \(forgetting?.name ?? "")?", isPresented: forgettingShown, titleVisibility: .visible,
                     presenting: forgetting
@@ -104,7 +111,7 @@ struct ComputerSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(listHeight > 0 ? [.height(listHeight), .large] : [.medium, .large])
         .fullScreenCover(isPresented: $pairing) { PairingView() }
     }
 

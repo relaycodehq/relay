@@ -40,7 +40,7 @@ struct MergeSheet: View {
                         Button("Try Again") { Task { await loadPlan() } }.buttonStyle(.glass)
                     }
                 } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Spinner.page
                 }
             }
             .navigationTitle(result?.merged == true ? "Merged into \(result?.base ?? plan?.base ?? "")" : "Merge Branch")
