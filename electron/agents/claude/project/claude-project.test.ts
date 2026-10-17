@@ -168,11 +168,14 @@ it("says what Claude reported when a turn fails", async () => {
       ...result(""),
       subtype: "error_during_execution",
       is_error: true,
-      errors: ["Tool permission stream closed before response received"],
+      errors: [
+        "Tool permission stream closed before response received",
+        "[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=null",
+      ],
     },
   ]);
   await expect(run()).rejects.toThrow(
-    "Claude could not complete this turn: Tool permission stream closed before response received",
+    /^Claude could not complete this turn: Tool permission stream closed before response received$/,
   );
 });
 

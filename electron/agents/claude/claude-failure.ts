@@ -76,7 +76,15 @@ export class ClaudeFailureWatch {
     return (
       claudeReason(result.result) ??
       claudeReason(
-        Array.isArray(result.errors) ? result.errors.join("; ") : undefined,
+        Array.isArray(result.errors)
+          ? result.errors
+              // Claude Code's own bookkeeping, like "[ede_diagnostic] result_type=user …".
+              .filter(
+                (e) =>
+                  typeof e !== "string" || !e.startsWith("[ede_diagnostic]"),
+              )
+              .join("; ")
+          : undefined,
       ) ??
       claudeReason(this.errorText)
     );

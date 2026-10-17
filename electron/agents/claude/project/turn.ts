@@ -192,6 +192,10 @@ export async function runClaudeProject(
         await options.session?.onId(message.session_id);
       }
       const verdict = reader.read(message);
+      // A result read past, like the one a steer cut short, is over: a
+      // restart shows the turn from after it.
+      if (message.type === "result" && typeof verdict === "string")
+        session.hosted?.mark("start", consumed);
       if (verdict === "more") continue;
       if (verdict === "follow-up") {
         if (await startsFollowUp(session.frames)) {
