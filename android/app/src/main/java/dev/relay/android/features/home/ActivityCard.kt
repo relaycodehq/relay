@@ -199,7 +199,7 @@ private fun CardState(chat: RemoteChatSummary, unread: Boolean, now: Long) {
     val style = RelayTheme.type.xs.copy(fontFeatureSettings = "tnum")
     val since = if (chat.running == true) chat.runningSince else agentsSince(chat.pending)
     when {
-        since != null -> Elapsed("", since, style, c.mutedForeground)
+        since != null -> Elapsed("", since, style, c.accent)
         chat.nextSend != null && !unread -> Icon(TablerIcons.Outline.CalendarClock, "Sends later", tint = c.mutedForeground, size = 12.dp)
         else -> Text(shortAge(chat.updated, now), style = style, color = if (unread) c.foreground else c.faint)
     }

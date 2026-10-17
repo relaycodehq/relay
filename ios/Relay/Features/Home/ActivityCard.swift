@@ -128,7 +128,7 @@ private struct CardState: View {
                 // Ticks by itself, so only this label redraws.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(elapsedLabel(since, now: Int64(context.date.timeIntervalSince1970 * 1000)))
-                        .foregroundStyle(colors.muted)
+                        .foregroundStyle(colors.accent)
                 }
             } else if chat.nextSend != nil && !unread {
                 Image(systemName: "calendar.badge.clock")
