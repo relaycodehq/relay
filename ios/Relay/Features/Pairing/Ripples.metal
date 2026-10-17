@@ -2,8 +2,9 @@
 using namespace metal;
 
 // The pairing screen's field: rows of dots on a gently swelling floor, rings going out from the
-// phone and the computer. Scanning, the near middle of it folds up into the viewfinder, its dots
-// lock onto the code, and the code bursts back out into the whole field.
+// phone and the computer. Scanning, the near middle of it lands in the viewfinder and takes the
+// camera's light, the picture develops out across the screen in dots, the dots lock onto the code,
+// and the code bursts back out into the whole field.
 
 /// Wide enough to fill a disc round the computer, so the view can turn all the way round it.
 constant int COLS = 118;
@@ -20,6 +21,8 @@ constant int GRID = 50;
 constant int G0 = (COLS - GRID) / 2;
 /// How far the viewfinder's corner marks run along its edges, in dots.
 constant int BRACKET = 11;
+/// Points a cell of the camera's dots: the landed grid's own pitch, two to a module of the code.
+constant float PITCH = 5.0;
 
 /// Laid out as RippleRenderer's FieldUniforms.
 struct FieldUniforms {
@@ -49,6 +52,9 @@ struct FieldUniforms {
     float burst;
     /// Modules a side of the code; 0 before one's seen.
     int modules;
+    /// The halftone's front, points from the viewfinder's edge, and whether the way in or out is playing.
+    float front;
+    float entering;
 };
 
 struct DotOut {
@@ -72,6 +78,18 @@ static float2 onCode(float3x3 h, float2 m) {
 }
 
 static float ease(float x) { return x * x * (3.0 - 2.0 * x); }
+
+/// How far a viewfinder dot has got from the field to its place, near rows first.
+static float landing(float gather, uint iid, float gy) {
+    return ease(clamp(gather * 1.6 - gy * 0.45 - rand(iid, 1u) * 0.15, 0.0, 1.0));
+}
+
+/// Points from the viewfinder's edge, negative inside; p from its middle. Rounder at the corners
+/// than the viewfinder, so the front running out of it turns round as the field's ripples are.
+static float frontDistance(float2 p) {
+    float2 q = abs(p) - float2(45.0);
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 80.0;
+}
 
 vertex DotOut dotVertex(
     uint vid [[vertex_id]], uint iid [[instance_id]], constant FieldUniforms &u [[buffer(0)]],
@@ -127,9 +145,7 @@ vertex DotOut dotVertex(
     float soft = 0.0;
     float4 at = clip;
     if (chosen) {
-        float rnd = rand(iid, 1u);
-        // Near rows lift first, so the field folds up toward you.
-        float p = ease(clamp(u.gather * 1.6 - g.y * 0.45 - rnd * 0.15, 0.0, 1.0));
+        float p = landing(u.gather, iid, g.y);
         int ex = min(gx, GRID - 1 - gx), ey = min(ri, GRID - 1 - ri);
         bool bracket = min(ex, ey) == 0 && max(ex, ey) < BRACKET;
         float cleared = clamp(u.clear * 1.6 - length(g - 0.5) * 0.85, 0.0, 1.0);
@@ -147,8 +163,18 @@ vertex DotOut dotVertex(
         float winPx = u.window.z * u.screen.x / float(GRID) * (bracket ? 0.75 : 0.55);
         size = mix(size, winPx, p) * (1.0 + 1.6 * sin(M_PI_F * p));
         size = mix(size, modulePx * 0.95, l) * (1.0 - 0.15 * u.charge);
+        // As it lands, the camera's dot in its cell takes over from it.
+        if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.75, 1.0, p);
         if (p + l > 0.0) at = float4(xy, 0.0, 1.0);
         fade = 1.0 - p;
+    } else if (u.entering > 0.5) {
+        // The halftone's front reaches each dot of the field: it catches the light, then goes.
+        float2 pt = clip.w > 0.2 ? (clip.xy / clip.w - u.window.xy) * u.screen / (2.0 * u.unit) : float2(0.0, -2000.0);
+        float behind = u.front - frontDistance(pt);
+        float glint = exp(-(behind + 6.0) * (behind + 6.0) / 300.0);
+        col = mix(col, float4(u.scan, 1.0) * fog, 0.85 * glint);
+        size *= 1.0 + 0.7 * glint;
+        col *= 1.0 - smoothstep(0.0, 26.0, behind);
     } else {
         col *= 1.0 - u.rest;
     }
@@ -241,4 +267,83 @@ fragment float4 glowFragment(GlowOut in [[stage_in]]) {
     float core = 1.0 - smoothstep(0.0, 0.32, d);
     float halo = exp(-d * d * 7.0) * 0.55;
     return in.color * clamp(core + halo, 0.0, 1.0);
+}
+
+/// Laid out as RippleRenderer's CameraUniforms.
+struct CameraUniforms {
+    /// The screen, NDC, to the code's square (0..1, top left first).
+    float3x3 uncode;
+    float4 window;
+    float3 accent;
+    float2 screen;
+    /// The screen's share of the picture each way, which fills it as a camera app's does.
+    float2 fill;
+    float unit;
+    float front;
+    float gather;
+    float entrance;
+    float alpha;
+    float shade;
+    float lifted;
+    float light;
+};
+
+struct CameraOut {
+    float4 position [[position]];
+};
+
+vertex CameraOut cameraVertex(uint vid [[vertex_id]]) {
+    float2 p = float2(float((vid << 1) & 2u), float(vid & 2u)) * 2.0 - 1.0;
+    CameraOut out;
+    out.position = float4(p, 0.0, 1.0);
+    return out;
+}
+
+static float3 picture(texture2d<float> camera, float2 ndc, constant CameraUniforms &u) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    return camera.sample(s, float2(ndc.x, -ndc.y) * 0.5 * u.fill + 0.5).rgb;
+}
+
+/// The camera under the field. One dot a cell of the landed grid, as big as the light the camera
+/// sees there (as dark, like ink, in the light theme), until the cells close up into the picture.
+fragment float4 cameraFragment(
+    CameraOut in [[stage_in]], constant CameraUniforms &u [[buffer(0)]], texture2d<float> camera [[texture(0)]]
+) {
+    float2 ndc = float2(in.position.x / u.screen.x * 2.0 - 1.0, 1.0 - in.position.y / u.screen.y * 2.0);
+    float2 points = u.screen / (2.0 * u.unit);
+    float2 p = (ndc - u.window.xy) * points;
+    float2 k = floor(p / PITCH);
+    float2 cell = (k + 0.5) * PITCH;
+    float dist = frontDistance(cell);
+    // Inside the viewfinder each dot is born as the field's dot lands on it.
+    uint iid = uint((k.y + float(GRID / 2)) * float(COLS) + k.x + float(GRID / 2 + G0));
+    float born = all(abs(cell) < float2(125.0))
+        ? smoothstep(0.75, 1.0, landing(u.gather, iid, (k.y + float(GRID / 2) + 0.5) / float(GRID)))
+        : clamp((u.front - dist) / 34.0, 0.0, 1.0);
+    float closed = ease(clamp((u.front - dist - 120.0) / 150.0, 0.0, 1.0));
+    // The lens eases in by a few percent as the picture closes up.
+    float zoom = 1.0 + 0.05 * (1.0 - u.entrance) * (1.0 - u.entrance);
+    // The light over the cell, not at one pixel of it.
+    float2 at = u.window.xy + cell / points / zoom, d = 1.5 / points;
+    float3 seen = (picture(camera, at, u) + picture(camera, at + float2(d.x, d.y), u) + picture(camera, at - float2(d.x, d.y), u)
+        + picture(camera, at + float2(d.x, -d.y), u) + picture(camera, at - float2(d.x, -d.y), u)) / 5.0;
+    float lum = dot(seen, float3(0.299, 0.587, 0.114));
+    float tone = sqrt(clamp(u.light > 0.5 ? 1.0 - lum : lum * 1.6, 0.0, 1.0));
+    // Short of touching, so even the white of the code still reads as dots.
+    float pop = 1.0 + 0.45 * sin(M_PI_F * born);
+    float r = mix(0.9, PITCH * (0.1 + 0.36 * tone), ease(born)) * pop;
+    r = mix(r, PITCH * 0.75, closed);
+    float aa = 0.75 / u.unit;
+    float disc = (1.0 - smoothstep(r - aa, r + aa, length(p - cell))) * step(0.001, born);
+    float alpha = max(disc, smoothstep(0.8, 1.0, closed));
+    // Born in the scanner's colour, taking the camera's as it grows, lit up like a screen of LEDs
+    // until the cells close up and the picture settles.
+    float3 dots = mix(u.accent * 1.4, seen * mix(2.1, 1.0, closed), smoothstep(0.0, 0.55, born)) * mix(pop, 1.0, closed);
+    float3 c = mix(dots, picture(camera, u.window.xy + (ndc - u.window.xy) / zoom, u), closed);
+    c *= 1.0 - u.shade;
+    // Once the code has burst out of the screen, a dark square is left where it was.
+    float3 m = u.uncode * float3(ndc, 1.0);
+    float2 onCode = m.xy / m.z;
+    if (u.lifted > 0.5 && m.z > 0.0 && all(onCode >= 0.0) && all(onCode <= 1.0)) c = float3(0.04);
+    return float4(c, 1.0) * alpha * u.alpha;
 }

@@ -2,8 +2,7 @@ import AVFoundation
 import MetalKit
 import SwiftUI
 
-/// The field, with the camera under it while scanning. Both are drawn from one clock: the camera's
-/// window and shade move in the same transaction as the frame of dots riding its edges.
+/// The field, with the camera under it while scanning, both drawn in one Metal pass from one clock.
 struct ScanStage: UIViewControllerRepresentable {
     let scan: PairingScan
     let palette: RipplePalette
@@ -26,11 +25,6 @@ final class ScanStageController: UIViewController {
     var palette: RipplePalette { didSet { renderer?.palette = palette } }
     private let metal = MTKView()
     private var renderer: RippleRenderer?
-    /// The camera, cut to the viewfinder's window.
-    private let box = UIView()
-    private let window = CAShapeLayer()
-    private let shade = UIView()
-    private let hole = CAShapeLayer()
     private var camera: CodeCamera?
     private var starting = false
     private var last: CFTimeInterval = 0
@@ -51,23 +45,12 @@ final class ScanStageController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
-        box.isHidden = true
-        box.backgroundColor = .black
-        box.layer.mask = window
-        shade.backgroundColor = .black
-        shade.isUserInteractionEnabled = false
-        hole.fillColor = UIColor(white: 0.04, alpha: 1).cgColor
-        box.addSubview(shade)
-        box.layer.addSublayer(hole)
-        view.addSubview(box)
-
         metal.device = MTLCreateSystemDefaultDevice()
         metal.colorPixelFormat = .bgra8Unorm
         metal.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         metal.isOpaque = false
         metal.backgroundColor = .clear
         metal.preferredFramesPerSecond = 60
-        metal.presentsWithTransaction = true
         metal.isUserInteractionEnabled = false
         if let layer = metal.layer as? CAMetalLayer {
             layer.isOpaque = false
@@ -83,9 +66,7 @@ final class ScanStageController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         metal.frame = view.bounds
-        box.frame = view.bounds
-        shade.frame = box.bounds
-        camera?.controller.view.frame = box.bounds
+        camera?.stage = view.bounds.size
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -135,37 +116,12 @@ final class ScanStageController: UIViewController {
         if scan.wantsCamera, camera == nil, !starting { startCamera() }
         if !scan.wantsCamera, camera != nil { dropCamera() }
 
+        let picture = scan.wantsCamera ? camera?.latest : nil
+        scan.cameraLive = picture != nil
         let points = SIMD2<Float>(Float(view.bounds.width), Float(view.bounds.height))
-        let s = scan.scene(points: points)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        // Black until the camera's first frames, as a camera app's is.
-        let showing = scan.wantsCamera && s.cameraHalf.x > 0 && s.cameraAlpha > 0
-        box.isHidden = !showing
-        if showing {
-            box.alpha = CGFloat(s.cameraAlpha)
-            shade.alpha = CGFloat(s.shade)
-            let half = CGSize(width: CGFloat(s.cameraHalf.x * points.x / 2), height: CGFloat(s.cameraHalf.y * points.y / 2))
-            let centre = CGPoint(x: view.bounds.midX, y: CGFloat((1 - s.window.y) * points.y / 2))
-            let rect = CGRect(x: centre.x - half.width, y: centre.y - half.height, width: half.width * 2, height: half.height * 2)
-            window.path = UIBezierPath(rect: rect).cgPath
-            hole.path = s.lifted ? codePath(s.code, points) : nil
-        }
-        CATransaction.commit()
         return RippleFrame(
-            time: clock, scene: s, modules: scan.code?.size ?? 0, answer: scan.takeAnswer())
-    }
-
-    /// The code's square on the screen, in points.
-    private func codePath(_ code: simd_float3x3, _ points: SIMD2<Float>) -> CGPath {
-        let path = UIBezierPath()
-        for (i, m) in [SIMD2<Float>(0, 0), [1, 0], [1, 1], [0, 1]].enumerated() {
-            let p = code * SIMD3(m, 1)
-            let at = CGPoint(x: CGFloat((p.x / p.z + 1) / 2 * points.x), y: CGFloat((1 - p.y / p.z) / 2 * points.y))
-            if i == 0 { path.move(to: at) } else { path.addLine(to: at) }
-        }
-        path.close()
-        return path.cgPath
+            time: clock, scene: scan.scene(points: points), modules: scan.code?.size ?? 0, answer: scan.takeAnswer(),
+            camera: picture)
     }
 
     private func startCamera() {
@@ -191,8 +147,8 @@ final class ScanStageController: UIViewController {
 
     private func openCamera() {
         starting = false
-        guard scan.wantsCamera else { return }
-        let camera = CodeCameras.make()
+        guard scan.wantsCamera, let device = metal.device else { return }
+        let camera = CodeCameras.make(device)
         camera.onSeen = { [weak self] code, corners in
             guard let self else { return false }
             guard scan.seen(code, at: corners.map(ndc)) else { return false }
@@ -203,30 +159,21 @@ final class ScanStageController: UIViewController {
             guard let self else { return }
             scan.moved(to: corners.map(ndc))
         }
-        addChild(camera.controller)
-        box.insertSubview(camera.controller.view, at: 0)
-        camera.controller.view.frame = box.bounds
-        camera.controller.didMove(toParent: self)
-        do {
-            try camera.start()
-            self.camera = camera
-        } catch {
-            camera.controller.willMove(toParent: nil)
-            camera.controller.view.removeFromSuperview()
-            camera.controller.removeFromParent()
+        camera.onFailed = { [weak self] in
+            guard let self else { return }
+            dropCamera()
             scan.close()
             cameraFailed("The camera didn't start. Paste the pairing link instead.")
         }
+        camera.stage = view.bounds.size
+        camera.start()
+        self.camera = camera
     }
 
     private func dropCamera() {
         guard let camera else { return }
         camera.stop()
-        camera.controller.willMove(toParent: nil)
-        camera.controller.view.removeFromSuperview()
-        camera.controller.removeFromParent()
         self.camera = nil
-        box.isHidden = true
     }
 
     private func ndc(_ p: CGPoint) -> SIMD2<Float> {
@@ -247,6 +194,6 @@ extension RipplePalette {
         self.init(
             base: rgb(colors.muted), hot: accent,
             overCamera: colors.dark ? accent : simd_mix(accent, SIMD3(repeating: 1), SIMD3(repeating: 0.45)),
-            baseAlpha: colors.dark ? 0.28 : 0.34)
+            baseAlpha: colors.dark ? 0.28 : 0.34, light: !colors.dark)
     }
 }

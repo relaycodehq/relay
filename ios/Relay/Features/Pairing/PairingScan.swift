@@ -30,9 +30,15 @@ struct ScanScene {
     var beacon: Float = 1
     /// The code's square (0..1, top left first) to the screen, NDC.
     var code = matrix_identity_float3x3
-    /// The camera: its window's half size (NDC), how much of it shows, and the shade the lock-on puts over it.
-    var cameraHalf: SIMD2<Float> = .zero
+    /// The camera under the field, how much of it shows, and the shade the lock-on puts over it.
+    var camera = false
     var cameraAlpha: Float = 1
+    /// The way in or out is playing: the halftone's front, not `rest`, takes the field.
+    var entering = false
+    /// How far the halftone's front has run from the viewfinder's edge, points; negative inside it.
+    var front = Halftone.from
+    /// The way in, 0..1: the lens settles over it.
+    var entrance: Float = 0
     /// How much of the screen the camera covers: the scanner's dots lighten over it.
     var covers: Float = 0
     var shade: Float = 0
@@ -40,8 +46,33 @@ struct ScanScene {
     var lifted = false
 }
 
-/// The pairing screen's scan, as the preview has it: the field folds up into the viewfinder, which
-/// opens onto the camera; once a code's read its dots lock on, the code bursts back into the field,
+/// Seconds and points of the way in. The landed dots take the camera's light, then a front runs out
+/// of the viewfinder: ahead of it the field, on it new dots, behind it the dots swell shut into the picture.
+nonisolated enum Halftone {
+    static let land: Float = 0.6
+    static let frontAt: Float = 0.42
+    static let frontFor: Float = 1.2
+    static let from: Float = -125
+    static let duration = frontAt + frontFor
+
+    /// Nearly even, easing off at the end only: a wave, not a burst. `to` is far enough to close
+    /// the screen's farthest corner.
+    static func front(_ seconds: Float, to: Float) -> Float {
+        let u = min(1, max(0, (seconds - frontAt) / frontFor))
+        return from + (to - from) * (u * (1.4 - 0.4 * u))
+    }
+
+    /// Points from the viewfinder's edge, negative inside, `p` from its middle; rounder at the
+    /// corners than the viewfinder, as Ripples.metal's frontDistance.
+    static func distance(_ p: SIMD2<Float>) -> Float {
+        let q = abs(p) - SIMD2(repeating: 45)
+        return simd_length(simd_max(q, .zero)) + min(max(q.x, q.y), 0) - 80
+    }
+}
+
+/// The pairing screen's scan, as the preview has it: the field's near dots land in the viewfinder
+/// and take the camera's light, and the picture develops out across the screen from there; once a
+/// code's read its dots lock on, the code bursts back into the field,
 /// and the computer's ring goes out across it when the pairing goes through.
 @Observable final class PairingScan {
     enum Phase { case idle, opening, looking, locking, bursting, waiting, answering, paired, closing }
@@ -56,6 +87,8 @@ struct ScanScene {
     /// Called with a code's text once one's read; says whether it's a Relay pairing code.
     @ObservationIgnored var onRead: (String) -> Bool = { _ in false }
     @ObservationIgnored var reduceMotion = false
+    /// The camera has given a picture: the way in holds before the front until it has.
+    @ObservationIgnored var cameraLive = false
     /// The code being paired with, and its corners on the screen (NDC: top left, top right, bottom right, bottom left).
     @ObservationIgnored private(set) var code: SeenCode?
     @ObservationIgnored private var target: [SIMD2<Float>] = []
@@ -72,7 +105,7 @@ struct ScanScene {
     @ObservationIgnored private var outcome: Bool?
     @ObservationIgnored private var answerDue = false
 
-    static let opening = 1.7
+    static let opening = Double(Halftone.duration)
     /// The viewfinder: 250 points square, its middle 44% of the way down the screen.
     static let windowPoints = 125.0
     static let windowY: Float = 0.12
@@ -175,6 +208,7 @@ struct ScanScene {
         switch phase {
         case .opening:
             open = min(1, open + dt / Self.opening)
+            if !cameraLive { open = min(open, Double(Halftone.frontAt / Halftone.duration)) }
             if open >= 1 { go(.looking) }
         case .closing:
             open = max(0, open - dt / 0.9)
@@ -209,14 +243,21 @@ struct ScanScene {
         var covers: Float = 0
         switch phase {
         case .opening, .looking, .locking, .bursting, .closing:
-            let open = Float(self.open)
-            s.gather = clamp(open / 0.55)
-            s.rest = clamp(open / 0.45)
-            s.clear = clamp((open - 0.5) / 0.3)
-            s.beacon = 1 - s.rest
-            let e1 = ease((open - 0.5) / 0.25), e2 = ease((open - 0.72) / 0.28)
-            s.cameraHalf = simd_mix(half * e1, SIMD2(repeating: 1.3), SIMD2(repeating: e2))
-            covers = e2
+            let seconds = Float(open) * Halftone.duration
+            // Far enough that the screen's farthest corner closes up too.
+            let middle = SIMD2<Float>(0, Self.windowY * points.y / 2)
+            let far = [SIMD2<Float>(-1, 1), [1, 1], [-1, -1], [1, -1]].map { Halftone.distance($0 * points / 2 - middle) }.max() ?? 0
+            s.camera = true
+            s.gather = clamp(seconds / Halftone.land)
+            s.front = Halftone.front(seconds, to: max(640, far + 280))
+            s.entering = phase == .opening || phase == .closing
+            s.entrance = clamp((Float(open) - 0.38) / 0.62)
+            // The front takes the field dot by dot; once it has run, none is left.
+            s.rest = s.entering ? 0 : 1
+            s.clear = s.entering ? 0 : 1
+            // The computer's glow sits just above the viewfinder: the front reaches it first.
+            s.beacon = 1 - ease((s.front + 10) / 60)
+            covers = ease((s.front - 110) / 160)
         default: break
         }
         if phase == .bursting {

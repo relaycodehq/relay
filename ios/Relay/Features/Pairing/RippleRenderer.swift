@@ -10,6 +10,8 @@ struct RipplePalette: Equatable {
     var hot: SIMD3<Float>
     var overCamera: SIMD3<Float>
     var baseAlpha: Float
+    /// The camera's dots are dark on light, like ink.
+    var light: Bool
 }
 
 /// What one frame draws.
@@ -21,6 +23,8 @@ struct RippleFrame {
     var modules: Int
     /// The computer's answer goes out this frame.
     var answer: Bool
+    /// The camera's newest picture, while it's wanted.
+    var camera: CameraFrame?
 }
 
 /// Laid out as Ripples.metal's FieldUniforms.
@@ -44,6 +48,25 @@ private struct FieldUniforms {
     var charge: Float
     var burst: Float
     var modules: Int32
+    var front: Float
+    var entering: Float
+}
+
+/// Laid out as Ripples.metal's CameraUniforms.
+private struct CameraUniforms {
+    var uncode: simd_float3x3
+    var window: SIMD4<Float>
+    var accent: SIMD3<Float>
+    var screen: SIMD2<Float>
+    var fill: SIMD2<Float>
+    var unit: Float
+    var front: Float
+    var gather: Float
+    var entrance: Float
+    var alpha: Float
+    var shade: Float
+    var lifted: Float
+    var light: Float
 }
 
 /// Laid out as Ripples.metal's Glow.
@@ -54,11 +77,14 @@ private struct Glow {
 
 /// Draws the pairing screen's field, as the pairing-scan preview does: dots on a swelling floor,
 /// calls going back and forth between the phone and the computer as rings and packets, and the
-/// scan's fold, lock and burst on top.
+/// scan's camera in dots under it, with the lock and burst on top.
 final class RippleRenderer: NSObject, MTKViewDelegate {
     private let queue: MTLCommandQueue
     private let dots: MTLRenderPipelineState
     private let glows: MTLRenderPipelineState
+    private let picture: MTLRenderPipelineState
+    /// What the camera shows before its first picture.
+    private let black: MTLTexture
     private var moduleBuffer: MTLBuffer
     private var moduleBytes: [UInt8] = []
     private var pulses: [SIMD4<Float>] = []
@@ -105,9 +131,12 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     private static let maxGlows = 72
 
     init?(view: MTKView, palette: RipplePalette) {
+        let blank = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 1, height: 1, mipmapped: false)
         guard let device = view.device, let queue = device.makeCommandQueue(), let library = device.makeDefaultLibrary(),
-            let empty = device.makeBuffer(length: 4)
+            let empty = device.makeBuffer(length: 4), let black = device.makeTexture(descriptor: blank)
         else { return nil }
+        black.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8](arrayLiteral: 0, 0, 0, 255), bytesPerRow: 4)
+        self.black = black
         self.queue = queue
         self.palette = palette
         moduleBuffer = empty
@@ -127,6 +156,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             }
             dots = try pipeline("dotVertex", "dotFragment")
             glows = try pipeline("glowVertex", "glowFragment")
+            picture = try pipeline("cameraVertex", "cameraFragment")
         } catch {
             rippleLog.error("Ripple pipelines failed: \(String(describing: error), privacy: .public)")
             return nil
@@ -206,10 +236,27 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             viewProjection: vp, code: s.code, window: s.window, eye: eye, base: palette.base, hot: palette.hot,
             scan: scanHot, screen: screen, time: Float(time), px: px, unit: unit, baseAlpha: palette.baseAlpha,
             gather: s.gather, clear: s.clear, rest: s.rest, lock: s.lock, charge: s.charge, burst: s.burst,
-            modules: Int32(moduleBytes.isEmpty ? 0 : f.modules))
+            modules: Int32(moduleBytes.isEmpty ? 0 : f.modules), front: s.front, entering: s.entering ? 1 : 0)
         var waves = [SIMD4<Float>](repeating: .zero, count: Self.slots)
         for (i, p) in pulses.enumerated() { waves[i] = p }
         waves += packets
+
+        if s.camera, s.cameraAlpha > 0 {
+            let texture = f.camera?.texture ?? black
+            // Filled as a camera app's preview is: cropped to the screen, never letterboxed.
+            let image = SIMD2<Float>(Float(texture.width), Float(texture.height))
+            let fill = screen / (image * max(screen.x / image.x, screen.y / image.y))
+            var camera = CameraUniforms(
+                uncode: s.code.inverse, window: s.window, accent: scanHot, screen: screen, fill: fill, unit: unit,
+                front: s.front, gather: s.gather, entrance: s.entrance, alpha: s.cameraAlpha, shade: s.shade,
+                lifted: s.lifted ? 1 : 0, light: palette.light ? 1 : 0)
+            encoder.setRenderPipelineState(picture)
+            encoder.setFragmentBytes(&camera, length: MemoryLayout<CameraUniforms>.stride, index: 0)
+            encoder.setFragmentTexture(texture, index: 0)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            // The picture's buffer goes back to the camera only once the GPU is done with it.
+            if let held = f.camera { commands.addCompletedHandler { _ in withExtendedLifetime(held) {} } }
+        }
 
         encoder.setRenderPipelineState(dots)
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<FieldUniforms>.stride, index: 0)
@@ -229,10 +276,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         }
         encoder.endEncoding()
         guard let drawable = view.currentDrawable else { return }
-        // The camera's window moves in the same transaction as this frame's dots.
+        commands.present(drawable)
         commands.commit()
-        commands.waitUntilScheduled()
-        drawable.present()
     }
 
     /// A ring from where a finger touched the floor, `point` in a view of `size`. False when it

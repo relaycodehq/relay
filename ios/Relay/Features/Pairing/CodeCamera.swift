@@ -1,17 +1,30 @@
+import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import Metal
 import UIKit
+import os
 import Vision
-import VisionKit
 
-/// The camera behind the viewfinder: it reports the first code it reads, with the code's corners
-/// in its view's points (top left, top right, bottom right, bottom left), then follows those corners.
+/// One picture from the camera, upright, and what backs it, kept alive while the GPU reads it.
+nonisolated struct CameraFrame: @unchecked Sendable {
+    let texture: MTLTexture
+    let backing: AnyObject?
+}
+
+/// The camera behind the field: its pictures go to the renderer, which draws them in dots, and it
+/// reports the first code it reads with the code's corners in the stage's points (top left, top
+/// right, bottom right, bottom left), then follows those corners.
 protocol CodeCamera: AnyObject {
-    var controller: UIViewController { get }
+    /// The newest picture; nil until the first.
+    var latest: CameraFrame? { get }
     /// Says whether the code is one to follow; a code it isn't, the camera doesn't report again.
     var onSeen: (SeenCode, [CGPoint]) -> Bool { get set }
     var onMoved: ([CGPoint]) -> Void { get set }
-    func start() throws
+    var onFailed: () -> Void { get set }
+    /// The size in points the picture fills, as a camera app's does; the corners are in it.
+    var stage: CGSize { get set }
+    func start()
     func stop()
 }
 
@@ -20,61 +33,171 @@ enum CodeCameras {
         #if targetEnvironment(simulator)
             true
         #else
-            DataScannerViewController.isSupported
+            LiveCamera.device() != nil
         #endif
     }
 
-    static func make() -> CodeCamera {
+    static func make(_ device: MTLDevice) -> CodeCamera {
         #if targetEnvironment(simulator)
-            StandInCamera()
+            StandInCamera(device)
         #else
-            VisionCamera()
+            LiveCamera(device)
         #endif
+    }
+
+    /// Where a point of the picture (0..1, from its bottom left, as Vision gives it) shows on a
+    /// stage the picture fills.
+    static func onStage(_ p: CGPoint, image: CGSize, stage: CGSize) -> CGPoint {
+        let s = max(stage.width / image.width, stage.height / image.height)
+        return CGPoint(
+            x: (p.x - 0.5) * image.width * s + stage.width / 2, y: (0.5 - p.y) * image.height * s + stage.height / 2)
     }
 }
 
-/// VisionKit's live scanner with its own marks off: the viewfinder's dots are the marks.
-final class VisionCamera: NSObject, CodeCamera, DataScannerViewControllerDelegate {
-    private let scanner = DataScannerViewController(
-        recognizedDataTypes: [.barcode(symbologies: [.qr])], qualityLevel: .balanced, recognizesMultipleItems: false,
-        isHighFrameRateTrackingEnabled: true, isPinchToZoomEnabled: false, isGuidanceEnabled: false,
-        isHighlightingEnabled: false)
-    private var followed: RecognizedItem.ID?
-    private var refused = Set<RecognizedItem.ID>()
+/// The back camera, read for QR codes with Vision.
+final class LiveCamera: CodeCamera {
+    private let feed: CameraFeed
+    private var followed: String?
+    private var refused = Set<String>()
     var onSeen: (SeenCode, [CGPoint]) -> Bool = { _, _ in false }
     var onMoved: ([CGPoint]) -> Void = { _ in }
-    var controller: UIViewController { scanner }
+    var onFailed: () -> Void = {}
+    var stage = CGSize.zero
+    var latest: CameraFrame? { feed.latest }
 
-    override init() {
-        super.init()
-        scanner.delegate = self
+    /// The camera to scan with. One made of several hands over to the ultra wide for a code held
+    /// closer than the wide one can focus.
+    static func device() -> AVCaptureDevice? {
+        for kind in [AVCaptureDevice.DeviceType.builtInTripleCamera, .builtInDualWideCamera, .builtInWideAngleCamera] {
+            if let device = AVCaptureDevice.default(kind, for: .video, position: .back) { return device }
+        }
+        return nil
     }
 
-    func start() throws { try scanner.startScanning() }
-    func stop() { scanner.stopScanning() }
+    init(_ device: MTLDevice) {
+        feed = CameraFeed(device)
+        feed.sighted = { [weak self] sighting in
+            Task { @MainActor in self?.sighted(sighting) }
+        }
+        feed.failed = { [weak self] in
+            Task { @MainActor in self?.onFailed() }
+        }
+    }
 
-    func dataScanner(_ scanner: DataScannerViewController, didAdd added: [RecognizedItem], allItems: [RecognizedItem]) {
-        for item in added {
-            guard followed == nil, !refused.contains(item.id), case .barcode(let code) = item,
-                let text = code.payloadStringValue
-            else { continue }
-            let modules = CodeModules.read(code.observation, text: text)
-            if onSeen(SeenCode(text: text, size: modules.size, modules: modules.dark), Self.corners(code.bounds)) {
-                followed = item.id
-            } else {
-                refused.insert(item.id)
+    func start() {
+        guard let device = Self.device() else { return onFailed() }
+        feed.start(device)
+    }
+
+    func stop() { feed.stop() }
+
+    private func sighted(_ s: CameraFeed.Sighting) {
+        let code = s.observation
+        guard let text = code.payloadStringValue, !refused.contains(text), stage.width > 0 else { return }
+        let corners = [code.topLeft, code.topRight, code.bottomRight, code.bottomLeft].map {
+            CodeCameras.onStage($0, image: s.image, stage: stage)
+        }
+        if let followed {
+            if followed == text { onMoved(corners) }
+            return
+        }
+        let modules = CodeModules.read(code, text: text)
+        if onSeen(SeenCode(text: text, size: modules.size, modules: modules.dark), corners) {
+            followed = text
+        } else {
+            refused.insert(text)
+        }
+    }
+}
+
+/// The capture session, off the main thread: each picture becomes a Metal texture, and Vision
+/// looks for a code in as many of them as it keeps up with.
+private nonisolated final class CameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    struct Sighting: @unchecked Sendable {
+        let observation: VNBarcodeObservation
+        /// The picture's size in pixels.
+        let image: CGSize
+    }
+
+    private let session = AVCaptureSession()
+    private let output = AVCaptureVideoDataOutput()
+    private let pictures = DispatchQueue(label: "dev.relay.camera")
+    private let reading = DispatchQueue(label: "dev.relay.camera.read", qos: .userInitiated)
+    private var cache: CVMetalTextureCache?
+    private let newest = OSAllocatedUnfairLock<CameraFrame?>(initialState: nil)
+    private let busy = OSAllocatedUnfairLock(initialState: false)
+    var sighted: @Sendable (Sighting) -> Void = { _ in }
+    var failed: @Sendable () -> Void = {}
+
+    var latest: CameraFrame? { newest.withLock { $0 } }
+
+    init(_ device: MTLDevice) {
+        super.init()
+        CVMetalTextureCacheCreate(nil, nil, device, nil, &cache)
+    }
+
+    func start(_ device: AVCaptureDevice) {
+        pictures.async { [self] in
+            do {
+                try configure(device)
+                session.startRunning()
+            } catch {
+                failed()
             }
         }
     }
 
-    func dataScanner(_ scanner: DataScannerViewController, didUpdate updated: [RecognizedItem], allItems: [RecognizedItem]) {
-        for item in updated where item.id == followed {
-            if case .barcode(let code) = item { onMoved(Self.corners(code.bounds)) }
+    func stop() {
+        pictures.async { [self] in
+            session.stopRunning()
+            newest.withLock { $0 = nil }
         }
     }
 
-    private static func corners(_ b: RecognizedItem.Bounds) -> [CGPoint] {
-        [b.topLeft, b.topRight, b.bottomRight, b.bottomLeft]
+    private func configure(_ device: AVCaptureDevice) throws {
+        guard session.inputs.isEmpty else { return }
+        let input = try AVCaptureDeviceInput(device: device)
+        session.beginConfiguration()
+        defer { session.commitConfiguration() }
+        session.sessionPreset = .hd1920x1080
+        guard session.canAddInput(input), session.canAddOutput(output) else { throw CocoaError(.featureUnsupported) }
+        session.addInput(input)
+        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: pictures)
+        session.addOutput(output)
+        if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
+        }
+        try device.lockForConfiguration()
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+        if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+        // Framed as the wide camera's 1x, so the system can go wider for a close code.
+        if let wide = device.virtualDeviceSwitchOverVideoZoomFactors.first { device.videoZoomFactor = CGFloat(truncating: wide) }
+        device.unlockForConfiguration()
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sample: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let pixels = CMSampleBufferGetImageBuffer(sample), let cache else { return }
+        let w = CVPixelBufferGetWidth(pixels), h = CVPixelBufferGetHeight(pixels)
+        var made: CVMetalTexture?
+        CVMetalTextureCacheCreateTextureFromImage(nil, cache, pixels, nil, .bgra8Unorm, w, h, 0, &made)
+        if let made, let texture = CVMetalTextureGetTexture(made) {
+            let frame = CameraFrame(texture: texture, backing: made)
+            newest.withLock { $0 = frame }
+        }
+        guard busy.withLock({ was in defer { was = true }; return !was }) else { return }
+        let image = CGSize(width: w, height: h)
+        nonisolated(unsafe) let held = pixels
+        reading.async { [self] in
+            defer { busy.withLock { $0 = false } }
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.qr]
+            try? VNImageRequestHandler(cvPixelBuffer: held, orientation: .up).perform([request])
+            if let code = request.results?.first(where: { $0.payloadStringValue != nil }) {
+                sighted(Sighting(observation: code, image: image))
+            }
+        }
     }
 }
 
@@ -126,14 +249,23 @@ enum CodeModules {
     /// (`SIMCTL_CHILD_RELAY_STANDIN_PAIR=… xcrun simctl launch`), so the fixture desktop pairs it.
     final class StandInCamera: CodeCamera {
         private let screen = StandInScreen()
+        private let device: MTLDevice
+        /// Drawn in turn, so a picture isn't drawn over while the GPU still reads it.
+        private var textures: [MTLTexture] = []
+        private var next = 0
         private var link: CADisplayLink?
         private var started = 0.0
         private var reported = false
+        private var following = false
+        private(set) var latest: CameraFrame?
         var onSeen: (SeenCode, [CGPoint]) -> Bool = { _, _ in false }
         var onMoved: ([CGPoint]) -> Void = { _ in }
-        var controller: UIViewController { screen }
+        var onFailed: () -> Void = {}
+        var stage = CGSize.zero
 
-        func start() throws {
+        init(_ device: MTLDevice) { self.device = device }
+
+        func start() {
             started = CACurrentMediaTime()
             let link = CADisplayLink(target: self, selector: #selector(step))
             link.add(to: .main, forMode: .common)
@@ -143,19 +275,48 @@ enum CodeModules {
         func stop() {
             link?.invalidate()
             link = nil
+            latest = nil
         }
 
         @objc private func step() {
+            guard stage.width > 0 else { return }
             let t = CACurrentMediaTime() - started
+            screen.view.frame = CGRect(origin: .zero, size: stage)
             screen.sway(t)
+            // A camera takes a moment to give its first picture.
+            if t > 0.25 { latest = picture() }
             guard t > 2.6 else { return }
             if !reported {
                 reported = true
                 let modules = CodeModules.read(screen.observation, text: screen.text)
-                if !onSeen(SeenCode(text: screen.text, size: modules.size, modules: modules.dark), screen.corners) { stop() }
-            } else {
+                following = onSeen(SeenCode(text: screen.text, size: modules.size, modules: modules.dark), screen.corners)
+            } else if following {
                 onMoved(screen.corners)
             }
+        }
+
+        /// The screen drawn into the next texture, two pixels a point.
+        private func picture() -> CameraFrame? {
+            let w = Int(stage.width * 2), h = Int(stage.height * 2)
+            if textures.first?.width != w || textures.first?.height != h {
+                let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
+                d.usage = .shaderRead
+                textures = (0..<3).compactMap { _ in device.makeTexture(descriptor: d) }
+            }
+            guard textures.count == 3,
+                let context = CGContext(
+                    data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                    space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
+                let data = context.data
+            else { return nil }
+            context.translateBy(x: 0, y: CGFloat(h))
+            context.scaleBy(x: 2, y: -2)
+            screen.view.layer.render(in: context)
+            next = (next + 1) % 3
+            let texture = textures[next]
+            texture.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: data, bytesPerRow: w * 4)
+            return CameraFrame(texture: texture, backing: nil)
         }
     }
 
