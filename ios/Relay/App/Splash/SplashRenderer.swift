@@ -48,7 +48,8 @@ final class SplashRenderer: NSObject, MTKViewDelegate {
 
     private static let samples = 1800
     private static let wakeSamples = 900
-    private static let wakeWidth = 16.0
+    // Its soft edges eat into it, so a little wider cuts the splash as wide as the ribbon.
+    private static let wakeWidth = 1.4
     private static let floats = 13
     private static let mainWidths = widths(samples)
     private static let wakeWidths = widths(wakeSamples)
@@ -198,7 +199,7 @@ final class SplashRenderer: NSObject, MTKViewDelegate {
         encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: strip.length / (Self.floats * 4))
     }
 
-    /// The strip for the ribbon whose tail is at `tail`; `scale` widens it (the wake is wide).
+    /// The strip for the ribbon whose tail is at `tail`; `scale` widens it (the wake is a little wider).
     private func build(_ tail: Double, _ samples: Int, _ scale: Double) -> MTLBuffer? {
         let guide = PullSplash.guide
         let span = PullSplash.span
@@ -226,15 +227,13 @@ final class SplashRenderer: NSObject, MTKViewDelegate {
             let n0 = simd_cross(g.t, g.b)
             let across = g.b * cos(g.twist) + n0 * sin(g.twist)
             let normal = simd_cross(g.t, across)
-            let x = min(max((u - PullSplash.wakeFrom) / 2.5, 0), 1)
-            let wake = x * x * (3 - 2 * x)
             for side in 0...1 {
                 put(g.p + across * ((Double(side) - 0.5) * w))
                 put(normal)
                 put(g.t)
                 put(s)
                 put(Double(side))
-                put(wake)
+                put(1)
                 put(w)
             }
         }

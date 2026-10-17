@@ -12,9 +12,10 @@ nonisolated struct PullFrame {
 }
 
 /// The splash's exit, as on Android: the R the launch screen showed gets its leg yanked, the
-/// ribbon unthreads itself out of the R along the guide and whips past the camera, and wherever
-/// it has passed the splash is wiped away to the app beneath. Times are seconds since the
-/// overlay's first moving frame.
+/// ribbon unthreads itself out of the R along the guide and whips past the camera. The splash is
+/// cut away exactly where the ribbon has been, at its own width: an R-shaped window as it
+/// unthreads, then its path, then the lens it flies through. What it never touched clears while
+/// it fills the lens. Times are seconds since the overlay's first moving frame.
 nonisolated enum PullSplash {
     /// World units from the camera to the R; the exit's flight is laid out around it.
     static let cameraDistance = 40.0
@@ -28,8 +29,8 @@ nonisolated enum PullSplash {
 
     static let appScaleFrom = 1.045
     private static let hold = 0.06
-    /// Stretches the whole pull; 1.0 was the browser prototype's pace, which felt rushed.
-    private static let pace = 1.3
+    /// Stretches the whole pull; the browser prototype's 1.0 felt rushed, and so did 1.3.
+    private static let pace = 1.625
     private static let pull = 0.98 * pace
     static let duration = hold + 1.06 * pace
 
@@ -59,9 +60,6 @@ nonisolated enum PullSplash {
     /// The ribbon's length: the R, from its top tip to the end of its leg.
     static let span = guide.knotArc[RelayR.knots.count - 1]
 
-    /// Past here the ribbon has left the R, and its wake starts wiping the splash.
-    static let wakeFrom = span + 1.2
-
     static func frame(_ t: Double) -> PullFrame {
         var out = PullFrame()
         let q = progress(t, hold, hold + pull)
@@ -70,7 +68,7 @@ nonisolated enum PullSplash {
         out.tail = (guide.length - span) * pow(q, 2.7) + tug
         out.ribbon = t < duration
         out.wake = t >= hold
-        out.backdrop = Float(1 - smooth(t, hold + 0.86 * pace, hold + 1.02 * pace))
+        out.backdrop = Float(1 - smooth(t, hold + 0.80 * pace, hold + 0.87 * pace))
         let settle = progress(t, hold + 0.36 * pace, duration)
         out.appScale = appScaleFrom - (appScaleFrom - 1) * (1 - pow(1 - settle, 3))
         out.done = t >= duration

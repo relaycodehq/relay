@@ -20,8 +20,10 @@ internal class PullFrame {
 
 /**
  * The splash's exit: the R the system splash showed gets its leg yanked, the ribbon unthreads
- * itself out of the R along the guide and whips past the camera, and wherever it has passed the
- * splash is wiped away to the app beneath. Times are seconds since the overlay's first frame.
+ * itself out of the R along the guide and whips past the camera. The splash is cut away exactly
+ * where the ribbon has been, at its own width: an R-shaped window as it unthreads, then its
+ * path, then the lens it flies through. What it never touched clears while it fills the lens.
+ * Times are seconds since the overlay's first frame.
  */
 internal object PullSplash {
     /** World units from the camera to the R; the exit's flight is laid out around it. */
@@ -36,8 +38,8 @@ internal object PullSplash {
 
     const val APP_SCALE_FROM = 1.045f
     private const val HOLD = 0.06
-    /** Stretches the whole pull; 1.0 was the browser prototype's pace, which felt rushed. */
-    private const val PACE = 1.3
+    /** Stretches the whole pull; the browser prototype's 1.0 felt rushed, and so did 1.3. */
+    private const val PACE = 1.625
     private const val PULL = 0.98 * PACE
     const val DURATION = HOLD + 1.06 * PACE
 
@@ -64,9 +66,6 @@ internal object PullSplash {
     /** The ribbon's length: the R, from its top tip to the end of its leg. */
     val span = guide.knotArc[RelayR.knots.size - 1]
 
-    /** Past here the ribbon has left the R, and its wake starts wiping the splash. */
-    val wakeFrom = span + 1.2
-
     fun frame(t: Double, out: PullFrame) {
         val q = progress(t, HOLD, HOLD + PULL)
         // A tiny tug back into the knot before the yank.
@@ -74,7 +73,7 @@ internal object PullSplash {
         out.tail = (guide.length - span) * q.pow(2.7) + tug
         out.ribbon = t < DURATION
         out.wake = t >= HOLD
-        out.backdrop = 1f - smooth(t, HOLD + 0.86 * PACE, HOLD + 1.02 * PACE).toFloat()
+        out.backdrop = 1f - smooth(t, HOLD + 0.80 * PACE, HOLD + 0.87 * PACE).toFloat()
         val settle = progress(t, HOLD + 0.36 * PACE, DURATION)
         out.appScale = APP_SCALE_FROM - (APP_SCALE_FROM - 1f) * (1 - (1 - settle).pow(3)).toFloat()
         out.done = t >= DURATION

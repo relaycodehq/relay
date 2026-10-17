@@ -170,12 +170,11 @@ internal class SplashRenderer(
         GLES30.glBindVertexArray(0)
     }
 
-    /** Fills the strip for the ribbon whose tail is at [tail]; [scale] widens it (the wake is wide). */
+    /** Fills the strip for the ribbon whose tail is at [tail]; [scale] widens it (the wake is a little wider). */
     private fun build(tail: Double, samples: Int, scale: Double): Int {
         val guide = PullSplash.guide
         val span = PullSplash.span
         val widths = if (samples == SAMPLES) mainWidths else wakeWidths
-        val wakeFrom = PullSplash.wakeFrom
         val out = vertices
         out.clear()
         val g = sample
@@ -195,14 +194,12 @@ internal class SplashRenderer(
             val nx = t[1] * wz - t[2] * wy
             val ny = t[2] * wx - t[0] * wz
             val nz = t[0] * wy - t[1] * wx
-            val x = ((u - wakeFrom) / 2.5).coerceIn(0.0, 1.0)
-            val wake = x * x * (3 - 2 * x)
             for (side in 0..1) {
                 val k = (side - 0.5) * w
                 out.put((g.p[0] + wx * k).toFloat()).put((g.p[1] + wy * k).toFloat()).put((g.p[2] + wz * k).toFloat())
                 out.put(nx.toFloat()).put(ny.toFloat()).put(nz.toFloat())
                 out.put(t[0].toFloat()).put(t[1].toFloat()).put(t[2].toFloat())
-                out.put(s.toFloat()).put(side.toFloat()).put(wake.toFloat()).put(w.toFloat())
+                out.put(s.toFloat()).put(side.toFloat()).put(1f).put(w.toFloat())
             }
         }
         out.flip()
@@ -233,7 +230,8 @@ internal class SplashRenderer(
         private const val FLOATS = 13
         private const val SAMPLES = 1800
         private const val WAKE_SAMPLES = 900
-        private const val WAKE_WIDTH = 16.0
+        // Its soft edges eat into it, so a little wider cuts the splash as wide as the ribbon.
+        private const val WAKE_WIDTH = 1.4
         private val ATTRIBUTES = listOf(Triple(0, 3, 0), Triple(1, 3, 3), Triple(2, 3, 6), Triple(3, 2, 9), Triple(4, 1, 11), Triple(5, 1, 12))
 
         private val mainWidths = widths(SAMPLES)
