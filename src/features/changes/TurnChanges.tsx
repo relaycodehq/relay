@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ContextMenu } from "@base-ui/react/context-menu";
-import { FolderOpen, Undo2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FolderTree, List, RefreshCw, Undo2 } from "lucide-react";
 import { api } from "../../lib/api";
 import type { TurnDiffTarget } from "./turn-diff";
-import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
-import { ErrorBox } from "../../ui/ui";
-import { revealLabel } from "../../lib/mod-key";
-import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { TurnFileList } from "./TurnFileList";
+import { useSavedChanges } from "./useSavedChanges";
+import { ErrorBox, IconButton } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import "./changed-files.css";
+import "./working-tree.css";
 
 const turnSides = { deletions: "Before turn", additions: "After turn" };
 const worktreeSides = { deletions: "Branched from", additions: "Worktree" };
@@ -20,17 +19,23 @@ const worktreeSides = { deletions: "Branched from", additions: "Worktree" };
 /** What one agent turn changed, from the snapshots Relay took around it. */
 export function TurnChanges({
   target,
+  workspace,
   slots,
   onClose,
   onOpenFile,
 }: {
   target: TurnDiffTarget;
+  /** Whose local changes list this one shares its folder grouping with. */
+  workspace?: string;
   slots: PaneSlots;
-  onClose: () => void;
+  /** Back to the local changes; absent where a switch in the title does that. */
+  onClose?: () => void;
   onOpenFile: (path: string) => void;
 }) {
   const [path, setPath] = useState(target.path ?? target.files[0]?.path);
   const [revealError, setRevealError] = useState<string>();
+  const { grouped, setGrouped } = useSavedChanges(workspace);
+  const qc = useQueryClient();
   const sides = target.worktree ? worktreeSides : turnSides;
   const diff = useQuery({
     queryKey: target.worktree
@@ -63,10 +68,37 @@ export function TurnChanges({
         )}
       {slots.actions &&
         createPortal(
-          <button onClick={onClose}>
-            <Undo2 size={15} />
-            Local changes
-          </button>,
+          <>
+            <IconButton
+              label={
+                grouped
+                  ? "Folders: show a flat list"
+                  : "Flat list: group by folder"
+              }
+              onClick={() => setGrouped(!grouped)}
+            >
+              {grouped ? <FolderTree size={14} /> : <List size={14} />}
+            </IconButton>
+            {target.worktree && (
+              <IconButton
+                label="Refresh worktree changes"
+                onClick={() => {
+                  void qc.invalidateQueries({
+                    queryKey: ["worktree", target.chatId],
+                  });
+                  void diff.refetch();
+                }}
+              >
+                <RefreshCw size={15} />
+              </IconButton>
+            )}
+            {onClose && (
+              <button onClick={onClose}>
+                <Undo2 size={15} />
+                Local changes
+              </button>
+            )}
+          </>,
           slots.actions,
         )}
       <div className="working-content">
@@ -78,42 +110,13 @@ export function TurnChanges({
           }
           count={target.files.length}
         >
-          {target.files.map((f) => (
-            <ContextMenu.Root key={f.path}>
-              <ContextMenu.Trigger
-                render={
-                  <div
-                    className={`working-file ${f.path === path ? "selected" : ""}`}
-                  />
-                }
-              >
-                <button
-                  className="working-select turn-file"
-                  title={f.path}
-                  onClick={() => setPath(f.path)}
-                >
-                  <FileEntryIcon path={f.path} directory={false} />
-                  <MiddleTruncate text={f.path} kind="path" title={null} />
-                  {!f.binary && <DiffStatLabel stat={f} />}
-                </button>
-              </ContextMenu.Trigger>
-              <ContextMenu.Portal>
-                <ContextMenu.Positioner className="sb-menu-positioner">
-                  <ContextMenu.Popup className="sb-menu">
-                    <ContextMenu.Item
-                      className="sb-menu-item"
-                      onClick={() => reveal(f.path)}
-                    >
-                      <span className="sb-menu-label">
-                        <FolderOpen size={13} />
-                        {revealLabel}
-                      </span>
-                    </ContextMenu.Item>
-                  </ContextMenu.Popup>
-                </ContextMenu.Positioner>
-              </ContextMenu.Portal>
-            </ContextMenu.Root>
-          ))}
+          <TurnFileList
+            files={target.files}
+            selected={path}
+            grouped={grouped}
+            onPick={setPath}
+            onReveal={reveal}
+          />
           {revealError && <ErrorBox error={new Error(revealError)} />}
         </ChangesSidebar>
         <ChangesReview

@@ -22,8 +22,8 @@ export const changeLabels: Record<ChangeKind, string> = {
 };
 
 /** Files under their folder, in the order the folders first appear. */
-export function byFolder(files: WorkingChange[]) {
-  const folders = new Map<string, WorkingChange[]>();
+export function byFolder<T extends { path: string }>(files: T[]) {
+  const folders = new Map<string, T[]>();
   for (const c of files) {
     const folder = parentOf(c.path),
       group = folders.get(folder);

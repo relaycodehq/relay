@@ -130,6 +130,18 @@
 .turn-file .diff-stat {
   font-size: 10px;
 }
+/* No checkbox to make room for: flat rows sit at the folder's chevron, nested ones under its name. */
+.local-changes .working-file.turn-file-row {
+  padding-left: 0;
+}
+.local-changes .working-file.turn-file-row.nested {
+  padding-left: 18px;
+}
+.turn-file-row .diff-stat {
+  flex: none;
+  padding-right: 8px;
+  font-size: 10px;
+}
 /* A row and its rollback button, shown on hover. */
 .changed-files-item {
   position: relative;

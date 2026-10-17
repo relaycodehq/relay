@@ -1,0 +1,80 @@
+/* Tabs in the pane title whose underline sits on the header's bottom edge. */
+.pane-header-title:has(.worktree-switch) {
+  align-self: stretch;
+  padding-block: 0;
+}
+.pane-title-slot:has(.worktree-switch) {
+  align-self: stretch;
+}
+.worktree-switch {
+  display: flex;
+  align-self: stretch;
+  gap: 14px;
+  margin-left: 4px;
+  /* After the branch chips, whichever portal mounted first. */
+  order: 1;
+  flex-shrink: 0;
+}
+.worktree-switch button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  /* As much above as the underline takes below, so the words sit level with the title. */
+  padding: 2px 1px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  gap: 0.3em;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.worktree-switch button:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent;
+}
+.worktree-switch button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 550;
+}
+.worktree-switch-from {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.worktree-switch-vs {
+  display: none;
+}
+
+/* A narrow pane keeps the switch whole; what else the header says gives way. */
+@container (max-width: 640px) {
+  .pane-header:has(.worktree-switch) .pane-header-detail {
+    display: none;
+  }
+}
+/* The composer names the branch too. */
+@container (max-width: 560px) {
+  .pane-title-slot:has(.worktree-switch) .pane-chip {
+    display: none;
+  }
+}
+@container (max-width: 460px) {
+  .pane-header-title:has(.worktree-switch) > strong {
+    display: none;
+  }
+  .worktree-switch-against {
+    display: none;
+  }
+  .worktree-switch-vs {
+    display: inline;
+  }
+  .worktree-switch {
+    gap: 10px;
+    margin-left: 0;
+  }
+  .pane-header:has(.worktree-switch) {
+    gap: 4px;
+  }
+}

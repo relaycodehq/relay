@@ -67,6 +67,7 @@ export function ThreadChanges({
   opens,
   review,
   chatId,
+  inWorktree,
   onOpenThread,
   agentRunning,
 }: {
@@ -88,6 +89,8 @@ export function ThreadChanges({
     onConnect?: () => void;
   };
   chatId?: string;
+  /** The thread works in a worktree Relay made for it. */
+  inWorktree?: boolean;
   /** Opens a thread this one started, from a file it changed. */
   onOpenThread?: (chatId: string) => void;
   /** The thread's agent is at work in its folder. */
@@ -162,10 +165,12 @@ export function ThreadChanges({
           onViewing={view.setViewing}
           onOpenFile={editFile}
           turn={view.turnDiff}
+          onShowTurn={view.showTurn}
           onCloseTurn={() => view.closeTurn()}
           reveals={opens.changeReveals}
           onAsk={(code) => opens.ask({ text: "", code })}
           chatId={chatId}
+          inWorktree={inWorktree}
           onOpenThread={onOpenThread}
           agentRunning={agentRunning}
           onOpenOutside={(path) =>

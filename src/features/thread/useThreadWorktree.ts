@@ -23,6 +23,7 @@ import { threadStorage } from "../../lib/thread-storage";
 import { workspaceId } from "../../../shared/workspaces";
 import { chatKey } from "../../lib/chat-events";
 import { useNavigationLock } from "../../lib/navigation-lock";
+import { worktreeQuery } from "../changes/turn-diff";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -63,13 +64,7 @@ export function useThreadWorktree({
   useEffect(() => {
     if (!chat) threadStorage(id).branch.save(newBranch);
   }, [newBranch, !chat]);
-  const query = useQuery({
-    queryKey: ["worktree", chat?.id],
-    queryFn: () => api.projectWorktree(chat!.id),
-    enabled: !!chat?.worktree,
-    // Naming takes a second or two, and the agent starts right after.
-    refetchInterval: (q) => (q.state.data?.naming ? 400 : 5000),
-  });
+  const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree));
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
   const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;

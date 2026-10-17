@@ -7,7 +7,12 @@ import type { ProjectFileLink } from "../../shared/project-file-links";
 import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
-import type { TurnDiffTarget } from "../features/changes/turn-diff";
+import {
+  worktreeDiff,
+  worktreeQuery,
+  type TurnDiffTarget,
+} from "../features/changes/turn-diff";
+import { WorktreeSwitch } from "../features/changes/WorktreeSwitch";
 import type { FileTarget } from "./file-link-target";
 import { useNavigationLock } from "../lib/navigation-lock";
 import { useRequests, type RequestChannel } from "../lib/request-channel";
@@ -47,9 +52,11 @@ export function ProjectChanges({
   onOpenFile,
   onAsk,
   turn,
+  onShowTurn,
   onCloseTurn,
   reveals,
   chatId,
+  inWorktree,
   onOpenThread,
   onOpenOutside,
   agentRunning,
@@ -61,37 +68,61 @@ export function ProjectChanges({
   onOpenFile: (path: string, line?: number) => void;
   onAsk: (ref: CodeReference) => void;
   turn?: (TurnDiffTarget & { request: number }) | null;
+  onShowTurn: (target: TurnDiffTarget) => void;
   onCloseTurn: () => void;
   reveals: RequestChannel<ProjectFileLink>;
   /** The thread, whose agents' changes in other repositories list here too. */
   chatId?: string;
+  /** The thread works in a worktree Relay made, which can be diffed against its source branch. */
+  inWorktree?: boolean;
   onOpenThread?: (chatId: string) => void;
   onOpenOutside?: (path: string) => void;
   agentRunning?: boolean;
 }) {
+  const worktree = useQuery(worktreeQuery(chatId, !!inWorktree)).data;
+  const live = worktree?.path && !worktree.removed ? worktree : undefined;
+  const toggle = chatId && live && (
+    <WorktreeSwitch
+      slots={slots}
+      status={live}
+      showing={!turn ? "uncommitted" : turn.worktree ? "source" : "turn"}
+      onUncommitted={onCloseTurn}
+      onAgainstSource={() => {
+        if (!turn?.worktree) onShowTurn(worktreeDiff(chatId, live));
+      }}
+    />
+  );
   if (turn)
     return (
-      <TurnChanges
-        key={turn.request}
-        target={turn}
-        slots={slots}
-        onClose={onCloseTurn}
-        onOpenFile={onOpenFile}
-      />
+      <>
+        {toggle}
+        <TurnChanges
+          key={turn.request}
+          // The worktree's files keep changing while it stays open.
+          target={turn.worktree && live ? { ...turn, files: live.files } : turn}
+          workspace={where}
+          slots={slots}
+          onClose={toggle ? undefined : onCloseTurn}
+          onOpenFile={onOpenFile}
+        />
+      </>
     );
   return (
-    <LocalChanges
-      projectId={where}
-      slots={slots}
-      onOpenFile={onOpenFile}
-      onAsk={onAsk}
-      onSelection={(path) => onViewing({ path, viewed: 0, total: 0 })}
-      reveals={reveals}
-      chatId={chatId}
-      onOpenThread={onOpenThread}
-      onOpenOutside={onOpenOutside}
-      agentRunning={agentRunning}
-    />
+    <>
+      {toggle}
+      <LocalChanges
+        projectId={where}
+        slots={slots}
+        onOpenFile={onOpenFile}
+        onAsk={onAsk}
+        onSelection={(path) => onViewing({ path, viewed: 0, total: 0 })}
+        reveals={reveals}
+        chatId={chatId}
+        onOpenThread={onOpenThread}
+        onOpenOutside={onOpenOutside}
+        agentRunning={agentRunning}
+      />
+    </>
   );
 }
 
