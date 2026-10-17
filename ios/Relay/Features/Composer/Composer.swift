@@ -99,12 +99,13 @@ struct Composer: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, 8)
+            .padding(.bottom, 12)
             .contentShape(.rect(cornerRadius: 26))
             .onTapGesture { focused.wrappedValue = true }
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
         }
-        .padding(.horizontal, 10)
+        // In from the sides as far as the tab bar it takes over.
+        .padding(.horizontal, 20)
         .padding(.bottom, 6)
         .animation(.snappy(duration: 0.2), value: menuItems == nil)
         .task(id: commandsWanted) { await loadCommands() }
