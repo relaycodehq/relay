@@ -1,12 +1,6 @@
 import { createPortal } from "react-dom";
 import { Popover } from "@base-ui/react/popover";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  GitBranch,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GitBranch, RefreshCw } from "lucide-react";
 import {
   checkoutLabel,
   type WorkingTree,
@@ -50,13 +44,23 @@ export function ChangesToolbar({
   // Nothing to push once the upstream has every commit.
   const push = tree && (tree.ahead > 0 || !tree.upstream) && (
     <button
-      className="primary"
+      className="primary working-push"
       disabled={busy || !!blocked}
-      title={blocked}
+      // "Push 1…" reads as a cut-off label; the count stands apart instead.
+      aria-label={`Push${tree.ahead > 0 ? ` ${tree.ahead}` : ""}…`}
+      title={
+        blocked ??
+        (tree.ahead > 0
+          ? `Push ${tree.ahead} commit${tree.ahead === 1 ? "" : "s"}…`
+          : "Push…")
+      }
       onClick={onPush}
     >
-      <ArrowUp size={15} />
-      Push{tree.ahead > 0 && ` ${tree.ahead}`}…
+      <ArrowUp size={14} />
+      Push
+      {tree.ahead > 0 && (
+        <span className="working-push-count">{tree.ahead}</span>
+      )}
     </button>
   );
   const level = projectId ? (

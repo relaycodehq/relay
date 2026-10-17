@@ -144,6 +144,21 @@
   width: 28px;
   height: 28px;
 }
+/* A pane's own Push sits among its icons: outlined, not the window's loudest button. */
+.pane-header-actions > .working-push {
+  gap: 5px;
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.pane-header-actions > .working-push:hover:not(:disabled) {
+  background: var(--hover);
+}
+.working-push-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 
 /* Header toggle group */
 .pane-toggles {
