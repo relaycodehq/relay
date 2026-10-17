@@ -1,0 +1,7 @@
+# Generated from project.yml by XcodeGen
+Relay.xcodeproj/
+build/
+.build/
+DerivedData/
+xcuserdata/
+.swiftpm/

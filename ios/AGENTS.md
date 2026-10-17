@@ -1,0 +1,49 @@
+# Relay for iPhone (native)
+
+SwiftUI, iOS 26+, Liquid Glass from the system components. Talks to the
+desktop over the encrypted bridge, ported from the Kotlin app's `remote/`.
+The bridge spec is `../android/docs/protocol.md`; when it and the desktop's
+TS disagree, the TS wins (`../shared/remote*.ts`, `../electron/remote`).
+
+## Layout
+
+- `RelayKit/` Swift package, no UI, builds and tests on the Mac:
+  `RelayRemote` is the bridge (crypto, wire, pairing links, routes, delta
+  patches, models, `RemoteClient`).
+- `Relay/` the app: `App/` (entry, root, settings), `Connection/` (the
+  observable link to the active computer, Keychain pairings),
+  `Features/<name>/` per screen.
+- `project.yml` makes `Relay.xcodeproj` (`xcodegen` here); the project
+  isn't committed.
+
+## Build and test
+
+```
+cd ios/RelayKit && swift test                 # bridge tests, ~1s
+cd ios && xcodegen && xcodebuild -project Relay.xcodeproj -scheme Relay \
+  -destination 'generic/platform=iOS Simulator' build
+```
+
+`swift test` checks the Swift bridge against vectors the desktop's TS made
+(`Tests/RelayRemoteTests/Fixtures`, the same as Android's TsVectors.kt).
+The live test pairs with the real bridge under Node:
+
+```
+node_modules/.bin/jiti ios/scripts/live-desktop.ts /tmp/pair.txt &   # from the repo root
+RELAY_PAIR_URL_FILE=/tmp/pair.txt swift test --filter LiveBridgeTests
+```
+
+`--seed` gives that stand-in desktop sample threads that answer what the
+phone sends; the Simulator shares this computer's network, so
+`xcrun simctl openurl <sim> "$(cat /tmp/pair.txt)"` pairs it. Use a
+simulator of your own (`xcrun simctl create`), headless; Maestro drives it.
+Kill the stand-in by its PID.
+
+## Rules
+
+- `RemoteClient` is an actor on its own serial queue; socket callbacks land
+  there in order, which the sealed frames' counters need. `Dial` and `Race`
+  are only touched on that executor.
+- Native components first: let the system draw the glass (bars, sheets,
+  `.buttonStyle(.glass)`), no custom chrome copied from Android.
+- No pill badges as decoration; muted text instead.

@@ -1,0 +1,361 @@
+{
+ "pairing": [
+  [
+   "relay-remote://pair?h=192.168.1.2,100.100.1.1&p=47821&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop&n=Lubo%27s+Mac",
+   {
+    "hosts": [
+     "192.168.1.2",
+     "100.100.1.1"
+    ],
+    "port": 47821,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "Lubo's Mac"
+   }
+  ],
+  [
+   "  exp://10.0.0.5:8081/--/pair?h=host.ts.net&p=0x10&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop  ",
+   {
+    "hosts": [
+     "host.ts.net"
+    ],
+    "port": 16,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "Relay"
+   }
+  ],
+  [
+   "relay-remote://pair?h=a,b c,[fd7a:115c:a1e0::1]&p=1e3&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop&n=",
+   {
+    "hosts": [
+     "a",
+     "[fd7a:115c:a1e0::1]"
+    ],
+    "port": 1000,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "Relay"
+   }
+  ],
+  [
+   "relay-remote://pair?h=a&p=47821.5&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&p=&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&p=65536&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&p=1&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHwx&c=abcdefghijklmnop",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&p=1&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=short",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&h=b&p=1&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop&n=%E2%9C%93%ZZxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   {
+    "hosts": [
+     "a"
+    ],
+    "port": 1,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "✓%ZZxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  ],
+  [
+   "relay-remote://pair?h=a&p= 12 &k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop",
+   {
+    "hosts": [
+     "a"
+    ],
+    "port": 12,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "Relay"
+   }
+  ],
+  [
+   "relay-remote://pair",
+   null
+  ],
+  [
+   "https://example.com/pair?h=a&p=1&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop\nmore",
+   null
+  ],
+  [
+   "relay-remote://pair?h=a&p=1&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop\n",
+   {
+    "hosts": [
+     "a"
+    ],
+    "port": 1,
+    "key": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+    "code": "abcdefghijklmnop",
+    "name": "Relay"
+   }
+  ],
+  [
+   "no link here",
+   null
+  ]
+ ],
+ "url": "relay-remote://pair?h=192.168.1.2%2C%5Bfd7a%3A115c%3Aa1e0%3A%3A1%5D&p=47821&k=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&c=abcdefghijklmnop&n=Lubo%27s+Mac+%E2%9C%93+a%2Bb%26c%3Dd+%7E*",
+ "kinds": [
+  "tailscale",
+  "local",
+  "tailscale",
+  "tailscale",
+  "local",
+  "local",
+  "tailscale",
+  "local"
+ ],
+ "order": [
+  "192.168.1.2",
+  "100.128.0.1",
+  "10.0.0.1",
+  "mac.local",
+  "100.64.0.1",
+  "[fd7a:115c:a1e0::5]",
+  "mac.tail1234.ts.net",
+  "100.127.255.255"
+ ],
+ "orderTailscale": [
+  "100.64.0.1",
+  "[fd7a:115c:a1e0::5]",
+  "mac.tail1234.ts.net",
+  "100.127.255.255",
+  "192.168.1.2",
+  "100.128.0.1",
+  "10.0.0.1",
+  "mac.local"
+ ],
+ "learn": [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "z"
+ ],
+ "learnDup": [
+  "a",
+  "z",
+  "b"
+ ],
+ "prev": {
+  "id": "m1",
+  "role": "assistant",
+  "body": "Hi 😅 there",
+  "status": "streaming",
+  "created": 1,
+  "provider": "claude",
+  "version": 3,
+  "error": "x",
+  "trace": [
+   {
+    "kind": "commentary",
+    "id": "t1",
+    "text": "a"
+   },
+   {
+    "kind": "commentary",
+    "id": "t2",
+    "text": "b"
+   },
+   {
+    "kind": "commentary",
+    "id": "t3",
+    "text": "c"
+   }
+  ]
+ },
+ "patch": {
+  "id": "m1",
+  "set": {
+   "status": "complete",
+   "version": 5
+  },
+  "unset": [
+   "error"
+  ],
+  "body": {
+   "from": 6,
+   "text": "world 🎉"
+  },
+  "trace": {
+   "length": 2,
+   "items": [
+    [
+     1,
+     {
+      "kind": "commentary",
+      "id": "t2",
+      "text": "B"
+     }
+    ]
+   ]
+  },
+  "activity": {
+   "length": 1,
+   "items": [
+    [
+     0,
+     {
+      "id": "a1",
+      "kind": "command",
+      "label": "ls",
+      "status": "complete"
+     }
+    ]
+   ]
+  }
+ },
+ "applied": {
+  "id": "m1",
+  "role": "assistant",
+  "body": "Hi 😅 world 🎉",
+  "status": "complete",
+  "created": 1,
+  "provider": "claude",
+  "version": 5,
+  "trace": [
+   {
+    "kind": "commentary",
+    "id": "t1",
+    "text": "a"
+   },
+   {
+    "kind": "commentary",
+    "id": "t2",
+    "text": "B"
+   }
+  ],
+  "activity": [
+   {
+    "id": "a1",
+    "kind": "command",
+    "label": "ls",
+    "status": "complete"
+   }
+  ]
+ },
+ "sparse": {
+  "id": "m1",
+  "role": "assistant",
+  "body": "Hi 😅 there",
+  "status": "streaming",
+  "created": 1,
+  "provider": "claude",
+  "version": 3,
+  "error": "x",
+  "trace": [
+   {
+    "kind": "commentary",
+    "id": "t1",
+    "text": "a"
+   },
+   {
+    "kind": "commentary",
+    "id": "t2",
+    "text": "b"
+   },
+   {
+    "kind": "commentary",
+    "id": "t3",
+    "text": "c"
+   },
+   null,
+   {
+    "kind": "commentary",
+    "id": "t5",
+    "text": "e"
+   }
+  ]
+ },
+ "chatsPrev": [
+  {
+   "id": "b",
+   "projectId": "p",
+   "title": "B",
+   "scope": "project",
+   "updated": 5,
+   "created": 1
+  },
+  {
+   "id": "a",
+   "projectId": "p",
+   "title": "A",
+   "scope": "project",
+   "updated": 5,
+   "created": 1
+  },
+  {
+   "id": "c",
+   "projectId": "p",
+   "title": "C",
+   "scope": "project",
+   "updated": 3,
+   "created": 1
+  }
+ ],
+ "chatsPatch": {
+  "set": [
+   {
+    "id": "c",
+    "projectId": "p",
+    "title": "C2",
+    "scope": "project",
+    "updated": 9,
+    "created": 1
+   },
+   {
+    "id": "d",
+    "projectId": "p",
+    "title": "D",
+    "scope": "project",
+    "updated": 5,
+    "created": 1
+   }
+  ],
+  "remove": [
+   "b"
+  ]
+ },
+ "chatsApplied": [
+  {
+   "id": "c",
+   "projectId": "p",
+   "title": "C2",
+   "scope": "project",
+   "updated": 9,
+   "created": 1
+  },
+  {
+   "id": "a",
+   "projectId": "p",
+   "title": "A",
+   "scope": "project",
+   "updated": 5,
+   "created": 1
+  },
+  {
+   "id": "d",
+   "projectId": "p",
+   "title": "D",
+   "scope": "project",
+   "updated": 5,
+   "created": 1
+  }
+ ]
+}

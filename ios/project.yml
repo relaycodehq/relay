@@ -1,0 +1,77 @@
+# The Xcode project is generated from this: `xcodegen` in ios/.
+name: Relay
+options:
+  bundleIdPrefix: dev.relay
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+packages:
+  RelayKit:
+    path: RelayKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Set when signing for a device or TestFlight; the simulator needs none.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Relay:
+    type: application
+    platform: iOS
+    sources:
+      - path: Relay
+      # Android's copy, one source for both: display math typesets with it.
+      - path: ../android/app/src/main/assets/katex
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: RelayKit
+        product: RelayRemote
+      - package: RelayKit
+        product: RelayMarkdown
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.relay.ios
+        PRODUCT_NAME: Relay
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    info:
+      path: Relay/Info.plist
+      properties:
+        CFBundleDisplayName: Relay
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        # The R the splash pulls apart (App/Splash), centred on the app's background.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchMark
+          UIImageRespectsSafeAreaInsets: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # The browser loads the computer's dev servers from the phone's own loopback, over http.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
+        NSLocalNetworkUsageDescription: Relay connects to Relay on your computer over your network.
+        NSCameraUsageDescription: Scan the pairing code Relay shows on your computer, and take photos to send with a message.
+        NSMicrophoneUsageDescription: Dictate messages. Your computer turns the speech into text; nothing is kept on this phone.
+        # The desktop's QR code is a relay-remote:// link, so the Camera app opens it here too.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.relay.pair
+            CFBundleURLSchemes:
+              - relay-remote

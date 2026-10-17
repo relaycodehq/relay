@@ -1,0 +1,435 @@
+{
+ "activities": [
+  {
+   "id": "call-1",
+   "kind": "command",
+   "label": "npm run build",
+   "status": "complete"
+  },
+  {
+   "id": "call-2",
+   "kind": "command",
+   "label": "rg needle",
+   "status": "failed"
+  },
+  {
+   "id": "call-3",
+   "kind": "command",
+   "label": "sleep 5",
+   "status": "stopped"
+  },
+  {
+   "id": "call-4",
+   "kind": "command",
+   "label": "npm test",
+   "status": "running"
+  },
+  {
+   "id": "call-5",
+   "kind": "read",
+   "label": "src/app/AgentTurn.tsx",
+   "status": "complete"
+  },
+  {
+   "id": "call-6",
+   "kind": "read",
+   "label": "README.md",
+   "status": "failed"
+  },
+  {
+   "id": "call-7",
+   "kind": "file",
+   "label": "src/a.ts",
+   "status": "complete"
+  },
+  {
+   "id": "call-8",
+   "kind": "file",
+   "label": "src/b.ts +2 more",
+   "status": "complete",
+   "detail": "src/b.ts\nsrc/c.ts\nsrc/d.ts"
+  },
+  {
+   "id": "call-9",
+   "kind": "search",
+   "label": "useThreadScroll",
+   "status": "complete"
+  },
+  {
+   "id": "call-10",
+   "kind": "web",
+   "label": "swift regex lookahead",
+   "status": "complete"
+  },
+  {
+   "id": "call-11",
+   "kind": "agent",
+   "label": "Explore the bridge",
+   "status": "complete"
+  },
+  {
+   "id": "call-12",
+   "kind": "tool",
+   "label": "relay: start_threads",
+   "status": "complete"
+  },
+  {
+   "id": "call-13",
+   "kind": "tool",
+   "label": "AskUserQuestion",
+   "status": "complete",
+   "detail": "The user answered: \"Port?\"=\"5178\", \"Runner?\"=\"vitest\". Carry on."
+  },
+  {
+   "id": "call-14",
+   "kind": "tool",
+   "label": "AskUserQuestion",
+   "status": "failed"
+  },
+  {
+   "id": "call-15",
+   "kind": "tool",
+   "label": "request_user_input",
+   "status": "complete",
+   "questionAnswers": [
+    {
+     "question": "A?",
+     "answer": "b"
+    }
+   ]
+  }
+ ],
+ "commands": [
+  [
+   "rg foo src",
+   "rg"
+  ],
+  [
+   "cd app && npx vitest run",
+   "vitest"
+  ],
+  [
+   "/bin/zsh -lc 'rg -n \"x\" .'",
+   "rg"
+  ],
+  [
+   "bash -c \"cd web && npm test\"",
+   "npm"
+  ],
+  [
+   "FOO=1 sudo env BAR=2 make build",
+   "make"
+  ],
+  [
+   "for f in *.ts; do eslint $f; done",
+   "eslint"
+  ],
+  [
+   "if [ -f x ]; then cat x; fi",
+   "cat"
+  ],
+  [
+   "export A=1; ./scripts/run.sh --fast",
+   "run.sh"
+  ],
+  [
+   "cd only",
+   null
+  ],
+  [
+   "(git status)",
+   "git"
+  ]
+ ],
+ "labels": [
+  {
+   "id": "call-1",
+   "done": "Ran npm",
+   "live": "Running npm"
+  },
+  {
+   "id": "call-2",
+   "done": "Failed rg",
+   "live": "Running rg"
+  },
+  {
+   "id": "call-3",
+   "done": "Stopped sleep",
+   "live": "Running sleep"
+  },
+  {
+   "id": "call-4",
+   "done": "Ran npm",
+   "live": "Running npm"
+  },
+  {
+   "id": "call-5",
+   "done": "Read AgentTurn.tsx",
+   "live": "Reading AgentTurn.tsx"
+  },
+  {
+   "id": "call-6",
+   "done": "Failed to read README.md",
+   "live": "Reading README.md"
+  },
+  {
+   "id": "call-7",
+   "done": "Edited a.ts",
+   "live": "Editing a.ts"
+  },
+  {
+   "id": "call-8",
+   "done": "Edited b.ts +2 more",
+   "live": "Editing b.ts +2 more"
+  },
+  {
+   "id": "call-9",
+   "done": "Searched for useThreadScroll",
+   "live": "Searching for useThreadScroll"
+  },
+  {
+   "id": "call-10",
+   "done": "Searched the web",
+   "live": "Searching the web"
+  },
+  {
+   "id": "call-11",
+   "done": "Explore the bridge",
+   "live": "Explore the bridge"
+  },
+  {
+   "id": "call-12",
+   "done": "relay: start_threads",
+   "live": "relay: start_threads"
+  },
+  {
+   "id": "call-13",
+   "done": "Asked you 2 questions",
+   "live": "Waiting for your answer"
+  },
+  {
+   "id": "call-14",
+   "done": "Didn't get your answer",
+   "live": "Waiting for your answer"
+  },
+  {
+   "id": "call-15",
+   "done": "Asked you 1 question",
+   "live": "Waiting for your answer"
+  }
+ ],
+ "summaries": [
+  {
+   "ids": [
+    "call-1",
+    "call-1",
+    "call-5",
+    "call-5",
+    "call-7",
+    "call-8"
+   ],
+   "text": "Ran 1 command, read 1 file, and edited 4 files"
+  },
+  {
+   "ids": [
+    "call-1",
+    "call-2",
+    "call-3",
+    "call-4"
+   ],
+   "text": "Ran 1 command, 1 tool call failed, 1 tool call stopped, and 1 tool call still running"
+  },
+  {
+   "ids": [
+    "call-9",
+    "call-10",
+    "call-11",
+    "call-12",
+    "call-13",
+    "call-15"
+   ],
+   "text": "Searched code 1 time, searched the web 1 time, ran 1 agent, used 1 tool, and asked you 3 questions"
+  },
+  {
+   "ids": [
+    "call-7"
+   ],
+   "text": "Edited 1 file"
+  },
+  {
+   "ids": [],
+   "text": ""
+  },
+  {
+   "ids": [
+    "call-1"
+   ],
+   "dropped": {
+    "command": 4,
+    "failed": 2
+   },
+   "text": "Ran 5 commands and 2 tool calls failed"
+  }
+ ],
+ "durations": [
+  [
+   0,
+   "0s"
+  ],
+  [
+   999,
+   "0s"
+  ],
+  [
+   59999,
+   "59s"
+  ],
+  [
+   60000,
+   "1m 0s"
+  ],
+  [
+   184500,
+   "3m 4s"
+  ]
+ ],
+ "entries": [
+  {
+   "kind": "commentary",
+   "id": "c1",
+   "text": "Looking around."
+  },
+  {
+   "kind": "activity",
+   "id": "call-1",
+   "activity": {
+    "id": "call-1",
+    "kind": "command",
+    "label": "npm run build",
+    "status": "complete"
+   }
+  },
+  {
+   "kind": "activity",
+   "id": "call-5",
+   "activity": {
+    "id": "call-5",
+    "kind": "read",
+    "label": "src/app/AgentTurn.tsx",
+    "status": "complete"
+   }
+  },
+  {
+   "kind": "activity",
+   "id": "call-13",
+   "activity": {
+    "id": "call-13",
+    "kind": "tool",
+    "label": "AskUserQuestion",
+    "status": "complete",
+    "detail": "The user answered: \"Port?\"=\"5178\", \"Runner?\"=\"vitest\". Carry on."
+   }
+  },
+  {
+   "kind": "activity",
+   "id": "call-7",
+   "activity": {
+    "id": "call-7",
+    "kind": "file",
+    "label": "src/a.ts",
+    "status": "complete"
+   }
+  },
+  {
+   "kind": "commentary",
+   "id": "c2",
+   "text": "Done."
+  },
+  {
+   "kind": "activity",
+   "id": "call-9",
+   "activity": {
+    "id": "call-9",
+    "kind": "search",
+    "label": "useThreadScroll",
+    "status": "complete"
+   }
+  }
+ ],
+ "groups": [
+  {
+   "commentary": "c1"
+  },
+  {
+   "run": [
+    "call-1",
+    "call-5"
+   ]
+  },
+  {
+   "run": [
+    "call-13"
+   ]
+  },
+  {
+   "run": [
+    "call-7"
+   ]
+  },
+  {
+   "commentary": "c2"
+  },
+  {
+   "run": [
+    "call-9"
+   ]
+  }
+ ],
+ "words": [
+  [
+   "a",
+   0,
+   "Thinking"
+  ],
+  [
+   "a",
+   6000,
+   "Pondering"
+  ],
+  [
+   "a",
+   1792170922897,
+   "Chewing on it"
+  ],
+  [
+   "44444444-4444-4444-8444-000000000005",
+   0,
+   "Cogitating"
+  ],
+  [
+   "44444444-4444-4444-8444-000000000005",
+   6000,
+   "Brewing"
+  ],
+  [
+   "44444444-4444-4444-8444-000000000005",
+   1792170922897,
+   "Ruminating"
+  ],
+  [
+   "ünï",
+   0,
+   "Marinating"
+  ],
+  [
+   "ünï",
+   6000,
+   "Puzzling"
+  ],
+  [
+   "ünï",
+   1792170922897,
+   "Scheming"
+  ]
+ ]
+}

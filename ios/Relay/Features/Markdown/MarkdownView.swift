@@ -1,0 +1,150 @@
+import RelayMarkdown
+import SwiftUI
+
+/// An answer's markdown, block by block, its text selecting in place. `small` is for
+/// commentary between tool calls.
+struct MarkdownView: View {
+    let blocks: [MdBlock]
+    var small = false
+    /// Set back, as a quote is.
+    var secondary = false
+
+    init(_ text: String, small: Bool = false) {
+        blocks = markdownBlocks(text)
+        self.small = small
+        secondary = small
+    }
+
+    init(blocks: [MdBlock], small: Bool, secondary: Bool) {
+        self.blocks = blocks
+        self.small = small
+        self.secondary = secondary
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: small ? 6 : 12) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                BlockView(block: block, small: small, secondary: secondary)
+            }
+        }
+        .font(small ? .subheadline : .body)
+        .foregroundStyle(secondary ? .secondary : .primary)
+    }
+}
+
+private struct BlockView: View {
+    let block: MdBlock
+    let small: Bool
+    let secondary: Bool
+
+    private var look: TextLook { TextLook(style: small ? .subheadline : .body, secondary: secondary) }
+
+    var body: some View {
+        switch block {
+        case .paragraph(let text):
+            SelectableText(text: text, look: look)
+        case .heading(let level, let text):
+            SelectableText(
+                text: text,
+                look: TextLook(
+                    style: level == 1 ? .title3 : level == 2 ? .headline : .subheadline,
+                    weight: level == 2 ? nil : .semibold, secondary: secondary)
+            )
+            .padding(.top, 4)
+        case .code(let language, let text):
+            CodeBlock(language: language, code: text)
+        case .math(let tex, let closed):
+            MathBlock(tex: tex, closed: closed)
+        case .quote(let inner):
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 1.5).fill(.rule).frame(width: 3)
+                MarkdownView(blocks: inner, small: small, secondary: true)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        case .list(let ordered, let start, let items):
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        marker(ordered: ordered, number: start + i, checked: item.checked)
+                        MarkdownView(blocks: item.blocks, small: small, secondary: secondary)
+                    }
+                }
+            }
+        case .table(let header, let rows):
+            TableBlock(header: header, rows: rows)
+        case .rule:
+            Divider()
+        case .html(let raw):
+            Text(raw).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func marker(ordered: Bool, number: Int, checked: Bool?) -> some View {
+        if let checked {
+            Image(systemName: checked ? "checkmark.square.fill" : "square")
+                .foregroundStyle(checked ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        } else if ordered {
+            Text("\(number).").monospacedDigit().foregroundStyle(.secondary)
+        } else {
+            Text("•").foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A run of text that doesn't select, its inline code set apart: a table's cells, sized
+/// by the grid.
+struct Inline: View {
+    let text: AttributedString
+
+    var body: some View {
+        Text(styled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var styled: AttributedString {
+        var out = text
+        // Text already sets code in the surrounding size's monospace.
+        for run in out.runs {
+            if run.inlinePresentationIntent?.contains(.code) == true {
+                out[run.range].backgroundColor = Color.secondary.opacity(0.18)
+            }
+            // A formula: in a serif italic as plain text, else its TeX in a muted monospace.
+            switch run.inlineMath {
+            case .plain: out[run.range].font = .system(.body, design: .serif).italic()
+            case .source:
+                out[run.range].font = .system(.body, design: .monospaced)
+                out[run.range].foregroundColor = Color.secondary
+            case nil: break
+            }
+        }
+        return out
+    }
+}
+
+private struct TableBlock: View {
+    let header: [AttributedString]
+    let rows: [[AttributedString]]
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                GridRow {
+                    ForEach(Array(header.enumerated()), id: \.offset) { _, cell in
+                        Inline(text: cell).fontWeight(.semibold).frame(minWidth: 60, maxWidth: 220, alignment: .leading)
+                    }
+                }
+                Divider()
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    GridRow {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                            Inline(text: cell).frame(minWidth: 60, maxWidth: 220, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .font(.subheadline)
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+    }
+}
