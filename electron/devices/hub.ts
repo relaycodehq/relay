@@ -1,11 +1,13 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { access, mkdir, rm } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { DeviceHubState, DeviceHubStatus } from "../../shared/devices";
 import { findExecutable, runExecutable } from "../platform/executables";
 import { stopProcessTree } from "../platform/terminate";
+import { AVD_LIST_CACHE } from "./avd-list-cache";
 
 /**
  * Pinned: the hub is 0.x and ships canaries daily. Old enough to pass an npm
@@ -215,10 +217,14 @@ export class DeviceHub {
   private async launch(node: string, env: NodeJS.ProcessEnv): Promise<RunningHub> {
     const port = await freePort();
     const origin = `http://127.0.0.1:${port}`;
+    const avdCache = join(this.home, "avd-list-cache.mjs");
+    await writeFile(avdCache, AVD_LIST_CACHE);
     this.checkDisposed();
     const child = spawn(
       node,
       [
+        "--import",
+        pathToFileURL(avdCache).href,
         this.entry,
         "--port",
         String(port),
