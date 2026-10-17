@@ -1,7 +1,7 @@
 // What one agent turn changed, as a folder tree with line counts. Rows open
 // that turn's diff in the Changes pane; hovering one offers to roll it back.
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, type CSSProperties } from "react";
 import {
   ChevronRight,
   ChevronsDownUp,
@@ -18,10 +18,8 @@ import { DiffStatLabel } from "./DiffStatLabel";
 import { IconButton } from "../../ui/ui";
 import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import "../../ui/tree.css";
 import "./changed-files.css";
-
-// Short lists read best open; longer ones start as folders.
-const EXPAND_UP_TO = 5;
 
 type Mode = "revert" | "redo";
 type Rewind = (
@@ -60,7 +58,8 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   const tree = useMemo(() => buildTurnTree(files), [files]);
   const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
-  const [allOpen, setAllOpen] = useState(files.length <= EXPAND_UP_TO);
+  const [allOpen, setAllOpen] = useState(true);
+  const [folded, setFolded] = useState(false);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [working, setWorking] = useState(false);
@@ -112,7 +111,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
     );
   };
   const row = (node: TurnTreeNode, depth: number) => {
-    const indent = { paddingLeft: 8 + depth * 14 };
+    const indent = { "--depth": depth } as CSSProperties;
     if (node.kind === "directory") {
       const open = toggled[node.path] ?? allOpen;
       return (
@@ -122,12 +121,14 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           >
             <button
               type="button"
-              className="changed-files-row folder"
+              className="changed-files-row tree-row folder"
               aria-expanded={open}
               style={indent}
               onClick={() => setToggled((t) => ({ ...t, [node.path]: !open }))}
             >
-              <ChevronRight size={14} className="changed-files-chevron" />
+              <span className="tree-twist">
+                <ChevronRight size={14} />
+              </span>
               {open ? <FolderOpen size={14} /> : <Folder size={14} />}
               <span className="changed-files-name">{node.name}</span>
               <DiffStatLabel stat={node.stat} />
@@ -145,14 +146,14 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
       >
         <button
           type="button"
-          className="changed-files-row file"
+          className="changed-files-row tree-row file"
           style={indent}
           title={
             node.change.revertedBy ? `${node.path} · rolled back` : node.path
           }
           onClick={() => onOpen(node.path)}
         >
-          {(nested || depth > 0) && <span className="changed-files-gutter" />}
+          {(nested || depth > 0) && <span className="tree-twist" />}
           <FileEntryIcon path={node.path} directory={false} />
           <span className="changed-files-name">{node.name}</span>
           {node.change.binary ? (
@@ -194,23 +195,37 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
     );
   };
   return (
-    <section className="changed-files" aria-label="Changed files">
+    <section
+      className={`changed-files${folded ? " folded" : ""}`}
+      aria-label="Changed files"
+    >
       <header>
-        <strong>
-          {files.length} changed file{files.length === 1 ? "" : "s"}
-        </strong>
-        {(total.additions > 0 || total.deletions > 0) && (
-          <DiffStatLabel stat={total} />
-        )}
-        {reverted > 0 && (
-          <span className="changed-files-note">
-            {reverted === files.length
-              ? "Rolled back"
-              : `${reverted} rolled back`}
+        <button
+          type="button"
+          className="changed-files-fold"
+          aria-expanded={!folded}
+          title={folded ? "Show the files" : "Hide the files"}
+          onClick={() => setFolded((f) => !f)}
+        >
+          <span className="tree-twist">
+            <ChevronRight size={14} />
           </span>
-        )}
+          <strong>
+            {files.length} changed file{files.length === 1 ? "" : "s"}
+          </strong>
+          {(total.additions > 0 || total.deletions > 0) && (
+            <DiffStatLabel stat={total} />
+          )}
+          {reverted > 0 && (
+            <span className="changed-files-note">
+              {reverted === files.length
+                ? "Rolled back"
+                : `${reverted} rolled back`}
+            </span>
+          )}
+        </button>
         <span className="spacer" />
-        {nested && (
+        {nested && !folded && (
           <IconButton
             label={allOpen ? "Collapse all folders" : "Expand all folders"}
             onClick={() => {
@@ -311,7 +326,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           </button>
         </div>
       )}
-      <div className="changed-files-tree">
+      <div className="changed-files-tree" hidden={folded}>
         {tree.map((node) => row(node, 0))}
       </div>
     </section>

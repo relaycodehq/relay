@@ -41,18 +41,18 @@ it("renders the card header, folders and file rows", () => {
     { path: "docs/a.md", additions: 1, deletions: 0 },
     { path: "docs/b.md", additions: 1, deletions: 0 },
   ];
-  const collapsed = renderToStaticMarkup(
+  const long = renderToStaticMarkup(
     <ChangedFilesCard files={many} onOpen={() => {}} />,
   );
-  expect(collapsed).toContain("7 changed files");
-  expect(collapsed).toContain(">+50<");
-  expect(collapsed).toContain(">−14<");
-  expect(collapsed).toContain("Open diff");
-  expect(collapsed).toContain('aria-label="Expand all folders"');
-  // Over five files, folders start closed.
-  expect(collapsed).not.toContain(">ui.tsx<");
-  expect(collapsed).toContain(">logo.png<");
-  expect(collapsed).toContain(">binary<");
+  expect(long).toContain("7 changed files");
+  expect(long).toContain(">+50<");
+  expect(long).toContain(">−14<");
+  expect(long).toContain("Open diff");
+  expect(long).toContain('aria-label="Collapse all folders"');
+  // Folders start open however many files the turn changed.
+  expect(long).toContain(">ui.tsx<");
+  expect(long).toContain(">logo.png<");
+  expect(long).toContain(">binary<");
 
   const open = renderToStaticMarkup(
     <ChangedFilesCard files={files.slice(0, 2)} onOpen={() => {}} />,

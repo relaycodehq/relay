@@ -32,11 +32,9 @@
   padding-bottom: 8px;
 }
 .file-tree-row {
-  --indent: calc(6px + var(--depth, 0) * 14px);
   display: flex;
   align-items: center;
   height: 26px;
-  padding-left: var(--indent);
   gap: 0;
 }
 .file-tree-row:hover {
@@ -50,26 +48,6 @@
   background: transparent;
   border-radius: 0;
   padding: 0;
-}
-.file-tree-twist {
-  flex: none;
-  width: 16px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-}
-/* Files keep the gap where a folder's arrow goes, so names line up. */
-.file-tree-twist[hidden] {
-  display: flex;
-  visibility: hidden;
-}
-.file-tree-twist svg {
-  transition: transform 0.12s;
-}
-.file-tree-twist svg.open {
-  transform: rotate(90deg);
 }
 .file-tree-name-button {
   flex: 1;
@@ -110,13 +88,14 @@
   opacity: 0.55;
 }
 .file-tree-row.editing {
-  gap: 7px;
   padding-right: 8px;
 }
 .file-tree-name {
   flex: 1;
   min-width: 0;
   height: 22px;
+  /* With the input's padding, the typed name starts where a row's name does. */
+  margin-left: 1px;
   padding: 0 6px;
   font-size: 12px;
   border-radius: 4px;
@@ -125,7 +104,8 @@
   outline: 2px solid #cb6868;
 }
 .file-tree-hint {
-  padding: 4px 12px 4px calc(28px + var(--depth, 0) * 14px);
+  /* Where a child row's icon would be. */
+  padding: 4px 12px 4px calc(22px + var(--depth, 0) * 16px);
   font-size: 11px;
   color: var(--muted);
 }

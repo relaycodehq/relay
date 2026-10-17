@@ -1,0 +1,25 @@
+/*
+ * One indent for every file tree. A level is one chevron slot, so a child's
+ * chevron sits under its parent's icon, and a file keeps an empty slot so its
+ * icon lines up with a sibling folder's. Rows set --depth.
+ */
+.tree-row {
+  --tree-step: 16px;
+  padding-left: calc(var(--tree-start, 6px) + var(--depth, 0) * var(--tree-step));
+}
+.tree-twist {
+  flex: none;
+  align-self: stretch;
+  width: var(--tree-step, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.tree-twist svg {
+  transition: transform 0.12s;
+}
+.tree-twist svg.open,
+[aria-expanded="true"] > .tree-twist svg {
+  transform: rotate(90deg);
+}

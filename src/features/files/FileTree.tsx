@@ -32,6 +32,7 @@ import { workingTreeKey } from "../../lib/working-tree-key";
 import { ContextMenuItem } from "../../ui/ContextMenuItem";
 import { ErrorBox, IconButton, Modal } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import "../../ui/tree.css";
 import "./file-browser.css";
 import { revealLabel } from "../../lib/mod-key";
 
@@ -173,10 +174,10 @@ export function FileTree({
   const createRow = (kind: "file" | "dir", depth: number) => (
     <div
       key="create"
-      className="file-tree-row editing"
+      className="file-tree-row tree-row editing"
       style={{ "--depth": depth } as never}
     >
-      <span className="file-tree-twist" />
+      <span className="tree-twist" />
       <FileEntryIcon
         path={kind === "dir" ? "" : "new"}
         directory={kind === "dir"}
@@ -234,10 +235,10 @@ export function FileTree({
           <Fragment key={row.path}>
             {editing?.mode === "rename" && editing.path === row.path ? (
               <div
-                className="file-tree-row editing"
+                className="file-tree-row tree-row editing"
                 style={{ "--depth": row.depth } as never}
               >
-                <span className="file-tree-twist" />
+                <span className="tree-twist" />
                 <FileEntryIcon path={row.path} directory={row.kind === "dir"} />
                 <NameInput
                   initial={row.name}
@@ -365,22 +366,25 @@ function Row({
       <ContextMenu.Trigger
         render={
           <div
-            className={`file-tree-row ${selected ? "selected" : ""} ${row.ignored ? "ignored" : ""}`}
+            className={`file-tree-row tree-row ${selected ? "selected" : ""} ${row.ignored ? "ignored" : ""}`}
             style={{ "--depth": row.depth } as never}
           />
         }
       >
-        <button
-          type="button"
-          className="file-tree-twist"
-          tabIndex={-1}
-          aria-label={row.open ? "Collapse" : "Expand"}
-          hidden={!dir}
-          disabled={frozen}
-          onClick={() => expansion.toggle(row.path)}
-        >
-          <ChevronRight size={12} className={row.open ? "open" : ""} />
-        </button>
+        {dir ? (
+          <button
+            type="button"
+            className="tree-twist"
+            tabIndex={-1}
+            aria-label={row.open ? "Collapse" : "Expand"}
+            disabled={frozen}
+            onClick={() => expansion.toggle(row.path)}
+          >
+            <ChevronRight size={12} className={row.open ? "open" : ""} />
+          </button>
+        ) : (
+          <span className="tree-twist" />
+        )}
         <button
           type="button"
           role="treeitem"
