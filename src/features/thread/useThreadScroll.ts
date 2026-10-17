@@ -169,6 +169,9 @@ export function useThreadScroll({
     // readable. Once unfolded it's measured exactly.
     const measure = () => {
       const height = dock.offsetHeight;
+      // Frosted chat fades the thread out above the composer; that edge
+      // follows the composer as it folds, frame by frame, unlike the padding.
+      scroll.current?.style.setProperty("--composer-dock-live", `${height}px`);
       const folding = dock
         .querySelector(".composer-prompt-input")
         ?.getAnimations()

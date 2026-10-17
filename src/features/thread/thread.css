@@ -313,17 +313,35 @@
   pointer-events: auto;
 }
 /* Frosted chat: fading into the solid surface would leave a solid strip, so
-   the thread under the composer blurs away instead. */
+   the thread itself fades out above the composer and the frost shows. A
+   masked blur did this before, but half way down its ramp it crossfades the
+   sharp text with the blurred, which reads as a double image. The fade is
+   long and eased (smoothstep), or a line caught at its end looks sliced. It
+   follows the composer's live height (useThreadScroll), not the padding,
+   which stays tall while the composer is folded. The scrollbar keeps its full
+   height. Not inherited, so setting it each frame restyles only the scroller. */
+@property --composer-dock-live {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
 :root[data-glass-chat] .thread-bottom-composer {
   background: none;
 }
-:root[data-glass-chat] .thread-bottom-composer::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  backdrop-filter: blur(16px);
-  mask-image: linear-gradient(to bottom, transparent, #000 56px);
+:root[data-glass-chat] .project-chat:not(.empty-thread) .project-messages {
+  --fade-top: calc(100% - var(--composer-dock-live) - 40px);
+  mask:
+    linear-gradient(
+      to bottom,
+      #000 var(--fade-top),
+      rgb(0 0 0 / 0.93) calc(var(--fade-top) + 16px),
+      rgb(0 0 0 / 0.74) calc(var(--fade-top) + 32px),
+      rgb(0 0 0 / 0.5) calc(var(--fade-top) + 48px),
+      rgb(0 0 0 / 0.26) calc(var(--fade-top) + 64px),
+      rgb(0 0 0 / 0.07) calc(var(--fade-top) + 80px),
+      transparent calc(var(--fade-top) + 96px)
+    ),
+    linear-gradient(#000 0 0) right / 6px 100% no-repeat;
 }
 /* A failed send sits in the composer's column, not across the whole pane. */
 :is(.thread-start, .thread-bottom-composer) > .error-box {

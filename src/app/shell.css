@@ -30,7 +30,8 @@
 /* Frosted glass (macOS, Settings → Appearance): the window is clear, so the
    sidebar and header let the vibrancy through, the header a little darker,
    edged in the sidebar's line so the corner reads as one. A sidebar peeking
-   over the chat stays solid; the chat would show through. */
+   over the chat stays solid: a backdrop blur over the see-through chat lays
+   the blurred text over the sharp, so both show. */
 :root[data-glass] .projects-sidebar:not(.overlay) {
   background: color-mix(
     in srgb,
