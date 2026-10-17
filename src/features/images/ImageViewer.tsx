@@ -66,7 +66,7 @@ function useDone() {
 
 /**
  * The images of one turn, one at a time over the whole window: fitted to
- * start, zoomed with a pinch, ⌘-scroll, the keys or a double-click, dragged
+ * start, zoomed with a pinch, ⌘-scroll, the keys or a click, dragged
  * around once larger than the window, and stepped through with the arrows or
  * the strip along the bottom.
  */
@@ -416,23 +416,25 @@ export function ImageViewer({
             ? "grabbing"
             : pannable
               ? "grab"
-              : natural && fit < 1
-                ? "zoom-in"
-                : undefined
+              : zoomed
+                ? "zoom-out"
+                : natural
+                  ? "zoom-in"
+                  : undefined
         }
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onDoubleClick={(event) => {
-          if (!natural) return;
-          if (zoomed) setView(undefined, true);
+        onClick={(event) => {
+          const press = drag.current;
+          if (!press || press.moved) return;
+          // Beside the picture, a plain click closes, like a dialog's backdrop.
+          if (press.backdrop) onClose();
+          else if (!natural) return;
+          else if (zoomed) setView(undefined, true);
           else
             zoomAt(fit < 1 ? 1 : 2, fromCentre(event.clientX, event.clientY));
-        }}
-        onClick={() => {
-          // Beside the picture, a plain click closes, like a dialog's backdrop.
-          if (drag.current?.backdrop && !drag.current.moved) onClose();
         }}
         data-glide={zoom?.glide && zoom.key === image.key ? "" : undefined}
         data-pixels={view.scale >= 2 ? "" : undefined}

@@ -140,6 +140,9 @@
 .image-viewer-stage[data-cursor="zoom-in"] .image-viewer-frame {
   cursor: zoom-in;
 }
+.image-viewer-stage[data-cursor="zoom-out"] .image-viewer-frame {
+  cursor: zoom-out;
+}
 .image-viewer-frame {
   position: absolute;
   top: 50%;
