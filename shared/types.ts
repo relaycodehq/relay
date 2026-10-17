@@ -212,6 +212,8 @@ export interface FilePair {
   binary: boolean;
   /** Data URLs for a binary change to an image; null where the side is absent. */
   images?: { old: string | null; next: string | null };
+  /** relay-media addresses for a binary change to a video; null where the side is absent. */
+  videos?: { old: string | null; next: string | null };
 }
 export interface LocalFolder {
   path: string;

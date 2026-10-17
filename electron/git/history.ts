@@ -1,6 +1,7 @@
 import { git, gitBytes } from "./git";
 import { digest } from "../util/hash";
-import { imageSides } from "./image-pair";
+import { imageSides, type FileSource } from "./image-pair";
+import { videoSides } from "./video-pair";
 import { NotText, decodeText } from "./working-files";
 import { workingPathSchema } from "../../shared/working-tree";
 import type { FilePair } from "../../shared/types";
@@ -170,18 +171,16 @@ export async function commitDiff(
     old = oldSpec ? await read(oldSpec, oldName) : null;
     next = nextSpec ? await read(nextSpec, path) : null;
   } catch (e) {
-    if (e instanceof NotText)
-      return {
-        old: null,
-        next: null,
-        binary: true,
-        images: await imageSides(
-          root,
-          oldSpec ? { name: oldName, spec: oldSpec } : null,
-          nextSpec ? { name: path, spec: nextSpec } : null,
-        ),
-      };
-    throw e;
+    if (!(e instanceof NotText)) throw e;
+    const sides: [FileSource | null, FileSource | null] = [
+      oldSpec ? { name: oldName, spec: oldSpec } : null,
+      nextSpec ? { name: path, spec: nextSpec } : null,
+    ];
+    const [images, videos] = await Promise.all([
+      imageSides(root, ...sides),
+      videoSides(root, ...sides),
+    ]);
+    return { old: null, next: null, binary: true, images, videos };
   }
   for (const f of [old, next]) if (f) f.cacheKey = digest(f.contents);
   return { old, next, binary: false };

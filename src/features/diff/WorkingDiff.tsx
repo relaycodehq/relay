@@ -153,10 +153,11 @@ export function WorkingDiff({
     setSelection(null);
   };
   const body = (() => {
-    if (pair.images)
+    if (pair.images || pair.videos)
       return (
         <ImageDiff
-          images={pair.images}
+          images={(pair.images ?? pair.videos)!}
+          video={!pair.images}
           sideLabels={sideLabels}
           split={split && roomForSplit(width)}
         />

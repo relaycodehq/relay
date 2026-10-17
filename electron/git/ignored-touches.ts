@@ -11,6 +11,7 @@ import { ignoreRules } from "./working-tree";
 import { keyedQueue } from "../util/keyed-queue";
 import { digest } from "../util/hash";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
+import { videoSides } from "./video-pair";
 import type { AgentProvider } from "../../shared/agents";
 import type { FilePair } from "../../shared/types";
 import type { IgnoredTouch } from "../../shared/working-tree";
@@ -204,7 +205,14 @@ export async function ignoredDiff(
     if (e instanceof NotText) return "binary" as const;
     throw e;
   });
-  if (now === "binary") return { old: null, next: null, binary: true };
+  // No copy is kept of a binary from before, so only how it is now can play.
+  if (now === "binary")
+    return {
+      old: null,
+      next: null,
+      binary: true,
+      videos: await videoSides(root, null, { name: path, disk: true }),
+    };
   const text = touch.text;
   return {
     old:

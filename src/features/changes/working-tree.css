@@ -358,7 +358,8 @@
     )
     0 0 / 16px 16px;
 }
-.image-diff-canvas img {
+.image-diff-canvas img,
+.image-diff-canvas video {
   max-width: 100%;
 }
 .working-folder {

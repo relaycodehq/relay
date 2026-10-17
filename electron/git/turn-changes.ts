@@ -17,7 +17,8 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { NotText, decodeText, textLimit } from "./working-files";
 import { digest } from "../util/hash";
-import { imageSides } from "./image-pair";
+import { imageSides, type FileSource } from "./image-pair";
+import { videoSides } from "./video-pair";
 import { git, gitBytes } from "./git";
 import type { FilePair } from "../../shared/types";
 import type { TurnFileChange } from "../../shared/projects";
@@ -347,12 +348,15 @@ export async function revisionDiff(
   };
   const [old, next] = await Promise.all([read(from), read(to)]);
   if (!binary) return { old, next, binary: false };
-  const images = await imageSides(
-    root,
+  const sides: [FileSource, FileSource] = [
     { name: path, spec: `${from}:${path}` },
     { name: path, spec: `${to}:${path}` },
-  );
-  return { old: null, next: null, binary: true, images };
+  ];
+  const [images, videos] = await Promise.all([
+    imageSides(root, ...sides),
+    videoSides(root, ...sides),
+  ]);
+  return { old: null, next: null, binary: true, images, videos };
 }
 
 /** Where a rollback keeps its before/after snapshots, so it can be redone. */
