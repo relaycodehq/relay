@@ -216,7 +216,8 @@ export function ProjectFiles({
   const list = (files.data ?? []).filter((p) =>
       p.toLowerCase().includes(filter.toLowerCase()),
     ),
-    parent = useRef<HTMLDivElement>(null);
+    parent = useRef<HTMLDivElement>(null),
+    findInput = useRef<HTMLInputElement>(null);
   const virtual = useVirtualizer({
     count: list.length,
     getScrollElement: () => parent.current,
@@ -248,6 +249,7 @@ export function ProjectFiles({
         <div className="search-field">
           <Search size={14} />
           <input
+            ref={findInput}
             aria-label="Find project file"
             placeholder="Find file…"
             value={filter}
@@ -400,6 +402,19 @@ export function ProjectFiles({
         ) : (
           <Loading text="Opening editor…" />
         )
+      ) : !selection && !listHidden ? (
+        // The tree already lists the root; a second copy beside it says nothing new.
+        <div className="files-main">
+          <div className="editor-bar">{listToggle}</div>
+          <div className="empty project-editor-empty">
+            <FileCode2 size={28} />
+            <h2>No file open</h2>
+            <p>Pick one from the list, or find it by name.</p>
+            <button onClick={() => findInput.current?.focus()}>
+              <Search size={14} /> Find a file
+            </button>
+          </div>
+        </div>
       ) : (
         <FolderView
           key={selection?.path ?? ""}

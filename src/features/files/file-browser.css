@@ -337,6 +337,12 @@
 .project-editor-empty {
   flex: 1;
 }
+.project-editor-empty > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
 .editor-bar > .file-list-toggle {
   margin-left: -6px;
   margin-right: 2px;
