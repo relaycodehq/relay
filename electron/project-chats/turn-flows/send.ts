@@ -292,6 +292,7 @@ export class TurnSends {
     },
   ) {
     const id = chat.id;
+    let begun: ChatMessage | undefined;
     try {
       // A new worktree takes the thread's title as its name before anything
       // runs in it; a title slower than this keeps the message's.
@@ -380,9 +381,9 @@ export class TurnSends {
             (m) => m.id !== user.id && onBranch(m) && !m.side,
           ),
         );
-      const answer = streamingAnswer(asked.provider, {
+      const answer = (begun = streamingAnswer(asked.provider, {
         ...(input.parentId ? { parentId: input.parentId } : {}),
-      });
+      }));
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       await this.core.storage.save(chat);
@@ -412,19 +413,29 @@ export class TurnSends {
         ...(goal ? { goal } : {}),
       });
     } catch (e) {
-      // The send already went through, so the thread shows the failure.
-      const failed: ChatMessage = {
-        id: randomUUID(),
-        role: "assistant",
-        body: "",
-        status: "failed",
-        error: e instanceof Error ? e.message : String(e),
-        provider: asked.provider,
-        created: Date.now(),
-        version: 1,
-        ...(input.parentId ? { parentId: input.parentId } : {}),
-      };
-      chat.messages.push(failed);
+      // The send already went through, so the thread shows the failure, in
+      // the answer it began if it got that far.
+      const error = e instanceof Error ? e.message : String(e);
+      let failed: ChatMessage;
+      if (begun?.status === "streaming") {
+        failed = begun;
+        failed.status = "failed";
+        failed.error = error;
+        failed.version++;
+      } else {
+        failed = {
+          id: randomUUID(),
+          role: "assistant",
+          body: "",
+          status: "failed",
+          error,
+          provider: asked.provider,
+          created: Date.now(),
+          version: 1,
+          ...(input.parentId ? { parentId: input.parentId } : {}),
+        };
+        chat.messages.push(failed);
+      }
       if (chat.queue?.length) chat.queuePaused = true;
       // Ends the turn as failed, news like an agent's failure; a stop is no news.
       if (!active.abort.signal.aborted) active.answer = () => failed;
@@ -432,7 +443,7 @@ export class TurnSends {
       await this.core.storage
         .save(chat)
         .catch((e) => console.warn("Could not save the failed send:", e));
-      this.core.emit({ chatId: id, message: failed });
+      this.core.emit({ chatId: id, message: structuredClone(failed) });
       this.ends.unstarted(chat, input, failed.id);
     }
   }
@@ -449,16 +460,19 @@ export class TurnSends {
     input: ProjectChatSend,
     turn: ChatTurn & { kind: "reply" } = { kind: "reply" },
   ) {
-    active.job = this.runner
-      .run(chat, answer, root, prompt, input, active.abort, turn)
-      .then((last) => {
-        answer = last;
-      })
-      .finally(() =>
-        this.ends.run(chat, active, { request: input.id, answer: answer.id }),
-      );
+    const job = this.core.active.runs(
+      active,
+      this.runner
+        .run(chat, answer, root, prompt, input, active.abort, turn)
+        .then((last) => {
+          answer = last;
+        })
+        .finally(() =>
+          this.ends.run(chat, active, { request: input.id, answer: answer.id }),
+        ),
+    );
     // The runner turns agent errors into a failed answer; what's left is a failed save.
-    void active.job.catch((e) => console.warn("Could not save the answer:", e));
+    void job.catch((e) => console.warn("Could not save the answer:", e));
   }
   /**
    * The lead's first turn in a deep review. It answers the review request,
@@ -477,6 +491,13 @@ export class TurnSends {
       this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
+      // Pushed but never run: it mustn't read as streaming.
+      if (chat.messages.includes(message)) {
+        message.status = "failed";
+        message.error = e instanceof Error ? e.message : String(e);
+        message.version++;
+        this.core.emit({ chatId: chat.id, message: structuredClone(message) });
+      }
       this.core.active.release(chat.id, active);
       throw e;
     }

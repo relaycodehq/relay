@@ -78,6 +78,14 @@ const unknownCall = "Phones can't do that.";
 const unsupportedCall = (e: unknown) =>
   message(e) === unknownCall || message(e) === "Computers can't do that.";
 
+/** What another computer tells of a thread it took over live. */
+const handoffNewsSchema = z.object({
+  kind: z.enum(["waiting", "finished", "failed"]),
+  title: z.string().max(1000),
+  body: z.string().max(4000),
+  byAgent: z.literal(true).optional(),
+});
+
 /**
  * Handing this computer's threads to the paired ones and bringing them back.
  * Each step leaves the thread's `sentTo` saying where it stands, with the
@@ -304,13 +312,23 @@ export class Handoffs {
         ? event.chatId
         : event.kind === "handoff"
           ? event.id
-          : undefined;
+          : event.kind === "news"
+            ? event.item?.chatId
+            : undefined;
     const chat =
       handoffId &&
       this.liveOn(computerId).find((c) => c.sentTo!.id === handoffId);
     if (!chat) return;
     if (event.kind === "handoff") {
       this.chats.setHandoffLive(chat.id, event.live);
+      return;
+    }
+    // Its answers end there, so their news is told here as that computer decided it.
+    if (event.kind === "news") {
+      const news = handoffNewsSchema.safeParse(event.item);
+      if (news.success)
+        this.chats.handoffNews(chat.id, chat.projectId, news.data);
+      else console.warn("A live handoff's news didn't read:", news.error);
       return;
     }
     if (event.kind !== "message") return;

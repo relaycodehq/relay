@@ -42,6 +42,7 @@ export class TurnNews {
   /** A finished answer whose news waits for the thread's next end, by thread. */
   private held = new Map<string, Turn>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private disposed = false;
   private unsubscribe: () => void;
 
   constructor(
@@ -79,7 +80,7 @@ export class TurnNews {
    * now, or a held answer is free to tell.
    */
   changed(projectId: string) {
-    if (this.timers.has(projectId)) return;
+    if (this.disposed || this.timers.has(projectId)) return;
     const timer = setTimeout(() => {
       this.timers.delete(projectId);
       let chats: ChatSummary[];
@@ -104,7 +105,16 @@ export class TurnNews {
     this.timers.set(projectId, timer);
   }
 
+  /** News another computer decided, of a thread handed to it live. */
+  retell(
+    { byAgent, ...news }: ThreadNews & Pick<NewsItem, "byAgent">,
+    projectId: string,
+  ) {
+    if (!this.disposed) this.tell(news, projectId, byAgent ? { byAgent } : {});
+  }
+
   dispose() {
+    this.disposed = true;
     this.unsubscribe();
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
@@ -137,6 +147,8 @@ export class TurnNews {
   }
 
   private tellEnd(turn: Turn) {
+    // Only these can be news; the thread's summary costs a list of its project.
+    if (turn.endedAs !== "completed" && turn.endedAs !== "failed") return false;
     const answer = turn.answerId
       ? this.threads.answer(turn.threadId, turn.answerId)
       : undefined;

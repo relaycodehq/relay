@@ -18,6 +18,7 @@ import { ProjectChats } from "../project-chats";
 import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
 import type { ChatMessage } from "../../shared/projects";
+import type { NewsItem } from "../../shared/thread-news";
 
 type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
@@ -176,6 +177,7 @@ async function pairedComputers() {
   mini.chats.onSummaries((projectId) =>
     remote.chatsEvent({ projectId, chats: mini.chats.list(projectId) }),
   );
+  mini.chats.onNews((item) => remote.news(item));
   const computers = new Computers(laptop.store, seal, unseal, {
     timeoutMs: 5000,
   });
@@ -844,6 +846,8 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
     handedOver: true,
   });
 
+  const told: NewsItem[] = [];
+  laptop.chats.onNews((item) => told.push(item));
   const more = input("@codex One more thing");
   expect(sender.forwards("sendProjectChat", [thread.id, more])).toBe(true);
   expect(sender.forwards("renameProjectChat", [thread.id, "x"])).toBe(false);
@@ -855,6 +859,16 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
     expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
       await writtenThere(mini, there),
     ),
+  );
+  // Its answer finished there; the sounds here hear of it, by this thread.
+  await vi.waitFor(() =>
+    expect(told).toEqual([
+      expect.objectContaining({
+        kind: "finished",
+        chatId: thread.id,
+        projectId: laptop.projectId,
+      }),
+    ]),
   );
   // Saved too, not only held in memory.
   const saved = JSON.parse(

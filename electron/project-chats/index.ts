@@ -40,7 +40,11 @@ import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
 import { openTurnLedger, TurnNews } from "../turns";
-import type { NewsCursor, NewsItem } from "../../shared/thread-news";
+import type {
+  NewsCursor,
+  NewsItem,
+  ThreadNews,
+} from "../../shared/thread-news";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -142,8 +146,7 @@ export class ProjectChats {
       openTurnLedger(join(dirname(dir), "relay.db")),
     );
     this.leakCheck = setInterval(() => {
-      for (const id of this.active.ledger.check((t) => this.active.holds(t)))
-        this.storage.chatChanged(id);
+      for (const id of this.active.sweep()) this.storage.chatChanged(id);
     }, LEAK_CHECK_MS);
     this.leakCheck.unref();
     const core: ChatCore = {
@@ -570,6 +573,14 @@ export class ProjectChats {
   /** On the computer a thread came from: see LiveHandoff. */
   mirrorHandoff(id: string, handoffId: string, message: ChatMessage) {
     return this.liveHandoff.mirror(id, handoffId, message);
+  }
+  /** News of a thread live on another computer, as that computer told it. */
+  handoffNews(
+    id: string,
+    projectId: string,
+    news: Omit<ThreadNews, "chatId"> & Pick<NewsItem, "byAgent">,
+  ) {
+    this.news.retell({ ...news, chatId: id }, projectId);
   }
   handoffHeld(id: string) {
     return this.liveHandoff.held(id);

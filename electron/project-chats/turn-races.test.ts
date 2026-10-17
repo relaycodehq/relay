@@ -313,6 +313,84 @@ it("stops a review a restart cut a reviewer off from, letting the kept one finis
   expect((await chats.get(review.id)).deepReview?.status).toBe("stopped");
 }, 30_000);
 
+it("waits for every reviewer that carried on through a restart, however slowly each is picked back up", async () => {
+  const { agentRuntime } = await import("../agents");
+  const review = await chats.create(projectId, { kind: "project" });
+  const first = await chats.create(projectId, { kind: "project" });
+  const second = await chats.create(projectId, { kind: "project" });
+  await chats.dispose();
+  const edit = async (id: string, change: (saved: Record<string, unknown>) => void) => {
+    const file = join(root, "chats", id + ".json");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    change(saved);
+    await writeFile(file, JSON.stringify(saved));
+  };
+  const reviewer = { provider: "codex", choice: input("").choice };
+  await edit(review.id, (saved) => {
+    saved.deepReview = {
+      scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
+      request: "request",
+      reviewers: [
+        { ...reviewer, chatId: first.id },
+        { ...reviewer, chatId: second.id },
+      ],
+      lead: reviewer,
+      runChecks: false,
+      runtimeMode: "full-access",
+      status: "reviewing",
+    };
+  });
+  for (const [slot, chat] of [first, second].entries())
+    await edit(chat.id, (saved) => {
+      saved.reviewer = { parent: review.id, slot };
+      saved.messages = [
+        {
+          id: randomUUID(),
+          role: "assistant",
+          body: "Reading the diff",
+          status: "streaming",
+          created: 1,
+          provider: "codex",
+          version: 1,
+        },
+      ];
+    });
+  const codex = agentRuntime("codex");
+  const keys = [first, second].map((c) => JSON.stringify([join(root, "chats"), c.id, "main"]));
+  vi.spyOn(codex, "reattach").mockResolvedValue(keys.map((key) => ({ key, open: true })));
+  // The second reviewer's folder resolves only after the first has finished.
+  let firstDone!: () => void;
+  const firstEnded = new Promise<void>((resolve) => (firstDone = resolve));
+  const leadPrompts: string[] = [];
+  let adopted = 0;
+  vi.spyOn(codex, "run").mockImplementation(async (options) => {
+    if (options.job?.kind !== "adopt") {
+      leadPrompts.push(options.prompt);
+      return "Findings are in.";
+    }
+    if (adopted++ === 0) {
+      setTimeout(firstDone, 300);
+      return "The cache key ignores the locale.";
+    }
+    return "The parser drops trailing commas.";
+  });
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  const worktrees = chats["worktrees"];
+  const resolveRoot = worktrees.root.bind(worktrees);
+  vi.spyOn(worktrees, "root").mockImplementation(async (chat) => {
+    if (chat.id === second.id) await firstEnded;
+    return resolveRoot(chat);
+  });
+  await chats.reattach();
+  await vi.waitFor(
+    async () => expect((await chats.get(review.id)).deepReview?.status).toBe("done"),
+    { timeout: 10_000 },
+  );
+  expect(leadPrompts).toHaveLength(1);
+  expect(leadPrompts[0]).toContain("The cache key ignores the locale.");
+  expect(leadPrompts[0]).toContain("The parser drops trailing commas.");
+}, 30_000);
+
 it("refuses to take a queued message back once it went out", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "800");
   const chat = await chats.create(projectId, { kind: "project" });

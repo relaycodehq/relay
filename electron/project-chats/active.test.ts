@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { TurnEvent } from "../../shared/turns";
 import { ActiveTurns } from "./active";
 
@@ -45,5 +45,25 @@ describe("ActiveTurns", () => {
         answerId: "a",
       }),
     ]);
+  });
+
+  it("gives the thread back when a turn's job settled a sweep ago without releasing it", async () => {
+    const turns = new ActiveTurns(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const leaked = turns.claim("t", input);
+    const released = turns.claim("u", input);
+    await turns.runs(leaked, Promise.resolve());
+    await turns.runs(
+      released,
+      Promise.resolve().then(() => turns.release("u", released)),
+    );
+    await new Promise((settle) => setTimeout(settle));
+    // One sweep may land between the job settling and its release.
+    expect(turns.sweep()).toEqual([]);
+    expect(turns.has("t")).toBe(true);
+    expect(turns.sweep()).toEqual(["t"]);
+    expect(turns.has("t")).toBe(false);
+    expect(turns.ledger.inThread("t")).toEqual([]);
+    await leaked.ended;
   });
 });

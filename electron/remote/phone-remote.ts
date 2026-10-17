@@ -255,6 +255,8 @@ export class PhoneRemote {
       { kind: "news", item },
       (id, bridge) => !this.isComputer(id) && bridge >= newsBridge,
     );
+    // A computer hears only of the threads it handed over live, and remaps them.
+    this.host.handoffs?.news?.(item);
   }
   /** Someone may have come to the computer or left it. */
   presenceChanged() {

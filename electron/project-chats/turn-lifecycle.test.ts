@@ -248,10 +248,10 @@ describe("bugs the turn ledger fixed", () => {
     const id = await s!.thread();
     await s!.send(id, "fixture echo: never answered");
     await s!.ended(id);
-    expect((await answers(id)).at(-1)).toMatchObject({
-      status: "failed",
-      error: "The disk is full.",
-    });
+    // The answer it began fails; nothing is left streaming beside it.
+    expect(await answers(id)).toEqual([
+      expect.objectContaining({ status: "failed", error: "The disk is full." }),
+    ]);
     expect(kinds(s!.news)).toEqual(["failed"]);
   });
 

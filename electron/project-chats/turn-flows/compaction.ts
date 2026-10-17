@@ -153,14 +153,15 @@ export class TurnCompactions {
       throw e;
     }
     this.core.emit({ chatId: id, message: structuredClone(message) });
-    active.job = this.runner
-      .run(chat, message, root, instructions ?? "", input, abort, {
-        kind: "compact",
-      })
-      .finally(() => this.ends.run(chat, active));
-    void active.job.catch((e) =>
-      console.warn("Could not save the compaction:", e),
+    const job = this.core.active.runs(
+      active,
+      this.runner
+        .run(chat, message, root, instructions ?? "", input, abort, {
+          kind: "compact",
+        })
+        .finally(() => this.ends.run(chat, active)),
     );
+    void job.catch((e) => console.warn("Could not save the compaction:", e));
   }
 }
 

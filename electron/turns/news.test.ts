@@ -43,12 +43,11 @@ function setup() {
   const told: NewsItem[] = [];
   news.onNews((item) => told.push(item));
   /** Runs an answer turn to its end; `ends` leaves it open for later. */
-  const answer = (id: string, rides = false) => {
+  const answer = (id: string) => {
     const turn = ledger.start({
       threadId: "t1",
       kind: "answer",
       provider: "codex",
-      rides,
     });
     ledger.phase(turn.id, "running", id);
     return (endedAs: "completed" | "cancelled" | "lost") =>
@@ -88,7 +87,7 @@ it("tells of a held answer once its queue is cleared or paused with nothing run 
 
 it("tells of the finished answer when the turn beside it ends without news of its own", () => {
   const { told, answer } = setup();
-  const rider = answer("r1", true);
+  const rider = answer("r1");
   answer("a1")("completed");
   expect(told).toEqual([]);
   rider("lost");
@@ -97,7 +96,7 @@ it("tells of the finished answer when the turn beside it ends without news of it
 
 it("keeps quiet when you stopped the turn that ran on", () => {
   const { told, answer } = setup();
-  const rider = answer("r1", true);
+  const rider = answer("r1");
   answer("a1")("completed");
   rider("cancelled");
   expect(told).toEqual([]);

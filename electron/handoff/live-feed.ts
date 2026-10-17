@@ -5,6 +5,7 @@ import type {
   KnownMessages,
 } from "../../shared/projects";
 import type { RemoteEvent } from "../../shared/remote";
+import type { NewsItem } from "../../shared/thread-news";
 import type { ProjectChats } from "../project-chats";
 
 /** How the computers threads came from are reached. */
@@ -81,6 +82,15 @@ export class LiveFeed {
         if (message.status !== "streaming") return this.update(chatId);
       })
       .catch((e) => console.warn("A live handoff's message didn't go:", e));
+  }
+  /** News of a followed thread is the other computer's to tell there too. */
+  news(item: NewsItem) {
+    const entry = this.followed.get(item.chatId);
+    if (!entry || !this.link) return;
+    this.link.send(entry.deviceId, {
+      kind: "news",
+      item: { ...item, chatId: entry.handoffId },
+    });
   }
   changed(projectId: string) {
     if (!this.link || this.settling.has(projectId)) return;

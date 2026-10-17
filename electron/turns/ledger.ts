@@ -33,7 +33,6 @@ export interface OpenTurnInput {
   threadId: string;
   kind: TurnKind;
   provider: AgentProvider;
-  rides?: boolean;
   parentTurnId?: string;
 }
 
@@ -75,7 +74,6 @@ export class TurnLedger {
       provider: input.provider,
       phase: "starting",
       startedAt: Date.now(),
-      ...(input.rides ? { rides: true as const } : {}),
       ...(input.parentTurnId ? { parentTurnId: input.parentTurnId } : {}),
     };
     this.open.set(turn.id, turn);

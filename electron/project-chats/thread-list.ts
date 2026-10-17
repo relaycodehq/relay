@@ -130,10 +130,10 @@ export class ThreadList {
           return away ? awaySummary(c, away) : c;
         }
         // The thread's own turns first: the one holding it, any the agent
-        // started beside it, then its reviewers'.
+        // started beside it, then its reviewers' as they started.
         const turns = [
           ...ledger.inThread(c.id).filter(holdsThread),
-          ...(helpers.get(c.id) ?? []),
+          ...(helpers.get(c.id) ?? []).sort((a, b) => a.startedAt - b.startedAt),
         ];
         const crew = turns.filter((t) => working(t.phase));
         const active = crew.find((t) => t.threadId === c.id) ?? crew[0];

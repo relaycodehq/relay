@@ -134,9 +134,18 @@ export class CodexTurn {
     return this.plan || this.review || this.stream.answer || this.said;
   }
 
+  private past(turnId: string) {
+    if (!turnId) return;
+    const past = this.connection.pastTurns;
+    past.add(turnId);
+    // Late word comes soon after; the oldest ids can go.
+    if (past.size > 20) past.delete(past.values().next().value!);
+  }
+
   /** Ends the run: in `error`, or in what it answered. */
   finish = (error?: Error) => {
     if (this.settled) return;
+    this.past(this.turnId);
     void this.subagents.stop();
     if (error) this.end.fail(error);
     else this.end.succeed(this.answer);
@@ -217,6 +226,7 @@ export class CodexTurn {
     if (n.method === "turn/started") {
       // Codex went on with the goal: the turn before is history in this answer.
       if (this.turnId && n.params.turn.id !== this.turnId) {
+        this.past(this.turnId);
         this.stream.nextTurn();
         options.session?.onPoint?.(n.params.turn.id);
       }
@@ -225,9 +235,15 @@ export class CodexTurn {
       this.turnId = n.params.turn.id;
     }
     if (n.method === "turn/completed") {
-      // Word about an earlier turn, late: this one goes on.
+      // Word about an earlier turn, late: this one goes on. Before this one's
+      // id is known, only a turn known to be over is told apart.
       const { id } = n.params.turn;
-      if (id && this.turnId && id !== this.turnId) return;
+      if (
+        id &&
+        id !== this.turnId &&
+        (this.turnId || this.connection.pastTurns.has(id))
+      )
+        return;
       const done = n.params.turn.status === "completed";
       if (this.holds && done && this.goals.completed()) return;
       if (done) {

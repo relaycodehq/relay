@@ -169,6 +169,12 @@ export class ProviderSessions {
   isResuming(chatId: string, branch?: string) {
     return this.resuming.has(this.key(chatId, branch));
   }
+  /** A turn a restart cut off in the thread, on any branch, is yet to be picked up. */
+  resumingIn(chatId: string) {
+    return [...this.resuming].some(
+      (key) => parseSessionKey(key).chatId === chatId,
+    );
+  }
   resumed(key: string) {
     this.resuming.delete(key);
   }

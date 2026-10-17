@@ -96,10 +96,11 @@ completion for any turn but the current one.
 1. **The owner ends it.** Every turn is opened by the code that runs it, and
    closed in that code's `finally`, through `ActiveTurns.release`. A turn the
    agent started by itself ends there too, not just its handles.
-2. **A check catches leaks.** Every 30s the ledger compares its open turns
-   with the handles `ActiveTurns` holds. A turn with no handle ended without
-   telling the ledger, so it ends as `lost`, with a warning in the log, and
-   its thread lists again.
+2. **A check catches leaks.** Every 30s `ActiveTurns.sweep` looks for a turn
+   whose job (`ActiveTurns.runs`) settled at least one sweep ago while its
+   handle is still held: its owner never released it, so it ends as `lost`,
+   with a warning in the log, and gives the thread back. A turn open in the
+   ledger that no handle holds ends the same way.
 3. **A restart settles the rest.** Turns left open by a Relay that is no
    longer running are looked at on launch. Those whose agent session the agent
    host kept are picked back up, deep review reviewers included, with their

@@ -32,10 +32,11 @@ const answer = (more: Partial<LastAnswer>): LastAnswer => ({
 const turn = (
   endedAs: Turn["endedAs"],
   kind: Turn["kind"] = "answer",
-): Pick<Turn, "kind" | "endedAs" | "startedAt"> => ({
+): Pick<Turn, "kind" | "endedAs" | "startedAt" | "provider"> => ({
   kind,
   endedAs,
   startedAt: 10,
+  provider: "claude",
 });
 
 describe("answerNews", () => {
@@ -96,6 +97,16 @@ describe("answerNews", () => {
       title: "Thread c",
       body: "Overloaded",
     });
+  });
+
+  it("names the agent whose turn ended, not the one that answered last", () => {
+    const codexLast = chat("a", { provider: "codex" });
+    expect(answerNews(turn("completed"), codexLast, answer({}))?.body).toBe(
+      "Claude finished",
+    );
+    expect(answerNews(turn("failed"), codexLast, answer({}))?.body).toBe(
+      "Claude's answer failed",
+    );
   });
 
   it("stays quiet about snoozed threads", () => {

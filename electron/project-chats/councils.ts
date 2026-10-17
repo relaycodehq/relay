@@ -48,7 +48,9 @@ export class Councils {
         this.createReviewer(parent, reviewer),
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
-      active: (id) => this.core.active.has(id),
+      // A reviewer whose cut-off turn is being picked back up is at work too.
+      active: (id) =>
+        this.core.active.has(id) || this.core.sessions.resumingIn(id),
       // Only agents report back: a dev server it left up never ends.
       waiting: (id) =>
         this.core.sessions

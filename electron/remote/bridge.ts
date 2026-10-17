@@ -48,7 +48,11 @@ import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
-import type { NewsCatchUp, NewsCursor } from "../../shared/thread-news";
+import type {
+  NewsCatchUp,
+  NewsCursor,
+  NewsItem,
+} from "../../shared/thread-news";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -99,6 +103,7 @@ export interface RemoteHost {
     connect?(link: { send(deviceId: string, event: RemoteEvent): void }): void;
     chatEvent?(event: { chatId: string; message: ChatMessage }): void;
     chatsChanged?(projectId: string): void;
+    news?(item: NewsItem): void;
   };
 }
 

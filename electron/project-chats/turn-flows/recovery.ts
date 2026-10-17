@@ -142,7 +142,6 @@ export class TurnRecovery {
     let message: ChatMessage | undefined;
     try {
       chat = await this.core.storage.load(chatId);
-      this.core.sessions.resumed(key);
       message = [...chat.messages]
         .reverse()
         .find(
@@ -152,13 +151,11 @@ export class TurnRecovery {
             m.provider === provider &&
             (m.parentId ?? undefined) === branch,
         );
-      await this.unprompted(
-        chat,
-        await this.worktrees.root(chat),
-        provider,
-        branch,
-        message,
-      );
+      const root = await this.worktrees.root(chat);
+      // Resuming until the turn is claimed, in the same tick: a review counts
+      // a reviewer still picking its turn up as at work.
+      this.core.sessions.resumed(key);
+      await this.unprompted(chat, root, provider, branch, message);
     } catch (e) {
       this.core.sessions.lost(key);
       this.core.storage.chatChanged(chatId);

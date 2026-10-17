@@ -10,6 +10,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { execFileSync } from "node:child_process";
 import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
+import { accountKeys, idKeys, secretKeys } from "./redact-keys.mjs";
 
 const raw = resolve(process.argv[2] ?? "/tmp/relay-replays-raw");
 const only = process.argv.slice(3);
@@ -33,14 +34,6 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Both spellings of a temp path: macOS lists /var as /private/var. */
 const spellings = (path) =>
   path.startsWith("/private/") ? [path, path.slice("/private".length)] : [path, `/private${path}`];
-
-export const secretKeys = /^(.*token.*|.*secret.*|.*password.*|authorization|api_?key|cookie)$/i;
-/** Ids of the account, its organization or this computer, however a CLI spells them. */
-export const idKeys =
-  /(account|org(anization)?|installation|workspace|user|device|machine)_?(id|uuid)$/i;
-/** What the account is and has: plan, credit, this computer's name. */
-export const accountKeys =
-  /^(balance|subscription_?type|rate_?limit_?tier|overage\w*|user_?agent|hostname|organization_?name|display_?name)$/i;
 
 /**
  * What the account itself brings along: claude.ai connectors and skills synced

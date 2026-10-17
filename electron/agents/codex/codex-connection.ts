@@ -44,6 +44,8 @@ class CodexConnection {
   private sides = new Map<string, (method: string, params: any) => void>();
   /** Its thread's `/goal` as Codex last reported it, between runs too. */
   goal?: ThreadGoal | null;
+  /** Turns of its thread that are over for Relay, so late word of one ends nothing. */
+  readonly pastTurns = new Set<string>();
   /** Watch state for "Flag what I'd miss", made the first time a turn asks. */
   watch?: CodexWatch;
   private release!: () => void;

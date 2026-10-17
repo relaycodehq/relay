@@ -92,6 +92,9 @@ export class ActiveTurns {
   private handles = new Map<string, ActiveChat>();
   /** Turns that serve one of these, such as a handoff note. */
   private helpers = new Set<string>();
+  /** Turns whose job settled since the last sweep, and those still held at it. */
+  private settled = new Set<ActiveChat>();
+  private unreleased = new Set<ActiveChat>();
   constructor(
     private changed: (id: string) => void,
     readonly ledger = new TurnLedger(new MemoryTurnStore()),
@@ -139,7 +142,6 @@ export class ActiveTurns {
       threadId: id,
       kind,
       provider: sentAgent(input),
-      rides,
     });
     const active: ActiveChat = {
       turnId: turn.id,
@@ -178,6 +180,45 @@ export class ActiveTurns {
   /** The turn by its ledger id, if this holds it. */
   handle(turnId: string) {
     return this.handles.get(turnId);
+  }
+
+  /**
+   * `job` is the turn's work, released in its own `finally`: one that settles
+   * with the turn still held leaked it, and `sweep` gives the thread back.
+   */
+  runs(active: ActiveChat, job: Promise<unknown>) {
+    active.job = job;
+    void job
+      .catch(() => {})
+      .then(() => {
+        if (this.handles.get(active.turnId) === active)
+          this.settled.add(active);
+      });
+    return job;
+  }
+  /**
+   * Ends the turns nothing will release: a job that settled a sweep ago with
+   * its turn still held, and a turn open in the ledger that nothing holds.
+   * Says which threads changed.
+   */
+  sweep() {
+    const threads = new Set<string>();
+    for (const active of this.unreleased) {
+      const turn = this.ledger.get(active.turnId);
+      if (!turn || this.handles.get(active.turnId) !== active) continue;
+      console.warn(
+        `A ${turn.kind} turn in thread ${turn.threadId} finished without giving the thread back.`,
+      );
+      this.ledger.end(active.turnId, "lost");
+      this.release(turn.threadId, active);
+      threads.add(turn.threadId);
+    }
+    this.unreleased = new Set(
+      [...this.settled].filter((a) => this.handles.get(a.turnId) === a),
+    );
+    this.settled.clear();
+    for (const id of this.ledger.check((t) => this.holds(t))) threads.add(id);
+    return [...threads];
   }
 
   /** The turn's agent is at work, writing `answerId`. */
@@ -296,7 +337,6 @@ export class ActiveTurns {
       threadId: key.slice(0, key.indexOf(":")),
       kind: "aside",
       provider,
-      rides: true,
     });
     this.ledger.phase(turn.id, "running", answer.id);
     this.sides.set(key, { turnId: turn.id, abort, job, answer });
@@ -326,7 +366,6 @@ export class ActiveTurns {
       threadId,
       kind,
       provider,
-      rides: true,
       parentTurnId: parent.turnId,
     });
     this.ledger.phase(turn.id, "running", answer.id);
@@ -336,8 +375,7 @@ export class ActiveTurns {
       this.ledger.end(turn.id, outcome(answer, stopped), answer.id);
     };
   }
-  /** Whether this still holds the turn: the ledger's check asks. */
-  holds(turnId: string) {
+  private holds(turnId: string) {
     return (
       this.handles.has(turnId) ||
       this.helpers.has(turnId) ||

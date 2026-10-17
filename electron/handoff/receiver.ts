@@ -25,6 +25,7 @@ import {
   type ComputerProject,
 } from "../../shared/remote";
 import type { ApiMethod } from "../../shared/types";
+import type { NewsItem } from "../../shared/thread-news";
 import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/validation";
 import { workspaceId } from "../../shared/workspaces";
@@ -125,6 +126,10 @@ export class HandoffReceiver {
   /** A message written in a thread here. */
   chatEvent(event: { chatId: string; message: ChatMessage }) {
     this.feed.message(event.chatId, event.message);
+  }
+  /** Something here is news: a finished or failed answer, a thread that needs you. */
+  news(item: NewsItem) {
+    this.feed.news(item);
   }
   /** A project's threads may read differently. */
   chatsChanged(projectId: string) {

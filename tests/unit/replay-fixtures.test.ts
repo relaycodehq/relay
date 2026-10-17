@@ -5,8 +5,8 @@ import {
   accountKeys,
   idKeys,
   secretKeys,
-  // @ts-expect-error A plain script; its patterns are all this reads.
-} from "../record/redact.mjs";
+  // @ts-expect-error A plain module of patterns.
+} from "../record/redact-keys.mjs";
 
 // Recorded agent transcripts are public once committed. This checks them on
 // its own, whatever tests/record/redact.mjs did or missed, and the same on any

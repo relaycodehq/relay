@@ -31,8 +31,6 @@ export interface Turn {
   kind: TurnKind;
   provider: AgentProvider;
   phase: TurnPhase;
-  /** Doesn't hold the thread: one the agent started beside another. */
-  rides?: true;
   /** The turn it serves, e.g. the answer a handoff note briefs. */
   parentTurnId?: string;
   /** The message it writes into, once it has one. */

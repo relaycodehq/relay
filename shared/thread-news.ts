@@ -59,7 +59,7 @@ export type NewsCatchUp = NewsCursor & { items?: NewsItem[] };
  * thread it shows, and a phone keeps quiet while someone is at the computer.
  */
 export function answerNews(
-  turn: Pick<Turn, "kind" | "endedAs" | "startedAt">,
+  turn: Pick<Turn, "kind" | "endedAs" | "startedAt" | "provider">,
   chat: NewsChat,
   answer: LastAnswer | undefined,
   at = Date.now(),
@@ -69,7 +69,7 @@ export function answerNews(
   if (!failed && turn.endedAs !== "completed") return;
   // Snoozed: it comes back by itself when you said.
   if (chat.snoozedUntil && chat.snoozedUntil > at) return;
-  const agent = chat.provider ? agentName(chat.provider) : "The agent";
+  const agent = agentName(turn.provider);
   if (failed)
     return {
       chatId: chat.id,
