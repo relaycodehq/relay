@@ -18,7 +18,28 @@ export default defineConfig({
         html.replace("ws://127.0.0.1:5177", `ws://127.0.0.1:${port}`),
     },
   ],
-  server: { host: "127.0.0.1", port, strictPort: true },
+  server: {
+    host: "127.0.0.1",
+    port,
+    strictPort: true,
+    // previews/ stays watched: this server serves them, and an ignored file
+    // keeps its first transform until restart.
+    watch: {
+      ignored: [
+        "**/.claude/**",
+        "**/t3code/**",
+        "**/android/**",
+        "**/ios/**",
+        "**/dist-*/**",
+        "**/release/**",
+        "**/build/**",
+      ],
+    },
+  },
+  // By default the dep scan crawls every .html under the root, worktrees in
+  // .claude/ included. Previews stay in so opening one doesn't re-bundle deps
+  // and reload every page, the app's too.
+  optimizeDeps: { entries: ["index.html", "previews/**/index.html"] },
   build: {
     target: "es2022",
     // Electron's own Chromium. An older target makes LightningCSS polyfill
