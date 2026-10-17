@@ -2,8 +2,12 @@ import { session, shell, WebContentsView, type BrowserWindow } from "electron";
 import type { PreviewBounds } from "../../shared/preview";
 import type { RunningHub } from "./hub";
 
-/** Hidden this long, the page closes and the hub stops, so nothing pulls frames. */
-const UNLOAD_MS = 20_000;
+/**
+ * Hidden this long, the page closes and the hub stops, so nothing pulls frames.
+ * Long enough to hop between threads and come back to the page as it was:
+ * a fresh one forgets what Expo keeps only in memory, like its sidebar.
+ */
+const UNLOAD_MS = Number(process.env.RELAY_DEVICE_UNLOAD_MS) || 15 * 60_000;
 /** Not persisted: the token, and so its cookie, change with every start. */
 const PARTITION = "device-hub";
 

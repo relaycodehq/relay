@@ -31,6 +31,8 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
+      // The test can't wait out the real quarter of an hour.
+      RELAY_DEVICE_UNLOAD_MS: "20000",
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
@@ -206,6 +208,8 @@ test("closing the Device tab in one window keeps it live in another", async () =
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
+      // The test can't wait out the real quarter of an hour.
+      RELAY_DEVICE_UNLOAD_MS: "20000",
       RELAY_TEST_DATA: data,
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
