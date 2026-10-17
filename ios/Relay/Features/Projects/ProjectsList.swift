@@ -87,7 +87,7 @@ private struct ProjectsList: View {
             }
         }
         .listStyle(.plain)
-        .refreshable { await connection.reloadList() }
+        .ribbonRefresh { await connection.reloadList() }
     }
 }
 

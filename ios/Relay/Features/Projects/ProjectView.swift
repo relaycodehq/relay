@@ -60,7 +60,7 @@ struct ProjectView: View {
             }
         }
         .listStyle(.plain)
-        .refreshable { await connection.reloadList() }
+        .ribbonRefresh { await connection.reloadList() }
         .relayBackground()
         .navigationTitle(connection.project(projectId)?.name ?? "Project")
         .navigationBarTitleDisplayMode(.inline)

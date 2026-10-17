@@ -52,7 +52,7 @@ struct ActivityList: View {
             shelf("settled", "Settled", sections.settled.filter { !families.headers.contains($0.id) }, now)
         }
         .listStyle(.plain)
-        .refreshable { await connection.reloadList() }
+        .ribbonRefresh { await connection.reloadList() }
     }
 
     private func name(_ chat: RemoteChatSummary) -> String { connection.project(chat.projectId)?.name ?? "?" }
