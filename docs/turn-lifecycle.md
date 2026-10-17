@@ -77,7 +77,9 @@ completion for any turn but the current one.
   with the next. A send that fails before its agent runs ends its turn as
   `failed` too. While another answer runs beside it or a queued message goes
   out next, a finished answer waits: the thread's last end tells, or the one
-  held back does if that end has no news of its own and wasn't a stop.
+  held back does if that end has no news of its own and wasn't a stop. When
+  the queue is cleared or paused instead and nothing runs after it, the held
+  answer is told as the thread's list next reads that way.
   Whether someone watched it run can't be told when it ends (a window marks
   a thread read only once it's idle), so a window's sounds skip the thread
   it shows and a phone keeps quiet while someone is at the computer. The

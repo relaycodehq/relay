@@ -22,6 +22,7 @@ afterEach(() => {
   news?.dispose();
   queued = false;
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 function setup() {
   const ledger = new TurnLedger(new MemoryTurnStore());
@@ -66,6 +67,23 @@ it("tells of answers that ran one after another out of the queue once, at the la
   expect(told.map((i) => [i.kind, i.body])).toEqual([
     ["finished", "Answer a2"],
   ]);
+});
+
+it("tells of a held answer once its queue is cleared or paused with nothing run after it", () => {
+  vi.useFakeTimers();
+  const { news, told, answer } = setup();
+  queued = true;
+  answer("a1")("completed");
+  // Still queued: the next message is on its way out.
+  news.changed("p1");
+  vi.runAllTimers();
+  expect(told).toEqual([]);
+  queued = false;
+  news.changed("p1");
+  vi.runAllTimers();
+  news.changed("p1");
+  vi.runAllTimers();
+  expect(told.map((i) => i.body)).toEqual(["Answer a1"]);
 });
 
 it("tells of the finished answer when the turn beside it ends without news of its own", () => {

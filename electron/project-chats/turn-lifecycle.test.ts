@@ -255,6 +255,22 @@ describe("bugs the turn ledger fixed", () => {
     expect(kinds(s!.news)).toEqual(["failed"]);
   });
 
+  it("is news for the answer a queued message waited on when it can't go out", async () => {
+    await start();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("RELAY_AGENT_TURN_MS", "300");
+    const id = await s!.thread();
+    await s!.send(id, "fixture echo: first");
+    await s!.until(id, (c) => !!c.running);
+    // It pauses the queue, and nothing runs after the finished answer.
+    vi.spyOn(s!.chats["turns"], "sendNow").mockRejectedValue(
+      new Error("The agent can't be found."),
+    );
+    await s!.send(id, "fixture echo: never sent");
+    await s!.ended(id);
+    await vi.waitFor(() => expect(kinds(s!.news)).toEqual(["finished"]));
+  });
+
   it("tells a phone about a turn that started and ended while it was away", async () => {
     await start();
     const id = await s!.thread();

@@ -74,7 +74,10 @@ export class TurnNews {
     return { ...now, items: this.items.filter((i) => i.seq > cursor.seq) };
   }
 
-  /** The project's list may read differently; a thread in it may need you now. */
+  /**
+   * The project's list may read differently: a thread in it may need you
+   * now, or a held answer is free to tell.
+   */
   changed(projectId: string) {
     if (this.timers.has(projectId)) return;
     const timer = setTimeout(() => {
@@ -89,6 +92,12 @@ export class TurnNews {
         const news = waitingNews(this.waited.get(chat.id), chat);
         this.waited.set(chat.id, !!chat.waiting);
         if (news) this.tell(news, chat.projectId);
+        // The queue was cleared or paused with nothing run after the held answer.
+        const held = this.held.get(chat.id);
+        if (held && !this.busy(chat.id)) {
+          this.held.delete(chat.id);
+          this.tellEnd(held);
+        }
       }
     }, LIST_MS);
     timer.unref?.();
@@ -108,13 +117,7 @@ export class TurnNews {
     const { threadId } = turn;
     // Another answer still runs in the thread, or a queued message goes out
     // next: the thread's last end tells, unless this one failed.
-    if (
-      turn.endedAs === "completed" &&
-      (this.threads.queued(threadId) ||
-        this.ledger
-          .inThread(threadId)
-          .some((t) => answersKinds.includes(t.kind)))
-    ) {
+    if (turn.endedAs === "completed" && this.busy(threadId)) {
       this.held.set(threadId, turn);
       return;
     }
@@ -124,6 +127,13 @@ export class TurnNews {
     // finished one before it is the news.
     if (!this.tellEnd(turn) && held && turn.endedAs !== "cancelled")
       this.tellEnd(held);
+  }
+
+  private busy(threadId: string) {
+    return (
+      this.threads.queued(threadId) ||
+      this.ledger.inThread(threadId).some((t) => answersKinds.includes(t.kind))
+    );
   }
 
   private tellEnd(turn: Turn) {
