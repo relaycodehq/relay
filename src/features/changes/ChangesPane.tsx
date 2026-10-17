@@ -15,10 +15,13 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 export function ChangesSidebar({
   title,
   count,
+  tools,
   children,
 }: {
   title: ReactNode;
   count: number;
+  /** At the right end of the list's header, like how it's shown. */
+  tools?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -36,6 +39,7 @@ export function ChangesSidebar({
             <strong>
               {title} <span>{count}</span>
             </strong>
+            {tools}
           </header>
           {children}
         </section>

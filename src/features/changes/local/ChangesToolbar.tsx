@@ -4,9 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
-  FolderTree,
   GitBranch,
-  List,
   RefreshCw,
 } from "lucide-react";
 import {
@@ -34,8 +32,6 @@ export function ChangesToolbar({
   slots,
   tree,
   busy,
-  grouped,
-  onGrouped,
   onRefresh,
   onPush,
   agentRunning = false,
@@ -45,24 +41,12 @@ export function ChangesToolbar({
   slots?: PaneSlots;
   tree?: WorkingTree;
   busy: boolean;
-  grouped: boolean;
-  onGrouped: (grouped: boolean) => void;
   onRefresh: () => void;
   onPush: () => void;
   /** The thread's agent is at work in this folder: pulling waits for it. */
   agentRunning?: boolean;
 }) {
   const blocked = tree && gitBlockedReason(tree, "push");
-  const view = (
-    <IconButton
-      label={
-        grouped ? "Folders: show a flat list" : "Flat list: group by folder"
-      }
-      onClick={() => onGrouped(!grouped)}
-    >
-      {grouped ? <FolderTree size={14} /> : <List size={14} />}
-    </IconButton>
-  );
   // Nothing to push once the upstream has every commit.
   const push = tree && (tree.ahead > 0 || !tree.upstream) && (
     <button
@@ -96,7 +80,6 @@ export function ChangesToolbar({
   );
   const actions = (
     <>
-      {view}
       {refresh}
       {level}
     </>
@@ -135,7 +118,6 @@ export function ChangesToolbar({
     ].filter(Boolean);
   return (
     <header className="working-toolbar">
-      {view}
       <GitBranch size={15} />
       <strong>{tree ? checkoutLabel(tree) : "Local checkout"}</strong>
       {tree &&

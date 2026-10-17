@@ -1,10 +1,9 @@
-import { FolderTree, List } from "lucide-react";
 import type { WorkingChange } from "../../../shared/working-tree";
 import { parentOf } from "../../lib/file-tree";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { changeKind } from "../../../shared/working-tree";
 import { byFolder, changeLabels } from "./working-changes";
-import { IconButton } from "../../ui/ui";
+import { ListViewToggle } from "./ListViewToggle";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
@@ -52,22 +51,7 @@ export function CommitFileList({
             <span className="deleted">−{lines.deletions}</span>
           </span>
         )}
-        <span className="commit-files-view">
-          <IconButton
-            label="Group by folder"
-            active={!flat}
-            onClick={() => setFlat(false)}
-          >
-            <FolderTree size={13} />
-          </IconButton>
-          <IconButton
-            label="Flat list"
-            active={flat}
-            onClick={() => setFlat(true)}
-          >
-            <List size={13} />
-          </IconButton>
-        </span>
+        <ListViewToggle grouped={!flat} onGrouped={(g) => setFlat(!g)} />
       </div>
       <div className="commit-files-list">
         {flat

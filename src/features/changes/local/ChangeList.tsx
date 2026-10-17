@@ -48,14 +48,27 @@ interface Props {
   onOpenThread?: (chatId: string) => void;
   /** Under the lists, in the same scroll: other repositories the thread changed. */
   after?: ReactNode;
+  /** At the right end of the first list's header, like how the lists are shown. */
+  tools?: ReactNode;
 }
 
 /** The staged and working lists, each flat or under its folders. */
-export function ChangeList({ sections, listRef, after, ...props }: Props) {
+export function ChangeList({
+  sections,
+  listRef,
+  after,
+  tools,
+  ...props
+}: Props) {
   return (
     <div className="working-file-list" ref={listRef}>
-      {sections.map((s) => (
-        <Section key={s.area} section={s} {...props} />
+      {sections.map((s, i) => (
+        <Section
+          key={s.area}
+          section={s}
+          tools={i === 0 && tools}
+          {...props}
+        />
       ))}
       {after}
     </div>
@@ -95,6 +108,7 @@ function Section(props: SectionProps) {
           {s.files.length}{" "}
           <span>{s.files.length === 1 ? "file" : "files"}</span>
         </span>
+        {props.tools}
       </header>
       {open &&
         (grouped

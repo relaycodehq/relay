@@ -85,7 +85,9 @@ export function ProjectChanges({
     <WorktreeSwitch
       slots={slots}
       status={live}
+      where={where}
       showing={!turn ? "uncommitted" : turn.worktree ? "source" : "turn"}
+      turnFiles={turn && !turn.worktree ? turn.files.length : undefined}
       onUncommitted={onCloseTurn}
       onAgainstSource={() => {
         if (!turn?.worktree) onShowTurn(worktreeDiff(chatId, live));

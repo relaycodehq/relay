@@ -73,6 +73,30 @@
   background: transparent;
   font-size: 10px;
 }
+/* Sits at the right end of the list's first header, over the list it changes. */
+.list-view-toggle {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  margin-left: auto;
+}
+.list-view-toggle .icon-button,
+.working-file-list section > header .list-view-toggle .icon-button {
+  padding: 4px;
+}
+.working-file-list section > header:has(.list-view-toggle) {
+  padding-top: 6px;
+  padding-bottom: 0;
+  padding-right: 6px;
+}
+/* The toggle takes the room "files" had; the count says enough beside a title. */
+.local-changes .working-file-list section > header:has(.list-view-toggle) {
+  padding-top: 6px;
+  padding-right: 6px;
+}
+.local-changes .change-section-count > span {
+  display: none;
+}
 .working-file {
   display: flex;
   gap: 2px;

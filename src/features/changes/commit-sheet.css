@@ -82,13 +82,6 @@
   margin-left: 6px;
   color: light-dark(#c4323f, #f0707a);
 }
-.commit-files-view {
-  display: flex;
-  gap: 1px;
-}
-.commit-files-view .icon-button {
-  padding: 4px;
-}
 .commit-files-list {
   min-height: 0;
   max-height: 232px;

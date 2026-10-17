@@ -14,6 +14,7 @@ import { useSavedChanges } from "./useSavedChanges";
 import { useWorkingDiff, useWorkingTree } from "./useWorkingTree";
 import { useChangeReveals } from "./useChangeReveals";
 import { ChangesToolbar } from "./local/ChangesToolbar";
+import { ListViewToggle } from "./ListViewToggle";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { PaneResizer } from "../../ui/PaneResizer";
 import { CommitSplitSheet } from "./CommitSplit";
@@ -109,8 +110,6 @@ export function LocalChanges({
         slots={slots}
         tree={tree}
         busy={busy}
-        grouped={grouped}
-        onGrouped={setGrouped}
         onRefresh={() => void state.refetch()}
         onPush={() => setPush(true)}
         agentRunning={agentRunning}
@@ -163,6 +162,9 @@ export function LocalChanges({
                 revision={tree.revision}
                 selected={selected}
                 grouped={grouped}
+                tools={
+                  <ListViewToggle grouped={grouped} onGrouped={setGrouped} />
+                }
                 collapsed={collapsed}
                 onCollapse={(area, collapse) =>
                   setCollapsed((c) =>

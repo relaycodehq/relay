@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, List, RefreshCw, Undo2 } from "lucide-react";
+import { RefreshCw, Undo2 } from "lucide-react";
 import { api } from "../../lib/api";
 import type { TurnDiffTarget } from "./turn-diff";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { TurnFileList } from "./TurnFileList";
+import { ListViewToggle } from "./ListViewToggle";
 import { useSavedChanges } from "./useSavedChanges";
 import { ErrorBox, IconButton } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
@@ -69,16 +70,6 @@ export function TurnChanges({
       {slots.actions &&
         createPortal(
           <>
-            <IconButton
-              label={
-                grouped
-                  ? "Folders: show a flat list"
-                  : "Flat list: group by folder"
-              }
-              onClick={() => setGrouped(!grouped)}
-            >
-              {grouped ? <FolderTree size={14} /> : <List size={14} />}
-            </IconButton>
             {target.worktree && (
               <IconButton
                 label="Refresh worktree changes"
@@ -109,6 +100,7 @@ export function TurnChanges({
               : "Changed in this turn"
           }
           count={target.files.length}
+          tools={<ListViewToggle grouped={grouped} onGrouped={setGrouped} />}
         >
           <TurnFileList
             files={target.files}
