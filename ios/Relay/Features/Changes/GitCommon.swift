@@ -147,10 +147,7 @@ private struct ProminentGlass: ViewModifier {
     @Environment(\.isEnabled) private var enabled
 
     func body(content: Content) -> some View {
-        content
-            .buttonStyle(.glassProminent)
-            .tint(colors.accent)
-            .foregroundStyle(enabled ? colors.onAccent : colors.muted)
+        content.buttonStyle(.accentGlass)
     }
 }
 

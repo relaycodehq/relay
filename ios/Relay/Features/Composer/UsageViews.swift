@@ -29,6 +29,34 @@ extension View {
     }
 }
 
+/// The rings in a glass bubble of their own, for a thread, whose bar wants the room for its title.
+struct UsageBubble: View {
+    let provider: String?
+    let context: ContextUsage?
+    let cost: ThreadCost?
+    let compact: (() async throws -> Void)?
+    @State private var open = false
+
+    var body: some View {
+        if let provider, reportsUsage(provider) {
+            Button { open = true } label: {
+                UsageRings(provider: provider)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityLabel("\(agentName(provider)) usage")
+            .pollsUsage(provider)
+            .sheet(isPresented: $open) {
+                // A plain sheet: zoomed out of a floating glass view, it left a ghost of the
+                // bubble over the sheet and blew the rings up on the way back.
+                UsagePage(provider: provider, context: context, cost: cost, compact: compact).fitsSheet()
+            }
+        }
+    }
+}
+
 private struct UsageToolbar: ViewModifier {
     let provider: String?
     let context: ContextUsage?
@@ -52,7 +80,7 @@ private struct UsageToolbar: ViewModifier {
             .sheet(isPresented: $open) {
                 if let provider {
                     NavigationStack {
-                        UsagePage(provider: provider, context: context, cost: cost, compact: compact)
+                        UsagePage(provider: provider, context: context, cost: cost, compact: compact).fitsSheet()
                     }
                     .navigationTransition(.zoom(sourceID: "usage", in: transition))
                 }
@@ -201,6 +229,37 @@ struct UsageTrack: View {
 
 /// What the usage row, the rings and `/context` open: the context window, what the
 /// thread cost, then the plan's limits.
+extension UsagePage {
+    /// Opened on its own: the sheet as tall as the page instead of the whole screen, titled
+    /// without a navigation stack, whose bar laid itself out for a full screen first and then
+    /// jumped the rows up as the sheet came in.
+    func fitsSheet() -> some View { modifier(FitsSheet(title: "\(agentName(provider)) usage")) }
+}
+
+private struct FitsSheet: ViewModifier {
+    let title: String
+    /// The height it measured last time, so it opens at it rather than at half the screen and
+    /// then shrinking to fit; a first guess before it ever opened.
+    @AppStorage("usageSheetHeight") private var height = 404.0
+
+    private struct Fit: Equatable {
+        let content: CGFloat
+        let chrome: CGFloat
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Text(title).font(.headline).frame(maxWidth: .infinity).padding(.top, 20).padding(.bottom, 4)
+            }
+            // Taken only when the rows change: the insets swing while the sheet slides in and out.
+            .onScrollGeometryChange(for: Fit.self, of: { Fit(content: $0.contentSize.height, chrome: $0.contentInsets.top + $0.contentInsets.bottom) }) { old, new in
+                if new.content > 0, new.content != old.content { height = new.content + new.chrome }
+            }
+            .presentationDetents([.height(height), .large])
+    }
+}
+
 struct UsagePage: View {
     let provider: String
     let context: ContextUsage?

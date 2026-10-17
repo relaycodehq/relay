@@ -30,6 +30,7 @@ private struct CiToolbar: ViewModifier {
                     ToolbarItem(placement: .primaryAction) {
                         Button { open = true } label: {
                             Image(systemName: ciIcon(summary.state)).foregroundStyle(ciColor(summary.state, colors))
+                                .contentTransition(.symbolEffect(.replace))
                         }
                         .accessibilityLabel("\(ciLabel(summary.state)) on \(ci.branch)")
                     }
@@ -52,7 +53,10 @@ private struct CiToolbar: ViewModifier {
     }
 
     private func load(_ projectId: String) async {
-        ci = try? await connection.liveClient().ciStatus(projectId, chatId: chatId)
+        let next = try? await connection.liveClient().ciStatus(projectId, chatId: chatId)
+        guard next != ci else { return }
+        // So a run turning green swaps the mark rather than cutting to it.
+        withAnimation(.smooth) { ci = next }
     }
 
     private struct Live: Equatable {

@@ -40,7 +40,7 @@ struct AskPage: View {
                 Spacer()
                 Button("Skip") { onAnswer(nil) }.buttonStyle(.glass)
                 Button("Send answer") { if let answer { onAnswer(answer) } }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.accentGlass)
                     .disabled(answer == nil)
             }
             .controlSize(.large)

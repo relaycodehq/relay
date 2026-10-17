@@ -88,7 +88,7 @@ struct RequestCard: View {
                 }
                 if decisions.contains("accept") {
                     Button(decisions.contains("acceptForSession") ? "Once" : "Approve") { respond(.decision("accept")) }
-                        .buttonStyle(.glassProminent)
+                        .buttonStyle(.accentGlass)
                 }
             }
             .lineLimit(1)

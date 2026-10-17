@@ -5,14 +5,17 @@ import UIKit
 extension View {
     /// The thread's own actions in the toolbar (Android's threadMenu): rename, done, snooze,
     /// unread, a fresh title, its branch, side conversations, compact and archive.
-    func threadMenu(chatId: String, shown: Bool, leavingUnread: Binding<Bool>) -> some View {
-        modifier(ThreadMenu(chatId: chatId, shown: shown, leavingUnread: leavingUnread))
+    func threadMenu(
+        chatId: String, shown: Bool, notes: Binding<ThreadNotesEntry>, leavingUnread: Binding<Bool>
+    ) -> some View {
+        modifier(ThreadMenu(chatId: chatId, shown: shown, notes: notes, leavingUnread: leavingUnread))
     }
 }
 
 private struct ThreadMenu: ViewModifier {
     let chatId: String
     let shown: Bool
+    @Binding var notes: ThreadNotesEntry
     @Binding var leavingUnread: Bool
     @Environment(Connection.self) private var connection
     @Environment(\.navigate) private var navigate
@@ -117,6 +120,12 @@ private struct ThreadMenu: ViewModifier {
             }
         }
         Section {
+            if notes.count > 0 {
+                Button { notes.open = true } label: {
+                    Label("Notes", systemImage: "pin")
+                    Text("\(notes.count) kept from this thread")
+                }
+            }
             if let branch = thread?.worktree?.branch ?? summary?.branch {
                 copy("Copy Branch Name", branch)
             }

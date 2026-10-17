@@ -25,6 +25,14 @@ struct ThreadView: View {
     private var context: ContextUsage? { latestContext(connection.conversation(chatId, rootId: rootId)) }
     /// One made here has no summary until its first message is in.
     private var made: Made? { MadeHere.of(chatId) }
+    /// Under the title, as on Android: the branch, the model and its effort, how full the context is.
+    private var headerLine: String {
+        let branch = thread?.worktree?.branch ?? summary?.branch
+        let model = settings.wrappedValue.map { $0.modelLabel(connection.catalogs[$0.provider]) }
+        let full = contextPercent(context).map { "\($0)% context" }
+        return [branch, model, full].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+    }
+
     private var projectId: String? { thread?.projectId ?? summary?.projectId ?? made?.projectId }
     /// Replies live in their side conversations. This phone's sends the thread doesn't hold yet
     /// come last, shown at once, before the thread itself has loaded.
@@ -37,6 +45,7 @@ struct ThreadView: View {
     @State private var composer = ComposerHandle()
     /// Marked unread on the way out: a trailing seen mark mustn't clear it.
     @State private var leavingUnread = false
+    @State private var notes = ThreadNotesEntry()
     @State private var viewing: Viewing?
     @Namespace private var pictures
 
@@ -71,7 +80,9 @@ struct ThreadView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.top, 12)
+                    // Room under the last line, as on the desktop, so a turn's end doesn't sit on the composer.
+                    .padding(.bottom, 60)
                 }
                 // Built only once the thread is here, so it opens at the end.
                 .followingEnd(live: live, last: shown.last?.id, mine: shown.last?.role == "user", jump: jump)
@@ -139,22 +150,28 @@ struct ThreadView: View {
                     }
                 }
             }
+            // Over the dock's top edge rather than in the bar, so the title gets the room and the
+            // thread keeps its height; at the end it sits in the gap under the last line.
+            .overlay(alignment: .topTrailing) {
+                UsageBubble(
+                    provider: settings.wrappedValue?.provider, context: context,
+                    cost: thread.flatMap { $0.cost ?? threadCost($0.messages) },
+                    compact: { try await connection.compact(chatId, rootId: rootId) }
+                )
+                .padding(.trailing, 20)
+                .alignmentGuide(.top) { $0[.bottom] + 10 }
+            }
         }
         .relayBackground()
         .fullScreenCover(item: $viewing) { Lightbox($0, space: pictures) }
         .navigationTitle(rootId != nil ? "Replies" : thread?.title ?? summary?.title ?? made?.title ?? "Thread")
-        // Android's header line: how full the conversation's context is.
-        .navigationSubtitle(contextPercent(context).map { "\($0)% context" } ?? "")
-        .usageToolbar(
-            provider: settings.wrappedValue?.provider, context: context,
-            cost: thread.flatMap { $0.cost ?? threadCost($0.messages) },
-            compact: { try await connection.compact(chatId, rootId: rootId) })
+        .navigationSubtitle(headerLine)
         .ciStatus(projectId: projectId, chatId: chatId, running: summary?.running == true, shown: rootId == nil)
         .navigationBarTitleDisplayMode(.inline)
         // Open on the phone counts as read, but only while the app is in front:
         // answers that land in the background are marked when it comes back.
-        .threadMenu(chatId: chatId, shown: rootId == nil, leavingUnread: $leavingUnread)
-        .threadNotes(chatId: chatId, shown: rootId == nil, present: Set(shown.map(\.id))) { [composer] in
+        .threadMenu(chatId: chatId, shown: rootId == nil, notes: $notes, leavingUnread: $leavingUnread)
+        .threadNotes(chatId: chatId, shown: rootId == nil, entry: $notes, present: Set(shown.map(\.id))) { [composer] in
             composer.compose($0, nil)
         } show: { jump = MessageJump(id: $0) }
         .turnHaptics(rootId == nil ? summary : nil, answer: thread.flatMap { mainMessages($0.messages).last(where: isAnswer) })

@@ -50,28 +50,23 @@ struct FilterMenu: View {
         let scratch = sorted.filter { $0.scratch == true }.map(\.id)
         let projects = sorted.filter { $0.scratch != true || $0.id == scratch.first }
         Menu {
-            if shown.count > 0 {
-                Button("Clear filter", systemImage: "xmark") { filter = ThreadFilter() }
-            }
+            // Always there, off with nothing to clear, so ticking the first row doesn't move the rest.
+            Button("Clear filter", systemImage: "xmark") { filter = ThreadFilter() }
+                .disabled(shown.count == 0)
             if agents.count > 1 {
                 Section("Agents") {
                     ForEach(agents, id: \.self) { agent in
-                        Toggle(isOn: ticked(\.agents, [agent])) {
-                            Label { Text(agentName(agent)) } icon: { icon(ProviderMark(provider: agent, size: 18).foregroundStyle(colors.foreground)) }
+                        row(agentName(agent), ticked(\.agents, [agent])) {
+                            ProviderMark(provider: agent, size: 18).foregroundStyle(colors.foreground)
                         }
-                            .menuActionDismissBehavior(.disabled)
                     }
                 }
             }
             Section("Projects") {
                 ForEach(projects) { project in
-                    Toggle(isOn: ticked(\.projects, project.scratch == true ? scratch : [project.id])) {
-                        Label { Text(project.scratch == true ? "Scratchpad" : project.name) } icon: {
-                            icon(ProjectIcon(project: project, size: 18).environment(connection).environment(icons).environment(\.colors, colors))
-                        }
+                    row(project.scratch == true ? "Scratchpad" : project.name, ticked(\.projects, project.scratch == true ? scratch : [project.id])) {
+                        ProjectIcon(project: project, size: 18).environment(connection).environment(icons).environment(\.colors, colors)
                     }
-                        // Several can be ticked in one go, as on the desktop.
-                        .menuActionDismissBehavior(.disabled)
                 }
             }
         } label: {
@@ -85,6 +80,19 @@ struct FilterMenu: View {
             set: { on in
                 if on { filter[keyPath: kind].formUnion(ids) } else { filter[keyPath: kind].subtract(ids) }
             })
+    }
+
+    /// A row that ticks on and off, its tick after the name: a menu's own checkmark takes a column
+    /// before every row once one is on, which shoved the whole list over at the first tick.
+    private func row(_ name: String, _ on: Binding<Bool>, @ViewBuilder mark: () -> some View) -> some View {
+        Button { on.wrappedValue.toggle() } label: {
+            Label {
+                Text(on.wrappedValue ? "\(name)  ✓" : name)
+            } icon: { icon(mark()) }
+        }
+        .accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
+        // Several can be ticked in one go, as on the desktop.
+        .menuActionDismissBehavior(.disabled)
     }
 
     /// A menu row shows only an Image, so a mark drawn as a view is rendered into one.

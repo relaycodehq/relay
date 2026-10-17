@@ -50,7 +50,7 @@ struct Questions: View {
             field
             if showsNext {
                 Button(last ? "Send answer" : "Next") { next() }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.accentGlass)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .disabled(!answered || busy)
             }

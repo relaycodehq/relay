@@ -47,7 +47,7 @@ struct ComputerWaiting: View {
             } actions: {
                 // The old pairing is no use any more; forgetting it opens pairing.
                 Button("Pair again") { if let key = connection.active { connection.forget(key) } }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.accentGlass)
             }
         }
     }

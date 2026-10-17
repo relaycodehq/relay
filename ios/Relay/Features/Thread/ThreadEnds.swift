@@ -143,9 +143,9 @@ struct ImplementPlan: View {
         Button {
             go()
         } label: {
-            Text(sending ? "Sending…" : "Implement plan").foregroundStyle(colors.onAccent).frame(maxWidth: .infinity)
+            Text(sending ? "Sending…" : "Implement plan").frame(maxWidth: .infinity)
         }
-        .buttonStyle(.glassProminent)
+        .buttonStyle(.accentGlass)
         .controlSize(.large)
         .disabled(sending || settings == nil)
         .padding(.horizontal, 20)

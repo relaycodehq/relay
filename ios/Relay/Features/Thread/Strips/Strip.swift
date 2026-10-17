@@ -77,8 +77,8 @@ struct StripButton: View {
     var body: some View {
         Group {
             if primary {
-                Button { press() } label: { Text(busy ? busyLabel ?? label : label).foregroundStyle(colors.onAccent) }
-                    .buttonStyle(.glassProminent)
+                Button(busy ? busyLabel ?? label : label) { press() }
+                    .buttonStyle(.accentGlass)
             } else {
                 Button(busy ? busyLabel ?? label : label) { press() }.buttonStyle(.glass)
             }

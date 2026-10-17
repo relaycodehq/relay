@@ -1,58 +1,53 @@
 import RelayRemote
 import SwiftUI
 
-// The desktop's NotesChip on a phone (Android's NotesSheet.kt): a pin with how many notes the
-// thread keeps, opening a sheet of them. Lists tick off; tapping a note or an item quotes it
+// The desktop's NotesChip on a phone (Android's NotesSheet.kt): the notes the thread keeps,
+// opened from its menu. Lists tick off; tapping a note or an item quotes it
 // into the composer. Keeping, pinning and reordering stay on the computer.
 
+/// How many notes the thread keeps, and whether their sheet is up: the thread menu lists them
+/// rather than the bar, which had no room for a fourth mark.
+struct ThreadNotesEntry: Equatable {
+    var count = 0
+    var open = false
+}
+
 extension View {
-    /// The pin and count in the thread's bar, nothing while it keeps no notes or its computer
-    /// can't share them. `quote` puts markdown in the composer; `show` scrolls the thread to a
-    /// message a note was kept from, one of those `present` in it.
+    /// Follows the thread's notes and shows their sheet; `entry.count` stays 0 while it keeps
+    /// none or its computer can't share them. `quote` puts markdown in the composer; `show`
+    /// scrolls the thread to a message a note was kept from, one of those `present` in it.
     func threadNotes(
-        chatId: String, shown: Bool, present: Set<String>, quote: @escaping (String) -> Void,
-        show: @escaping (String) -> Void
+        chatId: String, shown: Bool, entry: Binding<ThreadNotesEntry>, present: Set<String>,
+        quote: @escaping (String) -> Void, show: @escaping (String) -> Void
     ) -> some View {
-        modifier(ThreadNotesButton(chatId: chatId, shown: shown, present: present, quote: quote, show: show))
+        modifier(ThreadNotesSheet(chatId: chatId, shown: shown, entry: entry, present: present, quote: quote, show: show))
     }
 }
 
-private struct ThreadNotesButton: ViewModifier {
+private struct ThreadNotesSheet: ViewModifier {
     let chatId: String
     let shown: Bool
+    @Binding var entry: ThreadNotesEntry
     let present: Set<String>
     let quote: (String) -> Void
     let show: (String) -> Void
     @Environment(Connection.self) private var connection
     @State private var model: ThreadNotesModel?
-    @State private var open = false
 
     private var shared: Bool { (connection.overview?.bridge ?? 1) >= Bridge.notes }
     private var mark: String? { connection.chats.first { $0.id == chatId }?.notesMark }
 
     func body(content: Content) -> some View {
-        let count = model?.notes.count ?? 0
+        let count = shown && shared ? model?.notes.count ?? 0 : 0
         content
-            .toolbar {
-                if shown && shared && count > 0 {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { open = true } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: "pin")
-                                Text("\(count)").monospacedDigit()
-                            }
-                        }
-                        .accessibilityLabel("\(count) \(count == 1 ? "note" : "notes")")
-                    }
-                }
-            }
-            .sheet(isPresented: $open) {
+            .onChange(of: count, initial: true) { entry.count = $1 }
+            .sheet(isPresented: $entry.open) {
                 if let model {
                     NotesSheet(model: model, present: present) { text in
-                        open = false
+                        entry.open = false
                         quote(text)
                     } jump: { id in
-                        open = false
+                        entry.open = false
                         show(id)
                     }
                     .presentationDetents([.medium, .large])

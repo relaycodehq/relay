@@ -65,17 +65,7 @@ struct ComputerUpdateBanner: View {
             .minimumScaleFactor(0.85)
             Spacer(minLength: 0)
             if let act {
-                // As the pairing screen's buttons: the accent as glass, white on it.
-                Button(action: act.1) {
-                    Text(act.0)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .frame(height: 38)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.clear.tint(colors.accent.opacity(colors.dark ? 0.6 : 0.8)).interactive(), in: .capsule)
+                Button(act.0, action: act.1).buttonStyle(.accentGlass).font(.subheadline)
             }
             if let dismiss {
                 Button(action: dismiss) {

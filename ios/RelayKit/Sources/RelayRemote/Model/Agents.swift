@@ -258,11 +258,20 @@ public extension ResumeSettings {
 
     /// "Claude · Opus 5.5 · High"; the model's name when the list has it.
     func label(_ models: [AgentModel]?) -> String {
-        var parts = [agentName(provider)]
+        ([agentName(provider)] + modelParts(models)).joined(separator: " · ")
+    }
+
+    /// "Opus 5.5 · High", the label without the agent's name.
+    func modelLabel(_ models: [AgentModel]?) -> String {
+        modelParts(models).joined(separator: " · ")
+    }
+
+    private func modelParts(_ models: [AgentModel]?) -> [String] {
+        var parts: [String] = []
         if !choice.model.isEmpty { parts.append(listedModel(provider, models, choice.model)?.name ?? choice.model) }
         if !choice.reasoningEffort.isEmpty { parts.append(effortLabel(choice.reasoningEffort)) }
         if fastFor(provider, choice.fast) { parts.append("Fast") }
         if windowFor(provider, model: choice.model, contextWindow) != nil { parts.append("200k") }
-        return parts.joined(separator: " · ")
+        return parts
     }
 }

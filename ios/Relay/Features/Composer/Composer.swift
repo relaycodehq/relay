@@ -217,9 +217,7 @@ struct Composer: View {
         }
         .sheet(isPresented: $showingUsage) {
             if let provider = settings?.provider {
-                NavigationStack {
-                    UsagePage(provider: provider, context: context, cost: cost, compact: compact)
-                }
+                UsagePage(provider: provider, context: context, cost: cost, compact: compact).fitsSheet()
             }
         }
         // Names the model rather than its id once the agent's list is in.
@@ -336,9 +334,7 @@ struct Composer: View {
                     .frame(width: 28, height: 28)
             }
             .accessibilityLabel(stops ? "Stop" : running ? "Queue" : "Send")
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .tint(stops ? stopRed : colors.accent)
+            .buttonStyle(.accentCircle(tint: stops ? stopRed : nil))
             .disabled(!stops && !canSend)
             .contextMenu {
                 if !stops && canSend {
