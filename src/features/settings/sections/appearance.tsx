@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { useAppearance } from "../../../lib/appearance";
+import {
+  setGlass,
+  setGlassChat,
+  setGlassChatFrost,
+  setGlassFrost,
+  useAppearance,
+} from "../../../lib/appearance";
+import { mac } from "../../../lib/mod-key";
+import { GlassFrostSlider } from "../GlassFrostSlider";
 import { setCacheHeat, useCacheHeat } from "../../agents/cache-heat";
 import { setImagePills, useImagePills } from "../../images/image-pills";
 import { setTipsShown, useTipsShown } from "../../tips/tip-memory";
@@ -8,6 +16,8 @@ import {
   useSidebarAutoHide,
 } from "../../../lib/sidebar-auto-hide";
 import {
+  GLASS_CHAT_FROST,
+  GLASS_FROST,
   resolveChoice,
   themesFor,
   type ResolvedAppearance,
@@ -101,6 +111,64 @@ export function useAppearanceEntries(): SettingEntry[] {
         </div>
       ),
     })),
+    ...(mac
+      ? [
+          {
+            id: "glass",
+            category: "appearance" as const,
+            title: "Frosted glass",
+            description:
+              "The sidebar and header let the desktop behind the window show through, blurred.",
+            keywords:
+              "frost frosted glass blur translucent transparent vibrancy sidebar header window opacity",
+            block: true,
+            accessory: () => (
+              <Switch
+                label="Frosted sidebar and header"
+                checked={appearance.value.glass}
+                onChange={setGlass}
+              />
+            ),
+            render: () =>
+              appearance.value.glass && (
+                <GlassFrostSlider
+                  label="Frost in the sidebar and header"
+                  value={appearance.value.glassFrost}
+                  range={GLASS_FROST}
+                  onChange={setGlassFrost}
+                />
+              ),
+          },
+          {
+            id: "glass-chat",
+            category: "appearance" as const,
+            title: "Frosted chat",
+            description:
+              "The chat lets some of the frost through too. Over a bright or busy desktop it can get harder to read.",
+            keywords:
+              "frost frosted glass blur translucent transparent vibrancy chat conversation thread background opacity",
+            block: true,
+            accessory: () => (
+              <Switch
+                label="Frosted chat"
+                checked={appearance.value.glass && appearance.value.glassChat}
+                disabled={!appearance.value.glass}
+                onChange={setGlassChat}
+              />
+            ),
+            render: () =>
+              appearance.value.glass &&
+              appearance.value.glassChat && (
+                <GlassFrostSlider
+                  label="Frost in the chat"
+                  value={appearance.value.glassChatFrost}
+                  range={GLASS_CHAT_FROST}
+                  onChange={setGlassChatFrost}
+                />
+              ),
+          },
+        ]
+      : []),
     {
       id: "typography",
       category: "appearance",

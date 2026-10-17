@@ -67,6 +67,10 @@ describe("loadAppearance", () => {
       mode: "system",
       light: { theme: "relay" },
       dark: { theme: "relay" },
+      glass: false,
+      glassChat: false,
+      glassFrost: 65,
+      glassChatFrost: 28,
     });
   });
 
@@ -76,6 +80,10 @@ describe("loadAppearance", () => {
       mode: "dark",
       light: { theme: "relay" },
       dark: { theme: "dracula", accent: "#ff79c6" },
+      glass: false,
+      glassChat: false,
+      glassFrost: 65,
+      glassChatFrost: 28,
     });
   });
 
@@ -85,6 +93,10 @@ describe("loadAppearance", () => {
       mode: "light",
       light: { theme: "relay", accent: "#123456" },
       dark: { theme: "relay", accent: "#123456" },
+      glass: false,
+      glassChat: false,
+      glassFrost: 65,
+      glassChatFrost: 28,
     });
   });
 
@@ -98,7 +110,16 @@ describe("loadAppearance", () => {
       mode: "dark",
       light: { theme: "solarized-light", foreground: "#3c4c53", contrast: 70 },
       dark: { theme: "relay" },
+      glass: false,
+      glassChat: false,
+      glassFrost: 65,
+      glassChatFrost: 28,
     });
+  });
+
+  it("keeps frosted glass on once turned on", () => {
+    saved({ mode: "dark", glass: true });
+    expect(loadAppearance().glass).toBe(true);
   });
 });
 
@@ -108,6 +129,10 @@ describe("resolveAppearance", () => {
       mode: "system" as const,
       light: { theme: "solarized-light" },
       dark: { theme: "nord", accent: "#b48ead" },
+      glass: false,
+      glassChat: false,
+      glassFrost: 65,
+      glassChatFrost: 28,
     };
     expect(resolveAppearance(value, false).theme.id).toBe("solarized-light");
     const dark = resolveAppearance(value, true);

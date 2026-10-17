@@ -335,6 +335,22 @@ export interface Appearance {
   mode: AppearanceMode;
   light: ThemeChoice;
   dark: ThemeChoice;
+  /** Frosted sidebar and header; only macOS has the vibrancy behind them. */
+  glass: boolean;
+  /** The chat on that glass too, a little see-through. */
+  glassChat: boolean;
+  /** How much of the frost shows through each, in percent. */
+  glassFrost: number;
+  glassChatFrost: number;
+}
+
+export const GLASS_FROST = { min: 10, max: 90, default: 65 };
+export const GLASS_CHAT_FROST = { min: 10, max: 90, default: 28 };
+
+function parseFrost(value: unknown, range: typeof GLASS_FROST) {
+  return typeof value === "number" && value >= range.min && value <= range.max
+    ? Math.round(value)
+    : range.default;
 }
 
 export const DEFAULT_CONTRAST = 50;
@@ -418,6 +434,10 @@ export function loadAppearance(): Appearance {
     mode,
     light: parseChoice("light", saved.light),
     dark: parseChoice("dark", saved.dark),
+    glass: saved.glass === true,
+    glassChat: saved.glassChat === true,
+    glassFrost: parseFrost(saved.glassFrost, GLASS_FROST),
+    glassChatFrost: parseFrost(saved.glassChatFrost, GLASS_CHAT_FROST),
   };
 }
 

@@ -5,6 +5,10 @@
   background: color-mix(in srgb, var(--text) 5%, var(--surface));
   font-size: 12px;
 }
+/* Frosted chat: tinted glass, not a solid panel. */
+:root[data-glass-chat] .changed-files {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
 .changed-files > header {
   display: flex;
   align-items: center;

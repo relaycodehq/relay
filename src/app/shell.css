@@ -27,6 +27,43 @@
 }
 /* The resize handle spans the titlebar too, so the edge can be grabbed
    anywhere from the top of the window down. */
+/* Frosted glass (macOS, Settings → Appearance): the window is clear, so the
+   sidebar and header let the vibrancy through, the header a little darker,
+   edged in the sidebar's line so the corner reads as one. A sidebar peeking
+   over the chat stays solid; the chat would show through. */
+:root[data-glass] .projects-sidebar:not(.overlay) {
+  background: color-mix(
+    in srgb,
+    var(--sidebar) var(--glass-sidebar),
+    transparent
+  );
+}
+/* The theme's hover greys are solid and sit on glass as flat slabs; a tint
+   of the text lets the frost through. */
+:root[data-glass] .projects-sidebar:not(.overlay),
+:root[data-glass] .project-titlebar {
+  --hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --selected: color-mix(in srgb, var(--text) 12%, transparent);
+}
+:root[data-glass] .project-titlebar {
+  background: color-mix(
+    in srgb,
+    var(--sidebar) var(--glass-header),
+    transparent
+  );
+  border-bottom-color: var(--sidebar-edge);
+}
+:root[data-glass] .project-titlebar-brand {
+  background: transparent;
+}
+/* Lines over glass are a see-through tint too, so the frost runs under them. */
+:root[data-glass] {
+  --sidebar-edge: color-mix(in srgb, var(--text) 12%, transparent);
+}
+/* Frosted chat, the second switch: the chat lets some of it through too. */
+:root[data-glass-chat] .project-chat-pane {
+  background: color-mix(in srgb, var(--surface) var(--glass-chat), transparent);
+}
 .projects-sidebar > .pane-resizer {
   top: -53px;
   -webkit-app-region: no-drag;

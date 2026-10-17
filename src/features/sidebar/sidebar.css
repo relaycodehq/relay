@@ -760,6 +760,7 @@
   outline: none;
   transition:
     background-color 0.12s,
+    box-shadow 0.12s,
     opacity 0.12s;
   animation: sb-enter 0.22s ease-out;
 }
@@ -771,6 +772,16 @@
 }
 .sb-card.selected {
   background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+:root[data-glass] .sb-card:not(.selected):hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+:root[data-glass] .sb-card:hover,
+:root[data-glass] .sb-card.selected {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+:root[data-glass] .sb-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 /* Dimmed by colour, not opacity: a faded card dropped its project and branch
    under 2:1 in the light themes. */
@@ -1160,6 +1171,21 @@
   background: color-mix(in srgb, var(--sb-waiting) 15%, var(--sidebar));
   cursor: default;
 }
+/* Mixed into the solid sidebar the amber turns to a slab on glass; tinted
+   glass with an amber edge keeps the frost. */
+:root[data-glass] .sb-card.draft {
+  background: color-mix(in srgb, var(--sb-waiting) 8%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--sb-waiting) 18%, transparent);
+}
+:root[data-glass] .sb-card.draft:hover {
+  background: color-mix(in srgb, var(--sb-waiting) 12%, transparent);
+}
+:root[data-glass] .sb-card.draft.selected {
+  background: color-mix(in srgb, var(--sb-waiting) 15%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--sb-waiting) 28%, transparent);
+}
 .sb-card-title.untitled {
   color: var(--muted);
 }
@@ -1190,6 +1216,11 @@
 }
 .sb-card[data-reordering]:not(.draft, .selected, :hover) {
   background: var(--sidebar);
+}
+/* Over frosted glass a solid cover shows as a box, and a see-through window
+   gets no backdrop blur, so a sliding card just passes over the others. */
+:root[data-glass] .sb-card[data-reordering]:not(.draft, .selected, :hover) {
+  background: transparent;
 }
 .sb-draft-error {
   margin-top: 4px;
@@ -1234,6 +1265,11 @@
   background: var(--sidebar);
   color: var(--muted);
   font-size: 11.5px;
+}
+/* Over frosted glass a cover would show as a box. */
+:root[data-glass] .sb .sb-shelf-toggle,
+:root[data-glass] .sb-shelf-floor {
+  background: transparent;
 }
 .sb-shelf-toggle b {
   font-weight: 500;

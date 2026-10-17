@@ -25,6 +25,7 @@ export function desktopHandlers(ctx: ApiContext) {
           .object({
             mode: z.enum(["system", "light", "dark"]),
             background: z.string().regex(/^#[0-9a-f]{6}$/i),
+            glass: z.boolean(),
             icon: z
               .string()
               .max(2_000_000)
@@ -41,7 +42,12 @@ export function desktopHandlers(ctx: ApiContext) {
         if (!icon.isEmpty() && process.platform === "darwin")
           app.dock?.setIcon(icon);
         for (const win of window.all()) {
-          win.setBackgroundColor(appearance.background);
+          // A clear window lets its macOS vibrancy show through the page.
+          win.setBackgroundColor(
+            appearance.glass && process.platform === "darwin"
+              ? "#00000000"
+              : appearance.background,
+          );
           if (!icon.isEmpty() && process.platform !== "darwin")
             win.setIcon(icon);
         }

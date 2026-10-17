@@ -8,6 +8,17 @@
   background: var(--surface);
   color: var(--text);
 }
+/* Frosted glass: the nav shows the frost, so only the pane is solid. */
+:root[data-glass] .settings-screen {
+  background: transparent;
+}
+:root[data-glass] .settings-pane {
+  background: var(--surface);
+}
+/* With the chat frosted, Settings is too, so its sliders show what they do. */
+:root[data-glass-chat] .settings-pane {
+  background: color-mix(in srgb, var(--surface) var(--glass-chat), transparent);
+}
 .settings-screen button {
   font-size: 12.5px;
 }

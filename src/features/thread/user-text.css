@@ -12,6 +12,11 @@
   font-size: var(--prompt-font-size, 13px);
   line-height: 1.65;
 }
+/* Frosted chat: a tint of glass rather than a solid box. */
+:root[data-glass-chat] .project-message.user > .user-text {
+  border-color: color-mix(in srgb, var(--text) 10%, transparent);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
 .project-message .user-text > .markdown {
   font-size: inherit;
   line-height: inherit;

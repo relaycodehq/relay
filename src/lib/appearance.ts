@@ -17,6 +17,7 @@ import {
 } from "./themes";
 import { relayIconPng } from "./relay-icon";
 import { setTitleBarBase } from "./titlebar-tint";
+import { mac } from "./mod-key";
 import type { PhonePalette } from "../../shared/remote";
 
 let value: Appearance = loadAppearance();
@@ -32,6 +33,19 @@ let nativeTimer: ReturnType<typeof setTimeout> | undefined;
 function apply() {
   resolved = resolveAppearance(value, media.matches);
   applyToDocument(resolved);
+  document.documentElement.toggleAttribute("data-glass", glassOn());
+  document.documentElement.toggleAttribute(
+    "data-glass-chat",
+    glassOn() && value.glassChat,
+  );
+  // How solid the sidebar and chat stay over the frost; the header a step more.
+  const root = document.documentElement.style;
+  root.setProperty("--glass-sidebar", `${100 - value.glassFrost}%`);
+  root.setProperty(
+    "--glass-header",
+    `${Math.min(100, 123 - value.glassFrost)}%`,
+  );
+  root.setProperty("--glass-chat", `${100 - value.glassChatFrost}%`);
   for (const listener of listeners) listener();
   // Colour pickers fire continuously; only the settled colour reaches the
   // window background and dock icon.
@@ -55,11 +69,16 @@ async function syncNative(current: ResolvedAppearance) {
     await window.relay.applyAppearance({
       mode: value.mode,
       background: current.palette.sidebar,
+      glass: glassOn(),
       icon: await relayIconPng(current.accent),
     });
   } catch {
     // Cosmetic; the in-window theme already applied.
   }
+}
+
+function glassOn() {
+  return mac && value.glass;
 }
 
 function phonePalette(resolved: ResolvedAppearance): PhonePalette {
@@ -97,6 +116,22 @@ function update(next: Appearance) {
   value = next;
   saveAppearance(value);
   apply();
+}
+
+export function setGlass(glass: boolean) {
+  update({ ...value, glass });
+}
+
+export function setGlassChat(glassChat: boolean) {
+  update({ ...value, glassChat });
+}
+
+export function setGlassFrost(glassFrost: number) {
+  update({ ...value, glassFrost });
+}
+
+export function setGlassChatFrost(glassChatFrost: number) {
+  update({ ...value, glassChatFrost });
 }
 
 export function setMode(mode: AppearanceMode) {

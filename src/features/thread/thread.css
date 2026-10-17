@@ -312,6 +312,19 @@
 .thread-bottom-composer > * {
   pointer-events: auto;
 }
+/* Frosted chat: fading into the solid surface would leave a solid strip, so
+   the thread under the composer blurs away instead. */
+:root[data-glass-chat] .thread-bottom-composer {
+  background: none;
+}
+:root[data-glass-chat] .thread-bottom-composer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  backdrop-filter: blur(16px);
+  mask-image: linear-gradient(to bottom, transparent, #000 56px);
+}
 /* A failed send sits in the composer's column, not across the whole pane. */
 :is(.thread-start, .thread-bottom-composer) > .error-box {
   max-width: var(--thread-width);

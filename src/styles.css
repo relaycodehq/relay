@@ -1009,6 +1009,10 @@ small {
   background: var(--inbox);
   border-radius: 6px;
 }
+:root[data-glass-chat] .markdown pre,
+:root[data-glass-chat] .markdown :not(pre) > code {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
 .markdown pre code {
   background: transparent;
   padding: 0;

@@ -707,6 +707,8 @@ export interface Api
   applyAppearance(appearance: {
     mode: "system" | "light" | "dark";
     background: string;
+    /** Frosted glass: a clear window over macOS vibrancy. */
+    glass: boolean;
     icon: string;
   }): Promise<void>;
   /** Colours Linux's native window controls; see lib/titlebar-tint.ts. */

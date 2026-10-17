@@ -10,6 +10,11 @@
   overflow: hidden;
   box-shadow: 0 5px 18px #00000006;
 }
+/* Frosted chat keeps the composer solid: a see-through window blurs nothing
+   behind it, and the thread scrolls under it. Only its edge is glass. */
+:root[data-glass-chat] .project-composer {
+  border-color: color-mix(in srgb, var(--text) 12%, transparent);
+}
 .composer-tools {
   display: flex;
   flex-wrap: wrap;
