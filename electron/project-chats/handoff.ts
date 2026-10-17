@@ -525,6 +525,7 @@ export class ComputerHandoff {
     const active = this.core.active.get(id);
     const model = (active?.input ?? chat.lastInput)?.choice.model;
     const request = active?.requests.list()[0];
+    const running = active && this.core.active.ledger.get(active.turnId);
     const peek: HandoffTurn = {
       ...(last ? turnPeek(last) : {}),
       ...(model ? { model } : {}),
@@ -535,7 +536,7 @@ export class ComputerHandoff {
               .slice(0, 300),
           }
         : {}),
-      ...(active ? { runningFor: Date.now() - active.started } : {}),
+      ...(running ? { runningFor: Date.now() - running.startedAt } : {}),
     };
     if (last?.status === "failed")
       return {

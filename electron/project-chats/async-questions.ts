@@ -123,7 +123,7 @@ export class AsyncQuestions {
       const answerMessageId = randomUUID();
       if (
         active?.steer &&
-        !active.stopping &&
+        !this.core.active.stopping(active) &&
         active.input &&
         agentAsked(active.input)?.provider === message.provider &&
         (active.input.parentId ?? null) === (message.parentId ?? null)

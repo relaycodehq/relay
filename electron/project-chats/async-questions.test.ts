@@ -65,6 +65,7 @@ function fixture() {
   const send = vi.fn().mockResolvedValue(undefined);
   return {
     questions: new AsyncQuestions(core, send),
+    active,
     chat,
     message,
     run,
@@ -91,7 +92,7 @@ it("dismisses and reopens a saved question without answering, steering or stoppi
     message: f.message,
   });
   expect(f.message.status).toBe("streaming");
-  expect(f.run.stopping).toBeFalsy();
+  expect(f.active.stopping(f.run)).toBe(false);
   expect(f.run.steer).not.toHaveBeenCalled();
   expect(f.send).not.toHaveBeenCalled();
   expect(f.chat.messages).toHaveLength(1);

@@ -152,9 +152,7 @@ export class ThreadList {
         ];
         // Open questions need the user even while the agent continues.
         // A thread handed away is answered on that computer.
-        const blocked = crew.some(
-          (t) => !!this.core.active.handle(t.id)?.requests.list().length,
-        );
+        const blocked = crew.some((t) => t.blocked);
         const waiting = blocked || (!!c.asking && !c.sentTo);
         return active || stopping || pending.length || waiting
           ? {

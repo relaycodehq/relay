@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { ChatMessage, ChatSummary } from "../../shared/projects";
+import type {
+  ChatMessage,
+  ChatSummary,
+  ProjectChat,
+} from "../../shared/projects";
 import {
   answerNews,
   waitingNews,
@@ -13,17 +17,19 @@ import type { TurnLedger } from "./ledger";
 
 /** News kept for a client catching up; one further behind starts from the list. */
 const KEEP_NEWS = 500;
-/** How often a project's list is read for threads that started needing you. */
-const LIST_MS = 50;
 
 export interface NewsThreads {
-  /** The thread's list entry as it reads now. */
+  /** The thread's list entry, for one no longer in memory. */
   summary(chatId: string): ChatSummary | undefined;
   /** The message a turn wrote, as the thread in memory has it. */
   answer(chatId: string, answerId: string): ChatMessage | undefined;
   /** Messages wait in the thread's queue and will go out next. */
   queued(chatId: string): boolean;
-  list(projectId: string): ChatSummary[];
+  /**
+   * The thread as news reads it, from memory and the ledger rather than the
+   * project's list; `chat` is the copy just saved.
+   */
+  thread(chatId: string, chat?: ProjectChat): ChatSummary | undefined;
 }
 
 /**
@@ -37,11 +43,10 @@ export class TurnNews {
   private seq = 0;
   private items: NewsItem[] = [];
   private listeners = new Set<(item: NewsItem) => void>();
-  /** Whether each thread waited when the last list read it. */
+  /** Whether each thread waited when news last looked; one it hasn't seen yet isn't news. */
   private waited = new Map<string, boolean>();
   /** A finished answer whose news waits for the thread's next end, by thread. */
   private held = new Map<string, Turn>();
-  private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private disposed = false;
   private unsubscribe: () => void;
 
@@ -51,11 +56,12 @@ export class TurnNews {
   ) {
     // Decided as the turn ends, so news is out before anyone hears the thread went idle.
     this.unsubscribe = ledger.onEvent((event) => {
-      if (event.type !== "ended") return;
       try {
-        this.ended(event.turn);
+        if (event.type === "ended") this.ended(event.turn);
+        // A turn opening, asking or ending can change whether its thread waits on you.
+        this.looked(event.turn.threadId);
       } catch (e) {
-        console.warn("Could not tell of the turn's end:", e);
+        console.warn("Could not tell of the turn:", e);
       }
     });
   }
@@ -76,33 +82,21 @@ export class TurnNews {
   }
 
   /**
-   * The project's list may read differently: a thread in it may need you
-   * now, or a held answer is free to tell.
+   * The thread was saved: a question in it may be open now, or its queue
+   * cleared or paused with nothing run after a held answer.
    */
-  changed(projectId: string) {
-    if (this.disposed || this.timers.has(projectId)) return;
-    const timer = setTimeout(() => {
-      this.timers.delete(projectId);
-      let chats: ChatSummary[];
-      try {
-        chats = this.threads.list(projectId);
-      } catch {
-        return; // The project is gone.
+  saved(chat: ProjectChat) {
+    if (this.disposed) return;
+    try {
+      this.looked(chat.id, chat);
+      const held = this.held.get(chat.id);
+      if (held && !this.busy(chat.id)) {
+        this.held.delete(chat.id);
+        this.tellEnd(held);
       }
-      for (const chat of chats) {
-        const news = waitingNews(this.waited.get(chat.id), chat);
-        this.waited.set(chat.id, !!chat.waiting);
-        if (news) this.tell(news, chat.projectId);
-        // The queue was cleared or paused with nothing run after the held answer.
-        const held = this.held.get(chat.id);
-        if (held && !this.busy(chat.id)) {
-          this.held.delete(chat.id);
-          this.tellEnd(held);
-        }
-      }
-    }, LIST_MS);
-    timer.unref?.();
-    this.timers.set(projectId, timer);
+    } catch (e) {
+      console.warn("Could not tell of the thread:", e);
+    }
   }
 
   /** News another computer decided, of a thread handed to it live. */
@@ -116,10 +110,17 @@ export class TurnNews {
   dispose() {
     this.disposed = true;
     this.unsubscribe();
-    for (const timer of this.timers.values()) clearTimeout(timer);
-    this.timers.clear();
     this.listeners.clear();
     this.held.clear();
+  }
+
+  /** Tells of the thread when it started waiting on you since news last looked. */
+  private looked(threadId: string, saved?: ProjectChat) {
+    const chat = this.threads.thread(threadId, saved);
+    if (!chat) return;
+    const news = waitingNews(this.waited.get(threadId), chat);
+    this.waited.set(threadId, !!chat.waiting);
+    if (news) this.tell(news, chat.projectId);
   }
 
   private ended(turn: Turn) {
@@ -147,12 +148,13 @@ export class TurnNews {
   }
 
   private tellEnd(turn: Turn) {
-    // Only these can be news; the thread's summary costs a list of its project.
     if (turn.endedAs !== "completed" && turn.endedAs !== "failed") return false;
     const answer = turn.answerId
       ? this.threads.answer(turn.threadId, turn.answerId)
       : undefined;
-    const chat = this.threads.summary(turn.threadId);
+    // From memory: the list hears of the turn's last save only after it ends.
+    const chat =
+      this.threads.thread(turn.threadId) ?? this.threads.summary(turn.threadId);
     const news = chat && answerNews(turn, chat, answer);
     if (!news) return false;
     this.tell(news, chat.projectId, {

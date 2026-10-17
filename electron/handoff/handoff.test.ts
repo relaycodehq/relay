@@ -888,6 +888,27 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
   expect(back.filter((m) => m.body.includes("One more thing"))).toHaveLength(1);
 });
 
+it("tells once here that a live handoff's thread needs you, as the other computer said", async () => {
+  const { laptop, thread } = await liveThread();
+  const told: NewsItem[] = [];
+  laptop.chats.onNews((item) => told.push(item));
+  // What the other computer sends when its agent asks: the live state, then its news.
+  laptop.chats.setHandoffLive(thread.id, { running: true, waiting: true });
+  laptop.chats.handoffNews(thread.id, laptop.projectId, {
+    kind: "waiting",
+    title: thread.title,
+    body: "Codex needs you",
+  });
+  await vi.waitFor(() =>
+    expect(
+      laptop.chats.list(laptop.projectId).find((c) => c.id === thread.id)
+        ?.waiting,
+    ).toBe(true),
+  );
+  // Waiting is told as it happens, never read off the list: here only by the other computer.
+  expect(told.map((i) => [i.kind, i.chatId])).toEqual([["waiting", thread.id]]);
+});
+
 /** A new thread started on the mini, its first answer written there and mirrored here. */
 async function startedThread() {
   const paired = await pairedComputers();

@@ -90,6 +90,15 @@ export class TurnLedger {
     this.write("phase", turn);
   }
 
+  /** Its agent asked you something and waits, or no longer does. */
+  blocked(id: string, waits: boolean) {
+    const turn = this.open.get(id);
+    if (!turn || !!turn.blocked === waits) return;
+    if (waits) turn.blocked = true;
+    else delete turn.blocked;
+    this.write("blocked", turn);
+  }
+
   end(id: string, endedAs: TurnEnd, answerId?: string) {
     const turn = this.open.get(id);
     if (!turn) return;

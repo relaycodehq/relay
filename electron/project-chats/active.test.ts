@@ -47,6 +47,21 @@ describe("ActiveTurns", () => {
     ]);
   });
 
+  it("keeps in the ledger whether a turn's agent waits on you", async () => {
+    const turns = new ActiveTurns(() => {});
+    const held = turns.claim("t", input);
+    const asked = held.requests.ask({
+      kind: "approval",
+      title: "Run the checks?",
+      decisions: ["accept"],
+    });
+    expect(turns.ledger.get(held.turnId)?.blocked).toBe(true);
+    const [request] = held.requests.list();
+    held.requests.respond(request!.id, { kind: "approval", decision: "accept" });
+    await asked;
+    expect(turns.ledger.get(held.turnId)?.blocked).toBeUndefined();
+  });
+
   it("gives the thread back when a turn's job settled a sweep ago without releasing it", async () => {
     const turns = new ActiveTurns(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});

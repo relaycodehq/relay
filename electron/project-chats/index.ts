@@ -45,6 +45,7 @@ import type {
   NewsItem,
   ThreadNews,
 } from "../../shared/thread-news";
+import { working } from "../../shared/turns";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -58,7 +59,7 @@ import { IdleCompactions } from "./idle-compact";
 import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
-import { ChatStorage } from "./storage";
+import { ChatStorage, chatSummary } from "./storage";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
 import { TerminalContinue } from "./terminal-continue";
@@ -219,9 +220,20 @@ export class ProjectChats {
         const chat = this.storage.cached(chatId);
         return !!chat?.queue?.length && !chat.queuePaused;
       },
-      list: (projectId) => this.threads.list(projectId),
+      thread: (id, chat = this.storage.cached(id)) => {
+        if (!chat) return;
+        const summary = chatSummary(chat);
+        // As the thread's list entry reads it; one handed away waits there, which tells it.
+        const blocked = this.active.ledger
+          .inThread(id)
+          .some((t) => t.blocked && working(t.phase));
+        return {
+          ...summary,
+          waiting: blocked || (!!summary.asking && !summary.sentTo),
+        };
+      },
     });
-    this.storage.onSummaries((projectId) => this.news.changed(projectId));
+    this.storage.onSaved((chat) => this.news.saved(chat));
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
     this.creating = new ThreadCreate(core);
     this.notes = new ThreadNotes(core);
@@ -830,7 +842,7 @@ export class ProjectChats {
       (goal?.type === "pause" || goal?.type === "clear") &&
       !input.parentId &&
       running?.goal &&
-      !running.stopping
+      !this.active.stopping(running)
     )
       return running.goal(goal.type);
     // Sent right after a stop: it waits for the agent to let go, rather
@@ -1002,7 +1014,7 @@ export class ProjectChats {
   /** Adds a page the thread's agent showed to the answer it is writing; see electron/html-renders. */
   async showRender(id: string, render: HtmlRender, pages: string[]) {
     const active = this.active.get(id);
-    if (!active?.render || active.finishing || active.stopping)
+    if (!active?.render || this.active.windingDown(active))
       throw new Error("This thread has no running answer to show it in.");
     await this.storage.renders.save(id, render.id, pages);
     active.render(render);
@@ -1017,8 +1029,8 @@ export class ProjectChats {
     jpeg: Buffer | null,
   ) {
     const active = this.active.get(id);
-    if (!active?.preview || !active.answerId || active.finishing) return;
-    if (active.stopping) return;
+    if (!active?.preview || !active.answerId || this.active.windingDown(active))
+      return;
     const shot =
       !!jpeg &&
       (await this.storage.shown
@@ -1044,7 +1056,7 @@ export class ProjectChats {
    */
   async askWithPage(id: string, page: HtmlRender, html: string, ask: string) {
     const active = this.active.get(id);
-    if (!active?.askPage || active.finishing || active.stopping)
+    if (!active?.askPage || this.active.windingDown(active))
       throw new Error("This thread has no running answer to ask in.");
     await this.storage.renders.save(id, page.id, [html]);
     active.askPage({

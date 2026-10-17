@@ -494,7 +494,8 @@ export class TurnRunner {
         chat.queuePaused = true;
     } finally {
       abort.signal.removeEventListener("abort", stop);
-      if (mine && !mine.stopping) this.core.active.finishing(chat.id, mine);
+      // A stopped turn reads as stopping until it ends; the ledger keeps it so.
+      if (mine) this.core.active.finishing(chat.id, mine);
       const ended = answer.message;
       if (turn.kind === "reply")
         settleFixes(chat.findings, input.id, ended.status === "complete");

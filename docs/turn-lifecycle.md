@@ -34,6 +34,7 @@ those waits are where the release builds kept failing.
 | `phase` | `starting` → `running` → (`finishing` \| `stopping`) → `ended` |
 | `endedAs` | `completed`, `failed`, `cancelled`, `unstarted`, `interrupted`, `lost` |
 | `answerId` | the message the turn writes into, once it has one |
+| `blocked` | its agent asked you something (an approval, a question) and waits for the answer |
 | `startedAt`, `endedAt` | on this computer's clock |
 
 - `starting`: the thread is held, but no agent runs yet: a new worktree is
@@ -45,15 +46,17 @@ those waits are where the release builds kept failing.
 - `ended`: the thread is given back.
 
 Questions and approvals are not a phase. A turn that asks something still
-runs; the thread's `waiting` flag says it needs you.
+runs, `blocked` until it has its answer; the thread's `waiting` flag says it
+needs you.
 
 **Runtime handles stay where they are.** `ActiveTurns` keeps what a running
 turn needs to be controlled (its abort controller, open requests, steer and
-goal callbacks). Every one of its turns carries a ledger id, and every
-transition it makes goes through the ledger. Nothing else decides whether a
-turn runs.
+goal callbacks), and none of its state: whether a turn is stopping or
+finishing, when it started and whether it waits on you are the ledger's.
+Every one of its turns carries a ledger id, and every transition it makes
+goes through the ledger. Nothing else decides whether a turn runs.
 
-**One way to change a turn.** `TurnLedger.start`, `.phase` and `.end` write
+**One way to change a turn.** `TurnLedger.start`, `.phase`, `.blocked` and `.end` write
 the turn and an event in one SQLite transaction, then tell subscribers in
 sequence order; a subscriber that throws never holds up the turn. A
 transition from a turn that already ended is ignored, so a late completion
@@ -70,16 +73,21 @@ completion for any turn but the current one.
 - **News.** One place on the computer, `TurnNews` in `electron/turns/`,
   decides what is news, by the rules in `shared/thread-news.ts`: a `finished`
   or `failed` answer as a turn of kind `answer`, `adopt` or `lead` ends, and
-  `waiting` when a thread starts needing you. A usage limit is the failed
+  `waiting` when a thread starts needing you: a turn of it turns `blocked`,
+  or a save leaves a question open in an answer. That is decided as it
+  happens too, from the thread in memory and the ledger; a thread handed to
+  another computer live waits there, and that computer's news tells it. A
+  usage limit is the failed
   answer's news, once. A compaction, a handoff note or a side answer is never
   news, and neither is a stopped or interrupted turn. It's decided as the turn
-  ends, from the thread as it reads then, never by comparing one thread list
+  ends, from the thread in memory as it reads then (the list hears of the
+  turn's last save only after it ends), never by comparing one thread list
   with the next. A send that fails before its agent runs ends its turn as
   `failed` too. While another answer runs beside it or a queued message goes
   out next, a finished answer waits: the thread's last end tells, or the one
   held back does if that end has no news of its own and wasn't a stop. When
   the queue is cleared or paused instead and nothing runs after it, the held
-  answer is told as the thread's list next reads that way.
+  answer is told as that change is saved.
   Whether someone watched it run can't be told when it ends (a window marks
   a thread read only once it's idle), so a window's sounds skip the thread
   it shows and a phone keeps quiet while someone is at the computer. The

@@ -23,14 +23,9 @@ it("counts blocking requests from helpers even when the parent keeps running", (
     reviewer: { parent: "parent", slot: 0 },
     startedBy: { chatId: "parent", agent: "claude" },
   };
-  let blocked = false;
   const running = new ActiveTurns(() => {});
   const input = { provider: "claude", body: "" } as ProjectChatSend;
   const held = [running.claim("parent", input), running.claim("helper", input)];
-  held[1].requests = {
-    list: () => (blocked ? [{}] : []),
-    close: () => {},
-  } as never;
   const core = {
     store: { get: () => ({ chats: [parent, helper], autoSettleDays: null }) },
     projects: { get: () => ({ settings: {} }) },
@@ -41,7 +36,10 @@ it("counts blocking requests from helpers even when the parent keeps running", (
   const review = () => threads.list("p").find((c) => c.id === "parent")!;
   expect(review()).toMatchObject({ running: true, waiting: true });
   expect(review().blocked).toBeUndefined();
-  blocked = true;
+  // The reviewer's agent asks for approval.
+  void held[1].requests
+    .ask({ kind: "approval", title: "Run the checks?", decisions: ["accept"] })
+    .catch(() => {});
   expect(review().blocked).toBe(true);
   // The reviewer is listed too, under its review, and blocked on its own.
   expect(threads.list("p").find((c) => c.id === "helper")).toMatchObject({

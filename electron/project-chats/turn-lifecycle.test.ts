@@ -232,6 +232,30 @@ describe("bugs the turn ledger fixed", () => {
     expect(kinds(s!.news)).toEqual(["failed"]);
   });
 
+  it("is news once when its agent asks for approval, and once more when it finishes", async () => {
+    await start();
+    const id = await s!.thread();
+    await s!.send(id, "fixture request approval", "codex", {
+      runtimeMode: "approval-required",
+    });
+    await s!.until(id, (c) => !!c.blocked);
+    expect(kinds(s!.news)).toEqual(["waiting"]);
+    const [request] = (await s!.chats.get(id)).requests!;
+    s!.chats.respond(id, request!.id, { kind: "approval", decision: "accept" });
+    await s!.ended(id);
+    expect(kinds(s!.news)).toEqual(["waiting", "finished"]);
+  });
+
+  it("is news once when its agent leaves a question in the answer and carries on", async () => {
+    await start();
+    const id = await s!.thread();
+    await s!.send(id, "fixture async question");
+    await s!.ended(id);
+    await s!.until(id, (c) => !!c.waiting);
+    // The finished answer waits for the question, which is the news.
+    expect(kinds(s!.news)).toEqual(["waiting"]);
+  });
+
   it("is news when a send fails before its agent runs", async () => {
     await start();
     vi.spyOn(console, "warn").mockImplementation(() => {});

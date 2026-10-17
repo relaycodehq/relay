@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import type { ChatSummary } from "../../shared/projects";
+import type { ChatSummary, ProjectChat } from "../../shared/projects";
 import type { NewsItem } from "../../shared/thread-news";
 import { MemoryTurnStore } from "./store";
 import { TurnLedger } from "./ledger";
@@ -17,13 +17,16 @@ const chat = (more: Partial<ChatSummary> = {}) =>
   }) as ChatSummary;
 
 let queued = false;
+let waiting = false;
 let news: TurnNews | undefined;
 afterEach(() => {
   news?.dispose();
   queued = false;
+  waiting = false;
   vi.restoreAllMocks();
-  vi.useRealTimers();
 });
+/** The thread's file as it was just saved. */
+const saved = { id: "t1" } as ProjectChat;
 function setup() {
   const ledger = new TurnLedger(new MemoryTurnStore());
   news = new TurnNews(ledger, {
@@ -38,7 +41,7 @@ function setup() {
       version: 1,
     }),
     queued: () => queued,
-    list: () => [chat()],
+    thread: () => chat(waiting ? { waiting } : {}),
   });
   const told: NewsItem[] = [];
   news.onNews((item) => told.push(item));
@@ -53,7 +56,7 @@ function setup() {
     return (endedAs: "completed" | "cancelled" | "lost") =>
       ledger.end(turn.id, endedAs);
   };
-  return { news, told, answer };
+  return { news, told, answer, ledger };
 }
 
 it("tells of answers that ran one after another out of the queue once, at the last", () => {
@@ -69,20 +72,44 @@ it("tells of answers that ran one after another out of the queue once, at the la
 });
 
 it("tells of a held answer once its queue is cleared or paused with nothing run after it", () => {
-  vi.useFakeTimers();
   const { news, told, answer } = setup();
   queued = true;
   answer("a1")("completed");
   // Still queued: the next message is on its way out.
-  news.changed("p1");
-  vi.runAllTimers();
+  news.saved(saved);
   expect(told).toEqual([]);
   queued = false;
-  news.changed("p1");
-  vi.runAllTimers();
-  news.changed("p1");
-  vi.runAllTimers();
+  news.saved(saved);
+  news.saved(saved);
   expect(told.map((i) => i.body)).toEqual(["Answer a1"]);
+});
+
+it("tells once that a thread needs you as its agent asks, and again only after it stopped waiting", () => {
+  const { told, ledger } = setup();
+  const turn = ledger.start({
+    threadId: "t1",
+    kind: "answer",
+    provider: "codex",
+  });
+  waiting = true;
+  ledger.blocked(turn.id, true);
+  news!.saved(saved);
+  expect(told.map((i) => [i.kind, i.body])).toEqual([
+    ["waiting", "Codex needs you"],
+  ]);
+  waiting = false;
+  ledger.blocked(turn.id, false);
+  waiting = true;
+  ledger.blocked(turn.id, true);
+  expect(told.map((i) => i.kind)).toEqual(["waiting", "waiting"]);
+});
+
+it("isn't news of a thread that already waited when it was first seen", () => {
+  const { told } = setup();
+  waiting = true;
+  news!.saved(saved);
+  news!.saved(saved);
+  expect(told).toEqual([]);
 });
 
 it("tells of the finished answer when the turn beside it ends without news of its own", () => {

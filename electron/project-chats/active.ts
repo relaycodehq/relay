@@ -20,7 +20,6 @@ export type AgentControl = Parameters<
 export interface ActiveChat {
   /** The turn in the ledger; see docs/turn-lifecycle.md. */
   turnId: string;
-  started: number;
   requests: AgentRequests;
   abort: AbortController;
   job?: Promise<unknown>;
@@ -40,10 +39,6 @@ export interface ActiveChat {
   retune?: AgentControl["retune"];
   /** Settles once the turn gives the thread back; see `release`. */
   ended: Promise<void>;
-  /** The answer is written; the turn only saves before giving the thread back. */
-  finishing?: boolean;
-  /** Stopped: the answer already shows it, while the agent winds down. */
-  stopping?: boolean;
   /** Stopped to send a steer it hadn't read: the queue goes on after that. */
   keepsQueue?: boolean;
   /** The message the turn writes; how it ended is how the turn did. */
@@ -143,12 +138,15 @@ export class ActiveTurns {
       kind,
       provider: sentAgent(input),
     });
+    const requests: AgentRequests = new AgentRequests(abort.signal, () => {
+      this.ledger.blocked(turn.id, requests.list().length > 0);
+      this.changed(id);
+    });
     const active: ActiveChat = {
       turnId: turn.id,
-      started: turn.startedAt,
       abort,
       input,
-      requests: new AgentRequests(abort.signal, () => this.changed(id)),
+      requests,
       ended,
       end,
     };
@@ -228,7 +226,6 @@ export class ActiveTurns {
   }
   /** The answer is written; the turn saves before it gives the thread back. */
   finishing(id: string, active: ActiveChat) {
-    active.finishing = true;
     this.ledger.phase(active.turnId, "finishing");
     this.changed(id);
   }
@@ -239,7 +236,6 @@ export class ActiveTurns {
     if (!running.some(Boolean)) return;
     for (const active of running) {
       if (!active) continue;
-      active.stopping = true;
       this.ledger.phase(active.turnId, "stopping");
       active.abort.abort();
     }
@@ -273,12 +269,21 @@ export class ActiveTurns {
    */
   async finished(id: string) {
     const active = this.turns.get(id);
-    if (active?.finishing || active?.stopping)
+    if (active && this.windingDown(active))
       await withTimeout(
         active.ended,
-        active.stopping ? 30_000 : 10_000,
+        this.stopping(active) ? 30_000 : 10_000,
         "",
       ).catch(() => {});
+  }
+  /** Stopped: the answer already shows it, while the agent winds down. */
+  stopping(active: ActiveChat) {
+    return this.ledger.get(active.turnId)?.phase === "stopping";
+  }
+  /** Its answer shows as finished or stopped; the turn only winds down. */
+  windingDown(active: ActiveChat) {
+    const phase = this.ledger.get(active.turnId)?.phase;
+    return phase === "finishing" || phase === "stopping";
   }
 
   async assertIdle(id: string) {

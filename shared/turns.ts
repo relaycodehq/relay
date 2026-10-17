@@ -35,6 +35,8 @@ export interface Turn {
   parentTurnId?: string;
   /** The message it writes into, once it has one. */
   answerId?: string;
+  /** Its agent asked you something (an approval, a question) and waits for the answer. */
+  blocked?: true;
   startedAt: number;
   endedAt?: number;
   endedAs?: TurnEnd;
@@ -44,7 +46,7 @@ export interface Turn {
 export interface TurnEvent {
   seq: number;
   at: number;
-  type: "opened" | "phase" | "ended";
+  type: "opened" | "phase" | "blocked" | "ended";
   turn: Turn;
 }
 
