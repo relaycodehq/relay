@@ -42,7 +42,7 @@ data class DictationState(
     val phase: Phase = Phase.Idle,
     /** Which composer is dictating, or last tried to (for its error). */
     val owner: Any? = null,
-    /** The desktop is still loading the model; the audio waits for it there. */
+    /** The engine is still loading; the audio waits for it. */
     val loading: Boolean = false,
     val error: String? = null,
 ) {
@@ -52,10 +52,10 @@ data class DictationState(
 typealias DictateCall = suspend (DictationRequest) -> DictationHeard
 
 /**
- * mobile/src/remote/dictation.ts: the phone's microphone, the paired
- * desktop's speech engine. Audio goes over the encrypted link in 80 ms
- * chunks; each answer carries the words heard so far. One per process; all
- * calls on the main thread.
+ * The phone's microphone and the paired desktop's speech engine, or the
+ * phone's own (`DictationEngine`). To the desktop audio goes over the
+ * encrypted link in 80 ms chunks; each answer carries the words heard so
+ * far. One per process; all calls on the main thread.
  */
 class Dictation(
     private val mic: Mic,
@@ -64,6 +64,8 @@ class Dictation(
     private val permitted: () -> Boolean,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** A fresh phone engine when that's the one picked; null dictates with the desktop. */
+    private val phone: () -> Hearer? = { null },
 ) {
     private val _state = MutableStateFlow(DictationState())
     val state: StateFlow<DictationState> = _state.asStateFlow()
@@ -91,9 +93,18 @@ class Dictation(
     private var nextId = Random.nextInt(1_000_000)
     private var session: Session? = null
 
+    private class Here(val hearer: Hearer, val target: DictationTarget) {
+        var stopRequested = false
+        var heard = ""
+        var began = false
+    }
+
+    private var here: Here? = null
+
     /** Starts listening into `target`. */
     fun start(target: DictationTarget, owner: Any) {
         if (snapshot.phase != DictationState.Phase.Idle) return
+        phone()?.let { return startHere(it, target, owner) }
         val link = call()
         if (link == null) {
             snapshot = DictationState(owner = owner, error = "Not connected to your computer.")
@@ -173,8 +184,64 @@ class Dictation(
         snapshot = snapshot.copy(phase = DictationState.Phase.Idle, loading = false, error = describe(error))
     }
 
-    /** Finishes: the last words settle on the desktop, then the text stays in the composer. */
+    private fun startHere(hearer: Hearer, target: DictationTarget, owner: Any) {
+        val current = Here(hearer, target)
+        here = current
+        beforeStart()
+        snapshot = DictationState(DictationState.Phase.Starting, owner, loading = true)
+        if (!permitted()) return endHere(
+            current, null, "Relay isn't allowed to use the microphone. Allow it in Android's settings for Relay.",
+        )
+        hearer.start(object : Hearer.Listener {
+            override fun onReady() {
+                if (here !== current || current.began) return
+                current.began = true
+                target.begin()
+                snapshot = snapshot.copy(phase = DictationState.Phase.Listening, loading = false)
+                if (current.stopRequested) stop()
+            }
+
+            override fun onLevel(level: Float) {
+                if (here === current) _levels.tryEmit(level)
+            }
+
+            override fun onHeard(settled: String, tentative: String) {
+                if (here !== current) return
+                current.heard = listOf(settled, tentative).filter { it.isNotEmpty() }.joinToString(" ")
+                if (current.began) target.update(settled, tentative)
+            }
+
+            override fun onEnd(text: String) {
+                if (here === current) endHere(current, text, null)
+            }
+
+            override fun onError(message: String) {
+                if (here === current) endHere(current, current.heard, message)
+            }
+        })
+    }
+
+    private fun endHere(current: Here, text: String?, error: String?) {
+        here = null
+        if (current.began) current.target.end(text?.ifEmpty { null })
+        // A failure stays with the composer that hit it.
+        snapshot = if (error == null) DictationState()
+        else snapshot.copy(phase = DictationState.Phase.Idle, loading = false, error = error)
+    }
+
+    /** Finishes: the last words settle, then the text stays in the composer. */
     fun stop() {
+        here?.let { current ->
+            when (snapshot.phase) {
+                DictationState.Phase.Starting -> current.stopRequested = true
+                DictationState.Phase.Listening -> {
+                    snapshot = snapshot.copy(phase = DictationState.Phase.Finishing)
+                    current.hearer.stop()
+                }
+                else -> {}
+            }
+            return
+        }
         val current = session ?: return
         when (snapshot.phase) {
             DictationState.Phase.Starting -> current.stopRequested = true
@@ -209,6 +276,13 @@ class Dictation(
 
     /** Stops and takes the dictated words back out. */
     fun cancel() {
+        here?.let { current ->
+            here = null
+            current.hearer.cancel()
+            if (current.began) current.target.end(null)
+            snapshot = DictationState()
+            return
+        }
         val current = session ?: return
         val began = snapshot.phase == DictationState.Phase.Listening || snapshot.phase == DictationState.Phase.Finishing
         discard(current)
@@ -247,6 +321,7 @@ class Dictation(
                         ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                     },
                     scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                    phone = { if (DictationEngines.of(app).chosen == DictationEngine.Phone) PhoneSpeech(app) else null },
                 ).also { d ->
                     // Android takes the microphone away in the background; keep what was said.
                     // Not while starting: the permission prompt backgrounds the app too.

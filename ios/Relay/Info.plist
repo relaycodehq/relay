@@ -59,7 +59,9 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Relay connects to Relay on your computer over your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Dictate messages. Your computer turns the speech into text; nothing is kept on this phone.</string>
+	<string>Dictate messages. Your computer or this phone turns the speech into text; no recording is kept.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Dictate messages with this phone's own speech engine; the audio stays on the phone.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>JetBrainsMono-Regular.ttf</string>

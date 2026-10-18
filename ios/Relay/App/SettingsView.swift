@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(\.navigate) private var navigate
     @AppStorage(ThemeMode.key) private var theme = ThemeMode.computer
     @AppStorage(ThreadNotices.switchKey) private var notices = true
+    @AppStorage(DictationEngine.key) private var dictation = DictationEngine.computer
     #if DEBUG
     @AppStorage(ShowTouches.key) private var touches = true
     #endif
@@ -22,6 +23,19 @@ struct SettingsView: View {
                 }
             }
             .cardRow()
+            if PhoneSpeech.available {
+                Section("Dictation") {
+                    ChoiceRow(
+                        label: "On the computer", hint: "\(name) turns speech into text; the audio goes over the link.",
+                        chosen: dictation == .computer
+                    ) { dictation = .computer }
+                    ChoiceRow(
+                        label: "On this phone", hint: "The phone's own speech engine. Needs no computer and sends no audio.",
+                        chosen: dictation == .phone
+                    ) { dictation = .phone }
+                }
+                .cardRow()
+            }
             Section("App") {
                 LabeledContent("Relay \(Connection.appVersion)") {}
                 #if DEBUG

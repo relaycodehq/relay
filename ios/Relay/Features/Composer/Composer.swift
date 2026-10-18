@@ -52,6 +52,7 @@ struct Composer: View {
     @State private var sending = false
     @State private var error: String?
     @State private var dictation = DictationSession()
+    @AppStorage(DictationEngine.key) private var dictationEngine = DictationEngine.computer
     /// Where dictated words go while typing (Android's DictationInput).
     private var cursor: SwiftUI.TextSelection? {
         get { field.cursor }
@@ -316,7 +317,7 @@ struct Composer: View {
                     .buttonStyle(.plain)
                     .transition(.opacity)
             }
-            if connection.canDictate {
+            if connection.canDictate || (dictationEngine == .phone && PhoneSpeech.available) {
                 DictationButton(session: dictation) {
                     reader.stop()
                     // At the cursor while typing, after the draft otherwise.

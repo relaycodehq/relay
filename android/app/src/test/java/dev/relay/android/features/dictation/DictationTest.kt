@@ -152,4 +152,72 @@ class DictationTest {
         d.clearError()
         assertNull(d.state.value.error)
     }
+
+    private class FakeHearer : Hearer {
+        var listener: Hearer.Listener? = null
+        val calls = mutableListOf<String>()
+        override fun start(listener: Hearer.Listener) { calls += "start"; this.listener = listener }
+        override fun stop() { calls += "stop" }
+        override fun cancel() { calls += "cancel" }
+    }
+
+    private fun TestScope.dictationHere(hearer: FakeHearer) = StandardTestDispatcher(testScheduler).let { d ->
+        Dictation(mic, { null }, { permitted }, CoroutineScope(d), io = d, phone = { hearer })
+    }
+
+    @Test fun dictatesOnThePhoneWithoutTheDesktop() = runTest {
+        val hearer = FakeHearer()
+        val d = dictationHere(hearer)
+        val target = Target()
+        d.start(target, "composer")
+        assertEquals(DictationState.Phase.Starting, d.state.value.phase)
+        hearer.listener!!.onReady()
+        assertEquals(DictationState.Phase.Listening, d.state.value.phase)
+        assertEquals(false, d.state.value.loading)
+        hearer.listener!!.onHeard("fix the", "test")
+        d.stop()
+        assertEquals(DictationState.Phase.Finishing, d.state.value.phase)
+        hearer.listener!!.onEnd("fix the test")
+        assertEquals(listOf("begin", "update fix the|test", "end fix the test"), target.log)
+        assertEquals(listOf("start", "stop"), hearer.calls)
+        assertTrue(requests.isEmpty())
+        assertEquals(DictationState(), d.state.value)
+    }
+
+    @Test fun aStopBeforeThePhoneListensFinishesOnceItDoes() = runTest {
+        val hearer = FakeHearer()
+        val d = dictationHere(hearer)
+        d.start(Target(), "composer")
+        d.stop()
+        assertEquals(listOf("start"), hearer.calls)
+        hearer.listener!!.onReady()
+        assertEquals(listOf("start", "stop"), hearer.calls)
+    }
+
+    @Test fun thePhoneKeepsItsWordsWhenItsEngineFails() = runTest {
+        val hearer = FakeHearer()
+        val d = dictationHere(hearer)
+        val target = Target()
+        d.start(target, "composer")
+        hearer.listener!!.onReady()
+        hearer.listener!!.onHeard("fix it", "")
+        hearer.listener!!.onError("The microphone isn't available.")
+        assertEquals("end fix it", target.log.last())
+        assertEquals("The microphone isn't available.", d.state.value.error)
+        assertEquals("composer", d.state.value.owner)
+    }
+
+    @Test fun cancelOnThePhoneTakesTheWordsOutAndIgnoresLateOnes() = runTest {
+        val hearer = FakeHearer()
+        val d = dictationHere(hearer)
+        val target = Target()
+        d.start(target, "composer")
+        hearer.listener!!.onReady()
+        hearer.listener!!.onHeard("oops", "")
+        d.cancel()
+        hearer.listener!!.onEnd("oops")
+        assertEquals(listOf("begin", "update oops|", "end null"), target.log)
+        assertEquals(listOf("start", "cancel"), hearer.calls)
+        assertEquals(DictationState(), d.state.value)
+    }
 }

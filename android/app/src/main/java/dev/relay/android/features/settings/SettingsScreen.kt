@@ -34,6 +34,9 @@ import kotlinx.coroutines.CoroutineScope
 import dev.relay.android.ui.ListInset
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.License
+import androidx.compose.ui.platform.LocalContext
+import dev.relay.android.features.dictation.DictationEngine
+import dev.relay.android.features.dictation.DictationEngines
 
 /**
  * mobile/src/app/settings.tsx: theme, notifications, this app's version and
@@ -81,6 +84,8 @@ fun SettingsList(
         SectionHeader("Notifications")
         ListGroup { NotificationSwitchRow(notifications, name) }
 
+        DictationSection(name)
+
         SectionHeader("App")
         ListGroup {
             ListRow(
@@ -110,6 +115,22 @@ fun SettingsList(
                 chevron = true,
                 onClick = { nav.push(Route.Gallery) },
             )
+        }
+    }
+}
+
+@Composable
+private fun DictationSection(name: String) {
+    val engines = DictationEngines.of(LocalContext.current)
+    if (!engines.available) return
+    val picked by engines.picked.collectAsState()
+    SectionHeader("Dictation")
+    ListGroup {
+        ChoiceRow("On the computer", "$name turns speech into text; the audio goes over the link.", picked == DictationEngine.Computer) {
+            engines.pick(DictationEngine.Computer)
+        }
+        ChoiceRow("On this phone", "The phone's own speech engine. Needs no computer and sends no audio.", picked == DictationEngine.Phone) {
+            engines.pick(DictationEngine.Phone)
         }
     }
 }

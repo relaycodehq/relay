@@ -14,6 +14,10 @@
     <!-- The can't-reach line turns Tailscale on through its receiver. -->
     <queries>
         <package android:name="com.tailscale.ipn" />
+        <!-- Dictation on the phone asks Android's speech recognizer. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <!-- No backups or device transfers: drafts and the outbox (pasted images among them) stay on

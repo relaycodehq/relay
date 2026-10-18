@@ -3,16 +3,17 @@ import Observation
 import RelayRemote
 import SwiftUI
 
-/// One composer's dictation: the phone's microphone, the paired computer's
-/// speech engine. Audio goes over the link one call at a time, each carrying
-/// whatever was heard since the last, so a slow link sends bigger calls
-/// instead of falling behind. Each answer carries the words heard so far.
+/// One composer's dictation: the phone's microphone, and the paired computer's
+/// speech engine or the phone's own (`DictationEngine`). To the computer audio
+/// goes over the link one call at a time, each carrying whatever was heard
+/// since the last, so a slow link sends bigger calls instead of falling
+/// behind. Each answer carries the words heard so far.
 @Observable
 final class DictationSession {
     enum Phase { case idle, starting, listening, finishing }
 
     private(set) var phase = Phase.idle
-    /// The computer is still loading the model; the audio waits for it there.
+    /// The engine is still loading; the audio waits for it.
     private(set) var loading = false
     /// The last few chunks' loudness, 0–1, oldest first.
     private(set) var levels = [Double](repeating: 0, count: 6)
@@ -77,6 +78,7 @@ final class DictationSession {
     }
 
     private func listen(_ session: Int, _ connection: Connection) async {
+        if DictationEngine.chosen == .phone { return await listenHere() }
         let mic = Microphone()
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
@@ -105,6 +107,48 @@ final class DictationSession {
             self.error = error.localizedDescription
         }
         // Taken back out: the draft as it was, the cursor where the words went.
+        write(discarding ? PlacedDictation(text: base, start: from, end: from) : placed())
+        self.mic = nil
+        phase = .idle
+        loading = false
+    }
+
+    /// The same with this phone's engine: nothing goes over the link.
+    private func listenHere() async {
+        let mic = Microphone()
+        let speech = PhoneSpeech()
+        do {
+            guard await AVAudioApplication.requestRecordPermission() else {
+                throw MicrophoneError("Relay isn't allowed to use the microphone. Allow it in Settings › Relay.")
+            }
+            // The microphone first: what's said while the engine loads waits in it.
+            let chunks = try mic.start()
+            self.mic = mic
+            phase = .listening
+            write(placed())
+            if stopAsked { stop() }
+            try await speech.start { [weak self] words in
+                guard let self, !self.discarding else { return }
+                self.heard = words
+                if self.phase == .listening { self.write(self.placed()) }
+            }
+            loading = false
+            for await power in chunks where !discarding {
+                levels = Array(levels.dropFirst()) + [loudness(power)]
+                speech.feed(mic.take(max: .max))
+            }
+            if discarding {
+                heard = ""
+                await speech.cancel()
+            } else {
+                speech.feed(mic.take(max: .max))
+                heard = try await speech.finish()
+            }
+        } catch {
+            mic.stop()
+            await speech.cancel()
+            self.error = error.localizedDescription
+        }
         write(discarding ? PlacedDictation(text: base, start: from, end: from) : placed())
         self.mic = nil
         phase = .idle

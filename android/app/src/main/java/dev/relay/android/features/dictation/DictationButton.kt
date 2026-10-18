@@ -60,6 +60,9 @@ private val LiveWidth = 120.dp
 @Composable
 fun canDictate(remote: Remote): Boolean {
     val overview by remote.overview.collectAsState()
+    val engines = DictationEngines.of(LocalContext.current)
+    val picked by engines.picked.collectAsState()
+    if (engines.available && picked == DictationEngine.Phone) return true
     val d = overview?.dictation
     return d != null && d != "unsupported"
 }

@@ -85,7 +85,8 @@ targets:
         NSBonjourServices:
           - _relay-probe._tcp
         NSCameraUsageDescription: Scan the pairing code Relay shows on your computer, and take photos to send with a message.
-        NSMicrophoneUsageDescription: Dictate messages. Your computer turns the speech into text; nothing is kept on this phone.
+        NSMicrophoneUsageDescription: Dictate messages. Your computer or this phone turns the speech into text; no recording is kept.
+        NSSpeechRecognitionUsageDescription: Dictate messages with this phone's own speech engine; the audio stays on the phone.
         # The desktop's QR code is a relay-remote:// link, so the Camera app opens it here too.
         CFBundleURLTypes:
           - CFBundleURLName: dev.relay.pair
