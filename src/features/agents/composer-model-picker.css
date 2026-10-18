@@ -829,11 +829,28 @@
 .context-compact-check {
   margin-left: auto;
 }
-.context-compact:has(+ .context-heat-toggle) {
+.context-compact:has(+ .context-compact) {
   margin-bottom: 0;
 }
-.context-heat-toggle {
+.context-compact + .context-compact {
   margin-top: 0;
+}
+.context-auto-compact {
+  text-align: left;
+}
+.context-auto-compact > .context-auto-compact-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+.context-auto-compact small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.context-auto-compact > svg {
+  flex: none;
+  color: var(--muted);
 }
 
 /* The composer's controls as a standalone toolbar, e.g. in settings. */

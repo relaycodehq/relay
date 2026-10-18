@@ -287,6 +287,28 @@
     transform: scale(0.8);
   }
 }
+/* Beside Send while the cache is cold: the other choice, compacting or not. */
+.composer-tools .composer-send-other {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.composer-tools .composer-send-other:not(:disabled):hover {
+  background: var(--hover);
+}
+.composer-tools .composer-send-other:disabled {
+  color: var(--muted);
+}
 .composer-tools .send-message:hover {
   background: color-mix(in srgb, var(--send) 88%, #fff);
 }

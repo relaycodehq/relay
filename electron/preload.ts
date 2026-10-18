@@ -322,6 +322,8 @@ const methods = [
   "checkAgentVersions",
   "agentUpdateChecks",
   "saveAgentUpdateChecks",
+  "autoCompact",
+  "saveAutoCompact",
   "updateAgent",
   "registryListing",
   "registryAgents",

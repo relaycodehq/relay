@@ -1,7 +1,7 @@
 import { useEffect, useId, useReducer, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { usePinOnClick } from "../../lib/usePinOnClick";
-import { Check, Eye, EyeOff, Minimize2 } from "lucide-react";
+import { Check, ChevronRight, Eye, EyeOff, Minimize2 } from "lucide-react";
 import type {
   ChatMessage,
   ContextUsage,
@@ -14,6 +14,9 @@ import {
   useCacheHeatHidden,
 } from "./cache-heat";
 import { agentName } from "../../../shared/agents";
+import type { AutoCompact } from "../../../shared/context-usage";
+import { openSettings } from "../../lib/settings-page";
+import { useAutoCompact } from "./auto-compact";
 import { ContextBreakdown } from "./ContextBreakdown";
 import { formatTokens } from "../../../shared/tokens";
 import {
@@ -236,6 +239,15 @@ function HeatDecoration({
   );
 }
 
+const autoSummary = ({ idle, cold }: AutoCompact) =>
+  idle && cold
+    ? "Before expiry and cold sends"
+    : idle
+      ? "Before expiry"
+      : cold
+        ? "Before cold sends"
+        : "Off";
+
 /** A clock time, with the date once it isn't today. */
 function formatClock(ms: number, now: number) {
   const sameDay = new Date(ms).toDateString() === new Date(now).toDateString();
@@ -367,6 +379,7 @@ export function ContextWindowMeter({
     heat === "fire" ? "fresh" : heat === "warm" ? "warm" : "cold";
   // Only Claude reports what fills its window.
   const claude = provider === "claude";
+  const auto = useAutoCompact();
   const breakdown = useContextReport({
     counter: claude ? counter : undefined,
     version: usage.usedTokens,
@@ -514,6 +527,22 @@ export function ContextWindowMeter({
                 />
               )}
             </button>
+            {cache && (
+              <button
+                type="button"
+                className="composer-select-item context-compact context-auto-compact"
+                onClick={() => {
+                  setOpen(false);
+                  openSettings("agents", undefined, "compact-idle");
+                }}
+              >
+                <span className="context-auto-compact-text">
+                  Automatic compaction
+                  <small>{autoSummary(auto)}</small>
+                </span>
+                <ChevronRight size={13} aria-hidden />
+              </button>
+            )}
             {cache && heat && (
               <button
                 type="button"

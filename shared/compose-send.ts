@@ -27,6 +27,8 @@ export interface SendOptions {
   parentId?: string;
   images?: NonNullable<ProjectChatSend["images"]>;
   skills?: SentSkill[];
+  /** Compact first, or not, whatever Settings say; see ProjectChatSend. */
+  compact?: boolean;
 }
 
 /** A message as every composer sends it, desktop and phone alike. */
@@ -65,6 +67,7 @@ export function buildSend(
     ...(options.parentId ? { parentId: options.parentId } : {}),
     ...(options.images?.length ? { images: options.images } : {}),
     ...(options.skills?.length ? { skills: options.skills } : {}),
+    ...(options.compact === undefined ? {} : { compact: options.compact }),
   };
 }
 

@@ -6,6 +6,11 @@ import {
 import { isUpdating } from "../../../../shared/agent-updates";
 import { accountProviders } from "../../../../shared/agent-accounts";
 import type { AISettings } from "../../../../shared/settings";
+import {
+  defaultAutoCompact,
+  type AutoCompact,
+} from "../../../../shared/context-usage";
+import { autoCompactQuery } from "../../agents/auto-compact";
 import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
@@ -119,6 +124,28 @@ export function useModelEntries(
         "acp agent client protocol registry install download add remove goose kimi qwen mistral vibe auggie droid kilo junie copilot plugin marketplace",
       block: true,
       render: () => <MoreAgents />,
+    },
+    {
+      id: "compact-idle",
+      category: "agents",
+      section: "Compaction",
+      title: "Compact before the cache expires",
+      description:
+        "While a thread waits for you, compact it 5 min before its prompt cache goes cold, so coming back starts on a short summary. Threads over 120k tokens.",
+      keywords:
+        "compact compaction summary summarize idle cache prompt cold expire automatic auto tokens context window",
+      render: () => <AutoCompactSwitch which="idle" />,
+    },
+    {
+      id: "compact-cold",
+      category: "agents",
+      section: "Compaction",
+      title: "Send compacts a cold thread first",
+      description:
+        "When the cache has expired, Send summarizes the thread before your message goes out. The button next to Send does the other thing for one message. Threads over 120k tokens.",
+      keywords:
+        "compact compaction summary summarize send cache prompt cold expire automatic auto tokens context window",
+      render: () => <AutoCompactSwitch which="cold" />,
     },
     {
       id: "review-models",
@@ -262,6 +289,30 @@ function AgentSelect({ ai }: { ai: AISave }) {
       }))}
       onChange={(threadProvider) => void ai.save({ threadProvider })}
     />
+  );
+}
+
+function AutoCompactSwitch({ which }: { which: keyof AutoCompact }) {
+  const auto = useSavedSetting(
+    autoCompactQuery,
+    (value) => api.saveAutoCompact(value),
+    autoCompactQuery.queryKey,
+  );
+  const value = auto.value ?? defaultAutoCompact;
+  return (
+    <>
+      <Switch
+        label={
+          which === "idle"
+            ? "Compact before the cache expires"
+            : "Send compacts a cold thread first"
+        }
+        checked={value[which]}
+        disabled={!auto.loaded || auto.saving}
+        onChange={(on) => auto.set({ ...value, [which]: on })}
+      />
+      {auto.error && <ErrorBox error={auto.error} />}
+    </>
   );
 }
 

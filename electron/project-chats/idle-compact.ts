@@ -1,6 +1,6 @@
 import type { ChatSummary, ProjectChat } from "../../shared/projects";
 import { chatSettled } from "../../shared/chat-activity";
-import { idleCompactAt } from "../../shared/context-usage";
+import { defaultAutoCompact, idleCompactAt } from "../../shared/context-usage";
 import { worktreeExists } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { agentSession } from "./sessions";
@@ -68,9 +68,13 @@ export class IdleCompactions {
     const chat = await this.core.storage.load(id).catch(() => undefined);
     if (this.arming.get(id) !== mine) return;
     this.arming.delete(id);
-    if (!chat || this.stopped) return;
+    if (!chat || this.stopped || !this.on()) return;
     const at = idleCompactAt(main(chat), Date.now());
     if (at !== undefined) this.schedule(id, at);
+  }
+
+  private on() {
+    return (this.core.store.get().autoCompact ?? defaultAutoCompact).idle;
   }
 
   private schedule(id: string, at: number) {
@@ -88,7 +92,8 @@ export class IdleCompactions {
 
   private async fire(id: string) {
     this.timers.delete(id);
-    if (this.core.closing()) return;
+    // Turned off in Settings since it was planned.
+    if (this.core.closing() || !this.on()) return;
     await this.core.control(id, async () => {
       const chat = await this.core.storage.load(id);
       // A sleep that outlasted the cache, or a turn since, changed what's due.

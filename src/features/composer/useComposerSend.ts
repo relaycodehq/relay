@@ -58,19 +58,28 @@ export function useComposerSend({
     steer: boolean;
     sendAt?: number;
     after?: () => void;
+    compact?: boolean;
   } | null>(null);
   useEffect(() => {
     if (!sendAfterDictation) return;
     setSendAfterDictation(null);
-    const { steer, sendAt, after } = sendAfterDictation;
-    void send(steer, sendAt, after);
+    const { steer, sendAt, after, compact } = sendAfterDictation;
+    void send(steer, sendAt, after, compact);
   }, [sendAfterDictation]);
-  /** `sendAt` holds the message until then (Send later); `after` runs once it is in. */
-  async function send(steer = false, sendAt?: number, after?: () => void) {
+  /**
+   * `sendAt` holds the message until then (Send later); `after` runs once it
+   * is in; `compact` overrides Settings on a cold cache.
+   */
+  async function send(
+    steer = false,
+    sendAt?: number,
+    after?: () => void,
+    compact?: boolean,
+  ) {
     const now = dictationSnapshot();
     if (now.owner === dictation && now.phase !== "idle") {
       void stopDictation().then((finished) => {
-        if (finished) setSendAfterDictation({ steer, sendAt, after });
+        if (finished) setSendAfterDictation({ steer, sendAt, after, compact });
       });
       return;
     }
@@ -120,6 +129,7 @@ export function useComposerSend({
           ...(running ? { running: { steer } } : {}),
           sendAt,
           skills: draft.skills(body),
+          compact,
           images: flattened.map(({ name, mimeType, dataUrl }) => ({
             name,
             mimeType,

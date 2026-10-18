@@ -28,6 +28,17 @@ export function latestContext(
  */
 export const COLD_COMPACT_TOKENS = 120_000;
 
+/**
+ * When Relay compacts a big conversation without being asked: while it
+ * waits, just before its cache expires, and before a message that finds it
+ * cold. Saved for every thread; unset is both on.
+ */
+export interface AutoCompact {
+  idle: boolean;
+  cold: boolean;
+}
+export const defaultAutoCompact: AutoCompact = { idle: true, cold: true };
+
 /** The conversation is big enough, and its cache cold, to compact before the next message. */
 export function compactsCold(usage: ContextUsage, now: number) {
   return (

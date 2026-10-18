@@ -2,7 +2,11 @@ import type { ProjectChat, ProjectChatSend } from "../../../shared/projects";
 import { replyRoot } from "../../../shared/projects";
 import { agentAsked } from "../../../shared/recipient";
 import { agentName, agentInfo } from "../../../shared/agents";
-import { compactsCold, latestContext } from "../../../shared/context-usage";
+import {
+  compactsCold,
+  defaultAutoCompact,
+  latestContext,
+} from "../../../shared/context-usage";
 import { streamingAnswer } from "../answer-recorder";
 import type { ChatCore } from "../core";
 import type { Councils } from "../councils";
@@ -71,10 +75,15 @@ export class TurnCompactions {
   }
   /**
    * Compacts before a message that finds a big conversation's prompt cache
-   * cold, for a caller holding the thread's control. The message waits in
-   * the queue behind the compaction; false leaves sending it to the caller.
+   * cold, for a caller holding the thread's control, as Settings say or the
+   * message itself asks. The message waits in the queue behind the
+   * compaction; false leaves sending it to the caller.
    */
   async firstIfCold(id: string, input: ProjectChatSend) {
+    const cold =
+      input.compact ??
+      (this.core.store.get().autoCompact ?? defaultAutoCompact).cold;
+    if (!cold) return false;
     const chat = await this.core.storage.load(id);
     const asked = agentAsked(input);
     // Behind other queued messages it would jump their order; a command
@@ -100,7 +109,11 @@ export class TurnCompactions {
       !compactsCold(held.usage, Date.now())
     )
       return false;
-    await this.queue.add(id, { ...input, delivery: undefined });
+    await this.queue.add(id, {
+      ...input,
+      delivery: undefined,
+      compact: undefined,
+    });
     try {
       await this.now(id, parentId, undefined, "cold");
     } catch (e) {

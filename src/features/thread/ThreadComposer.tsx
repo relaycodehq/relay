@@ -20,6 +20,8 @@ import type { ThreadHandle } from "./useThreadHandle";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
+import { useCacheExpired } from "../agents/auto-compact";
+import { compactsCold } from "../../../shared/context-usage";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
 import { liveAway } from "../../../shared/handoff";
 import {
@@ -241,6 +243,22 @@ export function ThreadComposer({
   const qc = useQueryClient();
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
   const cost = useMemo(() => threadCost(shown), [shown]);
+  const cacheExpired = useCacheExpired(context?.usage.cache);
+  // As the server decides in firstIfCold: a side question, or one behind
+  // queued messages, goes as is.
+  const cold =
+    chat &&
+    context &&
+    cacheExpired &&
+    !root?.side &&
+    // Sent on to the computer it's handed to, which may not know `compact`.
+    !chat.sentTo &&
+    !compacting &&
+    !history.data?.queue?.length &&
+    !history.data?.queuePaused &&
+    compactsCold(context.usage, Date.now())
+      ? { provider: context.provider, tokens: context.usage.usedTokens }
+      : undefined;
   const chatId = chat?.id;
   const counter = useMemo(
     () =>
@@ -307,6 +325,7 @@ export function ThreadComposer({
         planner: running ? undefined : openPlan(messages, shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
+        cold,
       }}
       context={
         <>

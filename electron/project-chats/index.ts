@@ -445,6 +445,10 @@ export class ProjectChats {
     this.limits.armAll();
     this.idle.armAll();
   }
+  /** Automatic idle compaction was turned on: plans it for threads idle since. */
+  armIdleCompactions() {
+    if (!this.disposing) this.idle.armAll();
+  }
   /** Turns off carrying on the answer a usage limit stopped, or back on. */
   setLimitResume(id: string, on: boolean) {
     return this.limits.set(id, on);

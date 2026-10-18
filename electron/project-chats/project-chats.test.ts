@@ -836,6 +836,40 @@ it("sends straight away while the conversation's cache is still warm", async () 
     expect.stringMatching(/^assistant:/),
   ]);
 });
+it("sends to a cold cache as Settings say, unless the message asks otherwise", async () => {
+  const answers = async (id: string) =>
+    vi.waitFor(
+      async () => {
+        expect((await chats.get(id)).messages.at(-1)?.status).toBe("complete");
+        expect((await chats.get(id)).messages.at(-1)?.role).toBe("assistant");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10_000 },
+    );
+  const asIs = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(asIs.id, { ...input("@codex Go on"), compact: false });
+  await answers(asIs.id);
+  expect(await shape(asIs.id)).not.toContain("compaction (cold)");
+
+  await store.update((s) => {
+    s.autoCompact = { idle: true, cold: false };
+  });
+  const off = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(off.id, input("@codex Go on"));
+  await answers(off.id);
+  expect(await shape(off.id)).not.toContain("compaction (cold)");
+
+  const asked = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(asked.id, { ...input("@codex Go on"), compact: true });
+  await answers(asked.id);
+  expect(await shape(asked.id)).toEqual([
+    "user:@codex Expla",
+    expect.stringMatching(/^assistant:/),
+    "compaction (cold)",
+    "user:@codex Go on",
+    expect.stringMatching(/^assistant:/),
+  ]);
+});
 it("compacts a big unread conversation just before its cache goes cold, without bumping the thread", async () => {
   const chat = await answeredLongAgo(57 * 60_000);
   const before = await chats.get(chat.id);

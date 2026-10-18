@@ -30,10 +30,10 @@ function answered(age: number, more: Partial<ProjectChat> = {}): ProjectChat {
   } as unknown as ProjectChat;
 }
 
-function planner() {
+function planner(autoCompact = { idle: true, cold: true }) {
   const compact = vi.fn(async () => {});
   const core = {
-    store: { get: () => ({ chats: [chat] }) },
+    store: { get: () => ({ chats: [chat], autoCompact }) },
     storage: { load: async () => chat },
     active: { has: () => false },
     control: threadControl(),
@@ -44,7 +44,7 @@ function planner() {
     busy: () => false,
     compact,
   });
-  return { idle, compact };
+  return { idle, compact, autoCompact };
 }
 
 beforeEach(() => {
@@ -62,6 +62,21 @@ it("compacts an unread thread five minutes before its cache expires", async () =
   expect(compact).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1 * MINUTE);
   expect(compact).toHaveBeenCalledWith("chat");
+});
+
+it("plans nothing while it's off in Settings, and drops a plan turned off since", async () => {
+  chat = answered(30 * MINUTE);
+  const off = planner({ idle: false, cold: true });
+  await off.idle.arm("chat");
+  await vi.advanceTimersByTimeAsync(30 * MINUTE);
+  expect(off.compact).not.toHaveBeenCalled();
+
+  chat = answered(30 * MINUTE);
+  const on = planner();
+  await on.idle.arm("chat");
+  on.autoCompact.idle = false;
+  await vi.advanceTimersByTimeAsync(30 * MINUTE);
+  expect(on.compact).not.toHaveBeenCalled();
 });
 
 it("compacts a read thread but leaves a settled or agent-started one to go cold", async () => {

@@ -37,8 +37,21 @@ export function sendAction(
   sendKey: SendKey,
   runningAction: RunningSendAction,
 ): "send" | "steer" | null {
-  if (e.key !== "Enter" || e.nativeEvent.isComposing) return null;
   if (e.altKey) return null;
+  return action(e, sendKey, runningAction);
+}
+
+/** The send key with ⌥/Alt added, for the send beside Send. */
+export function altSends(e: KeyboardEvent, sendKey: SendKey) {
+  return e.altKey && action(e, sendKey, "queue") === "send";
+}
+
+function action(
+  e: KeyboardEvent,
+  sendKey: SendKey,
+  runningAction: RunningSendAction,
+): "send" | "steer" | null {
+  if (e.key !== "Enter" || e.nativeEvent.isComposing) return null;
   const primary = runningAction === "steer" ? "steer" : "send";
   const alternate = runningAction === "steer" ? "send" : "steer";
   const mod = e.metaKey || e.ctrlKey;

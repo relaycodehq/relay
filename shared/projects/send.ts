@@ -44,6 +44,11 @@ export const projectChatSendSchema = z
     runtimeMode: runtimeModeSchema,
     interactionMode: interactionModeSchema,
     parentId: idSchema.nullable().optional(),
+    /**
+     * Overrides automatic compaction for this message when the cache went
+     * cold: true compacts first, false sends as is. Left out, Settings decide.
+     */
+    compact: z.boolean().optional(),
     /** Asks `/btw`: starts a side thread instead of a turn of the main one. */
     side: z.literal(true).optional(),
     viewing: filePathSchema.optional(),

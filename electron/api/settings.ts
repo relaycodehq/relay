@@ -17,6 +17,7 @@ import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
 import { accountIdSchema } from "../../shared/agent-accounts";
 import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
+import { defaultAutoCompact } from "../../shared/context-usage";
 import { watchScopes } from "../../shared/watch";
 import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
@@ -238,6 +239,18 @@ export function settingsHandlers(ctx: ApiContext) {
       agentUpdates.setAutomatic(saved);
       return saved;
     }),
+    autoCompact: () => store.get().autoCompact ?? defaultAutoCompact,
+    saveAutoCompact: takes(
+      [z.object({ idle: z.boolean(), cold: z.boolean() }).strict()],
+      async (value) => {
+        await store.update((s) => {
+          s.autoCompact = value;
+        });
+        // Threads that went idle while it was off plan theirs now.
+        if (value.idle) ctx.projectChats.armIdleCompactions();
+        return store.get().autoCompact ?? defaultAutoCompact;
+      },
+    ),
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),

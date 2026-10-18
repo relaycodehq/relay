@@ -1,3 +1,4 @@
+import type { AutoCompact } from "./context-usage";
 import type { MemesState } from "./memes";
 import type { ExtensionRef, ThemeSearchPage, VsCodeTheme } from "./open-vsx";
 import type { ProjectApi } from "./projects";
@@ -656,6 +657,9 @@ export interface Api
   /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
   agentUpdateChecks(): Promise<boolean>;
   saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;
+  /** When Relay compacts big conversations unasked; see AutoCompact. */
+  autoCompact(): Promise<AutoCompact>;
+  saveAutoCompact(value: AutoCompact): Promise<AutoCompact>;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
   /**

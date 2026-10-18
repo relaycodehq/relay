@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { KeyboardEvent } from "react";
 import {
+  altSends,
   queueKeyLabel,
   sendAction,
   sendsMessage,
@@ -87,5 +88,16 @@ describe("running-action shortcut hints", () => {
     expect(steerKeyLabel(sendKey, "queue")).toBe(alternate);
     expect(queueKeyLabel(sendKey, "steer")).toBe(alternate);
     expect(steerKeyLabel(sendKey, "steer")).toBe(primary);
+  });
+});
+
+describe("altSends", () => {
+  it("is the send key with ⌥ added, and not ⌘⌥ (send, then a new thread)", () => {
+    expect(altSends(key({ alt: true }), "enter")).toBe(true);
+    expect(altSends(key(), "enter")).toBe(false);
+    expect(altSends(key({ alt: true, meta: true }), "enter")).toBe(false);
+    expect(altSends(key({ alt: true, shift: true }), "shift-enter")).toBe(true);
+    expect(altSends(key({ alt: true }), "shift-enter")).toBe(false);
+    expect(altSends(key({ alt: true, ctrl: true }), "mod-enter")).toBe(true);
   });
 });

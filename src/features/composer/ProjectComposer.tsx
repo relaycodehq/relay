@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { Paperclip } from "lucide-react";
+import { Minimize2, Paperclip } from "lucide-react";
 import { reportsUsage, type AgentProvider } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
@@ -19,10 +19,15 @@ import { useComposerToolbar } from "./composer-toolbar";
 import { effortStep, quickStep } from "../quick-switch/effort-shortcut";
 import { quickItems } from "../quick-switch/quick-switch";
 import {
+  altSends,
   sendAction,
+  sendKeyLabel,
   useRunningSendAction,
   useSendKey,
 } from "../../lib/send-key";
+import { mac } from "../../lib/mod-key";
+import { useAutoCompact } from "../agents/auto-compact";
+import { formatTokens } from "../../../shared/tokens";
 import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
@@ -99,6 +104,12 @@ export interface ComposerConversation {
   planner?: AgentProvider;
   /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
   chatId?: string;
+  /**
+   * A message to this agent finds a big conversation's prompt cache cold:
+   * Send compacts first or not as Settings say, and a button beside it does
+   * the other.
+   */
+  cold?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
 }
 export function ProjectComposer({
@@ -225,6 +236,12 @@ export function ProjectComposer({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const quick = useQuickSwitchHud(runs, to);
+  const autoCompact = useAutoCompact();
+  // A command means what it says; the server sends it as is.
+  const cold =
+    conversation.cold?.provider === to && !/^\s*\//.test(draft.text)
+      ? conversation.cold
+      : undefined;
   const settingCommands = useSettingCommands({
     state: composer,
     runs,
@@ -444,6 +461,11 @@ export function ProjectComposer({
               quick.step(quickDir);
               return;
             }
+            if (cold && !running && altSends(e, sendKey)) {
+              e.preventDefault();
+              sending.send(false, undefined, undefined, !autoCompact.cold);
+              return;
+            }
             const action = sendAction(e, sendKey, runningAction);
             if (action) {
               e.preventDefault();
@@ -550,12 +572,46 @@ export function ProjectComposer({
                     onStop={() => onStop(false)}
                   />
                 )}
+                {cold && !running && (
+                  <button
+                    type="button"
+                    className="composer-send-other"
+                    disabled={sending.disabled}
+                    title={`${
+                      autoCompact.cold
+                        ? "Send without compacting"
+                        : `Compact ${formatTokens(cold.tokens)} tokens, then send`
+                    } · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)}`}
+                    onClick={() =>
+                      void sending.send(
+                        false,
+                        undefined,
+                        undefined,
+                        !autoCompact.cold,
+                      )
+                    }
+                  >
+                    {autoCompact.cold ? (
+                      "Don't compact"
+                    ) : (
+                      <>
+                        <Minimize2 size={14} aria-hidden />
+                        Compact first
+                      </>
+                    )}
+                  </button>
+                )}
                 {(!running ||
                   !onStop ||
                   !!draft.text.trim() ||
                   !!draft.attached.length) && (
                   <SendButton
                     disabled={sending.disabled}
+                    compactsFirst={
+                      !!cold && !running && autoCompact.cold
+                        ? cold.tokens
+                        : undefined
+                    }
                     running={running}
                     sendKey={sendKey}
                     runningAction={runningAction}

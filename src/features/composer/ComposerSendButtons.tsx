@@ -6,6 +6,7 @@ import {
   type SendKey,
 } from "../../lib/send-key";
 import { SendLaterMenu } from "./SendLaterMenu";
+import { formatTokens } from "../../../shared/tokens";
 
 /** Stops the running answer; armed shows the first Escape of two is in. */
 export function StopButton({
@@ -46,12 +47,15 @@ export function StopButton({
 /** Submits the composer's form; right-click picks a time to send it later. */
 export function SendButton({
   disabled,
+  compactsFirst,
   running,
   sendKey,
   runningAction,
   onSendLater,
 }: {
   disabled: boolean;
+  /** The tokens it compacts before the message goes, the cache being cold. */
+  compactsFirst?: number;
   /** An answer runs, so the message queues or steers. */
   running: boolean;
   sendKey: SendKey;
@@ -68,7 +72,9 @@ export function SendButton({
             ? runningAction === "steer"
               ? `Steer answer · ${queueKeyLabel(sendKey, runningAction)} to queue · right-click to send later`
               : `Queue message · ${steerKeyLabel(sendKey, runningAction)} to steer · right-click to send later`
-            : "Send message · right-click to send later"
+            : compactsFirst
+              ? `Compact ${formatTokens(compactsFirst)} tokens, then send · right-click to send later`
+              : "Send message · right-click to send later"
         }
         disabled={disabled}
       >
