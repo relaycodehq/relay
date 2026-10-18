@@ -445,6 +445,13 @@ export function ProjectComposer({
                 return;
               }
             }
+            // With ⌘/Ctrl+Enter sending, ⌥ plus it is also Send-then-new-thread's
+            // default; the button by Send is the one on screen, so it wins.
+            if (cold && !running && altSends(e, sendKey)) {
+              e.preventDefault();
+              sending.send(false, undefined, undefined, !sendCompacts);
+              return;
+            }
             if (!e.repeat && matches("send-new-thread", e)) {
               e.preventDefault();
               noteUsed("shortcut:send-new-thread");
@@ -466,11 +473,6 @@ export function ProjectComposer({
               e.preventDefault();
               noteUsed(`shortcut:quick-${quickDir < 0 ? "prev" : "next"}`);
               quick.step(quickDir);
-              return;
-            }
-            if (cold && !running && altSends(e, sendKey)) {
-              e.preventDefault();
-              sending.send(false, undefined, undefined, !sendCompacts);
               return;
             }
             const action = sendAction(e, sendKey, runningAction);
