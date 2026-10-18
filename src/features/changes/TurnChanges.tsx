@@ -33,7 +33,13 @@ export function TurnChanges({
   onClose?: () => void;
   onOpenFile: (path: string) => void;
 }) {
-  const [path, setPath] = useState(target.path ?? target.files[0]?.path);
+  const [picked, setPath] = useState(target.path ?? target.files[0]?.path);
+  // A worktree's list is live: a file that appears is picked once there is one,
+  // and one that's gone gives way to the first.
+  const path =
+    target.worktree && !target.files.some((f) => f.path === picked)
+      ? target.files[0]?.path
+      : picked;
   const [revealError, setRevealError] = useState<string>();
   const { grouped, setGrouped } = useSavedChanges(workspace);
   const qc = useQueryClient();
