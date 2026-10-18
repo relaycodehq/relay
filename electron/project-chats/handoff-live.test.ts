@@ -49,10 +49,17 @@ it("keeps the reconnect snapshot when an older live push arrives afterward", asy
     save.mockClear();
     emit.mockClear();
     await live.mirror(chat.id, "handoff", old);
-    await live.mirror(chat.id, "handoff", { ...final });
     expect(chat.messages).toEqual([final]);
     expect(emit).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+
+    // Copying an attachment locally can rewrite paths without changing its remote version.
+    const copied = { ...final, body: "Final with the copied attachment" };
+    await live.mirror(chat.id, "handoff", copied);
+    expect(chat.messages).toEqual([copied]);
+    expect(save).toHaveBeenCalledOnce();
+    save.mockClear();
+    emit.mockClear();
 
     const next = { ...final, body: "Next answer", version: 3 };
     await live.mirror(chat.id, "handoff", next);

@@ -136,7 +136,7 @@ export class LiveHandoff {
     const at = chat.messages.findIndex((m) => m.id === message.id);
     if (at >= 0 && at < kept) return;
     // Attachment copies can leave a push behind a newer reconnect snapshot.
-    if (at >= 0 && chat.messages[at].version >= message.version) return;
+    if (at >= 0 && chat.messages[at].version > message.version) return;
     if (at >= 0) chat.messages[at] = message;
     else {
       chat.messages.push(message);
