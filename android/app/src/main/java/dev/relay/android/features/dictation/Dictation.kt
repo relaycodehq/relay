@@ -192,33 +192,37 @@ class Dictation(
         if (!permitted()) return endHere(
             current, null, "Relay isn't allowed to use the microphone. Allow it in Android's settings for Relay.",
         )
-        hearer.start(object : Hearer.Listener {
-            override fun onReady() {
-                if (here !== current || current.began) return
-                current.began = true
-                target.begin()
-                snapshot = snapshot.copy(phase = DictationState.Phase.Listening, loading = false)
-                if (current.stopRequested) stop()
-            }
+        try {
+            hearer.start(object : Hearer.Listener {
+                override fun onReady() {
+                    if (here !== current || current.began) return
+                    current.began = true
+                    target.begin()
+                    snapshot = snapshot.copy(phase = DictationState.Phase.Listening, loading = false)
+                    if (current.stopRequested) stop()
+                }
 
-            override fun onLevel(level: Float) {
-                if (here === current) _levels.tryEmit(level)
-            }
+                override fun onLevel(level: Float) {
+                    if (here === current) _levels.tryEmit(level)
+                }
 
-            override fun onHeard(settled: String, tentative: String) {
-                if (here !== current) return
-                current.heard = listOf(settled, tentative).filter { it.isNotEmpty() }.joinToString(" ")
-                if (current.began) target.update(settled, tentative)
-            }
+                override fun onHeard(settled: String, tentative: String) {
+                    if (here !== current) return
+                    current.heard = listOf(settled, tentative).filter { it.isNotEmpty() }.joinToString(" ")
+                    if (current.began) target.update(settled, tentative)
+                }
 
-            override fun onEnd(text: String) {
-                if (here === current) endHere(current, text, null)
-            }
+                override fun onEnd(text: String) {
+                    if (here === current) endHere(current, text, null)
+                }
 
-            override fun onError(message: String) {
-                if (here === current) endHere(current, current.heard, message)
-            }
-        })
+                override fun onError(message: String) {
+                    if (here === current) endHere(current, current.heard, message)
+                }
+            })
+        } catch (e: Exception) {
+            endHere(current, null, describe(e))
+        }
     }
 
     private fun endHere(current: Here, text: String?, error: String?) {
