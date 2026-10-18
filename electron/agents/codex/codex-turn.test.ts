@@ -45,6 +45,7 @@ const fakeCodex = (
     },
     refusing,
     crash,
+    stops,
   }: {
     thread?: Wire;
     turn?: Wire;
@@ -54,6 +55,8 @@ const fakeCodex = (
     refusing?: { method: string; error: Wire };
     /** Dies at turn/start like a CLI whose runtime can't load. */
     crash?: boolean;
+    /** Takes turn/interrupt, logging it in place of the turn, and ends the turn as interrupted. */
+    stops?: boolean;
   } = {},
 ) => `
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
@@ -62,6 +65,11 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   if (m.method === ${JSON.stringify(refusing?.method ?? "")})
     send({ id: m.id, error: ${JSON.stringify(refusing?.error ?? {})} });
   else if (m.method === "initialize") send({ id: m.id, result: {} });
+  else if (${JSON.stringify(!!stops)} && m.method === "turn/interrupt") {
+    require("node:fs").writeFileSync(${JSON.stringify(log)}, JSON.stringify(m.params));
+    send({ id: m.id, result: {} });
+    send({ method: "turn/completed", params: { threadId: "thread", turn: { id: "turn", status: "interrupted" } } });
+  }
   else if (m.method === "config/read") send({ id: m.id, result: { config: {} } });
   else if (m.method === "thread/start")
     send({ id: m.id, result: ${JSON.stringify(thread)} });
@@ -188,13 +196,18 @@ it("ignores notifications it doesn't read, and fields it doesn't know", async ()
   expect(await answer).toBe("Done.");
 });
 
+const on = (method: string, params: Wire) => ({
+  method,
+  params: { threadId: "thread", ...params },
+});
+const review = (method: string, type: string, more: Wire = {}) =>
+  on(method, { turnId: "turn", item: { id: type, type, ...more } });
+const reviewJob = {
+  kind: "review",
+  target: { type: "uncommittedChanges" },
+} as const;
+
 it("ends a /review when Codex completes it, past the turn it starts for the review itself", async () => {
-  const on = (method: string, params: Wire) => ({
-    method,
-    params: { threadId: "thread", ...params },
-  });
-  const review = (method: string, type: string, more: Wire = {}) =>
-    on(method, { turnId: "turn", item: { id: type, type, ...more } });
   // In the order a real `codex app-server` sends them.
   const { answer } = await ask(
     {
@@ -203,12 +216,39 @@ it("ends a /review when Codex completes it, past the turn it starts for the revi
         review("item/completed", "enteredReviewMode"),
         on("turn/started", { turn: { id: "inner" } }),
         review("item/started", "exitedReviewMode"),
-        review("item/completed", "exitedReviewMode", { review: "[P1] Wrong sign." }),
+        review("item/completed", "exitedReviewMode", {
+          review: "[P1] Wrong sign.",
+        }),
       ],
     },
-    { job: { kind: "review", target: { type: "uncommittedChanges" } } },
+    { job: reviewJob },
   );
   expect(await answer).toBe("[P1] Wrong sign.");
+});
+
+it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one", async () => {
+  const stop = new AbortController();
+  const { answer, log } = await ask(
+    {
+      said: [
+        review("item/started", "enteredReviewMode"),
+        on("turn/started", { turn: { id: "inner" } }),
+        review("item/started", "commandExecution", { command: "git diff" }),
+      ],
+      ending: null,
+      stops: true,
+    },
+    {
+      job: reviewJob,
+      signal: stop.signal,
+      onActivity: (a) => a.kind === "command" && stop.abort(),
+    },
+  );
+  await expect(answer).rejects.toThrow();
+  expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
+    threadId: "thread",
+    turnId: "inner",
+  });
 });
 
 it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {

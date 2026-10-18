@@ -72,10 +72,10 @@ export class CodexTurn {
   /** Codex hands a finished `/review` back as one item, not as an answer. */
   private review = "";
   /**
-   * Inside a `/review`: the turn Codex starts for the review itself is part of
-   * this one, which `turn/completed` then ends under its own id.
+   * The turn Codex runs a `/review` in, inside this run's own: interrupts and
+   * steers name it, while `turn/completed` still ends the review under `turnId`.
    */
-  private inReview = false;
+  private reviewTurnId = "";
   /** When the spent window lifts, from Codex's latest word on the account's limits. */
   private spentUntil: number | undefined;
   private fileChanges = new Map<string, unknown>();
@@ -229,15 +229,20 @@ export class CodexTurn {
       return;
     }
     if (n.method === "turn/started") {
-      // Codex went on with the goal: the turn before is history in this answer.
-      if (!this.inReview && this.turnId && n.params.turn.id !== this.turnId) {
-        this.past(this.turnId);
-        this.stream.nextTurn();
-        options.session?.onPoint?.(n.params.turn.id);
+      const { id } = n.params.turn;
+      if (options.job.kind === "review") {
+        if (id !== this.turnId) this.reviewTurnId = id;
+      } else {
+        // Codex went on with the goal: the turn before is history in this answer.
+        if (this.turnId && id !== this.turnId) {
+          this.past(this.turnId);
+          this.stream.nextTurn();
+          options.session?.onPoint?.(id);
+        }
+        this.turnId = id;
       }
       this.goals.started();
       this.cacheClock.turnStarted();
-      if (!this.inReview) this.turnId = n.params.turn.id;
     }
     if (n.method === "turn/completed") {
       // Word about an earlier turn, late: this one goes on. Before this one's
@@ -326,7 +331,7 @@ export class CodexTurn {
       async () => {
         await this.wire!.request("turn/steer", {
           threadId: this.threadId,
-          expectedTurnId: this.turnId,
+          expectedTurnId: this.reviewTurnId || this.turnId,
           input: [
             ...(text
               ? [{ type: "text", text: codexMentions(text), text_elements: [] }]
@@ -409,8 +414,6 @@ export class CodexTurn {
     if (item.type === "fileChange" && item.id && item.changes)
       this.edited(item.id, item.changes);
     this.subagents.spawned(item);
-    if (item.type === "enteredReviewMode") this.inReview = true;
-    if (item.type === "exitedReviewMode") this.inReview = false;
     if (
       method === "item/completed" &&
       item.type === "exitedReviewMode" &&
@@ -453,7 +456,8 @@ export class CodexTurn {
 
   private interrupt() {
     if (this.settled) return;
-    const { wire, threadId, turnId } = this;
+    const { wire, threadId } = this;
+    const turnId = this.reviewTurnId || this.turnId;
     if (wire && threadId && turnId) {
       // Keep the transport alive until Codex acknowledges the interruption.
       this.interruptTimeout = setTimeout(() => this.finish(cancelled()), 3000);
