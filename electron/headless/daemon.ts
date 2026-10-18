@@ -257,6 +257,14 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   });
   acpAgents.onChange(() => void agentUpdates.sync());
   const triage = new TriageService(store, home);
+  const projectAdding = new ProjectAdding({
+    store,
+    projects,
+    client: () => login.client,
+    sessions: new TerminalSessions(async () => accountHomes()),
+    appData: home,
+    send: () => {},
+  });
   const api = apiContext({
     store,
     projects,
@@ -289,14 +297,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     readAloud,
     agentUpdates,
     agentAccounts,
-    projectAdding: new ProjectAdding({
-      store,
-      projects,
-      client: () => login.client,
-      sessions: new TerminalSessions(async () => accountHomes()),
-      appData: home,
-      send: () => {},
-    }),
+    projectAdding,
     drafts,
   });
   const dispatch: Dispatch = createDispatch(api);
@@ -344,6 +345,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     dir: join(handoffDir, "in"),
     version: () => headlessVersion,
     dispatch,
+    adding: projectAdding,
     // A paired computer or phone may update this one, as on the desktop.
     updates: {
       state: () => updater.now,

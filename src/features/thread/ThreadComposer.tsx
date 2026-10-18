@@ -365,6 +365,7 @@ export function ThreadComposer({
               project={project}
               worktree={worktree}
               disabled={busy}
+              onStartThread={onStartThread}
             />
           ) : (
             <WorkspaceControl

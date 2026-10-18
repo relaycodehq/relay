@@ -88,6 +88,12 @@ export class ProjectAdding {
     };
   }
 
+  /** Where a clone goes when nobody picks a folder: as the palette would open on it. */
+  async defaultFolder() {
+    const projects = await this.deps.projects.list(this.deps.client());
+    return this.cloneFolder(projects.filter((p) => !p.scratch));
+  }
+
   /** The folder the last clone or new project went into, else the newest project's parent. */
   private async cloneFolder(projects: Project[]) {
     const saved = this.deps.store.get().projectsFolder;
@@ -116,7 +122,12 @@ export class ProjectAdding {
     return this.deps.projects.add(info.path, this.deps.client());
   }
 
-  async clone(remoteText: string, into: string) {
+  /** `onStep` hears its progress besides the window, for a clone a paired computer asked for. */
+  async clone(
+    remoteText: string,
+    into: string,
+    onStep?: (job: AddingJob) => void,
+  ) {
     const remote = parseRemote(remoteText);
     if (!remote) throw new Error("That isn't a clone URL or owner/repo.");
     const parent = expandHome(into);
@@ -136,7 +147,7 @@ export class ProjectAdding {
       await this.remember(parent);
       return this.deps.projects.add(dest, this.deps.client());
     }
-    return this.job(`Cloning ${remote.full}`, async (signal, step) => {
+    return this.job(`Cloning ${remote.full}`, onStep, async (signal, step) => {
       await mkdir(parent, { recursive: true });
       // Made here, so a folder that turned up since is refused, not removed below.
       await mkdir(dest);
@@ -160,12 +171,16 @@ export class ProjectAdding {
     const location = expandHome(spec.location);
     const dest = join(location, spec.name);
     if (await exists(dest)) throw new Error(`${dest} is there already.`);
-    return this.job(`Creating ${spec.name}`, async (signal, step) => {
-      await createProjectFolder({ ...spec, location }, dest, step, signal);
-      if (signal.aborted) throw new Error("Cancelled.");
-      await this.remember(location);
-      return this.deps.projects.add(dest, this.deps.client());
-    });
+    return this.job(
+      `Creating ${spec.name}`,
+      undefined,
+      async (signal, step) => {
+        await createProjectFolder({ ...spec, location }, dest, step, signal);
+        if (signal.aborted) throw new Error("Cancelled.");
+        await this.remember(location);
+        return this.deps.projects.add(dest, this.deps.client());
+      },
+    );
   }
 
   cancel() {
@@ -174,6 +189,7 @@ export class ProjectAdding {
 
   private async job(
     title: string,
+    onStep: ((job: AddingJob) => void) | undefined,
     work: (
       signal: AbortSignal,
       step: (step: string, progress: number | null) => void,
@@ -182,10 +198,14 @@ export class ProjectAdding {
     if (this.running)
       throw new Error("Another clone is under way. Wait for it, or cancel it.");
     const running = (this.running = new AbortController());
-    this.deps.send({ title, step: "Starting", progress: null });
+    const send = (job: AddingJob) => {
+      this.deps.send(job);
+      onStep?.(job);
+    };
+    send({ title, step: "Starting", progress: null });
     try {
       const project = await work(running.signal, (step, progress) =>
-        this.deps.send({ title, step, progress }),
+        send({ title, step, progress }),
       );
       if (running.signal.aborted) throw new Error("Cancelled.");
       return project;

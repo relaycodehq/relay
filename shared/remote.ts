@@ -170,7 +170,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 24;
+export const remoteBridgeVersion = 25;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -267,6 +267,11 @@ export const skillsBridge = 21;
  * (shared/remote-tunnel) and list what listens there (`sites`).
  */
 export const tunnelBridge = 23;
+/**
+ * From here a paired computer clones a project it lacks (`cloneProject`) and
+ * runs a command for an agent setting one up (`runCommand`).
+ */
+export const cloneBridge = 25;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -578,6 +583,14 @@ export interface RemoteApi {
   ): Promise<{ chatId: string }>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
+  /**
+   * Clones `url` into the folder clones go to here and adds it as a project,
+   * or joins the clone of it under way; answers within seconds with how far
+   * it is, so the caller asks again until it's done. From `cloneBridge`.
+   */
+  cloneProject(url: string): Promise<CloneProgress>;
+  /** Runs a shell command here and waits for it; from `cloneBridge`. */
+  runCommand(command: string, timeoutMs: number): Promise<CommandRun>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
   handoffUpload(
     id: string,
@@ -625,6 +638,19 @@ export interface ComputerProject {
   name: string;
   repositories: string[];
 }
+/** A clone `cloneProject` started: still going, or the project it made. */
+export type CloneProgress =
+  | { done: false; step: string; progress: number | null }
+  | { done: true; project: ComputerProject };
+/** A command `runCommand` ran: its exit code, null when it was stopped. */
+export interface CommandRun {
+  code: number | null;
+  /** The end of what it wrote, stdout and stderr together. */
+  output: string;
+  timedOut: boolean;
+}
+/** The longest a command may run, inside the call's own two minutes. */
+export const maxCommandMs = 100_000;
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
   "overview",
@@ -647,6 +673,8 @@ export const remoteMethods = [
   "draftOther",
   "sendDraft",
   "computerProjects",
+  "cloneProject",
+  "runCommand",
   "handoffUpload",
   "receiveHandoff",
   "handoffStatus",
@@ -662,6 +690,8 @@ export const remoteMethods = [
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
   "computerProjects",
+  "cloneProject",
+  "runCommand",
   "handoffUpload",
   "receiveHandoff",
   "handoffStatus",
@@ -693,6 +723,7 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
   "handBack",
   "handoffUpload",
   "handoffDownload",
+  "runCommand",
 ];
 
 /**

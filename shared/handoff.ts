@@ -430,6 +430,12 @@ export interface HandoffTarget {
   project?: { id: string; name: string };
   /** Why it can't take the thread; shown in place of the project. */
   problem?: string;
+  /** It lacks the repository but can clone it (`cloneOnComputer`): the repository's owner/name. */
+  clone?: string;
+  /** Its clone of the repository, under way. */
+  cloning?: { step: string; progress: number | null };
+  /** Why the last clone there failed. */
+  cloneError?: string;
 }
 
 /** The thread's handoff as its strip shows it. */
@@ -457,6 +463,15 @@ export interface ComputersApi {
     input: ProjectChatSend,
     computerId: string,
   ): Promise<void>;
+  /**
+   * Clones the project on a paired computer that lacks it, or joins the clone
+   * under way; resolves to the project it made there. The targets show how
+   * far it is meanwhile, and its error after.
+   */
+  cloneOnComputer(
+    computerId: string,
+    projectId: string,
+  ): Promise<{ id: string; name: string }>;
   /** Starts the handoff; the thread's `sentTo` follows it from there. */
   handOffThread(chatId: string, computerId: string): Promise<void>;
   /** Sends a handoff that failed on its way again. */

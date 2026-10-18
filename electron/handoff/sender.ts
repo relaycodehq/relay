@@ -32,11 +32,13 @@ import {
   type ChatSummary,
 } from "../../shared/projects";
 import {
+  cloneBridge,
   folderHandoffBridge,
   handoffBridge,
   startHandoffBridge,
   liveHandoffBridge,
   skillsBridge,
+  type CommandRun,
   type HandoffPart,
   type RemoteEvent,
 } from "../../shared/remote";
@@ -49,6 +51,7 @@ import { portableMessages } from "../project-chats/handoff";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { computerName, type Computers } from "./computers";
+import { cloneUrl } from "./remote-setup";
 import {
   bundleBranch,
   fetchBundle,
@@ -102,6 +105,16 @@ export class Handoffs {
   >();
   /** Each computer's version and update, as it last said; `null` for one too old to say. */
   private infos = new Map<string, { at: number; info: ComputerInfo | null }>();
+  /** Clones of this computer's projects on paired ones, by computer and project id; a failed one keeps its error. */
+  private clones = new Map<
+    string,
+    {
+      job: Promise<{ id: string; name: string }>;
+      step: string;
+      progress: number | null;
+      error?: string;
+    }
+  >();
   constructor(
     private store: Store,
     private computers: Computers,
@@ -368,7 +381,9 @@ export class Handoffs {
     if (!computer) throw new Error("This computer is no longer paired.");
     return this.targetFor(
       computer,
-      projectId ? await this.repositoriesOf(projectId) : null,
+      projectId
+        ? { id: projectId, repositories: await this.repositoriesOf(projectId) }
+        : null,
       bridge,
     );
   }
@@ -376,9 +391,12 @@ export class Handoffs {
     projectId: string,
     bridge: number,
   ): Promise<HandoffTarget[]> {
-    const repositories = await this.repositoriesOf(projectId);
+    const project = {
+      id: projectId,
+      repositories: await this.repositoriesOf(projectId),
+    };
     return Promise.all(
-      this.computers.list().map((c) => this.targetFor(c, repositories, bridge)),
+      this.computers.list().map((c) => this.targetFor(c, project, bridge)),
     );
   }
   private repositoriesOf(projectId: string) {
@@ -389,9 +407,10 @@ export class Handoffs {
   }
   private async targetFor(
     c: ReturnType<Computers["list"]>[number],
-    repositories: string[] | null,
+    project: { id: string; repositories: string[] } | null,
     bridge: number,
   ): Promise<HandoffTarget> {
+    const repositories = project?.repositories ?? null;
     const base = { id: c.id, name: c.name };
     if (c.status !== "online")
       return {
@@ -411,16 +430,104 @@ export class Handoffs {
       const match = projects.find((p) =>
         p.repositories.some((r) => repositories.includes(r)),
       );
-      return match
-        ? {
-            ...base,
-            online: true,
-            project: { id: match.id, name: match.name },
-          }
-        : { ...base, online: true, problem: `Not cloned on ${c.name}` };
+      if (match)
+        return {
+          ...base,
+          online: true,
+          project: { id: match.id, name: match.name },
+        };
+      const clone = this.clones.get(`${c.id}/${project!.id}`);
+      return {
+        ...base,
+        online: true,
+        problem: `Not cloned on ${c.name}`,
+        ...((info?.bridge ?? 0) >= cloneBridge
+          ? { clone: repositories[0] }
+          : {}),
+        ...(clone?.error
+          ? { cloneError: clone.error }
+          : clone
+            ? { cloning: { step: clone.step, progress: clone.progress } }
+            : {}),
+      };
     } catch (e) {
       return { ...base, online: false, problem: message(e) };
     }
+  }
+  /**
+   * Clones the project on a paired computer that lacks it, or joins the
+   * clone under way; a failed one starts over. The computer clones it into
+   * the folder its clones go to and adds it as a project.
+   */
+  cloneOn(computerId: string, projectId: string) {
+    const key = `${computerId}/${projectId}`;
+    const running = this.clones.get(key);
+    if (running && !running.error) return running.job;
+    const clone = {
+      step: "Starting",
+      progress: null as number | null,
+      error: undefined as string | undefined,
+      job: Promise.resolve({ id: "", name: "" }),
+    };
+    clone.job = this.clone(computerId, projectId, (step, progress) => {
+      clone.step = step;
+      clone.progress = progress;
+    }).then(
+      (made) => {
+        this.clones.delete(key);
+        return made;
+      },
+      (e: unknown) => {
+        clone.error = message(e);
+        throw e;
+      },
+    );
+    this.clones.set(key, clone);
+    return clone.job;
+  }
+  private async clone(
+    computerId: string,
+    projectId: string,
+    onStep: (step: string, progress: number | null) => void,
+  ) {
+    const name = this.nameOf(computerId);
+    const url = await cloneUrl(await this.projects.root(projectId));
+    if (!url)
+      throw new Error(
+        `This project has no Git remote ${name} could clone it from.`,
+      );
+    for (;;) {
+      const client = await this.computers.connected(computerId);
+      const answer = await client.call("cloneProject", url).catch((e) => {
+        throw unsupportedCall(e)
+          ? new Error(`${name} needs a Relay update to clone projects.`)
+          : e;
+      });
+      if (answer.done)
+        return { id: answer.project.id, name: answer.project.name };
+      onStep(answer.step, answer.progress);
+    }
+  }
+  /** Runs a command on a paired computer, for an agent setting a project up there. */
+  async runOn(
+    computerId: string,
+    command: string,
+    timeoutMs: number,
+  ): Promise<CommandRun> {
+    const client = await this.computers.connected(computerId);
+    return client.call("runCommand", command, timeoutMs).catch((e) => {
+      throw unsupportedCall(e)
+        ? new Error(
+            `${this.nameOf(computerId)} needs a Relay update to run commands.`,
+          )
+        : e;
+    });
+  }
+  /** The paired computers, whether online or not. */
+  paired() {
+    return this.computers
+      .list()
+      .map((c) => ({ id: c.id, name: c.name, online: c.status === "online" }));
   }
   /**
    * Asks each online computer about the threads it has from here, unless

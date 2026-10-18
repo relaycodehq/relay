@@ -33,6 +33,21 @@
 .handoff-target-text small:empty {
   display: none;
 }
+/* A failed clone's error gets two lines, its whole text on hover. */
+.handoff-target-text small[title] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The agent offered after a failed clone sits under that computer's name. */
+.handoff-menu .composer-select-item.handoff-setup {
+  padding-left: 34px;
+}
+.handoff-setup > svg {
+  color: var(--muted);
+}
 .handoff-menu-note {
   margin: 4px 10px 6px;
   color: var(--muted);

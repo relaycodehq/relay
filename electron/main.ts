@@ -494,6 +494,14 @@ app
     elsewhereWatch = new ElsewhereWatch({
       changed: (chatId) => window.send("relay:elsewhere", chatId),
     });
+    const projectAdding = new ProjectAdding({
+      store: loaded,
+      projects,
+      client: () => login.client,
+      sessions: new TerminalSessions(async () => accountHomes()),
+      appData: app.getPath("appData"),
+      send: (job) => window.send("relay:project-adding", job),
+    });
     const api = apiContext({
       store: loaded,
       projects,
@@ -519,14 +527,7 @@ app
       readAloud,
       agentUpdates,
       agentAccounts,
-      projectAdding: new ProjectAdding({
-        store: loaded,
-        projects,
-        client: () => login.client,
-        sessions: new TerminalSessions(async () => accountHomes()),
-        appData: app.getPath("appData"),
-        send: (job) => window.send("relay:project-adding", job),
-      }),
+      projectAdding,
       previews,
       devices,
       drafts: sharedDrafts,
@@ -609,6 +610,7 @@ app
           dir: join(handoffDir, "in"),
           version: () => app.getVersion(),
           dispatch,
+          adding: projectAdding,
           updates: {
             state: () => updater.current,
             check: () => updater.check(),

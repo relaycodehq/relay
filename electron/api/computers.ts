@@ -26,6 +26,9 @@ export function computerHandlers(ctx: ApiContext) {
     startTargets: takes([idSchema], (projectId) =>
       handoffs().sender.startTargets(projectId),
     ),
+    cloneOnComputer: takes([idSchema, idSchema], (computerId, projectId) =>
+      handoffs().sender.cloneOn(computerId, projectId),
+    ),
     startProjectChatOn: takes(
       [idSchema, projectChatSendSchema, idSchema],
       async (chatId, input, computerId) => {

@@ -17,6 +17,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
+import { ProjectAdding } from "../project-add";
 import type { ChatMessage } from "../../shared/projects";
 import type { NewsItem } from "../../shared/thread-news";
 
@@ -153,6 +154,14 @@ async function pairedComputers() {
         dir: join(mini.dir, "handoffs"),
         version: () => "0.9.0",
         updates: updater,
+        adding: new ProjectAdding({
+          store: mini.store,
+          projects: mini.projects,
+          client: () => null,
+          sessions: undefined as never,
+          appData: join(mini.dir, "app-data"),
+          send: () => {},
+        }),
         // What a live handoff's computer has run here, as the app's dispatch would.
         dispatch: async (method, args) => {
           const [id, ...rest] = args as [string, ...unknown[]];
@@ -1224,6 +1233,63 @@ it("puts back what fails to go out here, with what came after it, and sends it o
   chat = await laptop.chats.get(thread.id);
   expect(chat.outbox).toBeUndefined();
   expect(chat.messages.at(-2)).toMatchObject({ id: next.id, body: next.body });
+});
+
+it("clones a project the other computer lacks, keeps a failed clone's error, and clones it once asked again", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  // A remote by URL, as the other computer clones only those, served from disk.
+  vi.stubEnv("GIT_CONFIG_COUNT", "1");
+  vi.stubEnv("GIT_CONFIG_KEY_0", `url.${join(root, "remote")}/.insteadOf`);
+  vi.stubEnv("GIT_CONFIG_VALUE_0", "https://git.example.test/");
+  const url = "https://git.example.test/me/tool.git";
+  const origin = join(root, "remote", "me", "tool.git");
+  await mkdir(origin, { recursive: true });
+  git(origin, "init", "--bare", "-q", "-b", "main");
+  const tool = join(laptop.dir, "tool");
+  git(laptop.dir, "clone", "-q", url, tool);
+  await writeFile(join(tool, "README.md"), "# Tool\n");
+  git(tool, "add", "-A");
+  git(tool, "commit", "-q", "-m", "First");
+  git(tool, "push", "-q", "origin", "HEAD:main");
+  const projectId = (await laptop.projects.add(tool, null)).id;
+
+  const [before] = await sender.startTargets(projectId);
+  expect(before).toMatchObject({
+    clone: "me/tool",
+    problem: expect.stringMatching(/^Not cloned on /),
+  });
+  expect(before!.project).toBeUndefined();
+
+  // A remote that isn't there.
+  git(
+    tool,
+    "remote",
+    "set-url",
+    "origin",
+    "https://git.example.test/me/gone.git",
+  );
+  await expect(sender.cloneOn(computerId, projectId)).rejects.toThrow();
+  const [failed] = await sender.startTargets(projectId);
+  expect(failed!.cloneError).toBeTruthy();
+  expect(failed!.cloning).toBeUndefined();
+
+  git(tool, "remote", "set-url", "origin", url);
+  const made = await sender.cloneOn(computerId, projectId);
+  const there = (await mini.projects.list(null)).find((p) => p.id === made.id);
+  expect(there?.path).toBe(join(mini.dir, "tool"));
+  const [after] = await sender.startTargets(projectId);
+  expect(after).toMatchObject({ project: { id: made.id, name: made.name } });
+  expect(after!.cloneError).toBeUndefined();
+});
+
+it("runs a command on the other computer for an agent setting it up", async () => {
+  const { sender, computerId } = await pairedComputers();
+  const run = await sender.runOn(computerId, "echo set-up-$((40 + 2))", 20_000);
+  expect(run).toMatchObject({ code: 0, timedOut: false });
+  expect(run.output).toContain("set-up-42");
+  await expect(
+    sender.runOn(computerId, "exit 3", 20_000),
+  ).resolves.toMatchObject({ code: 3 });
 });
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {

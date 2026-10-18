@@ -20,6 +20,7 @@ import {
   type ChatMessage,
 } from "../../shared/projects";
 import {
+  maxCommandMs,
   remoteBridgeVersion,
   type ComputerMethod,
   type ComputerProject,
@@ -41,6 +42,7 @@ import {
   repositoryNames,
 } from "../git/bundles";
 import { LiveFeed, type FeedLink } from "./live-feed";
+import { CloneRequests, runCommand, type CloneHost } from "./remote-setup";
 
 const folderMethods = new Set<string>(handoffFolderMethods);
 const partSchema = z.enum(["thread", "bundle"]);
@@ -93,6 +95,8 @@ export interface ReceiverHost {
   version(): string;
   /** Runs an Api call, as the window would; a live handoff's calls go through it. */
   dispatch?(method: ApiMethod, args: unknown[]): Promise<unknown>;
+  /** Clones a paired computer asks for, as the add-project palette makes them. */
+  adding?: Omit<CloneHost, "repositories">;
   /** Its updater, which a paired computer may set going. */
   updates?: {
     state(): UpdateState;
@@ -116,8 +120,16 @@ export class HandoffReceiver {
     Promise<{ chatId: string; project: string }>
   >();
   private feed: LiveFeed;
+  private clones?: CloneRequests;
   constructor(private host: ReceiverHost) {
     this.feed = new LiveFeed(host.chats);
+    const adding = host.adding;
+    if (adding)
+      this.clones = new CloneRequests({
+        defaultFolder: () => adding.defaultFolder(),
+        clone: (url, into, onStep) => adding.clone(url, into, onStep),
+        repositories: (p) => host.root(p.id).then(repositoryNames),
+      });
   }
   /** How the computers threads came from are reached; the phone remote's server. */
   connect(link: FeedLink) {
@@ -147,6 +159,17 @@ export class HandoffReceiver {
     switch (method) {
       case "computerProjects":
         return this.projects();
+      case "cloneProject": {
+        if (!this.clones) throw new Error("This Relay can't clone projects.");
+        const url = z.string().trim().min(1).max(2000).parse(args[0]);
+        return this.clones.ask(url, device.name);
+      }
+      case "runCommand":
+        return runCommand(
+          z.string().min(1).max(8000).parse(args[0]),
+          z.number().int().min(1000).max(maxCommandMs).parse(args[1]),
+          device.name,
+        );
       case "handoffUpload":
         return this.upload(
           idSchema.parse(args[0]),

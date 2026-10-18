@@ -354,6 +354,7 @@ const methods = [
   "handoffTargets",
   "handOffThread",
   "startTargets",
+  "cloneOnComputer",
   "startProjectChatOn",
   "retryHandoff",
   "handoffView",
