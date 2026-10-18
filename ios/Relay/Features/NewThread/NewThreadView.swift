@@ -158,6 +158,7 @@ struct NewThreadView: View {
                 next = connection.drafts.newThreadKey(computer, now.projectId!)
             }
             if let draftKey, before.computer == computer, draftKey != next {
+                UnsentPhotos.move(computer, from: draftKey, to: next)
                 connection.drafts.move(computer, from: draftKey, to: next)
             }
             draftKey = next

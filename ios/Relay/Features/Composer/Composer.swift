@@ -91,6 +91,7 @@ struct Composer: View {
     }
     private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var empty: Bool { field.blank && photos.isEmpty && computerShots.isEmpty }
+    private var tooManyPhotos: Bool { photos.count > PastedImage.maxPerMessage }
 
     private var computerShots: [Int] { connection.computerShots(draftAt) }
 
@@ -138,6 +139,11 @@ struct Composer: View {
                 }
                 ComposerPhotos(photos: photos, loading: loadingPhotos, draftAt: draftAt) { id in
                     photos.removeAll { $0.id == id }
+                }
+                if tooManyPhotos {
+                    Text("A message can hold three photos. Remove extras to send.")
+                        .font(.footnote)
+                        .foregroundStyle(colors.destructive)
                 }
                 ComposerField(
                     field: field, prompt: running ? "Queue a message" : placeholder, focused: focused
@@ -375,13 +381,14 @@ struct Composer: View {
     }
 
     private var canSend: Bool {
-        (!empty || dictation.phase == .listening) && !sending && loadingPhotos == 0 && dictation.phase != .finishing
+        (!empty || dictation.phase == .listening) && !sending && loadingPhotos == 0 && !tooManyPhotos
+            && dictation.phase != .finishing
     }
 
     private func add(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         picked = []
-        let taking = Array(items.prefix(PastedImage.maxPerMessage - photos.count - loadingPhotos))
+        let taking = Array(items.prefix(max(0, PastedImage.maxPerMessage - photos.count - loadingPhotos)))
         let first = photos.count + loadingPhotos + 1
         loadingPhotos += taking.count
         Task {
@@ -432,6 +439,7 @@ struct Composer: View {
     }
 
     private func submit(steer: Bool = false, sendAt: Int64? = nil, confirmed: Bool = false) {
+        guard !tooManyPhotos, loadingPhotos == 0 else { return }
         if !confirmed, startsWithCommand(text), !command(text) { return }
         // A `/btw` question goes beside the conversation; nobody takes over.
         let side = rootId == nil && text.range(of: "^/btw\\s", options: [.regularExpression, .caseInsensitive]) != nil
@@ -441,6 +449,7 @@ struct Composer: View {
         }
         Task {
             if dictation.phase != .idle { await dictation.finish() }
+            guard !tooManyPhotos, loadingPhotos == 0 else { return }
             let body = text
             let sent = photos
             let at = draftAt
@@ -654,7 +663,8 @@ struct Composer: View {
             return
         }
         let held = UnsentPhotos.take(id)
-        photos = photosLoaded != nil ? held : Array((held + photos).prefix(PastedImage.maxPerMessage))
+        let heldIDs = Set(held.map(\.id))
+        photos = photosLoaded != nil ? held : held + photos.filter { !heldIDs.contains($0.id) }
         photosLoaded = id
         UnsentPhotos.keep(photos, for: id)
     }

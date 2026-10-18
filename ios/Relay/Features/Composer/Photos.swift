@@ -20,6 +20,17 @@ enum UnsentPhotos {
     static func keep(_ photos: [PickedPhoto], for draft: String) {
         held[draft] = photos.isEmpty ? nil : photos
     }
+
+    /// A new thread follows its chosen project, including photos already in either draft.
+    /// Keep every photo: the composer asks the user to remove extras before sending.
+    static func move(_ computer: String, from: String, to: String) {
+        guard from != to else { return }
+        let source = "\(computer)\n\(from)", target = "\(computer)\n\(to)"
+        let existing = take(target)
+        let ids = Set(existing.map(\.id))
+        keep(existing + take(source).filter { !ids.contains($0.id) }, for: target)
+        held[source] = nil
+    }
 }
 
 /// Tried in turn until the photo fits the desktop's limit: long side in pixels, JPEG quality.
