@@ -56,7 +56,12 @@ final class ReadAloud {
                 guard current(id) else { return }
                 let pcm = Data(base64Encoded: audio.pcm) ?? Data()
                 if !pcm.isEmpty {
-                    if !started { try speaker.start(sampleRate: audio.sampleRate) }
+                    if !started {
+                        try speaker.start(sampleRate: audio.sampleRate) { [weak self] in
+                            guard let self, self.current(id) else { return }
+                            self.stop()
+                        }
+                    }
                     started = true
                     speaker.write(pcm)
                     loading = false

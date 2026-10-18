@@ -85,7 +85,15 @@ final class DictationSession {
                 throw MicrophoneError("Relay isn't allowed to use the microphone. Allow it in Settings › Relay.")
             }
             loading = try await connection.dictate(.start(id: session)).loading
-            let chunks = try mic.start()
+            // A stop while permission or the computer was loading mustn't take audio
+            // back from a reader that has since started.
+            if stopAsked {
+                _ = try await connection.dictate(.cancel(id: session))
+                phase = .idle
+                loading = false
+                return
+            }
+            let chunks = try mic.start { [weak self] in self?.stop() }
             self.mic = mic
             phase = .listening
             write(placed())
@@ -122,7 +130,12 @@ final class DictationSession {
                 throw MicrophoneError("Relay isn't allowed to use the microphone. Allow it in Settings › Relay.")
             }
             // The microphone first: what's said while the engine loads waits in it.
-            let chunks = try mic.start()
+            if stopAsked {
+                phase = .idle
+                loading = false
+                return
+            }
+            let chunks = try mic.start { [weak self] in self?.stop() }
             self.mic = mic
             phase = .listening
             write(placed())

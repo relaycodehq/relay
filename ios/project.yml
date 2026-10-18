@@ -16,6 +16,14 @@ packages:
   RelayKit:
     path: RelayKit
 
+schemes:
+  Relay:
+    build:
+      targets:
+        Relay: all
+    test:
+      targets: [RelayTests]
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -28,6 +36,17 @@ settings:
     CODE_SIGN_STYLE: Automatic
 
 targets:
+  RelayTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RelayTests
+    dependencies:
+      - target: Relay
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.relay.ios.tests
   Relay:
     type: application
     platform: iOS
