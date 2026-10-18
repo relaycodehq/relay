@@ -3,6 +3,8 @@ package dev.relay.android.features.dictation
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -116,9 +118,20 @@ class PhoneSpeech(private val context: Context) : Hearer {
                 // Nothing (more) was said before Stop.
                 if (stopping && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT))
                     return end()
-                if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) r.triggerModelDownload(intent)
                 over = true
-                release()
+                if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                    // Android 13 queues the download on its main handler. Keep the
+                    // recognizer alive until that request runs, including if the UI cancels.
+                    recognizer = null
+                    try {
+                        r.triggerModelDownload(intent)
+                    } catch (_: RuntimeException) {
+                        listener.onError("The phone couldn't request its speech model. Try again, or dictate on the computer.")
+                        return
+                    } finally {
+                        Handler(Looper.getMainLooper()).post { r.destroy() }
+                    }
+                } else release()
                 listener.onError(describe(error))
             }
             override fun onBeginningOfSpeech() {}
@@ -152,7 +165,9 @@ class PhoneSpeech(private val context: Context) : Hearer {
 private fun joinWords(a: String, b: String) = listOf(a, b).filter { it.isNotEmpty() }.joinToString(" ")
 
 private fun describe(error: Int) = when (error) {
-    SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE, SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
+    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
+        "This phone's speech engine doesn't support your language. Dictate on the computer instead."
+    SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
         "This phone's speech engine has no model for your language yet. Android is downloading it; try again soon, or dictate on the computer."
     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
         "Relay isn't allowed to use the microphone. Allow it in Android's settings for Relay."
