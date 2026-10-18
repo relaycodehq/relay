@@ -54,10 +54,6 @@
 .accounts-row:last-child {
   border-bottom: 0;
 }
-.accounts-row[data-in-use] {
-  box-shadow: inset 2px 0 0 var(--accent);
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
 .accounts-pick {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 200px;
@@ -73,7 +69,9 @@
   gap: 12px 14px;
   cursor: pointer;
 }
-.accounts-row[data-several]:not([data-in-use]) .accounts-pick:hover {
+/* The radio and "New threads" mark the one in use; the others light up
+   whole, menu included, as the line picks them. */
+.accounts-row[data-several]:not([data-in-use]):hover {
   background: var(--hover);
 }
 .accounts-pick input[type="radio"] {

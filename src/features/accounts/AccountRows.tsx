@@ -76,13 +76,14 @@ function AccountRow({
   const [renaming, setRenaming] = useState(false);
   const { provider, id } = account;
   const out = headroom(usage) === 0;
-  const who = [
-    account.signedIn ? account.plan : "Signed out",
-    account.email,
-    account.system && (provider === "claude" ? "~/.claude" : "~/.codex"),
-  ]
+  const who = [account.signedIn ? account.plan : "Signed out", account.email]
     .filter(Boolean)
     .join(" · ");
+  const folder = account.system
+    ? provider === "claude"
+      ? "~/.claude"
+      : "~/.codex"
+    : undefined;
   return (
     <div
       className="accounts-row"
@@ -121,7 +122,9 @@ function AccountRow({
               <span className="accounts-quiet">Out until reset</span>
             ) : null}
           </span>
-          <span className="accounts-who">{who}</span>
+          <span className="accounts-who" title={folder}>
+            {who || folder}
+          </span>
         </span>
         <AccountBars usage={usage} />
       </label>
