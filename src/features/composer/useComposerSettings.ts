@@ -7,6 +7,7 @@ import {
 import type { SentComposerSettings } from "../../../shared/projects";
 import type { Recipient } from "../../../shared/recipient";
 import { codexQuestionChoice } from "../../../shared/settings";
+import { agentOn } from "../../../shared/agent-prefs";
 import {
   composerProvider,
   followLastAgent,
@@ -53,10 +54,21 @@ export function useComposerSettings({
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
   const [picked, setProvider] = useState(saved.provider);
-  const provider = composerProvider(picked, agent ?? ai.data?.threadProvider);
   // A new thread starts on the agent last picked for one, here or on the
   // phone; picking one here makes it that agent for both.
   const followsLastAgent = key.startsWith("new:");
+  // Unless that agent has been switched off since: then the default decides.
+  const remembered =
+    followsLastAgent &&
+    picked &&
+    picked !== "message" &&
+    !agentOn(ai.data, picked)
+      ? undefined
+      : picked;
+  const provider = composerProvider(
+    remembered,
+    agent ?? ai.data?.threadProvider,
+  );
   const [frozen, setFrozen] = useState(saved.frozen);
   const freeze = useCallback(() => setFrozen(true), []);
   useFollowLastAgent(followsLastAgent, !!frozen, picked, setProvider);

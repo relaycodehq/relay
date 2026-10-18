@@ -642,7 +642,7 @@ app
               lookAtPage(html, { ...options, theme }, signal),
             ),
           handoffs: handoffs.sender,
-          agents: threadAgents(agentUpdates),
+          agents: threadAgents(agentUpdates, () => store?.aiSettings()),
           reportProblem: draftBugReport,
           ...(process.env.RELAY_DEV_STALE
             ? { restart: () => devBuild.restart() }

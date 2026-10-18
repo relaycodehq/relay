@@ -30,7 +30,6 @@ import { soundEntries } from "./sections/sounds";
 import { useShortcutEntries } from "./sections/shortcuts";
 import { useAboutEntries } from "./sections/about";
 import { reportEntries } from "./sections/report";
-import { AgentTools } from "../agent-tools/AgentTools";
 import "./settings.css";
 
 export type { SettingsCategory };
@@ -88,7 +87,7 @@ export function Settings({
   const appearance = useAppearanceEntries(),
     composer = useComposerEntries(),
     threads = useThreadEntries(),
-    models = useModelEntries(setError),
+    models = useModelEntries(setError, projectId),
     dictation = useDictationEntries(),
     readAloud = useReadAloudEntries(),
     shortcuts = useShortcutEntries(),
@@ -99,14 +98,6 @@ export function Settings({
     ...threads,
     ...projectEntries(project),
     ...models,
-    {
-      id: "agent-tools-inventory",
-      category: "agent-tools",
-      title: "Skills and MCP servers",
-      keywords:
-        "tools skills mcp servers configuration disabled enabled plugins personal repository computer agent codex claude",
-      card: () => <AgentTools initialProjectId={projectId} />,
-    },
     ...integrationEntries({ account, onConnect, onDisconnect }),
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),

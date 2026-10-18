@@ -17,7 +17,6 @@ export type SettingsCategory =
   | "agents"
   | "relay-models"
   | "quick-switch"
-  | "agent-tools"
   | "integrations"
   | "phone"
   | "computers"

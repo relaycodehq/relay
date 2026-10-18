@@ -393,7 +393,10 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       chats,
       agentHosts,
       agentProjects(projects, () => login.client, home),
-      { handoffs: handoffs.sender, agents: threadAgents(agentUpdates) },
+      {
+        handoffs: handoffs.sender,
+        agents: threadAgents(agentUpdates, () => store.aiSettings()),
+      },
     );
   chats.armWakeups();
   void chats

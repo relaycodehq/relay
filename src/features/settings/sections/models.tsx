@@ -1,38 +1,19 @@
 import {
-  agentName,
-  isCliProvider,
-  type AgentProvider,
-} from "../../../../shared/agents";
-import { isUpdating } from "../../../../shared/agent-updates";
-import { accountProviders } from "../../../../shared/agent-accounts";
-import {
   helperOn,
   type AISettings,
   type SwitchableHelper,
 } from "../../../../shared/settings";
 import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
-import { AgentCards } from "../../updates/AgentCards";
+import { AgentsPanel } from "../../agent-settings/AgentsPanel";
+import { AgentTools } from "../../agent-tools/AgentTools";
 import { useRecent } from "../../updates/useRecent";
-import {
-  agentUpdateChecksQuery,
-  updateAgent,
-  useAgentVersions,
-} from "../../updates/agent-updates";
+import { agentUpdateChecksQuery } from "../../updates/agent-updates";
 import { AccountRows } from "../../accounts/AccountRows";
-import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { ModelField } from "../../agents/ModelField";
-import { useRunnableAgents } from "../../agents/registry-agents";
-import {
-  AcpRegistrySettings,
-  type MissingAgent,
-} from "../../agents/AcpRegistrySettings";
+import { useOfferedAgents } from "../../agents/registry-agents";
 import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
-import {
-  SettingsCard,
-  SettingsSelect,
-  Switch,
-} from "../../../ui/SettingsCard";
+import { SettingsCard, Switch } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import { WatchThreadsSetting } from "../WatchThreadsSetting";
 import { useSavedSetting } from "../useSavedSetting";
@@ -40,46 +21,14 @@ import { api } from "../../../lib/api";
 
 type AISave = ReturnType<typeof useSaveAISettings>;
 
-const hasAccounts = (provider: AgentProvider) =>
-  (accountProviders as readonly AgentProvider[]).includes(provider);
-
-/** The registry's agents, after Relay's own that this computer doesn't have. */
-function MoreAgents() {
-  const versions = useAgentVersions();
-  const missing = (versions?.agents ?? []).flatMap((agent): MissingAgent[] =>
-    isCliProvider(agent.provider) && !agent.path && agent.installer === "relay"
-      ? [
-          {
-            provider: agent.provider,
-            command: agent.command,
-            installing: isUpdating(agent),
-            failed:
-              agent.update?.status === "failed"
-                ? agent.update.message
-                : undefined,
-          },
-        ]
-      : [],
-  );
-  return (
-    <AcpRegistrySettings missing={missing} onInstallMissing={updateAgent} />
-  );
-}
-
 /** Settings → AI & agents: Agents, Used by Relay and Quick switch. */
 export function useModelEntries(
   setError: (error: unknown) => void,
+  /** The project Settings opened for, whose checkout an agent's tools are read in. */
+  projectId?: string,
 ): SettingEntry[] {
   const ai = useSaveAISettings(setError);
   return [
-    {
-      id: "default-agent",
-      category: "agents",
-      title: "New threads start on",
-      description: "Unless the project picked its own agent.",
-      keywords: "default agent new thread start codex claude opencode cursor muse meta",
-      render: () => <AgentSelect ai={ai} />,
-    },
     {
       id: "agent-list",
       category: "agents",
@@ -87,18 +36,17 @@ export function useModelEntries(
       description:
         "Relay runs the agent CLIs installed on this computer, and Cursor's SDK, which it downloads itself. Claude Code and Codex can each sign in to more than one account.",
       keywords:
-        "account accounts sign in login switch work personal subscription limit usage email plan profile version update upgrade install link path cli codex claude code opencode cursor muse meta sdk npm homebrew bun",
-      block: true,
-      render: () => (
-        <AgentCards
-          accounts={(provider) =>
-            hasAccounts(provider) && (
-              <AccountRows
-                provider={provider as (typeof accountProviders)[number]}
-                onError={setError}
-              />
-            )
-          }
+        "account accounts sign in login switch work personal subscription limit usage email plan profile version update upgrade install link path cli codex claude code opencode cursor muse meta sdk npm homebrew bun default agent new thread start tools skills mcp servers plugins configuration acp agent client protocol registry add remove goose kimi qwen mistral vibe auggie droid kilo junie copilot plugin marketplace",
+      card: () => (
+        <AgentsPanel
+          accounts={(provider) => (
+            <AccountRows provider={provider} onError={setError} />
+          )}
+          tools={(provider) => (
+            <AgentTools agent={provider} initialProjectId={projectId} />
+          )}
+          prefs={ai.values}
+          onSave={(change) => void ai.save(change)}
         />
       ),
     },
@@ -111,17 +59,6 @@ export function useModelEntries(
       keywords:
         "agent update check automatic background notice notification nag reminder footer sidebar newer release version amp codex claude opencode",
       render: () => <AgentUpdateChecksSwitch />,
-    },
-    {
-      id: "acp-registry",
-      category: "agents",
-      title: "More agents",
-      description:
-        "Install any agent from the ACP registry. Relay downloads it into its own folder, keeps it up to date with the agents above, and it shows up in the composer.",
-      keywords:
-        "acp agent client protocol registry install download add remove goose kimi qwen mistral vibe auggie droid kilo junie copilot plugin marketplace",
-      block: true,
-      render: () => <MoreAgents />,
     },
     {
       id: "review-models",
@@ -199,7 +136,9 @@ const reviewRows: {
 
 function ReviewModelsCard({ ai }: { ai: AISave }) {
   const saved = useRecent(ai.savedAt, 2000);
-  const runnable = useRunnableAgents();
+  const runnable = useOfferedAgents(
+    ...reviewRows.map((row) => ai.values?.[`${row.kind}Provider`]),
+  );
   const { values } = ai;
   if (!values)
     return ai.settings.error ? (
@@ -262,27 +201,6 @@ function ReviewModelsCard({ ai }: { ai: AISave }) {
         </p>
       )}
     </SettingsCard>
-  );
-}
-
-function AgentSelect({ ai }: { ai: AISave }) {
-  const runnable = useRunnableAgents();
-  if (!ai.values) return null;
-  const value = ai.values.threadProvider;
-  // An agent removed since stays listed while it's the one picked.
-  const offered = runnable.includes(value) ? runnable : [...runnable, value];
-  return (
-    <SettingsSelect<AgentProvider>
-      label="New threads start on"
-      value={value}
-      icon={<ProviderIcon provider={value} />}
-      options={offered.map((provider) => ({
-        value: provider,
-        label: agentName(provider),
-        icon: <ProviderIcon provider={provider} />,
-      }))}
-      onChange={(threadProvider) => void ai.save({ threadProvider })}
-    />
   );
 }
 

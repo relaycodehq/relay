@@ -250,6 +250,10 @@ export const aiSettingsSchema = z
     threadProvider: agentProviderSchema.default("codex"),
     /** Helpers switched off: their buttons go and their jobs refuse to run. */
     helpersOff: z.array(z.enum(switchableHelpers)).default([]),
+    /** The agents as Settings lists them; any left out follow in Relay's order. */
+    agentOrder: z.array(agentProviderSchema).max(500).default([]),
+    /** Agents switched off: pickers leave them out, threads already on one keep it. */
+    agentsOff: z.array(agentProviderSchema).max(500).default([]),
   })
   .strict()
   .refine((s) => claudeEffortCheck(s.groupingProvider, s.grouping), {
@@ -289,6 +293,8 @@ export const defaultAISettings: AISettings = {
   timesheetProvider: "codex",
   threadProvider: "codex",
   helpersOff: [],
+  agentOrder: [],
+  agentsOff: [],
 };
 export const helperOn = (
   settings: Pick<AISettings, "helpersOff"> | undefined,

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { agentOn } from "../../../shared/agent-prefs";
 import type { Recipient } from "../../../shared/recipient";
 import {
   presetIndex,
   stepPreset,
   useQuickSwitch,
 } from "../quick-switch/quick-switch";
+import { useAISettings } from "../agents/useAISettings";
 import type { AgentRuns } from "./useAgentRuns";
 
 /**
@@ -13,7 +15,15 @@ import type { AgentRuns } from "./useAgentRuns";
  */
 export function useQuickSwitchHud(runs: AgentRuns, to: Recipient) {
   const quickSwitch = useQuickSwitch();
-  const presets = quickSwitch.enabled ? quickSwitch.presets : [];
+  const ai = useAISettings().data;
+  // A preset on an agent switched off sits out until it's back on.
+  const presets = useMemo(
+    () =>
+      quickSwitch.enabled
+        ? quickSwitch.presets.filter((p) => agentOn(ai, p.provider))
+        : [],
+    [quickSwitch.enabled, quickSwitch.presets, ai?.agentsOff],
+  );
   const [hud, setHud] = useState({ open: false, at: -1, dir: 1 });
   const hovered = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);

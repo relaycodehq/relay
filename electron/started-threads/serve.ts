@@ -24,7 +24,10 @@ import {
 import type { ThreadAgents } from "./thread-agents";
 import { agentRuntime } from "../agents";
 import type { AgentUpdates } from "../agents/agent-updates";
+import { agentOn } from "../../shared/agent-prefs";
 import { cantRun } from "../../shared/agent-updates";
+import { agentName } from "../../shared/agents";
+import type { AISettings } from "../../shared/settings";
 
 /** Finds or makes the tools' port and secret before any agent session starts. */
 export async function prepareRelayTools(dir: string) {
@@ -61,8 +64,13 @@ export function agentProjects(
 }
 
 /** The agents as Settings → Agents finds them, and the models their runtimes list. */
-export const threadAgents = (updates: AgentUpdates): ThreadAgents => ({
+export const threadAgents = (
+  updates: AgentUpdates,
+  ai: () => Pick<AISettings, "agentsOff"> | undefined,
+): ThreadAgents => ({
   cantRun: (agent) => {
+    if (!agentOn(ai(), agent))
+      return `${agentName(agent)} is switched off in Settings → Agents.`;
     const found = updates.current.agents.find((a) => a.provider === agent);
     return found && cantRun(found);
   },

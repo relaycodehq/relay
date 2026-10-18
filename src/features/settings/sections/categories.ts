@@ -16,7 +16,6 @@ import {
   SquarePen,
   Volume2,
   Zap,
-  Wrench,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
 
@@ -83,13 +82,7 @@ export const categories: {
     icon: Zap,
     group: aiAgents,
   },
-  {
-    id: "agent-tools",
-    label: "Agent tools",
-    description: "See the skills and MCP servers available to each agent.",
-    icon: Wrench,
-    group: aiAgents,
-  },
+
   {
     id: "integrations",
     label: "Integrations",

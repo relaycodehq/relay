@@ -1,11 +1,13 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import {
   knowRegistryAgents,
   runnableAgents,
   type AgentProvider,
 } from "../../../shared/agents";
 import type { RegistryAgentsState } from "../../../shared/acp-registry";
+import { inAgentOrder, offeredAgents } from "../../../shared/agent-prefs";
 import { api } from "../../lib/api";
+import { useAISettings } from "./useAISettings";
 
 /**
  * The agents installed from the ACP registry, as the main process last said.
@@ -46,6 +48,27 @@ export const useRegistryAgents = () =>
 /** Every agent a thread can run: Relay's own, then the installed registry ones. */
 export const useRunnableAgents = () =>
   useSyncExternalStore(subscribe, runnableAgents, runnableAgents);
+
+/** Every agent, in the order Settings → Agents lists them. */
+export function useOrderedAgents() {
+  const runnable = useRunnableAgents();
+  const order = useAISettings().data?.agentOrder;
+  return useMemo(() => inAgentOrder(runnable, order), [runnable, order]);
+}
+
+/**
+ * The agents a picker offers: in Settings' order, without the ones switched
+ * off, but keeping `keep` (the agent already picked) so it still shows.
+ */
+export function useOfferedAgents(...keep: (AgentProvider | undefined)[]) {
+  const runnable = useRunnableAgents();
+  const ai = useAISettings().data;
+  const kept = keep.join(" ");
+  return useMemo(
+    () => offeredAgents(runnable, ai, keep),
+    [runnable, ai?.agentOrder, ai?.agentsOff, kept],
+  );
+}
 
 export const registryIcon = (provider: AgentProvider) =>
   state.installed.find((agent) => agent.provider === provider)?.icon;

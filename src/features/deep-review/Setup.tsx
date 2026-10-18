@@ -5,7 +5,7 @@ import { sendsMessage, useSendKey } from "../../lib/send-key";
 import { useAgentName } from "./useAgentName";
 import { useDeepReviewSetup } from "./useDeepReviewSetup";
 import { ModelField } from "../agents/ModelField";
-import { useRunnableAgents } from "../agents/registry-agents";
+import { useOfferedAgents } from "../agents/registry-agents";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
 import { ReviewersField } from "./ReviewersField";
@@ -37,7 +37,6 @@ export function DeepReviewSetup({
   /** Resolves true once the review has started. */
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
-  const runnable = useRunnableAgents();
   const name = useAgentName();
   const sendKey = useSendKey();
   const { setup, update, focus, setFocus, pick, choice, start } =
@@ -50,6 +49,7 @@ export function DeepReviewSetup({
       busy,
       onStart,
     });
+  const runnable = useOfferedAgents(setup.lead.provider);
   const count = setup.reviewers.length;
   return (
     <div className="thread-compose-wrap">

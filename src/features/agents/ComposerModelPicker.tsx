@@ -52,7 +52,7 @@ import { ModelReload, reloadsModels } from "./ModelReload";
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
 import { useCustomModels, useFavoriteModels } from "./useStoredModels";
-import { useRunnableAgents } from "./registry-agents";
+import { useOfferedAgents } from "./registry-agents";
 import "./composer-model-picker.css";
 
 const providerIcons: Record<BuiltinProvider | "message", typeof OpenAI> = {
@@ -123,7 +123,9 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
   const { usage, now } = usePickerUsage(open, account?.of);
-  const runnable = useRunnableAgents();
+  const runnable = useOfferedAgents(
+    provider === "message" ? undefined : provider,
+  );
   const offered = (providers ?? runnable).filter((p) => catalogs[p]);
   const selectedKey = JSON.stringify([
     provider,

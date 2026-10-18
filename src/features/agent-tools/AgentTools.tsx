@@ -21,10 +21,7 @@ import { api } from "../../lib/api";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { SettingsCard, SettingsSelect } from "../../ui/SettingsCard";
 import { ErrorBox, Spinner } from "../../ui/ui";
-import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { useRunnableAgents } from "../agents/registry-agents";
 import { useAgentAccounts } from "../accounts/agent-accounts";
-import { newThreadAgentQuery } from "../composer/useNewThreadAgent";
 import { filterAgentTools } from "./filter";
 import "./agent-tools.css";
 
@@ -73,22 +70,18 @@ function ToolRow({ tool }: { tool: AgentTool }) {
   );
 }
 
-/** Settings → AI & agents → Agent tools. Shows configuration for new sessions. */
+/**
+ * The skills and MCP servers an agent's new sessions load, under its detail
+ * in Settings → AI & agents → Agents. Read-only.
+ */
 export function AgentTools({
+  agent,
   initialProjectId,
 }: {
+  agent: AgentProvider;
   initialProjectId?: string;
 }) {
-  const runnable = useRunnableAgents();
   const accounts = useAgentAccounts();
-  const lastAgent = useQuery(newThreadAgentQuery);
-  const [picked, setAgent] = useState<AgentProvider>();
-  // Opens on the agent new threads start with, not on one that may not be installed.
-  const agent =
-    picked ??
-    (lastAgent.data && runnable.includes(lastAgent.data)
-      ? lastAgent.data
-      : runnable[0]);
   const [computer, setComputer] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>();
   const [tab, setTab] = useState<Tab>("skills");
@@ -117,10 +110,7 @@ export function AgentTools({
     queryFn: () =>
       api.agentTools(projectId || null, agent, computer || undefined),
     // Waits for what picks the agent and its account, so the first answer isn't thrown away.
-    enabled:
-      projects.isSuccess &&
-      !lastAgent.isPending &&
-      (!signsIn || accounts !== undefined),
+    enabled: projects.isSuccess && (!signsIn || accounts !== undefined),
     staleTime: 0,
     retry: false,
   });
@@ -172,18 +162,6 @@ export function AgentTools({
               ...offeredProjects.map((p) => ({ value: p.id, label: p.name })),
               { value: "", label: "Personal configuration", short: "Personal" },
             ]}
-          />
-          <span className="composer-divider" />
-          <ComposerSelect<AgentProvider>
-            label="Tools agent"
-            value={agent}
-            icon={<ProviderIcon provider={agent} />}
-            onChange={setAgent}
-            options={runnable.map((p) => ({
-              value: p,
-              label: agentName(p),
-              icon: <ProviderIcon provider={p} />,
-            }))}
           />
         </div>
         <button

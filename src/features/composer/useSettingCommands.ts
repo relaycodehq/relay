@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { runtimeModes } from "../../../shared/agent-modes";
-import { agentName, runnableAgents } from "../../../shared/agents";
+import { agentName } from "../../../shared/agents";
 import {
   isComposerCommand,
   type CommandOption,
@@ -16,6 +16,7 @@ import {
 import type { Recipient } from "../../../shared/recipient";
 import { effortLabels } from "../../../shared/settings";
 import { isPickAgent } from "../agents/composer-models";
+import { useOfferedAgents } from "../agents/registry-agents";
 import type { AgentRuns } from "./useAgentRuns";
 import type { ComposerState } from "./useComposerSettings";
 import type { ModelCatalogs } from "./useModelCatalogs";
@@ -46,6 +47,8 @@ export function useSettingCommands({
 }) {
   const { interactionMode } = state;
   const { codex, claude, claudeListed, levels, pickOf } = runs;
+  // /model lists the agents the picker does; one switched off only while it's `to`.
+  const offered = useOfferedAgents(to === "message" ? undefined : to);
   /** Bumped by a bare /model, which opens the model picker. */
   const [pickerSignal, setPickerSignal] = useState(0);
   /** The recipient's model, as /model and /effort see it; "" is Default. */
@@ -61,9 +64,7 @@ export function useSettingCommands({
     model: recipientModel(),
     fast: to !== "message" && runs.fastOf(to),
     plan: interactionMode === "plan",
-    catalogs: Object.fromEntries(
-      runnableAgents().map((p) => [p, catalogs.of(p)]),
-    ),
+    catalogs: Object.fromEntries(offered.map((p) => [p, catalogs.of(p)])),
     defaultNames: catalogs.defaultNames,
   });
   // Every model /model can switch to, the current agent's first.

@@ -4,7 +4,7 @@ import type { HelperPick } from "../../../shared/settings";
 import { openSettings } from "../../lib/settings-page";
 import { IconButton } from "../../ui/ui";
 import { ModelField } from "../agents/ModelField";
-import { useRunnableAgents } from "../agents/registry-agents";
+import { useOfferedAgents } from "../agents/registry-agents";
 import { useAISettings } from "../agents/useAISettings";
 import { useProjectSetting } from "../projects/ProjectSettings";
 
@@ -50,7 +50,7 @@ export function CommitModel({
   /** Leaves the sheet for Settings, where the app's default is set. */
   onSettings: () => void;
 }) {
-  const runnable = useRunnableAgents();
+  const runnable = useOfferedAgents(model.shown?.provider);
   if (!model.shown) return null;
   return (
     <span className="commit-model">

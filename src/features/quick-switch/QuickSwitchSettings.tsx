@@ -7,7 +7,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useRunnableAgents } from "../agents/registry-agents";
+import { useOfferedAgents } from "../agents/registry-agents";
 import { onModel } from "../../../shared/model-fit";
 import { effortLabels, type ReasoningEffort } from "../../../shared/settings";
 import { useCatalogs } from "../agents/useCatalogs";
@@ -49,10 +49,10 @@ export function QuickSwitchSettings() {
   const quickKeys = useQuickKeysLabel();
   const quick = useQuickSwitch();
   const catalogs = useCatalogs();
-  const runnable = useRunnableAgents();
   const save = (next: Partial<QuickSwitch>) =>
     setQuickSwitch({ ...quick, ...next });
   const presets = quick.presets;
+  const runnable = useOfferedAgents(...presets.map((p) => p.provider));
   const update = (i: number, next: Partial<QuickPreset>) =>
     save({ presets: presets.map((p, j) => (j === i ? { ...p, ...next } : p)) });
   const [dragging, setDragging] = useState<number>();

@@ -2,7 +2,7 @@ import { Sparkles } from "lucide-react";
 import type { BugReportWriter } from "../../../shared/bug-report";
 import { agentName } from "../../../shared/agents";
 import { ModelField } from "../agents/ModelField";
-import { useRunnableAgents } from "../agents/registry-agents";
+import { useOfferedAgents } from "../agents/registry-agents";
 
 /**
  * Optional: an agent of the user's choosing rewrites the description into
@@ -24,7 +24,7 @@ export function ReportTidyUp({
   /** Set while the last tidy-up can be undone. */
   onUndo?: () => void;
 }) {
-  const runnable = useRunnableAgents();
+  const runnable = useOfferedAgents();
   // An agent removed since stays listed while it's the one picked.
   const providers = runnable.includes(writer.provider)
     ? runnable

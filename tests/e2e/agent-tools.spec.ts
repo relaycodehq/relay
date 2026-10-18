@@ -91,12 +91,11 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     await page
       .getByRole("button", { name: "Open settings", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Agent tools", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
     await expect(
-      page.getByRole("heading", { name: "AI & agents / Agent tools" }),
+      page.getByRole("heading", { name: "AI & agents / Agents" }),
     ).toBeVisible();
+    await page.getByRole("option", { name: /^Codex CLI/ }).click();
     const release = page
       .locator(".agent-tool-item")
       .filter({ hasText: "release" });
@@ -134,8 +133,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     await page.screenshot({
       path: join(tmpdir(), "relay-agent-tools-electron.png"),
     });
-    await page.getByRole("combobox", { name: "Tools agent" }).click();
-    await page.getByRole("option", { name: "Claude", exact: true }).click();
+    await page.getByRole("option", { name: /^Claude Code/ }).click();
     await expect(
       page.locator(".agent-tool-item").filter({ hasText: "claude-docs" }),
     ).toBeVisible();
