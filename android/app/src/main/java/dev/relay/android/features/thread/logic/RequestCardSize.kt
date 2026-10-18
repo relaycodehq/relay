@@ -9,5 +9,6 @@ private const val SHARE = 0.6f
 
 fun requestCardMaxHeightDp(screenDp: Float, keyboardDp: Float): Float {
     val room = screenDp - keyboardDp - CHROME_DP
-    return room.coerceIn(MIN_DP, screenDp * SHARE)
+    // On a short window the share is under the minimum, and coerceIn rejects that range.
+    return room.coerceIn(MIN_DP.coerceAtMost(screenDp * SHARE), screenDp * SHARE)
 }

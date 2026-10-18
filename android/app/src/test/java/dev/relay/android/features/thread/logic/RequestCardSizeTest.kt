@@ -19,4 +19,8 @@ class RequestCardSizeTest {
     @Test fun neverSmallerThanTheQuestionNeeds() {
         assertEquals(200f, requestCardMaxHeightDp(600f, 400f), 0.01f)
     }
+
+    @Test fun aShortWindowDoesNotCrashAndStaysWithinSixtyPercent() {
+        assertEquals(180f, requestCardMaxHeightDp(300f, 0f), 0.01f)
+    }
 }
