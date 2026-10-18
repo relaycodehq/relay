@@ -506,6 +506,12 @@ export interface Api
         ? ClaudeModel[]
         : import("./agents").AgentModel[]
   >;
+  /** Inspects configuration for new sessions on this computer, or a paired one. Never returns credentials. */
+  agentTools(
+    projectId: string | null,
+    provider: import("./agents").AgentProvider,
+    computerId?: string,
+  ): Promise<import("./agent-tools").AgentTools>;
   /**
    * Has the agent list its models afresh, restarting it where that takes
    * a restart. Refuses while threads run on it, naming them, unless

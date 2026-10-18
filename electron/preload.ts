@@ -283,6 +283,7 @@ const methods = [
   "agentModels",
   "reloadAgentModels",
   "agentDefaults",
+  "agentTools",
   "openExternal",
   "updateState",
   "checkForUpdates",

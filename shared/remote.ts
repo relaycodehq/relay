@@ -442,6 +442,7 @@ export const phoneDesktopMethods = [
   "removeThreadNote",
   "agentModels",
   "agentDefaults",
+  "agentTools",
   "aiSettings",
   "newThreadAgent",
   "saveNewThreadAgent",
@@ -699,6 +700,7 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
  * them the desktop's two minutes instead of its usual quarter.
  */
 export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
+  "agentTools",
   "sendProjectChat",
   "createProjectChat",
   "projectGitAction",

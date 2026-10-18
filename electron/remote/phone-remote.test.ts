@@ -1367,3 +1367,21 @@ it("tells only phones that know drafts when someone leaves the computer; older o
   );
   expect(older.events().some((e) => e.kind === "presence")).toBe(false);
 });
+
+it("carries agent tool inspection through the desktop bridge without adding a forwarding destination", async () => {
+  const inventory = {
+    skills: { items: [] },
+    servers: { items: [] },
+    checkedAt: 1,
+  };
+  const { remote, dispatched } = await desktop(async () => inventory);
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const paired = phone({ link, device: "Tools inspector" });
+  await paired.until("online");
+  expect(await paired.client.desktop("agentTools", projectId, "codex")).toEqual(
+    inventory,
+  );
+  expect(dispatched).toEqual([
+    { method: "agentTools", args: [projectId, "codex"] },
+  ]);
+});

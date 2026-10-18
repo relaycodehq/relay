@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ApiMethod } from "../../shared/types";
 import { callFrom, type AppWindow } from "../app/window";
 import { accountHandlers } from "./account";
+import { agentToolHandlers } from "./agent-tools";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
 import { bugReportHandlers } from "./bug-reports";
@@ -37,6 +38,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
   const handlers = combine([
     accountHandlers(ctx),
     agentAccountHandlers(ctx),
+    agentToolHandlers(ctx),
     reviewHandlers(ctx),
     reviewCheckoutHandlers(ctx),
     checkHandlers(ctx),

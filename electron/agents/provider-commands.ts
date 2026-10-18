@@ -40,28 +40,28 @@ export const codexSkills = memoByKey((root) => discover(root));
 function discover(root: string): Promise<CodexSkill[]> {
   return withAppServer(root, "loading skills", async (wire) => {
     const response = await wire.request("skills/list", { cwds: [root] });
-    const entries = z
-      .object({
-        data: z
-          .array(
-            z.object({
-              cwd: z.string(),
-              skills: z.array(z.unknown()).max(5000),
-            }),
-          )
-          .max(100),
-      })
-      .parse(response).data;
-    return (entries.find((e) => e.cwd === root)?.skills ?? []).flatMap(
-      (value) => {
-        const parsed = skillSchema.safeParse(value);
-        return parsed.success && parsed.data.enabled !== false
-          ? [parsed.data]
-          : [];
-      },
-    );
+    return readCodexSkills(response, root);
   });
 }
+/** All discovered skills, including disabled ones; the composer filters them later. */
+export function readCodexSkills(response: unknown, root: string): CodexSkill[] {
+  const entries = z
+    .object({
+      data: z
+        .array(
+          z.object({ cwd: z.string(), skills: z.array(z.unknown()).max(5000) }),
+        )
+        .max(100),
+    })
+    .parse(response).data;
+  const found = entries.find((e) => e.cwd === root);
+  if (!found) throw new Error("Codex did not report skills for this checkout.");
+  return found.skills.flatMap((value) => {
+    const parsed = skillSchema.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 const modelEntrySchema = z.object({
   id: z.string(),
   model: z.string().optional(),
