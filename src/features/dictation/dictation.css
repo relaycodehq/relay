@@ -186,3 +186,8 @@
   border-radius: 7px;
   font-size: 12px;
 }
+
+.dictation-engine-error {
+  font-size: 12px;
+  color: #b3636b;
+}

@@ -1,4 +1,5 @@
 import { Download, Pause, Trash2 } from "lucide-react";
+import { useState } from "react";
 import {
   dictationModel,
   dictationModelSize,
@@ -40,16 +41,30 @@ export const dictationEngineLine =
 
 export function DictationEngineSetting() {
   const { engine } = useDictationModel();
+  const [error, setError] = useState<string>();
   return (
-    <SettingsSelect<DictationEngine>
-      label="Speech engine"
-      value={engine}
-      options={[
-        { value: "parakeet", label: dictationModel.name },
-        { value: "apple", label: "macOS" },
-      ]}
-      onChange={(next) => void api.setDictationEngine(next)}
-    />
+    <>
+      <SettingsSelect<DictationEngine>
+        label="Speech engine"
+        value={engine}
+        options={[
+          { value: "parakeet", label: dictationModel.name },
+          { value: "apple", label: "macOS" },
+        ]}
+        onChange={(next) => {
+          setError(undefined);
+          api.setDictationEngine(next).catch((e: unknown) => {
+            console.warn("Could not switch the speech engine:", e);
+            setError(e instanceof Error ? e.message : String(e));
+          });
+        }}
+      />
+      {error && (
+        <small role="alert" className="dictation-engine-error">
+          {error}
+        </small>
+      )}
+    </>
   );
 }
 
