@@ -62,7 +62,7 @@ internal fun NativeInlines(inlines: List<MdInline>, ctx: MdContext, style: TextS
     val text = remember(inlines, ctx, c, density, mono, inter) { spannedOf(inlines, ctx, c, density, mono, inter) }
     val weight = (style.fontWeight ?: FontWeight.Normal).weight
     AndroidView(
-        factory = { context -> TextView(context).apply { setUp(context) } },
+        factory = { context -> AnswerText(context).apply { setUp(context) } },
         modifier = modifier.fillMaxWidth(),
         onReset = {},
         update = { view ->
@@ -70,6 +70,15 @@ internal fun NativeInlines(inlines: List<MdInline>, ctx: MdContext, style: TextS
             view.show(text, selectable)
         },
     )
+}
+
+/**
+ * Sized to its text, so there's never anything to scroll to. A selectable TextView still brings
+ * its cursor into view before drawing, and one laid out before it had any height scrolled its
+ * first line out of sight and stayed that way: list items showed all but their first line.
+ */
+private class AnswerText(context: Context) : TextView(context) {
+    override fun scrollTo(x: Int, y: Int) = super.scrollTo(0, 0)
 }
 
 /** What a view last showed, so a parent drawing again with the same doesn't reset it. */
