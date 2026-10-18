@@ -68,9 +68,9 @@ struct RootView: View {
             get: { tab },
             set: { next in
                 guard next == .new else { return tab = next }
+                // Only before `neverSelect` is in. UIKit took the circle for picked all the same;
+                // left so, the next tap on it would show its empty page.
                 stacks[tab]?.routes.append(.newThread())
-                // UIKit took the circle for picked all the same; left so, the next tap on it
-                // would show its empty page.
                 if let index = HomeTab.allCases.firstIndex(of: tab) {
                     DispatchQueue.main.async { keepTabSelected(index) }
                 }
@@ -116,6 +116,14 @@ struct RootView: View {
             }
             .tabViewSearchActivation(.searchTabSelection)
             .onChange(of: tab) { from, to in switched = TabSwitch(from: from, to: to) }
+            .task {
+                // Once UIKit has the tab bar up; then the circle pushes without ever being picked.
+                guard let circle = HomeTab.allCases.firstIndex(of: .new) else { return }
+                for _ in 0..<40 {
+                    if neverSelect(circle, tapped: { stacks[tab]?.routes.append(.newThread()) }) { return }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+            }
             .environment(\.tabSwitch, switched)
             .hotReloads()
             .environment(\.threadFilter, ThreadFilter.decoded(filterData))

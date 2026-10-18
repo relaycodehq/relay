@@ -141,14 +141,86 @@ private struct OverTabBar: ViewModifier {
 /// Selects the tab at `index` in UIKit, where SwiftUI's selection already is.
 @MainActor
 func keepTabSelected(_ index: Int) {
-    let roots = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+    guard let tabs = rootTabs(), index < tabs.tabs.count, tabs.selectedTab !== tabs.tabs[index] else { return }
+    tabs.selectedTab = tabs.tabs[index]
+}
+
+/// Keeps UIKit from ever picking the tab at `index`, running `tapped` instead; false while the
+/// tab bar isn't up yet. Picked for a moment and put back, the New circle left iOS 26's
+/// navigation broken: the next push's bar items had no environment, and crashed.
+@MainActor
+func neverSelect(_ index: Int, tapped: @escaping () -> Void) -> Bool {
+    guard let tabs = rootTabs() else { return false }
+    if let installed = tabs.delegate as? TabGuard {
+        installed.tapped = tapped
+        return true
+    }
+    let guarded = TabGuard(index: index, original: tabs.delegate, tapped: tapped)
+    TabGuard.current = guarded
+    tabs.delegate = guarded
+    return true
+}
+
+@MainActor
+private func rootTabs() -> UITabBarController? {
+    var stack = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         .compactMap(\.rootViewController)
-    var stack = roots
     while let next = stack.popLast() {
-        if let tabs = next as? UITabBarController {
-            if index < tabs.tabs.count, tabs.selectedTab !== tabs.tabs[index] { tabs.selectedTab = tabs.tabs[index] }
-            return
-        }
+        if let tabs = next as? UITabBarController { return tabs }
         stack += next.children
+    }
+    return nil
+}
+
+/// Stands in as the tab bar's delegate, answering for one tab and passing the rest on to
+/// SwiftUI's own.
+private final class TabGuard: NSObject, UITabBarControllerDelegate {
+    /// UIKit holds its delegate weakly.
+    @MainActor static var current: TabGuard?
+    let index: Int
+    weak var original: UITabBarControllerDelegate?
+    var tapped: () -> Void
+
+    init(index: Int, original: UITabBarControllerDelegate?, tapped: @escaping () -> Void) {
+        self.index = index
+        self.original = original
+        self.tapped = tapped
+    }
+
+    // iOS 26 asks this one,
+    func tabBarController(_ controller: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if controller.viewControllers?.firstIndex(of: viewController) == index {
+            answer()
+            return false
+        }
+        return original?.tabBarController?(controller, shouldSelect: viewController) ?? true
+    }
+
+    // iOS 27 this one; left to SwiftUI, the circle's empty page showed for a frame.
+    func tabBarController(_ controller: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        if controller.tabs.firstIndex(of: tab) == index {
+            answer()
+            return false
+        }
+        return original?.tabBarController?(controller, shouldSelectTab: tab) ?? true
+    }
+
+    private var answered = false
+
+    /// One push for a tap, should UIKit ask both.
+    private func answer() {
+        guard !answered else { return }
+        answered = true
+        tapped()
+        DispatchQueue.main.async { self.answered = false }
+    }
+
+    // UIKit asks these on the main thread.
+    nonisolated override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector) || MainActor.assumeIsolated { original?.responds(to: selector) == true }
+    }
+
+    nonisolated override func forwardingTarget(for selector: Selector!) -> Any? {
+        MainActor.assumeIsolated { original }
     }
 }
