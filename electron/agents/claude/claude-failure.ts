@@ -29,8 +29,13 @@ export class ClaudeFailureWatch {
   private rejected?: { resetsAt?: number; overage: boolean };
   // What Claude answered with when a request failed, such as "API Error: overloaded".
   private errorText?: string;
+  private afterResult = false;
 
   see(frame: Frame) {
+    // An error only explains the result it led to: a turn can read several
+    // (a steer's, a background command's), and one Claude got past is over.
+    if (this.afterResult) this.errorText = undefined;
+    this.afterResult = frame.type === "result";
     if (frame.type === "rate_limit_event" && frame.rate_limit_info) {
       const info = frame.rate_limit_info;
       if (info.status === "rejected")
@@ -43,10 +48,10 @@ export class ClaudeFailureWatch {
         };
     }
     if (frame.type !== "assistant") return;
-    if (frame.error && !frame.parent_tool_use_id)
-      this.errorText = textOf(
-        (frame.message as { content?: unknown } | undefined)?.content,
-      );
+    if (!frame.parent_tool_use_id)
+      this.errorText = frame.error
+        ? textOf((frame.message as { content?: unknown } | undefined)?.content)
+        : undefined;
     if (frame.error === "authentication_failed") this.signedOut = true;
     if (
       (frame.error === "rate_limit" || frame.error === "billing_error") &&
