@@ -111,6 +111,23 @@ class TurnWordsTest {
         assertEquals(2, (parts[0] as TracePart.Run).activity.size)
     }
 
+    @Test fun aRunningTurnsOnlyRunStaysOneRowAsTheAgentWritesAndCallsAgain() {
+        val run = (1..10).map { act(call("r$it", "command", "complete")) }
+        fun shapes(trace: List<AgentTrace>, live: Boolean, settled: Boolean): List<RunShape> {
+            val parts = groupTrace(trace)
+            return parts.indices.filter { parts[it] is TracePart.Run }.map { runShape(parts, it, live, settled) }
+        }
+        val wrote = run + AgentTrace("commentary", "c1", text = "Found it")
+        val calledAgain = wrote + act(call("n", "command", "running"))
+        // Rows here would unfold ten lines under the reader, then fold them again a call later.
+        assertEquals(listOf(RunShape.Live), shapes(run, live = true, settled = false))
+        assertEquals(listOf(RunShape.Group), shapes(wrote, live = true, settled = false))
+        assertEquals(listOf(RunShape.Group, RunShape.Live), shapes(calledAgain, live = true, settled = false))
+        // Held open for a reader once it ended, it still doesn't unfold.
+        assertEquals(listOf(RunShape.Group), shapes(wrote, live = false, settled = false))
+        assertEquals(listOf(RunShape.Rows), shapes(wrote, live = false, settled = true))
+    }
+
     @Test fun nestsSubagentCallsUnderTheirAgentRow() {
         val turn = readTurn(message(listOf(
             act(call("agent", "agent", "running", "Explore")),

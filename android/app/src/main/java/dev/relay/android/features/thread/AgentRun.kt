@@ -40,6 +40,7 @@ import dev.relay.android.features.images.imagePath
 import dev.relay.android.features.images.imageRead
 import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.markdown.Markdown
+import dev.relay.android.features.thread.logic.RunShape
 import dev.relay.android.features.thread.logic.TracePart
 import dev.relay.android.features.thread.logic.TurnHeading
 import dev.relay.android.features.thread.logic.askedQuestions
@@ -50,6 +51,7 @@ import dev.relay.android.features.thread.logic.duration
 import dev.relay.android.features.thread.logic.groupTrace
 import dev.relay.android.features.thread.logic.isQuestionCall
 import dev.relay.android.features.thread.logic.isStartThreads
+import dev.relay.android.features.thread.logic.runShape
 import dev.relay.android.features.thread.logic.liveLabel
 import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.readTurn
@@ -194,11 +196,11 @@ fun AgentRun(
                             part is TracePart.Commentary ->
                                 Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
                             part !is TracePart.Run -> Unit
-                            live && index == parts.lastIndex && !isQuestionCall(part.activity.first()) -> OpenBatch(part.activity)
-                            // The only run's summary is already the turn's heading.
-                            part.activity.size == 1 || parts.all { it === part || it is TracePart.Commentary } ->
-                                part.activity.forEach { ToolRow(it) }
-                            else -> ActivityGroup(part.activity)
+                            else -> when (runShape(parts, index, live, settled = !live && (toggled != null || !held))) {
+                                RunShape.Live -> OpenBatch(part.activity)
+                                RunShape.Rows -> part.activity.forEach { ToolRow(it) }
+                                RunShape.Group -> ActivityGroup(part.activity)
+                            }
                         }
                     }
                     // Keeps its height while a call runs, so the thread doesn't jolt.
