@@ -14,6 +14,8 @@ import type {
 } from "../../../shared/types";
 import { revisionOf } from "../../../shared/types";
 import { api } from "../../lib/api";
+import { helperOn } from "../../../shared/settings";
+import { useAISettings } from "../agents/useAISettings";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { DiffViewer } from "../diff/DiffViewer";
 import { roomForSplit, useSplitDiff } from "../diff/WorkingDiff";
@@ -97,6 +99,7 @@ export function ReviewWorkspace({
   const { wrap: wrapByDefault } = useTypography();
   const fullContext = fullContextStore.use();
   const [split, setSplit] = useSplitDiff();
+  const asks = helperOn(useAISettings().data, "questions");
   const [tab, setTab] = useState<ReviewTab>("files"),
     [wrap, setWrap] = useState(wrapByDefault),
     [reviewOpen, setReviewOpen] = useState(false),
@@ -258,8 +261,10 @@ export function ReviewWorkspace({
               }}
               onCodex={setCodex}
               onDiscuss={onDiscuss}
-              onAskAboutLines={(target) =>
-                setQuestion({ pull, file: file!, target })
+              onAskAboutLines={
+                asks
+                  ? (target) => setQuestion({ pull, file: file!, target })
+                  : undefined
               }
               onError={onError}
               onEditLine={(line) => onEditFile(file.filename, line)}

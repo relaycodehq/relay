@@ -76,7 +76,7 @@ export function ChangedFilesPane({
           />
         </div>
       </div>
-      {pull.data && !restoring && (
+      {pull.data && !restoring && triage.on && (
         <TriageControls
           state={triage.query.data}
           busy={triage.busy}

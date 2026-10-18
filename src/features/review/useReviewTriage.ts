@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { helperOn } from "../../../shared/settings";
 import { isAnalyzing, notedPaths } from "../../../shared/triage";
 import type { Progress, Pull, PullRef } from "../../../shared/types";
 import { api } from "../../lib/api";
+import { useAISettings } from "../agents/useAISettings";
 import { openGroups } from "./review-order";
 
 const NO_PATHS: string[] = [];
@@ -10,7 +12,8 @@ const NO_PATHS: string[] = [];
 /**
  * Grouping a PR's files by the change they make together: the analysis,
  * starting and cancelling it, and its groups without the files that have
- * notes, drafts or open comments. `plain` shows the flat list instead.
+ * notes, drafts or open comments. `plain` shows the flat list instead, as
+ * it always does while grouping is off in Settings.
  */
 export function useReviewTriage(
   selected: PullRef | null,
@@ -20,6 +23,7 @@ export function useReviewTriage(
   progress: Progress,
 ) {
   const qc = useQueryClient();
+  const on = helperOn(useAISettings().data, "grouping");
   const key = ["triage", selected, revision];
   const triage = useQuery({
     queryKey: key,
@@ -88,7 +92,9 @@ export function useReviewTriage(
     error,
     start,
     cancel,
-    plain,
+    /** Grouping is on in Settings, so it can be started. */
+    on,
+    plain: plain || !on,
     setPlain,
     /** Files with unresolved line comments, which stay out of groups. */
     commentPaths,

@@ -11,7 +11,11 @@ import {
   historyLimitSchema,
   historyScopeSchema,
 } from "../../shared/history";
-import { helperPickSchema } from "../../shared/settings";
+import {
+  helperOffMessage,
+  helperOn,
+  helperPickSchema,
+} from "../../shared/settings";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
@@ -137,6 +141,8 @@ export function gitHandlers(ctx: ApiContext) {
         helperPickSchema.nullable().optional(),
       ],
       async (where, paths, picked) => {
+        if (!helperOn(store.aiSettings(), "commitMessage"))
+          throw new Error(helperOffMessage("Commit messages"));
         const root = await placeRoot(where);
         const pick =
           picked === undefined
@@ -159,14 +165,18 @@ export function gitHandlers(ctx: ApiContext) {
     ),
     projectPlanCommitSplit: takes(
       [workspaceIdSchema, commitSplitNoteSchema.optional()],
-      async (where, note) =>
-        planCommitSplit(
+      async (where, note) => {
+        const settings = store.aiSettings();
+        if (!helperOn(settings, "split"))
+          throw new Error(helperOffMessage("Commit splits"));
+        return planCommitSplit(
           await placeRoot(where),
           note ?? "",
-          store.aiSettings(),
+          settings,
           // Planning reads every change at the chosen effort; give it room.
           AbortSignal.timeout(600_000),
-        ),
+        );
+      },
     ),
     projectApplyCommitSplit: takes(
       [workspaceIdSchema, applyCommitSplitSchema],

@@ -5,7 +5,11 @@ import {
 } from "../../../../shared/agents";
 import { isUpdating } from "../../../../shared/agent-updates";
 import { accountProviders } from "../../../../shared/agent-accounts";
-import type { AISettings } from "../../../../shared/settings";
+import {
+  helperOn,
+  type AISettings,
+  type SwitchableHelper,
+} from "../../../../shared/settings";
 import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
@@ -153,9 +157,11 @@ export function useModelEntries(
 }
 
 const reviewRows: {
-  kind: "grouping" | "questions" | "split" | "commitMessage";
+  kind: SwitchableHelper;
   label: string;
   hint: string;
+  /** What Relay does instead while it's off. */
+  off: string;
   allowDefault?: boolean;
   /** Runs on any agent, not only Codex and Claude. */
   anyAgent?: boolean;
@@ -164,17 +170,20 @@ const reviewRows: {
     kind: "grouping",
     label: "Pull request steps",
     hint: "Groups a pull request into reviewable steps. Steps already made keep theirs.",
+    off: "Off: pull requests list their files plainly, without Group changes.",
   },
   {
     kind: "questions",
     label: "Line questions",
     hint: "Answers what you ask about a line of code.",
+    off: "Off: selected lines in a diff don't offer to ask about them.",
     allowDefault: true,
   },
   {
     kind: "split",
     label: "Commit splits",
     hint: "Splits your changes into commits you review first.",
+    off: "Off: Changes doesn't offer to split your changes.",
     allowDefault: true,
     anyAgent: true,
   },
@@ -182,6 +191,7 @@ const reviewRows: {
     kind: "commitMessage",
     label: "Commit messages",
     hint: "Drafts the message in the Commit sheets.",
+    off: "Off: the Commit sheet opens with an empty message for you to write.",
     allowDefault: true,
     anyAgent: true,
   },
@@ -202,27 +212,50 @@ function ReviewModelsCard({ ai }: { ai: AISave }) {
     );
   return (
     <SettingsCard className="review-models">
-      {reviewRows.map((row) => (
-        <div key={row.kind} className="review-model">
-          <div className="settings-row-text">
-            <span>{row.label}</span>
-            <small>{row.hint}</small>
+      {reviewRows.map((row) => {
+        const on = helperOn(values, row.kind);
+        return (
+          <div
+            key={row.kind}
+            className="review-model"
+            data-switchable
+            data-off={!on || undefined}
+          >
+            <div className="settings-row-text">
+              <span>{row.label}</span>
+              <small>{on ? row.hint : row.off}</small>
+            </div>
+            <div className="review-model-controls">
+              {on && (
+                <ModelField
+                  label={row.label}
+                  value={values[row.kind]}
+                  provider={values[`${row.kind}Provider`]}
+                  providers={row.anyAgent ? runnable : undefined}
+                  allowDefault={row.allowDefault}
+                  onChange={(value, provider) =>
+                    void ai.save({
+                      [row.kind]: value,
+                      [`${row.kind}Provider`]: provider,
+                    } as Partial<AISettings>)
+                  }
+                />
+              )}
+              <Switch
+                label={`Use ${row.label.toLowerCase()}`}
+                checked={on}
+                onChange={(next) =>
+                  void ai.save({
+                    helpersOff: next
+                      ? values.helpersOff.filter((h) => h !== row.kind)
+                      : [...values.helpersOff, row.kind],
+                  })
+                }
+              />
+            </div>
           </div>
-          <ModelField
-            label={row.label}
-            value={values[row.kind]}
-            provider={values[`${row.kind}Provider`]}
-            providers={row.anyAgent ? runnable : undefined}
-            allowDefault={row.allowDefault}
-            onChange={(value, provider) =>
-              void ai.save({
-                [row.kind]: value,
-                [`${row.kind}Provider`]: provider,
-              } as Partial<AISettings>)
-            }
-          />
-        </div>
-      ))}
+        );
+      })}
       {saved && (
         <p className="review-models-saved" role="status">
           Saved

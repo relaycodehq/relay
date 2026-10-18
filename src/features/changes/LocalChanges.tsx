@@ -23,6 +23,8 @@ import { CommitForm } from "./local/CommitForm";
 import { ChangeReview } from "./local/ChangeReview";
 import { PushDialog } from "./local/PushDialog";
 import { useSplitDiff } from "../diff/WorkingDiff";
+import { useAISettings } from "../agents/useAISettings";
+import { helperOn } from "../../../shared/settings";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import { ElsewhereGroups } from "./elsewhere/ElsewhereGroups";
 import { ElsewhereReview } from "./elsewhere/ElsewhereReview";
@@ -61,6 +63,7 @@ export function LocalChanges({
   agentRunning?: boolean;
 }) {
   const [split, setSplit] = useSplitDiff();
+  const splits = helperOn(useAISettings().data, "split");
   const { selected, setSelected, message, setMessage, grouped, setGrouped } =
     useSavedChanges(projectId);
   useEffect(() => {
@@ -226,7 +229,9 @@ export function LocalChanges({
                     () => setMessage(""),
                   )
                 }
-                onSplit={projectId ? () => setSplitting(true) : undefined}
+                onSplit={
+                  projectId && splits ? () => setSplitting(true) : undefined
+                }
               />
             </aside>
             {chatId && away ? (

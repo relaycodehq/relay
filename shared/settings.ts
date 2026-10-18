@@ -208,6 +208,14 @@ export const helperPickSchema = z
     path: ["choice", "reasoningEffort"],
   });
 export type HelperPick = z.infer<typeof helperPickSchema>;
+/** The helpers someone can switch off; the Clockify timesheet goes with its plugin. */
+export const switchableHelpers = [
+  "grouping",
+  "questions",
+  "split",
+  "commitMessage",
+] as const;
+export type SwitchableHelper = (typeof switchableHelpers)[number];
 // Settings saved before Claude was offered used Codex for both.
 export const aiSettingsSchema = z
   .object({
@@ -240,6 +248,8 @@ export const aiSettingsSchema = z
     timesheetProvider: agentProviderSchema.default("codex"),
     /** The agent a composer starts on until it remembers one. */
     threadProvider: agentProviderSchema.default("codex"),
+    /** Helpers switched off: their buttons go and their jobs refuse to run. */
+    helpersOff: z.array(z.enum(switchableHelpers)).default([]),
   })
   .strict()
   .refine((s) => claudeEffortCheck(s.groupingProvider, s.grouping), {
@@ -278,7 +288,15 @@ export const defaultAISettings: AISettings = {
   commitMessageProvider: "codex",
   timesheetProvider: "codex",
   threadProvider: "codex",
+  helpersOff: [],
 };
+export const helperOn = (
+  settings: Pick<AISettings, "helpersOff"> | undefined,
+  helper: SwitchableHelper,
+) => !settings?.helpersOff?.includes(helper);
+/** Why a switched-off helper's job didn't run; the phone shows it as is. */
+export const helperOffMessage = (label: string) =>
+  `${label} are off in Settings → AI & agents → Used by Relay.`;
 /** Codex's line-question choice, or its defaults when questions go to Claude. */
 export const codexQuestionChoice = (settings: AISettings): ModelChoice =>
   settings.questionsProvider === "codex"

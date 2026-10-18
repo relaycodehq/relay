@@ -1,6 +1,7 @@
 import { app, dialog, shell } from "electron";
 import { z } from "zod";
 import { lineQuestionSchema } from "../../shared/questions";
+import { helperOffMessage, helperOn } from "../../shared/settings";
 import type { PullRef, Repo } from "../../shared/types";
 import {
   bodySchema,
@@ -111,6 +112,8 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       async (ref, question) => {
         const dir = requireFolder(ref);
         const settings = store.aiSettings();
+        if (!helperOn(settings, "questions"))
+          throw new Error(helperOffMessage("Line questions"));
         await launchLineQuestion(
           await clientFor(ref),
           dir,

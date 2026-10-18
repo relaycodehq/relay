@@ -46,7 +46,7 @@ interface Props extends NoteActions {
   comments: ReviewComment[];
   progress: Progress;
   onMark: (start: number, end: number, side: Side) => void;
-  onAskAboutLines: (target: QuestionTarget) => void;
+  onAskAboutLines?: (target: QuestionTarget) => void;
   onDiscuss: (target: QuestionTarget) => void;
   onEditLine: (line: number) => void;
 }

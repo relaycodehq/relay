@@ -1022,6 +1022,19 @@
 .review-model:last-child {
   border-bottom: 0;
 }
+/* The same height on and off, so switching a helper leaves the rows below put. */
+.review-model[data-switchable] {
+  min-height: 64px;
+}
+.review-model[data-off] .settings-row-text > span {
+  color: var(--muted);
+}
+.review-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
 /* Fixed model and effort widths, so the controls line up from row to row
    instead of zigzagging with each label's length. */
 .review-model .composer-model-trigger {

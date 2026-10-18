@@ -21,7 +21,8 @@ export function SelectionToolbar({
   range: SelectedLineRange;
   path: string;
   questionAgent: string;
-  onAskAboutLines: (target: QuestionTarget) => void;
+  /** Missing while line questions are off in Settings. */
+  onAskAboutLines?: (target: QuestionTarget) => void;
   onDiscuss: (target: QuestionTarget) => void;
   onComment: () => void;
   onEditLine: (line: number) => void;
@@ -37,24 +38,26 @@ export function SelectionToolbar({
           ? `line ${range.start}`
           : `lines ${range.start}–${range.end}`}
       </span>
-      <button
-        onClick={() => {
-          const span = selectedSpan(range);
-          if ("error" in span) {
-            onError(
-              new Error(
-                span.error === "two-sides"
-                  ? `Select lines on one side to ask ${questionAgent}.`
-                  : `Select up to 200 lines to ask ${questionAgent}.`,
-              ),
-            );
-            return;
-          }
-          onAskAboutLines({ path, ...span });
-        }}
-      >
-        <Terminal size={13} /> Ask {questionAgent}
-      </button>
+      {onAskAboutLines && (
+        <button
+          onClick={() => {
+            const span = selectedSpan(range);
+            if ("error" in span) {
+              onError(
+                new Error(
+                  span.error === "two-sides"
+                    ? `Select lines on one side to ask ${questionAgent}.`
+                    : `Select up to 200 lines to ask ${questionAgent}.`,
+                ),
+              );
+              return;
+            }
+            onAskAboutLines({ path, ...span });
+          }}
+        >
+          <Terminal size={13} /> Ask {questionAgent}
+        </button>
+      )}
       <button
         onClick={() => {
           const span = selectedSpan(range);

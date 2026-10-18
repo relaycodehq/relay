@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { helperOffMessage, helperOn } from "../../shared/settings";
 import { emptyProgress } from "../../shared/types";
 import {
   bodySchema,
@@ -121,9 +122,11 @@ export function reviewHandlers(ctx: ApiContext) {
     triageState: takes(triageArgs, (r, head, base) =>
       triage.state(prKey(r), `${base}:${head}`),
     ),
-    startTriage: takes(triageArgs, async (r, head, base) =>
-      triage.start(await clientFor(r), r, prKey(r), head, base),
-    ),
+    startTriage: takes(triageArgs, async (r, head, base) => {
+      if (!helperOn(store.aiSettings(), "grouping"))
+        throw new Error(helperOffMessage("Pull request steps"));
+      return triage.start(await clientFor(r), r, prKey(r), head, base);
+    }),
     groupPaths: takes(
       [...triageArgs, z.string().max(100)],
       async (r, head, base, id) =>

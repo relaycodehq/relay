@@ -12,6 +12,8 @@ import { keys } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { CommitFileList } from "./CommitFileList";
 import { CommitModel, useCommitModel } from "./CommitModel";
+import { useAISettings } from "../agents/useAISettings";
+import { helperOn } from "../../../shared/settings";
 import { ErrorBox, IconButton, Modal, Spinner } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./commit-sheet.css";
@@ -74,12 +76,18 @@ export function CommitSheet({
       if (id === generation.current) setWriting(false);
     }
   }
+  const ai = useAISettings().data;
+  const drafts = helperOn(ai, "commitMessage");
+  const drafted = useRef(false);
+  // Waits for the settings, so a sheet with drafting off never asks.
   useEffect(() => {
-    void write(selected);
-  }, []);
+    if (!ai || drafted.current) return;
+    drafted.current = true;
+    if (drafts) void write(selected);
+  }, [ai]);
   // The drafted message still describes the files that left.
   useEffect(() => {
-    if (committed.length && selected.length && !typed.current)
+    if (drafts && committed.length && selected.length && !typed.current)
       void write(selected);
   }, [committed.length]);
   async function submit() {
@@ -229,24 +237,32 @@ export function CommitSheet({
                     {subject}/{SUBJECT_LIMIT}
                   </span>
                 )}
-                <CommitModel
-                  model={model}
-                  onPick={(pick) => {
-                    typed.current = false;
-                    void write(selected, pick);
-                  }}
-                  onSettings={onClose}
-                />
-                <IconButton
-                  label="Write the message again"
-                  onClick={() => {
-                    typed.current = false;
-                    void write(selected);
-                  }}
-                  disabled={writing || busy || !selected.length}
-                >
-                  {writing ? <Spinner size={13} /> : <RefreshCw size={13} />}
-                </IconButton>
+                {drafts && (
+                  <>
+                    <CommitModel
+                      model={model}
+                      onPick={(pick) => {
+                        typed.current = false;
+                        void write(selected, pick);
+                      }}
+                      onSettings={onClose}
+                    />
+                    <IconButton
+                      label="Write the message again"
+                      onClick={() => {
+                        typed.current = false;
+                        void write(selected);
+                      }}
+                      disabled={writing || busy || !selected.length}
+                    >
+                      {writing ? (
+                        <Spinner size={13} />
+                      ) : (
+                        <RefreshCw size={13} />
+                      )}
+                    </IconButton>
+                  </>
+                )}
               </span>
               <textarea
                 aria-label="Commit message"
