@@ -18,6 +18,7 @@ import { DiffStatLabel } from "./DiffStatLabel";
 import { IconButton } from "../../ui/ui";
 import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { useFoldedTurn } from "./folded-turns";
 import "../../ui/tree.css";
 import "./changed-files.css";
 
@@ -43,11 +44,14 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 export const ChangedFilesCard = memo(function ChangedFilesCard({
   files,
+  turn,
   onOpen,
   onReveal,
   onRewind,
 }: {
   files: TurnFileChange[];
+  /** The turn's thread and message, so the card stays folded when shown again. */
+  turn?: { chatId: string; messageId: string };
   /** Opens this turn's diff, on a file when one was picked. */
   onOpen: (path?: string) => void;
   /** Shows a file in Finder. */
@@ -59,7 +63,10 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
   const [allOpen, setAllOpen] = useState(true);
-  const [folded, setFolded] = useState(false);
+  const [folded, setFolded] = useFoldedTurn(
+    turn?.chatId,
+    turn?.messageId ?? "",
+  );
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [working, setWorking] = useState(false);
@@ -205,7 +212,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           className="changed-files-fold"
           aria-expanded={!folded}
           title={folded ? "Show the files" : "Hide the files"}
-          onClick={() => setFolded((f) => !f)}
+          onClick={() => setFolded(!folded)}
         >
           <span className="tree-twist">
             <ChevronRight size={14} />

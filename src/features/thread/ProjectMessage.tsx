@@ -495,6 +495,7 @@ export const Message = memo(function Message({
       {!!m.changes?.length && m.status !== "streaming" && (
         <ChangedFilesCard
           files={m.changes}
+          turn={chatId ? { chatId, messageId: m.id } : undefined}
           onOpen={(path) => onTurnDiff(m, path)}
           onReveal={
             chatId
