@@ -41,15 +41,17 @@ struct RouteStack<Root: View>: View {
     @ViewBuilder let root: (_ open: @escaping (Route) -> Void) -> Root
     @Environment(Connection.self) private var connection
     @State private var name = NameSpot()
+    @State private var drop = TabBarDrop.Handle()
 
     // Nothing here reads the routes themselves: a push would run this again, and the root's
     // screen with it, under the screen being pushed.
     var body: some View {
         NavigationStack(path: $stack.routes) {
             root { stack.routes.append($0) }
-                .background(StackDrop(stack: stack))
+                .background(TabBarDrop(handle: drop))
                 .navigationDestination(for: Route.self) { destination($0).overTabBar().connectionLine() }
         }
+        .background(StackDepth(stack: stack, drop: drop))
         .environment(name)
         // The bar takes no touches below itself, where the tab title's computer name hangs, so
         // one menu sits over the title and the name both, growing from the title either way.
@@ -109,9 +111,12 @@ private struct NameMenu: View {
     }
 }
 
-/// The tab bar dropping as the stack pushes, following its depth on its own.
-private struct StackDrop: View {
+/// The stack's depth for the tab bar, heard from outside the stack and in a view of its own.
+private struct StackDepth: View {
     let stack: StackPath
+    let drop: TabBarDrop.Handle
 
-    var body: some View { TabBarDrop(depth: stack.routes.count) }
+    var body: some View {
+        Color.clear.onChange(of: stack.routes.count) { _, depth in drop.pushed(depth) }
+    }
 }

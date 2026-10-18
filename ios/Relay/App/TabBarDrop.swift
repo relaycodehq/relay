@@ -6,11 +6,23 @@ import UIKit
 /// it as far as the finger has gone, and a swipe let go of drops it again. Pushed screens
 /// take back the room the bar leaves with `overTabBar()`.
 struct TabBarDrop: UIViewControllerRepresentable {
-    /// How many screens the stack has pushed.
-    let depth: Int
+    /// How the stack's depth reaches it.
+    let handle: Handle
 
-    func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) { controller.pushed(depth) }
+    func makeUIViewController(context: Context) -> Controller {
+        let controller = Controller()
+        handle.controller = controller
+        return controller
+    }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    /// For a view outside the navigation stack to tell of pushes and pops. Read inside the stack's
+    /// root, iOS 26 updated nothing there as a pop brought it back, and the bar stayed down.
+    @MainActor final class Handle {
+        fileprivate weak var controller: Controller?
+
+        func pushed(_ depth: Int) { controller?.pushed(depth) }
+    }
 
     final class Controller: UIViewController {
         private weak var watched: UINavigationController?
