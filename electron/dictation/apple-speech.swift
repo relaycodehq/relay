@@ -77,10 +77,16 @@ func run() async throws {
     return settled
   }
 
-  // 80ms chunks, as Relay sends them.
+  // 80ms chunks, as Relay sends them. A read can end mid-sample, so the odd
+  // bytes wait for the next one.
   let stdin = FileHandle.standardInput
-  while let data = try stdin.read(upToCount: 1280 * 4), !data.isEmpty {
-    let count = data.count / 4
+  var carry = Data()
+  while let read = try stdin.read(upToCount: 1280 * 4), !read.isEmpty {
+    let all = carry + read
+    let usable = all.count - all.count % 4
+    carry = Data(all[usable...])
+    let data = Data(all[..<usable])
+    let count = usable / 4
     guard count > 0, let chunk = AVAudioPCMBuffer(pcmFormat: source, frameCapacity: AVAudioFrameCount(count)) else { continue }
     chunk.frameLength = AVAudioFrameCount(count)
     data.withUnsafeBytes { bytes in

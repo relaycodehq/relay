@@ -80,6 +80,11 @@ export class Dictation {
     return this.current;
   }
 
+  /** Tells the page again, e.g. once the saved engine choice has loaded. */
+  announce() {
+    this.emit(this.current);
+  }
+
   private set(state: DictationModelState) {
     this.state = state;
     this.emit(this.current);

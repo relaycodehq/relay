@@ -99,14 +99,25 @@ cpSync(
 // offers only its own engine.
 const speechSource = "electron/dictation/apple-speech.swift",
   speechOut = "dist-electron/apple-speech";
-// Built once per change of its source: swiftc takes seconds, every dev start.
-if (
-  process.platform === "darwin" &&
-  !(
-    existsSync(speechOut) &&
-    statSync(speechOut).mtimeMs >= statSync(speechSource).mtimeMs
-  )
-) {
+// Built once per change of its source or of the architecture: swiftc takes
+// seconds, every dev start.
+const speechArch = process.arch === "x64" ? "x86_64" : "arm64";
+const speechBuiltForThis = () => {
+  if (!existsSync(speechOut)) return false;
+  if (statSync(speechOut).mtimeMs < statSync(speechSource).mtimeMs)
+    return false;
+  try {
+    return (
+      execFileSync("lipo", ["-archs", speechOut], { encoding: "utf8" })
+        .trim()
+        .split(/\s+/)
+        .join() === speechArch
+    );
+  } catch {
+    return false;
+  }
+};
+if (process.platform === "darwin" && !speechBuiltForThis()) {
   rmSync(speechOut, { force: true });
   try {
     execFileSync(
@@ -117,7 +128,7 @@ if (
         "5",
         "-O",
         "-target",
-        `${process.arch === "x64" ? "x86_64" : "arm64"}-apple-macos26.0`,
+        `${speechArch}-apple-macos26.0`,
         speechSource,
         "-o",
         speechOut,

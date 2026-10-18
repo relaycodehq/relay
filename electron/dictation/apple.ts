@@ -37,13 +37,17 @@ export function serveAppleSpeech(port: MessagePortMain, helper: string) {
   const send = (event: DictationEvent) => port.postMessage(event);
   let current:
     { id: number; child: ChildProcess; stopping: boolean } | undefined;
+  /** Stopped, but still working out its last words; a new start or a closed port ends it. */
+  let finishing: ChildProcess | undefined;
   const end = (cancel: boolean) => {
-    if (!current) return;
-    if (cancel) current.child.kill();
+    if (cancel) {
+      current?.child.kill();
+      finishing?.kill();
+      finishing = undefined;
+    }
     current = undefined;
   };
 
-  send({ type: "ready" });
   port.on("message", ({ data }) => {
     const request = data as DictationRequest | null;
     if (!request) return;
@@ -71,7 +75,10 @@ export function serveAppleSpeech(port: MessagePortMain, helper: string) {
         } catch {
           return;
         }
-        if (event.type === "text")
+        // Ready only once the helper is: a first run installs the language
+        // asset first, and the page shows it loading until then.
+        if (event.type === "ready") send({ type: "ready" });
+        else if (event.type === "text")
           send({
             type: "text",
             id: session.id,
@@ -86,6 +93,7 @@ export function serveAppleSpeech(port: MessagePortMain, helper: string) {
       child.on("error", (error) => fail(error.message));
       child.on("exit", (code, signal) => {
         if (current === session) current = undefined;
+        if (finishing === child) finishing = undefined;
         if (code && !signal)
           fail(stderr.trim() || `macOS's speech engine stopped (${code}).`);
       });
@@ -101,6 +109,7 @@ export function serveAppleSpeech(port: MessagePortMain, helper: string) {
     else if (request.type === "stop") {
       current.stopping = true;
       current.child.stdin!.end();
+      finishing = current.child;
       end(false);
     }
   });

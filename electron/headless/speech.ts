@@ -192,7 +192,7 @@ export class HeadlessSpeech {
   readonly forPhones: { dictation: SpeechService; readAloud: VoiceService } = {
     dictation: {
       status: () => {
-        const status = this.dictation.current.status;
+        const status = this.dictation.current.parakeet.status;
         return status === "unsupported" && this.runtime.supported
           ? "missing"
           : status;
@@ -216,7 +216,7 @@ export class HeadlessSpeech {
       dictation: {
         supported: this.runtime.supported,
         engine: this.runtime.installed,
-        model: this.dictation.current,
+        model: this.dictation.current.parakeet,
       },
       voice: {
         supported: this.runtime.supported,

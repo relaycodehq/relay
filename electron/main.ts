@@ -332,6 +332,7 @@ app
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
+    dictation.announce();
     const bugReports = setUpBugReports({
       github,
       projects: () => loaded.get().projects ?? [],

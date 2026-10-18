@@ -1,3 +1,4 @@
+import type { DictationModelState } from "../../../../shared/dictation";
 import { command } from "../../../../shared/shortcuts";
 import { useDictationModel } from "../../dictation/audio/session";
 import type { SettingEntry } from "../settings-search";
@@ -9,6 +10,12 @@ import {
   dictationModelLine,
 } from "../../dictation/DictationSettings";
 import { ShortcutKeys } from "../ShortcutSettings";
+
+const hasParakeetFiles = (model: DictationModelState) =>
+  model.status === "ready" ||
+  model.status === "downloading" ||
+  ((model.status === "missing" || model.status === "failed") &&
+    !!model.received);
 
 export function useDictationEntries(): SettingEntry[] {
   const dictation = useDictationModel();
@@ -26,7 +33,8 @@ export function useDictationEntries(): SettingEntry[] {
           } satisfies SettingEntry,
         ]
       : []),
-    ...(dictation.engine === "parakeet"
+    // Another engine doesn't hide a downloaded model: it can still be removed.
+    ...(dictation.engine === "parakeet" || hasParakeetFiles(dictation.parakeet)
       ? [
           {
             id: "dictation-model",
