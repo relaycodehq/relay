@@ -455,6 +455,7 @@ struct Composer: View {
             let body = text
             let sent = photos
             let at = draftAt
+            let textDraft = draftID
             let photoDraft = photosLoaded
             let through = draftKey.map(connection.sendsThroughComputer) ?? false
             guard !body.isEmpty || !sent.isEmpty || through else { return }
@@ -479,11 +480,14 @@ struct Composer: View {
                 if let at { connection.drafts.went(at.computer, at.key, text: body, throughComputer: through) }
             } catch {
                 if let at { connection.drafts.release(at.computer, at.key) }
-                failed = attempt
-                self.error = error.localizedDescription
-                if draft.isEmpty { draft = body }
+                // The same composer can now be showing another computer or project's draft.
+                if draftID == textDraft {
+                    failed = attempt
+                    self.error = error.localizedDescription
+                    if draft.isEmpty { draft = body }
+                }
                 if let photoDraft {
-                    let showingDraft = visible && photosLoaded == photoDraft
+                    let showingDraft = visible && photosLoaded == photoDraft && draftID == photoDraft
                     if showingDraft { UnsentPhotos.keep(photos, for: photoDraft) }
                     let restored = UnsentPhotos.restore(sent, for: photoDraft)
                     if showingDraft { photos = restored }
@@ -492,7 +496,9 @@ struct Composer: View {
                 }
             }
             // The draft ignored edits while the send held it: what was typed meanwhile goes in now.
-            if let at { connection.drafts.editText(at.computer, at.key, draft) }
+            if let at, draftID == textDraft {
+                connection.drafts.editText(at.computer, at.key, draft)
+            }
         }
     }
 
