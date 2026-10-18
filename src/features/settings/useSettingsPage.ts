@@ -16,7 +16,8 @@ export function useSettingsPage(
     [project, setProject] = useState<string>(),
     [entry, setEntry] = useState<string>(),
     [query, setQuery] = useState(""),
-    [where, setWhere] = useState("");
+    [where, setWhere] = useState(""),
+    [asked, setAsked] = useState(0);
   // What had focus before Settings covered it, the composer usually.
   const returnTo = useRef<Element | null>(null);
   useEffect(() => {
@@ -32,6 +33,8 @@ export function useSettingsPage(
     project,
     /** The setting it opens scrolled to. */
     entry,
+    /** Counts the places it was sent to; an open page goes to a new one as if opened. */
+    asked,
     /** Search survives closing the page for the lifetime of this window. */
     query,
     setQuery,
@@ -40,6 +43,7 @@ export function useSettingsPage(
     setWhere,
     show(at?: SettingsCategory, projectId?: string, entryId?: string) {
       if (!open) returnTo.current = document.activeElement;
+      if (at) setAsked((n) => n + 1);
       setCategory(at);
       setEntry(entryId);
       setProject(at === "project" ? projectId : undefined);

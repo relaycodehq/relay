@@ -475,7 +475,7 @@ export default function ProjectShell() {
             account={account ?? null}
             initialCategory={settings.category}
             initialEntry={settings.entry}
-            key={settings.project ?? "app"}
+            key={`${settings.project ?? "app"}:${settings.asked}`}
             projectId={settings.project}
             initialQuery={settings.query}
             onQueryChange={settings.setQuery}
