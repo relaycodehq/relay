@@ -1,6 +1,7 @@
 package dev.relay.android.features.markdown
 
 import android.content.Context
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.Spannable
@@ -39,6 +40,7 @@ import androidx.core.content.res.ResourcesCompat
 import dev.relay.android.R
 import dev.relay.android.ui.theme.RelayColors
 import dev.relay.android.ui.theme.RelayTheme
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
 /*
@@ -54,8 +56,10 @@ import kotlin.math.roundToInt
 internal fun NativeInlines(inlines: List<MdInline>, ctx: MdContext, style: TextStyle, selectable: Boolean, modifier: Modifier = Modifier) {
     val c = RelayTheme.colors
     val density = LocalDensity.current
-    val mono = Fonts.mono(LocalContext.current)
-    val text = remember(inlines, ctx, c, density, mono) { spannedOf(inlines, ctx, c, density, mono) }
+    val context = LocalContext.current
+    val mono = Fonts.mono(context)
+    val inter = Fonts.inter(context)
+    val text = remember(inlines, ctx, c, density, mono, inter) { spannedOf(inlines, ctx, c, density, mono, inter) }
     val weight = (style.fontWeight ?: FontWeight.Normal).weight
     AndroidView(
         factory = { context -> TextView(context).apply { setUp(context) } },
@@ -86,7 +90,7 @@ private fun TextView.applyStyle(key: StyleKey, density: Density) {
     if (shown.style == key) return
     shown.style = key
     val (style, weight, c) = key
-    fontVariationSettings = "'wght' $weight"
+    typeface = Fonts.weighted(Fonts.inter(context), weight)
     setTextSize(TypedValue.COMPLEX_UNIT_SP, style.fontSize.value)
     if (style.lineHeight.isSp) lineHeight = with(density) { style.lineHeight.toPx() }.roundToInt()
     setTextColor((if (style.color.isUnspecified) c.foreground else style.color).toArgb())
@@ -124,20 +128,32 @@ private object Fonts {
 
     fun mono(context: Context): Typeface =
         mono ?: (ResourcesCompat.getFont(context, R.font.jetbrains_mono_regular) ?: Typeface.MONOSPACE).also { mono = it }
+
+    private val weights = ConcurrentHashMap<Pair<Typeface, Int>, Typeface>()
+
+    /**
+     * [base] at [weight] on its variable axis, made once. A paint told the variation itself builds
+     * a new font every time, and text measures and draws each bold run with a paint it resets:
+     * that was a quarter of the time a fast scroll up a long thread spent.
+     */
+    fun weighted(base: Typeface, weight: Int): Typeface = weights.getOrPut(base to weight) {
+        Paint().apply { typeface = base; fontVariationSettings = "'wght' $weight" }.typeface
+    }
 }
 
 /** The same marks InlineText draws in Compose, as Android spans. */
-private fun spannedOf(inlines: List<MdInline>, ctx: MdContext, c: RelayColors, density: Density, mono: Typeface): Spanned {
+private fun spannedOf(inlines: List<MdInline>, ctx: MdContext, c: RelayColors, density: Density, mono: Typeface, inter: Typeface): Spanned {
     val code = Code(mono, with(density) { 13.5.sp.toPx() })
-    return SpannableStringBuilder().apply { appendInlines(inlines, ctx, c, code, inLink = false) }
+    val strong = Weight(Fonts.weighted(inter, 600))
+    return SpannableStringBuilder().apply { appendInlines(inlines, ctx, c, code, strong, inLink = false) }
 }
 
-private fun SpannableStringBuilder.appendInlines(inlines: List<MdInline>, ctx: MdContext, c: RelayColors, code: Code, inLink: Boolean) {
+private fun SpannableStringBuilder.appendInlines(inlines: List<MdInline>, ctx: MdContext, c: RelayColors, code: Code, strong: Weight, inLink: Boolean) {
     for (inline in inlines) when (inline) {
         is MdInline.Plain -> append(inline.text)
-        is MdInline.Strong -> span(Weight(600)) { appendInlines(inline.children, ctx, c, code, inLink) }
-        is MdInline.Em -> span(StyleSpan(Typeface.ITALIC)) { appendInlines(inline.children, ctx, c, code, inLink) }
-        is MdInline.Del -> span(StrikethroughSpan()) { appendInlines(inline.children, ctx, c, code, inLink) }
+        is MdInline.Strong -> span(strong.copy()) { appendInlines(inline.children, ctx, c, code, strong, inLink) }
+        is MdInline.Em -> span(StyleSpan(Typeface.ITALIC)) { appendInlines(inline.children, ctx, c, code, strong, inLink) }
+        is MdInline.Del -> span(StrikethroughSpan()) { appendInlines(inline.children, ctx, c, code, strong, inLink) }
         is MdInline.Math -> {
             val plain = texToPlain(inline.tex)
             if (plain == null) span(code.copy(), ForegroundColorSpan(c.mutedForeground.toArgb())) { append(inline.tex) }
@@ -153,7 +169,7 @@ private fun SpannableStringBuilder.appendInlines(inlines: List<MdInline>, ctx: M
             )
             span(*marks.toTypedArray()) { append(inline.code) }
         }
-        is MdInline.Link -> link(inline.href, ctx, c, inLink) { appendInlines(inline.children, ctx, c, code, inLink = true) }
+        is MdInline.Link -> link(inline.href, ctx, c, inLink) { appendInlines(inline.children, ctx, c, code, strong, inLink = true) }
         is MdInline.Image ->
             if (isWebUrl(inline.src)) link(inline.src, ctx, c, inLink) { append(inline.alt.ifEmpty { inline.src }) }
             else append(inline.alt)
@@ -171,12 +187,13 @@ private inline fun SpannableStringBuilder.span(vararg marks: Any, body: Spannabl
     for (mark in marks) setSpan(mark, start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
-/** Inter at [weight], on its variable weight axis. */
-private class Weight(private val weight: Int) : MetricAffectingSpan() {
+/** Inter at a weight made beforehand ([Fonts.weighted]); each use takes a copy, as a span marks one range. */
+private class Weight(private val face: Typeface) : MetricAffectingSpan() {
+    fun copy() = Weight(face)
     override fun updateMeasureState(paint: TextPaint) = apply(paint)
     override fun updateDrawState(paint: TextPaint) = apply(paint)
     private fun apply(paint: TextPaint) {
-        paint.fontVariationSettings = "'wght' $weight"
+        paint.typeface = face
     }
 }
 
