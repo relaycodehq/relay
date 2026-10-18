@@ -121,6 +121,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     val inFront by rememberInFront()
     val failures = rememberFailures()
     val scope = rememberCoroutineScope()
+    // Opened from a notification, the app comes to the front with a link that may still be catching up.
+    LaunchedEffect(inFront) { if (inFront) model.load() }
     val actions = remember { ThreadActions(remote, id, model, scope, failures, nav) }
     val composer = remember { ComposerState(screenFollows = true) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
@@ -328,6 +330,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
             // Last of the desktop's strips: one that asks for something comes first.
             val pressing = waitingShown || (summary?.limitResume != null && !running) || !t?.stopped?.items.isNullOrEmpty()
             if (rootId == null && settled && !pressing) SettledStrip(summary?.settleWhenDone != null, actions::unsettle)
+            // The saved copy shows while a refresh fails: without this a question the agent asked since looks like none.
+            if (t != null && error != null) Row(
+                Modifier.fillMaxWidth().pressable(onClick = { scope.launchLoad(model) }, scale = false).padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Hint("Couldn't refresh this thread, so it may be out of date. Tap to try again.", color = c.destructive)
+            }
             // Questions and approvals belong to the whole thread, replies included.
             t?.requests?.firstOrNull()?.let { request ->
                 key(request.id) {

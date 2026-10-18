@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -108,7 +110,19 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
             stackRestored = true
             backStack.removeAll { it is Route.Pair }
         }
-        LaunchedEffect(navigator) { for (route in links) navigator.open(route) }
+        // A link (a notification's tap) lands on a screen of its own: the keyboard the last one had
+        // up would stay and squeeze it.
+        val keyboard = LocalSoftwareKeyboardController.current
+        val focus = LocalFocusManager.current
+        LaunchedEffect(navigator) {
+            for (route in links) {
+                if (navigator.stack.lastOrNull() != route) {
+                    focus.clearFocus()
+                    keyboard?.hide()
+                }
+                navigator.open(route)
+            }
+        }
         // Decided here, from one composition's reads: inside the effect, `ready` would be read live
         // while `paired` stayed as composed, and a launch that drew before the saved computer was
         // read saw it ready and unpaired at once, and opened pairing over a paired phone.

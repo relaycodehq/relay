@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,10 +33,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.relay.android.features.thread.logic.requestCardMaxHeightDp
 import dev.relay.android.remote.model.AgentQuestion
 import dev.relay.android.remote.model.AgentRequest
 import dev.relay.android.ui.Button
@@ -88,8 +92,9 @@ fun RequestCard(
     var moreOptions by remember(request.id) { mutableStateOf(false) }
     val decisions = decisionsOf(request)
     val canRemember = "acceptForSession" in decisions
-    // Room for the thread above it; with the keyboard up its body scrolls.
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
+    // Room for the thread above it and the composer below; with the keyboard up its body scrolls.
+    val keyboard = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+    val maxHeight = requestCardMaxHeightDp(LocalConfiguration.current.screenHeightDp.toFloat(), keyboard.value).dp
     fun respond(response: AgentResponse) {
         busy = true
         error = null
