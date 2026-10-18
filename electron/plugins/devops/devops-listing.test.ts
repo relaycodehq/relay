@@ -136,16 +136,18 @@ describe("the current sprint", () => {
 describe("saved settings", () => {
   it("fill in what older saves lack", () => {
     const {
-      hiddenProjects: _,
+      shownProjects: _,
       team: __,
       ...older
     } = {
       ...defaultDevOpsSettings,
       organization: "org",
+      // Cards were opt-out before; an old hidden list turns into none shown.
+      hiddenProjects: ["p2"],
     };
-    const read = readSettings(older as DevOpsSettings);
+    const read = readSettings(older as unknown as DevOpsSettings);
     expect(read.organization).toBe("org");
-    expect(read.hiddenProjects).toEqual([]);
+    expect(read.shownProjects).toEqual([]);
     expect(read.team).toEqual({ members: [], filters: [] });
     expect(readSettings(undefined)).toEqual(defaultDevOpsSettings);
   });

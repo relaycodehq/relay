@@ -105,7 +105,8 @@ export function WorkItemCards({
   const status = useDevOpsStatus(),
     qc = useQueryClient();
   const settings = status.data?.settings;
-  const hidden = !!settings?.hiddenProjects.includes(project.id);
+  const hidden =
+    !!project.scratch || !settings?.shownProjects.includes(project.id);
   const enabled = !!settings?.enabled && !!settings.organization && !hidden;
   // The team's items once Settings names its members; kept per computer.
   const hasTeam = !!settings?.team.members.length;
@@ -117,12 +118,12 @@ export function WorkItemCards({
   const setHidden = async (hide: boolean) => {
     if (!settings) return;
     setHideError(undefined);
-    const others = settings.hiddenProjects.filter((id) => id !== project.id);
+    const others = settings.shownProjects.filter((id) => id !== project.id);
     try {
       const next = await api.saveDevOpsSettings(
         {
           ...settings,
-          hiddenProjects: hide ? [...others, project.id] : others,
+          shownProjects: hide ? others : [...others, project.id],
         },
         {},
       );

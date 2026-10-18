@@ -28,6 +28,7 @@ const settings: DevOpsSettings = {
   enabled: true,
   organization: "contoso",
   project: "Software",
+  shownProjects: ["p1"],
   sort: {
     fields: [
       { field: currentSprintField, direction: "desc" },
@@ -263,20 +264,17 @@ it("keeps the list when the filter fails and explains rejected tokens", async ()
   );
 });
 
-it("never asks Azure DevOps or Jev for a hidden project", async () => {
+it("never asks Azure DevOps or Jev for a project without cards", async () => {
   const fetch = vi.fn(async () => json({ workItems: [] }));
-  const { devops, store } = await setup(fetch);
-  await devops.save({ ...settings, hiddenProjects: ["p1"] }, {});
-  const result = await devops.workItems(project);
-  expect(result.items).toEqual([]);
-  expect(result.relevance).toBeNull();
+  const { devops } = await setup(fetch);
+  await devops.save({ ...settings, shownProjects: [] }, {});
+  const off = await devops.workItems(project);
+  expect(off.items).toEqual([]);
+  expect(off.relevance).toBeNull();
+  // The Scratchpad never shows them, even if its id got picked somehow.
+  await devops.save({ ...settings, shownProjects: ["p1"] }, {});
+  await devops.workItems({ ...project, scratch: true });
   expect(fetch).not.toHaveBeenCalled();
-  // Settings saved before the field existed read back as nothing hidden.
-  const { hiddenProjects: _, ...older } = settings;
-  await store.update((s) => {
-    s.devops = older as DevOpsSettings;
-  });
-  expect(devops.settings().hiddenProjects).toEqual([]);
 });
 
 it("puts this sprint's items first, then sorts by priority", async () => {

@@ -48,8 +48,8 @@ export const devopsSettingsSchema = z
     /** Azure DevOps project; empty searches every project in the organization. */
     project: z.string().trim().max(200),
     auth: z.enum(["pat", "azure-cli"]),
-    /** Relay project ids that never show work item cards. */
-    hiddenProjects: z.array(z.string().max(200)).max(500),
+    /** Relay project ids that show work item cards; none until picked, never the Scratchpad. */
+    shownProjects: z.array(z.string().max(200)).max(500),
     filter: z
       .object({
         enabled: z.boolean(),
@@ -87,7 +87,7 @@ export const defaultDevOpsSettings: DevOpsSettings = {
   organization: "",
   project: "",
   auth: "pat",
-  hiddenProjects: [],
+  shownProjects: [],
   filter: { enabled: false, model: "jev-latest", threshold: 0.5, keywords: {} },
   sort: { fields: [] },
   mine: { filters: [] },

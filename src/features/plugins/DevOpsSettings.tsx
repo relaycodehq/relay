@@ -362,7 +362,7 @@ export function DevOpsSettings() {
             ) : (
               <SettingsCard className="plugin-map">
                 {projects.data.map((p) => {
-                  const shown = !settings.hiddenProjects.includes(p.id);
+                  const shown = settings.shownProjects.includes(p.id);
                   return (
                     <div key={p.id} className="plugin-map-row">
                       <span data-hidden={!shown || undefined}>{p.name}</span>
@@ -387,11 +387,11 @@ export function DevOpsSettings() {
                           checked={shown}
                           onChange={(show) =>
                             void save({
-                              hiddenProjects: show
-                                ? settings.hiddenProjects.filter(
+                              shownProjects: show
+                                ? [...settings.shownProjects, p.id]
+                                : settings.shownProjects.filter(
                                     (id) => id !== p.id,
-                                  )
-                                : [...settings.hiddenProjects, p.id],
+                                  ),
                             })
                           }
                         />
@@ -402,7 +402,7 @@ export function DevOpsSettings() {
               </SettingsCard>
             )}
             <p className="plugin-note">
-              Turn work items off where a project isn't tracked in Azure DevOps.
+              Work items show only in the projects turned on here.
               {filter.enabled && " Hints help Jev match items to the rest."}
             </p>
           </div>

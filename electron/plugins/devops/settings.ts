@@ -8,11 +8,15 @@ import {
 
 /** The saved settings over the defaults, older saves brought up to date. */
 export function readSettings(saved: DevOpsSettings | undefined) {
+  // Cards used to show everywhere but the hidden projects; now only where picked.
+  const { hiddenProjects: _, ...rest } = (saved ?? {}) as DevOpsSettings & {
+    hiddenProjects?: string[];
+  };
   return devopsSettingsSchema.parse(
     saved
       ? {
           ...defaultDevOpsSettings,
-          ...saved,
+          ...rest,
           filter: { ...defaultDevOpsSettings.filter, ...saved.filter },
           sort: savedSort(saved.sort),
           mine: { ...defaultDevOpsSettings.mine, ...saved.mine },

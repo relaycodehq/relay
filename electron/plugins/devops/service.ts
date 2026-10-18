@@ -105,8 +105,11 @@ export class DevOps {
     const settings = this.settings();
     if (!settings.enabled) throw new Error("Azure DevOps is turned off.");
     const threshold = settings.filter.threshold;
-    // Hidden projects never reach Azure DevOps or the filter.
-    if (project && settings.hiddenProjects.includes(project.id))
+    // Projects without cards never reach Azure DevOps or the filter.
+    if (
+      project &&
+      (project.scratch || !settings.shownProjects.includes(project.id))
+    )
       return { items: [], relevance: null, threshold };
     const items = await this.list(settings, refresh, scope);
     const result: WorkItemsResult = {
