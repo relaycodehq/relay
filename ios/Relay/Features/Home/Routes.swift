@@ -52,14 +52,7 @@ struct RouteStack<Root: View>: View {
         // The bar takes no touches below itself, where the tab title's computer name hangs, so
         // one menu sits over the title and the name both, growing from the title either way.
         .overlay(alignment: .topLeading) {
-            if stack.routes.isEmpty, let title = name.title, let at = name.frame.map({ $0.union(title) }) {
-                GeometryReader { space in
-                    let origin = space.frame(in: .global).origin
-                    ComputerMenu { Color.clear.frame(width: at.width + 16, height: at.height + 14).contentShape(.rect) }
-                        .offset(x: at.minX - 8 - origin.x, y: at.minY - 7 - origin.y)
-                }
-                .accessibilityHidden(true)
-            }
+            if stack.routes.isEmpty { NameMenu(name: name) }
         }
         .environment(\.navigate) { stack.routes.append($0) }
         // A link to the computer's own localhost opens in Relay's browser, through the tunnel.
@@ -91,6 +84,24 @@ struct RouteStack<Root: View>: View {
         case .tasks(let projectId): TasksView(projectId: projectId)
         case .licences: LicencesView()
         case .subagentRun(let chatId, let agentId): SubagentRunView(chatId: chatId, agentId: agentId)
+        }
+    }
+}
+
+/// The computer menu laid over a tab's title and the name under it. A view of its own because the
+/// spot moves whenever the app does, every frame of the launch splash's settle; read in the stack's
+/// body, each move rebuilt the tab's whole screen, the thread list's sorting and all.
+private struct NameMenu: View {
+    let name: NameSpot
+
+    var body: some View {
+        if let title = name.title, let at = name.frame.map({ $0.union(title) }) {
+            GeometryReader { space in
+                let origin = space.frame(in: .global).origin
+                ComputerMenu { Color.clear.frame(width: at.width + 16, height: at.height + 14).contentShape(.rect) }
+                    .offset(x: at.minX - 8 - origin.x, y: at.minY - 7 - origin.y)
+            }
+            .accessibilityHidden(true)
         }
     }
 }
