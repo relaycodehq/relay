@@ -60,6 +60,10 @@ const settled = (id: string, count: number) =>
     expect(messages).toHaveLength(count);
     expect(messages.at(-1)?.status).toBe("complete");
     expect(chats.hasActiveProject(projectId)).toBe(false);
+    // The turn releases before its final summary is published.
+    expect(chats.list(projectId).find((chat) => chat.id === id)?.updated).toBe(
+      messages.at(-1)?.ended,
+    );
   });
 /** The thread's own app-server calls; a title's helper job runs elsewhere. */
 const threadCalls = async () =>
