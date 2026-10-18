@@ -41,6 +41,7 @@ struct RelayApp: App {
                 }
                 .onChange(of: connection.active) { readAloud.stop() }
                 .fullScreenCover(item: $crash) { CrashScreen(crash: $0) }
+                .showTouches()
         }
     }
 }

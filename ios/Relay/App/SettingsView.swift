@@ -8,6 +8,9 @@ struct SettingsView: View {
     @Environment(\.navigate) private var navigate
     @AppStorage(ThemeMode.key) private var theme = ThemeMode.computer
     @AppStorage(ThreadNotices.switchKey) private var notices = true
+    #if DEBUG
+    @AppStorage(ShowTouches.key) private var touches = true
+    #endif
 
     var body: some View {
         let name = connection.computerName
@@ -21,6 +24,16 @@ struct SettingsView: View {
             .cardRow()
             Section("App") {
                 LabeledContent("Relay \(Connection.appVersion)") {}
+                #if DEBUG
+                Toggle(isOn: $touches) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show touches")
+                        Text("A circle under each finger, for screen recordings.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                #endif
                 Button { navigate(.licences) } label: {
                     HStack {
                         Label("Open-source licences", systemImage: "doc.plaintext").foregroundStyle(.primary)
