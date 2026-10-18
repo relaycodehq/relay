@@ -71,6 +71,17 @@ export function diffMessage(
       prev.body.charCodeAt(from) === next.body.charCodeAt(from)
     )
       from++;
+    // JSON readers such as Swift's reject a suffix starting with half an emoji.
+    // Keep the UTF-16 offset, but start the replacement before the whole pair.
+    if (
+      from > 0 &&
+      from < next.body.length &&
+      next.body.charCodeAt(from - 1) >= 0xd800 &&
+      next.body.charCodeAt(from - 1) <= 0xdbff &&
+      next.body.charCodeAt(from) >= 0xdc00 &&
+      next.body.charCodeAt(from) <= 0xdfff
+    )
+      from--;
     patch.body = { from, text: next.body.slice(from) };
   }
   for (const key of ["trace", "activity"] as const) {
