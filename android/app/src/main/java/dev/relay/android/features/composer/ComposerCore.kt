@@ -60,6 +60,7 @@ import dev.relay.android.features.composer.logic.NewThreadModels
 import dev.relay.android.features.composer.logic.agentInfo
 import dev.relay.android.features.composer.logic.agentName
 import dev.relay.android.features.composer.logic.agentProviders
+import dev.relay.android.features.composer.logic.offeredAgents
 import dev.relay.android.features.composer.logic.appendQuote
 import dev.relay.android.features.composer.logic.composeAttempt
 import dev.relay.android.features.composer.logic.composerCommand
@@ -241,6 +242,14 @@ internal fun ComposerCore(
         return ModelLists.load(cl, pc, connection, wanted, saves).also { catalogs = it }
     }
     LaunchedEffect(client, computer, provider, online, connection) { runCatching { loadCatalogs(listOf(provider)) } }
+    // The agents in Settings' order, without the ones switched off but this composer's own.
+    var ai by remember(computer) { mutableStateOf(AgentPrefs.known(computer)) }
+    LaunchedEffect(client, computer, online, connection) {
+        val cl = client ?: return@LaunchedEffect
+        val pc = computer ?: return@LaunchedEffect
+        ai = AgentPrefs.load(cl, pc)
+    }
+    val offered = offeredAgents(ai?.agentOrder.orEmpty(), ai?.agentsOff.orEmpty(), provider)
     val modelLabel = if (settings.choice.model.isNotEmpty()) modelName(provider, catalogs[provider], settings.choice.model) else "Default"
 
     val usage = rememberUsage(client, computer, online, provider)
@@ -297,7 +306,7 @@ internal fun ComposerCore(
             return RunResult.Done
         }
         val known = when (name) {
-            "model" -> loadCatalogs(agentProviders)
+            "model" -> loadCatalogs(offered).filterKeys { it in offered }
             "effort", "fast" -> loadCatalogs(listOf(provider))
             else -> emptyMap()
         }
@@ -537,7 +546,7 @@ internal fun ComposerCore(
 
     when (sheet) {
         Sheet.Model -> ModelSheet(
-            client, online, projectId, settings, catalogs,
+            client, online, projectId, settings, catalogs, offered,
             onChange = { next, to -> onSettings(if (to != null) switched(next, to) else next) },
             onDismiss = { sheet = null },
         )

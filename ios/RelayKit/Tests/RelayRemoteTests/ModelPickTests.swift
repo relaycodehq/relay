@@ -24,6 +24,23 @@ private func settings(_ provider: String, _ choice: ModelChoice, window: String?
     #expect(newThreadSettings(last: "codex", ai: ai, models: blank).choice.model == "gpt-6-sol")
 }
 
+@Test func aNewThreadSkipsTheLastAgentOnceItsSwitchedOff() {
+    let ai = NewThreadAI(threadProvider: "claude", agentsOff: ["cursor"])
+    #expect(newThreadSettings(last: "cursor", ai: ai, models: [:]).provider == "claude")
+    #expect(newThreadSettings(last: "codex", ai: ai, models: [:]).provider == "codex")
+}
+
+// Mirrors shared/agent-prefs.test.ts and Android's ComposeSendTest.
+@Test func offersAgentsInSettingsOrderWithoutTheOnesSwitchedOff() {
+    #expect(
+        offeredAgents(order: ["cursor", "claude"], off: [])
+            == ["cursor", "claude", "codex", "opencode", "muse", "amp", "antigravity"])
+    #expect(offeredAgents(order: ["acp:goose", "codex", "codex"], off: []) == agentProviders)
+    let off = ["codex", "cursor", "muse", "amp", "antigravity"]
+    #expect(offeredAgents(order: ["opencode"], off: off) == ["opencode", "claude"])
+    #expect(offeredAgents(order: ["opencode"], off: off, keep: "cursor") == ["opencode", "claude", "cursor"])
+}
+
 @Test func anotherAgentStartsOnItsDefaultAndKeepsOnlyEffortsTheModelTakes() {
     let codex = settings("codex", ModelChoice(model: "gpt-6-sol", fast: true, reasoningEffort: "xhigh"))
     #expect(codex.onAgent("claude").onModel("opus", nil).choice == ModelChoice(model: "opus"))

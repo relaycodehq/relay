@@ -90,6 +90,24 @@ class ComposeSendTest {
         assertEquals("codex", newThreadSettingsFrom("nobody-knows", null, emptyMap()).provider)
     }
 
+    @Test fun `a new thread skips the last agent once it's switched off`() {
+        val ai = NewThreadAI("claude", agentsOff = listOf("cursor"))
+        assertEquals("claude", newThreadSettingsFrom("cursor", ai, emptyMap()).provider)
+        assertEquals("codex", newThreadSettingsFrom("codex", ai, emptyMap()).provider)
+    }
+
+    // Mirrors shared/agent-prefs.test.ts.
+    @Test fun `offers agents in Settings' order, without the ones switched off`() {
+        assertEquals(
+            listOf("cursor", "claude", "codex", "opencode", "muse", "amp", "antigravity"),
+            offeredAgents(listOf("cursor", "claude"), emptyList()),
+        )
+        assertEquals(agentProviders, offeredAgents(listOf("acp:goose", "codex", "codex"), emptyList()))
+        val off = listOf("codex", "cursor", "muse", "amp", "antigravity")
+        assertEquals(listOf("opencode", "claude"), offeredAgents(listOf("opencode"), off))
+        assertEquals(listOf("opencode", "claude", "cursor"), offeredAgents(listOf("opencode"), off, keep = "cursor"))
+    }
+
     @Test fun `a composer command on another agent's model switches to it`() {
         val s = ResumeSettings("codex", ModelChoice("gpt-6-sol", true, "xhigh"), null, "full-access", "default")
         val next = withComposerChange(s, ComposerChange.Model("claude", "opus"), emptyMap())

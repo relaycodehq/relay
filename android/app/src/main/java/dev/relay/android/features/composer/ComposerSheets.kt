@@ -24,7 +24,6 @@ import dev.relay.android.features.composer.logic.ComposerChange
 import dev.relay.android.features.composer.logic.ModelCatalogs
 import dev.relay.android.features.composer.logic.NewThreadModel
 import dev.relay.android.features.composer.logic.agentName
-import dev.relay.android.features.composer.logic.agentProviders
 import dev.relay.android.features.composer.logic.effortLabel
 import dev.relay.android.features.composer.logic.listedModel
 import dev.relay.android.features.composer.logic.onWindow
@@ -119,6 +118,8 @@ fun ModelSheet(
     settings: ResumeSettings,
     /** Lists the composer already has, shown while the sheet asks again. */
     known: ModelCatalogs,
+    /** The agents to switch between, in Settings' order. */
+    agents: List<String>,
     /** Picking another agent asks the composer to switch to it. */
     onChange: (ResumeSettings, String?) -> Unit,
     onDismiss: () -> Unit,
@@ -157,7 +158,7 @@ fun ModelSheet(
 
     Sheet(onDismiss, title = "Model") {
         // Unfilled segmented tabs scroll themselves; another scroll around them measures them unbounded and crashes.
-        SegmentedTabs(agentProviders.map { TabOption(it, agentName(it)) }, provider, { onChange(settings, it) }, fill = false)
+        SegmentedTabs(agents.map { TabOption(it, agentName(it)) }, provider, { onChange(settings, it) }, fill = false)
         if (efforts.isNotEmpty()) {
             SectionHeader("Reasoning")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

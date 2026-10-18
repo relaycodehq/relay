@@ -25,6 +25,9 @@ public struct NewThreadAI: Codable, Sendable, Equatable {
     public var threadProvider: String?
     public var questionsProvider: String?
     public var questions: ModelChoice?
+    /// The agents as Settings → Agents lists them; older desktops leave both out.
+    public var agentOrder: [String]? = nil
+    public var agentsOff: [String]? = nil
 }
 
 private func known(_ provider: String?) -> String? { isAgentProvider(provider) ? provider : nil }
@@ -32,7 +35,9 @@ private func known(_ provider: String?) -> String? { isAgentProvider(provider) ?
 /// A new thread's composer as the desktop starts one: Full access, Build,
 /// the agent picked last (else the default one) on its remembered model.
 public func newThreadSettings(last: String?, ai: NewThreadAI?, models: NewThreadModels) -> ResumeSettings {
-    let provider = known(last) ?? known(ai?.threadProvider) ?? "codex"
+    // The agent picked last, unless it's been switched off since.
+    let lastOn = known(last).flatMap { ai?.agentsOff?.contains($0) == true ? nil : $0 }
+    let provider = lastOn ?? known(ai?.threadProvider) ?? "codex"
     // Codex picked for questions too starts on that model.
     let codex = provider == "codex" && ai?.questionsProvider == "codex" ? ai?.questions : nil
     return ResumeSettings(
@@ -69,6 +74,10 @@ public extension RemoteClient {
     func agentDefaults(projectId: String, provider: String) async throws -> AgentDefaults? {
         let answer = try await desktop("agentDefaults", [.string(projectId), .string(provider)])
         return answer.isNull ? nil : try answer.decode()
+    }
+
+    func aiSettings() async throws -> NewThreadAI {
+        try await desktop("aiSettings").decode()
     }
 
     func saveNewThreadAgent(_ provider: String) async throws {

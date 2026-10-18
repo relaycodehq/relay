@@ -45,6 +45,15 @@ fun agentName(provider: String) = agentInfo(provider)?.name ?: provider
 
 fun reportsUsage(provider: String) = builtin[provider]?.usage == true
 
+/**
+ * shared/agent-prefs.ts: what a picker offers, in Settings' order (the ones it
+ * hasn't placed after, in Relay's), without those switched off except [keep].
+ */
+fun offeredAgents(order: List<String>, off: List<String>, keep: String? = null): List<String> {
+    val placed = order.filter { it in agentProviders }.distinct()
+    return (placed + agentProviders.filter { it !in placed }).filter { it !in off || it == keep }
+}
+
 val sideProviders = agentProviders.filter { builtin[it]!!.side }
 
 /** `@codex`, `@claude`, … at the start of a message. */

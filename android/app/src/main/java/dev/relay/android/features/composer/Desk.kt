@@ -47,6 +47,16 @@ suspend fun RemoteClient.newThreadAgent(): String? =
 
 suspend fun RemoteClient.aiSettings(): NewThreadAI = desktop("aiSettings").to()
 
+/** Each computer's AI settings as last read, so a composer lists its agents in order at once. */
+object AgentPrefs {
+    private val known = ConcurrentHashMap<String, NewThreadAI>()
+
+    fun known(computer: String?): NewThreadAI? = computer?.let { known[it] }
+
+    suspend fun load(client: RemoteClient, computer: String): NewThreadAI? =
+        runCatching { client.aiSettings() }.getOrNull()?.also { known[computer] = it } ?: known[computer]
+}
+
 suspend fun RemoteClient.newThreadModels(): NewThreadModels = desktop("newThreadModels").to()
 
 suspend fun RemoteClient.saveNewThreadAgent(provider: String) {

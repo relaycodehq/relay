@@ -94,6 +94,9 @@ data class NewThreadAI(
     val threadProvider: String? = null,
     val questionsProvider: String? = null,
     val questions: ModelChoice? = null,
+    /** The agents as Settings → Agents lists them; older desktops leave both out. */
+    val agentOrder: List<String> = emptyList(),
+    val agentsOff: List<String> = emptyList(),
 )
 
 typealias NewThreadModels = Map<String, NewThreadModel>
@@ -116,9 +119,9 @@ fun withRememberedModel(settings: ResumeSettings, models: NewThreadModels): Resu
     return settings.copy(choice = c, contextWindow = remembered.contextWindow?.takeIf { it.isNotEmpty() })
 }
 
-/** desktopNewThread's pick: the agent last picked for a new thread, else the default one. */
+/** desktopNewThread's pick: the agent last picked for a new thread, unless it's switched off since, else the default one. */
 fun newThreadSettingsFrom(last: String?, ai: NewThreadAI?, models: NewThreadModels) =
-    newThreadSettings(ai, known(last) ?: known(ai?.threadProvider), models)
+    newThreadSettings(ai, known(last)?.takeUnless { it in ai?.agentsOff.orEmpty() } ?: known(ai?.threadProvider), models)
 
 /** The same composer on another agent: its model goes back to Default. */
 fun switchAgent(settings: ResumeSettings, provider: String): ResumeSettings =

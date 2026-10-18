@@ -39,7 +39,7 @@ struct ModelSheet: View {
             Form {
                 Section {
                     Picker("Agent", selection: agent) {
-                        ForEach(agentProviders, id: \.self) { Text(agentName($0)).tag($0) }
+                        ForEach(connection.offeredAgents(keeping: provider), id: \.self) { Text(agentName($0)).tag($0) }
                     }
                     if UsageBars.shows(provider, context, cost) {
                         NavigationLink {

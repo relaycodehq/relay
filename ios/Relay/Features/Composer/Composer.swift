@@ -161,6 +161,7 @@ struct Composer: View {
         .padding(.bottom, 6)
         .animation(.snappy(duration: 0.2), value: menuItems == nil)
         .task(id: commandsWanted) { await loadCommands() }
+        .task(id: connection.status.state) { await connection.loadAgentPrefs() }
         .onChange(of: picked) { _, items in add(items) }
         .photosPicker(
             isPresented: $library, selection: $picked,
@@ -586,11 +587,12 @@ struct Composer: View {
             picking = true
             return
         }
-        let wanted = name == "model" ? agentProviders : name == "effort" || name == "fast" ? [current.provider] : []
+        let offered = connection.offeredAgents(keeping: current.provider)
+        let wanted = name == "model" ? offered : name == "effort" || name == "fast" ? [current.provider] : []
         await withTaskGroup(of: Void.self) { group in
             for provider in wanted { group.addTask { _ = try? await connection.models(provider) } }
         }
-        let known = connection.catalogs
+        let known = name == "model" ? connection.catalogs.filter { offered.contains($0.key) } : connection.catalogs
         let asked = CommandSettings(
             recipient: current.provider, model: current.choice.model, fast: current.choice.fast,
             plan: current.interactionMode == "plan", catalogs: known)

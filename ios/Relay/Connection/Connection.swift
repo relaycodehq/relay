@@ -43,6 +43,9 @@ final class Connection {
     /// The agents listed and the new thread asked on this connection, past the saved copies.
     private var listedModels: Set<String> = []
     private var askedNewThread = false
+    /// The agents as Settings → Agents orders and switches them; asked once per connection.
+    private(set) var agentPrefs: NewThreadAI?
+    private var askedAgentPrefs = false
     @ObservationIgnored private let saves = ComposerSaves()
     /// Which threads moved since this phone last looked, kept past a restart.
     private(set) var seen = Connection.loadSeen()
@@ -179,6 +182,8 @@ final class Connection {
         newThread = nil
         listedModels = []
         askedNewThread = false
+        agentPrefs = nil
+        askedAgentPrefs = false
         missing = MissingProjects()
         missingRefetch?.cancel()
         route = nil
@@ -620,6 +625,19 @@ final class Connection {
     func agentDefaults(_ projectId: String, _ provider: String) async throws -> AgentDefaults? {
         guard let client else { throw PairingError("Not connected.") }
         return try await client.agentDefaults(projectId: projectId, provider: provider)
+    }
+
+    func loadAgentPrefs() async {
+        guard !askedAgentPrefs, let client, status.state == .online else { return }
+        askedAgentPrefs = true
+        let prefs = try? await client.aiSettings()
+        guard self.client === client else { return }
+        if let prefs { agentPrefs = prefs } else { askedAgentPrefs = false }
+    }
+
+    /// The agents a picker offers, keeping `keep` (the composer's own) even when it's off.
+    func offeredAgents(keeping keep: String?) -> [String] {
+        RelayRemote.offeredAgents(order: agentPrefs?.agentOrder ?? [], off: agentPrefs?.agentsOff ?? [], keep: keep)
     }
 
     func loadNewThread() async {

@@ -8,6 +8,16 @@ public let agentProviders = ["codex", "claude", "opencode", "cursor", "muse", "a
 
 let builtinAgents = Set(agentProviders)
 
+/// shared/agent-prefs.ts: what a picker offers, in Settings' order (the ones it
+/// hasn't placed after, in Relay's), without those switched off except `keep`.
+public func offeredAgents(order: [String], off: [String], keep: String? = nil) -> [String] {
+    var placed: [String] = []
+    for provider in order where builtinAgents.contains(provider) && !placed.contains(provider) {
+        placed.append(provider)
+    }
+    return (placed + agentProviders.filter { !placed.contains($0) }).filter { !off.contains($0) || $0 == keep }
+}
+
 private let agentNames = [
     "codex": "Codex", "claude": "Claude", "opencode": "OpenCode", "cursor": "Cursor", "muse": "Muse",
     "amp": "Amp", "antigravity": "Antigravity",
