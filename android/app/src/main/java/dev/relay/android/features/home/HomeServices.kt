@@ -32,12 +32,13 @@ class FamilyFoldStore(private val file: File) {
     }.getOrDefault(emptyMap())
 }
 
-/** What Home keeps beside the connection: seen marks, folds, icons and the missing-projects refetch. */
+/** What Home keeps beside the connection: seen marks, folds, the filter, icons and the missing-projects refetch. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeServices(context: Context, val remote: Remote, val seen: ThreadSeen, val drafts: DraftSource) {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
     val folds = FamilyFoldStore(File(app.filesDir, "relay-family-folds.json"))
+    val filter = ThreadFilterStore(File(app.filesDir, "relay-thread-filter.json"))
     val icons = ProjectIcons(File(app.filesDir, "project-icons"), File(app.filesDir, "project-icons.json"))
 
     init {

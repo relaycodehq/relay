@@ -69,6 +69,8 @@ fun ActivityList(
     chats: List<RemoteChatSummary>,
     projects: List<RemoteProject>,
     drafts: Map<String, ListedDraft>,
+    /** A filter narrows [chats], so an empty list says nothing about the rest. */
+    filtered: Boolean,
     unread: (RemoteChatSummary) -> Boolean,
     folds: Map<String, Boolean>,
     onFold: (lead: String, open: Boolean) -> Unit,
@@ -208,7 +210,7 @@ fun ActivityList(
             item("section-$label") { SectionHeader(label, count = group.size) }
             items(group, key = { it.id }) { chat -> family(chat) }
         }
-        if (sections.active.isEmpty() && fresh.isEmpty()) item("empty") { InboxZero() }
+        if (sections.active.isEmpty() && fresh.isEmpty()) item("empty") { InboxZero(filtered) }
         shelf("snoozed", "Snoozed", sections.snoozed)
         shelf("settled", "Settled", sections.settled.filter { it.id !in families.headers })
     }
@@ -266,14 +268,18 @@ private fun NewDraftCard(draft: ListedDraft, project: RemoteProject, onClick: ()
 }
 
 @Composable
-private fun InboxZero() {
+private fun InboxZero(filtered: Boolean) {
     val c = RelayTheme.colors
     Column(Modifier.fillMaxWidth().padding(top = 26.dp, start = 18.dp, end = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.padding(bottom = 4.dp).size(36.dp).background(c.accentSoft, CircleShape), contentAlignment = Alignment.Center) {
             Icon(TablerIcons.Outline.Check, null, tint = c.accent, size = 18.dp)
         }
-        Text("Inbox zero", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold))
-        Text("Threads come back here when an agent replies or needs you.", color = c.mutedForeground, textAlign = TextAlign.Center)
+        Text(if (filtered) "Nothing open here" else "Inbox zero", style = RelayTheme.type.base.copy(fontWeight = FontWeight.SemiBold))
+        Text(
+            if (filtered) "No open thread matches the filter." else "Threads come back here when an agent replies or needs you.",
+            color = c.mutedForeground,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

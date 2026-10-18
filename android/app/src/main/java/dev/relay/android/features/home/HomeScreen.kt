@@ -119,6 +119,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
     val status by remote.status.collectAsState()
     val seen by home.seen.state.collectAsState()
     val folds by home.folds.folds.collectAsState()
+    val filter by home.filter.filter.collectAsState()
     val inFront by rememberInFront()
     var tab by rememberSaveable { mutableStateOf(Tab.Activity) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -179,9 +180,19 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
         }
     }
 
+    // Search looks through every thread, as on the iPhone; the filter narrows Activity only.
+    val shown = filter.current(o)
+
     Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(Modifier.fillMaxSize()) {
-            SearchField(query, { query = it }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp), placeholder = "Search")
+            Row(
+                Modifier.padding(start = 16.dp, end = if (tab == Tab.Activity) 8.dp else 16.dp, top = 4.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SearchField(query, { query = it }, Modifier.weight(1f), placeholder = "Search")
+                if (tab == Tab.Activity) FilterButton(o, filter, home.filter::set)
+            }
             val needle = query.trim().lowercase()
             if (needle.isNotEmpty()) {
                 val results = o.chats.filter { "${it.title} ${names[it.projectId] ?: ""}".lowercase().contains(needle) }
@@ -203,9 +214,10 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                 RibbonRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
                     when (tab) {
                         Tab.Activity -> ActivityList(
-                            chats = o.chats,
+                            chats = o.chats.filter(shown::keeps),
                             projects = o.projects,
-                            drafts = drafts,
+                            drafts = drafts.filterKeys(shown::keepsDraft),
+                            filtered = shown.count > 0,
                             unread = { seen.unread(it, selected, inFront) },
                             folds = folds,
                             onFold = home.folds::fold,
