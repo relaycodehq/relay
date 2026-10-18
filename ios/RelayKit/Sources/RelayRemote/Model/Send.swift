@@ -32,16 +32,19 @@ public struct ProjectChatSend: Codable, Sendable, Equatable {
         sendAt: Int64? = nil
     ) {
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        let mentioned = agentMention(text) != nil || !builtinAgents.contains(settings.provider)
+        let to = sendRecipient(text, picked: settings.provider)
+        // Another agent named in the text runs on its Default: the picked model is the picked agent's.
+        let picked = to == settings.provider
+        let mentioned = agentMention(text) != nil || !builtinAgents.contains(to)
         self.id = id
-        self.body = mentioned ? text : "@\(settings.provider) \(text)".trimmingCharacters(in: .whitespaces)
-        choice = settings.choice
-        choice.fast = fastFor(settings.provider, settings.choice.fast)
-        provider = settings.provider
-        to = settings.provider
+        self.body = mentioned ? text : "@\(to) \(text)".trimmingCharacters(in: .whitespaces)
+        choice = picked ? settings.choice : ModelChoice(model: "")
+        choice.fast = fastFor(to, choice.fast)
+        provider = to
+        self.to = to
         runtimeMode = settings.runtimeMode
         interactionMode = settings.interactionMode
-        contextWindow = windowFor(settings.provider, model: settings.choice.model, settings.contextWindow)
+        contextWindow = picked ? windowFor(to, model: choice.model, settings.contextWindow) : nil
         self.delivery = delivery
         self.images = images.isEmpty ? nil : images
         self.parentId = parentId
@@ -66,6 +69,11 @@ public struct PastedImage: Codable, Sendable, Equatable, Hashable {
         self.mimeType = mimeType
         dataUrl = "data:\(mimeType);base64,\(data.base64EncodedString())"
     }
+}
+
+/// Who answers a text: the agent it starts with a mention of, else the one picked (`draftRecipient`).
+public func sendRecipient(_ text: String, picked: String) -> String {
+    agentMention(text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? picked
 }
 
 /// The agent a text starts with a mention of: "@claude fix it" → "claude".

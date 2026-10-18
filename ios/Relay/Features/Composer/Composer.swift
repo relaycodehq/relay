@@ -398,13 +398,13 @@ struct Composer: View {
         return contextAgent(connection.conversation(chatId, rootId: rootId), rootId: rootId)
     }
 
-    private var switchTitle: String { "Switch to \(agentName(settings?.provider ?? ""))?" }
+    private var switchTitle: String { "Switch to \(agentName(settings.map { sendRecipient(text, picked: $0.provider) } ?? ""))?" }
 
     private func submit(steer: Bool = false, sendAt: Int64? = nil, confirmed: Bool = false) {
         if !confirmed, startsWithCommand(text), !command(text) { return }
         // A `/btw` question goes beside the conversation; nobody takes over.
         let side = rootId == nil && text.range(of: "^/btw\\s", options: [.regularExpression, .caseInsensitive]) != nil
-        if !confirmed, !side, let settings, takesOver(settings.provider, holder: holder) {
+        if !confirmed, !side, let settings, takesOver(sendRecipient(text, picked: settings.provider), holder: holder) {
             switching = (steer, sendAt)
             return
         }

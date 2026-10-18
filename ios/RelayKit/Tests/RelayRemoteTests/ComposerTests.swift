@@ -50,6 +50,12 @@ struct ComposerTests {
         #expect(plain.body == "@claude fix it")
         #expect(plain.to == "claude")
         #expect(ProjectChatSend(body: "@codex look", settings: settings).body == "@codex look")
+        // The agent the text names answers, on its Default.
+        let named = ProjectChatSend(body: "@codex look", settings: settings.onWindow("200k"))
+        #expect(named.to == "codex")
+        #expect(named.provider == "codex")
+        #expect(named.choice == ModelChoice(model: ""))
+        #expect(named.contextWindow == nil)
         let registry = ResumeSettings(
             provider: "acp:goose", choice: settings.choice, contextWindow: nil,
             runtimeMode: "full-access", interactionMode: "default")
