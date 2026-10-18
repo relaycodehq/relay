@@ -73,22 +73,28 @@ struct NewThreadView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            Spacer()
-            if projects.isEmpty && !scratch {
-                ContentUnavailableView(
-                    "No projects", systemImage: "folder",
-                    description: Text("Add one in Relay on your computer to start a thread in it."))
-            } else {
-                place
-                if !recent.isEmpty {
-                    RecentThreads(chats: recent, open: started).padding(.top, 20)
+        // Scrolls once the keyboard and a tall composer leave too little room: a plain stack that
+        // overflowed grew the screen, and the composer below it slid under the keyboard.
+        ScrollView {
+            VStack(spacing: 8) {
+                if projects.isEmpty && !scratch {
+                    ContentUnavailableView(
+                        "No projects", systemImage: "folder",
+                        description: Text("Add one in Relay on your computer to start a thread in it."))
+                } else {
+                    place
+                    if !recent.isEmpty {
+                        RecentThreads(chats: recent, open: started).padding(.top, 20)
+                    }
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
+        .defaultScrollAnchor(.center, for: .alignment)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
         .contentShape(.rect)
         .onTapGesture { composing = false }
         .safeAreaInset(edge: .bottom) {
