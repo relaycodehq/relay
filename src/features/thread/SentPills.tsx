@@ -3,10 +3,13 @@ import { PreviewCard } from "@base-ui/react/preview-card";
 import type { ChatImage } from "../../../shared/projects";
 import {
   linesOf,
+  splitOutsidePath,
   type ProjectFileLink,
 } from "../../../shared/project-file-links";
 import { imageToken } from "../../../shared/image-refs";
+import { api } from "../../lib/api";
 import { formatSize } from "../../lib/file-tree";
+import { revealLabel } from "../../lib/mod-key";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { copiedPill } from "../images/image-clipboard";
@@ -102,7 +105,11 @@ function SentImagePill({
   );
 }
 
-/** A file the message names in inline code, opening like the thread's other file links. */
+/**
+ * A file the message names in inline code, opening like the thread's other
+ * file links. One outside the project is mostly something dropped in from
+ * Downloads or the desktop, so it shows in the file manager, not in Files.
+ */
 export function FilePill({
   code,
   target,
@@ -123,10 +130,17 @@ export function FilePill({
         label: shown.label,
         ...(lines ? { detail: `L${lines}` } : {}),
       }}
-      title={`${target.path}${lines ? `:${linesOf(target, "-")}` : ""}`}
-      onClick={() => onOpen(target)}
+      title={`${target.path}${lines ? `:${linesOf(target, "-")}` : ""}${target.outside ? `\n${revealLabel}` : ""}`}
+      onClick={() => (target.outside ? reveal(target.path) : onOpen(target))}
     />
   );
+}
+
+function reveal(path: string) {
+  const { folder, name } = splitOutsidePath(path);
+  api
+    .revealProjectPath(folder, name)
+    .catch((error) => console.warn(`Couldn't show ${path}`, error));
 }
 
 /** Takes the reader to where a quote was taken from, given the pill clicked. */

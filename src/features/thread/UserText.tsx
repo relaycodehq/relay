@@ -5,6 +5,7 @@ import {
   chatFileLink,
   type ProjectFileLink,
 } from "../../../shared/project-file-links";
+import { isOutsideFilePath } from "../../../shared/markdown-links";
 import { PastedTextPill } from "../composer/PastedTextCard";
 import { Pill, skillPill } from "../composer/prompt/Pill";
 import { QuoteTooltip, useQuoteTip } from "../composer/prompt/QuoteTip";
@@ -54,8 +55,20 @@ function pilledCode(
   if (value.startsWith(skillMark)) return { skill: value.slice(1) };
   const n = sentToken.exec(value)?.[1];
   if (n) return { image: Number(n) };
-  const file = projectRoot && chatFileLink(value, projectRoot, true);
+  const file =
+    (projectRoot && chatFileLink(value, projectRoot, true)) ||
+    droppedFile(value);
   return file ? { file } : undefined;
+}
+
+/**
+ * A file dropped into the composer goes in as its whole path in code, spaces
+ * and all (`Q3 report.pdf`), which a path in an answer never gets.
+ */
+function droppedFile(value: string): ProjectFileLink | undefined {
+  if (!/ /.test(value) || /[\n`]/.test(value) || !isOutsideFilePath(value))
+    return undefined;
+  return { path: value, directory: false, outside: true };
 }
 
 /** The screenshot numbers a sent message's text shows as pills. */

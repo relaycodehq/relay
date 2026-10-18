@@ -43,6 +43,15 @@ it("pills code that names a file, and leaves other code as code", () => {
   expect(html).toContain("<code>npm run dev</code>");
 });
 
+it("pills a dropped file by its name, spaces and all", () => {
+  const html = render(
+    "`/Users/me/Downloads/Screen Recording 19-08-02.MP4` the R jumps, see `git log -1`",
+  );
+  expect(html).toContain('class="prompt-pill file"');
+  expect(html).toContain(">Screen Recording 19-08-02.MP4</span>");
+  expect(html).toContain("<code>git log -1</code>");
+});
+
 it("lists for a copy the same pills the message shows", () => {
   expect(
     sentPills(
