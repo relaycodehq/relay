@@ -72,6 +72,12 @@ private struct CameraUniforms {
     var develop: Float
 }
 
+/// Laid out as Ripples.metal's Beacon.
+private struct Beacon {
+    var alpha: Float
+    var bloom: Float
+}
+
 /// Laid out as Ripples.metal's Glow.
 private struct Glow {
     var clip: SIMD4<Float>
@@ -85,6 +91,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     private let queue: MTLCommandQueue
     private let dots: MTLRenderPipelineState
     private let glows: MTLRenderPipelineState
+    private let beacon: MTLRenderPipelineState
     private let picture: MTLRenderPipelineState
     /// What the camera shows before its first picture.
     private let black: MTLTexture
@@ -123,6 +130,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     private static let cols = 118
     private static let rows = 140
     private static let specks = 24
+    private static let beaconSpecks = 3000
     /// Specks a draw.
     private static let batch = 32768
     private static let slots = 24
@@ -166,6 +174,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             }
             dots = try pipeline("dotVertex", "dotFragment")
             glows = try pipeline("glowVertex", "glowFragment")
+            beacon = try pipeline("beaconVertex", "dotFragment")
             picture = try pipeline("cameraVertex", "cameraFragment")
         } catch {
             rippleLog.error("Ripple pipelines failed: \(String(describing: error), privacy: .public)")
@@ -215,7 +224,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         let answer = Float(exp(-(time - answeredAt) * 1.1))
         let flash = phase >= Self.flight ? Float(exp(-(phase - Self.flight) * 2.5)) : 0
         let bloom = max(flash, answer)
-        world(Self.computer, 1.3 + flash + 3.2 * answer, (0.6 + 0.4 * bloom) * s.beacon)
+        var lights = Beacon(alpha: s.beacon, bloom: bloom)
         for o in Self.others { world([o.x, 0.05, o.y], 0.55, 0.22 * field) }
 
         var packets = [SIMD4<Float>](repeating: .zero, count: 2)
@@ -280,6 +289,12 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         let specks = Self.cols * Self.rows * Self.specks
         for start in stride(from: 0, to: specks, by: Self.batch) {
             encoder.drawPrimitives(type: .point, vertexStart: start, vertexCount: min(Self.batch, specks - start))
+        }
+
+        if lights.alpha > 0.002 {
+            encoder.setRenderPipelineState(beacon)
+            encoder.setVertexBytes(&lights, length: MemoryLayout<Beacon>.stride, index: 2)
+            encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: Self.beaconSpecks)
         }
 
         if !lit.isEmpty {

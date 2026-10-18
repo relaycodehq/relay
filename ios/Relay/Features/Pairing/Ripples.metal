@@ -109,6 +109,34 @@ static int2 nearestDot(float2 xz) {
     return int2(int(c), r >= 0.0 ? int(r) : AWAY - 1 - int(r));
 }
 
+static float swellAt(float2 xz, float time) {
+    return 0.11 * sin(xz.x * 0.55 + time * 0.6) * cos(xz.y * 0.42 - time * 0.45)
+         + 0.05 * sin(xz.y * 0.9 + xz.x * 0.2 + time * 0.8);
+}
+
+/// How far the rings lift the floor at `xz`, and how lit they've left it.
+static float2 ringsAt(float2 xz, float time, constant float4 *waves) {
+    float lift = 0.0;
+    float wash = 0.0;
+    for (int i = 0; i < SLOTS; i++) {
+        float4 p = waves[i];
+        float age = time - p.z;
+        if (age < 0.0 || p.w <= 0.0) continue;
+        float ring = distance(xz, p.xy) - age * 3.4;
+        float fade = p.w * exp(-age * 0.28);
+        lift += fade * exp(-ring * ring / (0.12 + age * 0.06));
+        // What the ring has passed stays lit for a moment behind it.
+        wash += fade * exp(min(ring, 0.0) / 1.6) * step(ring, 0.0) * exp(-age * 0.9) * 0.5;
+    }
+    // The field glows under a packet as it passes over.
+    for (int i = 0; i < 2; i++) {
+        float4 k = waves[SLOTS + i];
+        float2 d = xz - k.xy;
+        wash += k.w * exp(-dot(d, d) / (0.35 + k.z * 0.5)) * (1.0 - k.z * 0.3);
+    }
+    return float2(lift, wash);
+}
+
 /// How far a viewfinder dot has got from the field to its place, near rows first.
 static float landing(float gather, uint iid, float gy) {
     return ease(clamp(gather * 1.6 - gy * 0.45 - rand(iid, 1u) * 0.15, 0.0, 1.0));
@@ -144,26 +172,9 @@ vertex DotOut dotVertex(
     bool loose = rand(iid, 20u) < 0.25;
     float2 spread = loose ? float2(STEP * 1.2, STEP * 1.1) : float2(STEP * 0.55, 0.06);
     float2 xz = site + (float2(rand(iid, 21u), rand(iid, 22u)) * 2.0 - 1.0) * spread;
-    float swell = 0.11 * sin(xz.x * 0.55 + u.time * 0.6) * cos(xz.y * 0.42 - u.time * 0.45)
-                + 0.05 * sin(xz.y * 0.9 + xz.x * 0.2 + u.time * 0.8);
-    float lift = 0.0;
-    float wash = 0.0;
-    for (int i = 0; i < SLOTS; i++) {
-        float4 p = waves[i];
-        float age = u.time - p.z;
-        if (age < 0.0 || p.w <= 0.0) continue;
-        float ring = distance(xz, p.xy) - age * 3.4;
-        float fade = p.w * exp(-age * 0.28);
-        lift += fade * exp(-ring * ring / (0.12 + age * 0.06));
-        // What the ring has passed stays lit for a moment behind it.
-        wash += fade * exp(min(ring, 0.0) / 1.6) * step(ring, 0.0) * exp(-age * 0.9) * 0.5;
-    }
-    // The field glows under a packet as it passes over.
-    for (int i = 0; i < 2; i++) {
-        float4 k = waves[SLOTS + i];
-        float2 d = xz - k.xy;
-        wash += k.w * exp(-dot(d, d) / (0.35 + k.z * 0.5)) * (1.0 - k.z * 0.3);
-    }
+    float swell = swellAt(xz, u.time);
+    float2 rings = ringsAt(xz, u.time, waves);
+    float lift = rings.x, wash = rings.y;
     float h = clamp(lift * 1.3 + wash, 0.0, 1.0);
     float3 pos = float3(xz.x, swell + lift * 0.5 + wash * 0.08 + (loose ? (rand(iid, 23u) - 0.3) * 0.5 : 0.0), xz.y);
     float4 clip = u.viewProjection * float4(pos, 1.0);
@@ -279,6 +290,42 @@ vertex DotOut dotVertex(
     out.color = col * min(1.0, size / 1.2);
     out.fade = fade;
     out.soft = soft;
+    return out;
+}
+
+/// Laid out as RippleRenderer's Beacon.
+struct Beacon {
+    float alpha;
+    /// How far it has flared, 0..1, as a call lands or the computer answers.
+    float bloom;
+};
+
+/// The computer: a ball of specks floating on the field, thick and white at its heart, turning
+/// slowly, riding the swell and the rings under it, and flaring out as a call lands.
+vertex DotOut beaconVertex(
+    uint iid [[vertex_id]], constant FieldUniforms &u [[buffer(0)]],
+    constant float4 *waves [[buffer(1)]], constant Beacon &b [[buffer(2)]]
+) {
+    float2 rings = ringsAt(COMPUTER, u.time, waves);
+    float3 mid = float3(COMPUTER.x, 0.32 + swellAt(COMPUTER, u.time) + 0.5 * rings.x + 0.08 * rings.y, COMPUTER.y);
+    // A direction on the sphere, at a depth weighted toward the middle.
+    float z = rand(iid, 30u) * 2.0 - 1.0;
+    float a = rand(iid, 31u) * 6.283 + u.time * (0.25 + 0.35 * rand(iid, 32u));
+    float depth = pow(rand(iid, 33u), 1.2);
+    float radius = 0.34 * (1.0 + 0.9 * b.bloom);
+    float3 dir = float3(sqrt(1.0 - z * z) * cos(a), z * 0.85, sqrt(1.0 - z * z) * sin(a));
+    float3 pos = mid + dir * radius * depth + 0.02 * float3(sin(u.time * 1.3 + z * 9.0), cos(u.time * 1.1 + a), 0.0);
+    float4 clip = u.viewProjection * float4(pos, 1.0);
+    float twinkle = 0.55 + 0.45 * sin(u.time * (1.0 + 2.5 * rand(iid, 34u)) + 6.283 * rand(iid, 35u));
+    float3 tint = mix(u.hot, float3(1.0), 0.4 * (1.0 - depth));
+    float bright = b.alpha * twinkle * (0.5 + 0.5 * rand(iid, 36u)) * (0.6 + 0.6 * b.bloom) * (0.5 + 0.2 * u.glow);
+    float size = u.unit * (0.5 + 0.6 * rand(iid, 37u)) * (1.0 + 0.6 * b.bloom);
+    DotOut out;
+    out.position = clip;
+    out.pointSize = max(size, 1.2);
+    out.color = float4(tint, 1.0) * clamp(bright, 0.0, 1.0) * step(0.1, clip.w);
+    out.fade = 1.0;
+    out.soft = 0.0;
     return out;
 }
 
