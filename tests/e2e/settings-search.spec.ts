@@ -58,12 +58,12 @@ test("settings search keeps its query, opens highlighted matches and scrolls to 
 
     await settings
       .getByRole("button", {
-        name: "Open Prompt cache fire and ice in Appearance",
+        name: "Open Prompt cache fire and ice in Composer",
       })
       .click();
     await expect(search).toHaveValue("cache");
     await expect(
-      settings.getByRole("heading", { name: "Appearance", exact: true }),
+      settings.getByRole("heading", { name: "Composer", exact: true }),
     ).toBeVisible();
     await expect(cache).toHaveAttribute("data-search-match", "true");
     await expect(cache).toBeFocused();
@@ -84,18 +84,18 @@ test("settings search keeps its query, opens highlighted matches and scrolls to 
     await settings.getByRole("button", { name: "All search results" }).click();
     await expect(search).toHaveValue("cache");
     await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBe(0);
-    await categories.getByRole("button", { name: "Appearance" }).click();
+    await categories.getByRole("button", { name: "Composer" }).click();
     await expect(search).toHaveValue("cache");
     await expect(cache).toBeFocused();
     await expect(
-      categories.getByRole("button", { name: "Appearance" }),
+      categories.getByRole("button", { name: "Composer" }),
     ).toHaveAttribute("aria-current", "page");
 
     // Keyword-only hits still identify the row, even without text to mark.
     await search.fill("newline");
     await settings
       .getByRole("button", {
-        name: "Open Send messages with in Keyboard shortcuts",
+        name: "Open Send messages with in Composer",
       })
       .click();
     const send = settings.getByRole("region", {
@@ -112,7 +112,7 @@ test("settings search keeps its query, opens highlighted matches and scrolls to 
     // Every word and repeated occurrence is highlighted, not just the title.
     await search.fill("message enter");
     const result = settings.getByRole("button", {
-      name: "Open Send messages with in Keyboard shortcuts",
+      name: "Open Send messages with in Composer",
     });
     const sendHighlights = ["message", "Enter", "message", "Enter"];
     await expect(result.locator("mark")).toHaveText(sendHighlights);

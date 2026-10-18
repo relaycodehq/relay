@@ -8,13 +8,6 @@ import {
 } from "../../../lib/appearance";
 import { mac } from "../../../lib/mod-key";
 import { GlassFrostSlider } from "../GlassFrostSlider";
-import { setCacheHeat, useCacheHeat } from "../../agents/cache-heat";
-import {
-  setAccessNamed,
-  useAccessNamed,
-} from "../../composer/composer-toolbar";
-import { setImagePills, useImagePills } from "../../images/image-pills";
-import { setTipsShown, useTipsShown } from "../../tips/tip-memory";
 import {
   setSidebarAutoHide,
   useSidebarAutoHide,
@@ -33,11 +26,6 @@ import { useSavedSetting } from "../useSavedSetting";
 import type { SettingEntry } from "../settings-search";
 import { ErrorBox } from "../../../ui/ui";
 import { Switch } from "../../../ui/SettingsCard";
-import { AutoSettleSelect, WorktreeCleanupSelect } from "../AutoSettleSettings";
-import {
-  ComposerToolbarReset,
-  ComposerToolbarSettings,
-} from "../../composer/ComposerToolbarSettings";
 import { ThemeImportSettings } from "../ThemeImportSettings";
 import { ChatWidthPreview, ChatWidthSlider } from "../ChatWidthSlider";
 import {
@@ -48,10 +36,6 @@ import { kindLabels, ThemeChoiceCard, ThemeModes } from "../ThemeCards";
 
 export function useAppearanceEntries(): SettingEntry[] {
   const appearance = useAppearance();
-  const cacheHeat = useCacheHeat();
-  const accessNamed = useAccessNamed();
-  const imagePills = useImagePills();
-  const tipsShown = useTipsShown();
   const sidebarAutoHide = useSidebarAutoHide();
   const smartNames = useSavedSetting(
     {
@@ -82,6 +66,7 @@ export function useAppearanceEntries(): SettingEntry[] {
     {
       id: "theme",
       category: "appearance",
+      section: "Colours",
       title: "Theme",
       description:
         "Follow the system or keep Relay light or dark. Each mode has its own theme.",
@@ -95,6 +80,7 @@ export function useAppearanceEntries(): SettingEntry[] {
     ...kinds.map((kind) => ({
       id: `${kind}-theme`,
       category: "appearance" as const,
+      section: "Colours",
       title: `${kindLabels[kind]} theme`,
       description:
         mode === "system"
@@ -116,11 +102,42 @@ export function useAppearanceEntries(): SettingEntry[] {
         </div>
       ),
     })),
+    {
+      id: "vscode-themes",
+      category: "appearance",
+      section: "Colours",
+      title: "VS Code themes",
+      description:
+        "Install any colour theme from Open VSX. Its themes join the light and dark lists above, code colours included.",
+      keywords:
+        "vscode vs code open vsx import install extension marketplace cursor noir",
+      block: true,
+      render: () => <ThemeImportSettings />,
+    },
+    {
+      id: "icon",
+      category: "appearance",
+      section: "Colours",
+      title: "App icon",
+      description:
+        "The dock icon and the Relay mark follow your accent color automatically.",
+      keywords: "dock logo mark brand",
+      render: () => (
+        <img
+          className="settings-app-icon"
+          src={iconSrc}
+          width={64}
+          height={64}
+          alt="Relay app icon preview"
+        />
+      ),
+    },
     ...(mac
       ? [
           {
             id: "glass",
             category: "appearance" as const,
+            section: "Window",
             title: "Frosted glass",
             description:
               "The sidebar and header let the desktop behind the window show through, blurred.",
@@ -147,6 +164,7 @@ export function useAppearanceEntries(): SettingEntry[] {
           {
             id: "glass-chat",
             category: "appearance" as const,
+            section: "Window",
             title: "Frosted chat",
             description:
               "The chat lets some of the frost through too. Over a bright or busy desktop it can get harder to read.",
@@ -175,18 +193,9 @@ export function useAppearanceEntries(): SettingEntry[] {
         ]
       : []),
     {
-      id: "typography",
-      category: "appearance",
-      title: "Typography",
-      keywords:
-        "font family typeface size text code monospace terminal interface prompt zoom smoothing wrap",
-      block: true,
-      accessory: () => <TypographyAdvancedSwitch />,
-      render: () => <TypographySettings />,
-    },
-    {
       id: "chat-width",
       category: "appearance",
+      section: "Window",
       title: "Chat width",
       description:
         "How wide the conversation grows in a wide window. Messages, the composer and the new-thread page follow it.",
@@ -197,89 +206,9 @@ export function useAppearanceEntries(): SettingEntry[] {
       render: () => <ChatWidthPreview />,
     },
     {
-      id: "vscode-themes",
-      category: "appearance",
-      title: "VS Code themes",
-      description:
-        "Install any colour theme from Open VSX. Its themes join the light and dark lists above, code colours included.",
-      keywords:
-        "vscode vs code open vsx import install extension marketplace cursor noir",
-      block: true,
-      render: () => <ThemeImportSettings />,
-    },
-    {
-      id: "composer-toolbar",
-      category: "appearance",
-      title: "Composer toolbar",
-      description: "Drag to reorder. Drop below the bar to hide.",
-      keywords:
-        "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode plan attach dictation microphone",
-      block: true,
-      accessory: () => <ComposerToolbarReset />,
-      render: () => <ComposerToolbarSettings />,
-    },
-    {
-      id: "access-name",
-      category: "appearance",
-      title: "Access mode's name",
-      description:
-        "The composer writes the access mode beside its icon. Off leaves the icon alone, a closed lock for Supervised and an open one for Full access; hover it or open it for the name.",
-      keywords:
-        "access permissions runtime mode supervised full access auto lock icon label name composer toolbar",
-      render: () => (
-        <Switch
-          label="Name the access mode"
-          checked={accessNamed}
-          onChange={setAccessNamed}
-        />
-      ),
-    },
-    {
-      id: "image-pills",
-      category: "appearance",
-      title: "Screenshots in the message",
-      description:
-        "A pasted or dropped screenshot also goes into the text as a pill, which the agent reads as [Image #1]. Off keeps screenshots above the message only.",
-      keywords:
-        "screenshot image picture paste drop attach pill chip inline thumbnail composer message",
-      render: () => (
-        <Switch
-          label="Put screenshots in the message"
-          checked={imagePills}
-          onChange={setImagePills}
-        />
-      ),
-    },
-    {
-      id: "cache-heat",
-      category: "appearance",
-      title: "Prompt cache fire and ice",
-      description:
-        "Flames on the context meter while the prompt cache is fresh, an ice cube once it has expired. Right-click the ring to put it out for one chat.",
-      keywords: "prompt cache fire flame ice cold fresh context meter ring",
-      render: () => (
-        <Switch
-          label="Show prompt cache fire and ice"
-          checked={cacheHeat}
-          onChange={setCacheHeat}
-        />
-      ),
-    },
-    {
-      id: "tips",
-      category: "appearance",
-      title: "Tips from Clip",
-      description:
-        "When an agent has been working a while, Clip peeks up at the right of its thinking line with one thing Relay can do that you haven't set up. Right-click him to turn tips off.",
-      keywords:
-        "tips clip paperclip clippy hints suggestions peek eyes working onboarding",
-      render: () => (
-        <Switch label="Show tips" checked={tipsShown} onChange={setTipsShown} />
-      ),
-    },
-    {
       id: "smart-project-names",
       category: "appearance",
+      section: "Sidebar",
       title: "Smart project names",
       description:
         "Turn relay-releases into Relay Releases. Off keeps the original folder or repository name. Names you type yourself stay as typed.",
@@ -298,28 +227,9 @@ export function useAppearanceEntries(): SettingEntry[] {
       ),
     },
     {
-      id: "auto-settle",
-      category: "appearance",
-      title: "Auto-settle quiet threads",
-      description:
-        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. Each project can override this through Project settings in its menu, and one thread can opt out from its right-click menu.",
-      keywords:
-        "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
-      render: () => <AutoSettleSelect />,
-    },
-    {
-      id: "worktree-cleanup",
-      category: "appearance",
-      title: "Remove settled threads' worktrees",
-      description:
-        "Free the disk a settled thread's worktree takes, once it has been settled this long. Its branch stays, and writing in the thread again checks the branch out in a new worktree. A worktree with uncommitted changes, or with something running in it, stays. Each project can override this through Project settings in its menu.",
-      keywords:
-        "worktree cleanup clean remove delete disk space settled branch folder prune",
-      render: () => <WorktreeCleanupSelect />,
-    },
-    {
       id: "sidebar-auto-hide",
       category: "appearance",
+      section: "Sidebar",
       title: "Make room for side panes",
       description:
         "Hide the projects sidebar while Changes, Files or History is open, and bring it back when they close.",
@@ -333,21 +243,15 @@ export function useAppearanceEntries(): SettingEntry[] {
       ),
     },
     {
-      id: "icon",
+      id: "typography",
       category: "appearance",
-      title: "App icon",
-      description:
-        "The dock icon and the Relay mark follow your accent color automatically.",
-      keywords: "dock logo mark brand",
-      render: () => (
-        <img
-          className="settings-app-icon"
-          src={iconSrc}
-          width={64}
-          height={64}
-          alt="Relay app icon preview"
-        />
-      ),
+      section: "Text",
+      title: "Typography",
+      keywords:
+        "font family typeface size text code monospace terminal interface prompt zoom smoothing wrap",
+      block: true,
+      accessory: () => <TypographyAdvancedSwitch />,
+      render: () => <TypographySettings />,
     },
   ];
 }

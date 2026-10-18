@@ -1201,3 +1201,8 @@
   vertical-align: -2px;
   color: var(--danger);
 }
+
+/* The ring beside the fire and ice setting, with room for the flame above. */
+.cache-heat-demo > .composer-tools {
+  padding: 8px 4px 0;
+}

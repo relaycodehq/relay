@@ -533,7 +533,7 @@ export function ContextWindowMeter({
                 className="composer-select-item context-compact context-auto-compact"
                 onClick={() => {
                   setOpen(false);
-                  openSettings("agents", undefined, "compact-idle");
+                  openSettings("threads", undefined, "compact-idle");
                 }}
               >
                 <span className="context-auto-compact-text">

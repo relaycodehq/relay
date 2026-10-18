@@ -180,7 +180,7 @@ test("thread windows follow preferences, keep their zoom, and preserve a 13 px p
 
     await settings
       .getByRole("navigation", { name: "Settings categories" })
-      .getByRole("button", { name: "Keyboard shortcuts", exact: true })
+      .getByRole("button", { name: "Composer", exact: true })
       .click();
     await settings
       .getByRole("region", { name: "Send messages with", exact: true })

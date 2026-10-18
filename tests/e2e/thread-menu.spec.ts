@@ -186,7 +186,7 @@ test("a thread's right-click menu forks, renames and marks unread; quiet threads
       exact: true,
     });
     await settings
-      .getByRole("button", { name: "Appearance", exact: true })
+      .getByRole("button", { name: "Threads", exact: true })
       .click();
     await settings
       .getByRole("combobox", { name: "Auto-settle quiet threads", exact: true })

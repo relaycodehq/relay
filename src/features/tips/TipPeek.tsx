@@ -97,7 +97,7 @@ function Peek({ chatId, message }: { chatId: string; message: ChatMessage }) {
       setSaid("Turned on");
       setTimeout(leave, 1600);
     } catch {
-      setSaid("Didn't work, try Settings → Used by Relay");
+      setSaid("Didn't work, try Settings → AI & agents → Used by Relay");
     }
   }
 

@@ -78,7 +78,7 @@ test("the running-action setting steers with the send key and button, keeps an e
       await page.getByRole("button", { name: "Open settings", exact: true }).click();
       await settings
         .getByRole("navigation", { name: "Settings categories" })
-        .getByRole("button", { name: "Keyboard shortcuts" })
+        .getByRole("button", { name: "Composer", exact: true })
         .click();
     };
     await openSettings();

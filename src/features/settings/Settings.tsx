@@ -16,6 +16,8 @@ import { SearchHighlight } from "./sections/SearchHighlight";
 import { Setting } from "./sections/Setting";
 import { SettingsNav } from "./sections/SettingsNav";
 import { useAppearanceEntries } from "./sections/appearance";
+import { useComposerEntries } from "./sections/composer";
+import { useThreadEntries } from "./sections/threads";
 import { projectEntries } from "./sections/projects";
 import { useSettingsProject } from "../projects/ProjectSettings";
 import { useModelEntries } from "./sections/models";
@@ -84,6 +86,8 @@ export function Settings({
   const [error, setError] = useState<unknown>();
   const project = useSettingsProject(account?.id, projectId);
   const appearance = useAppearanceEntries(),
+    composer = useComposerEntries(),
+    threads = useThreadEntries(),
     models = useModelEntries(setError),
     dictation = useDictationEntries(),
     readAloud = useReadAloudEntries(),
@@ -91,6 +95,8 @@ export function Settings({
     about = useAboutEntries();
   const entries: SettingEntry[] = [
     ...appearance,
+    ...composer,
+    ...threads,
     ...projectEntries(project),
     ...models,
     {

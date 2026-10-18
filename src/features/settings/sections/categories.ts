@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   Bell,
   Bug,
   Bot,
@@ -6,11 +7,13 @@ import {
   Info,
   Keyboard,
   ListTodo,
+  MessagesSquare,
   Mic,
   MonitorUp,
   Palette,
   Smartphone,
   Sparkles,
+  SquarePen,
   Volume2,
   Zap,
   Wrench,
@@ -21,6 +24,7 @@ import type { SettingsCategory } from "../../../lib/settings-page";
 export type CategoryGroup = { label: string; icon: typeof Palette };
 
 const aiAgents: CategoryGroup = { label: "AI & agents", icon: Sparkles };
+const voice: CategoryGroup = { label: "Voice", icon: AudioLines };
 
 export const categories: {
   id: SettingsCategory;
@@ -32,8 +36,21 @@ export const categories: {
   {
     id: "appearance",
     label: "Appearance",
-    description: "Theme, typography, colour mode, accent and app icon.",
+    description: "Colours, glass, the sidebar and text.",
     icon: Palette,
+  },
+  {
+    id: "composer",
+    label: "Composer",
+    description: "What the composer shows, and what Send does.",
+    icon: SquarePen,
+  },
+  {
+    id: "threads",
+    label: "Threads",
+    description:
+      "What Relay does with a thread while it works, waits and goes quiet. Each project can do its own thing in Project settings.",
+    icon: MessagesSquare,
   },
   {
     id: "project",
@@ -98,6 +115,7 @@ export const categories: {
     label: "Dictation",
     description: "Speak your messages; words appear as you talk.",
     icon: Mic,
+    group: voice,
   },
   {
     id: "read-aloud",
@@ -105,6 +123,7 @@ export const categories: {
     description:
       "Have answers read to you by a voice that runs on this computer.",
     icon: Volume2,
+    group: voice,
   },
   {
     id: "sounds",
