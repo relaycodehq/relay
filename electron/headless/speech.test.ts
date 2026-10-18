@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -13,8 +14,6 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SpeechRuntime, type SpeechRuntimeManifest } from "./speech";
-
-const sherpa = `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
 
 /** An npm-style tarball: its files under package/. */
 async function tarball(
@@ -36,10 +35,12 @@ async function tarball(
   };
 }
 
-it("downloads the speech engines it's asked for, checked against the lockfile's hashes", async () => {
+it("downloads the speech engine once for both, checked against the lockfile's hash", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-speech-")));
   const served = new Map<string, Buffer>();
+  let requests = 0;
   const server = createServer((req, res) => {
+    requests++;
     const bytes = served.get(req.url ?? "");
     res.writeHead(bytes ? 200 : 404, { "content-length": bytes?.length ?? 0 });
     res.end(bytes);
@@ -47,39 +48,18 @@ it("downloads the speech engines it's asked for, checked against the lockfile's 
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try {
-    const node = await tarball(dir, "sherpa-onnx-node", {
-      "addon.js": "addon",
-    });
-    const native = await tarball(dir, `sherpa-onnx-${sherpa}`, {
-      "sherpa-onnx.node": "native",
-    });
     const ort = await tarball(dir, "onnxruntime-node", {
       [`bin/napi-v6/${process.platform}/${process.arch}/onnxruntime_binding.node`]:
         "ort",
       "bin/napi-v6/elsewhere/x64/onnxruntime_binding.node": "other",
     });
-    served.set("/node.tgz", node.bytes);
-    served.set("/native.tgz", native.bytes);
     served.set("/ort.tgz", ort.bytes);
-    const pkg = (name: string, url: string, integrity: string) => ({
-      name,
-      version: "1.0.0",
-      url: base + url,
-      integrity,
-    });
     const manifest: SpeechRuntimeManifest = {
-      sherpa: {
-        node: pkg("sherpa-onnx-node", "/node.tgz", node.integrity),
-        platforms: {
-          [sherpa]: pkg(
-            `sherpa-onnx-${sherpa}`,
-            "/native.tgz",
-            native.integrity,
-          ),
-        },
-      },
       onnxruntime: {
-        ...pkg("onnxruntime-node", "/ort.tgz", ort.integrity),
+        name: "onnxruntime-node",
+        version: "1.0.0",
+        url: `${base}/ort.tgz`,
+        integrity: ort.integrity,
         platforms: [`${process.platform}/${process.arch}`],
       },
     };
@@ -88,27 +68,17 @@ it("downloads the speech engines it's asked for, checked against the lockfile's 
     await mkdir(join(lib, "onnxruntime", "dist"), { recursive: true });
     await writeFile(join(lib, "onnxruntime", "dist", "index.cjs"), "js");
     await writeFile(join(lib, "speech-runtime.json"), JSON.stringify(manifest));
+    // What dictation used to run on goes.
+    await mkdir(join(home, "runtime", "sherpa"), { recursive: true });
 
     const runtime = new SpeechRuntime(home, lib);
-    expect(runtime.supports("dictation")).toBe(true);
-    expect(runtime.installed("dictation")).toBe(false);
-    await runtime.install("dictation");
-    expect(runtime.installed("dictation")).toBe(true);
-    // Side by side, as sherpa-onnx-node looks for its addon.
-    expect(
-      await readFile(
-        join(runtime.sherpaDir, "sherpa-onnx-node", "addon.js"),
-        "utf8",
-      ),
-    ).toBe("addon");
-    expect(
-      await readFile(
-        join(runtime.sherpaDir, `sherpa-onnx-${sherpa}`, "sherpa-onnx.node"),
-        "utf8",
-      ),
-    ).toBe("native");
-
-    await runtime.install("voice");
+    await runtime.prepare();
+    expect(existsSync(join(home, "runtime", "sherpa"))).toBe(false);
+    expect(runtime.supported).toBe(true);
+    expect(runtime.installed).toBe(false);
+    await Promise.all([runtime.install("dictation"), runtime.install("voice")]);
+    expect(runtime.installed).toBe(true);
+    expect(requests).toBe(1);
     expect(
       await readFile(
         join(
@@ -139,12 +109,11 @@ it("downloads the speech engines it's asked for, checked against the lockfile's 
       ),
     ).rejects.toThrow();
 
-    // A download that isn't what the lockfile pinned is refused, and what was there stays.
-    served.set("/node.tgz", Buffer.from("tampered"));
-    await runtime.remove("dictation");
-    await expect(runtime.install("dictation")).rejects.toThrow(/doesn't match/);
-    expect(runtime.installed("dictation")).toBe(false);
-    expect(runtime.installed("voice")).toBe(true);
+    // A download that isn't what the lockfile pinned is refused.
+    served.set("/ort.tgz", Buffer.from("tampered"));
+    await runtime.remove();
+    await expect(runtime.install("voice")).rejects.toThrow(/doesn't match/);
+    expect(runtime.installed).toBe(false);
   } finally {
     server.close();
     await rm(dir, { recursive: true, force: true });

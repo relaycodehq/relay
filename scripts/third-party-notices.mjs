@@ -28,7 +28,7 @@ const end = "<!-- END GENERATED -->";
 process.chdir(repo);
 
 // scripts/build-electron.mjs copies these beside the bundles instead of bundling them.
-const copied = ["node-pty", "sherpa-onnx-node"];
+const copied = ["node-pty"];
 
 // Packages published without a licence file. Some come from a monorepo whose
 // licence covers them; others have a hand-written section above the marker.
@@ -41,7 +41,6 @@ const licenceOf = {
   "expo-router": { from: "expo" },
   "onnxruntime-common": { above: "ONNX Runtime" },
   "onnxruntime-node": { above: "ONNX Runtime" },
-  "sherpa-onnx-node": { above: "sherpa-onnx" },
   "@anthropic-ai/claude-agent-sdk": { above: "Anthropic Claude Agent SDK" },
 };
 
@@ -309,7 +308,7 @@ const generated = [
   "",
   "### In the desktop app",
   "",
-  "The window (bundled by Vite), the main process and its workers (bundled by esbuild), and node-pty and sherpa-onnx-node, which ship as plain files beside them.",
+  "The window (bundled by Vite), the main process and its workers (bundled by esbuild), and node-pty, which ships as plain files beside them.",
   "",
   table(desktop),
   "",

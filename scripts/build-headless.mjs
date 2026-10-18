@@ -21,8 +21,8 @@ import { resolveVersion, syncVersion } from "./sync-version.mjs";
 export const headlessOut = "dist-headless";
 
 /**
- * The speech engines' npm packages as the lockfile pins them, which a
- * headless Relay downloads when dictation or read aloud is set up.
+ * onnxruntime's npm package as the lockfile pins it, which a headless Relay
+ * downloads when dictation or read aloud is set up.
  */
 function speechRuntime() {
   const { packages } = JSON.parse(readFileSync("package-lock.json", "utf8"));
@@ -37,20 +37,8 @@ function speechRuntime() {
       integrity: entry.integrity,
     };
   };
-  const sherpa = Object.keys(packages)
-    .map(
-      (key) =>
-        /^node_modules\/sherpa-onnx-((?:darwin|linux|win)-\w+)$/.exec(key)?.[1],
-    )
-    .filter(Boolean);
   const ort = "node_modules/onnxruntime-node/bin/napi-v6";
   return {
-    sherpa: {
-      node: pinned("sherpa-onnx-node"),
-      platforms: Object.fromEntries(
-        sherpa.map((platform) => [platform, pinned(`sherpa-onnx-${platform}`)]),
-      ),
-    },
     onnxruntime: {
       ...pinned("onnxruntime-node"),
       platforms: readdirSync(ort).flatMap((platform) =>
@@ -98,7 +86,7 @@ export async function buildHeadless(given) {
     mainFields: ["module", "main"],
     // Native modules: terminals aren't reached headless, and the speech
     // engines are downloaded when set up (see speech-runtime.json below).
-    external: ["node-pty", "onnxruntime-node", "sherpa-onnx-node"],
+    external: ["node-pty", "onnxruntime-node"],
   });
   // The speech workers, with Electron's parentPort made of Node's IPC.
   for (const name of ["dictation", "read-aloud"])
@@ -107,7 +95,7 @@ export async function buildHeadless(given) {
       entryPoints: [`electron/headless/${name}-worker.ts`],
       format: "cjs",
       outfile: `${headlessOut}/${name}-worker.cjs`,
-      external: ["onnxruntime-node", "sherpa-onnx-node"],
+      external: ["onnxruntime-node"],
     });
   await build(onnxRuntimeBundle(`${headlessOut}/onnxruntime/dist/index.cjs`));
   cpSync(

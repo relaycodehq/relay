@@ -41,7 +41,7 @@ import { rearmOnWake } from "../app/wake";
 import { AppWindow } from "../app/window";
 import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
-import { Dictation, setSherpaDir } from "../dictation/service";
+import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
 import { gitExecutable, setGitPath } from "../git/git";
 import { flushWorkingFiles } from "../git/working-files";
@@ -64,7 +64,8 @@ import { TerminalSessions } from "../terminal-sessions";
 import { GithubLogin } from "../pull-requests/github-login";
 import { pullRequestHosts } from "../pull-requests/setup";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
-import { ReadAloud, setOnnxRuntimeDir } from "../read-aloud";
+import { ReadAloud } from "../read-aloud";
+import { setOnnxRuntimeDir } from "../util/onnxruntime";
 import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
 import { applyLinkedTools, teaTokenFor } from "../source-control";
@@ -222,7 +223,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   // they never open one, and what they'd show goes nowhere.
   // Speech for phones, its engines downloaded into the home folder when set up.
   const runtime = new SpeechRuntime(home, __dirname, fetcher);
-  setSherpaDir(runtime.sherpaDir);
   setOnnxRuntimeDir(runtime.ortDir);
   await runtime.prepare();
   const dictation = new Dictation(home, () => {});

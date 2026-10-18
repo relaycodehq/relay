@@ -170,24 +170,11 @@ cp "release/Relay-$version-mac-arm64.zip" "release/Relay-$version-mac-arm64.dmg"
 step "Windows"
 # electron-builder makes the NSIS installer on macOS without Wine; only the
 # native modules have to be swapped for Windows builds.
-rm -rf dist-electron/node-pty/prebuilds dist-electron/sherpa/sherpa-onnx-darwin-* dist-electron/onnxruntime/bin/napi-v6/darwin
+rm -rf dist-electron/node-pty/prebuilds dist-electron/onnxruntime/bin/napi-v6/darwin
 mkdir -p dist-electron/node-pty/prebuilds dist-electron/onnxruntime/bin/napi-v6/win32
 cp -R node_modules/onnxruntime-node/bin/napi-v6/win32/x64 dist-electron/onnxruntime/bin/napi-v6/win32/
 cp -R node_modules/node-pty/prebuilds/win32-x64 dist-electron/node-pty/prebuilds/
 find dist-electron/node-pty/prebuilds -name '*.pdb' -delete
-sherpa_version="$(node -p 'require("./node_modules/sherpa-onnx-node/package.json").version')"
-sherpa_integrity="$(node -p "require('./package-lock.json').packages['node_modules/sherpa-onnx-win-x64']?.integrity ?? ''")"
-pack="$(mktemp -d)"
-(cd "$pack" && npm pack --silent "sherpa-onnx-win-x64@$sherpa_version" >/dev/null)
-tarball="$(ls "$pack"/*.tgz)"
-if [[ -n "$sherpa_integrity" ]]; then
-  actual="sha512-$(openssl dgst -sha512 -binary "$tarball" | base64)"
-  [[ "$actual" == "$sherpa_integrity" ]] || { echo "sherpa-onnx-win-x64 doesn't match the lockfile." >&2; exit 1; }
-fi
-mkdir -p dist-electron/sherpa/sherpa-onnx-win-x64
-tar -xzf "$tarball" -C dist-electron/sherpa/sherpa-onnx-win-x64 --strip-components 1
-find dist-electron/sherpa/sherpa-onnx-win-x64 \( -name '*.md' -o -name '*.lib' -o -name '*.h' \) -delete
-rm -rf "$pack"
 npx electron-builder --win --x64 --publish never
 cp "release/Relay-$version-win-x64.exe" "$out/"
 

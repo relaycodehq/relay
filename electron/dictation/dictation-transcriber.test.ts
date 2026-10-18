@@ -9,9 +9,8 @@ import {
 const rate = 16000;
 
 /**
- * Speech is any sample above 0.5. Each decode answers with one word per 0.1 s
- * of speech it was given, named after the sample value, so tests can tell
- * which audio reached which decode.
+ * Each decode answers with one word per 0.1 s of speech it was given, named
+ * after the sample value, so tests can tell which audio reached which decode.
  */
 function fakeEngine() {
   const decoded: Float32Array[] = [];
@@ -25,11 +24,16 @@ function fakeEngine() {
       }
       return words.join(" ");
     },
-    detect: (samples) => samples.some((s) => s > 0.5),
-    resetDetector() {},
   };
   return { engine, decoded };
 }
+
+/** Pushes audio as the voice detector would hear it: speech is any sample above 0.5. */
+const feed = (transcriber: Transcriber, samples: Float32Array) =>
+  transcriber.push(
+    samples,
+    samples.some((s) => s > 0.5),
+  );
 
 function lastSpeech(samples: Float32Array) {
   let at = samples.length - 1;
@@ -43,9 +47,9 @@ const chunk = (seconds: number, value: number) =>
 it("keeps the audio from just before speech was detected", async () => {
   const { engine, decoded } = fakeEngine();
   const transcriber = new Transcriber(engine, () => {});
-  transcriber.push(chunk(1, 0));
-  transcriber.push(chunk(0.2, 0.3)); // a soft first syllable the detector missed
-  transcriber.push(chunk(0.5, 0.9));
+  feed(transcriber, chunk(1, 0));
+  feed(transcriber, chunk(0.2, 0.3)); // a soft first syllable the detector missed
+  feed(transcriber, chunk(0.5, 0.9));
   await transcriber.stop();
   expect(decoded[0].some((s) => Math.abs(s - 0.3) < 1e-6)).toBe(true);
 });
@@ -53,10 +57,10 @@ it("keeps the audio from just before speech was detected", async () => {
 it("keeps a word that starts before the detector noticed the pause", async () => {
   const { engine, decoded } = fakeEngine();
   const transcriber = new Transcriber(engine, () => {});
-  transcriber.push(chunk(0.5, 0.9));
+  feed(transcriber, chunk(0.5, 0.9));
   // The chunk that closes the phrase already holds the next word's onset.
-  transcriber.push(new Float32Array([...chunk(0.2, 0), ...chunk(0.1, 0.3)]));
-  transcriber.push(chunk(0.5, 0.8));
+  feed(transcriber, new Float32Array([...chunk(0.2, 0), ...chunk(0.1, 0.3)]));
+  feed(transcriber, chunk(0.5, 0.8));
   await transcriber.stop();
   const next = decoded.find((d) => d.some((s) => Math.abs(s - 0.8) < 1e-6))!;
   expect(next.some((s) => Math.abs(s - 0.3) < 1e-6)).toBe(true);
@@ -65,9 +69,9 @@ it("keeps a word that starts before the detector noticed the pause", async () =>
 it("keeps talking through a pause to think in one phrase", async () => {
   const { engine, decoded } = fakeEngine();
   const transcriber = new Transcriber(engine, () => {});
-  transcriber.push(chunk(0.5, 0.9));
-  transcriber.push(chunk(1.2, 0));
-  transcriber.push(chunk(0.5, 0.8));
+  feed(transcriber, chunk(0.5, 0.9));
+  feed(transcriber, chunk(1.2, 0));
+  feed(transcriber, chunk(0.5, 0.8));
   await transcriber.stop();
   const last = decoded.at(-1)!;
   expect(last.some((s) => Math.abs(s - 0.9) < 1e-6)).toBe(true);
@@ -77,11 +81,11 @@ it("keeps talking through a pause to think in one phrase", async () => {
 it("stops decoding again while nothing is said", async () => {
   const { engine, decoded } = fakeEngine();
   const transcriber = new Transcriber(engine, () => {});
-  transcriber.push(chunk(0.5, 0.9));
+  feed(transcriber, chunk(0.5, 0.9));
   await new Promise((resolve) => setTimeout(resolve));
   const before = decoded.length;
   for (let tenth = 0; tenth < 15; tenth++) {
-    transcriber.push(chunk(0.1, 0));
+    feed(transcriber, chunk(0.1, 0));
     await new Promise((resolve) => setTimeout(resolve));
   }
   // One to hear the end of the last word, then quiet.
@@ -96,7 +100,7 @@ it("settles phrases in order and only ever grows the settled text", async () => 
     pause: 0.3,
   });
   for (const value of [0.7, 0, 0.8, 0, 0.9]) {
-    transcriber.push(chunk(0.4, value));
+    feed(transcriber, chunk(0.4, value));
     await new Promise((resolve) => setTimeout(resolve));
   }
   const text = await transcriber.stop();
@@ -110,7 +114,7 @@ it("splits a phrase with no pause at its quietest moment", async () => {
   const transcriber = new Transcriber(engine, () => {}, { maxPhrase: 3 });
   // Barely speech from 2.5 s to 2.6 s: the breath between two words.
   for (let tenth = 0; tenth < 40; tenth++)
-    transcriber.push(chunk(0.1, tenth === 25 ? 0.51 : 0.9));
+    feed(transcriber, chunk(0.1, tenth === 25 ? 0.51 : 0.9));
   await transcriber.stop();
   const ends = decoded.map((d) => lastSpeech(d) / rate);
   expect(ends.some((end) => end > 2.5 && end < 2.6)).toBe(true);
@@ -119,8 +123,8 @@ it("splits a phrase with no pause at its quietest moment", async () => {
 it("ends a phrase that runs out of room in a pause instead of splitting it", async () => {
   const { engine, decoded } = fakeEngine();
   const transcriber = new Transcriber(engine, () => {}, { maxPhrase: 1 });
-  transcriber.push(chunk(0.8, 0.9));
-  for (let tenth = 0; tenth < 10; tenth++) transcriber.push(chunk(0.1, 0));
+  feed(transcriber, chunk(0.8, 0.9));
+  for (let tenth = 0; tenth < 10; tenth++) feed(transcriber, chunk(0.1, 0));
   await transcriber.stop();
   // A clip of only silence is where Parakeet makes words up.
   expect(decoded.every((d) => d.some((s) => s > 0.5))).toBe(true);
@@ -157,7 +161,7 @@ it("waits for as much new audio as a slow decode took before decoding again", as
     const transcriber = new Transcriber(engine, () => {});
     // 3 s of speech without a pause, as it streams in.
     for (let i = 0; i < 30; i++) {
-      transcriber.push(chunk(0.1, 0.9));
+      feed(transcriber, chunk(0.1, 0.9));
       await new Promise((resolve) => setTimeout(resolve));
     }
     // Every 0.3 s would be 10 decodes; a 1 s decode spaces them a second apart.

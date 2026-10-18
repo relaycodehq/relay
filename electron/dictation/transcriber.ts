@@ -3,9 +3,6 @@ import { dictationSampleRate as rate } from "../../shared/dictation";
 export interface SpeechEngine {
   /** Transcribes one phrase of 16 kHz samples. */
   decode(samples: Float32Array): Promise<string>;
-  /** Feeds the voice detector; true while it hears speech. */
-  detect(samples: Float32Array): boolean;
-  resetDetector(): void;
 }
 
 export interface TranscriberOptions {
@@ -66,12 +63,11 @@ export class Transcriber {
     this.pause = (options.pause ?? 2) * rate;
     this.maxPhrase = (options.maxPhrase ?? 15) * rate;
     this.partialStep = (options.partialStep ?? 0.3) * rate;
-    engine.resetDetector();
   }
 
-  push(samples: Float32Array) {
+  /** The next stretch of audio, and whether the voice detector heard speech in it. */
+  push(samples: Float32Array, speaking: boolean) {
     if (this.stopped || !samples.length) return;
-    const speaking = this.engine.detect(samples);
     const open = this.open();
     if (open) {
       open.chunks.push(samples);

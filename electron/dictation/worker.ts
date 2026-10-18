@@ -1,14 +1,18 @@
 // Runs in an Electron utility process: the model holds over a gigabyte, and a
 // native crash here takes down only dictation.
+import { join } from "node:path";
 import type { MessagePortMain } from "electron";
+import type * as Ort from "onnxruntime-node";
 import type { DictationEvent, DictationRequest } from "../../shared/dictation";
-import { loadSherpaEngine, type SpeechModel } from "./sherpa-engine";
+import { loadParakeet } from "./parakeet";
 import { Transcriber, type SpeechEngine } from "./transcriber";
+import { loadSilero, type VoiceDetector } from "./voice-detector";
 
 export type WorkerCommand = {
   type: "load";
   dir: string;
-  sherpa: string;
+  /** onnxruntime-node's bundle, beside Relay's (see build-electron.mjs). */
+  ort: string;
   threads: number;
 };
 export type WorkerNotice =
@@ -17,100 +21,121 @@ export type WorkerNotice =
   /** Whether a session is running, for the idle unload. */
   | { type: "busy"; busy: boolean };
 
+/**
+ * The model, shared by every session, and a voice detector for each: the
+ * desktop and a phone may dictate at once, and a detector keeps state.
+ */
+interface SpeechModel extends SpeechEngine {
+  detector(): VoiceDetector;
+}
+
+async function loadModel(ort: typeof Ort, dir: string, threads: number) {
+  const [parakeet, detector] = await Promise.all([
+    loadParakeet(ort, dir, threads),
+    loadSilero(ort, join(dir, "silero_vad.onnx")),
+  ]);
+  return { decode: parakeet.decode, detector } satisfies SpeechModel;
+}
+
 const parent = process.parentPort;
 let engine: Promise<SpeechModel> | undefined;
 let sessions = 0;
 const notify = (notice: WorkerNotice) => parent.postMessage(notice);
+const message = (error: unknown) =>
+  String((error as Error | undefined)?.message ?? error);
 
 parent.on("message", ({ data, ports }) => {
   const command = data as WorkerCommand | { type: "port" };
   if (command.type === "load" && !engine) {
-    const sherpa = require(command.sherpa);
-    engine = loadSherpaEngine(sherpa, command.dir, command.threads);
+    engine = loadModel(require(command.ort), command.dir, command.threads);
     engine.then(
       () => notify({ type: "loaded" }),
-      (error) =>
-        notify({ type: "failed", message: String(error?.message ?? error) }),
+      (error) => notify({ type: "failed", message: message(error) }),
     );
   } else if (command.type === "port" && ports[0]) serve(ports[0]);
 });
 
+interface Session {
+  id: number;
+  transcriber?: Transcriber;
+  detect?: VoiceDetector;
+  /**
+   * Everything asked of the session, in order: the detector carries state
+   * from one stretch of audio to the next, and audio said while the model
+   * was still loading waits here.
+   */
+  steps: Promise<void>;
+  /** Cancelled, replaced or failed: what's still queued is dropped. */
+  over: boolean;
+}
+
 function serve(port: MessagePortMain) {
   const send = (event: DictationEvent) => port.postMessage(event);
-  let current:
-    | { id: number; transcriber?: Transcriber; queued: Float32Array[] }
-    | undefined;
+  let current: Session | undefined;
   const finish = () => {
     current = undefined;
     notify({ type: "busy", busy: --sessions > 0 });
   };
+  const then = (session: Session, step: () => Promise<void> | void) => {
+    session.steps = session.steps
+      .then(() => (session.over ? undefined : step()))
+      .catch((error) => {
+        session.over = true;
+        send({ type: "error", id: session.id, message: message(error) });
+        if (current === session) finish();
+      });
+  };
   engine?.then(
     () => send({ type: "ready" }),
-    (error) =>
-      send({ type: "error", message: String(error?.message ?? error) }),
+    (error) => send({ type: "error", message: message(error) }),
   );
   port.on("message", ({ data }) => {
-    void handle(data as DictationRequest | null).catch((error) =>
-      send({ type: "error", message: String(error?.message ?? error) }),
-    );
-  });
-  const handle = async (request: DictationRequest | null) => {
+    const request = data as DictationRequest | null;
     if (!request) return;
     if (request.type === "start") {
-      if (current) finish();
-      const session: NonNullable<typeof current> = {
+      if (current) {
+        current.over = true;
+        finish();
+      }
+      const session: Session = {
         id: request.id,
-        queued: [],
+        steps: Promise.resolve(),
+        over: false,
       };
       current = session;
       notify({ type: "busy", busy: ++sessions > 0 });
-      try {
-        const ready = await engine!;
-        if (current !== session) return;
-        session.transcriber = new Transcriber(
-          ownDetector(ready),
-          (settled, tentative) =>
-            send({ type: "text", id: session.id, settled, tentative }),
+      then(session, async () => {
+        const model = await engine!;
+        session.detect = model.detector();
+        session.transcriber = new Transcriber(model, (settled, tentative) =>
+          send({ type: "text", id: session.id, settled, tentative }),
         );
-        // Audio said while the model was still loading.
-        for (const samples of session.queued.splice(0))
-          session.transcriber.push(samples);
-      } catch (error) {
-        send({
-          type: "error",
-          id: session.id,
-          message: String((error as Error)?.message ?? error),
-        });
-        if (current === session) finish();
-      }
+      });
       return;
     }
     if (!current || request.id !== current.id) return;
     const session = current;
-    if (request.type === "audio") {
-      if (session.transcriber) session.transcriber.push(request.samples);
-      else session.queued.push(request.samples);
-    } else if (request.type === "cancel") finish();
-    else if (request.type === "stop") {
+    if (request.type === "audio")
+      then(session, async () =>
+        session.transcriber!.push(
+          request.samples,
+          await session.detect!(request.samples),
+        ),
+      );
+    else if (request.type === "cancel") {
+      session.over = true;
+      finish();
+    } else if (request.type === "stop") {
       finish();
       // Stopping while the model loads still transcribes what was said.
-      const transcriber = session.transcriber ?? (await startLate(session));
-      const text = transcriber ? await transcriber.stop() : "";
-      send({ type: "final", id: session.id, text });
+      then(session, async () =>
+        send({
+          type: "final",
+          id: session.id,
+          text: await session.transcriber!.stop(),
+        }),
+      );
     }
-  };
+  });
   port.start();
 }
-
-async function startLate(session: { queued: Float32Array[] }) {
-  const ready = await engine!.catch(() => undefined);
-  if (!ready) return;
-  const transcriber = new Transcriber(ownDetector(ready), () => {});
-  for (const samples of session.queued) transcriber.push(samples);
-  return transcriber;
-}
-
-const ownDetector = (model: SpeechModel): SpeechEngine => ({
-  decode: (samples) => model.decode(samples),
-  ...model.detector(),
-});

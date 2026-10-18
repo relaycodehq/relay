@@ -80,7 +80,6 @@
     "rehype-sanitize": "6.0.0",
     "remark-gfm": "4.0.1",
     "remark-math": "6.0.0",
-    "sherpa-onnx-node": "1.13.8",
     "uqr": "0.1.3",
     "ws": "8.21.3",
     "yaml": "2.9.1",
@@ -132,7 +131,6 @@
     "asarUnpack": [
       "dist-electron/node-pty/**",
       "dist-electron/typescript-5/**",
-      "dist-electron/sherpa/**",
       "dist-electron/onnxruntime/**",
       "dist-electron/agent-host.mjs",
       "dist-electron/cursor-worker.mjs"

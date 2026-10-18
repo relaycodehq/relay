@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
@@ -19,25 +18,11 @@ import {
   modelComplete,
   modelReceived,
 } from "../util/model-files";
+import { onnxRuntimeEntry, onnxRuntimeInstalled } from "../util/onnxruntime";
 import type { WorkerCommand, WorkerNotice } from "./worker";
 
 /** The model's memory goes back to the system this long after the last use. */
 const idleUnload = 3 * 60_000;
-
-// Native files can't load from inside the asar; they ship unpacked beside it.
-const unpacked = (path: string) =>
-  path.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
-let sherpaDir = unpacked(join(__dirname, "sherpa"));
-const platformDir = () =>
-  join(
-    sherpaDir,
-    `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`,
-  );
-
-/** Where a headless Relay downloaded the engine to, instead of beside the bundle. */
-export function setSherpaDir(dir: string) {
-  sherpaDir = dir;
-}
 
 export class Dictation {
   private state: DictationModelState = { status: "missing" };
@@ -67,7 +52,7 @@ export class Dictation {
 
   /** Looks again at the engine and the model, e.g. once the engine is downloaded. */
   async refresh() {
-    if (!existsSync(platformDir())) return this.set({ status: "unsupported" });
+    if (!onnxRuntimeInstalled()) return this.set({ status: "unsupported" });
     if (await modelComplete(this.dir, dictationModel.files))
       return this.set({ status: "ready" });
     const received = await modelReceived(this.dir, dictationModel.files);
@@ -187,7 +172,7 @@ export class Dictation {
     worker.postMessage({
       type: "load",
       dir: this.dir,
-      sherpa: join(sherpaDir, "sherpa-onnx-node"),
+      ort: onnxRuntimeEntry(),
       threads: Math.max(1, Math.min(4, availableParallelism() - 2)),
     } satisfies WorkerCommand);
     this.touch(true);

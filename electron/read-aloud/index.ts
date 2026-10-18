@@ -1,6 +1,1 @@
-export {
-  ReadAloud,
-  setOnnxRuntimeDir,
-  type ReadAloudSettingsStore,
-  type Speech,
-} from "./service";
+export { ReadAloud, type ReadAloudSettingsStore, type Speech } from "./service";

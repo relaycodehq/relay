@@ -42,15 +42,21 @@ test("a phone dictates with a headless Relay's speech engine", async () => {
   const manifest = JSON.parse(
     await readFile("dist-headless/speech-runtime.json", "utf8"),
   );
-  const platform = `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
-  const native = manifest.sherpa.platforms[platform];
-  test.skip(!native, `No speech engine for ${platform}.`);
-  const sherpa = join(home, "runtime", "sherpa");
-  for (const name of ["sherpa-onnx-node", native.name])
-    await cp(join("node_modules", name), join(sherpa, name), {
-      recursive: true,
-    });
-  await writeFile(join(sherpa, "VERSION"), `${native.version}\n`);
+  const platform = `${process.platform}/${process.arch}`;
+  test.skip(
+    !manifest.onnxruntime.platforms.includes(platform),
+    `No speech engine for ${platform}.`,
+  );
+  const ort = join(home, "runtime", "onnxruntime");
+  await cp(
+    join("node_modules/onnxruntime-node/bin/napi-v6", platform),
+    join(ort, "bin/napi-v6", platform),
+    { recursive: true },
+  );
+  await cp("dist-headless/onnxruntime/dist", join(ort, "dist"), {
+    recursive: true,
+  });
+  await writeFile(join(ort, "VERSION"), `${manifest.onnxruntime.version}\n`);
   const model = join(home, "models", dictationModel.id);
   await mkdir(model, { recursive: true });
   for (const file of dictationModel.files)

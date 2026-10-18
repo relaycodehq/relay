@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
@@ -16,6 +15,7 @@ import {
   modelComplete,
   modelReceived,
 } from "../util/model-files";
+import { onnxRuntimeEntry, onnxRuntimeInstalled } from "../util/onnxruntime";
 import { engineById, engineList } from "./catalog";
 import type { ReadAloudEngine } from "./engine";
 import { speakableChunks } from "./speakable";
@@ -26,18 +26,6 @@ const idleUnload =
   (process.env.RELAY_TEST_DATA &&
     Number(process.env.RELAY_TEST_READ_ALOUD_IDLE_MS)) ||
   3 * 60_000;
-
-// Native files can't load from inside the asar; they ship unpacked beside it.
-const unpacked = (path: string) =>
-  path.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
-let ortDir = unpacked(join(__dirname, "onnxruntime"));
-const ortBinaries = () =>
-  join(ortDir, "bin", "napi-v6", process.platform, process.arch);
-
-/** Where a headless Relay downloaded onnxruntime to, instead of beside the bundle. */
-export function setOnnxRuntimeDir(dir: string) {
-  ortDir = dir;
-}
 
 /** What a reading hands back as it goes. */
 export type Speech =
@@ -53,7 +41,7 @@ export interface ReadAloudSettingsStore {
 
 export class ReadAloud {
   get supported() {
-    return existsSync(ortBinaries());
+    return onnxRuntimeInstalled();
   }
   private models = new Map<string, ReadAloudModelState>();
   private downloads = new Map<string, AbortController>();
@@ -273,7 +261,7 @@ export class ReadAloud {
     });
     worker.postMessage({
       type: "init",
-      ort: join(ortDir, "dist", "index.cjs"),
+      ort: onnxRuntimeEntry(),
       threads: Math.max(1, Math.min(4, availableParallelism() - 2)),
     } satisfies WorkerCommand);
     this.touch(false);

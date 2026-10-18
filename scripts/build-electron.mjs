@@ -69,25 +69,13 @@ cpSync(
 const helper = join(ptyOut, native, "spawn-helper");
 if (existsSync(helper)) chmodSync(helper, 0o755);
 
-// sherpa-onnx-node finds its native addon in a sibling folder named for the
-// platform, whose libraries load from beside the addon; both ship as plain
-// files, and only this platform's addon comes along.
-const sherpaOut = "dist-electron/sherpa",
-  sherpaNative = `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
-rmSync(sherpaOut, { recursive: true, force: true });
-cpSync("node_modules/sherpa-onnx-node", join(sherpaOut, "sherpa-onnx-node"), {
-  recursive: true,
-  filter: (path) => !/\.(md|d\.ts)$/.test(path),
-});
-if (existsSync(join("node_modules", sherpaNative)))
-  cpSync(join("node_modules", sherpaNative), join(sherpaOut, sherpaNative), {
-    recursive: true,
-    filter: (path) => !/\.(md|lib|h)$/.test(path),
-  });
+// Dictation ran on sherpa-onnx until it moved to onnxruntime; a tree built
+// before then still has it, and the package takes all of dist-electron.
+rmSync("dist-electron/sherpa", { recursive: true, force: true });
 
-// onnxruntime-node, which runs read aloud's voice engines, names its native
-// addon by a path built at runtime. Its bundle loads the addon from a bin/
-// folder beside it, and both ship as plain files unpacked from the asar, with
+// onnxruntime-node, which runs dictation and read aloud's voice engines, names
+// its native addon by a path built at runtime. Its bundle loads the addon from
+// a bin/ folder beside it, and both ship as plain files unpacked from the asar, with
 // only this platform's binaries. The Linux CUDA providers its postinstall can
 // fetch, and the macOS library's second name, aren't needed.
 const ortOut = "dist-electron/onnxruntime",

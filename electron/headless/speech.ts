@@ -1,7 +1,7 @@
-// The speech engines phones use, for a headless Relay: dictation runs on
-// sherpa-onnx and read aloud on onnxruntime, both native and both large, so
-// neither ships in the archive. They're downloaded from npm when set up in
-// `relay settings`, each checked against the SHA-512 in Relay's lockfile
+// The speech engine phones use, for a headless Relay: dictation and read
+// aloud both run on onnxruntime, which is native and large, so it doesn't
+// ship in the archive. It's downloaded from npm when either is set up in
+// `relay settings`, checked against the SHA-512 in Relay's lockfile
 // (scripts/build-headless.mjs writes speech-runtime.json from it).
 import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -23,16 +23,11 @@ export interface RuntimePackage {
 
 /** speech-runtime.json, beside the bundle. */
 export interface SpeechRuntimeManifest {
-  sherpa: {
-    node: RuntimePackage;
-    /** By `<platform>-<arch>` as sherpa names them: `win-x64`, `darwin-arm64`. */
-    platforms: Record<string, RuntimePackage>;
-  };
   /** Ships every platform's binaries; `platforms` lists them as `<platform>/<arch>`. */
   onnxruntime: RuntimePackage & { platforms: string[] };
 }
 
-/** Dictation's engine, or read aloud's. */
+/** Dictation, or read aloud. */
 export type SpeechEngine = "dictation" | "voice";
 
 export interface EngineDownload {
@@ -41,25 +36,21 @@ export interface EngineDownload {
   total: number;
 }
 
-const sherpaPlatform = () =>
-  `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
 const ortPlatform = () => `${process.platform}/${process.arch}`;
 
 export class SpeechRuntime {
-  readonly sherpaDir: string;
   readonly ortDir: string;
   private manifest: SpeechRuntimeManifest | null;
-  private installing = new Map<SpeechEngine, Promise<void>>();
+  private installing?: Promise<void>;
   /** What's downloading now, for `relay settings` to show. */
   progress?: EngineDownload;
 
   constructor(
-    home: string,
+    private home: string,
     /** The folder the bundle runs from, holding speech-runtime.json and onnxruntime's JavaScript. */
     private lib: string,
     private fetcher: typeof fetch = fetch,
   ) {
-    this.sherpaDir = join(home, "runtime", "sherpa");
     this.ortDir = join(home, "runtime", "onnxruntime");
     try {
       this.manifest = JSON.parse(
@@ -71,136 +62,91 @@ export class SpeechRuntime {
   }
 
   /** Whether this computer's platform has the engine at all. */
-  supports(engine: SpeechEngine) {
-    const m = this.manifest;
-    if (!m) return false;
-    return engine === "dictation"
-      ? !!m.sherpa.platforms[sherpaPlatform()]
-      : m.onnxruntime.platforms.includes(ortPlatform());
+  get supported() {
+    return !!this.manifest?.onnxruntime.platforms.includes(ortPlatform());
   }
 
   /** Downloaded, and the version this Relay was built with. */
-  installed(engine: SpeechEngine) {
-    const want = this.version(engine);
+  get installed() {
+    const want = this.manifest?.onnxruntime.version;
     if (!want) return false;
     try {
-      return (
-        readFileSync(join(this.dir(engine), "VERSION"), "utf8").trim() === want
-      );
+      return readFileSync(join(this.ortDir, "VERSION"), "utf8").trim() === want;
     } catch {
       return false;
     }
   }
 
   /** Downloaded once, of another version: an update moved it on, so it's fetched again. */
-  stale(engine: SpeechEngine) {
-    return (
-      existsSync(join(this.dir(engine), "VERSION")) && !this.installed(engine)
-    );
+  get stale() {
+    return existsSync(join(this.ortDir, "VERSION")) && !this.installed;
   }
 
   /** onnxruntime's JavaScript comes with each Relay; the binaries it loads were downloaded. */
   async prepare() {
-    if (!this.installed("voice")) return;
+    // Dictation ran on sherpa-onnx before it moved to onnxruntime.
+    await rm(join(this.home, "runtime", "sherpa"), {
+      recursive: true,
+      force: true,
+    }).catch(() => {});
+    if (!this.installed) return;
     await cp(join(this.lib, "onnxruntime", "dist"), join(this.ortDir, "dist"), {
       recursive: true,
-    }).catch((e) => console.warn("Read aloud's runtime is incomplete:", e));
+    }).catch((e) => console.warn("The speech runtime is incomplete:", e));
   }
 
+  /** Downloads the runtime for `engine`, unless the other one already did. */
   install(engine: SpeechEngine) {
-    if (this.installed(engine)) return Promise.resolve();
-    let job = this.installing.get(engine);
-    if (!job) {
-      job = this.fetch(engine).finally(() => {
-        this.installing.delete(engine);
-        if (this.progress?.engine === engine) this.progress = undefined;
-      });
-      this.installing.set(engine, job);
-    }
-    return job;
+    if (this.installed) return Promise.resolve();
+    this.installing ??= this.fetch(engine).finally(() => {
+      this.installing = undefined;
+      this.progress = undefined;
+    });
+    return this.installing;
   }
 
-  async remove(engine: SpeechEngine) {
-    await rm(this.dir(engine), { recursive: true, force: true });
-  }
-
-  private dir(engine: SpeechEngine) {
-    return engine === "dictation" ? this.sherpaDir : this.ortDir;
-  }
-
-  private version(engine: SpeechEngine) {
-    const m = this.manifest;
-    if (!m) return undefined;
-    return engine === "dictation"
-      ? m.sherpa.platforms[sherpaPlatform()]?.version
-      : m.onnxruntime.version;
+  async remove() {
+    await rm(this.ortDir, { recursive: true, force: true });
   }
 
   /** Into a folder beside the final one, swapped in once whole. */
   private async fetch(engine: SpeechEngine) {
-    const m = this.manifest;
-    if (!m || !this.supports(engine))
+    const pkg = this.manifest?.onnxruntime;
+    if (!pkg || !this.supported)
       throw new Error(
         `${engine === "dictation" ? "Dictation" : "Read aloud"} isn't available for ${process.platform} on ${process.arch}.`,
       );
-    const target = this.dir(engine);
+    const target = this.ortDir;
     const staging = `${target}.download`;
     await rm(staging, { recursive: true, force: true });
     await mkdir(staging, { recursive: true });
     try {
-      const packages =
-        engine === "dictation"
-          ? [m.sherpa.node, m.sherpa.platforms[sherpaPlatform()]!]
-          : [m.onnxruntime];
-      const archives: { pkg: RuntimePackage; file: string; size: number }[] =
-        [];
-      let done = 0;
-      for (const pkg of packages) {
-        const file = join(staging, `${pkg.name}.tgz`);
-        const size = await download(pkg.url, file, pkg.integrity, {
-          fetch: this.fetcher,
-          progress: (received, total) =>
-            (this.progress = {
-              engine,
-              received: done + received,
-              total: done + Math.max(total, received),
-            }),
-        });
-        done += size;
-        archives.push({ pkg, file, size });
-      }
-      for (const { pkg, file } of archives) {
-        if (engine === "dictation") {
-          // sherpa-onnx-node finds its addon in the sibling folder named for the platform.
-          const into = join(staging, pkg.name);
-          await mkdir(into);
-          await extract(file, into);
-          await renameSoon(join(into, "package"), `${into}.unpacked`);
-          await rm(into, { recursive: true });
-          await renameSoon(`${into}.unpacked`, into);
-        } else {
-          // Every platform's binaries come in the one package; only this one's stay.
-          const binaries = `package/bin/napi-v6/${ortPlatform()}`;
-          await extract(file, staging, [binaries]);
-          await mkdir(join(staging, "bin", "napi-v6", process.platform), {
-            recursive: true,
-          });
-          await renameSoon(
-            join(staging, binaries),
-            join(staging, "bin", "napi-v6", ortPlatform()),
-          );
-          await rm(join(staging, "package"), { recursive: true });
-          await cp(
-            join(this.lib, "onnxruntime", "dist"),
-            join(staging, "dist"),
-            {
-              recursive: true,
-            },
-          );
-        }
-        await rm(file);
-      }
-      await writeFile(join(staging, "VERSION"), `${this.version(engine)}\n`);
+      const file = join(staging, `${pkg.name}.tgz`);
+      await download(pkg.url, file, pkg.integrity, {
+        fetch: this.fetcher,
+        progress: (received, total) =>
+          (this.progress = {
+            engine,
+            received,
+            total: Math.max(total, received),
+          }),
+      });
+      // Every platform's binaries come in the one package; only this one's stay.
+      const binaries = `package/bin/napi-v6/${ortPlatform()}`;
+      await extract(file, staging, [binaries]);
+      await mkdir(join(staging, "bin", "napi-v6", process.platform), {
+        recursive: true,
+      });
+      await renameSoon(
+        join(staging, binaries),
+        join(staging, "bin", "napi-v6", ortPlatform()),
+      );
+      await rm(join(staging, "package"), { recursive: true });
+      await cp(join(this.lib, "onnxruntime", "dist"), join(staging, "dist"), {
+        recursive: true,
+      });
+      await rm(file);
+      await writeFile(join(staging, "VERSION"), `${pkg.version}\n`);
       await rm(target, { recursive: true, force: true });
       await renameSoon(staging, target);
     } catch (e) {
@@ -247,7 +193,7 @@ export class HeadlessSpeech {
     dictation: {
       status: () => {
         const status = this.dictation.current.status;
-        return status === "unsupported" && this.runtime.supports("dictation")
+        return status === "unsupported" && this.runtime.supported
           ? "missing"
           : status;
       },
@@ -256,7 +202,7 @@ export class HeadlessSpeech {
     readAloud: {
       ready: () => this.readAloud.ready(),
       speak: (markdown, sink) => {
-        if (!this.readAloud.supported && this.runtime.supports("voice"))
+        if (!this.readAloud.supported && this.runtime.supported)
           throw new Error(
             "Set up read aloud on the computer first: relay settings › Read aloud.",
           );
@@ -268,13 +214,13 @@ export class HeadlessSpeech {
   state(): SpeechState {
     return {
       dictation: {
-        supported: this.runtime.supports("dictation"),
-        engine: this.runtime.installed("dictation"),
+        supported: this.runtime.supported,
+        engine: this.runtime.installed,
         model: this.dictation.current,
       },
       voice: {
-        supported: this.runtime.supports("voice"),
-        engine: this.runtime.installed("voice"),
+        supported: this.runtime.supported,
+        engine: this.runtime.installed,
         state: this.readAloud.current,
       },
       ...(this.setup ? { setup: { ...this.setup } } : {}),
@@ -284,20 +230,17 @@ export class HeadlessSpeech {
 
   /** An update moved the engines on: what was set up is fetched again, quietly. */
   async catchUp() {
-    for (const engine of ["dictation", "voice"] as const)
-      if (this.runtime.stale(engine))
-        await this.runtime
-          .install(engine)
-          .then(() => this.refresh(engine))
-          .catch((e) =>
-            console.warn(`Couldn't update the ${engine} engine:`, e),
-          );
+    if (this.runtime.stale)
+      await this.runtime
+        .install("dictation")
+        .then(() => this.dictation.refresh())
+        .catch((e) => console.warn("Couldn't update the speech engine:", e));
   }
 
   /** Starts setting `engine` up and answers at once; `state()` follows it. */
   install(engine: SpeechEngine, voice?: string) {
     if (this.setup?.status === "working") return this.state();
-    if (!this.runtime.supports(engine))
+    if (!this.runtime.supported)
       throw new Error(
         `${engine === "dictation" ? "Dictation" : "Read aloud"} isn't available for ${process.platform} on ${process.arch}.`,
       );
@@ -312,7 +255,7 @@ export class HeadlessSpeech {
     void (async () => {
       try {
         await this.runtime.install(engine);
-        await this.refresh(engine);
+        await this.dictation.refresh();
         setup.step = "model";
         if (engine === "dictation") {
           const done = await this.dictation.downloadModel();
@@ -346,24 +289,26 @@ export class HeadlessSpeech {
     return this.state();
   }
 
-  /** Removes a voice, or with none named the engine and everything it ran. */
+  /**
+   * Removes a voice, or with none named the model or voices and what ran
+   * them; the engine stays while the other still uses it.
+   */
   async remove(engine: SpeechEngine, voice?: string) {
     if (engine === "dictation") {
       await this.dictation.removeModel();
       this.dictation.stopWorker();
-      await this.runtime.remove("dictation");
+      if (
+        !this.readAloud.current.engines.some((e) => e.model.status === "ready")
+      )
+        await this.runtime.remove();
     } else if (voice) await this.readAloud.remove(voice);
     else {
       for (const e of this.readAloud.current.engines)
         await this.readAloud.remove(e.id);
-      await this.runtime.remove("voice");
+      if (this.dictation.current.status !== "ready")
+        await this.runtime.remove();
     }
-    await this.refresh(engine);
+    await this.dictation.refresh();
     return this.state();
-  }
-
-  private async refresh(engine: SpeechEngine) {
-    if (engine === "dictation") await this.dictation.refresh();
-    else await this.runtime.prepare();
   }
 }

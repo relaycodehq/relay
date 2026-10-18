@@ -11,7 +11,7 @@ export interface DictationModelFile {
 const parakeet =
   "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78";
 
-/** NVIDIA Parakeet TDT 0.6B v3 (25 European languages) and Silero VAD, as sherpa-onnx exports. */
+/** NVIDIA Parakeet TDT 0.6B v3 (25 European languages), as csukuangfj exported it to ONNX, and Silero VAD. */
 export const dictationModel = {
   id: "parakeet-tdt-0.6b-v3-int8",
   name: "Parakeet TDT 0.6B v3",
