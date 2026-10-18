@@ -21,6 +21,16 @@ enum UnsentPhotos {
         held[draft] = photos.isEmpty ? nil : photos
     }
 
+    /// A failed send returns to its original draft, even after its composer has left.
+    @discardableResult
+    static func restore(_ photos: [PickedPhoto], for draft: String) -> [PickedPhoto] {
+        let current = take(draft)
+        let ids = Set(current.map(\.id))
+        let restored = current + photos.filter { !ids.contains($0.id) }
+        keep(restored, for: draft)
+        return restored
+    }
+
     /// A new thread follows its chosen project, including photos already in either draft.
     /// Keep every photo: the composer asks the user to remove extras before sending.
     static func move(_ computer: String, from: String, to: String) {

@@ -74,6 +74,7 @@ struct Composer: View {
     @State private var draftLoaded: String?
     /// Whose unsent photos `photos` are, `computer\nkey` as `draftLoaded`.
     @State private var photosLoaded: String?
+    @State private var visible = false
     /// The send that failed last, tried again as it was while the draft stays the same.
     @State private var failed: Attempt?
 
@@ -198,7 +199,7 @@ struct Composer: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { dictation.stop() }
         }
-        .onDisappear { dictation.stop() }
+        .onDisappear { visible = false; dictation.stop() }
         // One voice at a time: reading aloud ends dictation, and dictating ends a reading.
         .onChange(of: reader.key) { _, key in
             if key != nil { dictation.stop() }
@@ -217,6 +218,7 @@ struct Composer: View {
             if now != draft { draft = now }
         }
         .onAppear {
+            visible = true
             handle?.restore = restore
             handle?.compose = { text, earlier in draft = composeInto(draft, text, earlier: earlier) }
             handle?.quote = { markdown in
@@ -453,6 +455,7 @@ struct Composer: View {
             let body = text
             let sent = photos
             let at = draftAt
+            let photoDraft = photosLoaded
             let through = draftKey.map(connection.sendsThroughComputer) ?? false
             guard !body.isEmpty || !sent.isEmpty || through else { return }
             // Sent again unchanged after failing: as it was, under its own id, so it can't go twice.
@@ -465,6 +468,7 @@ struct Composer: View {
             error = nil
             draft = ""
             photos = []
+            if let photoDraft { UnsentPhotos.keep([], for: photoDraft) }
             defer { sending = false }
             do {
                 guard let settings else { throw PairingError("Wait for your computer to say which agent answers.") }
@@ -478,7 +482,14 @@ struct Composer: View {
                 failed = attempt
                 self.error = error.localizedDescription
                 if draft.isEmpty { draft = body }
-                if photos.isEmpty { photos = sent }
+                if let photoDraft {
+                    let showingDraft = visible && photosLoaded == photoDraft
+                    if showingDraft { UnsentPhotos.keep(photos, for: photoDraft) }
+                    let restored = UnsentPhotos.restore(sent, for: photoDraft)
+                    if showingDraft { photos = restored }
+                } else if photos.isEmpty {
+                    photos = sent
+                }
             }
             // The draft ignored edits while the send held it: what was typed meanwhile goes in now.
             if let at { connection.drafts.editText(at.computer, at.key, draft) }
