@@ -200,4 +200,10 @@ struct MathBlocksTests {
         #expect(markdownBlocks("Run:\n\n    $$\n    echo $$a$$ done") == [.paragraph("Run:"), .code(language: nil, text: "$$\necho $$a$$ done")])
         #expect(markdownBlocks("<div title=\"$$a$$\">\n$$\n</div>") == [.html("<div title=\"$$a$$\">\n$$\n</div>")])
     }
+
+    @Test func oversizedPlaceholderLikeTextStaysLiteral() {
+        let literal = "$\u{E000}" + String(repeating: "9", count: 200) + "\u{E001}$"
+        #expect(markdownBlocks("```\n\(literal)\n```") == [.code(language: nil, text: literal)])
+        #expect(markdownBlocks("`\(literal)`") == [.paragraph(code(literal))])
+    }
 }

@@ -113,7 +113,9 @@ struct MathText {
         var k = i + 2
         var number = 0
         while k < s.count, ("0"..."9").contains(s[k]) {
-            number = number * 10 + Int(s[k].value - 48)
+            let digit = Int(s[k].value - 48)
+            guard number <= (Int.max - digit) / 10 else { return nil }
+            number = number * 10 + digit
             k += 1
         }
         guard k > i + 2, k + 1 < s.count, s[k] == placeholderClose, s[k + 1] == "$" else { return nil }
