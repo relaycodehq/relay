@@ -12,6 +12,7 @@ import {
   insertPaste,
   insertMention,
   pasteText,
+  pasteFile,
   insertQuote,
   insertSkill,
   insertTags,
@@ -92,6 +93,7 @@ export function usePromptHandle(
       },
       insertPaste: (pasted) => !!editor && insertPaste(editor, pasted),
       pasteText: (text) => !!editor && pasteText(editor.view, pills, text),
+      pasteFile: (path) => !!editor && pasteFile(editor.view, pills, path),
       focusEnd: () => void editor?.commands.focus("end"),
       removePaste(index) {
         if (editor) removePaste(editor, index);

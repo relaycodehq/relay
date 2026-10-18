@@ -6,7 +6,7 @@ import { syncDraft } from "./usePromptSync";
 import { promptContent } from "../prompt-content";
 import { promptText } from "../prompt-text";
 import type { DraftPills } from "../useDraftPills";
-import { pasteText } from "./edits";
+import { pasteFile, pasteText } from "./edits";
 
 const content = (text: string) => promptContent(text, {});
 const editors: Editor[] = [];
@@ -72,4 +72,34 @@ it("says when pasted text didn't fit, so screenshots copied with it aren't kept"
   expect(pasteText(editor.view, pills, "b".repeat(10))).toBe(true);
   expect(pasteText(editor.view, pills, "c")).toBe(false);
   expect(promptText(editor.state.doc).length).toBe(32000);
+});
+
+it.each(["old prompt", "x".repeat(32000)])(
+  "replaces selected text with a saved paste's file pill (%#. draft)",
+  (text) => {
+    const editor = draft(text);
+    editor.commands.setTextSelection({ from: 1, to: text.length + 1 });
+    let files: string[] = [];
+    const pills = {
+      addFiles: (paths: string[]) => {
+        files = paths;
+      },
+      content: (value: string) => promptContent(value, {}, [], files),
+    } as unknown as DraftPills;
+    const path = "/data/pastes/id/pasted-text.txt";
+    expect(pasteFile(editor.view, pills, path)).toBe(true);
+    expect(promptText(editor.state.doc)).toBe(`\`${path}\` `);
+    expect(editor.state.doc.firstChild?.firstChild?.type.name).toBe(
+      "relayFile",
+    );
+  },
+);
+
+it("reports a saved paste that cannot fit without changing the draft", () => {
+  const editor = draft("x".repeat(32000));
+  const pills = { addFiles: () => {}, content } as unknown as DraftPills;
+  expect(pasteFile(editor.view, pills, "/data/pastes/id/pasted-text.txt")).toBe(
+    false,
+  );
+  expect(promptText(editor.state.doc)).toBe("x".repeat(32000));
 });

@@ -58,6 +58,8 @@ export interface DraftEditor {
   removeImage: (n: number) => void;
   /** Puts copied text in at the caret, over any selection, its tokens as pills; false when the message cannot hold it. */
   pasteText: (text: string) => boolean;
+  /** Replaces the selection with a saved paste's file pill; false when it cannot fit. */
+  pasteFile: (path: string) => boolean;
   /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
   insertPaste: (text: string) => boolean;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
@@ -292,9 +294,9 @@ export function useComposerDraft(
     setError(undefined);
     try {
       const path = await api.savePaste(pasted, nextPasteFile(readDraft(key)));
-      if (shownKey.current === key && editor.current)
-        editor.current.insertFiles([path]);
-      else {
+      if (shownKey.current === key && editor.current) {
+        if (!editor.current.pasteFile(path)) setError(PASTE_TOO_LONG);
+      } else {
         const chips = draftChips(key).files;
         chips.save([...new Set([...chips.load(), path])]);
         const now = readDraft(key);

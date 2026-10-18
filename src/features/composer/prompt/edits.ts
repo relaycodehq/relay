@@ -12,7 +12,7 @@ import {
   pasteNodes,
   spacedTags,
 } from "../prompt-pills";
-import { positionAt, promptText } from "../prompt-text";
+import { fileMarkdown, positionAt, promptText } from "../prompt-text";
 
 type Point = { left: number; top: number };
 
@@ -123,6 +123,12 @@ export function insertQuote(editor: Editor, text: string) {
       ])
       .run(),
   );
+}
+
+/** A saved paste replaces the selection just as its text would. */
+export function pasteFile(view: EditorView, pills: DraftPills, path: string) {
+  pills.addFiles([path]);
+  return pasteText(view, pills, fileMarkdown(path));
 }
 
 /** Puts pasted text in over the selection, with the pills it names; false when the message cannot hold it. */

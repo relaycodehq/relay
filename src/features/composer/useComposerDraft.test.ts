@@ -467,9 +467,9 @@ it("sends a paste of 32KB or more as a file named in the message, numbered after
   const { writeDraft } = await import("./drafts");
   writeDraft(KEY, "First `/data/pastes/a/pasted-text.txt`");
   const insertPaste = vi.fn(() => true);
-  const insertFiles = vi.fn();
+  const pasteFile = vi.fn(() => true);
   const editor = {
-    current: { insertPaste, insertFiles, adoptPills } as unknown as DraftEditor,
+    current: { insertPaste, pasteFile, adoptPills } as unknown as DraftEditor,
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -480,18 +480,16 @@ it("sends a paste of 32KB or more as a file named in the message, numbered after
   expect(event.preventDefault).toHaveBeenCalled();
   expect(insertPaste).not.toHaveBeenCalled();
   expect(savePaste).toHaveBeenCalledWith(huge.trimEnd(), 2);
-  expect(insertFiles).toHaveBeenCalledWith([
-    "/data/pastes/x/pasted-text-2.txt",
-  ]);
+  expect(pasteFile).toHaveBeenCalledWith("/data/pastes/x/pasted-text-2.txt");
   expect(draft().error).toBeUndefined();
 });
 
 it("sends a long paste the message can't hold as a file instead of refusing it", async () => {
   const { useComposerDraft } = await import("./useComposerDraft");
   const insertPaste = vi.fn(() => false);
-  const insertFiles = vi.fn();
+  const pasteFile = vi.fn(() => true);
   const editor = {
-    current: { insertPaste, insertFiles, adoptPills } as unknown as DraftEditor,
+    current: { insertPaste, pasteFile, adoptPills } as unknown as DraftEditor,
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -500,8 +498,23 @@ it("sends a long paste the message can't hold as a file instead of refusing it",
   await settle();
   expect(insertPaste).toHaveBeenCalledWith(long);
   expect(savePaste).toHaveBeenCalledWith(long, 1);
-  expect(insertFiles).toHaveBeenCalledWith(["/data/pastes/x/pasted-text.txt"]);
+  expect(pasteFile).toHaveBeenCalledWith("/data/pastes/x/pasted-text.txt");
   expect(draft().error).toBeUndefined();
+});
+
+it("reports when the saved paste's reference cannot fit", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const pasteFile = vi.fn(() => false);
+  const editor = {
+    current: { pasteFile, adoptPills } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  draft().paste(plainPaste("x".repeat(40_000)) as never);
+  await settle();
+  expect(pasteFile).toHaveBeenCalledWith("/data/pastes/x/pasted-text.txt");
+  expect(draft().error).toContain("32,000");
+  expect(draft().isPreparing()).toBe(false);
 });
 
 it("names the saved paste in the draft it was pasted in, once another thread shows", async () => {
@@ -512,9 +525,9 @@ it("names the saved paste in the draft it was pasted in, once another thread sho
   savePaste.mockImplementationOnce(
     () => new Promise<string>((resolve) => (finish = resolve)),
   );
-  const insertFiles = vi.fn();
+  const pasteFile = vi.fn(() => true);
   const editor = {
-    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+    current: { pasteFile, adoptPills } as unknown as DraftEditor,
   };
   let key = KEY;
   const draft = mount(() => useComposerDraft(key, editor));
@@ -525,7 +538,7 @@ it("names the saved paste in the draft it was pasted in, once another thread sho
   rerender();
   finish("/data/pastes/y/pasted-text.txt");
   await settle();
-  expect(insertFiles).not.toHaveBeenCalled();
+  expect(pasteFile).not.toHaveBeenCalled();
   expect(readDraft(KEY)).toBe("Look `/data/pastes/y/pasted-text.txt`");
 });
 
@@ -536,11 +549,12 @@ it("keeps Send blocked until queued paste files land, and recovers after a faile
   savePaste.mockImplementationOnce(
     () => new Promise<string>((resolve) => (finish = resolve)),
   );
-  const insertFiles = vi.fn((paths: string[]) => {
-    writeDraft(KEY, `${readDraft(KEY)} \`${paths[0]}\``);
+  const pasteFile = vi.fn((path: string) => {
+    writeDraft(KEY, `${readDraft(KEY)} \`${path}\``);
+    return true;
   });
   const editor = {
-    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+    current: { pasteFile, adoptPills } as unknown as DraftEditor,
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -563,5 +577,5 @@ it("keeps Send blocked until queued paste files land, and recovers after a faile
   draft().pasteRefused("retry");
   await settle();
   expect(draft().error).toBeUndefined();
-  expect(insertFiles).toHaveBeenCalledTimes(3);
+  expect(pasteFile).toHaveBeenCalledTimes(3);
 });
