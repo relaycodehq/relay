@@ -83,7 +83,6 @@ export function ThreadHeaderActions({
   move,
   onConnectHost,
   onSettings,
-  onStartThread,
 }: {
   tools: ThreadTools;
   project: Project;
@@ -91,8 +90,6 @@ export function ThreadHeaderActions({
   move?: ReactNode;
   onConnectHost: () => void;
   onSettings: (at: SettingsCategory, projectId?: string) => void;
-  /** A new thread in the project on a draft; the main window only. */
-  onStartThread?: ChatProps["onStartThread"];
 }) {
   const { chat, panes, pull } = nav;
   const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
@@ -132,7 +129,6 @@ export function ThreadHeaderActions({
                 chat={handoff}
                 onError={setError}
                 onSettings={() => onSettings("computers")}
-                onStartThread={onStartThread}
               />
             )}
             <span className="header-strip-sep" aria-hidden="true" />

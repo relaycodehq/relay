@@ -444,6 +444,35 @@ export class ComputerHandoff {
       );
     return chatSummary(chat);
   }
+  /**
+   * A Scratchpad thread whose agent sets up a project another computer is
+   * handing a thread to this one for. It counts as come from that computer,
+   * which follows it live, though nothing came along with it.
+   */
+  async adoptSetup(
+    projectId: string,
+    title: string,
+    cameFrom: Omit<ChatCameFrom, "carried" | "tip">,
+    input: ProjectChatSend,
+  ) {
+    const chat: ProjectChat = {
+      id: randomUUID(),
+      projectId,
+      scope: { kind: "project" },
+      title,
+      renamed: true,
+      created: Date.now(),
+      updated: Date.now(),
+      messages: [],
+      cameFrom: { ...cameFrom, carried: 0, tip: "" },
+      carriedIds: {},
+    };
+    await this.core.storage.add(chat);
+    void this.host
+      .send(chat.id, input)
+      .catch((e) => console.warn("A project's setup couldn't start:", e));
+    return chatSummary(chat);
+  }
   /** What a thread that came here wrote since, for its trip back. */
   async handBack(id: string, deviceId: string) {
     const summary = (this.core.store.get().chats ?? []).find(

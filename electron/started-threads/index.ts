@@ -17,7 +17,6 @@ import {
 import { hasAccounts, pinnedAccount } from "../../shared/agent-accounts";
 import { fitModel } from "../../shared/model-fit";
 import { AgentChoices, type ThreadAgents } from "./thread-agents";
-import { cloneOnComputer, runOnComputer } from "./computer-setup";
 import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
 import {
   projectChatSendSchema,
@@ -28,7 +27,6 @@ import {
   type ProjectChatSend,
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
-import type { CommandRun } from "../../shared/remote";
 import {
   handoffBlocked,
   type HandoffChatMethod,
@@ -121,17 +119,6 @@ export interface ThreadHandoffs {
   bringBack(chatId: string): Promise<void>;
   /** Once the handoff or bringing back under way is over, however it went. */
   finished(chatId: string): Promise<void>;
-  paired(): { id: string; name: string; online: boolean }[];
-  /** Clones a project on a computer that lacks it; the project it made there. */
-  cloneOn(
-    computerId: string,
-    projectId: string,
-  ): Promise<{ id: string; name: string }>;
-  runOn(
-    computerId: string,
-    command: string,
-    timeoutMs: number,
-  ): Promise<CommandRun>;
 }
 
 const defaultChoice: ModelChoice = {
@@ -336,16 +323,6 @@ export class StartedThreads {
         return this.stop(lead, input.id, signal);
       case "hand_off_thread":
         return this.handOff(lead, input, signal);
-      case "run_on_computer":
-        if (!this.handoffs)
-          return toolText("This Relay can't reach other computers.", true);
-        return runOnComputer(this.handoffs, input, (title, detail) =>
-          this.approve(lead, title, detail, signal),
-        );
-      case "clone_on_computer":
-        if (!this.handoffs)
-          return toolText("This Relay can't reach other computers.", true);
-        return cloneOnComputer(this.handoffs, lead.projectId, input);
       case "settle_thread":
         if (input.id === lead.id) return this.settleSelf(lead);
         return this.settle(lead, input.id, signal);

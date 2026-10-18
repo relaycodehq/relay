@@ -1,10 +1,12 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { awayDuring, unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
 import { threadReports } from "../../../shared/findings";
 import { leadStoppedLast } from "../deep-review/lead-halted";
 import { api } from "../../lib/api";
+import { chatKey } from "../../lib/chat-events";
 import type {
   ChatMessage,
   ProjectChat as ProjectChatData,
@@ -28,6 +30,7 @@ import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { HeldSends, ranHereNote } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
+import { ThreadSetup } from "./ThreadSetup";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { landedNote, renamedNote } from "./WorktreeControls";
@@ -234,6 +237,15 @@ export function ThreadMessages({
     () => (root ? undefined : latestSetup(listed)?.id),
     [root, listed],
   );
+  const qc = useQueryClient();
+  const setupMark = chat?.setupMark;
+  // Its messages arrive as they're written; how it stands is fetched with the thread.
+  useEffect(() => {
+    if (chat && setupMark)
+      void qc.invalidateQueries({ queryKey: chatKey(chat.id), exact: true });
+  }, [setupMark]);
+  const setup = root ? undefined : history.data?.setup;
+  const setupAfter = setup && history.data!.messages[setup.after - 1]?.id;
   /** Queued and scheduled messages wait in the conversation they were sent in, main or side. */
   const inView = (waiting: { input: { parentId?: string | null } }) =>
     (waiting.input.parentId ?? null) === (root?.id ?? null);
@@ -381,6 +393,9 @@ export function ThreadMessages({
                 ) : undefined
               }
             />,
+            m.id === setupAfter && chat && (
+              <ThreadSetup key="thread-setup" chat={chat} setup={setup!} />
+            ),
           ];
         })}
         {!running &&

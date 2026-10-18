@@ -3,7 +3,7 @@ import type { AgentProvider } from "../agents";
 import type { DeepReviewState } from "../deep-review";
 import type { ThreadFindings } from "../findings";
 import type { ThreadNote } from "../thread-notes";
-import type { ChatHandover, HeldSend } from "../handoff";
+import type { ChatHandover, HeldSend, ThreadSetup } from "../handoff";
 import type { ChatMessage } from "./messages";
 import type { ProjectChatSend } from "./send";
 import type { ChatSummary } from "./threads";
@@ -66,6 +66,8 @@ export interface ProjectChat extends ChatSummary {
   carriedIds?: Record<string, string>;
   /** What the user keeps at hand in the thread; see shared/thread-notes. */
   notes?: ThreadNote[];
+  /** The computer it was handed to, readied for it; see shared/handoff. */
+  setup?: ThreadSetup;
 }
 /** An agent's session on a conversation, and the last message it heard there. */
 export interface AgentSession {

@@ -310,7 +310,6 @@ export default function ProjectShell() {
               move={chat && <PopOutButton chat={chat} onError={setError} />}
               onConnectHost={() => setChoosePR(true)}
               onSettings={settings.show}
-              onStartThread={starts.start}
             />
           )}
           {sidebar.hidden && !settings.open && (

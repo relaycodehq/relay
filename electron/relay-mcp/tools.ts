@@ -7,7 +7,6 @@
 // restarts; Relay answers the calls (electron/started-threads).
 import { z } from "zod";
 import { agentProviderSchema, agentProviders } from "../../shared/agents";
-import { maxCommandMs } from "../../shared/remote";
 import { reasoningEffortSchema } from "../../shared/settings";
 import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import {
@@ -184,40 +183,6 @@ export const relayToolSchemas = {
         .describe(
           'The paired computer\'s name, or "here" to bring the thread back. Left out: the one computer that can take it.',
         ),
-    })
-    .strict(),
-  run_on_computer: z
-    .object({
-      computer: z
-        .string()
-        .trim()
-        .min(1)
-        .max(120)
-        .describe("The paired computer's name."),
-      command: z
-        .string()
-        .min(1)
-        .max(8000)
-        .describe(
-          "A shell command: its login shell on macOS and Linux, PowerShell on Windows. Starts in the home folder.",
-        ),
-      timeout_seconds: z
-        .number()
-        .int()
-        .min(1)
-        .max(maxCommandMs / 1000)
-        .optional()
-        .describe("How long it may run. Left out: 60."),
-    })
-    .strict(),
-  clone_on_computer: z
-    .object({
-      computer: z
-        .string()
-        .trim()
-        .min(1)
-        .max(120)
-        .describe("The paired computer's name."),
     })
     .strict(),
   settle_thread: z.object({ id: threadId }).strict(),
@@ -448,10 +413,6 @@ const descriptions: Record<RelayToolName, string> = {
   stop_thread: `Stop the answer a thread is working on.\n\n${DRIVE_NOTE}`,
   hand_off_thread:
     "Move a thread to another computer the user paired with this Relay, like an always-on desktop or server at home, or bring it back with `to` \"here\". Its agent stops and writes a handoff note, its worktree is committed, and it carries on there; the thread stays in the user's list here, marked with where it runs, and send_to_thread, stop_thread, read_thread and wait_for_threads reach it there. Only a thread in its own worktree can move. The user confirms every move. Returns once it has arrived, or why it couldn't, with the computers that could take it.",
-  run_on_computer:
-    "Run a shell command on another computer the user paired with this Relay, to set it up for this project's threads: fix what stops a clone there (a Git or GitHub sign-in, SSH keys, a missing tool). Returns its exit code and the end of its output. Nothing interactive: a sign-in that waits for the user, like `gh auth login --web`, goes in the background with its output in a file you read, and you tell the user the code and where to enter it. The user may have to confirm each command. Only for setting the computer up, never for the project's own work.",
-  clone_on_computer:
-    "Clone this thread's project on a paired computer and add it to Relay there, so threads can move or start there; a folder already cloned in its projects folder is added as it is. Returns the project, or git's error.",
   settle_thread: `Settle a thread once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user. For your own thread, settle_this_thread.\n\n${DRIVE_NOTE}`,
   settle_this_thread:
     "Settle this thread once this answer ends, the way the user settles one: it leaves their Activity and they can bring it back. Only when the user asked you to, or when your work here is finished and needs nothing more from them. It settles once the answer ends cleanly with nothing queued, and after the user has read it; a thread another thread started settles without, as its lead reads it. An open question, a failure, a stop or the user's next message keeps it in Activity.",

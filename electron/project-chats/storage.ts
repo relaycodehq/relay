@@ -77,9 +77,11 @@ export function chatSummary({
   outbox,
   carriedIds,
   notes,
+  setup,
   // Worked out below; a stale copy on the thread itself doesn't count.
   queueMark: _staleMark,
   notesMark: _staleNotesMark,
+  setupMark: _staleSetupMark,
   asking,
   ...summary
 }: ProjectChat): ChatSummary {
@@ -109,6 +111,7 @@ export function chatSummary({
     ...(next ? { nextSend: next } : {}),
     ...(mark ? { queueMark: mark } : {}),
     ...(notesAt ? { notesMark: notesAt } : {}),
+    ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
     ...(open ? { asking: true as const } : {}),
     ...(review ? { reviewFolder: review } : {}),
     ...(deepReview?.status === "reviewing" ? { reviewing: true as const } : {}),

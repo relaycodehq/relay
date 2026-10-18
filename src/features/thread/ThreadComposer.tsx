@@ -23,7 +23,8 @@ import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { useCacheExpired } from "../agents/auto-compact";
 import { compactsCold } from "../../../shared/context-usage";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
-import { liveAway } from "../../../shared/handoff";
+import { SetupLine } from "../handoff/SetupLine";
+import { inSetup, liveAway } from "../../../shared/handoff";
 import {
   ProjectComposer,
   type ComposerHandle,
@@ -285,7 +286,7 @@ export function ThreadComposer({
     busy ||
     (!!chat && history.isPending) ||
     worktree.unavailable ||
-    (!!chat?.sentTo && !liveAway(chat)) ||
+    (!!chat?.sentTo && !liveAway(chat) && !inSetup(chat)) ||
     !!chat?.cameFrom?.returnedAt;
   // Read on ↑ only, so streaming answers don't rebuild it.
   const shownNow = useRef(shown);
@@ -365,7 +366,6 @@ export function ThreadComposer({
               project={project}
               worktree={worktree}
               disabled={busy}
-              onStartThread={onStartThread}
             />
           ) : (
             <WorkspaceControl
@@ -398,8 +398,11 @@ export function ThreadComposer({
         </>
       }
       below={
-        chat &&
-        liveAway(chat) && <LiveAwayLine chat={chat} onError={setError} />
+        chat && liveAway(chat) ? (
+          <LiveAwayLine chat={chat} onError={setError} />
+        ) : chat && inSetup(chat) ? (
+          <SetupLine chat={chat} onError={setError} />
+        ) : undefined
       }
       notice={({ sendGoal }) =>
         chat ? (

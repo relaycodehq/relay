@@ -70,7 +70,41 @@ export interface ChatSentTo {
    * changes, files, history and Git actions are what's on that computer.
    */
   folder?: true;
+  /**
+   * Sending, its project isn't on that computer yet, and an agent there is
+   * setting it up: that agent's thread there, by the id it follows with.
+   * Sends, stops and answers go to it until the project is there and the
+   * handoff goes on. See `ThreadSetup`.
+   */
+  setup?: string;
 }
+
+/**
+ * How the computer a thread went to was readied for it: Relay's clone of
+ * its project there and, when that failed, the agent that set it up. Kept
+ * beside the thread's messages, which a live handoff mirrors, and shown
+ * after the first `after` of them.
+ */
+export interface ThreadSetup {
+  computer: string;
+  after: number;
+  at: number;
+  state: "cloning" | "agent" | "done" | "dropped";
+  ended?: number;
+  /** What git said when Relay's own clone failed, so the agent took over. */
+  error?: string;
+  /** The project's name, as it's called there once it's there, and its folder there. */
+  project: string;
+  folder?: string;
+  /** The agent's thread there, as it mirrors here; the first is Relay's request. */
+  messages: ChatMessage[];
+}
+
+/** Waiting on an agent setting its project up on the computer it's going to; it talks to that agent meanwhile. */
+export const inSetup = (chat: Pick<ChatSummary, "sentTo">) =>
+  !!chat.sentTo?.setup &&
+  chat.sentTo.state === "sending" &&
+  !chat.sentTo.error;
 
 /**
  * What runs and waits in a live handoff's thread on the other computer, laid
@@ -260,7 +294,7 @@ export interface HeldSend {
 }
 
 /** The settings the next turn goes out with, as the last one did. */
-type HandoffSettings = Pick<
+export type HandoffSettings = Pick<
   ProjectChatSend,
   "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
 >;
@@ -430,12 +464,8 @@ export interface HandoffTarget {
   project?: { id: string; name: string };
   /** Why it can't take the thread; shown in place of the project. */
   problem?: string;
-  /** It lacks the repository but can clone it (`cloneOnComputer`): the repository's owner/name. */
+  /** It lacks the repository but can clone it as the thread goes: the repository's owner/name. */
   clone?: string;
-  /** Its clone of the repository, under way. */
-  cloning?: { step: string; progress: number | null };
-  /** Why the last clone there failed. */
-  cloneError?: string;
 }
 
 /** The thread's handoff as its strip shows it. */
@@ -443,6 +473,8 @@ export interface HandoffView {
   sentTo: ChatSentTo;
   online: boolean;
   remote?: HandoffRemoteStatus;
+  /** Its project's clone on that computer, under way. */
+  cloning?: { step: string; progress: number | null };
 }
 
 export interface ComputersApi {
@@ -464,14 +496,13 @@ export interface ComputersApi {
     computerId: string,
   ): Promise<void>;
   /**
-   * Clones the project on a paired computer that lacks it, or joins the clone
-   * under way; resolves to the project it made there. The targets show how
-   * far it is meanwhile, and its error after.
+   * For a thread whose project an agent is setting up on the computer it's
+   * going to: the folder there that holds a clone, added there as its
+   * project when it does. False when it doesn't hold the repository.
    */
-  cloneOnComputer(
-    computerId: string,
-    projectId: string,
-  ): Promise<{ id: string; name: string }>;
+  setupFolder(chatId: string, folder: string): Promise<boolean>;
+  /** Gives up on the setup a thread waits for there; it stays, and starts, here. */
+  startThreadHere(chatId: string): Promise<void>;
   /** Starts the handoff; the thread's `sentTo` follows it from there. */
   handOffThread(chatId: string, computerId: string): Promise<void>;
   /** Sends a handoff that failed on its way again. */

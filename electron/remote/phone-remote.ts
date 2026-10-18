@@ -243,8 +243,9 @@ export class PhoneRemote {
       (id, bridge) => !this.isComputer(id) && bridge >= draftsBridge,
     );
   }
-  chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
-    if (!this.server.listening) return;
+  chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true }) {
+    // Phones don't show a thread's setup on another computer yet.
+    if (!this.server.listening || event.setup) return;
     this.bridge.chatEvent(event);
     this.host.handoffs?.chatEvent?.(event);
   }

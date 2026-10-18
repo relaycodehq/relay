@@ -14,6 +14,8 @@ export interface ProjectChatEvent {
   chatId: string;
   message: ChatMessage;
   title?: string;
+  /** One of `ProjectChat.setup`'s messages rather than the thread's own. */
+  setup?: true;
 }
 
 /** A project's thread list, as `projectChats` returns it, whenever it reads differently. */

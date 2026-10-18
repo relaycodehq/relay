@@ -10,6 +10,7 @@ import {
   handoffFolderMethods,
   handoffHereOnlyMethods,
   handoffWorktreeMethods,
+  inSetup,
   liveAway,
   handoffMessageSchema,
   handoffMessagesSchema,
@@ -39,7 +40,7 @@ import {
   liveHandoffBridge,
   skillsBridge,
   pastesBridge,
-  type CommandRun,
+  type ComputerProject,
   type HandoffPart,
   type RemoteEvent,
 } from "../../shared/remote";
@@ -113,7 +114,7 @@ export class Handoffs {
   private clones = new Map<
     string,
     {
-      job: Promise<{ id: string; name: string }>;
+      job: Promise<ComputerProject>;
       step: string;
       progress: number | null;
       error?: string;
@@ -133,9 +134,10 @@ export class Handoffs {
       void this.acknowledge(id);
       void this.notifyAbandoned(id);
       void this.follow(id);
+      void this.followSetups(id);
     });
     computers.onOffline((id) => {
-      for (const c of this.liveOn(id))
+      for (const c of [...this.liveOn(id), ...this.setupsOn(id)])
         this.chats.setHandoffLive(c.id, undefined);
     });
     computers.onEvent((id, event) => this.event(id, event));
@@ -149,9 +151,13 @@ export class Handoffs {
     // An agent's own worktree beside the thread's isn't what went across.
     if (!chatId || worktree) return undefined;
     const chat = this.store.get().chats?.find((c) => c.id === chatId);
-    return chat && liveAway(chat) ? chat : undefined;
+    return chat && (liveAway(chat) || inSetup(chat)) ? chat : undefined;
   }
-  /** Whether the call is for a thread live on another computer, so runs there or not at all. */
+  /**
+   * Whether the call is for a thread live on another computer, so runs there
+   * or not at all. One waiting on a setup there talks to the setup's agent;
+   * its folder is still here.
+   */
   forwards(
     method: string,
     args: unknown[],
@@ -162,7 +168,8 @@ export class Handoffs {
       !hereOnly(method)
     )
       return false;
-    return !!this.liveAwayIn(args[0]);
+    const chat = this.liveAwayIn(args[0]);
+    return !!chat && (liveAway(chat) || chatMethods.has(method));
   }
   /**
    * Runs the call on the computer the thread is live on. A send waits here
@@ -179,6 +186,7 @@ export class Handoffs {
     if (!chat) throw new Error("This thread isn't live on another computer.");
     const chatId = chat.id;
     const sentTo = chat.sentTo!;
+    if (inSetup(chat)) return this.toSetup(chat, method, args);
     if (hereOnly(method))
       throw new Error(
         `This thread's files are on ${sentTo.computer}; the copy here is as it left.`,
@@ -214,6 +222,27 @@ export class Handoffs {
       );
     await this.chats.holdHandoffSend(chatId, sentTo.id, send);
     if (online()) void this.flush(chatId);
+  }
+  /** A call for the agent setting the thread's project up on the computer it's going to. */
+  private async toSetup(chat: ChatSummary, method: string, args: unknown[]) {
+    const sentTo = chat.sentTo!;
+    if (this.computers.status(sentTo.computerId) !== "online")
+      throw new Error(
+        `${sentTo.computer} is offline. Answer its setup once it's back.`,
+      );
+    const client = await this.computers.connected(sentTo.computerId);
+    const send =
+      method === "sendProjectChat"
+        ? projectChatSendSchema.parse(args[1])
+        : undefined;
+    return client.call(
+      "handoffCall",
+      sentTo.setup!,
+      method as HandoffMethod,
+      send
+        ? [args[0], await this.sendFor(sentTo.computerId, client, send)]
+        : args,
+    );
   }
   /** Sends what waited for the computer a thread is live on, oldest first. */
   private async flush(chatId: string) {
@@ -332,6 +361,71 @@ export class Handoffs {
       console.warn("Live handoffs couldn't be followed:", e);
     }
   }
+  /** Threads waiting on a setup on the computer, its agent at work there. */
+  private setupsOn(computerId: string) {
+    return (this.store.get().chats ?? []).filter(
+      (c) => c.sentTo?.computerId === computerId && inSetup(c),
+    );
+  }
+  /** Asks the computer to keep the setups under way there up to date here, and for what's missed. */
+  private async followSetups(computerId: string, chatId?: string) {
+    const chats = this.setupsOn(computerId).filter(
+      (c) => !chatId || c.id === chatId,
+    );
+    if (!chats.length) return;
+    try {
+      const client = await this.computers.connected(computerId);
+      await Promise.all(
+        chats.map(async (c) => {
+          const answer = await client.call(
+            "handoffChat",
+            c.sentTo!.setup!,
+            await this.chats.setupHeld(c.id),
+          );
+          const messages = z
+            .array(z.union([z.string(), handoffMessageSchema]))
+            .parse(answer.messages) as (ChatMessage | string)[];
+          await this.chats.setupSynced(c.id, messages);
+          this.chats.setHandoffLive(c.id, answer.live);
+          // It may have finished while this computer wasn't listening.
+          this.checkSetup(c.id);
+        }),
+      );
+    } catch (e) {
+      console.warn("Setups on another computer couldn't be followed:", e);
+    }
+  }
+  /** Looks again whether the setup the thread waits on is done, and hands it off when it is. */
+  private checkSetup(chatId: string) {
+    const sentTo = this.store.get().chats?.find((c) => c.id === chatId)?.sentTo;
+    if (!sentTo?.setup || sentTo.error || this.jobs.has(chatId)) return;
+    this.run(chatId, () => this.send(chatId, sentTo.id, sentTo.computerId));
+  }
+  /** What the agent setting a thread's project up there writes, and how it stands. */
+  private setupEvent(chat: ChatSummary, event: RemoteEvent) {
+    if (event.kind === "handoff") {
+      this.chats.setHandoffLive(chat.id, event.live);
+      return;
+    }
+    if (event.kind === "news") {
+      const news = handoffNewsSchema.safeParse(event.item);
+      if (news.success)
+        this.chats.handoffNews(chat.id, chat.projectId, news.data);
+      return;
+    }
+    if (event.kind !== "message") return;
+    const parsed = handoffMessageSchema.safeParse(event.message);
+    if (!parsed.success)
+      return console.warn("A setup's message didn't read:", parsed.error);
+    const message = parsed.data as ChatMessage;
+    void this.chats
+      .mirrorSetup(chat.id, message)
+      .then(() => {
+        if (message.role === "assistant" && message.status !== "streaming")
+          this.checkSetup(chat.id);
+      })
+      .catch((e) => console.warn("A setup's message wasn't kept:", e));
+  }
   /** What a computer says about the threads live on it. */
   private event(computerId: string, event: RemoteEvent) {
     const handoffId =
@@ -345,7 +439,13 @@ export class Handoffs {
     const chat =
       handoffId &&
       this.liveOn(computerId).find((c) => c.sentTo!.id === handoffId);
-    if (!chat) return;
+    if (!chat) {
+      const setting =
+        handoffId &&
+        this.setupsOn(computerId).find((c) => c.sentTo!.setup === handoffId);
+      if (setting) this.setupEvent(setting, event);
+      return;
+    }
     if (event.kind === "handoff") {
       this.chats.setHandoffLive(chat.id, event.live);
       return;
@@ -466,7 +566,6 @@ export class Handoffs {
           online: true,
           project: { id: match.id, name: match.name },
         };
-      const clone = this.clones.get(`${c.id}/${project!.id}`);
       return {
         ...base,
         online: true,
@@ -474,11 +573,6 @@ export class Handoffs {
         ...((info?.bridge ?? 0) >= cloneBridge
           ? { clone: repositories[0] }
           : {}),
-        ...(clone?.error
-          ? { cloneError: clone.error }
-          : clone
-            ? { cloning: { step: clone.step, progress: clone.progress } }
-            : {}),
       };
     } catch (e) {
       return { ...base, online: false, problem: message(e) };
@@ -489,7 +583,7 @@ export class Handoffs {
    * clone under way; a failed one starts over. The computer clones it into
    * the folder its clones go to and adds it as a project.
    */
-  cloneOn(computerId: string, projectId: string) {
+  private cloneOn(computerId: string, projectId: string) {
     const key = `${computerId}/${projectId}`;
     const running = this.clones.get(key);
     if (running && !running.error) return running.job;
@@ -497,7 +591,11 @@ export class Handoffs {
       step: "Starting",
       progress: null as number | null,
       error: undefined as string | undefined,
-      job: Promise.resolve({ id: "", name: "" }),
+      job: Promise.resolve<ComputerProject>({
+        id: "",
+        name: "",
+        repositories: [],
+      }),
     };
     clone.job = this.clone(computerId, projectId, (step, progress) => {
       clone.step = step;
@@ -533,31 +631,9 @@ export class Handoffs {
           ? new Error(`${name} needs a Relay update to clone projects.`)
           : e;
       });
-      if (answer.done)
-        return { id: answer.project.id, name: answer.project.name };
+      if (answer.done) return answer.project;
       onStep(answer.step, answer.progress);
     }
-  }
-  /** Runs a command on a paired computer, for an agent setting a project up there. */
-  async runOn(
-    computerId: string,
-    command: string,
-    timeoutMs: number,
-  ): Promise<CommandRun> {
-    const client = await this.computers.connected(computerId);
-    return client.call("runCommand", command, timeoutMs).catch((e) => {
-      throw unsupportedCall(e)
-        ? new Error(
-            `${this.nameOf(computerId)} needs a Relay update to run commands.`,
-          )
-        : e;
-    });
-  }
-  /** The paired computers, whether online or not. */
-  paired() {
-    return this.computers
-      .list()
-      .map((c) => ({ id: c.id, name: c.name, online: c.status === "online" }));
   }
   /**
    * Asks each online computer about the threads it has from here, unless
@@ -794,6 +870,8 @@ export class Handoffs {
   async keepHere(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) return;
+    if (sentTo.setup && sentTo.state === "sending")
+      return this.startHere(chatId);
     if (sentTo.state !== "sending" || this.jobs.has(chatId))
       throw new Error(
         `${sentTo.computer} has this thread. Bring it back instead.`,
@@ -829,6 +907,8 @@ export class Handoffs {
       throw new Error(
         `It's being brought back from ${sentTo.computer} right now. If that fails, you can take it back without ${sentTo.computer}.`,
       );
+    if (sentTo.setup)
+      await this.dropSetup(chatId, sentTo.computerId, sentTo.setup);
     if (!(await this.chats.abandonHandoff(chatId, sentTo.id))) return;
     console.info(
       `Handoff ${named(sentTo.id, sentTo.computer)}: taken back without it.`,
@@ -838,14 +918,25 @@ export class Handoffs {
     void this.notifyAbandoned(sentTo.computerId);
   }
   async view(chatId: string): Promise<HandoffView | null> {
-    const sentTo = this.summary(chatId).sentTo;
+    const { sentTo, projectId } = this.summary(chatId);
     if (!sentTo) return null;
     const online = this.computers.status(sentTo.computerId) === "online";
     const remote =
       online && sentTo.state !== "sending"
         ? await this.remote(sentTo).catch(() => undefined)
         : this.statuses.get(sentTo.id)?.status;
-    return { sentTo, online, ...(remote ? { remote } : {}) };
+    const clone =
+      sentTo.state === "sending"
+        ? this.clones.get(`${sentTo.computerId}/${projectId}`)
+        : undefined;
+    return {
+      sentTo,
+      online,
+      ...(remote ? { remote } : {}),
+      ...(clone && !clone.error
+        ? { cloning: { step: clone.step, progress: clone.progress } }
+        : {}),
+    };
   }
   /** The other computer's view of the thread, asked at most every few seconds. */
   private async remote(
@@ -886,27 +977,40 @@ export class Handoffs {
     try {
       if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
-      const { chat, root, tip } = await this.chats.leave(chatId, name);
-      if (!this.onHandoff(chatId, id)) return;
-      const worktree = chat.worktree!;
-      const input = chat.lastInput;
-      if (!input)
-        throw new Error("Send a message before handing the thread off.");
       const client = await this.computers.connected(computerId);
       const info = await this.info(computerId, client, true);
       if (outdated(info))
         throw new Error(
           `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
         );
-      // Nothing answered it here: its first message starts it there.
-      const start =
-        !chat.messages.some((m) => m.role === "assistant") &&
-        info!.bridge >= startHandoffBridge;
-      const repositories = await repositoryNames(root);
+      const repositories = await repositoryNames(
+        await this.projects.root(this.summary(chatId).projectId),
+      );
       if (!repositories.length)
         throw new Error(
           `This project has no Git remote, so ${name} can't find its copy.`,
         );
+      // Until the project is there, the thread stays as it is here.
+      const ready = await this.readied(
+        chatId,
+        id,
+        computerId,
+        client,
+        info!.bridge,
+        repositories,
+      );
+      if (!ready) return;
+      if (!this.onHandoff(chatId, id)) return;
+      const { chat, root, tip } = await this.chats.leave(chatId, name);
+      if (!this.onHandoff(chatId, id)) return;
+      const worktree = chat.worktree!;
+      const input = chat.lastInput;
+      if (!input)
+        throw new Error("Send a message before handing the thread off.");
+      // Nothing answered it here: its first message starts it there.
+      const start =
+        !chat.messages.some((m) => m.role === "assistant") &&
+        info!.bridge >= startHandoffBridge;
       const thread: HandoffThread = {
         from: computerName(),
         repositories,
@@ -981,6 +1085,161 @@ export class Handoffs {
       );
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
     }
+  }
+  /**
+   * Whether the thread's project is on the computer: there already, cloned
+   * now, or set up since by the agent there. When the clone fails, an agent
+   * there sets it up while the thread waits, talking to it, until a later
+   * look finds the project there. One too old to clone says what's missing
+   * as the thread arrives.
+   */
+  private async readied(
+    chatId: string,
+    id: string,
+    computerId: string,
+    client: RemoteClient,
+    bridge: number,
+    repositories: string[],
+  ) {
+    const { projectId, sentTo } = this.summary(chatId);
+    if (sentTo?.setup) {
+      const answer = await client.call(
+        "setupProgress",
+        sentTo.setup,
+        repositories,
+      );
+      if (!answer.done) return false;
+      await this.setupDone(chatId, id, sentTo.setup, answer.project);
+      return true;
+    }
+    const projects = await client.call("computerProjects");
+    if (
+      projects.some((p) => p.repositories.some((r) => repositories.includes(r)))
+    )
+      return true;
+    if (bridge < cloneBridge) return true;
+    const name = this.nameOf(computerId);
+    await this.chats.beginSetup(chatId, name, this.projects.get(projectId).name);
+    let failed: string;
+    try {
+      const made = await this.cloneOn(computerId, projectId);
+      await this.chats.updateSetup(chatId, {
+        state: "done",
+        ended: Date.now(),
+        project: made.name,
+        ...(made.folder ? { folder: made.folder } : {}),
+      });
+      return true;
+    } catch (e) {
+      failed = message(e);
+    }
+    const url = await cloneUrl(await this.projects.root(projectId));
+    const input = (await this.chats.get(chatId)).lastInput;
+    if (!url || !input) {
+      await this.chats.updateSetup(chatId, {
+        state: "dropped",
+        ended: Date.now(),
+        error: failed,
+      });
+      throw new Error(failed);
+    }
+    const setup = randomUUID();
+    await client.call("setupProject", setup, {
+      url,
+      repositories,
+      error: failed,
+      settings: {
+        provider: sentAgent(input),
+        choice: input.choice,
+        runtimeMode: input.runtimeMode,
+        interactionMode: input.interactionMode,
+        ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
+      },
+    });
+    await this.chats.updateSetup(chatId, { state: "agent", error: failed });
+    await this.chats.updateSentTo(chatId, id, { setup });
+    console.info(
+      `Handoff ${named(id, name)}: its clone failed, an agent there sets it up.`,
+    );
+    void this.followSetups(computerId, chatId);
+    return false;
+  }
+  /** The setup's agent got the project there: the thread goes on, and its thread there settles. */
+  private async setupDone(
+    chatId: string,
+    id: string,
+    setup: string,
+    project: ComputerProject,
+  ) {
+    const { computerId } = this.summary(chatId).sentTo!;
+    await this.chats.updateSetup(chatId, {
+      state: "done",
+      ended: Date.now(),
+      project: project.name,
+      ...(project.folder ? { folder: project.folder } : {}),
+    });
+    await this.chats.updateSentTo(chatId, id, { setup: undefined });
+    this.chats.setHandoffLive(chatId, undefined);
+    void this.computers
+      .connected(computerId)
+      .then((client) => client.call("handedBack", setup))
+      .catch((e) => console.warn("A finished setup wasn't settled there:", e));
+  }
+  /**
+   * The folder on the computer a waiting thread's setup is for that holds
+   * the project's clone: added there, and the handoff goes on. False when
+   * it holds no clone of it.
+   */
+  async setupFolder(chatId: string, folder: string) {
+    const sentTo = this.summary(chatId).sentTo;
+    if (!sentTo?.setup || sentTo.state !== "sending")
+      throw new Error("This thread isn't waiting on a setup.");
+    const client = await this.computers.connected(sentTo.computerId);
+    const repositories = await repositoryNames(
+      await this.projects.root(this.summary(chatId).projectId),
+    );
+    const answer = await client.call(
+      "setupProgress",
+      sentTo.setup,
+      repositories,
+      folder,
+    );
+    if (!answer.done) return false;
+    if (sentTo.error)
+      await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
+    this.checkSetup(chatId);
+    return true;
+  }
+  /**
+   * Gives up on the computer whose setup the thread waits for: the agent
+   * there is told, and the thread stays here, its first message answered
+   * here when nothing answered it yet.
+   */
+  async startHere(chatId: string) {
+    await this.jobs.get(chatId);
+    const sentTo = this.summary(chatId).sentTo;
+    if (!sentTo?.setup || sentTo.state !== "sending")
+      throw new Error(
+        sentTo
+          ? `It's on ${sentTo.computer} now. Bring it back instead.`
+          : "This thread is here already.",
+      );
+    await this.dropSetup(chatId, sentTo.computerId, sentTo.setup);
+    await this.chats.updateSentTo(chatId, sentTo.id, null);
+    console.info(
+      `Handoff ${named(sentTo.id, sentTo.computer)}: stays here instead of its setup there.`,
+    );
+    await this.chats.answerHere(chatId);
+  }
+  /** The setup's agent there is let go, even across a restart. */
+  private async dropSetup(chatId: string, computerId: string, setup: string) {
+    await this.chats.updateSetup(chatId, {
+      state: "dropped",
+      ended: Date.now(),
+    });
+    this.chats.setHandoffLive(chatId, undefined);
+    await this.saveAbandoned(computerId, setup);
+    void this.notifyAbandoned(computerId);
   }
   private nameOf(computerId: string) {
     try {

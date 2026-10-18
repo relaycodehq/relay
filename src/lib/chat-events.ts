@@ -43,6 +43,12 @@ export function followChatEvents(qc: QueryClient) {
   });
   const messages = api.onProjectChat((e) => {
     const key = chatKey(e.chatId);
+    if (e.setup) {
+      const held = qc.getQueryData<ProjectChat>(key);
+      const next = held && withSetupMessage(held, e.message);
+      if (next && next !== held) qc.setQueryData(key, next);
+      return;
+    }
     // A thread that isn't open isn't fetched; it refetches as it opens.
     const held = qc.getQueryData<ProjectChat>(key);
     const known = held?.messages.some((m) => m.id === e.message.id);
@@ -82,6 +88,22 @@ export async function fetchChat(
       return pushed && pushed.version > m.version ? pushed : m;
     }),
   };
+}
+
+/** `chat` with `message` among its setup's, unless it holds that version or a newer one. */
+function withSetupMessage(
+  chat: ProjectChat,
+  message: ChatMessage,
+): ProjectChat {
+  const { setup } = chat;
+  if (!setup) return chat;
+  const index = setup.messages.findIndex((m) => m.id === message.id);
+  if (index >= 0 && setup.messages[index].version >= message.version)
+    return chat;
+  const messages = [...setup.messages];
+  if (index >= 0) messages[index] = message;
+  else messages.push(message);
+  return { ...chat, setup: { ...setup, messages } };
 }
 
 /** `chat` with `message` in it, unless it holds that version or a newer one. */

@@ -20,10 +20,10 @@ import {
   type ChatMessage,
 } from "../../shared/projects";
 import {
-  maxCommandMs,
   remoteBridgeVersion,
   type ComputerMethod,
   type ComputerProject,
+  type SetupRequest,
 } from "../../shared/remote";
 import type { ApiMethod } from "../../shared/types";
 import type { NewsItem } from "../../shared/thread-news";
@@ -42,7 +42,8 @@ import {
   repositoryNames,
 } from "../git/bundles";
 import { LiveFeed, type FeedLink } from "./live-feed";
-import { CloneRequests, runCommand, type CloneHost } from "./remote-setup";
+import { CloneRequests, type CloneHost } from "./remote-setup";
+import { SetupAgents } from "./setup-agent";
 import { readPaste, writePasteChunk } from "../drafts";
 
 const folderMethods = new Set<string>(handoffFolderMethods);
@@ -57,19 +58,29 @@ const branchSchema = z
   .string()
   .max(250)
   .refine((b) => !branchNameProblem(b));
+const repositoriesSchema = z.array(z.string().max(300)).min(1).max(20);
+const settingsSchema = projectChatSendSchema.pick({
+  provider: true,
+  choice: true,
+  runtimeMode: true,
+  interactionMode: true,
+  contextWindow: true,
+});
+const setupRequestSchema = z
+  .object({
+    url: z.string().trim().min(1).max(2000),
+    repositories: repositoriesSchema,
+    error: z.string().max(8000),
+    settings: settingsSchema,
+  })
+  .strict();
 const threadSchema = z
   .object({
     from: z.string().trim().min(1).max(80),
-    repositories: z.array(z.string().max(300)).min(1).max(20),
+    repositories: repositoriesSchema,
     title: z.string().max(200),
     scope: chatScopeSchema,
-    settings: projectChatSendSchema.pick({
-      provider: true,
-      choice: true,
-      runtimeMode: true,
-      interactionMode: true,
-      contextWindow: true,
-    }),
+    settings: settingsSchema,
     messages: handoffMessagesSchema,
     git: z
       .object({
@@ -99,7 +110,9 @@ export interface ReceiverHost {
   /** Runs an Api call, as the window would; a live handoff's calls go through it. */
   dispatch?(method: ApiMethod, args: unknown[]): Promise<unknown>;
   /** Clones a paired computer asks for, as the add-project palette makes them. */
-  adding?: Omit<CloneHost, "repositories">;
+  adding?: Omit<CloneHost, "repositories"> & {
+    addAt(path: string): Promise<import("../../shared/projects").Project>;
+  };
   /** Its updater, which a paired computer may set going. */
   updates?: {
     state(): UpdateState;
@@ -124,14 +137,26 @@ export class HandoffReceiver {
   >();
   private feed: LiveFeed;
   private clones?: CloneRequests;
+  private setups?: SetupAgents;
   constructor(private host: ReceiverHost) {
     this.feed = new LiveFeed(host.chats);
-    const adding = host.adding;
-    if (adding)
-      this.clones = new CloneRequests({
+    const { adding, dispatch } = host;
+    if (!adding) return;
+    this.clones = new CloneRequests({
+      defaultFolder: () => adding.defaultFolder(),
+      clone: (url, into, onStep) => adding.clone(url, into, onStep),
+      repositories: (p) => host.root(p.id).then(repositoryNames),
+    });
+    if (dispatch)
+      this.setups = new SetupAgents({
+        handedOver: (id) => host.chats.handedOver(id),
+        adoptSetup: (projectId, title, cameFrom, input) =>
+          host.chats.adoptSetup(projectId, title, cameFrom, input),
+        scratch: () =>
+          dispatch("createScratch", []) as Promise<{ id: string }>,
         defaultFolder: () => adding.defaultFolder(),
-        clone: (url, into, onStep) => adding.clone(url, into, onStep),
-        repositories: (p) => host.root(p.id).then(repositoryNames),
+        addAt: (path) => adding.addAt(path),
+        projects: () => this.projects(),
       });
   }
   /** How the computers threads came from are reached; the phone remote's server. */
@@ -192,12 +217,24 @@ export class HandoffReceiver {
         const url = z.string().trim().min(1).max(2000).parse(args[0]);
         return this.clones.ask(url, device.name);
       }
-      case "runCommand":
-        return runCommand(
-          z.string().min(1).max(8000).parse(args[0]),
-          z.number().int().min(1000).max(maxCommandMs).parse(args[1]),
-          device.name,
+      case "setupProject": {
+        if (!this.setups) throw new Error("This Relay can't set projects up.");
+        return this.setups.start(
+          idSchema.parse(args[0]),
+          setupRequestSchema.parse(args[1]) as SetupRequest,
+          device,
         );
+      }
+      case "setupProgress": {
+        if (!this.setups) throw new Error("This Relay can't set projects up.");
+        this.mine(idSchema.parse(args[0]), device.id);
+        return this.setups.progress(
+          repositoriesSchema.parse(args[1]),
+          args[2] == null
+            ? undefined
+            : z.string().trim().min(1).max(4096).parse(args[2]),
+        );
+      }
       case "handoffUpload":
         return this.upload(
           idSchema.parse(args[0]),

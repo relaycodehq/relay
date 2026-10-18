@@ -1,0 +1,21 @@
+/* The setup's own thread on the other computer, set off like a handoff note
+   but at full size: it's a conversation you answer, not a note you read. */
+.setup-phase {
+  margin: 2px 0 10px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.setup-phase .project-message {
+  margin-left: 0;
+}
+.setup-phase .setup-asked {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.thread-setup-held {
+  margin: -6px 0 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: right;
+}

@@ -1,19 +1,13 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ChevronDown, Folder, FolderGit2 } from "lucide-react";
+import { ChevronDown, Folder, FolderGit2 } from "lucide-react";
 import type { ChatWorkspace, Project } from "../../../shared/projects";
 import type { HandoffTarget } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { DeviceIcon } from "../handoff/DeviceIcon";
-import {
-  canPick,
-  cloneSetupPrompt,
-  targetLine,
-  useCloneThere,
-  whileCloning,
-} from "../handoff/clone-there";
+import { canPick, targetLine } from "../handoff/clone-there";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
@@ -29,20 +23,16 @@ const workspaces: Record<
 
 /**
  * Before a thread's first message: where it will work. A paired computer
- * is a third answer, the thread starting there in a worktree of its own;
- * one without the project clones it first, and when that fails, an agent
- * in a new thread here can set it up.
+ * is a third answer, the thread starting there in a worktree of its own.
  */
 export function NewWorkspacePicker({
   project,
   worktree,
   disabled,
-  onStartThread,
 }: {
   project: Project;
   worktree: ThreadWorktree;
   disabled?: boolean;
-  onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const computers = useQuery({
@@ -50,15 +40,12 @@ export function NewWorkspacePicker({
     queryFn: () => api.pairedComputers(),
     staleTime: 10_000,
   });
-  const targetsKey = ["start-targets", project.id];
   const targets = useQuery({
-    queryKey: targetsKey,
+    queryKey: ["start-targets", project.id],
     queryFn: () => api.startTargets(project.id),
     enabled: open && !!computers.data?.length,
     staleTime: 5_000,
-    refetchInterval: (q) => whileCloning(q.state.data),
   });
-  const cloneThere = useCloneThere(project.id, targetsKey);
   const { startOn, setStartOn } = worktree;
   const Icon = workspaces[worktree.workspace].icon;
   return (
@@ -120,50 +107,23 @@ export function NewWorkspacePicker({
                   </Menu.GroupLabel>
                   {(targets.data ?? computers.data).map((c) => {
                     const target: Partial<HandoffTarget> = c;
-                    const pick = () => {
-                      setStartOn({ id: c.id, name: c.name });
-                      setOpen(false);
-                    };
                     return (
-                      <Fragment key={c.id}>
-                        <Menu.Item
-                          className="composer-select-item handoff-target"
-                          disabled={!targets.data || !canPick(target)}
-                          // A clone keeps the menu open to show how far it is.
-                          closeOnClick={!!target.project}
-                          onClick={() =>
-                            target.project
-                              ? pick()
-                              : cloneThere(c as HandoffTarget, pick)
-                          }
-                        >
-                          <DeviceIcon name={c.name} size={16} />
-                          <span className="handoff-target-text">
-                            <span>{c.name}</span>
-                            <small title={target.cloneError}>
-                              {!targets.data
-                                ? "Checking…"
-                                : targetLine(target, "Starts")}
-                            </small>
-                          </span>
-                        </Menu.Item>
-                        {target.cloneError && onStartThread && (
-                          <Menu.Item
-                            className="composer-select-item handoff-target handoff-setup"
-                            onClick={() =>
-                              void onStartThread(
-                                cloneSetupPrompt(c as HandoffTarget),
-                                false,
-                              )
-                            }
-                          >
-                            <Bot size={14} />
-                            <span className="handoff-target-text">
-                              <span>Let an agent set it up…</span>
-                            </span>
-                          </Menu.Item>
-                        )}
-                      </Fragment>
+                      <Menu.Item
+                        key={c.id}
+                        className="composer-select-item handoff-target"
+                        disabled={!targets.data || !canPick(target)}
+                        onClick={() => setStartOn({ id: c.id, name: c.name })}
+                      >
+                        <DeviceIcon name={c.name} size={16} />
+                        <span className="handoff-target-text">
+                          <span>{c.name}</span>
+                          <small>
+                            {!targets.data
+                              ? "Checking…"
+                              : targetLine(target, "Starts")}
+                          </small>
+                        </span>
+                      </Menu.Item>
                     );
                   })}
                 </Menu.Group>

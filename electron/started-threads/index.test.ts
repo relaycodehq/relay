@@ -1371,9 +1371,6 @@ test("handing off always asks; the thread then says where it runs, and sends and
       delete chats.get(id)!.sentTo;
     },
     finished: async () => undefined,
-    paired: () => [],
-    cloneOn: async () => ({ id: "", name: "" }),
-    runOn: async () => ({ code: 0, output: "", timedOut: false }),
   };
   const threads = new StartedThreads(api, { handoffs });
   const [child] = parse(
@@ -1442,9 +1439,6 @@ test("a handoff names the computers when it can't pick one", async () => {
     handOff: async () => undefined,
     bringBack: async () => undefined,
     finished: async () => undefined,
-    paired: () => [],
-    cloneOn: async () => ({ id: "", name: "" }),
-    runOn: async () => ({ code: 0, output: "", timedOut: false }),
   };
   const threads = new StartedThreads(api, { handoffs });
   const [child] = parse(

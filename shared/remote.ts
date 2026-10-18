@@ -7,6 +7,7 @@ import type {
   HandoffMethod,
   HandoffLive,
   HandoffRemoteStatus,
+  HandoffSettings,
 } from "./handoff";
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
@@ -270,8 +271,8 @@ export const skillsBridge = 21;
  */
 export const tunnelBridge = 23;
 /**
- * From here a paired computer clones a project it lacks (`cloneProject`) and
- * runs a command for an agent setting one up (`runCommand`).
+ * From here a paired computer clones a project it lacks (`cloneProject`) and,
+ * when that fails, has an agent here set it up (`setupProject`).
  */
 export const cloneBridge = 25;
 
@@ -591,8 +592,23 @@ export interface RemoteApi {
    * it is, so the caller asks again until it's done. From `cloneBridge`.
    */
   cloneProject(url: string): Promise<CloneProgress>;
-  /** Runs a shell command here and waits for it; from `cloneBridge`. */
-  runCommand(command: string, timeoutMs: number): Promise<CommandRun>;
+  /**
+   * Starts an agent here, in a Scratchpad thread of its own, that gets the
+   * repository cloned and added where the clone failed; the same id again
+   * changes nothing. The thread follows like a live handoff's, by this id
+   * (`handoffChat`, `handoffCall`, `handedBack`, `handoffAbandoned`). From
+   * `cloneBridge`.
+   */
+  setupProject(id: string, request: SetupRequest): Promise<void>;
+  /**
+   * The project, once a project here has one of `repositories`. Given a
+   * `folder` the user says holds a clone, adds it first when it does.
+   */
+  setupProgress(
+    id: string,
+    repositories: string[],
+    folder?: string,
+  ): Promise<{ done: false } | { done: true; project: ComputerProject }>;
   /** A saved paste, uploaded in chunks; returns its path on this computer. */
   uploadPaste(
     id: string,
@@ -648,20 +664,22 @@ export interface ComputerProject {
   id: string;
   name: string;
   repositories: string[];
+  /** Its folder, from the home folder as `~`; with a project just made there. */
+  folder?: string;
 }
 /** A clone `cloneProject` started: still going, or the project it made. */
 export type CloneProgress =
   | { done: false; step: string; progress: number | null }
   | { done: true; project: ComputerProject };
-/** A command `runCommand` ran: its exit code, null when it was stopped. */
-export interface CommandRun {
-  code: number | null;
-  /** The end of what it wrote, stdout and stderr together. */
-  output: string;
-  timedOut: boolean;
+/** What a computer's setup agent is to clone, and why Relay's own clone didn't. */
+export interface SetupRequest {
+  url: string;
+  repositories: string[];
+  /** What git said when the clone failed. */
+  error: string;
+  /** The agent and how it runs, as the thread it's for runs. */
+  settings: HandoffSettings;
 }
-/** The longest a command may run, inside the call's own two minutes. */
-export const maxCommandMs = 100_000;
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
   "overview",
@@ -687,7 +705,8 @@ export const remoteMethods = [
   "uploadPaste",
   "downloadPaste",
   "cloneProject",
-  "runCommand",
+  "setupProject",
+  "setupProgress",
   "handoffUpload",
   "receiveHandoff",
   "handoffStatus",
@@ -706,7 +725,8 @@ export const computerMethods = [
   "downloadPaste",
   "computerProjects",
   "cloneProject",
-  "runCommand",
+  "setupProject",
+  "setupProgress",
   "handoffUpload",
   "receiveHandoff",
   "handoffStatus",
@@ -738,7 +758,6 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
   "handBack",
   "handoffUpload",
   "handoffDownload",
-  "runCommand",
 ];
 
 /**
