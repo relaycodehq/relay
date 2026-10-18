@@ -151,9 +151,9 @@ export function useComposerDraft(
       offTaken();
     };
   }, [key]);
-  // Screenshots pasted while others are still being prepared wait their turn,
-  // so each batch counts the ones before it.
-  function queueImages(attach: () => Promise<void>) {
+  // Attachments wait their turn so each batch counts the ones before it,
+  // and Send waits until everything pasted has landed in the draft.
+  function queuePreparation(attach: () => Promise<void>) {
     batches.current++;
     setPreparing(true);
     setError(undefined);
@@ -163,7 +163,8 @@ export function useComposerDraft(
   }
   function addImages(files: File[], point?: Point) {
     const arriving = files.map((file) => ({ file }));
-    if (arriving.length) queueImages(() => attachImages(arriving, { point }));
+    if (arriving.length)
+      queuePreparation(() => attachImages(arriving, { point }));
   }
   /**
    * Screenshots arrive as files, each getting a pill where the pointer is or
@@ -369,10 +370,12 @@ export function useComposerDraft(
     /** Pasted text the message can't hold goes in as a file. */
     pasteRefused: (text: string) => {
       const pasted = cleanPaste(text);
-      if (pasted) void spillPaste(pasted);
+      if (pasted) queuePreparation(() => spillPaste(pasted));
     },
-    /** A screenshot is being prepared; the message waits for it. */
+    /** An attachment is being prepared; the message waits for it. */
     preparing,
+    /** Also catches a send in the same event turn, before React rerenders. */
+    isPreparing: () => batches.current > 0,
     /** The screenshot being drawn on. */
     sketching,
     sketch: setSketching,
@@ -435,7 +438,7 @@ export function useComposerDraft(
         event.preventDefault();
         event.stopPropagation();
         const text = cleanPaste(event.clipboardData.getData("text/plain"));
-        queueImages(() => attachImages(copied, { text }));
+        queuePreparation(() => attachImages(copied, { text }));
         return;
       }
       const files = event.clipboardData.files.length
@@ -464,7 +467,7 @@ export function useComposerDraft(
       event.preventDefault();
       event.stopPropagation();
       if (!huge && editor.current?.insertPaste(pasted)) setError(undefined);
-      else void spillPaste(pasted);
+      else queuePreparation(() => spillPaste(pasted));
     },
     drop(event: DragEvent) {
       const image = droppedImage(event.dataTransfer);

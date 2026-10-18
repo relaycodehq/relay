@@ -43,6 +43,7 @@ import {
 } from "../git/bundles";
 import { LiveFeed, type FeedLink } from "./live-feed";
 import { CloneRequests, runCommand, type CloneHost } from "./remote-setup";
+import { readPaste, writePasteChunk } from "../drafts";
 
 const folderMethods = new Set<string>(handoffFolderMethods);
 const partSchema = z.enum(["thread", "bundle"]);
@@ -91,6 +92,8 @@ export interface ReceiverHost {
   worktrees: string;
   /** Scratch space for uploads and downloads, a folder per handoff. */
   dir: string;
+  /** The managed paste folder; defaults to this process's configured store. */
+  pastes?: string;
   /** This Relay's version. */
   version(): string;
   /** Runs an Api call, as the window would; a live handoff's calls go through it. */
@@ -157,6 +160,31 @@ export class HandoffReceiver {
     device: { id: string; name: string },
   ): Promise<unknown> {
     switch (method) {
+      case "uploadPaste":
+        return writePasteChunk(
+          idSchema.parse(args[0]),
+          z.number().int().min(1).max(999).parse(args[1]),
+          z
+            .number()
+            .int()
+            .min(0)
+            .max(200 * 1024 * 1024)
+            .parse(args[2]),
+          Buffer.from(base64.parse(args[3]), "base64"),
+          this.host.pastes,
+        );
+      case "downloadPaste":
+        return readPaste(
+          z.string().max(32768).parse(args[0]),
+          z
+            .number()
+            .int()
+            .min(0)
+            .max(200 * 1024 * 1024)
+            .parse(args[1]),
+          handoffChunk,
+          this.host.pastes,
+        );
       case "computerProjects":
         return this.projects();
       case "cloneProject": {

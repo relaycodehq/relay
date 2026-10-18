@@ -27,6 +27,7 @@ it("preserves Send later when the draft starts with /btw", async () => {
         attached: [],
         images: [],
         preparing: false,
+        isPreparing: () => false,
         take: () => outgoing,
       } as never,
       state: {} as never,
@@ -86,3 +87,33 @@ it("sends a meme's line once while the first send is on its way", async () => {
   expect(await next).toBe(true);
   expect(onSend).toHaveBeenCalledTimes(2);
 });
+
+it.each(["Read this", "/btw Read this"])(
+  "blocks sending %s while a paste is saving, before rerender",
+  async (text) => {
+    const onSend = vi.fn();
+    const take = vi.fn();
+    const sending = mount(() =>
+      useComposerSend({
+        draft: {
+          text,
+          attached: [],
+          images: [],
+          preparing: false,
+          isPreparing: () => true,
+          take,
+        } as never,
+        state: {} as never,
+        runs: { codex: true } as never,
+        to: "codex",
+        conversation: { busy: false, running: false },
+        complete: false,
+        intercept: () => false,
+        onSend,
+      }),
+    );
+    await sending().send();
+    expect(take).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+  },
+);

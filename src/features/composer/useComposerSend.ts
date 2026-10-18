@@ -76,6 +76,7 @@ export function useComposerSend({
     after?: () => void,
     compact?: boolean,
   ) {
+    if (draft.isPreparing()) return;
     const now = dictationSnapshot();
     if (now.owner === dictation && now.phase !== "idle") {
       void stopDictation().then((finished) => {

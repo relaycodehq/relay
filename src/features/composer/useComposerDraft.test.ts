@@ -520,10 +520,48 @@ it("names the saved paste in the draft it was pasted in, once another thread sho
   const draft = mount(() => useComposerDraft(key, editor));
   await settle();
   draft().pasteRefused("x".repeat(40_000));
+  await flush();
   key = "chat-draft:t2";
   rerender();
   finish("/data/pastes/y/pasted-text.txt");
   await settle();
   expect(insertFiles).not.toHaveBeenCalled();
   expect(readDraft(KEY)).toBe("Look `/data/pastes/y/pasted-text.txt`");
+});
+
+it("keeps Send blocked until queued paste files land, and recovers after a failed save", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { readDraft, writeDraft } = await import("./drafts");
+  let finish!: (path: string) => void;
+  savePaste.mockImplementationOnce(
+    () => new Promise<string>((resolve) => (finish = resolve)),
+  );
+  const insertFiles = vi.fn((paths: string[]) => {
+    writeDraft(KEY, `${readDraft(KEY)} \`${paths[0]}\``);
+  });
+  const editor = {
+    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  draft().pasteRefused("first log");
+  expect(draft().isPreparing()).toBe(true);
+  draft().pasteRefused("second log");
+  await settle();
+  expect(draft().preparing).toBe(true);
+  expect(savePaste).toHaveBeenCalledTimes(1);
+  finish("/data/pastes/a/pasted-text.txt");
+  await settle();
+  expect(savePaste).toHaveBeenLastCalledWith("second log", 2);
+  expect(draft().preparing).toBe(false);
+  expect(draft().isPreparing()).toBe(false);
+  savePaste.mockRejectedValueOnce(new Error("disk full"));
+  draft().pasteRefused("third log");
+  await settle();
+  expect(draft().error).toContain("disk full");
+  expect(draft().isPreparing()).toBe(false);
+  draft().pasteRefused("retry");
+  await settle();
+  expect(draft().error).toBeUndefined();
+  expect(insertFiles).toHaveBeenCalledTimes(3);
 });

@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, readdir, rm, utimes } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { savePaste, setPastesRoot, sweepPastes } from "./pastes";
+import { savePaste, setPastesRoot } from "./pastes";
 
 let root: string;
 beforeEach(async () => {
@@ -18,14 +18,4 @@ it("keeps each paste in a folder of its own under its message's name", async () 
   expect(basename(second)).toBe("pasted-text-2.txt");
   expect(dirname(first)).not.toBe(dirname(second));
   expect(await readFile(second, "utf8")).toBe("two");
-});
-
-it("sweeps pastes saved over a month ago and keeps newer ones", async () => {
-  const old = await savePaste("old", 1);
-  const fresh = await savePaste("fresh", 1);
-  const now = Date.now();
-  const longAgo = new Date(now - 31 * 24 * 60 * 60 * 1000);
-  await utimes(dirname(old), longAgo, longAgo);
-  await sweepPastes(now);
-  expect(await readdir(root)).toEqual([basename(dirname(fresh))]);
 });

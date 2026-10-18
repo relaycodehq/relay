@@ -18,6 +18,7 @@ import { ProjectChats } from "../project-chats";
 import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
 import { ProjectAdding } from "../project-add";
+import { savePaste, setPastesRoot } from "../drafts";
 import type { ChatMessage } from "../../shared/projects";
 import type { NewsItem } from "../../shared/thread-news";
 
@@ -152,6 +153,7 @@ async function pairedComputers() {
         chats: mini.chats,
         worktrees: join(mini.dir, "worktrees"),
         dir: join(mini.dir, "handoffs"),
+        pastes: join(mini.dir, "pastes"),
         version: () => "0.9.0",
         updates: updater,
         adding: new ProjectAdding({
@@ -857,16 +859,28 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
 
   const told: NewsItem[] = [];
   laptop.chats.onNews((item) => told.push(item));
-  const more = input("@codex One more thing");
+  setPastesRoot(join(laptop.dir, "pastes"));
+  const paste = await savePaste("A large log\n".repeat(4000), 1);
+  const more = input(`@codex One more thing: \`${paste}\``);
   expect(sender.forwards("sendProjectChat", [thread.id, more])).toBe(true);
   expect(sender.forwards("renameProjectChat", [thread.id, "x"])).toBe(false);
   await sender.forward("sendProjectChat", [thread.id, more]);
   await finished(mini.chats, there);
   expect((await prompts()).at(-1)).toContain("One more thing");
+  const remotePaste = (await mini.chats.get(there)).messages
+    .find((m) => m.id === more.id)!
+    .body.match(/`([^`]+)`/)![1]!;
+  expect(remotePaste.startsWith(join(mini.dir, "pastes"))).toBe(true);
+  expect(await readFile(remotePaste, "utf8")).toBe(
+    await readFile(paste, "utf8"),
+  );
   await finished(laptop.chats, thread.id);
   await vi.waitFor(async () =>
     expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
-      await writtenThere(mini, there),
+      (await writtenThere(mini, there)).map((m) => ({
+        ...m,
+        body: m.body.replaceAll(remotePaste, paste),
+      })),
     ),
   );
   // Its answer finished there; the sounds here hear of it, by this thread.
@@ -1132,7 +1146,9 @@ it("holds what's sent while a live thread's computer is away, and sends it once 
   const { laptop, mini, sender, computers, thread, kept, there } =
     await liveThread();
   computers.close();
-  const later = input("@codex Sent while apart");
+  setPastesRoot(join(laptop.dir, "pastes"));
+  const paste = await savePaste("offline log\n".repeat(4000), 1);
+  const later = input(`@codex Sent while apart: \`${paste}\``);
   await sender.forward("sendProjectChat", [thread.id, later]);
   expect((await laptop.chats.get(thread.id)).outbox).toMatchObject([
     { input: { id: later.id } },
@@ -1160,10 +1176,20 @@ it("holds what's sent while a live thread's computer is away, and sends it once 
     ).toHaveLength(1),
   );
   await finished(mini.chats, there);
+  const remotePaste = (await mini.chats.get(there)).messages
+    .find((m) => m.id === later.id)!
+    .body.match(/`([^`]+)`/)![1]!;
+  expect(remotePaste.startsWith(join(mini.dir, "pastes"))).toBe(true);
+  expect(await readFile(remotePaste, "utf8")).toBe(
+    await readFile(paste, "utf8"),
+  );
   await vi.waitFor(async () => {
     expect((await laptop.chats.get(thread.id)).outbox).toBeUndefined();
     expect(await mirrored(laptop.chats, thread.id, kept)).toEqual(
-      await writtenThere(mini, there),
+      (await writtenThere(mini, there)).map((m) => ({
+        ...m,
+        body: m.body.replaceAll(remotePaste, paste),
+      })),
     );
   });
 });

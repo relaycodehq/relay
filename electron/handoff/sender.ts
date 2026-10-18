@@ -38,6 +38,7 @@ import {
   startHandoffBridge,
   liveHandoffBridge,
   skillsBridge,
+  pastesBridge,
   type CommandRun,
   type HandoffPart,
   type RemoteEvent,
@@ -48,6 +49,7 @@ import { parseWorkspaceId } from "../../shared/workspaces";
 import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
 import { portableMessages } from "../project-chats/handoff";
+import { receivePastes, sendPastes } from "./pastes";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { computerName, type Computers } from "./computers";
@@ -96,6 +98,8 @@ const handoffNewsSchema = z.object({
  */
 export class Handoffs {
   private jobs = new Map<string, Promise<void>>();
+  /** Attachment downloads must not let a later message overtake an earlier one. */
+  private mirrors = new Map<string, Promise<void>>();
   /** Threads whose waiting sends are going out now. */
   private flushing = new Set<string>();
   private telling: Promise<unknown> = Promise.resolve();
@@ -309,7 +313,17 @@ export class Handoffs {
           const messages = z
             .array(z.union([z.string(), handoffMessageSchema]))
             .parse(answer.messages) as (ChatMessage | string)[];
-          await this.chats.handoffSynced(c.id, id, messages);
+          const carried = await this.receivePastes(
+            computerId,
+            client,
+            messages.filter((m): m is ChatMessage => typeof m !== "string"),
+          );
+          let next = 0;
+          await this.chats.handoffSynced(
+            c.id,
+            id,
+            messages.map((m) => (typeof m === "string" ? m : carried[next++]!)),
+          );
           this.chats.setHandoffLive(c.id, answer.live);
           void this.flush(c.id);
         }),
@@ -351,9 +365,20 @@ export class Handoffs {
         "A live handoff's message didn't read:",
         parsed.error,
       );
-    void this.chats
-      .mirrorHandoff(chat.id, handoffId, parsed.data as ChatMessage)
-      .catch((e) => console.warn("A live handoff's message wasn't kept:", e));
+    const prior = this.mirrors.get(chat.id) ?? Promise.resolve();
+    const copying = prior
+      .then(async () => {
+        const client = await this.computers.connected(computerId);
+        const [message] = await this.receivePastes(computerId, client, [
+          parsed.data as ChatMessage,
+        ]);
+        await this.chats.mirrorHandoff(chat.id, handoffId, message!);
+      })
+      .catch((e) => console.warn("A live handoff's message wasn't kept:", e))
+      .finally(() => {
+        if (this.mirrors.get(chat.id) === copying) this.mirrors.delete(chat.id);
+      });
+    this.mirrors.set(chat.id, copying);
   }
   private summary(chatId: string): ChatSummary {
     const chat = this.store.get().chats?.find((c) => c.id === chatId);
@@ -670,11 +695,23 @@ export class Handoffs {
     client: RemoteClient,
     send: ProjectChatSend,
   ) {
-    if (!send.skills) return send;
     const info = await this.info(computerId, client).catch(() => null);
-    if ((info?.bridge ?? 0) >= skillsBridge) return send;
-    const { skills: _, ...older } = send;
+    const [carried] = await sendPastes(
+      [send],
+      client,
+      (info?.bridge ?? 0) >= pastesBridge,
+    );
+    if (!send.skills || (info?.bridge ?? 0) >= skillsBridge) return carried!;
+    const { skills: _, ...older } = carried!;
     return older;
+  }
+  private async receivePastes(
+    computerId: string,
+    client: RemoteClient,
+    messages: ChatMessage[],
+  ) {
+    const info = await this.info(computerId, client);
+    return receivePastes(messages, client, (info?.bridge ?? 0) >= pastesBridge);
   }
   private async info(computerId: string, client: RemoteClient, fresh = false) {
     const cached = this.infos.get(computerId);
@@ -877,7 +914,11 @@ export class Handoffs {
             ? { contextWindow: input.contextWindow }
             : {}),
         },
-        messages: portableMessages(chat.messages),
+        messages: await sendPastes(
+          portableMessages(chat.messages),
+          client,
+          info!.bridge >= pastesBridge,
+        ),
         git: {
           branch: worktree.branch!,
           tip,
@@ -960,9 +1001,13 @@ export class Handoffs {
       await mkdir(folder, { recursive: true, mode: 0o700 });
       const json = join(folder, "thread");
       await download(client, id, "thread", back.thread, json);
-      const messages = readReturned(
-        await readFile(json, "utf8"),
-        this.computers.get(computerId).name,
+      const messages = await this.receivePastes(
+        computerId,
+        client,
+        readReturned(
+          await readFile(json, "utf8"),
+          this.computers.get(computerId).name,
+        ),
       );
       if (back.bundle) {
         const bundle = join(folder, "bundle");

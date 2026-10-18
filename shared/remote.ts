@@ -170,7 +170,9 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 25;
+export const remoteBridgeVersion = 26;
+/** From here computers carry saved paste files along with sends and handoffs. */
+export const pastesBridge = 26;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -591,6 +593,15 @@ export interface RemoteApi {
   cloneProject(url: string): Promise<CloneProgress>;
   /** Runs a shell command here and waits for it; from `cloneBridge`. */
   runCommand(command: string, timeoutMs: number): Promise<CommandRun>;
+  /** A saved paste, uploaded in chunks; returns its path on this computer. */
+  uploadPaste(
+    id: string,
+    n: number,
+    offset: number,
+    data: string,
+  ): Promise<string>;
+  /** A chunk of a Relay-owned paste; null for paths outside its paste folder. */
+  downloadPaste(path: string, offset: number): Promise<string | null>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
   handoffUpload(
     id: string,
@@ -673,6 +684,8 @@ export const remoteMethods = [
   "draftOther",
   "sendDraft",
   "computerProjects",
+  "uploadPaste",
+  "downloadPaste",
   "cloneProject",
   "runCommand",
   "handoffUpload",
@@ -689,6 +702,8 @@ export const remoteMethods = [
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
+  "uploadPaste",
+  "downloadPaste",
   "computerProjects",
   "cloneProject",
   "runCommand",
