@@ -18,6 +18,7 @@
 //                     by itself, does so after a pause here too
 const fs = require("node:fs");
 const path = require("node:path");
+const { StringDecoder } = require("node:string_decoder");
 
 const agent = process.env.RELAY_REPLAY_AGENT;
 const dir = process.env.RELAY_REPLAY_DIR;
@@ -204,8 +205,9 @@ function heard(m) {
 }
 
 let rest = "";
+const decoder = new StringDecoder("utf8");
 process.stdin.on("data", (chunk) => {
-  rest += chunk.toString("utf8");
+  rest += decoder.write(chunk);
   let i;
   while ((i = rest.indexOf("\n")) >= 0) {
     const line = rest.slice(0, i);
@@ -214,6 +216,7 @@ process.stdin.on("data", (chunk) => {
   }
 });
 process.stdin.on("end", () => {
+  rest += decoder.end();
   if (rest.trim()) heard(parse(rest));
   stdinEnded = true;
   wake();

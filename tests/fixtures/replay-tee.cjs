@@ -6,6 +6,7 @@
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { StringDecoder } = require("node:string_decoder");
 
 const real = process.env.RELAY_REPLAY_REAL;
 const outDir = process.env.RELAY_REPLAY_OUT;
@@ -30,9 +31,10 @@ write({
 const child = spawn(real, args, { stdio: ["pipe", "pipe", "pipe"], env: process.env });
 const lines = (stream, dir, sink) => {
   let rest = "";
+  const decoder = new StringDecoder("utf8");
   stream.on("data", (chunk) => {
     sink?.write(chunk);
-    rest += chunk.toString("utf8");
+    rest += decoder.write(chunk);
     let at;
     while ((at = rest.indexOf("\n")) >= 0) {
       const line = rest.slice(0, at);
@@ -41,6 +43,7 @@ const lines = (stream, dir, sink) => {
     }
   });
   stream.on("end", () => {
+    rest += decoder.end();
     if (rest.trim()) write({ dir, line: rest });
   });
 };
