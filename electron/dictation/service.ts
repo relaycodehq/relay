@@ -21,7 +21,11 @@ import {
   modelReceived,
 } from "../util/model-files";
 import { onnxRuntimeEntry, onnxRuntimeInstalled } from "../util/onnxruntime";
-import { appleSpeechAvailable, serveAppleSpeech } from "./apple";
+import {
+  appleSpeechAvailable,
+  appleSpeechHelper,
+  serveAppleSpeech,
+} from "./apple";
 import type { WorkerCommand, WorkerNotice } from "./worker";
 
 /** The model's memory goes back to the system this long after the last use. */
@@ -41,7 +45,7 @@ export class Dictation {
   private broken = false;
   private idle?: NodeJS.Timeout;
   private readonly dir: string;
-  private readonly appleHelper = join(__dirname, "apple-speech");
+  private readonly appleHelper = appleSpeechHelper(__dirname);
   private readonly appleReady = appleSpeechAvailable(this.appleHelper);
 
   constructor(
@@ -63,7 +67,8 @@ export class Dictation {
   get current(): DictationState {
     const apple = !!this.choice && this.appleReady;
     const engine = this.engine;
-    const shown = engine === "apple" ? { status: "ready" as const } : this.state;
+    const shown =
+      engine === "apple" ? { status: "ready" as const } : this.state;
     return { ...shown, engine, apple, parakeet: this.state };
   }
 

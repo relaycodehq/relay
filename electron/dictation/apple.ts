@@ -1,9 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { release } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type { MessagePortMain } from "electron";
 import type { DictationEvent, DictationRequest } from "../../shared/dictation";
+
+/** Native executables must be outside ASAR, including when their caller is bundled inside it. */
+export const appleSpeechHelper = (moduleDir: string) =>
+  join(moduleDir, "apple-speech").replace(
+    /app\.asar([\\/])/,
+    "app.asar.unpacked$1",
+  );
 
 /** macOS 26 is Darwin 25: the first with SpeechAnalyzer. */
 export function appleSpeechAvailable(helper: string) {
@@ -27,7 +35,8 @@ type HelperEvent =
  */
 export function serveAppleSpeech(port: MessagePortMain, helper: string) {
   const send = (event: DictationEvent) => port.postMessage(event);
-  let current: { id: number; child: ChildProcess; stopping: boolean } | undefined;
+  let current:
+    { id: number; child: ChildProcess; stopping: boolean } | undefined;
   const end = (cancel: boolean) => {
     if (!current) return;
     if (cancel) current.child.kill();
