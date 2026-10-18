@@ -108,7 +108,7 @@ struct ToolRow: View {
             HStack(spacing: 4) {
                 Text(text)
                     .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
-                    .lineLimit(open ? 6 : 2)
+                    .lineLimit(open ? 6 : 1)
                 if activity.kind == "agent", let progress = activity.progress, !progress.isEmpty {
                     Text("· \(progress)").lineLimit(1).foregroundStyle(.tertiary)
                 }

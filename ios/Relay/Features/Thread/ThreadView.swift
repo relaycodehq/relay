@@ -91,7 +91,8 @@ struct ThreadView: View {
                             ResumeAnswer(chatId: chatId, settings: settings.wrappedValue ?? thread.settings)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    // In line with the composer's edge below.
+                    .padding(.horizontal, 20)
                     .padding(.top, 12)
                     // Room under the last line, as on the desktop, so a turn's end doesn't sit on the composer.
                     .padding(.bottom, 60)
