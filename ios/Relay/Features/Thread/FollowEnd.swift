@@ -2,6 +2,7 @@ import SwiftUI
 
 extension View {
     /// Keeps a thread's scroll view at its end while it should be there; `jump` scrolls to a message.
+    /// The thread's lazy stack needs `.scrollTargetLayout()` and a `ThreadEnd()` as its last row.
     func followingEnd(live: Bool, last: String?, mine: Bool, jump: MessageJump? = nil) -> some View {
         modifier(FollowEnd(live: live, last: last, mine: mine, jump: jump))
     }
@@ -15,13 +16,29 @@ struct MessageJump: Equatable {
     init(id: String) { self.id = id }
 }
 
+/// The thread's last row, the room under its last line. Never zero high: a row with
+/// no height is never on screen, so the thread couldn't tell it's at its end.
+struct ThreadEnd: View {
+    static let id = "thread-end"
+
+    var body: some View {
+        // With the stack's spacing above it, 60pt under the last line, as on the desktop.
+        Color.clear.frame(height: 42).id(Self.id)
+    }
+}
+
 /// A thread stays at its end while it settles after opening, a new message or
-/// an answer ending (the lazy list only guessed the heights of rows it hadn't
-/// drawn, the composer takes its room a pass later, and a finished turn folds
-/// its trace), while an answer streams and when the keyboard or the composer
-/// takes room, as long as you're at the end. Scrolling up stops that, coming
-/// back down or sending starts it again, and what you unfold yourself grows
-/// downward. Content shrinking under you never leaves you past its end.
+/// an answer ending (the composer takes its room a pass later, and a finished
+/// turn folds its trace), while an answer streams and when the keyboard or the
+/// composer takes room, as long as you're at the end. Scrolling up stops that,
+/// coming back down or sending starts it again, and what you unfold yourself
+/// grows downward.
+///
+/// As Android's ThreadScroll does, the end is a row to scroll to and to see on
+/// screen, never an offset: the lazy stack only guesses the heights of rows it
+/// hasn't drawn (one tall answer had it guess a 27,000pt thread at 64,000), so
+/// the content size and every offset worked out from it can point far past the
+/// last row, and the thread showed nothing until you scrolled.
 private struct FollowEnd: ViewModifier {
     let live: Bool
     /// The newest message's id.
@@ -29,30 +46,34 @@ private struct FollowEnd: ViewModifier {
     /// The newest message is one sent from this phone.
     let mine: Bool
     let jump: MessageJump?
-    @State private var position = ScrollPosition(edge: .bottom)
+    @State private var position = ScrollPosition(id: ThreadEnd.id, anchor: .bottom)
     @State private var following = true
     @State private var settling = true
     @State private var touching = false
+    /// The end row is on screen.
+    @State private var atEnd = true
 
     func body(content: Content) -> some View {
         content
             .scrollPosition($position)
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .onScrollPhaseChange { _, phase, context in
+            .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.5) { shown in
+                atEnd = shown.contains(ThreadEnd.id)
+                // Only your own scrolling decides; the thread following or growing doesn't.
+                if touching { following = atEnd }
+            }
+            .onScrollPhaseChange { _, phase in
                 touching = phase == .tracking || phase == .interacting || phase == .decelerating
                 if touching { settling = false }
-                if phase == .idle { following = atEnd(context.geometry) }
+                if phase == .idle { following = atEnd }
             }
             .onScrollGeometryChange(for: Extent.self, of: Extent.init) { old, new in
-                guard !touching else { return }
-                if new.beyond || following && (settling || live || new.room != old.room) {
-                    position.scrollTo(edge: .bottom)
-                }
+                guard !touching, following, settling || live || new.room != old.room || new.content < old.content else { return }
+                follow()
             }
             .onChange(of: last) {
                 if mine { following = true }
                 // Not mid-flick: where the flick stops decides whether it follows.
-                if following && (mine || !touching) { position.scrollTo(edge: .bottom) }
+                if following && (mine || !touching) { follow() }
             }
             .task(id: jump) {
                 guard let jump else { return }
@@ -73,6 +94,10 @@ private struct FollowEnd: ViewModifier {
                 if !Task.isCancelled { settling = false }
             }
     }
+
+    private func follow() {
+        position.scrollTo(id: ThreadEnd.id, anchor: .bottom)
+    }
 }
 
 private struct Settle: Equatable {
@@ -80,29 +105,14 @@ private struct Settle: Equatable {
     let live: Bool
 }
 
-/// What moves the end: the content, the room for it, and whether the view
-/// was left past it.
+/// What moves the end: the content and the room for it.
 private struct Extent: Equatable {
     var content: CGFloat
     /// The height and insets the keyboard and the composer change.
     var room: [CGFloat]
-    var beyond: Bool
 
     init(_ g: ScrollGeometry) {
         content = g.contentSize.height
         room = [g.containerSize.height, g.contentInsets.top, g.contentInsets.bottom]
-        beyond = g.contentOffset.y > furthest(g) + 1
     }
 }
-
-/// The container leaves out the insets, so the end's offset is the content
-/// less the container and the top inset.
-private func end(_ g: ScrollGeometry) -> CGFloat {
-    g.contentSize.height - g.containerSize.height - g.contentInsets.top
-}
-
-/// Further than a short thread's rest at the top or a long one's end.
-private func furthest(_ g: ScrollGeometry) -> CGFloat { max(end(g), -g.contentInsets.top) }
-
-/// Within a few points of the end.
-private func atEnd(_ g: ScrollGeometry) -> Bool { g.contentOffset.y >= end(g) - 24 }

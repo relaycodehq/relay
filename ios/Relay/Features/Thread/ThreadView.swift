@@ -90,12 +90,13 @@ struct ThreadView: View {
                         if let thread, canResume(thread, conversation: shown, rootId: rootId, running: running) {
                             ResumeAnswer(chatId: chatId, settings: settings.wrappedValue ?? thread.settings)
                         }
+                        // Room under the last line, so a turn's end doesn't sit on the composer.
+                        ThreadEnd()
                     }
+                    .scrollTargetLayout()
                     // In line with the composer's edge below.
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    // Room under the last line, as on the desktop, so a turn's end doesn't sit on the composer.
-                    .padding(.bottom, 60)
                 }
                 // Built only once the thread is here, so it opens at the end.
                 .followingEnd(live: live, last: shown.last?.id, mine: sentHere(shown.last), jump: jump)
