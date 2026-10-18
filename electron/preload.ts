@@ -295,6 +295,7 @@ const methods = [
   "devSwitchState",
   "devSwitch",
   "dictationState",
+  "setDictationEngine",
   "downloadDictationModel",
   "cancelDictationDownload",
   "removeDictationModel",

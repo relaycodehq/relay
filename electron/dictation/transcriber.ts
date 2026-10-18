@@ -59,7 +59,8 @@ export class Transcriber {
     private onText: (settled: string, tentative: string) => void,
     options: TranscriberOptions = {},
   ) {
-    this.prerollSamples = (options.preroll ?? 0.4) * rate;
+    // Long, as the detector is slow to hear a whisper begin.
+    this.prerollSamples = (options.preroll ?? 1) * rate;
     this.pause = (options.pause ?? 2) * rate;
     this.maxPhrase = (options.maxPhrase ?? 15) * rate;
     this.partialStep = (options.partialStep ?? 0.3) * rate;

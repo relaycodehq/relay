@@ -3,7 +3,8 @@ import { dictationSampleRate as rate } from "../../shared/dictation";
 
 /** Silero takes exactly this many samples at a time. */
 const window = 512;
-const threshold = 0.4;
+// Low enough for a whisper, which Silero is never sure of.
+const threshold = 0.25;
 // Short: the transcriber decides which pauses end a phrase.
 const minSilence = 0.3 * rate,
   minSpeech = 0.2 * rate;
@@ -40,6 +41,35 @@ export class SpeechGate {
   }
 }
 
+const targetLevel = 10 ** (-30 / 20),
+  maxGain = 100,
+  /** About 3 s of windows. */
+  levelHistory = 94;
+
+/**
+ * Brings quiet input up for the voice detector alone. Silero misses a
+ * whisper below about -60 dBFS, and phones apply no gain of their own;
+ * Parakeet normalizes what it's given, so it gets the audio as it came.
+ * Steered by the loudest stretch of the last few seconds, so the noise
+ * between words isn't pumped up to speech; never turns anything down.
+ */
+export class LevelGain {
+  private levels: number[] = [];
+
+  apply(window: Float32Array) {
+    let energy = 0;
+    for (const v of window) energy += v * v;
+    this.levels.push(Math.sqrt(energy / window.length));
+    if (this.levels.length > levelHistory) this.levels.shift();
+    const sorted = [...this.levels].sort((a, b) => a - b);
+    const loud = sorted[Math.floor(sorted.length * 0.9)]!;
+    const gain = Math.min(maxGain, Math.max(1, targetLevel / (loud + 1e-6)));
+    return gain === 1
+      ? window
+      : window.map((v) => Math.max(-1, Math.min(1, v * gain)));
+  }
+}
+
 export type VoiceDetector = (samples: Float32Array) => Promise<boolean>;
 
 /** Silero VAD (v4, with LSTM state), shared; each call to the result starts a detector of its own. */
@@ -57,6 +87,7 @@ export async function loadSilero(ort: typeof Ort, path: string) {
       speaking = false,
       pending = new Float32Array(0);
     const gate = new SpeechGate();
+    const gain = new LevelGain();
     // Calls must not overlap: each window carries the last one's state.
     return async (samples) => {
       const all = new Float32Array(pending.length + samples.length);
@@ -65,7 +96,11 @@ export async function loadSilero(ort: typeof Ort, path: string) {
       let at = 0;
       for (; at + window <= all.length; at += window) {
         const out = await session.run({
-          x: new ort.Tensor("float32", all.slice(at, at + window), [1, window]),
+          x: new ort.Tensor(
+            "float32",
+            gain.apply(all.slice(at, at + window)),
+            [1, window],
+          ),
           h,
           c,
         });

@@ -2,24 +2,43 @@ import { command } from "../../../../shared/shortcuts";
 import { useDictationModel } from "../../dictation/audio/session";
 import type { SettingEntry } from "../settings-search";
 import {
+  DictationEngineSetting,
   DictationMicrophoneSetting,
   DictationModelSetting,
+  dictationEngineLine,
   dictationModelLine,
 } from "../../dictation/DictationSettings";
 import { ShortcutKeys } from "../ShortcutSettings";
 
 export function useDictationEntries(): SettingEntry[] {
-  const dictationModel = useDictationModel();
+  const dictation = useDictationModel();
   return [
-    {
-      id: "dictation-model",
-      category: "dictation",
-      title: "Speech model",
-      description: dictationModelLine(dictationModel),
-      keywords:
-        "dictation voice speech microphone parakeet download model transcribe",
-      render: () => <DictationModelSetting />,
-    },
+    ...(dictation.apple
+      ? [
+          {
+            id: "dictation-engine",
+            category: "dictation",
+            title: "Speech engine",
+            description: dictationEngineLine,
+            keywords:
+              "dictation voice speech engine apple macos parakeet whisper transcribe",
+            render: () => <DictationEngineSetting />,
+          } satisfies SettingEntry,
+        ]
+      : []),
+    ...(dictation.engine === "parakeet"
+      ? [
+          {
+            id: "dictation-model",
+            category: "dictation",
+            title: "Speech model",
+            description: dictationModelLine(dictation.parakeet),
+            keywords:
+              "dictation voice speech microphone parakeet download model transcribe",
+            render: () => <DictationModelSetting />,
+          } satisfies SettingEntry,
+        ]
+      : []),
     {
       id: "dictation-shortcut",
       category: "dictation",

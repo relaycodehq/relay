@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
-import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { bundles, onnxRuntimeBundle } from "./electron-bundles.mjs";
 import { syncVersion } from "./sync-version.mjs";
@@ -93,3 +93,40 @@ cpSync(
       ),
   },
 );
+
+// Dictation can use the speech engine built into macOS 26 and later, through a
+// small Swift program; an Xcode older than 26 can't build it, and Relay then
+// offers only its own engine.
+const speechSource = "electron/dictation/apple-speech.swift",
+  speechOut = "dist-electron/apple-speech";
+// Built once per change of its source: swiftc takes seconds, every dev start.
+if (
+  process.platform === "darwin" &&
+  !(
+    existsSync(speechOut) &&
+    statSync(speechOut).mtimeMs >= statSync(speechSource).mtimeMs
+  )
+) {
+  rmSync(speechOut, { force: true });
+  try {
+    execFileSync(
+      "xcrun",
+      [
+        "swiftc",
+        "-swift-version",
+        "5",
+        "-O",
+        "-target",
+        `${process.arch === "x64" ? "x86_64" : "arm64"}-apple-macos26.0`,
+        speechSource,
+        "-o",
+        speechOut,
+      ],
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.warn(
+      "Couldn't build apple-speech; dictation offers only Parakeet in this build.",
+    );
+  }
+}

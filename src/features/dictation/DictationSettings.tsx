@@ -1,5 +1,10 @@
 import { Download, Pause, Trash2 } from "lucide-react";
-import { dictationModel, dictationModelSize } from "../../../shared/dictation";
+import {
+  dictationModel,
+  dictationModelSize,
+  type DictationEngine,
+  type DictationModelState,
+} from "../../../shared/dictation";
 import { api } from "../../lib/api";
 import {
   setDictationMicrophone,
@@ -14,7 +19,7 @@ const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
 
 /** The speech model's row: what it is and where its download stands. */
 export function dictationModelLine(
-  state: ReturnType<typeof useDictationModel>,
+  state: DictationModelState,
 ) {
   switch (state.status) {
     case "ready":
@@ -30,8 +35,26 @@ export function dictationModelLine(
   }
 }
 
+export const dictationEngineLine =
+  "Parakeet is a one-time download that Relay runs itself. macOS has a speech engine of its own built in, with nothing to download.";
+
+export function DictationEngineSetting() {
+  const { engine } = useDictationModel();
+  return (
+    <SettingsSelect<DictationEngine>
+      label="Speech engine"
+      value={engine}
+      options={[
+        { value: "parakeet", label: dictationModel.name },
+        { value: "apple", label: "macOS" },
+      ]}
+      onChange={(next) => void api.setDictationEngine(next)}
+    />
+  );
+}
+
 export function DictationModelSetting() {
-  const model = useDictationModel();
+  const model = useDictationModel().parakeet;
   if (model.status === "unsupported") return null;
   if (model.status === "downloading")
     return (

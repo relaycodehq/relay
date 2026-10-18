@@ -240,8 +240,18 @@ const devBuild = new DevBuild(
     quit: (cancelled) => quit.restart(cancelled),
   },
 );
-const dictation = new Dictation(app.getPath("userData"), (state) =>
-  window.send("relay:dictation", state),
+const dictation = new Dictation(
+  app.getPath("userData"),
+  (state) => window.send("relay:dictation", state),
+  {
+    get: () => store?.get().dictationEngine,
+    save: async (engine) => {
+      if (!store) throw new Error("Relay is still starting.");
+      await store.update((s) => {
+        s.dictationEngine = engine;
+      });
+    },
+  },
 );
 const readAloud = new ReadAloud(
   app.getPath("userData"),

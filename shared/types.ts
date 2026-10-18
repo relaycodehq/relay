@@ -15,7 +15,7 @@ import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
 import type { ReleaseNote, UpdateState } from "./updates";
-import type { DictationModelState } from "./dictation";
+import type { DictationEngine, DictationState } from "./dictation";
 import type {
   ReadAloudEvent,
   ReadAloudSettings,
@@ -623,10 +623,12 @@ export interface Api
   devSwitchState(): Promise<DevSwitchState | null>;
   /** Stops this Relay and starts the one in the checkout at `path`, on the same data. */
   devSwitch(path: string): Promise<void>;
-  dictationState(): Promise<DictationModelState>;
-  downloadDictationModel(): Promise<DictationModelState>;
+  dictationState(): Promise<DictationState>;
+  /** Picks Parakeet or, on macOS 26 and later, the system's own speech engine. */
+  setDictationEngine(engine: DictationEngine): Promise<DictationState>;
+  downloadDictationModel(): Promise<DictationState>;
   cancelDictationDownload(): Promise<void>;
-  removeDictationModel(): Promise<DictationModelState>;
+  removeDictationModel(): Promise<DictationState>;
   /** Asks the system for the microphone where it needs asking; false when refused. */
   dictationMicrophone(): Promise<boolean>;
   /**
@@ -636,7 +638,7 @@ export interface Api
   connectDictation(): Promise<boolean>;
   /** Starts loading the model so the first words don't wait for it. */
   warmDictation(): Promise<void>;
-  onDictationState(callback: (state: DictationModelState) => void): () => void;
+  onDictationState(callback: (state: DictationState) => void): () => void;
   readAloudState(): Promise<ReadAloudState>;
   saveReadAloudSettings(settings: ReadAloudSettings): Promise<ReadAloudState>;
   downloadReadAloudEngine(engine: string): Promise<ReadAloudState>;

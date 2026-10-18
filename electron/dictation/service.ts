@@ -11,7 +11,9 @@ import {
 import {
   dictationModel,
   dictationModelSize,
+  type DictationEngine,
   type DictationModelState,
+  type DictationState,
 } from "../../shared/dictation";
 import {
   downloadModel,
@@ -19,10 +21,17 @@ import {
   modelReceived,
 } from "../util/model-files";
 import { onnxRuntimeEntry, onnxRuntimeInstalled } from "../util/onnxruntime";
+import { appleSpeechAvailable, serveAppleSpeech } from "./apple";
 import type { WorkerCommand, WorkerNotice } from "./worker";
 
 /** The model's memory goes back to the system this long after the last use. */
 const idleUnload = 3 * 60_000;
+
+/** Where the engine choice is kept; the headless Relay has none and runs Parakeet. */
+export interface EngineChoice {
+  get(): DictationEngine | undefined;
+  save(engine: DictationEngine): Promise<void>;
+}
 
 export class Dictation {
   private state: DictationModelState = { status: "missing" };
@@ -32,22 +41,43 @@ export class Dictation {
   private broken = false;
   private idle?: NodeJS.Timeout;
   private readonly dir: string;
+  private readonly appleHelper = join(__dirname, "apple-speech");
+  private readonly appleReady = appleSpeechAvailable(this.appleHelper);
 
   constructor(
     userData: string,
-    private emit: (state: DictationModelState) => void,
+    private emit: (state: DictationState) => void,
+    private choice?: EngineChoice,
   ) {
     this.dir = join(userData, "models", dictationModel.id);
     void this.refresh();
   }
 
-  get current() {
-    return this.state;
+  /** The chosen engine, if this computer can run it. */
+  private get engine(): DictationEngine {
+    return this.choice?.get() === "apple" && this.appleReady
+      ? "apple"
+      : "parakeet";
+  }
+
+  get current(): DictationState {
+    const apple = !!this.choice && this.appleReady;
+    const engine = this.engine;
+    const shown = engine === "apple" ? { status: "ready" as const } : this.state;
+    return { ...shown, engine, apple, parakeet: this.state };
+  }
+
+  async setEngine(engine: DictationEngine) {
+    if (!this.choice) throw new Error("This Relay can only run Parakeet.");
+    await this.choice.save(engine);
+    if (this.engine === "apple") this.stopWorker();
+    this.emit(this.current);
+    return this.current;
   }
 
   private set(state: DictationModelState) {
     this.state = state;
-    this.emit(state);
+    this.emit(this.current);
   }
 
   /** Whether the model is downloaded and checked, whatever the engine. */
@@ -64,7 +94,7 @@ export class Dictation {
   }
 
   async downloadModel() {
-    if (this.download || this.state.status === "ready") return this.state;
+    if (this.download || this.state.status === "ready") return this.current;
     const controller = (this.download = new AbortController());
     const total = dictationModelSize;
     let shown = 0;
@@ -102,7 +132,7 @@ export class Dictation {
     } finally {
       this.download = undefined;
     }
-    return this.state;
+    return this.current;
   }
 
   cancelDownload() {
@@ -114,7 +144,7 @@ export class Dictation {
     this.stopWorker();
     await rm(this.dir, { recursive: true, force: true });
     if (this.state.status !== "unsupported") this.set({ status: "missing" });
-    return this.state;
+    return this.current;
   }
 
   /** Asks macOS for the microphone the first time; other systems answer in the page. */
@@ -127,6 +157,11 @@ export class Dictation {
 
   /** A port straight to the speech engine, loading it if needed. */
   open() {
+    if (this.engine === "apple") {
+      const { port1, port2 } = new MessageChannelMain();
+      serveAppleSpeech(port1, this.appleHelper);
+      return port2;
+    }
     if (this.state.status !== "ready") return;
     const worker = this.startWorker();
     const { port1, port2 } = new MessageChannelMain();
@@ -144,7 +179,8 @@ export class Dictation {
 
   /** Loads the model ahead of the first word, e.g. when the pointer nears the mic. */
   warm() {
-    if (this.state.status === "ready") this.startWorker();
+    if (this.engine === "parakeet" && this.state.status === "ready")
+      this.startWorker();
   }
 
   private startWorker() {

@@ -331,6 +331,9 @@ export function settingsHandlers(ctx: ApiContext) {
       return acpRegistry().remove(id);
     }),
     dictationState: () => dictation.current,
+    setDictationEngine: takes([z.enum(["parakeet", "apple"])], (engine) =>
+      dictation.setEngine(engine),
+    ),
     downloadDictationModel: () => dictation.downloadModel(),
     cancelDictationDownload: () => dictation.cancelDownload(),
     removeDictationModel: () => dictation.removeModel(),

@@ -83,6 +83,8 @@ interface State {
   computers?: SavedComputer[];
   /** Engine, voices and speed for reading answers aloud. */
   readAloud?: import("../../shared/read-aloud").ReadAloudSettings;
+  /** The speech engine dictation uses; unset, Parakeet. */
+  dictationEngine?: import("../../shared/dictation").DictationEngine;
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;
   /** Agent CLIs linked in Settings; a missing one is found by searching. */

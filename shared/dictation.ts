@@ -68,6 +68,20 @@ export type DictationModelState =
   /** This platform has no speech engine build. */
   | { status: "unsupported" };
 
+/** Relay's own Parakeet, or the speech engine built into macOS 26 and later. */
+export type DictationEngine = "parakeet" | "apple";
+
+/**
+ * Where dictation stands. `status` is the chosen engine's: macOS's is
+ * always ready, Parakeet once downloaded. `parakeet` is Parakeet's own.
+ */
+export type DictationState = DictationModelState & {
+  engine: DictationEngine;
+  /** This computer can run macOS's engine. */
+  apple: boolean;
+  parakeet: DictationModelState;
+};
+
 /** Renderer → engine, over the dictation MessagePort. */
 export type DictationRequest =
   | { type: "start"; id: number }

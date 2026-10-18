@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type {
   DictationEvent,
-  DictationModelState,
   DictationRequest,
+  DictationState,
 } from "../../../../shared/dictation";
 import { api } from "../../../lib/api";
 import { startCapture, type Capture } from "./capture";
@@ -227,7 +227,12 @@ function describe(error: unknown) {
 }
 
 // The speech model, as the main process reports it.
-let modelState: DictationModelState = { status: "missing" };
+let modelState: DictationState = {
+  status: "missing",
+  engine: "parakeet",
+  apple: false,
+  parakeet: { status: "missing" },
+};
 const modelListeners = new Set<() => void>();
 let modelWatched = false;
 
@@ -236,10 +241,15 @@ function watchModel() {
   modelWatched = true;
   // A window whose main process predates dictation (reloaded, not restarted).
   if (typeof api.onDictationState !== "function") {
-    modelState = { status: "unsupported" };
+    modelState = {
+      status: "unsupported",
+      engine: "parakeet",
+      apple: false,
+      parakeet: { status: "unsupported" },
+    };
     return;
   }
-  const update = (state: DictationModelState) => {
+  const update = (state: DictationState) => {
     modelState = state;
     for (const listener of modelListeners) listener();
   };
