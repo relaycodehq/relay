@@ -68,6 +68,8 @@ struct Composer: View {
     @State private var showingUsage = false
     /// Whose draft the field holds, `computer\nkey`; nil until one loaded.
     @State private var draftLoaded: String?
+    /// Whose unsent photos `photos` are, `computer\nkey` as `draftLoaded`.
+    @State private var photosLoaded: String?
     /// The send that failed last, tried again as it was while the draft stays the same.
     @State private var failed: Attempt?
 
@@ -185,7 +187,13 @@ struct Composer: View {
         .onChange(of: reader.key) { _, key in
             if key != nil { dictation.stop() }
         }
-        .task(id: draftID) { loadDraft() }
+        .task(id: draftID) {
+            loadDraft()
+            loadPhotos()
+        }
+        .onChange(of: photos.map(\.id)) {
+            if let id = photosLoaded { UnsentPhotos.keep(photos, for: id) }
+        }
         .onChange(of: draft) { _, now in
             if let at = draftAt, draftLoaded == draftID { connection.drafts.editText(at.computer, at.key, now) }
         }
@@ -615,6 +623,19 @@ struct Composer: View {
         }
         draftLoaded = id
         connection.drafts.editText(at.computer, at.key, draft)
+    }
+
+    /// The draft's unsent photos into the strip, as `loadDraft` does its text; ones picked before
+    /// any draft loaded go after them.
+    private func loadPhotos() {
+        guard let id = draftID else {
+            photosLoaded = nil
+            return
+        }
+        let held = UnsentPhotos.take(id)
+        photos = photosLoaded != nil ? held : Array((held + photos).prefix(PastedImage.maxPerMessage))
+        photosLoaded = id
+        UnsentPhotos.keep(photos, for: id)
     }
 
     private func restore(_ text: String, _ images: [PastedImage]) throws -> () -> Void {

@@ -9,6 +9,19 @@ struct PickedPhoto: Identifiable, Sendable {
     let thumbnail: UIImage
 }
 
+/// Photos picked but not sent, by the draft they go with, so they outlive its composer: an
+/// approval card takes its place, or the thread is left and opened again. Gone when the app quits.
+@MainActor
+enum UnsentPhotos {
+    private static var held: [String: [PickedPhoto]] = [:]
+
+    static func take(_ draft: String) -> [PickedPhoto] { held[draft] ?? [] }
+
+    static func keep(_ photos: [PickedPhoto], for draft: String) {
+        held[draft] = photos.isEmpty ? nil : photos
+    }
+}
+
 /// Tried in turn until the photo fits the desktop's limit: long side in pixels, JPEG quality.
 private nonisolated let steps: [(side: CGFloat, quality: CGFloat)] = [(1600, 0.8), (1280, 0.7), (1024, 0.6), (800, 0.5)]
 
