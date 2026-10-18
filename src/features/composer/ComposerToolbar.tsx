@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import {
   toolbarRun,
+  useAccessNamed,
   type ToolbarItem,
   type ToolbarLayout,
   type ToolbarSlot,
@@ -28,7 +29,12 @@ export function ComposerToolbar({
   wrap?: (slot: ToolbarSlot, node: ReactNode) => ReactNode;
   end?: ReactNode;
 }) {
-  const run = toolbarRun(layout, (item) => !!controls[item]);
+  const accessNamed = useAccessNamed();
+  const run = toolbarRun(
+    layout,
+    (item) => !!controls[item],
+    accessNamed ? [] : ["access"],
+  );
   const nodes = run.map(({ slot, divider }) => {
     const node = slot === "gap" ? <span className="spacer" /> : controls[slot];
     return (

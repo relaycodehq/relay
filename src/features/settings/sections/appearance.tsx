@@ -9,6 +9,10 @@ import {
 import { mac } from "../../../lib/mod-key";
 import { GlassFrostSlider } from "../GlassFrostSlider";
 import { setCacheHeat, useCacheHeat } from "../../agents/cache-heat";
+import {
+  setAccessNamed,
+  useAccessNamed,
+} from "../../composer/composer-toolbar";
 import { setImagePills, useImagePills } from "../../images/image-pills";
 import { setTipsShown, useTipsShown } from "../../tips/tip-memory";
 import {
@@ -45,6 +49,7 @@ import { kindLabels, ThemeChoiceCard, ThemeModes } from "../ThemeCards";
 export function useAppearanceEntries(): SettingEntry[] {
   const appearance = useAppearance();
   const cacheHeat = useCacheHeat();
+  const accessNamed = useAccessNamed();
   const imagePills = useImagePills();
   const tipsShown = useTipsShown();
   const sidebarAutoHide = useSidebarAutoHide();
@@ -212,6 +217,22 @@ export function useAppearanceEntries(): SettingEntry[] {
       block: true,
       accessory: () => <ComposerToolbarReset />,
       render: () => <ComposerToolbarSettings />,
+    },
+    {
+      id: "access-name",
+      category: "appearance",
+      title: "Access mode's name",
+      description:
+        "The composer writes the access mode beside its icon. Off leaves the icon alone, a closed lock for Supervised and an open one for Full access; hover it or open it for the name.",
+      keywords:
+        "access permissions runtime mode supervised full access auto lock icon label name composer toolbar",
+      render: () => (
+        <Switch
+          label="Name the access mode"
+          checked={accessNamed}
+          onChange={setAccessNamed}
+        />
+      ),
     },
     {
       id: "image-pills",

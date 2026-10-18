@@ -21,6 +21,7 @@ export interface ComposerSelectProps<T extends string> {
   /** A title over the options, with keys that change it from the composer. */
   heading?: { label: string; hint?: string };
   className?: string;
+  title?: string;
 }
 
 function ComposerSelectImpl<T extends string>({
@@ -32,6 +33,7 @@ function ComposerSelectImpl<T extends string>({
   container,
   heading,
   className = "",
+  title,
 }: ComposerSelectProps<T>) {
   return (
     <Select.Root
@@ -45,6 +47,7 @@ function ComposerSelectImpl<T extends string>({
         type="button"
         aria-label={label}
         className={`composer-control ${className}`}
+        title={title}
       >
         {icon}
         <Select.Value>

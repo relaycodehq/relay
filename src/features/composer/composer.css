@@ -61,6 +61,11 @@
   gap: inherit;
   margin-left: auto;
 }
+/* The access control as its lock alone, when Settings stops naming it; its
+   menu and tooltip still do. */
+.composer-tools .composer-runtime.icon-only > :is(span, .lucide-chevron-down) {
+  display: none;
+}
 /* Fit steps: useToolbarFit lists the steps it took in data-fit until the
    row sits on one line. The full names stay in the menus and tooltips. */
 .composer-tools[data-fit~="1"] {

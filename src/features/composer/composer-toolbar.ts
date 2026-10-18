@@ -1,3 +1,4 @@
+import { localSwitch } from "../../lib/local-switch";
 import { persistedStore } from "../../lib/persisted-store";
 
 /** The composer's controls that can move or hide; Stop and Send stay last. */
@@ -65,19 +66,23 @@ const divided = new Set<ToolbarSlot>([
 
 /**
  * The slots to draw, in order: shown items that `present` has a control for,
- * and the gap. `divider` marks a slot that follows a divider.
+ * and the gap. `divider` marks a slot that follows a divider; `bare` items
+ * show their icon alone, so they go without.
  */
 export function toolbarRun(
   layout: ToolbarLayout,
   present: (item: ToolbarItem) => boolean,
+  bare: ToolbarItem[] = [],
 ) {
   const shown = layout.slots.filter(
     (slot) =>
       slot === "gap" || (!layout.hidden.includes(slot) && present(slot)),
   );
+  const labelled = (slot: ToolbarSlot) =>
+    divided.has(slot) && !(bare as ToolbarSlot[]).includes(slot);
   return shown.map((slot, i) => ({
     slot,
-    divider: i > 0 && divided.has(shown[i - 1]) && divided.has(slot),
+    divider: i > 0 && labelled(shown[i - 1]) && labelled(slot),
   }));
 }
 
@@ -186,5 +191,9 @@ const store = persistedStore<ToolbarLayout>(
   (layout) => JSON.stringify(layout),
 );
 export const composerToolbar = store.get;
+// Settings can drop the access mode's name, leaving its lock alone.
+const accessName = localSwitch("relay-access-name");
+export const useAccessNamed = accessName.use;
+export const setAccessNamed = accessName.set;
 export const useComposerToolbar = store.use;
 export const setComposerToolbar = store.set;

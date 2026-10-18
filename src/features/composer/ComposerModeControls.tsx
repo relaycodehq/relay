@@ -17,6 +17,7 @@ import {
 } from "../../../shared/agent-modes";
 import type { AgentProvider } from "../../../shared/agents";
 import { ComposerSelect } from "../../ui/ComposerSelect";
+import { useAccessNamed } from "./composer-toolbar";
 const icons = {
   "approval-required": LockKeyhole,
   "auto-accept-edits": PencilLine,
@@ -85,14 +86,21 @@ export const RuntimeModeSelect = memo(function RuntimeModeSelect({
   onRuntimeMode: (mode: RuntimeMode) => void;
 }) {
   const Icon = icons[runtimeMode];
+  const iconOnly = !useAccessNamed();
+  const options = runtimeModesFor(provider);
   return (
     <ComposerSelect
       label="Runtime mode"
-      className="composer-runtime"
+      className={`composer-runtime ${iconOnly ? "icon-only" : ""}`}
+      title={
+        iconOnly
+          ? options.find((option) => option.value === runtimeMode)?.label
+          : undefined
+      }
       value={runtimeMode}
       icon={<Icon size={14} />}
       onChange={onRuntimeMode}
-      options={runtimeModesFor(provider).map((option) => {
+      options={options.map((option) => {
         const OptionIcon = icons[option.value];
         return { ...option, icon: <OptionIcon size={14} /> };
       })}

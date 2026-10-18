@@ -20,6 +20,11 @@ describe("toolbarRun", () => {
     ]);
   });
 
+  it("leaves a bare icon without dividers on either side", () => {
+    const run = toolbarRun(defaultToolbar, () => true, ["access"]);
+    expect(dividersBefore(run)).toEqual(["effort", "context"]);
+  });
+
   it("closes up around controls the composer doesn't offer", () => {
     // No effort for the model, no meter yet: model and access become neighbours.
     const run = toolbarRun(
