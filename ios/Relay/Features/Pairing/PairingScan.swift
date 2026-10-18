@@ -264,8 +264,9 @@ nonisolated enum Halftone {
             // The front takes the field dot by dot; once it has run, none is left.
             s.rest = s.entering ? 0 : 1
             s.clear = s.entering ? 0 : 1
-            // The computer's glow sits just above the viewfinder: the front reaches it first.
-            s.beacon = 1 - ease((s.front + 10) / 60)
+            // The computer goes with the field folding into the viewfinder, not left standing alone
+            // till the front reaches it.
+            s.beacon = min(1 - ease((s.front + 10) / 60), 1 - ease(seconds / 0.3))
             covers = ease((s.front - 110) / 160)
         default: break
         }

@@ -390,6 +390,12 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         for p in pulses {
             let age = time - p.z
             guard age >= 0, p.w > 0 else { continue }
+            // Its own rings start right under it: rather than thrown up on their crest and dropped
+            // as it rolls away, it rises softly and floats back down.
+            if simd_distance(SIMD2(x, z), SIMD2(p.x, p.y)) < 0.5 {
+                lift += 0.4 * p.w * (1 - exp(-age * 4)) * exp(-age * 0.9)
+                continue
+            }
             let ring = simd_distance(SIMD2(x, z), SIMD2(p.x, p.y)) - age * 3.4
             let fade = p.w * exp(-age * 0.28)
             lift += fade * exp(-ring * ring / (0.12 + age * 0.06))
