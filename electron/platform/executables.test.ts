@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { existsSync, watch, type FSWatcher } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const refreshPath = vi.hoisted(() =>
@@ -20,7 +20,7 @@ vi.mock("node:fs/promises", async (actual) => {
   return {
     ...fs,
     access: async (...args: Parameters<typeof fs.access>) => {
-      if (!String(args[0]).startsWith(root + "/"))
+      if (!String(args[0]).startsWith(root + sep))
         throw Object.assign(new Error("Outside the test installation"), {
           code: "ENOENT",
         });

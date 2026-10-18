@@ -290,12 +290,17 @@ export interface Exec {
 
 const outputLimit = 10_000;
 
-/** Runs a path from `findExecutable` and collects what it says; cancellation rejects after exit. */
+/**
+ * Runs a path from `findExecutable` and collects what it says; cancellation
+ * rejects after exit. With `ownTree` (on by default for a signal) the process
+ * gets its own group, so a timeout or cancel stops its children too.
+ */
 export const runExecutable = (
   file: string,
   args: string[],
   timeout: number,
   signal?: AbortSignal,
+  ownTree = !!signal,
 ): Promise<Exec> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("Cancelled."));
@@ -306,13 +311,13 @@ export const runExecutable = (
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      detached: !!signal && !windows,
+      detached: ownTree && !windows,
     });
     // gh can spawn git push: cancelling must stop that process too.
     let stopping: Promise<void> | undefined;
     let stopError: unknown;
     const stop = () => {
-      if (signal)
+      if (ownTree)
         stopping ??= stopProcessTree(child).catch((e) => {
           stopError = e;
         });
