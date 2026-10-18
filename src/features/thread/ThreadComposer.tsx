@@ -256,6 +256,12 @@ export function ThreadComposer({
     !compacting &&
     !history.data?.queue?.length &&
     !history.data?.queuePaused &&
+    // Compacting resumes the session of the agent that answered last.
+    shown.findLast((m) => m.role === "assistant")?.provider ===
+      context.provider &&
+    !!(root ? history.data?.replySessions?.[root.id] : history.data?.sessions)?.[
+      context.provider
+    ]?.thread &&
     compactsCold(context.usage, Date.now())
       ? { provider: context.provider, tokens: context.usage.usedTokens }
       : undefined;
