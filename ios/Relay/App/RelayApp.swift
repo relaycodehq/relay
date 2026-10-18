@@ -45,6 +45,8 @@ struct RootView: View {
     @State private var pairing = false
     @Binding var linked: LinkedThread?
     @State private var tab = HomeTab.threads
+    /// The last switch between tabs, which the new tab's title turns from.
+    @State private var switched: TabSwitch?
     @Environment(\.colors) private var colors
     /// Each tab's own: a push redraws that tab's stack, not the root and every tab under it.
     @State private var stacks = Dictionary(uniqueKeysWithValues: HomeTab.allCases.map { ($0, StackPath()) })
@@ -107,6 +109,8 @@ struct RootView: View {
                 }
             }
             .tabViewSearchActivation(.searchTabSelection)
+            .onChange(of: tab) { from, to in switched = TabSwitch(from: from, to: to) }
+            .environment(\.tabSwitch, switched)
             .hotReloads()
             .environment(\.threadFilter, filter.wrappedValue)
             .overlay(alignment: .top) {
@@ -188,7 +192,7 @@ private struct TabChrome<Actions: ToolbarContent>: ViewModifier {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     TabTitle(
-                        title: tab.title, subtitle: tab == .settings ? nil : connection.statusLine, switches: tab != .settings,
+                        tab: tab, subtitle: tab == .settings ? nil : connection.statusLine, switches: tab != .settings,
                         name: name)
                 }
                 .sharedBackgroundVisibility(.hidden)
@@ -271,24 +275,37 @@ struct ComputerMenu<Label: View>: View {
 
 /// A tab's title in the navigation bar, as large as the title row it stands in for.
 private struct TabTitle: View {
-    let title: String
+    let tab: HomeTab
     let subtitle: String?
     /// Tapping it opens the computers to switch to; the screen lays the menu over it.
     var switches = false
     /// Where the title and the computer's name are drawn, for the menu the screen lays over them.
     var name: NameSpot?
     @Environment(\.colors) private var colors
+    @Environment(\.tabSwitch) private var switched
+    /// The word showing, which is the last tab's for a moment after a switch to this one.
+    @State private var shown: String?
 
     var body: some View {
         label
             .overlay(alignment: .bottomLeading) { hanging }
+            // Each tab has its own bar, so the title would just cut; this one rolls from the last
+            // tab's word into its own instead.
+            .onChange(of: switched) { _, now in
+                guard let now, now.to == tab, now.from != .new else { return }
+                var still = Transaction()
+                still.disablesAnimations = true
+                withTransaction(still) { shown = now.from.title }
+                Task { withAnimation(.snappy(duration: 0.4)) { shown = nil } }
+            }
             .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { [name, switches] in
                 if switches { name?.title = $0 }
             }
     }
     private var label: some View {
-        Text(title)
+        Text(shown ?? tab.title)
             .font(.largeTitle.bold())
+            .contentTransition(.numericText())
             .foregroundStyle(colors.foreground)
             .lineLimit(1)
             .fixedSize()
@@ -317,6 +334,15 @@ private struct TabTitle: View {
 final class NameSpot {
     var title: CGRect?
     var frame: CGRect?
+}
+
+struct TabSwitch: Equatable {
+    let from: HomeTab
+    let to: HomeTab
+}
+
+extension EnvironmentValues {
+    @Entry var tabSwitch: TabSwitch?
 }
 
 enum HomeTab: Hashable, CaseIterable {
