@@ -52,6 +52,7 @@ private struct FieldUniforms {
     var entering: Float
     var develop: Float
     var turn: Float
+    var glow: Float
 }
 
 /// Laid out as Ripples.metal's CameraUniforms.
@@ -118,9 +119,12 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    /// As Ripples.metal's COLS and ROWS.
+    /// As Ripples.metal's COLS, ROWS and SPECKS.
     private static let cols = 118
     private static let rows = 140
+    private static let specks = 24
+    /// Specks a draw.
+    private static let batch = 32768
     private static let slots = 24
     private static let fov: Float = 50
     /// The picture moved up the screen, so the field sits above the words.
@@ -245,7 +249,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             scan: scanHot, screen: screen, time: Float(time), px: px, unit: unit, baseAlpha: palette.baseAlpha,
             gather: s.gather, clear: s.clear, rest: s.rest, lock: s.lock, charge: s.charge, burst: s.burst,
             modules: Int32(moduleBytes.isEmpty ? 0 : f.modules), front: s.front, entering: s.entering ? 1 : 0,
-            develop: s.develop, turn: scanYaw)
+            develop: s.develop, turn: scanYaw, glow: palette.light ? 0 : 1)
         var waves = [SIMD4<Float>](repeating: .zero, count: Self.slots)
         for (i, p) in pulses.enumerated() { waves[i] = p }
         waves += packets
@@ -273,7 +277,10 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         encoder.setVertexBytes(waves, length: MemoryLayout<SIMD4<Float>>.stride * waves.count, index: 1)
         encoder.setVertexBuffer(moduleBuffer, offset: 0, index: 2)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<FieldUniforms>.stride, index: 0)
-        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4, instanceCount: Self.cols * Self.rows)
+        let specks = Self.cols * Self.rows * Self.specks
+        for start in stride(from: 0, to: specks, by: Self.batch) {
+            encoder.drawPrimitives(type: .point, vertexStart: start, vertexCount: min(Self.batch, specks - start))
+        }
 
         if !lit.isEmpty {
             var tint = SIMD4<Float>(s.flash > 0 ? simd_mix(scanHot, SIMD3(repeating: 1), SIMD3(repeating: 0.4)) : palette.hot, 1)

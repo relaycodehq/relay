@@ -14,6 +14,8 @@ constant int ROWS = AWAY + 12;
 /// The computer, which the view turns round.
 constant float2 COMPUTER = float2(0.0, -13.0);
 constant float STEP = 0.36;
+/// Specks a dot of the field is drawn as.
+constant int SPECKS = 24;
 /// Ring slots, room for a finger's too, then the two packets.
 constant int SLOTS = 24;
 /// Places a side of the viewfinder's grid.
@@ -63,12 +65,14 @@ struct FieldUniforms {
     float develop;
     /// How far the view had turned round the computer when the scan began, radians.
     float turn;
+    /// The field adds up as light, on a dark theme; on a light one it's ink and doesn't.
+    float glow;
 };
 
 struct DotOut {
     float4 position [[position]];
+    float pointSize [[point_size]];
     float4 color;
-    float2 corner;
     float fade;
     float soft;
 };
@@ -124,14 +128,22 @@ static float frontDistance(float2 p) {
 }
 
 vertex DotOut dotVertex(
-    uint vid [[vertex_id]], uint iid [[instance_id]], constant FieldUniforms &u [[buffer(0)]],
+    uint iid [[vertex_id]], constant FieldUniforms &u [[buffer(0)]],
     constant float4 *waves [[buffer(1)]], constant uchar *modules [[buffer(2)]]
 ) {
-    int ci = int(iid) % COLS;
-    int ri = int(iid) / COLS;
+    int spray = int(iid) / SPECKS;
+    int k = int(iid) % SPECKS;
+    int ci = spray % COLS;
+    int ri = spray / COLS;
     float c = float(ci);
     float r = ri < AWAY ? float(ri) : float(AWAY - 1 - ri);
-    float2 xz = float2((c - float(COLS - 1) * 0.5 + fmod(abs(r), 2.0) * 0.5) * STEP, 5.5 - r * STEP * 0.866);
+    float2 site = float2((c - float(COLS - 1) * 0.5 + fmod(abs(r), 2.0) * 0.5) * STEP, 5.5 - r * STEP * 0.866);
+    // A dot is a spray of specks: most spread along its row, tight across it, so the rows read as
+    // grainy lines; one in four drifts loose as haze between them. Each has its own size, colour and
+    // twinkle, and the shape shows in where they bunch and brighten, not in a lattice.
+    bool loose = rand(iid, 20u) < 0.25;
+    float2 spread = loose ? float2(STEP * 1.2, STEP * 1.1) : float2(STEP * 0.55, 0.06);
+    float2 xz = site + (float2(rand(iid, 21u), rand(iid, 22u)) * 2.0 - 1.0) * spread;
     float swell = 0.11 * sin(xz.x * 0.55 + u.time * 0.6) * cos(xz.y * 0.42 - u.time * 0.45)
                 + 0.05 * sin(xz.y * 0.9 + xz.x * 0.2 + u.time * 0.8);
     float lift = 0.0;
@@ -153,23 +165,38 @@ vertex DotOut dotVertex(
         wash += k.w * exp(-dot(d, d) / (0.35 + k.z * 0.5)) * (1.0 - k.z * 0.3);
     }
     float h = clamp(lift * 1.3 + wash, 0.0, 1.0);
-    float3 pos = float3(xz.x, swell + lift * 0.5 + wash * 0.08, xz.y);
+    float3 pos = float3(xz.x, swell + lift * 0.5 + wash * 0.08 + (loose ? (rand(iid, 23u) - 0.3) * 0.5 : 0.0), xz.y);
     float4 clip = u.viewProjection * float4(pos, 1.0);
     float dist = distance(pos, u.eye);
     float fog = (1.0 - smoothstep(15.0, 31.0, dist)) * (1.0 - smoothstep(17.0, 21.0, distance(xz, COMPUTER)))
               * smoothstep(0.4, 1.6, clip.w);
-    float size = min(u.px * (0.042 + 0.07 * h) / max(clip.w, 0.01), 30.0 * u.unit);
-    float4 col = float4(mix(u.base, u.hot, h), 1.0) * (u.baseAlpha + (1.0 - u.baseAlpha) * h) * fog;
+    // Grain a pixel or three across, a little bigger near you, and now and then a big soft one.
+    float grain = rand(iid, 24u);
+    bool big = grain > 0.993;
+    float size = big ? min(u.px * 0.045 / max(clip.w, 0.01), 30.0 * u.unit)
+                     : u.unit * (0.5 + 0.5 * grain) * clamp(7.0 / max(clip.w, 0.01), 0.7, 1.8);
+    size *= 1.0 + 1.5 * h;
+    // Our accent, with teal, magenta and white specks through it.
+    float hue = rand(iid, 25u);
+    float3 tint = hue < 0.4 ? u.hot : hue < 0.7 ? float3(0.25, 0.9, 0.78)
+                : hue < 0.9 ? float3(0.95, 0.3, 0.72) : float3(1.0);
+    // Brighter on the swell's crests, so it shows as bands of light, and each speck twinkles.
+    float crest = smoothstep(-0.12, 0.16, swell);
+    float twinkle = 0.55 + 0.45 * sin(u.time * (1.0 + 2.5 * rand(iid, 26u)) + 6.283 * rand(iid, 27u));
+    float bright = (0.2 + 0.8 * crest) * twinkle * (0.35 + 0.65 * rand(iid, 28u)) * (loose ? 0.6 : 1.0) * (big ? 0.35 : 1.0);
+    float4 col = float4(mix(mix(u.base, tint, 0.5 + 0.5 * u.glow), tint, h), 1.0)
+               * (u.baseAlpha * bright * (3.0 + 8.0 * u.glow) + (1.0 - u.baseAlpha) * h) * fog;
+    float soft = big ? 1.0 : 0.0;
     float4 home = col;
     float homeSize = size;
 
     // Every dot folds into the viewfinder, onto the place of the grid it was over as the field faced
     // you when the scan began, the near rows at the bottom. One dot a place stays; the rest melt into it.
     float2 span = SCAN_HI - SCAN_LO;
-    float2 b = (facing(xz, u.turn) - SCAN_LO) / span;
+    float2 b = (facing(site, u.turn) - SCAN_LO) / span;
     int2 place = clamp(int2(floor(float2(b.x, 1.0 - b.y) * float(GRID))), 0, GRID - 1);
     float2 g = (float2(place) + 0.5) / float(GRID);
-    bool keeps = all(nearestDot(unfacing(SCAN_LO + float2(g.x, 1.0 - g.y) * span, u.turn)) == int2(ci, ri));
+    bool keeps = k == 0 && all(nearestDot(unfacing(SCAN_LO + float2(g.x, 1.0 - g.y) * span, u.turn)) == int2(ci, ri));
     // The module each dot lands on, (0,0) top left; dots sharing one sit on its middle.
     float2 m = float2(g.x, 1.0 - g.y);
     int n = max(u.modules, 1);
@@ -178,7 +205,6 @@ vertex DotOut dotVertex(
     float2 mid = onCode(u.code, float2(0.5));
     float modulePx = length((onCode(u.code, float2(1.0, 0.0)) - onCode(u.code, float2(0.0))) * u.screen * 0.5) / float(n);
     float fade = 1.0;
-    float soft = 0.0;
     float4 at = clip;
     float p = landing(u.gather, iid, g.y);
     int ex = min(place.x, GRID - 1 - place.x), ey = min(place.y, GRID - 1 - place.y);
@@ -191,9 +217,7 @@ vertex DotOut dotVertex(
     float2 from = clip.w > 0.2 ? clip.xy / clip.w : float2(sign(clip.x) * 0.3, -1.3);
     float2 xy = mix(from, win, p);
     xy = mix(mix(xy, onCode(u.code, (float2(cell) + 0.5) / float(n)), l), mid, 0.06 * u.charge);
-    // Those that melt are only as bright on the way as they were in the field, so the far ones,
-    // thousands packed into the horizon, don't light it up as one bar.
-    col = mix(col, keeps ? onWin : onWin * fog, p);
+    col = mix(col, onWin, p);
     // White-hot as each dot lands, so the read sweeps across the code; white again as it draws in to burst.
     float white = max(0.6 * sin(M_PI_F * l), 0.55 * u.charge);
     col = mix(col, dark ? mix(float4(u.scan, 1.0), float4(1.0), white) : float4(0.0), l);
@@ -202,7 +226,12 @@ vertex DotOut dotVertex(
     size = mix(size, modulePx * 0.95, l) * (1.0 - 0.15 * u.charge);
     // Landed, it holds until the camera's dot in its cell takes over from it.
     if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.2, 0.9, developed(u.develop, (g - 0.5) * 250.0));
-    if (!keeps) col *= 1.0 - smoothstep(0.45, 1.0, p);
+    // Those that melt stay the specks they were and fade on the way, or hundreds of thousands of
+    // grid-sized dots adding up in flight would white the screen out.
+    if (!keeps) {
+        col = home * (1.0 - smoothstep(0.3, 1.0, p));
+        size = homeSize;
+    }
     if (p + l > 0.0) at = float4(xy, 0.0, 1.0);
     fade = 1.0 - p;
 
@@ -245,23 +274,24 @@ vertex DotOut dotVertex(
         fade = smoothstep(0.6, 1.0, t);
     }
 
-    float2 corner = float2(vid & 1u ? 1.0 : -1.0, vid & 2u ? 1.0 : -1.0);
-    size = max(size, 1.5 * u.unit * 0.5);
+    // Smaller than a speck can be drawn, it dims instead of shrinking.
     DotOut out;
-    out.position = at + float4(corner * size / u.screen * at.w, 0.0, 0.0);
-    out.color = col * min(1.0, size / (1.5 * u.unit * 0.5));
-    out.corner = corner;
+    out.position = at;
+    out.pointSize = max(size, 1.2);
+    out.color = col * min(1.0, size / 1.2);
     out.fade = fade;
     out.soft = soft;
     return out;
 }
 
 /// Round dots; in the field they fade toward the words below.
-fragment float4 dotFragment(DotOut in [[stage_in]], constant FieldUniforms &u [[buffer(0)]]) {
-    float d = length(in.corner) * 0.5;
+fragment float4 dotFragment(DotOut in [[stage_in]], float2 point [[point_coord]], constant FieldUniforms &u [[buffer(0)]]) {
+    float d = length(point - 0.5);
     float y = in.position.y / u.screen.y;
     float curve = y < 0.52 ? 1.0 : y < 0.7 ? mix(1.0, 0.4, (y - 0.52) / 0.18) : mix(0.4, 0.16, (y - 0.7) / 0.3);
-    return in.color * (1.0 - smoothstep(mix(0.25, 0.0, in.soft), 0.5, d)) * mix(1.0, curve, in.fade);
+    float4 c = in.color * (1.0 - smoothstep(mix(0.25, 0.0, in.soft), 0.5, d)) * mix(1.0, curve, in.fade);
+    // In the field, specks add up as light where they bunch.
+    return float4(c.rgb, c.a * (1.0 - u.glow * in.fade));
 }
 
 /// Laid out as RippleRenderer's Glow.
