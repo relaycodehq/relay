@@ -30,23 +30,38 @@ const OPEN_SETTINGS = "relay:open-settings";
 
 /**
  * Opens Settings at `category` from a feature the shell hands no way there;
- * `projectId` picks the project a "project" category shows.
+ * `projectId` picks the project a "project" category shows, `entryId` the
+ * setting it scrolls to.
  */
-export function openSettings(category: SettingsCategory, projectId?: string) {
+export function openSettings(
+  category: SettingsCategory,
+  projectId?: string,
+  entryId?: string,
+) {
   window.dispatchEvent(
-    new CustomEvent(OPEN_SETTINGS, { detail: { category, projectId } }),
+    new CustomEvent(OPEN_SETTINGS, {
+      detail: { category, projectId, entryId },
+    }),
   );
 }
 
 /** The shell's side of `openSettings`; returns the unsubscribe. */
 export function onOpenSettings(
-  show: (category: SettingsCategory, projectId?: string) => void,
+  show: (
+    category: SettingsCategory,
+    projectId?: string,
+    entryId?: string,
+  ) => void,
 ) {
   const listener = (event: Event) => {
-    const { category, projectId } = (
-      event as CustomEvent<{ category: SettingsCategory; projectId?: string }>
+    const { category, projectId, entryId } = (
+      event as CustomEvent<{
+        category: SettingsCategory;
+        projectId?: string;
+        entryId?: string;
+      }>
     ).detail;
-    show(category, projectId);
+    show(category, projectId, entryId);
   };
   window.addEventListener(OPEN_SETTINGS, listener);
   return () => window.removeEventListener(OPEN_SETTINGS, listener);

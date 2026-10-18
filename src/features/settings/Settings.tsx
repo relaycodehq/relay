@@ -40,12 +40,15 @@ export function Settings({
   onConnect,
   onOpenChat,
   initialCategory,
+  initialEntry,
   projectId,
   initialQuery = "",
   onQueryChange,
   onWhere,
 }: {
   initialCategory?: SettingsCategory;
+  /** The setting in that category it opens scrolled to. */
+  initialEntry?: string;
   /** Only provided when opening settings from a project entry point. */
   projectId?: string;
   /** Kept by the shell while the settings page is closed. */
@@ -67,7 +70,7 @@ export function Settings({
   const [destination, setDestination] = useState<{
     category: SettingsCategory;
     entryId?: string;
-  }>({ category: initialCategory ?? "appearance" });
+  }>({ category: initialCategory ?? "appearance", entryId: initialEntry });
   const category = destination.category;
   const [query, updateQuery] = useState(initialQuery);
   const [searching, setSearching] = useState(!initialCategory);
@@ -126,18 +129,33 @@ export function Settings({
   useLayoutEffect(() => {
     const pane = content.current;
     if (!pane) return;
-    if (!showResults && words.length && targetId) {
+    if (!showResults && (words.length || destination.entryId) && targetId) {
       const target = Array.from(
         pane.querySelectorAll<HTMLElement>("[data-setting-id]"),
       ).find((element) => element.dataset.settingId === targetId);
       if (target) {
         // Scroll only the content pane; tall cards should land at their top.
-        pane.scrollTop +=
-          target.getBoundingClientRect().top -
-          pane.getBoundingClientRect().top -
-          16;
+        const align = () => {
+          pane.scrollTop +=
+            target.getBoundingClientRect().top -
+            pane.getBoundingClientRect().top -
+            16;
+        };
+        align();
         target.focus({ preventScroll: true });
-        return;
+        // Lists above it that load afterwards push it down; keep it in view
+        // while the page settles, until you scroll yourself.
+        const grows = new ResizeObserver(align);
+        for (const child of pane.children) grows.observe(child);
+        const stop = () => grows.disconnect();
+        const settled = setTimeout(stop, 5000);
+        const yours = ["wheel", "pointerdown", "keydown", "touchstart"];
+        for (const type of yours) pane.addEventListener(type, stop);
+        return () => {
+          stop();
+          clearTimeout(settled);
+          for (const type of yours) pane.removeEventListener(type, stop);
+        };
       }
     }
     pane.scrollTop = 0;

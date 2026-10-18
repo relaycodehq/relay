@@ -463,6 +463,7 @@ export default function ProjectShell() {
           <Settings
             account={account ?? null}
             initialCategory={settings.category}
+            initialEntry={settings.entry}
             key={settings.project ?? "app"}
             projectId={settings.project}
             initialQuery={settings.query}

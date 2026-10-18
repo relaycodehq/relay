@@ -14,6 +14,7 @@ export function useSettingsPage(
   const [open, setOpen] = useState(false),
     [category, setCategory] = useState<SettingsCategory>(),
     [project, setProject] = useState<string>(),
+    [entry, setEntry] = useState<string>(),
     [query, setQuery] = useState(""),
     [where, setWhere] = useState("");
   // What had focus before Settings covered it, the composer usually.
@@ -29,15 +30,18 @@ export function useSettingsPage(
     category,
     /** The project explicitly opened from a project entry point. */
     project,
+    /** The setting it opens scrolled to. */
+    entry,
     /** Search survives closing the page for the lifetime of this window. */
     query,
     setQuery,
     /** Where in Settings it is, for the window title. */
     where,
     setWhere,
-    show(at?: SettingsCategory, projectId?: string) {
+    show(at?: SettingsCategory, projectId?: string, entryId?: string) {
       if (!open) returnTo.current = document.activeElement;
       setCategory(at);
+      setEntry(entryId);
       setProject(at === "project" ? projectId : undefined);
       setOpen(true);
     },
