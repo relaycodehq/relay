@@ -69,7 +69,7 @@
     "lucide-react": "1.47.0",
     "mdast-util-from-markdown": "2.0.3",
     "mdast-util-gfm": "3.1.0",
-    "mermaid": "12.0.0",
+    "mermaid": "12.2.0",
     "micromark-extension-gfm": "3.0.0",
     "node-pty": "1.1.0",
     "onnxruntime-node": "1.30.0",
@@ -229,5 +229,10 @@
     }
   },
   "license": "MIT",
-  "desktopName": "relay-experimental.desktop"
+  "desktopName": "relay-experimental.desktop",
+  "overrides": {
+    "katex": "$katex",
+    "lodash-es": "4.18.1",
+    "global-agent": "4.1.3"
+  }
 }
