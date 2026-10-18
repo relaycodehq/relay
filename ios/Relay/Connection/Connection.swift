@@ -371,16 +371,17 @@ final class Connection {
         guard let client else { return }
         openSaved(id)
         let fetched = OutboxClock.stamp()
+        let asked = threads[id]
         do {
             let chat: RemoteChat
             do {
-                chat = try await client.chat(id, previous: threads[id], history: history[id])
+                chat = try await client.chat(id, previous: asked, history: history[id])
             } catch is MissingMessage {
                 chat = try await client.chat(id, history: history[id])
             }
             guard self.client === client else { return }
             // A message the stream moved on while this was asked stays as the stream left it.
-            threads[id] = keepNewer(chat, threads[id])
+            threads[id] = keepNewer(chat, threads[id], asked: asked)
             offline.save(active, id, chat)
             loadErrors[id] = nil
             took(id, threads[id]!, fetched: fetched)
@@ -525,18 +526,16 @@ final class Connection {
         return try await client.createProjectChat(projectId: projectId, workspace: workspace)
     }
 
-    /// Makes the thread, then sends its first message; the thread's id.
+    /// Makes the thread, then sends its first message; the thread's id. A retry passes the
+    /// failed attempt's `id`, so the computer, which knows the draft's sends by it, starts one thread.
     func start(
         in projectId: String, workspace: String?, _ text: String, images: [PastedImage], with settings: ResumeSettings,
-        sendAt: Int64? = nil, throughDraft: String? = nil
+        sendAt: Int64? = nil, throughDraft: String? = nil, id: String = UUID().uuidString.lowercased()
     ) async throws -> String {
         guard let client else { throw PairingError("Not connected.") }
-        if let throughDraft {
-            return try await client.sendDraft(
-                key: throughDraft, chatId: nil, ProjectChatSend(body: text, settings: settings, images: images, sendAt: sendAt))
-        }
+        let send = ProjectChatSend(id: id, body: text, settings: settings, images: images, sendAt: sendAt)
+        if let throughDraft { return try await client.sendDraft(key: throughDraft, chatId: nil, send) }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
-        let send = ProjectChatSend(body: text, settings: settings, images: images, sendAt: sendAt)
         // One for later goes to the desktop's queue, which the thread shows; through the outbox it
         // would sit there twice. A plain one follows the thread, as a worktree or images can take a while.
         if sendAt != nil {

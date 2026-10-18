@@ -103,7 +103,7 @@ struct NewThreadView: View {
                     return started(
                         try await connection.start(
                             in: projectId ?? "", workspace: workspace, sent.text, images: sent.images,
-                            with: sent.settings, sendAt: sent.sendAt, throughDraft: through))
+                            with: sent.settings, sendAt: sent.sendAt, throughDraft: through, id: sent.id))
                 }
                 let place = scratch ? try await scratchFolder() : projectId
                 guard let place else { throw PairingError("Pick a project first.") }

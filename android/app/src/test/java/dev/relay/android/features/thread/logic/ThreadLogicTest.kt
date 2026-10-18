@@ -119,7 +119,17 @@ class ThreadLogicTest {
         // Unsequenced messages sort after sequenced ones, even when made earlier.
         assertEquals(listOf("a", "b", "c"), applyMessage(chat, msg("c", seq = null, created = 0)).messages.map { it.id })
         val fetched = chat.copy(messages = listOf(msg("a", seq = 1, version = 2), msg("b", seq = 2, version = 3)))
-        assertEquals(listOf(2L, 5L), keepNewer(fetched, chat).messages.map { it.version })
+        assertEquals(listOf(2L, 5L), keepNewer(fetched, chat, chat).messages.map { it.version })
+    }
+
+    @Test fun aFetchKeepsWhatStreamedInWhileItRan() {
+        val asked = RemoteChat(id = "t", projectId = "p", title = "T", scope = ChatScope("project"),
+            messages = listOf(msg("a", seq = 1), msg("gone", seq = 2)))
+        // "c" streamed in during the fetch; "gone" was removed on the computer.
+        val held = asked.copy(messages = asked.messages + msg("c", seq = 4))
+        val fetched = asked.copy(messages = listOf(msg("a", seq = 1), msg("b", seq = 3)))
+        assertEquals(listOf("a", "b", "c"), keepNewer(fetched, held, asked).messages.map { it.id })
+        assertEquals(fetched, keepNewer(fetched, null, asked))
     }
 
     @Test fun repliesFormSideConversations() {

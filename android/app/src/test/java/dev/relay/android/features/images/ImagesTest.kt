@@ -41,9 +41,10 @@ class ImagesTest {
         val body = listOf(
             "Before: ![](/tmp/before.png) and after: ![after](<shots/after.png> \"title\")",
             "A [link](/tmp/link.png), `/tmp/code.png`, and ![](https://x.dev/r.png).",
-            "Again ![](/tmp/before.png)",
+            "Again ![](/tmp/before.png), and ![shot](</tmp/my screenshot.png>)",
         ).joinToString("\n")
-        assertEquals(listOf("/tmp/before.png", "/work/relay/shots/after.png"), answerImagePaths(body, root))
+        assertEquals(listOf("/tmp/before.png", "/work/relay/shots/after.png", "/tmp/my screenshot.png"),
+            answerImagePaths(body, root))
     }
 
     private fun read(id: String, path: String, status: String = "complete") =

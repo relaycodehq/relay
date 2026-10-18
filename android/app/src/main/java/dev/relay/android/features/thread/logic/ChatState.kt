@@ -26,11 +26,18 @@ fun applyMessage(thread: RemoteChat, message: ChatMessage): RemoteChat {
     return thread.copy(messages = messages)
 }
 
-/** A fetched thread, keeping any message a stream moved past while the fetch ran. */
-fun keepNewer(fetched: RemoteChat, held: RemoteChat?): RemoteChat {
+/**
+ * A fetched thread, keeping any message a stream moved past or brought while the fetch ran.
+ * [asked] is what was held when the fetch began: a message held then that the fetch leaves out
+ * is gone from the thread, but one streamed in since may be newer than the fetch.
+ */
+fun keepNewer(fetched: RemoteChat, held: RemoteChat?, asked: RemoteChat?): RemoteChat {
     if (held == null) return fetched
     val newer = held.messages.associateBy { it.id }
-    return fetched.copy(messages = fetched.messages.map { m -> newer[m.id]?.takeIf { it.version > m.version } ?: m })
+    val messages = fetched.messages.map { m -> newer[m.id]?.takeIf { it.version > m.version } ?: m }
+    val known = fetched.messages.mapTo(HashSet()) { it.id }.apply { asked?.messages?.forEach { add(it.id) } }
+    val arrived = held.messages.filter { it.id !in known }
+    return fetched.copy(messages = if (arrived.isEmpty()) messages else (messages + arrived).sortedWith(threadOrder))
 }
 
 /** The main conversation: everything but replies. A reply whose parent is gone shows here rather than nowhere. */

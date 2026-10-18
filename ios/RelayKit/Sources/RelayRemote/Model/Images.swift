@@ -37,8 +37,9 @@ public func isImagePath(_ path: String) -> Bool {
     path.range(of: #"\.(?:png|jpe?g|gif|webp)$"#, options: [.regularExpression, .caseInsensitive]) != nil
 }
 
+// A destination in <angle brackets> may hold spaces, like a macOS app data path.
 private let markdownImage = try! NSRegularExpression(
-    pattern: #"!\[[^\]\n]*]\(\s*<?([^\s<>()]+)>?(?:\s+["'][^"'\n]*["'])?\s*\)"#)
+    pattern: #"!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+))(?:\s+["'][^"'\n]*["'])?\s*\)"#)
 
 private func matches(_ text: String, _ pattern: String) -> Bool {
     text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
@@ -78,7 +79,9 @@ public func answerImagePaths(_ body: String, root: String) -> [String] {
     let text = body as NSString
     var seen = Set<String>()
     return markdownImage.matches(in: body, range: NSRange(location: 0, length: text.length)).compactMap { match in
-        guard let path = localImagePath(text.substring(with: match.range(at: 1)), root: root),
+        let bracketed = match.range(at: 1)
+        let src = text.substring(with: bracketed.location != NSNotFound ? bracketed : match.range(at: 2))
+        guard let path = localImagePath(src, root: root),
             seen.insert(path).inserted
         else { return nil }
         return path

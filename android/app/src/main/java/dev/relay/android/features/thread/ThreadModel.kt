@@ -72,12 +72,13 @@ class ThreadModel(
         try {
             val history = _history.value
             val started = stamp()
+            val asked = _thread.value
             val next = try {
-                client.chat(id, _thread.value, history)
+                client.chat(id, asked, history)
             } catch (_: MissingMessage) {
                 client.chat(id, null, history)
             }
-            _thread.value = keepNewer(next, _thread.value)
+            _thread.value = keepNewer(next, _thread.value, asked)
             _fetched.value = started
             cache.save(computer, id, next)
             _error.value = null

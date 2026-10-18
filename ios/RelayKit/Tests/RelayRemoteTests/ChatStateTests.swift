@@ -32,7 +32,16 @@ private func chat(_ messages: [ChatMessage]) -> RemoteChat {
     // Unsequenced messages sort after sequenced ones, even when made earlier.
     #expect(applyMessage(held, msg("c", created: 0)).messages.map(\.id) == ["a", "b", "c"])
     let fetched = chat([msg("a", seq: 1, version: 2), msg("b", seq: 2, version: 3)])
-    #expect(keepNewer(fetched, held).messages.map(\.version) == [2, 5])
+    #expect(keepNewer(fetched, held, asked: held).messages.map(\.version) == [2, 5])
+}
+
+@Test func aFetchKeepsWhatStreamedInWhileItRan() {
+    let asked = chat([msg("a", seq: 1), msg("gone", seq: 2)])
+    // "c" streamed in during the fetch; "gone" was removed on the computer.
+    let held = chat(asked.messages + [msg("c", seq: 4)])
+    let fetched = chat([msg("a", seq: 1), msg("b", seq: 3)])
+    #expect(keepNewer(fetched, held, asked: asked).messages.map(\.id) == ["a", "b", "c"])
+    #expect(keepNewer(fetched, nil, asked: asked) == fetched)
 }
 
 @Test func repliesFormSideConversations() {

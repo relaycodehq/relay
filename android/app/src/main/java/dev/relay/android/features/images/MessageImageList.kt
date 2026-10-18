@@ -47,7 +47,8 @@ private val IMAGE_FILE = Regex("""\.(?:png|jpe?g|gif|webp)$""", RegexOption.IGNO
 /** An image Relay can show, by its name. */
 fun isImagePath(path: String) = IMAGE_FILE.containsMatchIn(path)
 
-private val MARKDOWN_IMAGE = Regex("""!\[[^\]\n]*]\(\s*<?([^\s<>()]+)>?(?:\s+["'][^"'\n]*["'])?\s*\)""")
+// A destination in <angle brackets> may hold spaces, like a macOS app data path.
+private val MARKDOWN_IMAGE = Regex("""!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+))(?:\s+["'][^"'\n]*["'])?\s*\)""")
 private val SCHEME = Regex("^[a-z][a-z\\d+.-]*:", RegexOption.IGNORE_CASE)
 private val DRIVE = Regex("^[a-z]:[\\\\/]", RegexOption.IGNORE_CASE)
 private val FILE_URL = Regex("^file://", RegexOption.IGNORE_CASE)
@@ -105,7 +106,9 @@ fun localImagePath(src: String, root: String): String? {
 
 /** The local image files an answer embeds, so only those can be read for it. */
 fun answerImagePaths(body: String, root: String): List<String> =
-    MARKDOWN_IMAGE.findAll(body).mapNotNull { localImagePath(it.groupValues[1], root) }.distinct().toList()
+    MARKDOWN_IMAGE.findAll(body).mapNotNull { m ->
+        localImagePath(m.groupValues[1].ifEmpty { m.groupValues[2] }, root)
+    }.distinct().toList()
 
 /** The picture a call looked at or made, by path. */
 fun imagePath(a: AgentActivity): String? = a.image ?: a.label.takeIf { a.kind == "read" && isImagePath(it) }

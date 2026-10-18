@@ -27,9 +27,12 @@ struct ImagesTests {
         let body = [
             #"Before: ![](/tmp/before.png) and after: ![after](<shots/after.png> "title")"#,
             "A [link](/tmp/link.png), `/tmp/code.png`, and ![](https://x.dev/r.png).",
-            "Again ![](/tmp/before.png)",
+            "Again ![](/tmp/before.png), and ![shot](</tmp/my screenshot.png>)",
         ].joined(separator: "\n")
-        #expect(answerImagePaths(body, root: root) == ["/tmp/before.png", "/work/relay/shots/after.png"])
+        #expect(
+            answerImagePaths(body, root: root) == [
+                "/tmp/before.png", "/work/relay/shots/after.png", "/tmp/my screenshot.png",
+            ])
     }
 
     private func message(_ status: String) throws -> ChatMessage {

@@ -27,14 +27,19 @@ public func applyMessage(_ thread: RemoteChat, _ message: ChatMessage) -> Remote
     return next
 }
 
-/// A fetched thread, keeping any message a stream moved past while the fetch ran.
-public func keepNewer(_ fetched: RemoteChat, _ held: RemoteChat?) -> RemoteChat {
+/// A fetched thread, keeping any message a stream moved past or brought while the fetch ran.
+/// `asked` is what was held when the fetch began: a message held then that the fetch leaves out
+/// is gone from the thread, but one streamed in since may be newer than the fetch.
+public func keepNewer(_ fetched: RemoteChat, _ held: RemoteChat?, asked: RemoteChat?) -> RemoteChat {
     guard let held else { return fetched }
     let newer = Dictionary(held.messages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     var next = fetched
     next.messages = fetched.messages.map { m in
         if let n = newer[m.id], n.version > m.version { n } else { m }
     }
+    let known = Set(fetched.messages.map(\.id)).union(asked?.messages.map(\.id) ?? [])
+    let arrived = held.messages.filter { !known.contains($0.id) }
+    if !arrived.isEmpty { next.messages = (next.messages + arrived).sorted(by: threadOrder) }
     return next
 }
 
