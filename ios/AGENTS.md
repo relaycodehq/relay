@@ -26,6 +26,12 @@ cd ios && xcodegen && xcodebuild -project Relay.xcodeproj -scheme Relay \
 
 `swift test` checks the Swift bridge against vectors the desktop's TS made
 (`Tests/RelayRemoteTests/Fixtures`, the same as Android's TsVectors.kt).
+**On the user's iPhone: `ios/scripts/device.sh`, nothing else.** No
+arguments. It finds the phone, signs with whatever profile works, installs
+Debug and launches it with Show touches on. Don't run `xcodebuild` with a
+team, don't send the user to Xcode › Accounts or to Trust, and don't
+mention signing or accounts at all. If the script fails, fix the script.
+
 The live test pairs with the real bridge under Node:
 
 ```
