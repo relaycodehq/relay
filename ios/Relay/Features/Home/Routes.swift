@@ -8,7 +8,7 @@ enum Route: Hashable {
     case replies(chatId: String, rootId: String)
     /// In the project given, else the one used last; or a Scratchpad chat. `draftKey` carries
     /// on a new thread's draft picked from Home, maybe started on the computer.
-    case newThread(projectId: String? = nil, scratch: Bool = false, draftKey: String? = nil)
+    case newThread(projectId: String? = nil, scratch: Bool = false, draftKey: String? = nil, entry: UUID = UUID())
     /// Changes, branches, history, a commit, a turn or worktree, a diff (Features/Changes/GitRoute).
     case git(GitRoute)
     case project(String)
@@ -32,6 +32,12 @@ extension EnvironmentValues {
 /// What a tab's stack has pushed.
 @Observable final class StackPath {
     var routes: [Route] = []
+
+    /// A background send can finish after Back, or after another New was opened.
+    func started(_ id: String, from route: Route) {
+        guard routes.last == route else { return }
+        routes[routes.count - 1] = .thread(id)
+    }
 }
 
 /// A tab's navigation, every route reachable from its root. Pushing drops the tab bar.
@@ -75,10 +81,9 @@ struct RouteStack<Root: View>: View {
         case .thread(let id): ThreadView(chatId: id)
         case .replies(let chatId, let rootId): ThreadView(chatId: chatId, rootId: rootId)
         // Started: the thread takes the new one's place, so Back skips it.
-        case .newThread(let projectId, let scratch, let draftKey):
+        case .newThread(let projectId, let scratch, let draftKey, _):
             NewThreadView(projectId: projectId, scratch: scratch, draftKey: draftKey) { id in
-                stack.routes.removeLast()
-                stack.routes.append(.thread(id))
+                stack.started(id, from: route)
             }
         case .git(let git): GitScreen(route: git)
         case .project(let id): ProjectView(projectId: id)
