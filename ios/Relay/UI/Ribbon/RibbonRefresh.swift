@@ -43,7 +43,9 @@ private struct RibbonRefresh: ViewModifier {
             .onScrollGeometryChange(for: Overscroll.self) { g in
                 Overscroll(pull: max(0, -(g.contentOffset.y + g.contentInsets.top)), top: g.contentInsets.top)
             } action: { _, now in
-                scroll = now
+                // The list reloading under a refresh reports no inset for a few frames, which
+                // put the R up by the title; no list here sits without bars, so 0 is never real.
+                scroll = Overscroll(pull: now.pull, top: now.top > 0 ? now.top : scroll.top)
                 guard dragging, !refreshing else { return }
                 if now.pull >= gap, !armed {
                     armed = true
