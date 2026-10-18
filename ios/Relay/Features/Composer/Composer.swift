@@ -676,7 +676,10 @@ struct Composer: View {
         cursor = SwiftUI.TextSelection(insertionPoint: draft.endIndex)
         photos += back
         error = nil
+        let restoredPhotos = photos.map(\.id)
         return {
+            // The desktop may answer after the user has edited or added photos.
+            guard draft == body, photos.map(\.id) == restoredPhotos else { return }
             draft = before.0
             photos = before.1
         }

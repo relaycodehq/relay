@@ -49,6 +49,8 @@ struct ThreadView: View {
     @State private var picked: ResumeSettings?
     @FocusState private var composing: Bool
     @State private var composer = ComposerHandle()
+    @State private var recoveredQueueItems: Set<String> = []
+    @State private var uncertainTakeBack = false
     /// Marked unread on the way out: a trailing seen mark mustn't clear it.
     @State private var leavingUnread = false
     @State private var notes = ThreadNotesEntry()
@@ -178,6 +180,11 @@ struct ThreadView: View {
             }
         }
         .relayBackground()
+        .alert("Message kept in your draft", isPresented: $uncertainTakeBack) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The computer didn't confirm removal. Check the queue before sending the draft; the original may still be queued or may have gone out.")
+        }
         .fullScreenCover(item: $viewing) { Lightbox($0, space: pictures) }
         .navigationTitle(rootId != nil ? "Replies" : thread?.title ?? summary?.title ?? made?.title ?? "Thread")
         .navigationSubtitle(headerLine)
@@ -246,19 +253,28 @@ struct ThreadView: View {
             HandedBacks.hand("\(chatId):\(parentId)", item)
             return navigate(.replies(chatId: chatId, rootId: parentId))
         }
+        // A retry after an uncertain removal must not append another copy.
+        if recoveredQueueItems.contains(item.id) {
+            uncertainTakeBack = try await !connection.removeQueuedForEditing(chatId, messageId: item.id)
+            composing = true
+            return
+        }
         let back = TakenBack(item)
         // Only a computer that sends `settings` can hand the photos over; older ones give the text alone.
         let images =
             (item.images ?? 0) > 0 && item.settings != nil ? try await connection.queuedImages(chatId, item: item.id) : []
         let undo = try composer.restore(back.body, images)
-        do {
-            try await connection.queue(chatId, .remove, messageId: item.id)
-        } catch {
-            undo()
-            throw error
-        }
+        let previousSettings = picked
         if let settings = back.settings { picked = settings }
         composing = true
+        do {
+            uncertainTakeBack = try await !connection.removeQueuedForEditing(chatId, messageId: item.id)
+            recoveredQueueItems.insert(item.id)
+        } catch {
+            undo()
+            if picked == back.settings { picked = previousSettings }
+            throw error
+        }
     }
 }
 

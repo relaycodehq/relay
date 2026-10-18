@@ -523,6 +523,16 @@ final class Connection {
         await load(chatId)
     }
 
+    /// False means removal could not be confirmed; keep the recovered draft.
+    func removeQueuedForEditing(_ chatId: String, messageId: String) async throws -> Bool {
+        guard let client else { throw PairingError("Not connected.") }
+        let confirmed = try await RelayRemote.removeQueuedForEditing {
+            try await client.queueAction(chatId: chatId, .remove, messageId: messageId)
+        }
+        await load(chatId)
+        return confirmed
+    }
+
     func queuedImages(_ chatId: String, item: String) async throws -> [PastedImage] {
         guard let client else { throw PairingError("Not connected.") }
         return try await client.queuedImages(chatId: chatId, itemId: item)

@@ -67,3 +67,40 @@ private let settings = #"{"provider":"claude","choice":{"model":"opus"},"runtime
     #expect(status(try queued(#"{"id":"a","body":"x","at":\#(now + 20 * hour)}"#), 0, later: true) == "Sends tomorrow 09:25")
     #expect(status(try queued(#"{"id":"a","body":"x","at":\#(now + 48 * hour)}"#), 0, later: true) == "Sends Sat 13:25")
 }
+
+
+@Test @MainActor func retriesAnUnansweredQueueRemovalOnce() async throws {
+    var attempts = 0
+    let confirmed = try await removeQueuedForEditing {
+        attempts += 1
+        if attempts == 1 { throw RemoteCallError.unanswered("Lost reply after removal") }
+    }
+    #expect(confirmed)
+    #expect(attempts == 2)
+}
+
+@Test @MainActor func keepsTheRecoveredCopyWhenRemovalRemainsUncertain() async throws {
+    for second in [RemoteCallError.unanswered("Lost again"), .notConnected("Offline"), .rejected("Relay is closing.")] {
+        var attempts = 0
+        let confirmed = try await removeQueuedForEditing {
+            attempts += 1
+            throw attempts == 1 ? RemoteCallError.unanswered("Lost reply") : second
+        }
+        #expect(!confirmed)
+        #expect(attempts == 2)
+    }
+}
+
+@Test @MainActor func rollsBackOnlyADefiniteFirstRefusal() async {
+    var attempts = 0
+    do {
+        _ = try await removeQueuedForEditing {
+            attempts += 1
+            throw RemoteCallError.rejected("That message already went out.")
+        }
+        Issue.record("A definite refusal should reach the caller's undo")
+    } catch {
+        #expect(error as? RemoteCallError == .rejected("That message already went out."))
+    }
+    #expect(attempts == 1)
+}

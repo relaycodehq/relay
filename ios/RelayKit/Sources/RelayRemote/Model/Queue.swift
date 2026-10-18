@@ -81,3 +81,20 @@ public extension RemoteClient {
         try await desktop("projectChatQueuedImages", [.string(chatId), .string(itemId)]).decode()
     }
 }
+
+/// Removing a queued item is idempotent. After a lost reply, one repeat can
+/// confirm removal; if that also fails, the recovered draft must be kept.
+@MainActor
+public func removeQueuedForEditing(_ remove: () async throws -> Void) async throws -> Bool {
+    do {
+        try await remove()
+        return true
+    } catch RemoteCallError.unanswered {
+        do {
+            try await remove()
+            return true
+        } catch {
+            return false
+        }
+    }
+}
