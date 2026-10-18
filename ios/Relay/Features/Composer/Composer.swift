@@ -175,8 +175,10 @@ struct Composer: View {
                     + "\(from) will write a handoff note first. \(next) continues from that note and the recent messages, so expect some context to be lost."
             )
         }
+        // Background only: the microphone prompt, Control Center or a call banner leave it
+        // inactive, and the first of those stopped the dictation it was asking for.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { dictation.stop() }
+            if phase == .background { dictation.stop() }
         }
         .onDisappear { dictation.stop() }
         // One voice at a time: reading aloud ends dictation, and dictating ends a reading.
