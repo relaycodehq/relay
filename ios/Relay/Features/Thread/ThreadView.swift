@@ -133,6 +133,18 @@ struct ThreadView: View {
                 Spinner.page
             }
         }
+        // Just over the dock's top edge rather than in the title bar, so the title gets the room
+        // and the thread keeps its height; at the end it sits in the gap under the last line. On
+        // the thread, not hung off the dock: iOS 26 takes no touches outside the bar's own frame.
+        .overlay(alignment: .bottomTrailing) {
+            UsageBubble(
+                provider: settings.wrappedValue?.provider, context: context,
+                cost: thread.flatMap { $0.cost ?? threadCost($0.messages) },
+                compact: { try await connection.compact(chatId, rootId: rootId) }
+            )
+            .padding(.trailing, 20)
+            .padding(.bottom, 10)
+        }
         // A bar rather than an inset: the thread blurs out under it, as it does under the title.
         .safeAreaBar(edge: .bottom) {
             VStack(spacing: 0) {
@@ -162,17 +174,6 @@ struct ThreadView: View {
                         }
                     }
                 }
-            }
-            // Over the dock's top edge rather than in the bar, so the title gets the room and the
-            // thread keeps its height; at the end it sits in the gap under the last line.
-            .overlay(alignment: .topTrailing) {
-                UsageBubble(
-                    provider: settings.wrappedValue?.provider, context: context,
-                    cost: thread.flatMap { $0.cost ?? threadCost($0.messages) },
-                    compact: { try await connection.compact(chatId, rootId: rootId) }
-                )
-                .padding(.trailing, 20)
-                .alignmentGuide(.top) { $0[.bottom] + 10 }
             }
         }
         .relayBackground()
