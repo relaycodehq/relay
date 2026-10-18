@@ -2,25 +2,24 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
-  FileText,
+  FolderGit2,
   Info,
   Monitor,
-  FolderGit2,
-  Plug,
   RefreshCw,
   Search,
   ShieldCheck,
+  User,
 } from "lucide-react";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import {
   agentToolSources,
   agentToolStates,
   type AgentTool,
-  type AgentToolSource,
   type AgentToolState,
 } from "../../../shared/agent-tools";
 import { api } from "../../lib/api";
-import { Segmented, SettingsCard } from "../../ui/SettingsCard";
+import { ComposerSelect } from "../../ui/ComposerSelect";
+import { SettingsCard, SettingsSelect } from "../../ui/SettingsCard";
 import { ErrorBox, Spinner } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { useRunnableAgents } from "../agents/registry-agents";
@@ -28,60 +27,46 @@ import { useAgentAccounts } from "../accounts/agent-accounts";
 import { filterAgentTools } from "./filter";
 import "./agent-tools.css";
 
+type Tab = "skills" | "servers";
+
 function ToolRow({ tool }: { tool: AgentTool }) {
+  // A server's own description is just its transport, so its endpoint says more.
+  const subtitle = tool.summary ?? tool.description;
   return (
     <details className="agent-tool-item" data-state={tool.state}>
       <summary>
-        <span className="agent-tool-glyph">
-          {tool.transport ? <Plug size={17} /> : <FileText size={17} />}
-        </span>
         <span className="agent-tool-copy">
           <span className="agent-tool-name">
             {tool.name}
             {tool.transport && <small>{tool.transport}</small>}
           </span>
-          <span className="agent-tool-description">{tool.description}</span>
+          <span
+            className={`agent-tool-description${tool.summary ? " mono" : ""}`}
+          >
+            {subtitle}
+          </span>
         </span>
-        <span className={`agent-tool-status ${tool.state}`}>
-          <i />
-          {agentToolStates[tool.state]}
-        </span>
-        <ChevronRight className="agent-tool-chevron" size={15} />
+        {tool.state !== "enabled" && (
+          <span className={`agent-tool-status ${tool.state}`}>
+            {agentToolStates[tool.state]}
+          </span>
+        )}
+        <ChevronRight className="agent-tool-chevron" size={14} />
       </summary>
       <div className="agent-tool-details">
         {tool.detail && <p>{tool.detail}</p>}
         <dl>
-          <div>
-            <dt>Source</dt>
-            <dd>{agentToolSources.find((s) => s.id === tool.source)?.label}</dd>
-          </div>
-          <div>
-            <dt>Loaded from</dt>
-            <dd>
-              {tool.path ? (
-                <code>{tool.path}</code>
-              ) : tool.source === "builtin" ? (
-                "Provided by Relay"
-              ) : (
-                "Not reported by the agent"
-              )}
-            </dd>
-          </div>
-          {tool.summary && (
-            <div>
-              <dt>
-                {tool.transport === "stdio" ? "Executable" : "Endpoint origin"}
-              </dt>
-              <dd>
-                <code>{tool.summary}</code>
-              </dd>
-            </div>
-          )}
+          <dt>Loaded from</dt>
+          <dd>
+            {tool.path ? (
+              <code>{tool.path}</code>
+            ) : tool.source === "builtin" ? (
+              "Provided by Relay"
+            ) : (
+              "Not reported by the agent"
+            )}
+          </dd>
         </dl>
-        <span className="agent-tools-read-only">
-          <ShieldCheck size={13} />
-          Inspection only · configuration stays with its owner
-        </span>
       </div>
     </details>
   );
@@ -98,9 +83,8 @@ export function AgentTools({
   const [agent, setAgent] = useState<AgentProvider>("codex");
   const [computer, setComputer] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>();
-  const [tab, setTab] = useState<"skills" | "servers">("skills");
+  const [tab, setTab] = useState<Tab>("skills");
   const [query, setQuery] = useState("");
-  const [source, setSource] = useState<AgentToolSource | "all">("all");
   const [state, setState] = useState<AgentToolState | "all">("all");
   const projects = useQuery({
     queryKey: ["projects"],
@@ -130,17 +114,21 @@ export function AgentTools({
     staleTime: 0,
     retry: false,
   });
-  const listing = !inventory.isError ? inventory.data?.[tab] : undefined;
+  const data = !inventory.isError ? inventory.data : undefined;
+  const listing = data?.[tab];
   const items = listing?.items ?? [];
-  const filtered = filterAgentTools(items, query, source, state);
+  const filtered = filterAgentTools(items, query, state);
   const computerName = computer
     ? (computers.data?.find((c) => c.id === computer)?.name ??
       "the selected computer")
     : "this computer";
-  const changeTab = (value: "skills" | "servers") => {
+  const projectName = offeredProjects.find((p) => p.id === projectId)?.name;
+  const counts = (["enabled", "disabled", "unknown"] as const).map(
+    (s) => [s, items.filter((t) => t.state === s).length] as const,
+  );
+  const changeTab = (value: Tab) => {
     setTab(value);
     setQuery("");
-    setSource("all");
     setState("all");
   };
   const refresh = () => {
@@ -148,75 +136,70 @@ export function AgentTools({
   };
   return (
     <div className="agent-tools">
-      <div className="agent-tools-context">
-        <label>
-          <span>Computer</span>
-          <span className="agent-tools-select">
-            <Monitor size={14} />
-            <select
-              aria-label="Tools computer"
-              value={computer}
-              onChange={(e) => setComputer(e.target.value)}
-            >
-              <option value="">This computer</option>
-              {computers.data?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.status !== "online" ? " · Offline" : ""}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
-        <label>
-          <span>Project</span>
-          <span className="agent-tools-select">
-            <FolderGit2 size={14} />
-            <select
-              aria-label="Tools project"
-              value={projectId}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              disabled={projects.isPending}
-            >
-              <option value="">Personal configuration</option>
-              {offeredProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
-        <label>
-          <span>Agent</span>
-          <span className="agent-tools-select">
-            <ProviderIcon provider={agent} />
-            <select
-              aria-label="Tools agent"
-              value={agent}
-              onChange={(e) => setAgent(e.target.value as AgentProvider)}
-            >
-              {runnable.map((p) => (
-                <option key={p} value={p}>
-                  {agentName(p)}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
+      <div className="agent-tools-scope">
+        <div className="composer-tools model-field">
+          <ComposerSelect
+            label="Tools computer"
+            value={computer}
+            icon={<Monitor size={14} />}
+            onChange={setComputer}
+            options={[
+              { value: "", label: "This computer" },
+              ...(computers.data ?? []).map((c) => ({
+                value: c.id,
+                label: c.name,
+                description: c.status !== "online" ? "Offline" : undefined,
+              })),
+            ]}
+          />
+          <span className="composer-divider" />
+          <ComposerSelect
+            label="Tools project"
+            value={projectId}
+            icon={projectId ? <FolderGit2 size={14} /> : <User size={14} />}
+            onChange={setSelectedProject}
+            options={[
+              ...offeredProjects.map((p) => ({ value: p.id, label: p.name })),
+              { value: "", label: "Personal configuration", short: "Personal" },
+            ]}
+          />
+          <span className="composer-divider" />
+          <ComposerSelect<AgentProvider>
+            label="Tools agent"
+            value={agent}
+            icon={<ProviderIcon provider={agent} />}
+            onChange={setAgent}
+            options={runnable.map((p) => ({
+              value: p,
+              label: agentName(p),
+              icon: <ProviderIcon provider={p} />,
+            }))}
+          />
+        </div>
+        <button
+          className="agent-tools-refresh"
+          aria-label="Refresh"
+          title="Read the configuration again"
+          disabled={inventory.isFetching || projects.isPending}
+          onClick={refresh}
+        >
+          {inventory.isFetching ? (
+            <Spinner size={13} />
+          ) : (
+            <RefreshCw size={13} />
+          )}
+        </button>
       </div>
-      <p className="agent-tools-scope">
-        <Info size={14} />
-        <span>
-          {projectId
-            ? "Configuration for the selected project's checkout"
-            : "Personal configuration without a project selected"}{" "}
-          on {computerName}.
-          {inventory.data?.account && !inventory.isError
-            ? ` Account: ${inventory.data.account}.`
-            : ""}{" "}
-          Running threads keep the tools their session loaded.
-        </span>
+      <p className="agent-tools-where">
+        {projectName
+          ? `${projectName}'s checkout on ${computerName}`
+          : `Personal configuration on ${computerName}`}
+        {data?.account && ` · ${data.account} account`}
+        {data &&
+          ` · read at ${new Date(data.checkedAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`}
       </p>
       {projects.isError && (
         <ErrorBox
@@ -225,8 +208,8 @@ export function AgentTools({
         />
       )}
       {computers.isError && (
-        <div className="agent-tools-notice">
-          <Info size={14} />
+        <p className="agent-tools-notice">
+          <Info size={13} />
           <span>
             Paired computers could not be listed.{" "}
             <button
@@ -236,61 +219,37 @@ export function AgentTools({
               Try again
             </button>
           </span>
-        </div>
+        </p>
       )}
-      <div className="agent-tools-tabs">
-        <Segmented
-          label="Tool type"
-          value={tab}
-          onChange={changeTab}
-          options={[
-            [
-              "skills",
-              `Skills${inventory.data && !inventory.isError ? ` (${inventory.data.skills.items.length})` : ""}`,
-            ],
-            [
-              "servers",
-              `MCP servers${inventory.data && !inventory.isError ? ` (${inventory.data.servers.items.length})` : ""}`,
-            ],
-          ]}
-        />
-        <button
-          className="agent-tools-refresh"
-          disabled={inventory.isFetching || projects.isPending}
-          onClick={refresh}
+      <div className="agent-tools-toolbar">
+        <div
+          className="segmented settings-segmented agent-tools-tabs"
+          role="group"
+          aria-label="Tool type"
         >
-          {inventory.isFetching ? (
-            <Spinner size={13} />
-          ) : (
-            <RefreshCw size={13} />
-          )}
-          <span>{inventory.isFetching ? "Refreshing…" : "Refresh"}</span>
-        </button>
-      </div>
-      <div className="agent-tools-intro">
-        <div>
-          <h4>{tab === "skills" ? "Skills" : "MCP servers"}</h4>
-          <p>
-            {tab === "skills"
-              ? "Instructions your agent can use, grouped by where they come from."
-              : "External tools configured for this agent, plus Relay's own tools."}
-          </p>
+          {(
+            [
+              ["skills", "Skills"],
+              ["servers", "MCP servers"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={tab === id ? "active" : ""}
+              aria-pressed={tab === id}
+              onClick={() => changeTab(id)}
+            >
+              {label}
+              {data && <span>{data[id].items.length}</span>}
+            </button>
+          ))}
         </div>
-        {listing && (
-          <span>
-            {items.filter((t) => t.state === "enabled").length} enabled ·{" "}
-            {items.filter((t) => t.state === "disabled").length} disabled
-            {items.some((t) => t.state === "unknown") &&
-              ` · ${items.filter((t) => t.state === "unknown").length} unknown`}
-          </span>
-        )}
-      </div>
-      <div className="agent-tools-filters">
         <label className="agent-tools-search">
-          <Search size={14} />
+          <Search size={13} />
           <input
             aria-label="Search agent tools"
-            placeholder={tab === "skills" ? "Find a skill…" : "Find a server…"}
+            placeholder={tab === "skills" ? "Find a skill" : "Find a server"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -300,30 +259,23 @@ export function AgentTools({
             </button>
           )}
         </label>
-        <select
-          aria-label="Tool source"
-          value={source}
-          onChange={(e) => setSource(e.target.value as AgentToolSource | "all")}
-        >
-          <option value="all">All sources</option>
-          {agentToolSources.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Tool status"
+        <SettingsSelect<AgentToolState | "all">
+          field="agent-tools-state"
+          label="Tool status"
           value={state}
-          onChange={(e) => setState(e.target.value as AgentToolState | "all")}
-        >
-          <option value="all">All statuses</option>
-          {Object.entries(agentToolStates).map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
+          onChange={setState}
+          options={[
+            { value: "all", label: "Any status" },
+            ...counts.map(([id, n]) => ({
+              value: id,
+              label: agentToolStates[id],
+              short: `${agentToolStates[id]} ${n}`,
+              description: listing
+                ? `${n} ${n === 1 ? "tool" : "tools"}`
+                : undefined,
+            })),
+          ]}
+        />
       </div>
       {inventory.isError && (
         <ErrorBox error={inventory.error} retry={refresh} />
@@ -331,27 +283,28 @@ export function AgentTools({
       {listing?.error && <ErrorBox error={listing.error} retry={refresh} />}
       {listing?.note && (
         <p className="agent-tools-notice">
-          <Info size={14} />
+          <Info size={13} />
           <span>{listing.note}</span>
         </p>
       )}
       <div
         key={`${computer}-${projectId}-${agent}-${tab}-${inventory.dataUpdatedAt}`}
+        className="agent-tools-list"
         aria-busy={inventory.isFetching}
       >
         {inventory.isPending && !projects.isError ? (
           <p className="agent-tools-loading" role="status">
-            Reading agent configuration…
+            <Spinner size={13} /> Reading {agentName(agent)}'s configuration…
           </p>
         ) : (
           agentToolSources.map((s) => {
             const rows = filtered.filter((t) => t.source === s.id);
             return rows.length ? (
               <section className="agent-tools-source" key={s.id}>
-                <h5>
+                <h4 className="settings-card-title">
                   {s.label}
                   <span>{rows.length}</span>
-                </h5>
+                </h4>
                 <SettingsCard>
                   {rows.map((t) => (
                     <ToolRow key={t.id} tool={t} />
@@ -363,7 +316,6 @@ export function AgentTools({
         )}
         {listing && !filtered.length && !listing.error && (
           <div className="agent-tools-empty">
-            <Search size={21} />
             <h4>
               {items.length
                 ? "No matching tools"
@@ -373,14 +325,14 @@ export function AgentTools({
             </h4>
             <p>
               {items.length
-                ? "Try another search or show all sources and statuses."
-                : "Check the inventory notes above for this agent's discovery support."}
+                ? "Nothing here matches that search and status."
+                : `${agentName(agent)} didn't report any for this ${projectId ? "project" : "configuration"}.`}
             </p>
             {items.length > 0 && (
               <button
+                className="text-button"
                 onClick={() => {
                   setQuery("");
-                  setSource("all");
                   setState("all");
                 }}
               >
@@ -390,28 +342,13 @@ export function AgentTools({
           </div>
         )}
       </div>
-      {listing && (
-        <footer className="agent-tools-footer">
-          <span role="status">
-            Read at{" "}
-            {new Date(inventory.data!.checkedAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
-            · configuration only
-          </span>
-          <span>
-            {filtered.length} of {items.length} shown
-          </span>
-        </footer>
-      )}
-      <div className="agent-tools-readonly-note">
-        <ShieldCheck size={15} />
-        <p>
-          Enabled means configured to load; it does not confirm a live
-          connection. This page does not change your agent's settings.
-        </p>
-      </div>
+      <p className="agent-tools-footnote">
+        <ShieldCheck size={13} />
+        <span>
+          Read-only. Enabled means configured to load, not that it connects.
+          Running threads keep what their session started with.
+        </span>
+      </p>
     </div>
   );
 }

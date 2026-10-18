@@ -18,11 +18,11 @@ const items: AgentTool[] = [
     state: "disabled",
   },
 ];
-it("combines word, source and status filters while keeping disabled tools discoverable", () => {
-  expect(filterAgentTools(items, "branch REVIEW", "repo", "enabled")).toEqual([
+it("combines word and status filters while keeping disabled tools discoverable", () => {
+  expect(filterAgentTools(items, "branch REVIEW", "enabled")).toEqual([
     items[0],
   ]);
-  expect(filterAgentTools(items, "SKILL.md", "all", "all")).toEqual([items[0]]);
-  expect(filterAgentTools(items, "", "all", "disabled")).toEqual([items[1]]);
-  expect(filterAgentTools(items, "release", "repo", "all")).toEqual([]);
+  expect(filterAgentTools(items, "SKILL.md", "all")).toEqual([items[0]]);
+  expect(filterAgentTools(items, "", "disabled")).toEqual([items[1]]);
+  expect(filterAgentTools(items, "release", "enabled")).toEqual([]);
 });

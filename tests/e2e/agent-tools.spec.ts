@@ -105,9 +105,8 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     await expect(release.locator(".agent-tool-details")).toContainText(
       "Disabled in the agent's configuration",
     );
-    await page
-      .getByLabel("Tool status", { exact: true })
-      .selectOption("disabled");
+    await page.getByRole("combobox", { name: "Tool status" }).click();
+    await page.getByRole("option", { name: /^Disabled/ }).click();
     await expect(page.locator(".agent-tool-item")).toHaveCount(1);
     await writeFile(state, JSON.stringify({ enabled: true }));
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
@@ -116,7 +115,7 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     ).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).click();
     await page
-      .getByRole("button", { name: "MCP servers (2)", exact: true })
+      .getByRole("button", { name: "MCP servers 2", exact: true })
       .click();
     await page
       .locator(".agent-tool-item summary")
@@ -125,6 +124,9 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     await expect(
       page.getByText("https://docs.example", { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.locator(".agent-tool-item").filter({ hasText: "docs" }),
+    ).toContainText("config.toml");
     const payload = await page.evaluate(async () =>
       window.relay.agentTools((await window.relay.projects())[0].id, "codex"),
     );
@@ -132,11 +134,12 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
     await page.screenshot({
       path: join(tmpdir(), "relay-agent-tools-electron.png"),
     });
-    await page.getByLabel("Tools agent").selectOption("claude");
+    await page.getByRole("combobox", { name: "Tools agent" }).click();
+    await page.getByRole("option", { name: "Claude", exact: true }).click();
     await expect(
       page.locator(".agent-tool-item").filter({ hasText: "claude-docs" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Skills (1)", exact: true }).click();
+    await page.getByRole("button", { name: "Skills 1", exact: true }).click();
     await expect(
       page.getByText("claude-review", { exact: true }),
     ).toBeVisible();
