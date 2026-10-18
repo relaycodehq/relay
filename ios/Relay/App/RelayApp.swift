@@ -10,7 +10,14 @@ struct RelayApp: App {
     @State private var incoming: IncomingPair?
     /// A thread a relay-native://chat link asked for.
     @State private var linked: LinkedThread?
+    /// The last run's crash, shown once on the way in.
+    @State private var crash: Crash?
     @Environment(\.scenePhase) private var phase
+
+    init() {
+        CrashRecovery.install()
+        _crash = State(initialValue: CrashRecovery.take())
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -33,6 +40,7 @@ struct RelayApp: App {
                     if now == .active { connection.wake() }
                 }
                 .onChange(of: connection.active) { readAloud.stop() }
+                .fullScreenCover(item: $crash) { CrashScreen(crash: $0) }
         }
     }
 }
