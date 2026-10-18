@@ -12,6 +12,7 @@ import SwiftUI
     /// The started thread's state its peek was last fetched at.
     @ObservationIgnored private var fetchedAt: [String: String] = [:]
     @ObservationIgnored private var fetching: Set<String> = []
+    @ObservationIgnored private var wanted: [String: String] = [:]
 
     func peek(_ computer: String?, _ id: String) -> StartedPeek { peeks["\(computer ?? ""):\(id)"] ?? StartedPeek() }
 
@@ -25,24 +26,35 @@ import SwiftUI
             let key = "\(computer):\(chat.id)"
             let state = "\(chat.running == true):\(chat.waiting == true):\(chat.updated)"
             if peeks[key] == nil, let saved = connection.offline.now(computer, chat.id) { peeks[key] = StartedPeek(saved) }
-            guard online, fetchedAt[key] != state, !fetching.contains(key) else { continue }
+            guard online else { continue }
+            wanted[key] = state
+            guard fetchedAt[key] != state, !fetching.contains(key), let client = try? connection.liveClient() else { continue }
             fetching.insert(key)
-            Task { await fetch(chat.id, key: key, state: state, computer: computer, connection) }
+            Task { await fetch(chat.id, key: key, state: state, computer: computer, client: client, connection) }
         }
     }
 
-    private func fetch(_ id: String, key: String, state: String, computer: String, _ connection: Connection) async {
+    private func fetch(_ id: String, key: String, state: String, computer: String, client: RemoteClient, _ connection: Connection) async {
         defer { fetching.remove(key) }
-        do {
-            let client = try connection.liveClient()
-            let saved = connection.offline.now(computer, id)
-            let thread: RemoteChat
-            do { thread = try await client.chat(id, previous: saved) } catch is MissingMessage { thread = try await client.chat(id) }
-            connection.offline.save(computer, id, thread)
-            peeks[key] = StartedPeek(thread)
-            fetchedAt[key] = state
-        } catch {
-            // Lost the link or the thread: the next change or visit asks again.
+        var state = state
+        while true {
+            do {
+                let saved = connection.offline.now(computer, id)
+                let thread: RemoteChat
+                do { thread = try await client.chat(id, previous: saved) } catch is MissingMessage { thread = try await client.chat(id) }
+                connection.offline.save(computer, id, thread)
+                peeks[key] = StartedPeek(thread)
+                fetchedAt[key] = state
+            } catch {
+                // Lost the link or the thread: the next change or visit asks again.
+                return
+            }
+            // Changes during a read need one more read; they won't restart the view's task again.
+            guard let next = wanted[key], next != state,
+                connection.active == computer, (try? connection.liveClient()) === client,
+                connection.status.state == .online
+            else { return }
+            state = next
         }
     }
 }
