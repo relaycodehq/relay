@@ -250,9 +250,13 @@ private func move(_ at: Int64, _ after: String?, _ to: String? = nil, how: Strin
 }
 
 @Test func agentErrorsReadPlainly() {
-    let missing = agentError("codex was not found. Install it in Settings → AI models → Agents, or put it on PATH.")
-    #expect(missing.message == "codex isn't installed on this computer.")
-    #expect(missing.notInstalled)
+    // An older desktop's stored error names the Settings group "AI models".
+    for group in ["AI & agents", "AI models"] {
+        let missing = agentError("codex was not found. Install it in Settings → \(group) → Agents, or put it on PATH.")
+        #expect(missing.message == "codex isn't installed on this computer.")
+        #expect(missing.hint == "Set it up in Settings → AI & agents → Agents, or put it on PATH, then send again.")
+        #expect(missing.notInstalled)
+    }
     let envelope = agentError(#"API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)
     #expect(envelope.message == "Overloaded")
     #expect(envelope.details != nil)

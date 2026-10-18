@@ -126,9 +126,11 @@ struct ThreadNewsTests {
 
     @Test func agentErrorReadsTheProvidersWords() {
         func shown(_ error: String) -> String { agentError(error).message }
-        #expect(
-            shown("codex was not found. Install it in Settings → AI models → Agents, or put it on PATH.")
-                == "codex isn't installed on this computer.")
+        for group in ["AI & agents", "AI models"] {
+            #expect(
+                shown("codex was not found. Install it in Settings → \(group) → Agents, or put it on PATH.")
+                    == "codex isn't installed on this computer.")
+        }
         #expect(shown("Boom.\n\nTechnical details:\nstack") == "Boom.")
         #expect(
             shown(

@@ -141,7 +141,7 @@ fun agentName(provider: String): String {
 }
 
 private const val DETAILS = "\n\nTechnical details:\n"
-private val missingCli = Regex("^(\\S+) was not found\\. Install it in Settings → AI models → Agents, or put it on PATH\\.$")
+private val missingCli = Regex("^(\\S+) was not found\\. Install it in Settings → AI (?:models|& agents) → Agents, or put it on PATH\\.$")
 private val unsupportedModel = Regex(
     "^The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account\\.?$",
     RegexOption.IGNORE_CASE,

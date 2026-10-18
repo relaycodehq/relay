@@ -30,7 +30,7 @@ Relay is an **early preview**. Grab your build from the [latest release](https:/
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then `python3 install.py` inside it (no sudo) | As Linux. |
 | Android | `Relay-Android.apk`, or **Settings → Phone → Get the app** on the desktop | Companion app; needs a running desktop or headless Relay. |
 
-1. Set up at least one agent under **Settings → AI models → Agents**. Relay can install missing CLIs and uses existing sign-ins for [Claude Code](https://code.claude.com/docs/en/overview), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai) and [Amp](https://ampcode.com). Cursor, Antigravity and ACP registry agents can be installed and signed in there too.
+1. Set up at least one agent under **Settings → AI & agents → Agents**. Relay can install missing CLIs and uses existing sign-ins for [Claude Code](https://code.claude.com/docs/en/overview), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai) and [Amp](https://ampcode.com). Cursor, Antigravity and ACP registry agents can be installed and signed in there too.
 2. Add a project folder, use **Scratchpad** for work without a project, or run `relay .` in a folder (choose **Relay → Install "relay" Command…** once on macOS or Linux).
 3. Type what you want done, pick the agent and model, and press **Send**.
 
@@ -141,8 +141,8 @@ Copy the teaser to `docs/media/relay-teaser.mp4` when the UI changes.
 
 ## Troubleshooting
 
-- **An agent isn't found:** Relay reads your login shell's `PATH`. Check **Settings → AI models → Agents** to install it or link its executable; restart Relay after changing your shell setup.
-- **An agent says it's signed out:** use its account controls under **Settings → AI models → Agents**, or its CLI login command for the account the thread uses.
+- **An agent isn't found:** Relay reads your login shell's `PATH`. Check **Settings → AI & agents → Agents** to install it or link its executable; restart Relay after changing your shell setup.
+- **An agent says it's signed out:** use its account controls under **Settings → AI & agents → Agents**, or its CLI login command for the account the thread uses.
 - **macOS keeps asking for Keychain access:** ad-hoc signed builds can ask again after an update. Denying access can prevent Relay from unlocking saved integration credentials or device pairing secrets.
 - **The update doesn't install on macOS:** move `Relay.app` into **Applications** (or any writable folder) and try again.
 - **Linux won't start:** check that user namespaces are enabled for Chromium's sandbox. Don't disable the sandbox instead.

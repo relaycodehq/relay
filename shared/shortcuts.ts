@@ -188,7 +188,7 @@ const shortcutCommands = {
     title: "Previous quick-switch preset",
     group: "Composer",
     description:
-      "Switches agent, model and effort together. Set presets up in AI models → Quick switch.",
+      "Switches agent, model and effort together. Set presets up in Settings → AI & agents → Quick switch.",
     keywords: "quick switch preset model agent left",
     // Win+Ctrl+arrows switch desktops on Windows, so no ⊞ there.
     defaults: (mac) => [

@@ -16,7 +16,8 @@ data class AgentErrorShown(
 )
 
 private const val DETAILS = "\n\nTechnical details:\n"
-private val MISSING = Regex("^(\\S+) was not found\\. Install it in Settings → AI models → Agents, or put it on PATH\\.$")
+// Older desktops said "AI models"; their stored errors still reach the phone.
+private val MISSING = Regex("^(\\S+) was not found\\. Install it in Settings → AI (?:models|& agents) → Agents, or put it on PATH\\.$")
 private val UNSUPPORTED = Regex(
     "^The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account\\.?$",
     RegexOption.IGNORE_CASE,
@@ -36,7 +37,7 @@ fun agentError(error: String): AgentErrorShown {
     MISSING.find(raw)?.let {
         return AgentErrorShown(
             "${it.groupValues[1]} isn't installed on this computer.",
-            "Set it up in Settings → AI models → Agents, or put it on PATH, then send again.",
+            "Set it up in Settings → AI & agents → Agents, or put it on PATH, then send again.",
             notInstalled = true,
         )
     }

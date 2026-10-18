@@ -33,12 +33,13 @@ public func agentError(_ error: String) -> AgentErrorShown {
         return shown
     }
     let raw = error.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Older desktops said "AI models"; their stored errors still reach the phone.
     if let m = raw.wholeMatch(
-        of: #/(\S+) was not found\. Install it in Settings → AI models → Agents, or put it on PATH\./#)
+        of: #/(\S+) was not found\. Install it in Settings → AI (?:models|& agents) → Agents, or put it on PATH\./#)
     {
         return AgentErrorShown(
             message: "\(m.output.1) isn't installed on this computer.",
-            hint: "Set it up in Settings → AI models → Agents, or put it on PATH, then send again.",
+            hint: "Set it up in Settings → AI & agents → Agents, or put it on PATH, then send again.",
             notInstalled: true)
     }
     var message = raw

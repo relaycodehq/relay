@@ -211,7 +211,7 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
       name: "Settings",
       exact: true,
     });
-    await settings.getByRole("button", { name: "AI models" }).click();
+    await settings.getByRole("button", { name: "AI & agents" }).click();
     await settings.getByRole("button", { name: "Check now" }).click();
     await expect(settings.getByText(/Version 1\.0\.32/)).toContainText(
       "installed by Relay",

@@ -54,11 +54,15 @@ it("preserves unknown structured errors behind a readable fallback", () => {
 });
 
 it("reads a CLI Relay couldn't find as not installed, so it isn't offered again", () => {
-  const error = agentError(
-    "codex was not found. Install it in Settings → AI models → Agents, or put it on PATH.",
-  );
-  expect(error.notInstalled).toBe(true);
-  expect(error.message).toBe("codex isn't installed on this computer.");
+  // An older desktop's stored error names the Settings group "AI models".
+  for (const group of ["AI & agents", "AI models"]) {
+    const error = agentError(
+      `codex was not found. Install it in Settings → ${group} → Agents, or put it on PATH.`,
+    );
+    expect(error.notInstalled).toBe(true);
+    expect(error.message).toBe("codex isn't installed on this computer.");
+    expect(error.hint).toContain("Settings → AI & agents → Agents");
+  }
   expect(agentError("codex crashed").notInstalled).toBeUndefined();
 });
 

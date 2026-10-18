@@ -144,8 +144,9 @@ class ThreadNewsTest {
     }
 
     @Test fun agentErrorReadsTheProvidersWords() {
-        assertEquals("codex isn't installed on this computer.",
-            agentError("codex was not found. Install it in Settings → AI models → Agents, or put it on PATH."))
+        for (group in listOf("AI & agents", "AI models"))
+            assertEquals("codex isn't installed on this computer.",
+                agentError("codex was not found. Install it in Settings → $group → Agents, or put it on PATH."))
         assertEquals("Boom.", agentError("Boom.\n\nTechnical details:\nstack"))
         assertEquals("gpt-x isn't available with your ChatGPT account.",
             agentError("{\"error\":{\"message\":\"The 'gpt-x' model is not supported when using Codex with a ChatGPT account.\"}}"))

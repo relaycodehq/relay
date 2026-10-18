@@ -189,7 +189,7 @@ export const firstStart: {
 ];
 
 export const steps: string[] = [
-  "Sign in to one agent CLI: Claude Code, Codex, OpenCode or Amp. Relay installs a missing CLI. Settings → AI models adds Cursor, Antigravity and ACP agents.",
+  "Sign in to one agent CLI: Claude Code, Codex, OpenCode or Amp. Relay installs a missing CLI. Settings → AI & agents adds Cursor, Antigravity and ACP agents.",
   "Open Relay and add a project folder.",
   "Type a task, select the agent and the model, and press Send.",
 ];
@@ -229,7 +229,7 @@ export const openSource: {
 export const faq: { q: string; a: string }[] = [
   {
     q: "Which agents does Relay run?",
-    a: "Relay runs Claude Code, Codex, OpenCode, Cursor, Amp and Google's Antigravity. Settings → AI models adds any agent from the ACP registry. You sign in with your own subscription.",
+    a: "Relay runs Claude Code, Codex, OpenCode, Cursor, Amp and Google's Antigravity. Settings → AI & agents adds any agent from the ACP registry. You sign in with your own subscription.",
   },
   {
     q: "Do I need a Relay account or an API key?",

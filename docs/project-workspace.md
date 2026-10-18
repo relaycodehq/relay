@@ -18,7 +18,7 @@ Hosted agent sessions can keep running across a Relay restart. After reconnectin
 
 ## Agents and permissions
 
-**Settings → AI models → Agents** manages Claude, Codex, OpenCode, Cursor, Amp, Antigravity and agents installed from the ACP registry. Depending on the provider, Relay runs a CLI, SDK or ACP server. Models, reasoning options and commands depend on the installed agent and signed-in account. Claude and Codex support multiple saved accounts; hitting a usage limit does not silently switch accounts.
+**Settings → AI & agents → Agents** manages Claude, Codex, OpenCode, Cursor, Amp, Antigravity and agents installed from the ACP registry. Depending on the provider, Relay runs a CLI, SDK or ACP server. Models, reasoning options and commands depend on the installed agent and signed-in account. Claude and Codex support multiple saved accounts; hitting a usage limit does not silently switch accounts.
 
 The composer remembers the chosen agent, model, effort, permissions and Build/Plan mode. A leading `@claude`, `@codex` or another built-in agent's mention overrides the selected recipient; **Message only** saves a message without invoking an agent. Switching agents in an existing conversation can ask the outgoing agent for a handoff note so the next one has context; each provider retains its own session where supported.
 
