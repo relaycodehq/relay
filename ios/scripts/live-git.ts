@@ -166,7 +166,7 @@ export function gitStandIn(opts: {
         // Committing the index leaves what's only on disk; committing paths takes them as they are on disk.
         r.changes = r.changes
           .map((x) => (files.includes(x.path) && !action.paths && x.worktree !== " " ? { ...x, index: " " } : x))
-          .filter((x) => !files.includes(x.path) || x.index === " ");
+          .filter((x) => !files.includes(x.path) || (!action.paths && x.index === " "));
         const sha = hex(`new${r.revision}${action.message}`);
         const subject = String(action.message).split("\n")[0];
         r.head = sha;
