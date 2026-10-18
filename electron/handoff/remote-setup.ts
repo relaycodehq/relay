@@ -136,6 +136,13 @@ export async function runCommand(
   // The command itself stays out of the log: it may carry a token.
   console.info(`${from} runs a command here.`);
   const home = process.platform === "win32" ? "Set-Location ~; " : "cd ~; ";
-  const run = await runExecutable(shell, [...args, home + command], timeoutMs);
+  // A signal opts runExecutable into an owned process tree: timeout must
+  // stop the command's children too, even though this call has no Cancel UI.
+  const run = await runExecutable(
+    shell,
+    [...args, home + command],
+    timeoutMs,
+    new AbortController().signal,
+  );
   return { code: run.code, output: run.output, timedOut: run.timedOut };
 }
