@@ -165,13 +165,13 @@ struct Composer: View {
                 .ignoresSafeArea()
         }
         .alert(switchTitle, isPresented: Binding(get: { switching != nil }, set: { if !$0 { switching = nil } })) {
-            Button("Switch to \(agentName(settings?.provider ?? ""))") {
+            Button("Switch to \(agentName(incoming))") {
                 if let pending = switching { submit(steer: pending.steer, sendAt: pending.sendAt, confirmed: true) }
             }
             Button("Keep \(agentName(holder ?? ""))", role: .cancel) {}
         } message: {
             let from = agentName(holder ?? "")
-            let next = agentName(settings?.provider ?? "")
+            let next = agentName(incoming)
             Text(
                 "\(from) has been working in this thread. \(next) cannot see its session, tool results, or the files it read.\n\n"
                     + "\(from) will write a handoff note first. \(next) continues from that note and the recent messages, so expect some context to be lost."
@@ -406,7 +406,10 @@ struct Composer: View {
         return contextAgent(connection.conversation(chatId, rootId: rootId), rootId: rootId)
     }
 
-    private var switchTitle: String { "Switch to \(agentName(settings.map { sendRecipient(text, picked: $0.provider) } ?? ""))?" }
+    /// Who the draft goes to: the picked agent, or the one it @mentions.
+    private var incoming: String { settings.map { sendRecipient(text, picked: $0.provider) } ?? "" }
+
+    private var switchTitle: String { "Switch to \(agentName(incoming))?" }
 
     private func submit(steer: Bool = false, sendAt: Int64? = nil, confirmed: Bool = false) {
         if !confirmed, startsWithCommand(text), !command(text) { return }
