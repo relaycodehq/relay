@@ -1,6 +1,6 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
-import { Slice } from "@tiptap/pm/model";
+import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { pastesAfter } from "../../../../shared/pasted-texts";
@@ -23,6 +23,10 @@ export interface SkillPick {
   start: number;
   end: number;
 }
+
+/** A space to type on after a pill, unless the text after it starts with one. */
+const spaceBefore = (after: PMNode | null | undefined): JSONContent[] =>
+  /^\s/.test(after?.text ?? "") ? [] : [{ type: "text", text: " " }];
 
 // Pills go in as their own undo step, apart from the typing around them.
 function asOneStep(editor: Editor, edit: () => void) {
@@ -108,14 +112,15 @@ export function removeImage(editor: Editor, n: number) {
 
 export function insertQuote(editor: Editor, text: string) {
   // After any selection rather than over it: the quote came from the thread.
+  const { to, $to } = editor.state.selection;
   asOneStep(editor, () =>
     editor
       .chain()
       .focus()
-      .insertContentAt(editor.state.selection.to, {
-        type: "relayQuote",
-        attrs: { text },
-      })
+      .insertContentAt(to, [
+        { type: "relayQuote", attrs: { text } },
+        ...spaceBefore($to.nodeAfter),
+      ])
       .run(),
   );
 }
@@ -123,9 +128,15 @@ export function insertQuote(editor: Editor, text: string) {
 /** Puts pasted text in over the selection, with the pills it names; false when the message cannot hold it. */
 export function pasteText(view: EditorView, pills: DraftPills, text: string) {
   // A pill copied within the draft, or from another, gets a new number.
-  const fragment = view.state.schema.nodeFromJSON(
+  const { schema, selection } = view.state;
+  let fragment = schema.nodeFromJSON(
     pills.content(pastesAfter(promptText(view.state.doc), text)),
   ).firstChild!.content;
+  const last = fragment.lastChild;
+  if (last?.isLeaf && !last.isText && last.type.name !== "hardBreak")
+    fragment = fragment.append(
+      Fragment.fromJSON(schema, spaceBefore(selection.$to.nodeAfter)),
+    );
   const before = view.state.doc;
   view.dispatch(
     view.state.tr.replaceSelection(new Slice(fragment, 0, 0)).scrollIntoView(),
@@ -137,11 +148,15 @@ export function pasteText(view: EditorView, pills: DraftPills, text: string) {
 export function insertPaste(editor: Editor, text: string) {
   const n = lastPaste(editor.state.doc);
   const before = editor.state.doc;
+  const { from, to, $to } = editor.state.selection;
   asOneStep(editor, () =>
     editor
       .chain()
       .focus()
-      .insertContent({ type: "relayPaste", attrs: { n: n + 1, text } })
+      .insertContentAt({ from, to }, [
+        { type: "relayPaste", attrs: { n: n + 1, text } },
+        ...spaceBefore($to.nodeAfter),
+      ])
       .run(),
   );
   // The length limit rejects the transaction rather than truncating it.

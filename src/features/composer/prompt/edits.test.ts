@@ -3,7 +3,14 @@ import { Editor } from "@tiptap/core";
 import { pasteMarkdown } from "../../../../shared/pasted-texts";
 import { promptContent } from "../prompt-content";
 import { promptText } from "../prompt-text";
-import { caretOffsets, replaceDraft } from "./edits";
+import type { DraftPills } from "../useDraftPills";
+import {
+  caretOffsets,
+  insertPaste,
+  insertQuote,
+  pasteText,
+  replaceDraft,
+} from "./edits";
 import { promptExtensions } from "./extensions";
 
 const editors: Editor[] = [];
@@ -46,4 +53,44 @@ it("shows a recalled message whole, caret at its end, and says so as an edit", (
     start: shown.text.length,
     end: shown.text.length,
   });
+});
+
+/** What follows the draft's last pill, and whether the saved text brings it back the same. */
+function afterPill(editor: Editor) {
+  const nodes: string[] = [];
+  editor.state.doc.firstChild!.forEach((node) =>
+    nodes.push(node.isText ? node.text! : node.type.name),
+  );
+  const text = promptText(editor.state.doc);
+  const restored = draft(text).editor;
+  expect(promptText(restored.state.doc)).toBe(text);
+  return nodes;
+}
+
+it("leaves a space after a pasted pill to type on, but not a second one", () => {
+  const { editor } = draft("see");
+  editor.commands.setTextSelection(4);
+  insertPaste(editor, "a\nlog");
+  insertQuote(editor, "the cache tweak");
+  expect(afterPill(editor)).toEqual([
+    "see",
+    "relayPaste",
+    " ",
+    "relayQuote",
+    " ",
+  ]);
+
+  const before = draft("look  here").editor;
+  before.commands.setTextSelection(6);
+  insertPaste(before, "a\nlog");
+  expect(afterPill(before)).toEqual(["look ", "relayPaste", " here"]);
+});
+
+it("leaves a space after pasted text that ends in a pill", () => {
+  const { editor } = draft("");
+  const pills = {
+    content: (text: string) => promptContent(text, {}, [], ["/tmp/a.md"]),
+  } as DraftPills;
+  pasteText(editor.view, pills, "read `/tmp/a.md`");
+  expect(afterPill(editor)).toEqual(["read ", "relayFile", " "]);
 });
