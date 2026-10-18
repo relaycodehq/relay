@@ -48,9 +48,9 @@ it("renders the card header, folders and file rows", () => {
   expect(long).toContain(">+50<");
   expect(long).toContain(">−14<");
   expect(long).toContain("Open diff");
-  expect(long).toContain('aria-label="Collapse all folders"');
-  // Folders start open however many files the turn changed.
-  expect(long).toContain(">ui.tsx<");
+  expect(long).toContain('aria-label="Expand all folders"');
+  // Over five files, folders start closed.
+  expect(long).not.toContain(">ui.tsx<");
   expect(long).toContain(">logo.png<");
   expect(long).toContain(">binary<");
 
@@ -60,6 +60,19 @@ it("renders the card header, folders and file rows", () => {
   expect(open).toContain("2 changed files");
   expect(open).toContain(">ui.tsx<");
   expect(open).toContain('href="#file-tree-builtin-react"');
+
+  // Closed, six files in one folder would be a single row.
+  const oneFolder = renderToStaticMarkup(
+    <ChangedFilesCard
+      files={["a", "b", "c", "d", "e", "f"].map((name) => ({
+        path: `src/features/x/${name}.ts`,
+        additions: 1,
+        deletions: 0,
+      }))}
+      onOpen={() => {}}
+    />,
+  );
+  expect(oneFolder).toContain(">f.ts<");
 });
 
 it("offers rollback per row and for the turn, and redo once rolled back", () => {

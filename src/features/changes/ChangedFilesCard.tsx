@@ -22,6 +22,10 @@ import { useFoldedTurn } from "./folded-turns";
 import "../../ui/tree.css";
 import "./changed-files.css";
 
+// Short lists read best open; longer ones start as folders, unless that
+// would fold everything into a single row.
+const EXPAND_UP_TO = 5;
+
 type Mode = "revert" | "redo";
 type Rewind = (
   paths: string[] | null,
@@ -62,7 +66,9 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   const tree = useMemo(() => buildTurnTree(files), [files]);
   const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
-  const [allOpen, setAllOpen] = useState(true);
+  const [allOpen, setAllOpen] = useState(
+    files.length <= EXPAND_UP_TO || tree.length < 2,
+  );
   const [folded, setFolded] = useFoldedTurn(
     turn?.chatId,
     turn?.messageId ?? "",
