@@ -243,7 +243,10 @@ struct Composer: View {
                 picking = true
             } label: {
                 HStack(spacing: 3) {
-                    Text(label(settings))
+                    // The agent's mark stands in for its name, which the label spends room on.
+                    ProviderMark(provider: settings.provider, size: 15)
+                        .padding(.trailing, 2)
+                    Text(modelLabel(settings))
                         .lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2.weight(.semibold))
@@ -398,6 +401,11 @@ struct Composer: View {
     /// "Opus 5.5 · High", and Plan while it's on.
     private func label(_ settings: ResumeSettings) -> String {
         settings.label(connection.catalogs[settings.provider]) + (settings.interactionMode == "plan" ? " · Plan" : "")
+    }
+
+    private func modelLabel(_ settings: ResumeSettings) -> String {
+        let model = settings.modelLabel(connection.catalogs[settings.provider])
+        return (model.isEmpty ? "Default" : model) + (settings.interactionMode == "plan" ? " · Plan" : "")
     }
 
     /// The agent holding this conversation's context; another one taking over loses its session.

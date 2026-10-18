@@ -91,6 +91,7 @@ import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.model.ThreadCost
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.ProviderIcon
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.ring
@@ -500,6 +501,7 @@ internal fun ComposerCore(
                 }
                 // Permissions and Plan are a tap further, in the sheet it opens with the model.
                 if (!settingsUp) Tool("Model, permissions and plan", Modifier.weight(1f, fill = false), onClick = { sheet = Sheet.Settings }) {
+                    ProviderIcon(provider, c.mutedForeground, size = 14.dp)
                     Text(
                         modelLabel +
                             (if (settings.choice.reasoningEffort.isNotEmpty()) " · ${effortLabel(settings.choice.reasoningEffort)}" else "") +
