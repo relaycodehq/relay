@@ -14,6 +14,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const refreshPath = vi.hoisted(() =>
   vi.fn<(searchedAt: number) => Promise<boolean>>(async () => false),
 );
+// Discovery must not pick up the developer's globally installed agents.
+vi.mock("node:fs/promises", async (actual) => {
+  const fs = await actual<typeof import("node:fs/promises")>();
+  return {
+    ...fs,
+    access: async (...args: Parameters<typeof fs.access>) => {
+      if (!String(args[0]).startsWith(root + "/"))
+        throw Object.assign(new Error("Outside the test installation"), {
+          code: "ENOENT",
+        });
+      return fs.access(...args);
+    },
+  };
+});
 vi.mock("./shell-path", () => ({ pathReady: async () => {}, refreshPath }));
 
 import {
@@ -260,8 +274,13 @@ describe("reading a Windows .cmd shim", () => {
       '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
     ].join("\r\n");
     expect(shimTarget(npm)).toBe("node_modules\\npm\\bin\\npm-cli.js");
-    expect(shimTarget(npm.replaceAll("NPM_CLI_JS", "NPX_CLI_JS").replace("npm-cli", "npx-cli")))
-      .toBe("node_modules\\npm\\bin\\npx-cli.js");
+    expect(
+      shimTarget(
+        npm
+          .replaceAll("NPM_CLI_JS", "NPX_CLI_JS")
+          .replace("npm-cli", "npx-cli"),
+      ),
+    ).toBe("node_modules\\npm\\bin\\npx-cli.js");
   });
 
   it("takes a package's script past the node.exe check", () => {
@@ -271,13 +290,17 @@ describe("reading a Windows .cmd shim", () => {
       ")",
       'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
     ].join("\r\n");
-    expect(shimTarget(codex)).toBe("node_modules\\@openai\\codex\\bin\\codex.js");
+    expect(shimTarget(codex)).toBe(
+      "node_modules\\@openai\\codex\\bin\\codex.js",
+    );
     const corepack = [
       '@IF EXIST "%~dp0\\node.exe" (',
       '  "%~dp0\\node.exe"  "%~dp0\\node_modules\\corepack\\dist\\corepack.js" %*',
       ")",
     ].join("\r\n");
-    expect(shimTarget(corepack)).toBe("node_modules\\corepack\\dist\\corepack.js");
+    expect(shimTarget(corepack)).toBe(
+      "node_modules\\corepack\\dist\\corepack.js",
+    );
   });
 
   it("finds nothing in a script that names no target", () => {

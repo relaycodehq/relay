@@ -2003,8 +2003,8 @@ it("runs a picked OpenCode skill through the thread's real prompt wrapper", asyn
 });
 
 it("lists Codex's enabled skills and sends a picked one as the `$name` Codex parses", async () => {
-  const { codexSkills } = await import("../agents/provider-commands");
-  const skills = await codexSkills(join(root, "repo"));
+  const { agentRuntime } = await import("../agents");
+  const skills = await agentRuntime("codex").commands(join(root, "repo"));
   expect(skills.map((s) => s.name)).toEqual(["explain"]);
   const discovery = (await agentCalls())
     .trim()
