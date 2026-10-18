@@ -7,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ChatCameFrom } from "../../shared/handoff";
+import type { AgentProvider } from "../../shared/agents";
+import type { ChatCameFrom, HandoffSettings } from "../../shared/handoff";
 import {
   parseRemote,
   repoName,
@@ -83,7 +84,12 @@ export class SetupAgents {
       this.host.scratch(),
     ]);
     const dest = join(expandHome(folder), repoName(remote.full));
-    const { provider, ...settings } = request.settings;
+    const agent = await setupAgent(request.settings);
+    if (!agent)
+      throw new Error(
+        "No agent is installed on this computer to set the project up.",
+      );
+    const { provider, ...settings } = agent;
     await this.host.adoptSetup(
       scratch.id,
       `Set up ${remote.full} for ${from.name}`,
@@ -143,6 +149,34 @@ export class SetupAgents {
   }
 }
 
+/** Agents Relay can tell are missing by their command; the others it takes on trust. */
+const commands = new Set<AgentProvider>(["claude", "codex", "opencode"]);
+const here = (provider: AgentProvider) =>
+  !commands.has(provider)
+    ? Promise.resolve(true)
+    : findExecutable(provider).then(
+        () => true,
+        () => false,
+      );
+
+/**
+ * The agent that sets it up: the thread's own when it's installed here,
+ * else Claude or Codex on their default model.
+ */
+async function setupAgent(
+  settings: HandoffSettings,
+): Promise<HandoffSettings | undefined> {
+  if (await here(settings.provider)) return settings;
+  for (const provider of ["claude", "codex"] as const)
+    if (provider !== settings.provider && (await here(provider)))
+      return {
+        provider,
+        choice: { model: "", fast: false, reasoningEffort: "" },
+        runtimeMode: settings.runtimeMode,
+        interactionMode: settings.interactionMode,
+      };
+}
+
 /** Repositories in `dir` named like one of `wanted`'s, any case. */
 async function clonesIn(dir: string, wanted: Set<string>) {
   const names = new Set([...wanted].map((r) => repoName(r).toLowerCase()));
@@ -198,6 +232,7 @@ export function setupPrompt(p: {
   const host = remote?.host ?? "the host";
   const full = remote?.full ?? "owner/name";
   const github = host === "github.com";
+  const githubSignIn = ` For GitHub, \`gh auth login --hostname github.com --git-protocol https --web\` prints a one-time code and waits; send them the code and https://github.com/login/device, and wait for it. gh keeps several accounts but makes the new one active, so switch back to the one that was active with \`gh auth switch\`, then give the new account to this clone alone. Clone with \`git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!f() { test "$1" = get && echo username=<account> && echo "password=$(gh auth token --user <account>)"; }; f' clone …\`, and set the same two helper lines in the clone's own config (\`git config credential.https://github.com.helper ''\`, then \`git config --add …\`), so only that folder uses it and no token is written anywhere. Ask the user only when it's unclear which of their accounts to use.`;
   return `Relay is handing a thread from ${p.from} to this computer, but its project isn't here yet, and Relay's own clone of ${p.url} failed. Git said:
 
 \`\`\`
@@ -211,7 +246,7 @@ This computer: ${platformName()}. On PATH: ${p.tools.on.join(", ") || "none of g
 First try what already works here: when an SSH key here is accepted (\`ssh -o BatchMode=yes -T git@${host}\`), clone over SSH (\`git@${host}:${full}.git\`). Sign in only when nothing here gets through, and never sign out of, replace or switch away from an account already signed in here: other things on this computer use it.
 
 The user isn't at this computer. They read this conversation on ${p.from} and answer from there, so:
-- Run nothing that waits for typed input. When signing in needs the user, start it in the background so it keeps waiting, then tell them exactly what to open and what to paste, the code or key in a code block of its own.${github ? " For GitHub, \`gh auth login --hostname github.com --git-protocol https --web\` prints a one-time code and waits; send them the code and https://github.com/login/device, and clone once it's through. It makes the new account the active one, so switch back to the one that was active with \`gh auth switch\` afterwards." : ""}
+- Run nothing that waits for typed input. When signing in needs the user, start it in the background so it keeps waiting, then tell them exactly what to open and what to paste, the code or key in a code block of its own.${github ? githubSignIn : ""}
 - Never ask them for a password, a token or a private key, and copy no credentials from anywhere: they sign in on this computer themselves.
 - Change nothing here the clone doesn't need, and ask before installing anything.
 - Once it's cloned, say so in one line and stop.`;

@@ -1410,6 +1410,48 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   );
 });
 
+it("has threads waiting on the same project there share one setup, and lets one go without the other", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { url, projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  const first = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(first)).setup?.state).toBe("agent"),
+  );
+  const setup = (await laptop.chats.get(first)).sentTo!.setup!;
+  const second = await startOnMini(laptop, sender, computerId, projectId);
+  const third = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () => {
+    for (const id of [second, third]) {
+      const chat = await laptop.chats.get(id);
+      expect(chat.sentTo?.setup).toBe(setup);
+      expect(chat.setup?.messages[0]?.role).toBe("user");
+    }
+  });
+  const setups = (await mini.projects.list(null))
+    .filter((p) => p.scratch)
+    .flatMap((p) => mini.chats.list(p.id).filter((c) => c.cameFrom));
+  expect(setups).toHaveLength(1);
+
+  // One gives up; the setup goes on for the others.
+  await sender.abandon(third);
+  expect((await laptop.chats.get(third)).sentTo).toBeUndefined();
+  expect(mini.chats.handedOver(setup)?.cameFrom?.abandonedAt).toBeUndefined();
+
+  await reachable(true);
+  git(mini.dir, "clone", "-q", url, join(mini.dir, "tool"));
+  await sender.forward("sendProjectChat", [first, input("@codex Done")]);
+  await vi.waitFor(
+    async () => {
+      for (const id of [first, second])
+        expect((await sender.view(id))?.sentTo).toMatchObject({
+          state: "away",
+        });
+    },
+    { timeout: 20_000 },
+  );
+});
+
 it("starts a thread here instead when its setup there is given up on", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const { projectId, reachable } = await lackedProject(laptop);
