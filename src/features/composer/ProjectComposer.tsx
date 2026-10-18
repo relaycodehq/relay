@@ -7,7 +7,11 @@ import {
   type Ref,
 } from "react";
 import { Minimize2, Paperclip } from "lucide-react";
-import { reportsUsage, type AgentProvider } from "../../../shared/agents";
+import {
+  agentMentionPattern,
+  reportsUsage,
+  type AgentProvider,
+} from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import type {
@@ -238,11 +242,11 @@ export function ProjectComposer({
   const quick = useQuickSwitchHud(runs, to);
   // The button by Send does the opposite of Settings, so it waits to know them.
   const sendCompacts = useAutoCompactSaved()?.cold;
-  // A command means what it says; the server sends it as is.
+  // A command means what it says, after an @mention too; the server sends it as is.
   const cold =
     sendCompacts !== undefined &&
     conversation.cold?.provider === to &&
-    !/^\s*\//.test(draft.text)
+    !/^\s*\//.test(draft.text.trim().replace(agentMentionPattern, ""))
       ? conversation.cold
       : undefined;
   const settingCommands = useSettingCommands({
