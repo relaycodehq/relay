@@ -50,11 +50,15 @@ export class Dictation {
     this.emit(state);
   }
 
+  /** Whether the model is downloaded and checked, whatever the engine. */
+  hasModel() {
+    return modelComplete(this.dir, dictationModel.files);
+  }
+
   /** Looks again at the engine and the model, e.g. once the engine is downloaded. */
   async refresh() {
     if (!onnxRuntimeInstalled()) return this.set({ status: "unsupported" });
-    if (await modelComplete(this.dir, dictationModel.files))
-      return this.set({ status: "ready" });
+    if (await this.hasModel()) return this.set({ status: "ready" });
     const received = await modelReceived(this.dir, dictationModel.files);
     if (received) this.set({ status: "missing", received });
   }

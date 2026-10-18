@@ -228,9 +228,12 @@ export class HeadlessSpeech {
     };
   }
 
-  /** An update moved the engines on: what was set up is fetched again, quietly. */
+  /** After an update, fetches quietly what dictation or read aloud needs to keep working. */
   async catchUp() {
-    if (this.runtime.stale)
+    if (this.runtime.installed || !this.runtime.supported) return;
+    // An update moved the engine on, or dictation's model outlived the engine
+    // it ran on (sherpa-onnx, before dictation moved to onnxruntime).
+    if (this.runtime.stale || (await this.dictation.hasModel()))
       await this.runtime
         .install("dictation")
         .then(() => this.dictation.refresh())
