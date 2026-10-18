@@ -71,6 +71,11 @@ export class CodexTurn {
   private plan = "";
   /** Codex hands a finished `/review` back as one item, not as an answer. */
   private review = "";
+  /**
+   * Inside a `/review`: the turn Codex starts for the review itself is part of
+   * this one, which `turn/completed` then ends under its own id.
+   */
+  private inReview = false;
   /** When the spent window lifts, from Codex's latest word on the account's limits. */
   private spentUntil: number | undefined;
   private fileChanges = new Map<string, unknown>();
@@ -225,14 +230,14 @@ export class CodexTurn {
     }
     if (n.method === "turn/started") {
       // Codex went on with the goal: the turn before is history in this answer.
-      if (this.turnId && n.params.turn.id !== this.turnId) {
+      if (!this.inReview && this.turnId && n.params.turn.id !== this.turnId) {
         this.past(this.turnId);
         this.stream.nextTurn();
         options.session?.onPoint?.(n.params.turn.id);
       }
       this.goals.started();
       this.cacheClock.turnStarted();
-      this.turnId = n.params.turn.id;
+      if (!this.inReview) this.turnId = n.params.turn.id;
     }
     if (n.method === "turn/completed") {
       // Word about an earlier turn, late: this one goes on. Before this one's
@@ -404,6 +409,8 @@ export class CodexTurn {
     if (item.type === "fileChange" && item.id && item.changes)
       this.edited(item.id, item.changes);
     this.subagents.spawned(item);
+    if (item.type === "enteredReviewMode") this.inReview = true;
+    if (item.type === "exitedReviewMode") this.inReview = false;
     if (
       method === "item/completed" &&
       item.type === "exitedReviewMode" &&

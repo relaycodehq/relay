@@ -65,7 +65,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   else if (m.method === "config/read") send({ id: m.id, result: { config: {} } });
   else if (m.method === "thread/start")
     send({ id: m.id, result: ${JSON.stringify(thread)} });
-  else if (m.method === "turn/start") {
+  else if (m.method === "turn/start" || m.method === "review/start") {
     if (${JSON.stringify(!!crash)}) {
       process.stderr.write("dyld: Library not loaded: libfixture.dylib\\n");
       process.exit(134);
@@ -186,6 +186,29 @@ it("ignores notifications it doesn't read, and fields it doesn't know", async ()
     ],
   });
   expect(await answer).toBe("Done.");
+});
+
+it("ends a /review when Codex completes it, past the turn it starts for the review itself", async () => {
+  const on = (method: string, params: Wire) => ({
+    method,
+    params: { threadId: "thread", ...params },
+  });
+  const review = (method: string, type: string, more: Wire = {}) =>
+    on(method, { turnId: "turn", item: { id: type, type, ...more } });
+  // In the order a real `codex app-server` sends them.
+  const { answer } = await ask(
+    {
+      said: [
+        review("item/started", "enteredReviewMode"),
+        review("item/completed", "enteredReviewMode"),
+        on("turn/started", { turn: { id: "inner" } }),
+        review("item/started", "exitedReviewMode"),
+        review("item/completed", "exitedReviewMode", { review: "[P1] Wrong sign." }),
+      ],
+    },
+    { job: { kind: "review", target: { type: "uncommittedChanges" } } },
+  );
+  expect(await answer).toBe("[P1] Wrong sign.");
 });
 
 it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {
