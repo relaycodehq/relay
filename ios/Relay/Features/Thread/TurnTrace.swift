@@ -30,16 +30,21 @@ struct TurnTrace: View {
             .buttonStyle(.plain)
             if open {
                 let parts = groupTrace(turn.shown)
+                let alone = parts.count(where: { if case .run = $0 { true } else { false } }) == 1
+                // A running turn shows its newest steps and folds the rest. One row thousands of points
+                // tall makes the lazy stack guess every unmeasured row that tall, and the end it scrolls
+                // to drifts past the thread when the turn folds or a steer ends it.
+                let cut = turn.live ? max(0, parts.count - liveSteps) : 0
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(parts) { part in
-                        switch part {
-                        case .commentary(_, let text):
-                            MarkdownView(text, small: true)
-                        case .run(let id, let activity):
-                            run(activity, batch: turn.live && id == parts.last?.id && !isQuestionCall(activity[0]),
-                                alone: parts.count(where: { if case .run = $0 { true } else { false } }) == 1, turn: turn)
+                    if cut > 0 {
+                        let earlier = summarizeActivity(parts[..<cut].flatMap { part -> [AgentActivity] in
+                            if case .run(_, let a) = part { a } else { [] }
+                        })
+                        Fold(label: earlier.isEmpty ? "Earlier" : earlier) {
+                            ForEach(parts[..<cut]) { self.part($0, last: parts.last?.id, alone: alone, turn: turn) }
                         }
                     }
+                    ForEach(parts[cut...]) { self.part($0, last: parts.last?.id, alone: alone, turn: turn) }
                     if turn.thinking { ThinkingLine(seed: message.id) }
                 }
                 .padding(.leading, 4)
@@ -47,6 +52,15 @@ struct TurnTrace: View {
             }
         }
         .onChange(of: open, initial: true) { onOpen(open) }
+    }
+
+    @ViewBuilder private func part(_ part: TracePart, last: String?, alone: Bool, turn: Turn) -> some View {
+        switch part {
+        case .commentary(_, let text):
+            MarkdownView(text, small: true)
+        case .run(let id, let activity):
+            run(activity, batch: turn.live && id == last && !isQuestionCall(activity[0]), alone: alone, turn: turn)
+        }
     }
 
     @ViewBuilder private func run(_ activity: [AgentActivity], batch: Bool, alone: Bool, turn: Turn) -> some View {
@@ -116,6 +130,9 @@ struct TurnTrace: View {
         }
     }
 }
+
+/// How many of a running turn's newest steps stay open.
+private let liveSteps = 8
 
 /// A run of calls folded behind its summary.
 private struct Fold<Content: View>: View {
