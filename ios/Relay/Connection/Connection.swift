@@ -459,9 +459,10 @@ final class Connection {
     func send(
         _ text: String, images: [PastedImage] = [], to chatId: String, with picked: ResumeSettings? = nil,
         steer: Bool = false, rootId: String? = nil, sendAt: Int64? = nil, throughDraft: String? = nil,
-        id: String = UUID().uuidString.lowercased()
+        id: String = UUID().uuidString.lowercased(), on computer: String? = nil
     ) async throws {
-        guard let client else { throw PairingError("Not connected.") }
+        guard let client, let active else { throw PairingError("Not connected.") }
+        guard computer == nil || computer == active else { throw PairingError("The computer changed. Send again on the computer you want.") }
         guard let settings = picked ?? settings(of: chatId, rootId: rootId)
         else { throw PairingError("Pick an agent for this thread first.") }
         let delivery = sendAt != nil || !running(chatId, rootId: rootId) ? nil : steer ? "steer" : "queue"
@@ -469,7 +470,7 @@ final class Connection {
         let send = ProjectChatSend(
             id: id, body: btw.map { String(text[$0.upperBound...]) } ?? text, settings: settings, delivery: delivery,
             images: images, parentId: rootId, side: btw != nil, sendAt: sendAt)
-        deliver(send, to: chatId, through: client, draft: throughDraft)
+        deliver(send, to: chatId, through: client, computer: active, draft: throughDraft)
     }
 
     /// Whether a send of this draft goes through the computer, which holds part of it.
@@ -539,8 +540,9 @@ final class Connection {
     }
 
     /// An empty thread in the project, for `send` to give its first message.
-    func createThread(in projectId: String, workspace: String?) async throws -> CreatedChat {
+    func createThread(in projectId: String, workspace: String?, on computer: String) async throws -> CreatedChat {
         guard let client else { throw PairingError("Not connected.") }
+        guard active == computer else { throw PairingError("The computer changed. Send again on the computer you want.") }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
         guard self.client === client else { throw PairingError("The connection changed. Send again on the computer you want.") }
         return made
@@ -550,14 +552,13 @@ final class Connection {
     /// failed attempt's `id`, so the computer, which knows the draft's sends by it, starts one thread.
     func start(
         in projectId: String, workspace: String?, _ text: String, images: [PastedImage], with settings: ResumeSettings,
-        sendAt: Int64? = nil, throughDraft: String? = nil, id: String = UUID().uuidString.lowercased()
+        sendAt: Int64? = nil, throughDraft: String? = nil, id: String = UUID().uuidString.lowercased(), on computer: String? = nil
     ) async throws -> String {
-        guard let client else { throw PairingError("Not connected.") }
+        guard let client, let active else { throw PairingError("Not connected.") }
+        guard computer == nil || computer == active else { throw PairingError("The computer changed. Send again on the computer you want.") }
         let send = ProjectChatSend(id: id, body: text, settings: settings, images: images, sendAt: sendAt)
         if let throughDraft {
-            let chatId = try await client.sendDraft(key: throughDraft, chatId: nil, send)
-            guard self.client === client else { throw PairingError("The connection changed. Check the thread on the computer it was sent to.") }
-            return chatId
+            return try await client.sendDraft(key: throughDraft, chatId: nil, send)
         }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
         guard self.client === client else { throw PairingError("The connection changed. Send again on the computer you want.") }
@@ -565,9 +566,8 @@ final class Connection {
         // would sit there twice. A plain one follows the thread, as a worktree or images can take a while.
         if sendAt != nil {
             try await client.sendProjectChat(chatId: made.id, send)
-            guard self.client === client else { throw PairingError("The connection changed. Check the thread on the computer it was sent to.") }
         } else {
-            deliver(send, to: made.id, through: client)
+            deliver(send, to: made.id, through: client, computer: active)
         }
         return made.id
     }

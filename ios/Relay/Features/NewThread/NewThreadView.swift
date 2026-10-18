@@ -108,25 +108,28 @@ struct NewThreadView: View {
                 if relayCommand(sent.text)?.name == "btw" { throw PairingError(asideNeedsAnswer) }
                 if let through = sent.throughDraft {
                     // Started on the computer with a screenshot or a branch of its own: it starts it.
-                    return started(
-                        try await connection.start(
-                            in: projectId ?? "", workspace: workspace, sent.text, images: sent.images,
-                            with: sent.settings, sendAt: sent.sendAt, throughDraft: through, id: sent.id))
+                    let chatId = try await connection.start(
+                        in: projectId ?? "", workspace: workspace, sent.text, images: sent.images,
+                        with: sent.settings, sendAt: sent.sendAt, throughDraft: through, id: sent.id, on: computer)
+                    if connection.active == computer { started(chatId) }
+                    return
                 }
                 let place = scratch ? try await scratchFolder() : projectId
                 guard connection.active == computer else { throw PairingError("The computer changed. Send again on the computer you want.") }
                 guard let place else { throw PairingError("Pick a project first.") }
                 let at = "\(place):\(workspace ?? "")"
                 let chat: CreatedChat
-                if let made, made.computer == computer, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace) }
+                if let made, made.computer == computer, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace, on: computer) }
                 made = (computer, at, chat)
                 try await connection.send(
-                    sent.text, images: sent.images, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id)
+                    sent.text, images: sent.images, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id, on: computer)
                 made = nil
                 // Titled as the computer titles it once the message is in.
                 let title = sent.sendAt == nil ? promptTitle(sent.text) : chat.title ?? ""
-                MadeHere.add(Made(id: chat.id, projectId: place, title: title))
-                started(chat.id)
+                if connection.active == computer {
+                    MadeHere.add(Made(id: chat.id, projectId: place, title: title))
+                    started(chat.id)
+                }
             }
         }
         .relayBackground()

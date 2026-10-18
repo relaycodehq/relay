@@ -4,9 +4,8 @@ import RelayRemote
 /// The outbox and the offline copies, as the connection feeds them.
 extension Connection {
     /// Goes in the background: the thread shows it at once, a failure stays there to retry or take back.
-    func deliver(_ send: ProjectChatSend, to chatId: String, through client: RemoteClient, draft: String? = nil) {
-        guard let active else { return }
-        outbox.deliver(ClientOutboxLink(client), computer: active, chatId: chatId, send, draft: draft)
+    func deliver(_ send: ProjectChatSend, to chatId: String, through client: RemoteClient, computer: String, draft: String? = nil) {
+        outbox.deliver(ClientOutboxLink(client), computer: computer, chatId: chatId, send, draft: draft)
     }
 
     /// The desktop took one the thread doesn't show yet: ask for it.
