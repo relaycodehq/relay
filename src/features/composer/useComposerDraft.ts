@@ -411,15 +411,20 @@ export function useComposerDraft(
         : Array.from(event.clipboardData.items)
             .map((item) => item.getAsFile())
             .filter((file): file is File => !!file);
-      // Files copied in Finder or Explorer paste like they drop.
-      if (files.length) {
+      // Files copied in Finder or Explorer paste like they drop. Files that
+      // aren't on disk can't be mentioned, so the text they came with pastes.
+      const placeable = files.some(
+        (file) => isScreenshot(file) || api.pathForFile(file),
+      );
+      const plain = event.clipboardData.getData("text/plain");
+      if (files.length && (placeable || !plain.trim())) {
         event.preventDefault();
         event.stopPropagation();
         addFiles(files);
         return;
       }
       // A long paste becomes a pill at the caret instead of flooding the draft.
-      const pasted = cleanPaste(event.clipboardData.getData("text/plain"));
+      const pasted = cleanPaste(plain);
       if (!isLongPaste(pasted) || pastedTexts(pasted).length) return;
       event.preventDefault();
       event.stopPropagation();

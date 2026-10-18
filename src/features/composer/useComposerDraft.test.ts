@@ -10,7 +10,9 @@ import type { DraftImage } from "../images/draft-images";
 import type { DraftEditor } from "./useComposerDraft";
 
 vi.mock("react", () => harnessReact);
-vi.mock("../../lib/api", () => ({ api: {} }));
+vi.mock("../../lib/api", () => ({
+  api: { pathForFile: (file: { path?: string }) => file.path ?? "" },
+}));
 vi.mock("../images/image-pills", () => ({ useImagePills: () => true }));
 const saved = new Map<string, DraftImage[]>();
 const savedListeners = new Set<(key: string, images: DraftImage[]) => void>();
@@ -20,7 +22,7 @@ let finishScreenshot: (() => void) | undefined;
 // Pills copied along with a paste; these tests paste none.
 const adoptPills = () => {};
 vi.mock("../images/draft-images", () => ({
-  isScreenshot: () => true,
+  isScreenshot: (file: File) => !file.name.endsWith(".pdf"),
   loadDraftImages: async (key: string) => saved.get(key) ?? [],
   saveDraftImages: async (key: string, images: DraftImage[]) => {
     if (images.length) saved.set(key, images);
@@ -411,4 +413,30 @@ it("gives each of two copied messages' #1 its own screenshot, and a repeated one
     { id: "a.png", n: 1 },
     { id: "b.png", n: 2 },
   ]);
+});
+
+it("pastes the words that came with a file that isn't on disk, and mentions one that is", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const insertFiles = vi.fn();
+  const editor = {
+    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  const paste = (file: object) => ({
+    clipboardData: {
+      getData: (type: string) => (type === "text/plain" ? "notes" : ""),
+      files: [{ name: "notes.pdf", ...file }],
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  });
+  const pathless = paste({});
+  draft().paste(pathless as never);
+  expect(pathless.preventDefault).not.toHaveBeenCalled();
+  expect(draft().error).toBeUndefined();
+  const saved = paste({ path: "/docs/notes.pdf" });
+  draft().paste(saved as never);
+  expect(saved.preventDefault).toHaveBeenCalled();
+  expect(insertFiles).toHaveBeenCalledWith(["/docs/notes.pdf"], undefined);
 });
