@@ -242,8 +242,9 @@ it("numbers diff lines and cuts very long diffs short", () => {
 
 it("sends a project's icon only when the phone's copy is missing or stale", async () => {
   const [withIcon, without] = [randomUUID(), randomUUID()];
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>';
   const icons: Record<string, string | null> = {
-    [withIcon]: "data:image/svg+xml;base64,PHN2Zy8+",
+    [withIcon]: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
     [without]: null,
   };
   const host = {
@@ -262,10 +263,11 @@ it("sends a project's icon only when the phone's copy is missing or stale", asyn
       Record<string, { hash: string | null; dataUrl?: string }>
     >;
 
+  // The phones can't draw SVG: it goes as a PNG.
   const first = await icon({});
   expect(first[withIcon]).toEqual({
     hash: expect.any(String),
-    dataUrl: icons[withIcon],
+    dataUrl: expect.stringMatching(/^data:image\/png;base64,/),
   });
   expect(first[without]).toEqual({ hash: null });
 

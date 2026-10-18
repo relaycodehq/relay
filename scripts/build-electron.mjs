@@ -57,6 +57,13 @@ cpSync(join(pty, native), join(ptyOut, native), {
   filter: (path) =>
     !/\.(pdb|o|d|mk)$|\/obj(\.target)?(\/|$)|\/\.deps(\/|$)/.test(path),
 });
+// resvg draws projects' SVG icons as PNGs for the phones; its WASM module
+// is read from beside the bundle.
+cpSync(
+  "node_modules/@resvg/resvg-wasm/index_bg.wasm",
+  "dist-electron/resvg.wasm",
+);
+
 // node-pty 1.1.0 publishes spawn-helper without its executable bit, and
 // every shell then fails with "posix_spawnp failed".
 const helper = join(ptyOut, native, "spawn-helper");

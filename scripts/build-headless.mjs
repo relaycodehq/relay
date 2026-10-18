@@ -7,6 +7,7 @@
 //   node scripts/build-headless.mjs [version]
 import {
   chmodSync,
+  cpSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -109,6 +110,10 @@ export async function buildHeadless(given) {
       external: ["onnxruntime-node", "sherpa-onnx-node"],
     });
   await build(onnxRuntimeBundle(`${headlessOut}/onnxruntime/dist/index.cjs`));
+  cpSync(
+    "node_modules/@resvg/resvg-wasm/index_bg.wasm",
+    `${headlessOut}/resvg.wasm`,
+  );
   writeFileSync(
     `${headlessOut}/speech-runtime.json`,
     JSON.stringify(speechRuntime(), null, 2) + "\n",

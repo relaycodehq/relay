@@ -476,6 +476,13 @@ Source: https://github.com/electron/electron
 window under the Eclipse Public License 2.0 (its text is under “npm
 packages”). Its source code is available at https://github.com/kieler/elkjs.
 
+## resvg
+
+`@resvg/resvg-wasm` 2.6.2, which draws projects' SVG icons as PNGs for the
+phone apps, is bundled into the main process unmodified under the Mozilla
+Public License 2.0 (https://www.mozilla.org/MPL/2.0/). Its source code is
+available at https://github.com/yisibl/resvg-js.
+
 ## Anthropic Claude Agent SDK
 
 `@anthropic-ai/claude-agent-sdk` version 0.3.276 is used for Claude project sessions.
@@ -571,6 +578,7 @@ The window (bundled by Vite), the main process and its workers (bundled by esbui
 | @pierre/theme | 2.0.0 | apache-2.0 |
 | @pierre/theming | 1.0.1 | apache-2.0 |
 | @pierre/trees | 1.0.0-beta.4 | apache-2.0 |
+| @resvg/resvg-wasm | 2.6.2 | MPL-2.0 |
 | @shikijs/core | 4.4.3 | MIT |
 | @shikijs/engine-javascript | 4.4.3 | MIT |
 | @shikijs/engine-oniguruma | 4.4.3 | MIT |
@@ -1832,6 +1840,16 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 ````
+
+#### @resvg/resvg-wasm 2.6.2
+
+```text
+From the package's README:
+
+[MPLv2.0](https://www.mozilla.org/en-US/MPL/)
+
+Copyright (c) 2021-present, yisibl(一丝)
+```
 
 #### @shikijs/core 4.4.3, @shikijs/engine-javascript 4.4.3, @shikijs/engine-oniguruma 4.4.3, @shikijs/langs 4.4.3, @shikijs/primitive 4.4.3, @shikijs/themes 4.4.3, @shikijs/transformers 4.4.3, @shikijs/types 4.4.3, shiki 4.4.3
 

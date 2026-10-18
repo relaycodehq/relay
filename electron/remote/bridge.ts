@@ -46,6 +46,7 @@ import {
 } from "../../shared/drafts";
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
+import { phoneIcon } from "./svg-icon";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
 import type {
@@ -409,9 +410,10 @@ export class RemoteBridge {
       for (let i = 0; i < projects.length; i += 4)
         await Promise.all(
           projects.slice(i, i + 4).map(async ({ id }) => {
-            const dataUrl = (await this.host
+            const icon = (await this.host
               .dispatch("projectIcon", [id])
               .catch(() => null)) as string | null;
+            const dataUrl = icon && (await phoneIcon(icon));
             const hash = dataUrl
               ? createHash("sha256").update(dataUrl).digest("hex").slice(0, 16)
               : null;
