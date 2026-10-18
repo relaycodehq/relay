@@ -5,6 +5,7 @@
 // pair with it.
 //
 //   node_modules/.bin/jiti ios/scripts/live-desktop.ts /tmp/relay-ios-pair.txt [--seed] [--lan]
+// Add --scroll-stress for a 600-message thread and a 360-entry "busy" trace.
 //
 // Bare: one empty thread whose title changes every second (the live bridge test).
 // --seed: sample threads in every state, a message sent from the phone gets a
@@ -33,6 +34,8 @@ if (!out) throw new Error("Usage: live-desktop.ts <file for the pairing link> [-
 const seeded = process.argv.includes("--seed");
 // Replies slow enough to queue behind or steer by hand.
 const slow = process.argv.includes("--slow");
+// Larger history and live trace for exercising lazy-list height corrections around a steer.
+const scrollStress = process.argv.includes("--scroll-stress");
 // A thread made from the phone takes a while to load and to take its first message.
 const slowNew = process.argv.includes("--slow-new");
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -247,10 +250,11 @@ if (!seeded) {
     message("assistant", "Inter, the same as the rest of the site.", 43, { parentId: btw.id }),
   ]);
   // Long enough that a lazy list has to guess most row heights.
-  thread(relay, "A long thread to scroll", 240, Array.from({ length: 30 }, (_, i) => [
-    message("user", `Question ${i + 1}: what does step ${i + 1} change?`, 300 - i * 2),
-    message("assistant", `## Step ${i + 1}\n\n${"It moves the work along a little and keeps the rest as it was. ".repeat(3 + (i % 5))}\n\n\`\`\`ts\nconst step = ${i + 1};\nrun(step);\n\`\`\`\n\n- one\n- two\n- three${i === 29 ? "\n\nThe very last line of the thread." : ""}`, 299 - i * 2, {
-      ended: now - (298 - i * 2) * min,
+  const scrollSteps = scrollStress ? 300 : 30;
+  thread(relay, "A long thread to scroll", 240, Array.from({ length: scrollSteps }, (_, i) => [
+    message("user", `Question ${i + 1}: what does step ${i + 1} change?`, 240 + (scrollSteps - i) * 2),
+    message("assistant", `## Step ${i + 1}\n\n${"It moves the work along a little and keeps the rest as it was. ".repeat(3 + (i % 5))}\n\n\`\`\`ts\nconst step = ${i + 1};\nrun(step);\n\`\`\`\n\n- one\n- two\n- three${i === scrollSteps - 1 ? "\n\nThe very last line of the thread." : ""}`, 239 + (scrollSteps - i) * 2, {
+      ended: now - (238 + (scrollSteps - i) * 2) * min,
       trace: [{ kind: "activity", ...(() => { const a = step(`npm test -- step${i + 1}`); return { id: a.id, activity: a }; })() }],
     }),
   ]).flat(), { settledAt: now - 230 * min });
@@ -1057,7 +1061,7 @@ function answer(chatId: string, send: any, silent = false) {
   if (busy) (reply as any).trace = trace;
   const tick = setInterval(() => {
     const done = i >= words.length || stopped.has(chatId);
-    if (busy && i < 24 && trace.length < 36) {
+    if (busy && i < 24 && trace.length < (scrollStress ? 360 : 36)) {
       const call = step(`rg -n 'pass ${trace.length}' src`, "search");
       trace.push(
         { kind: "commentary", id: id(), text: `Looking at pass ${trace.length / 3 + 1}: ${"it checks one more corner of the code before going on. ".repeat(3)}` },
@@ -1096,6 +1100,7 @@ function answer(chatId: string, send: any, silent = false) {
 // turn phone access off and on, keeping the pairing; "pair" writes a fresh pairing link; "wait", "run", "finish" and "fail" move the
 // thread whose title contains "chat" ("finish" with "body", "fail" with "error"); "refuse" turns
 // sends away as a gone worktree would, until "accept" or the phone picks the project folder.
+// "send" with "body" starts a streamed answer; "steer": true interrupts the current one.
 const controlAt = process.argv.indexOf("--control");
 let refusing = false;
 if (controlAt > 0) {
@@ -1117,6 +1122,10 @@ if (controlAt > 0) {
     if (order.do === "refuse") refusing = true;
     if (order.do === "accept") refusing = false;
     if (!t || !c) return;
+    if (order.do === "send") {
+      sent(c.id, { id: id(), body: order.body ?? "busy", delivery: order.steer ? "steer" : "queue" });
+      return;
+    }
     const end = (status: string, body: string, error?: string) => {
       const reply = { ...message("assistant", body, 0), created: Date.now(), status, ...(error ? { error } : {}) };
       t.messages.push(reply);
