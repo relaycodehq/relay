@@ -466,6 +466,7 @@ export default function ProjectShell() {
               })
             }
             onAddProject={() => starts.addProject()}
+            onScratch={() => void starts.scratch()}
             onSettings={settings.show}
             onLinkProject={gitea ? () => void linkProject() : undefined}
           />

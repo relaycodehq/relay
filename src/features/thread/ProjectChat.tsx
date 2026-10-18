@@ -97,6 +97,7 @@ export function ProjectChat({
   scopes,
   onSwitchProject,
   onAddProject,
+  onScratch,
   onProjectSettings,
   opens,
   onDraftWorkspace,
@@ -129,6 +130,8 @@ export function ProjectChat({
   scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
+  /** Starts a Scratchpad thread instead, from the headline's picker. */
+  onScratch?: () => void;
   /** Opens this project's settings. */
   onProjectSettings: () => void;
   opens: ThreadOpens;
@@ -500,6 +503,7 @@ export function ProjectChat({
             scope={scope}
             onSwitchProject={onSwitchProject}
             onAddProject={onAddProject}
+            onScratch={onScratch}
           />
         )}
         {!!error && <ErrorBox error={error} />}

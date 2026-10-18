@@ -161,12 +161,14 @@ export function ThreadIntroduction({
   scope,
   onSwitchProject,
   onAddProject,
+  onScratch,
 }: {
   project: Project;
   projects: Project[];
   scope: ChatScope;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
+  onScratch?: () => void;
 }) {
   if (project.scratch)
     return (
@@ -199,6 +201,7 @@ export function ThreadIntroduction({
           projects={projects}
           onSelect={onSwitchProject}
           onAdd={onAddProject}
+          onScratch={onScratch}
         />
         {scope.kind === "pr" ? "." : scope.kind === "review" ? "" : "?"}
       </h1>

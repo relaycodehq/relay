@@ -169,6 +169,7 @@ export function ThreadWorkspace({
   onCreated,
   onOpened,
   onAddProject,
+  onScratch,
   onSettings,
   onLinkProject,
 }: {
@@ -187,6 +188,7 @@ export function ThreadWorkspace({
   /** A thread made from this one, forked or started, to open. */
   onOpened: ChatProps["onOpenThread"];
   onAddProject: () => void;
+  onScratch?: () => void;
   onSettings: (at: SettingsCategory, projectId?: string) => void;
   onLinkProject?: () => void;
 }) {
@@ -266,6 +268,7 @@ export function ThreadWorkspace({
                 onOpenThread={onOpened}
                 onSwitchProject={(next) => navigate(next, undefined, true)}
                 onAddProject={onAddProject}
+                onScratch={onScratch}
                 onProjectSettings={() => onSettings("project", project.id)}
               />
             </ThreadPreviewContext.Provider>

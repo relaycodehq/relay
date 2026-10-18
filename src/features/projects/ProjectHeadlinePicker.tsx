@@ -1,21 +1,24 @@
 import { useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { FolderPlus } from "lucide-react";
 import { ProjectRibbon } from "./ProjectRibbon";
-import { ProjectSearch } from "./ProjectSearch";
+import { ProjectPicker, ScratchpadButton } from "./ProjectPicker";
 import type { Project } from "../../../shared/projects";
 import "./projects.css";
 
+/** The New thread dialog as a dropdown, under the project's name. */
 export function ProjectHeadlinePicker({
   project,
   projects,
   onSelect,
   onAdd,
+  onScratch,
 }: {
   project: Project;
   projects: Project[];
   onSelect: (project: Project) => void;
   onAdd: () => void;
+  /** Absent where no Scratchpad thread can start, like a thread window. */
+  onScratch?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -44,28 +47,29 @@ export function ProjectHeadlinePicker({
           collisionPadding={12}
         >
           <Popover.Popup
-            className="headline-project-popup"
-            aria-label="Switch project"
+            className="headline-project-popup project-picker-popup"
+            aria-label="New thread in…"
             initialFocus={input}
           >
-            <ProjectSearch
+            <div className="project-picker-heading">
+              <h2>New thread in…</h2>
+              {onScratch && (
+                <ScratchpadButton
+                  onClick={() => {
+                    setOpen(false);
+                    onScratch();
+                  }}
+                />
+              )}
+            </div>
+            <ProjectPicker
               projects={projects}
               current={project.id}
               input={input}
               onSelect={select}
-              onEscape={() => setOpen(false)}
+              onAdd={onAdd}
+              onClose={() => setOpen(false)}
             />
-            <button
-              type="button"
-              className="headline-project-add"
-              onClick={() => {
-                setOpen(false);
-                onAdd();
-              }}
-            >
-              <FolderPlus size={15} aria-hidden />
-              Add project folder
-            </button>
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { FolderPlus } from "lucide-react";
 import { Modal } from "../../ui/ui";
-import { matches, useShortcutLabel } from "../../lib/shortcuts";
-import { ProjectSearch } from "./ProjectSearch";
+import { matches } from "../../lib/shortcuts";
+import { ProjectPicker, ScratchpadButton } from "./ProjectPicker";
 import type { Project } from "../../../shared/projects";
 import "./projects.css";
 
@@ -28,7 +27,6 @@ export function NewThreadPicker({
   onClose: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const scratchKeys = useShortcutLabel("new-scratch");
   const scratch = useRef(onScratch);
   scratch.current = onScratch;
   // The dialog's showModal() runs after this effect and focuses its first
@@ -54,46 +52,18 @@ export function NewThreadPicker({
       title="New thread in…"
       className="new-thread-picker"
       onClose={onClose}
-      actions={
-        <button
-          type="button"
-          className="new-thread-scratch"
-          onClick={onScratch}
-        >
-          <span className="sb-project-badge scratchpad" aria-hidden />
-          Scratchpad
-          {scratchKeys && <kbd>{scratchKeys}</kbd>}
-        </button>
-      }
+      actions={<ScratchpadButton onClick={onScratch} />}
     >
-      {!projects ? null : projects.length ? (
-        <ProjectSearch
+      {projects && (
+        <ProjectPicker
           projects={projects}
           current={current}
           input={input}
           onSelect={onSelect}
-          onEscape={onClose}
+          onAdd={onAdd}
+          onClose={onClose}
         />
-      ) : (
-        <div className="new-thread-empty">
-          <strong>No projects yet</strong>
-          <p>
-            Add a folder to work in a repository, or start in Scratchpad for
-            anything else.
-          </p>
-        </div>
       )}
-      <button
-        type="button"
-        className="headline-project-add"
-        onClick={() => {
-          onClose();
-          onAdd();
-        }}
-      >
-        <FolderPlus size={15} aria-hidden />
-        Add project folder
-      </button>
     </Modal>
   );
 }
