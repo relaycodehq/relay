@@ -8,9 +8,13 @@ struct PairingView: View {
     @Binding var incoming: IncomingPair?
     @Binding var holding: Bool
 
-    /// In Relay's own colours: pairing another computer shouldn't wear the one already paired's.
+    /// In Relay's own colours, dark on black whatever the theme: pairing another computer shouldn't
+    /// wear the one already paired's, and the field glows best on black.
     var body: some View {
-        PairingScreen(incoming: $incoming, holding: $holding).defaultTheme()
+        PairingScreen(incoming: $incoming, holding: $holding)
+            .defaultTheme()
+            .environment(\.colorScheme, .dark)
+            .preferredColorScheme(.dark)
     }
 }
 
@@ -75,7 +79,7 @@ private struct PairingScreen: View {
         .animation(.spring(duration: 0.5, bounce: 0.15), value: scan.face)
         .statusBarHidden(scan.cameraCovers)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .relayBackground()
+        .background(.black, ignoresSafeAreaEdges: .all)
         .alert("Pairing link", isPresented: $pasting) {
             TextField("relay-remote://pair?…", text: $pasted)
             Button("Pair") { take(pasted) }

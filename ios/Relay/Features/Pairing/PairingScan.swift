@@ -275,7 +275,9 @@ nonisolated enum Halftone {
             s.cameraAlpha = 1 - ease((Float(t) - 0.04) / 0.34)
             s.lifted = true
         }
-        s.shade = 0.35 * s.lock
+        // The camera falls back into the dark as the dots fly onto the code, so the code they draw
+        // isn't lost in the screen it was read off.
+        s.shade = 0.85 * s.lock
         if corners.count == 4 { s.code = Self.homography(corners) }
         s.covers = covers * s.cameraAlpha
         let on = s.covers > 0.5
