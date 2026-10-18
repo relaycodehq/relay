@@ -541,7 +541,9 @@ final class Connection {
     /// An empty thread in the project, for `send` to give its first message.
     func createThread(in projectId: String, workspace: String?) async throws -> CreatedChat {
         guard let client else { throw PairingError("Not connected.") }
-        return try await client.createProjectChat(projectId: projectId, workspace: workspace)
+        let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
+        guard self.client === client else { throw PairingError("The connection changed. Send again on the computer you want.") }
+        return made
     }
 
     /// Makes the thread, then sends its first message; the thread's id. A retry passes the
@@ -552,12 +554,18 @@ final class Connection {
     ) async throws -> String {
         guard let client else { throw PairingError("Not connected.") }
         let send = ProjectChatSend(id: id, body: text, settings: settings, images: images, sendAt: sendAt)
-        if let throughDraft { return try await client.sendDraft(key: throughDraft, chatId: nil, send) }
+        if let throughDraft {
+            let chatId = try await client.sendDraft(key: throughDraft, chatId: nil, send)
+            guard self.client === client else { throw PairingError("The connection changed. Check the thread on the computer it was sent to.") }
+            return chatId
+        }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
+        guard self.client === client else { throw PairingError("The connection changed. Send again on the computer you want.") }
         // One for later goes to the desktop's queue, which the thread shows; through the outbox it
         // would sit there twice. A plain one follows the thread, as a worktree or images can take a while.
         if sendAt != nil {
             try await client.sendProjectChat(chatId: made.id, send)
+            guard self.client === client else { throw PairingError("The connection changed. Check the thread on the computer it was sent to.") }
         } else {
             deliver(send, to: made.id, through: client)
         }
@@ -612,7 +620,9 @@ final class Connection {
 
     func createScratch() async throws -> String {
         guard let client else { throw PairingError("Not connected.") }
-        return try await client.createScratch()
+        let projectId = try await client.createScratch()
+        guard self.client === client else { throw PairingError("The connection changed. Pick a computer and try again.") }
+        return projectId
     }
 
     /// The active computer's project icons that differ from `known`, and whose they are.

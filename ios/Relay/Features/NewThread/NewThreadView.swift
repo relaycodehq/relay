@@ -24,7 +24,7 @@ struct NewThreadView: View {
     /// A new thread's draft picked from Home, written on while its project stays picked.
     private let opened: String?
     /// The thread made for a send that then failed, used again on the next try to the same place.
-    @State private var made: (place: String, chat: CreatedChat)?
+    @State private var made: (computer: String, place: String, chat: CreatedChat)?
     @FocusState private var composing: Bool
 
     init(projectId: String? = nil, scratch: Bool = false, draftKey: String? = nil, started: @escaping (String) -> Void) {
@@ -103,6 +103,8 @@ struct NewThreadView: View {
                 remembered: connection.newThread?.models,
                 placeholder: scratch ? "Ask anything" : "What should we work on?", focused: $composing
             ) { sent in
+                guard let computer = connection.active else { throw PairingError("Not connected.") }
+                let workspace = workspace
                 if relayCommand(sent.text)?.name == "btw" { throw PairingError(asideNeedsAnswer) }
                 if let through = sent.throughDraft {
                     // Started on the computer with a screenshot or a branch of its own: it starts it.
@@ -112,11 +114,12 @@ struct NewThreadView: View {
                             with: sent.settings, sendAt: sent.sendAt, throughDraft: through, id: sent.id))
                 }
                 let place = scratch ? try await scratchFolder() : projectId
+                guard connection.active == computer else { throw PairingError("The computer changed. Send again on the computer you want.") }
                 guard let place else { throw PairingError("Pick a project first.") }
                 let at = "\(place):\(workspace ?? "")"
                 let chat: CreatedChat
-                if let made, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace) }
-                made = (at, chat)
+                if let made, made.computer == computer, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace) }
+                made = (computer, at, chat)
                 try await connection.send(
                     sent.text, images: sent.images, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id)
                 made = nil
