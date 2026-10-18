@@ -47,6 +47,8 @@ const OPEN_THREAD = "relay-project-chat:",
   CURRENT_NEW_THREAD = "relay-new-thread:";
 /** Per thread: the turns whose changed files are folded away. */
 export const TURN_FOLDS = "relay-turn-folds:";
+/** Per thread: whether the agent's inspected-image strips are expanded. */
+export const IMAGE_STRIPS = "relay-image-strips:";
 
 /** A thread's main draft, or with `reply` its side conversation's. */
 export const threadDraftKey = draftKeyOf;
@@ -360,10 +362,11 @@ export function keyOwner(
 ): { thread: string } | { project: string } | undefined {
   for (const prefix of [OPEN_THREAD, CURRENT_NEW_THREAD])
     if (key.startsWith(prefix)) return { project: key.slice(prefix.length) };
-  if (key.startsWith(TURN_FOLDS))
-    return key.length > TURN_FOLDS.length
-      ? { thread: key.slice(TURN_FOLDS.length) }
-      : undefined;
+  for (const prefix of [TURN_FOLDS, IMAGE_STRIPS])
+    if (key.startsWith(prefix))
+      return key.length > prefix.length
+        ? { thread: key.slice(prefix.length) }
+        : undefined;
   if (key.startsWith(RECORD_PREFIX))
     return key.length > RECORD_PREFIX.length
       ? { thread: key.slice(RECORD_PREFIX.length) }

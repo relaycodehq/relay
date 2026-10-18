@@ -41,6 +41,7 @@ import {
   type PreviewImage,
 } from "../images/ImagePreview";
 import { AnswerVideo } from "../images/AnswerVideo";
+import { AgentImageStrip } from "../images/AgentImageStrip";
 import { ImageViewer } from "../images/ImageViewer";
 import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
@@ -311,17 +312,26 @@ export const Message = memo(function Message({
   );
   // Your images sit above what you wrote; the images the agent read show
   // once its turn ends, after the answer.
-  const strip = !!stripImages.length && m.status !== "streaming" && (
-    <div className="message-images">
-      {stripImages.map((image) => (
-        <ImageThumbnail
-          key={image.key}
-          image={image}
-          onOpen={() => setViewing(image.key)}
-        />
-      ))}
-    </div>
-  );
+  const strip =
+    !!stripImages.length &&
+    m.status !== "streaming" &&
+    (m.role === "assistant" ? (
+      <AgentImageStrip
+        chatId={chatId}
+        images={stripImages}
+        onOpen={(image) => setViewing(image.key)}
+      />
+    ) : (
+      <div className="message-images">
+        {stripImages.map((image) => (
+          <ImageThumbnail
+            key={image.key}
+            image={image}
+            onOpen={() => setViewing(image.key)}
+          />
+        ))}
+      </div>
+    ));
   if (m.handedOver) return null;
   if (m.resumed)
     return (

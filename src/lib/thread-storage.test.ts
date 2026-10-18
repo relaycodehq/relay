@@ -256,6 +256,7 @@ describe("whose a key is", () => {
     expect(keyOwner("composer-settings:c1:r1")).toEqual({ thread: "c1" });
     expect(keyOwner("relay-new-thread:p1")).toEqual({ project: "p1" });
     expect(keyOwner("relay-turn-folds:c1")).toEqual({ thread: "c1" });
+    expect(keyOwner("relay-image-strips:c1")).toEqual({ thread: "c1" });
     expect(keyOwner("theme")).toBeUndefined();
   });
 });
