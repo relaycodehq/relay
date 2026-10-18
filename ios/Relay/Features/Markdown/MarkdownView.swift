@@ -91,7 +91,7 @@ private struct BlockView: View {
         case .rule:
             Divider()
         case .html(let raw):
-            Text(raw).font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary)
+            Text(raw).font(.mono(.footnote)).foregroundStyle(.secondary)
         }
     }
 
@@ -111,6 +111,7 @@ private struct BlockView: View {
 /// by the grid.
 struct Inline: View {
     let text: AttributedString
+    @Environment(\.colors) private var colors
 
     var body: some View {
         Text(styled)
@@ -119,16 +120,17 @@ struct Inline: View {
 
     private var styled: AttributedString {
         var out = text
-        // Text already sets code in the surrounding size's monospace.
         for run in out.runs {
+            // On the theme's code colour, a size under the words around it, as Android sets it.
             if run.inlinePresentationIntent?.contains(.code) == true {
-                out[run.range].backgroundColor = Color.secondary.opacity(0.18)
+                out[run.range].backgroundColor = colors.code
+                out[run.range].font = .mono(.subheadline)
             }
             // A formula: in a serif italic as plain text, else its TeX in a muted monospace.
             switch run.inlineMath {
             case .plain: out[run.range].font = .system(.body, design: .serif).italic()
             case .source:
-                out[run.range].font = .system(.body, design: .monospaced)
+                out[run.range].font = .mono(.body)
                 out[run.range].foregroundColor = Color.secondary
             case nil: break
             }

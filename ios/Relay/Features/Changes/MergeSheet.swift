@@ -78,7 +78,7 @@ struct MergeSheet: View {
                 Text("\(mono(plan.branch)) into \(mono(plan.base))")
                 if plan.bases.count > 1 {
                     Picker("Into", selection: Binding(get: { plan.base }, set: { pick($0) })) {
-                        ForEach(plan.bases.prefix(5), id: \.self) { Text($0).font(.system(.body, design: .monospaced)).tag($0) }
+                        ForEach(plan.bases.prefix(5), id: \.self) { Text($0).font(.mono(.body)).tag($0) }
                     }
                     .disabled(busy)
                 }
@@ -89,7 +89,7 @@ struct MergeSheet: View {
             Section {
                 if commits > 0 {
                     ForEach(plan.commits.prefix(listed), id: \.sha) { c in
-                        Text("\(Text(c.sha.prefix(7)).font(.system(.footnote, design: .monospaced)).foregroundStyle(colors.muted)) \(c.subject)")
+                        Text("\(Text(c.sha.prefix(7)).font(.mono(.footnote)).foregroundStyle(colors.muted)) \(c.subject)")
                             .font(.subheadline)
                             .lineLimit(1)
                     }
@@ -113,7 +113,7 @@ struct MergeSheet: View {
             if let result, !result.merged {
                 Section {
                     ForEach(result.conflicts ?? [], id: \.self) {
-                        Text($0).font(.system(.footnote, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                        Text($0).font(.mono(.footnote)).lineLimit(1).truncationMode(.middle)
                     }
                     Button("Ask the Agent to Resolve Them", systemImage: "bubble.left") { ask(plan, result.conflicts ?? []) }
                         .disabled(busy)
@@ -156,7 +156,7 @@ struct MergeSheet: View {
         return out
     }
 
-    private func mono(_ s: String) -> Text { Text(s).font(.system(.body, design: .monospaced)) }
+    private func mono(_ s: String) -> Text { Text(s).font(.mono(.body)) }
 
     private func pick(_ name: String) {
         guard name != plan?.base else { return }

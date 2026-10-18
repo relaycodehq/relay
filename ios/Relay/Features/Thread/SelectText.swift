@@ -77,8 +77,7 @@ private struct SheetText: UIViewRepresentable {
         view.backgroundColor = .clear
         view.font =
             mono
-            ? UIFontMetrics(forTextStyle: .footnote).scaledFont(
-                for: .monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular))
+            ? UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .mono(size: 13))
             : .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.textColor = .label

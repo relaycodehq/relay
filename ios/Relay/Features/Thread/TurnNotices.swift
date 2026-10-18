@@ -28,7 +28,7 @@ struct AgentErrorNote: View {
                     .buttonStyle(.plain)
                     if open {
                         Text(String(details.prefix(4000)))
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(.mono(.caption2))
                             .foregroundStyle(colors.muted)
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)

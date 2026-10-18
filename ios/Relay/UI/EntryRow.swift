@@ -17,7 +17,7 @@ struct EntryRow: View {
                 Image(systemName: icon).foregroundStyle(tint ?? colors.muted).frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(mono ? .system(.body, design: .monospaced) : .body)
+                        .font(mono ? .mono(.body) : .body)
                         .foregroundStyle(colors.foreground)
                         .lineLimit(1)
                         .truncationMode(.middle)

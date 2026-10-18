@@ -83,7 +83,7 @@ struct SitesList: View {
             HStack(spacing: 12) {
                 Image(systemName: icon).foregroundStyle(tint).frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(.body, design: .monospaced)).foregroundStyle(colors.foreground)
+                    Text(title).font(.mono(.body)).foregroundStyle(colors.foreground)
                     if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(colors.muted) }
                 }
                 Spacer(minLength: 0)

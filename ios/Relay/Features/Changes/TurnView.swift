@@ -89,7 +89,7 @@ struct TurnView: View {
                 } header: {
                     if !group.folder.isEmpty {
                         Text("\(group.folder) · \(group.files.count)")
-                            .font(.system(.caption, design: .monospaced))
+                            .font(.mono(.caption))
                             .foregroundStyle(colors.muted)
                             .textCase(nil)
                     }

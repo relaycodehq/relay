@@ -86,7 +86,7 @@ struct CommitView: View {
                     Text("\(c.author) · \(Date(timeIntervalSince1970: Double(c.time)).formatted(date: .abbreviated, time: .shortened))")
                         .font(.footnote)
                         .foregroundStyle(colors.muted)
-                    Text(c.sha).font(.system(.caption, design: .monospaced)).foregroundStyle(colors.faint)
+                    Text(c.sha).font(.mono(.caption)).foregroundStyle(colors.faint)
                 }
                 .textSelection(.enabled)
                 .padding(.vertical, 8)
@@ -97,7 +97,7 @@ struct CommitView: View {
                         NavigationLink(value: Route.git(.diff(.commit(where: self.where, sha: sha, path: f.path)))) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(fileName(f.path))
-                                    .font(.system(.subheadline, design: .monospaced))
+                                    .font(.mono(.subheadline))
                                     .foregroundStyle(colors.foreground)
                                     .lineLimit(1)
                                 Text([folderOf(f.path), commitFileLine(f)].filter { !$0.isEmpty }.joined(separator: " · "))

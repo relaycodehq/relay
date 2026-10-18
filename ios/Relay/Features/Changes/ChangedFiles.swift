@@ -73,12 +73,12 @@ struct FileLine: View {
                 .strikethrough(file.revertedBy != nil)
             let place = Text(folder && !dir.isEmpty ? "  \(dir)" : "").foregroundStyle(colors.faint)
             Text("\(name)\(place)")
-                .font(.system(.footnote, design: .monospaced))
+                .font(.mono(.footnote))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if file.binary == true {
-                Text("binary").font(.system(.caption, design: .monospaced)).foregroundStyle(colors.muted)
+                Text("binary").font(.mono(.caption)).foregroundStyle(colors.muted)
             } else {
                 Counts(add: file.additions, del: file.deletions)
             }
@@ -96,7 +96,7 @@ struct Counts: View {
             Text("+\(add)").foregroundStyle(colors.additionText)
             Text("−\(del)").foregroundStyle(colors.deletionText)
         }
-        .font(.system(.caption, design: .monospaced))
+        .font(.mono(.caption))
         .fixedSize()
     }
 }

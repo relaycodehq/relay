@@ -39,7 +39,7 @@ struct FileView: View {
                                 .padding(12)
                         }
                     }
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.mono(.caption))
                     .textSelection(.enabled)
                     .padding(.trailing, 12)
                     .padding(.vertical, 8)
@@ -53,7 +53,7 @@ struct FileView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             Text(path + (file.map { $0.branch.isEmpty ? "" : "  ·  \($0.branch)" } ?? ""))
-                .font(.system(.caption, design: .monospaced))
+                .font(.mono(.caption))
                 .foregroundStyle(colors.muted)
                 .lineLimit(1)
                 .truncationMode(.head)

@@ -279,7 +279,7 @@ struct Composer: View {
                     focused.wrappedValue = true
                 } label: {
                     Text("/")
-                        .font(.system(size: 18, design: .monospaced))
+                        .font(.mono(size: 18))
                         .frame(width: 26, height: 36)
                         .contentShape(.rect)
                 }

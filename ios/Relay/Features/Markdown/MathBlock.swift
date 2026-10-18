@@ -27,7 +27,7 @@ struct MathBlock: View {
         ZStack(alignment: .leading) {
             if !typeset || height == nil {
                 Text(tex.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .font(.system(size: 12.5, design: .monospaced))
+                    .font(.mono(size: 12.5))
                     .foregroundStyle(colors.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)

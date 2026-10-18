@@ -136,7 +136,7 @@ private struct ComputerBrowser: View {
                         .disabled(page?.canForward != true)
                 }
                 TextField("localhost:port", text: $text)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.mono(.body))
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

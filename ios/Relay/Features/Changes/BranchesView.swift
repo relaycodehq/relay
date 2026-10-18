@@ -82,7 +82,7 @@ struct BranchesView: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(b.name)
-                    .font(.system(.subheadline, design: .monospaced))
+                    .font(.mono(.subheadline))
                     .foregroundStyle(colors.foreground)
                     .lineLimit(1)
                     .truncationMode(.middle)

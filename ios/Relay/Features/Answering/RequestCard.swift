@@ -62,7 +62,7 @@ struct RequestCard: View {
             if let detail = request.detail, !detail.isEmpty {
                 ScrollView {
                     Text(detail)
-                        .font(.system(.footnote, design: .monospaced))
+                        .font(.mono(.footnote))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

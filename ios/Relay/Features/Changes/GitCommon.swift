@@ -115,7 +115,7 @@ struct ChangeLetter: View {
     var body: some View {
         let kind = changeKind(code, conflict: conflict)
         Text(conflict ? "!" : code == "?" ? "U" : code)
-            .font(.system(.footnote, design: .monospaced).weight(.medium))
+            .font(.mono(.footnote, medium: true))
             .foregroundStyle(kind == .added ? colors.additionText : kind == .modified ? colors.muted : colors.deletionText)
             .frame(width: 14)
     }

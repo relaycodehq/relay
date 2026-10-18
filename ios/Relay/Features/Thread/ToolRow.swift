@@ -107,7 +107,7 @@ struct ToolRow: View {
             let text = shown(activity.label)
             HStack(spacing: 4) {
                 Text(text)
-                    .font(activity.kind == "command" ? .system(.footnote, design: .monospaced) : .footnote)
+                    .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
                     .lineLimit(open ? 6 : 2)
                 if activity.kind == "agent", let progress = activity.progress, !progress.isEmpty {
                     Text("· \(progress)").lineLimit(1).foregroundStyle(.tertiary)
@@ -135,7 +135,7 @@ private struct Detail: View {
     var body: some View {
         ScrollView([.vertical, .horizontal]) {
             Text(text)
-                .font(.system(.caption, design: .monospaced))
+                .font(.mono(.caption))
                 .padding(10)
         }
         .scrollIndicators(.hidden)

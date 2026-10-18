@@ -124,7 +124,7 @@ private struct TaskCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(task.title).font(.body.weight(.semibold)).foregroundStyle(colors.foreground)
             Text(task.command)
-                .font(.system(.caption, design: .monospaced))
+                .font(.mono(.caption))
                 .foregroundStyle(colors.muted)
                 .lineLimit(3)
                 .textSelection(.enabled)

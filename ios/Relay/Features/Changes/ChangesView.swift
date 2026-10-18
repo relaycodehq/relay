@@ -110,7 +110,7 @@ private struct FileRow: View {
                     let name = Text(fileName(file.path)).foregroundStyle(colors.foreground)
                     let place = Text(dir.isEmpty ? "" : "  \(dir)").foregroundStyle(colors.faint)
                     Text("\(name)\(place)")
-                        .font(.system(.footnote, design: .monospaced))
+                        .font(.mono(.footnote))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,7 +149,7 @@ private struct RemoteSection: View {
                     .font(.footnote)
                     .foregroundStyle(colors.muted)
                 ForEach(tree.outgoing, id: \.sha) { commit in
-                    let sha = Text(commit.sha.prefix(7) + " ").font(.system(.footnote, design: .monospaced)).foregroundStyle(colors.faint)
+                    let sha = Text(commit.sha.prefix(7) + " ").font(.mono(.footnote)).foregroundStyle(colors.faint)
                     Text("\(sha)\(Text(commit.subject).foregroundStyle(colors.foreground))")
                         .font(.footnote)
                         .lineLimit(1)

@@ -98,8 +98,8 @@ private struct DiffRow: Identifiable {
     var line: RemoteDiffLine?
 }
 
-private let code = Font.system(size: 12, design: .monospaced)
-private let gutter = Font.system(size: 11, design: .monospaced)
+private let code = Font.mono(size: 12)
+private let gutter = Font.mono(size: 11)
 
 private struct HunkHeader: View {
     let text: String

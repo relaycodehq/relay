@@ -64,6 +64,10 @@ targets:
           UIColorName: LaunchBackground
           UIImageName: LaunchMark
           UIImageRespectsSafeAreaInsets: false
+        # JetBrains Mono for code, as on Android (UI/Mono.swift).
+        UIAppFonts:
+          - JetBrainsMono-Regular.ttf
+          - JetBrainsMono-Medium.ttf
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         # The browser loads the computer's dev servers from the phone's own loopback, over http.

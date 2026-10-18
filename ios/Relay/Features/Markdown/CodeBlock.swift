@@ -50,7 +50,7 @@ struct CodeBlock: View {
                     }
                     Text(joined(shown))
                 }
-                .font(.system(.footnote, design: .monospaced))
+                .font(.mono(.footnote))
                 .padding(.horizontal, 12)
                 .padding(.bottom, folds ? 4 : 10)
             }

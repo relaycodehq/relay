@@ -81,7 +81,7 @@ struct WatchNotesView: View {
             Text(diff.file).font(.caption).foregroundStyle(colors.muted).padding(.bottom, 4)
             ForEach(Array(diff.lines.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.mono(.caption))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         line.hasPrefix("+")

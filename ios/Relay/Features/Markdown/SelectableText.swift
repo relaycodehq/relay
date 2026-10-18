@@ -45,7 +45,8 @@ struct SelectableText: View {
             if intent.contains(.stronglyEmphasized) { traits.insert(.traitBold) }
             if intent.contains(.emphasized) { traits.insert(.traitItalic) }
             if intent.contains(.code) || run.inlineMath == .source {
-                font = .monospacedSystemFont(ofSize: base.pointSize, weight: traits.contains(.traitBold) ? .semibold : .regular)
+                // A size under the words around it, as Android sets code (13.5 in 15).
+                font = .mono(size: base.pointSize * 0.9, medium: traits.contains(.traitBold))
             } else if run.inlineMath == .plain,
                 let descriptor = base.fontDescriptor.withDesign(.serif)?.withSymbolicTraits(traits)
             {
@@ -59,7 +60,7 @@ struct SelectableText: View {
             // A formula plain text can't hold shows as its TeX, muted and without code's background.
             let runColor = run.inlineMath == .source ? UIColor.secondaryLabel : color
             var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: runColor]
-            if intent.contains(.code) { attributes[.backgroundColor] = UIColor.secondaryLabel.withAlphaComponent(0.18) }
+            if intent.contains(.code) { attributes[.backgroundColor] = UIColor(colors.code) }
             if intent.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
             let string = String(text[run.range].characters)
             if let link = run.link {

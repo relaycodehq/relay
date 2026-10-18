@@ -60,6 +60,11 @@
 	<string>Relay connects to Relay on your computer over your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dictate messages. Your computer turns the speech into text; nothing is kept on this phone.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>JetBrainsMono-Regular.ttf</string>
+		<string>JetBrainsMono-Medium.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

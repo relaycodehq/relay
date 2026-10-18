@@ -39,7 +39,7 @@ struct CommandMenu: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label)
-                    .font(.subheadline.monospaced())
+                    .font(.mono(.subheadline))
                     .foregroundStyle(colors.foreground)
                 if !item.description.isEmpty {
                     Text(item.description).font(.caption).foregroundStyle(colors.muted)

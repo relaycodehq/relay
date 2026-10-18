@@ -161,7 +161,7 @@ struct WorktreeCommandRow: View {
             if open, !output.isEmpty {
                 NoteBox {
                     Text("$ \(run.command)\n\(String(output.suffix(4000)))")
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.mono(.caption))
                         .foregroundStyle(colors.muted)
                         .selectsOnHold("$ \(run.command)\n\(output)", mono: true)
                 }
