@@ -42,7 +42,6 @@ private struct PairingScreen: View {
 
     var body: some View {
         ZStack {
-            glow
             ScanStage(scan: scan, palette: RipplePalette(colors)) { reason in error = reason }
                 .ignoresSafeArea()
             hint
@@ -97,21 +96,6 @@ private struct PairingScreen: View {
             scan.onRead = { read($0) }
         }
         .onChange(of: reduceMotion) { _, now in scan.reduceMotion = now }
-    }
-
-    /// The theme's accent, faintly, behind where the field meets the sky.
-    private var glow: some View {
-        GeometryReader { g in
-            EllipticalGradient(
-                colors: [colors.accent.opacity(colors.dark ? 0.16 : 0.1), .clear], center: .center,
-                // Fractions of the whole frame: gone at 70% of the way to its edge.
-                startRadiusFraction: 0, endRadiusFraction: 0.35
-            )
-            .frame(width: g.size.width * 1.2, height: g.size.height * 0.68)
-            .position(x: g.size.width / 2, y: g.size.height * 0.36)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 
     /// Who's asking, above the field, before a scan starts.
