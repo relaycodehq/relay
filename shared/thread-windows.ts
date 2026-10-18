@@ -9,7 +9,8 @@ export interface ThreadWindow {
 /**
  * What a thread's window asks the main window to do, as its own commands
  * would there: "meme" sets memes up in a new Scratchpad thread, "jump-N"
- * opens Activity's Nth thread as `jump-thread` does.
+ * opens Activity's Nth thread as `jump-thread` does. `SettingsCommand`
+ * opens Settings there.
  */
 export const mainWindowCommands = [
   "meme",
@@ -23,7 +24,15 @@ export const mainWindowCommands = [
   "jump-8",
   "jump-9",
 ] as const;
-export type MainWindowCommand = (typeof mainWindowCommands)[number];
+/** Settings at `settings`, a category of the page, as `openSettings` takes it. */
+export interface SettingsCommand {
+  settings: string;
+  projectId?: string;
+  entryId?: string;
+}
+export type MainWindowCommand =
+  | (typeof mainWindowCommands)[number]
+  | SettingsCommand;
 
 type JumpCommand = Extract<MainWindowCommand, `jump-${string}`>;
 

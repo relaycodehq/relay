@@ -12,7 +12,12 @@ import {
 } from "../lib/navigation-lock";
 import { projectFor } from "../features/pulls/pull-board";
 import { useReportRequests } from "../features/bug-report/useReportRequests";
-import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
+import {
+  onOpenSettings,
+  openSettings,
+  SIDEBAR_WIDTH,
+  type SettingsCategory,
+} from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
 import { useShortcut } from "../lib/shortcuts";
 import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
@@ -239,6 +244,12 @@ export default function ProjectShell() {
   // Asked from a thread's own window, which has no Scratchpad or Activity.
   const runAsked = useStableCallback((command: MainWindowCommand | null) => {
     if (command === "meme") runCommand(command);
+    else if (typeof command === "object" && command)
+      openSettings(
+        command.settings as SettingsCategory,
+        command.projectId,
+        command.entryId,
+      );
     else if (command) askJump(jumpDigitOf(command) - 1);
   });
   useEffect(() => {

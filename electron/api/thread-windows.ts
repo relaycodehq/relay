@@ -30,8 +30,20 @@ export function threadWindowHandlers(ctx: ApiContext) {
       },
     ),
     takeOpenThread: () => window.takeThread(),
-    runInMainWindow: takes([z.enum(mainWindowCommands)], (command) =>
-      window.runCommand(command),
+    runInMainWindow: takes(
+      [
+        z.union([
+          z.enum(mainWindowCommands),
+          z
+            .object({
+              settings: z.string().min(1).max(40),
+              projectId: idSchema.optional(),
+              entryId: z.string().min(1).max(80).optional(),
+            })
+            .strict(),
+        ]),
+      ],
+      (command) => window.runCommand(command),
     ),
     takeMainWindowCommand: () => window.takeCommand(),
   } satisfies Handlers;

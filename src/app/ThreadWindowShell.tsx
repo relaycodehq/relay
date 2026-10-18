@@ -4,6 +4,7 @@ import type { RelayCommand } from "../../shared/commands";
 import type { Project } from "../../shared/projects";
 import type { ThreadWindow } from "../../shared/thread-windows";
 import { api } from "../lib/api";
+import { onOpenSettings } from "../lib/settings-page";
 import {
   NavigationLockProvider,
   useNavigationLockRoot,
@@ -61,6 +62,16 @@ export default function ThreadWindowShell({
   // Read while this window is in front, its "New" divider and all.
   useUnread(chat?.id, nav.chats.data ?? []);
   useJumpInMainWindow(setError);
+  // Settings is the main window's page.
+  useEffect(
+    () =>
+      onOpenSettings((settings, projectId, entryId) =>
+        api
+          .runInMainWindow({ settings, projectId, entryId })
+          .catch(setError),
+      ),
+    [],
+  );
   useEffect(() => {
     document.title = chat?.title ?? "Relay";
   }, [chat?.title]);
