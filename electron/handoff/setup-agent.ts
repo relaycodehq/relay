@@ -194,7 +194,10 @@ export function setupPrompt(p: {
   tools: { on: string[]; missing: string[] };
   keys: string[];
 }) {
-  const github = parseRemote(p.url)?.host === "github.com";
+  const remote = parseRemote(p.url);
+  const host = remote?.host ?? "the host";
+  const full = remote?.full ?? "owner/name";
+  const github = host === "github.com";
   return `Relay is handing a thread from ${p.from} to this computer, but its project isn't here yet, and Relay's own clone of ${p.url} failed. Git said:
 
 \`\`\`
@@ -205,8 +208,10 @@ Get it cloned into exactly \`${p.dest}\`. Relay adds it as a project by itself o
 
 This computer: ${platformName()}. On PATH: ${p.tools.on.join(", ") || "none of git, gh, glab, ssh"}${p.tools.missing.length ? `; not found: ${p.tools.missing.join(", ")}` : ""}. SSH public keys in ~/.ssh: ${p.keys.join(", ") || "none"}.
 
+First try what already works here: when an SSH key here is accepted (\`ssh -o BatchMode=yes -T git@${host}\`), clone over SSH (\`git@${host}:${full}.git\`). Sign in only when nothing here gets through, and never sign out of, replace or switch away from an account already signed in here: other things on this computer use it.
+
 The user isn't at this computer. They read this conversation on ${p.from} and answer from there, so:
-- Run nothing that waits for typed input. When signing in needs the user, start it in the background so it keeps waiting, then tell them exactly what to open and what to paste, the code or key in a code block of its own.${github ? " For GitHub, `gh auth login --hostname github.com --git-protocol https --web` prints a one-time code and waits; send them the code and https://github.com/login/device, wait for it to finish, then `gh auth setup-git` so git uses it." : ""}
+- Run nothing that waits for typed input. When signing in needs the user, start it in the background so it keeps waiting, then tell them exactly what to open and what to paste, the code or key in a code block of its own.${github ? " For GitHub, \`gh auth login --hostname github.com --git-protocol https --web\` prints a one-time code and waits; send them the code and https://github.com/login/device, and clone once it's through. It makes the new account the active one, so switch back to the one that was active with \`gh auth switch\` afterwards." : ""}
 - Never ask them for a password, a token or a private key, and copy no credentials from anywhere: they sign in on this computer themselves.
 - Change nothing here the clone doesn't need, and ask before installing anything.
 - Once it's cloned, say so in one line and stop.`;
