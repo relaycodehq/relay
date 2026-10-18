@@ -120,6 +120,14 @@ button.linked-thread-settings:focus-visible {
   background: var(--hover);
   outline: none;
 }
+/* Nothing linked yet: there, but quiet until it's pointed at. */
+.linked-trigger-empty {
+  opacity: 0.55;
+}
+.linked-trigger-empty:hover,
+.linked-trigger-empty[data-popup-open] {
+  opacity: 1;
+}
 .thread-context-controls .composer-branch-trigger ~ .linked-trigger {
   margin-left: 0;
 }

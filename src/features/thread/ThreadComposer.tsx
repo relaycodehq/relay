@@ -389,7 +389,12 @@ export function ThreadComposer({
             disabled={waiting || held}
             onStartThread={onStartThread}
           />
-          <LinksControl links={links} onProjectSettings={onProjectSettings} />
+          <LinksControl
+            links={links}
+            empty={!chat}
+            onProjectSettings={onProjectSettings}
+            onError={setError}
+          />
         </>
       }
       below={
