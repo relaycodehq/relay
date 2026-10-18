@@ -22,6 +22,8 @@ data class Outgoing(
     val error: String? = null,
     /** No answer came back, so the desktop may have it all the same. */
     val unsure: Boolean? = null,
+    /** The desktop answered with a refusal: only you trying again sends it again. */
+    val refused: Boolean? = null,
     /** The draft it came from, which the desktop holds part of: it goes through the desktop's composer. */
     val draft: String? = null,
 )

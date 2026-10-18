@@ -13,6 +13,8 @@ public struct Outgoing: Codable, Sendable, Equatable {
     public var error: String?
     /// No answer came back, so the desktop may have it all the same.
     public var unsure: Bool?
+    /// The desktop answered with a refusal: only you trying again sends it again.
+    public var refused: Bool?
     /// The draft it came from, which the desktop holds part of: it goes through the desktop's composer.
     public var draft: String?
 
@@ -20,7 +22,7 @@ public struct Outgoing: Codable, Sendable, Equatable {
 
     public init(
         computer: String, chatId: String, send: ProjectChatSend, created: Int64, sent: Int64? = nil,
-        error: String? = nil, unsure: Bool? = nil, draft: String? = nil
+        error: String? = nil, unsure: Bool? = nil, refused: Bool? = nil, draft: String? = nil
     ) {
         self.computer = computer
         self.chatId = chatId
@@ -29,6 +31,7 @@ public struct Outgoing: Codable, Sendable, Equatable {
         self.sent = sent
         self.error = error
         self.unsure = unsure
+        self.refused = refused
         self.draft = draft
     }
 }

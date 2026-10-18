@@ -66,6 +66,7 @@ public final class Outbox {
         copy.sent = nil
         copy.error = nil
         copy.unsure = nil
+        copy.refused = nil
         // A full disk costs the copy; the send itself still goes.
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? JSONEncoder().encode(copy).write(to: file, options: .atomic)
@@ -111,15 +112,18 @@ public final class Outbox {
                     $0.sent = OutboxClock.stamp()
                     $0.error = nil
                     $0.unsure = nil
+                    $0.refused = nil
                 }
                 if let sent = items.first(where: { $0.id == id }) { onSent?(sent) }
             } catch {
                 guard let self else { return }
                 // A refused retry doesn't prove that an earlier unanswered copy failed.
                 let unanswered = if case RemoteCallError.unanswered = error { true } else { false }
+                let refused = if case RemoteCallError.rejected = error { true } else { false }
                 update(id) {
                     $0.error = error.localizedDescription
                     $0.unsure = item.unsure == true || unanswered
+                    $0.refused = refused ? true : nil
                 }
             }
             if let self, self.inFlight[id]?.token == token { self.inFlight[id] = nil }
@@ -137,14 +141,19 @@ public final class Outbox {
 
     public func retry(_ link: OutboxLink, _ id: String) {
         guard var item = items.first(where: { $0.id == id }), !takingBack.contains(id) else { return }
-        update(id) { $0.error = nil }
+        update(id) {
+            $0.error = nil
+            $0.refused = nil
+        }
         item.error = nil
+        item.refused = nil
         run(link, item)
     }
 
-    /// Back online: the ones the lost link stopped go out again by themselves.
+    /// Back online: the ones the lost link stopped go out again by themselves; a refused one
+    /// would only be refused again.
     public func resendFailed(_ link: OutboxLink, computer: String) {
-        for o in items where o.error != nil && o.computer == computer { retry(link, o.id) }
+        for o in items where o.error != nil && o.refused != true && o.computer == computer { retry(link, o.id) }
     }
 
     /// Still waiting here, unsent or failed.

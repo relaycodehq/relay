@@ -2,6 +2,7 @@ package dev.relay.android.remote.outbox
 
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.client.NotConnected
+import dev.relay.android.remote.client.Rejected
 import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.Unanswered
 import dev.relay.android.remote.client.chat
@@ -62,7 +63,7 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
         // A full disk costs the copy; the send itself still goes.
         runCatching {
             file.parentFile?.mkdirs()
-            file.writeText(json.encodeToString(Outgoing.serializer(), o.copy(sent = null, error = null, unsure = null)))
+            file.writeText(json.encodeToString(Outgoing.serializer(), o.copy(sent = null, error = null, unsure = null, refused = null)))
         }
     }
 
@@ -90,11 +91,17 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
                 if (item.draft != null) link.sendDraft(item.draft, item.chatId, item.send)
                 else link.send(item.chatId, item.send)
                 unkeep(id)
-                update(id) { it.copy(sent = stamp(), error = null, unsure = null) }
+                update(id) { it.copy(sent = stamp(), error = null, unsure = null, refused = null) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 // A refused retry doesn't prove that an earlier unanswered copy failed.
-                update(id) { it.copy(error = e.message ?: e.toString(), unsure = item.unsure == true || e is Unanswered) }
+                update(id) {
+                    it.copy(
+                        error = e.message ?: e.toString(),
+                        unsure = item.unsure == true || e is Unanswered,
+                        refused = if (e is Rejected) true else null,
+                    )
+                }
             }
         }
         inFlight[id] = sending
@@ -112,13 +119,13 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
     fun retry(link: OutboxLink, id: String) {
         val item = _items.value.find { it.send.id == id } ?: return
         if (id in takingBack) return
-        update(id) { it.copy(error = null) }
-        run(link, item.copy(error = null))
+        update(id) { it.copy(error = null, refused = null) }
+        run(link, item.copy(error = null, refused = null))
     }
 
-    /** Back online: the ones the lost link stopped go out again by themselves. */
+    /** Back online: the ones the lost link stopped go out again by themselves; a refused one would only be refused again. */
     fun resendFailed(link: OutboxLink, computer: String) {
-        for (o in _items.value) if (o.error != null && o.computer == computer) retry(link, o.send.id)
+        for (o in _items.value) if (o.error != null && o.refused != true && o.computer == computer) retry(link, o.send.id)
     }
 
     /** Still waiting here, unsent or failed. */
