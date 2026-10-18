@@ -70,7 +70,7 @@ fun computerName(remote: Remote): String {
 
 /**
  * Which computer this is, and whether it's reachable; quiet when all is well.
- * Unreached, it offers what would help: turning Tailscale on, or scanning the code again.
+ * Unreached, it offers what would help: turning Tailscale on, trying again now, or scanning the code again.
  */
 @Composable
 fun ConnectionLine(remote: Remote, modifier: Modifier = Modifier, always: Boolean = false) {
@@ -98,7 +98,8 @@ fun ConnectionLine(remote: Remote, modifier: Modifier = Modifier, always: Boolea
             Tailscale.connect(context)
         }
         unreached == Unreached.NoTailscale -> "Scan code again" to { nav.push(Route.Pair()) }
-        else -> null
+        // Tailscale is up: don't make them sit out the backoff once the computer's awake again.
+        else -> "Try now" to { remote.wake() }
     }
     // Tailscale that didn't come up when asked (signed out, say) opens, to show why.
     LaunchedEffect(asked, unreached) {
