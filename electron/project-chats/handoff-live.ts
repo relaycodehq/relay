@@ -56,7 +56,9 @@ export class LiveHandoff {
     return chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
       .map((m) =>
-        known[m.id] === m.version ? m.id : structuredClone(mirrorOf(m, carried)),
+        known[m.id] === m.version
+          ? m.id
+          : structuredClone(mirrorOf(m, carried)),
       );
   }
   /** A call's arguments from the computer the thread came from, carried messages by their ids here. */
@@ -133,6 +135,8 @@ export class LiveHandoff {
     const kept = chat.sentTo!.kept!;
     const at = chat.messages.findIndex((m) => m.id === message.id);
     if (at >= 0 && at < kept) return;
+    // Attachment copies can leave a push behind a newer reconnect snapshot.
+    if (at >= 0 && chat.messages[at].version >= message.version) return;
     if (at >= 0) chat.messages[at] = message;
     else {
       chat.messages.push(message);
