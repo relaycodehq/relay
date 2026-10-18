@@ -89,7 +89,42 @@ test("an answer plays the local video it embeds, and seeks in it", async () => {
     expect(state.duration).toBeCloseTo(3, 0);
     expect(state.width).toBe(320);
     expect(state.time).toBeGreaterThan(2);
-    await page.screenshot({ path: "test-results/answer-videos.png" });
+    await page.screenshot({ path: join(tmpdir(), "relay-answer-videos.png") });
+
+    // Make the media pipeline fail, rather than dispatching a synthetic event.
+    // Exhausting retries must keep the player and its space in the answer.
+    const before = await video.boundingBox();
+    const source = await video.getAttribute("src");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await video.evaluate((v: HTMLVideoElement) => {
+        v.src = "data:video/mp4;base64,AA==";
+      });
+      if (attempt < 2) {
+        await expect(video).toHaveAttribute("src", source!);
+        await expect
+          .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+          .toBeGreaterThanOrEqual(1);
+      }
+    }
+    const retry = answer.getByRole("button", { name: "Retry video" });
+    await expect(retry).toBeVisible();
+    await expect(video).toBeVisible();
+    expect(await video.boundingBox()).toEqual(before);
+    await page.screenshot({
+      path: join(tmpdir(), "relay-answer-video-error.png"),
+    });
+    await retry.click();
+    await expect(retry).toHaveCount(0);
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+      .toBeGreaterThanOrEqual(1);
+    expect(
+      await video.evaluate(async (v: HTMLVideoElement) => {
+        v.currentTime = 0;
+        await v.play();
+        return v.error;
+      }),
+    ).toBeNull();
 
     // Only a checked file has an address; a made-up one plays nothing.
     const status = await app.evaluate(({ session }) =>

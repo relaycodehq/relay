@@ -90,9 +90,11 @@ export function serveMedia() {
       });
     }
     const file = createReadStream(full, { start: range.start, end: range.end });
-    file.on("error", (error) =>
-      console.warn(`relay-media: reading ${full} failed:`, error),
-    );
+    file.on("error", (error: NodeJS.ErrnoException) => {
+      // Players cancel a range after reading metadata or seeking elsewhere.
+      if (error.code !== "ABORT_ERR")
+        console.warn(`relay-media: reading ${full} failed:`, error);
+    });
     const body = Readable.toWeb(file);
     return new Response(body as ReadableStream, {
       status: range.partial ? 206 : 200,
