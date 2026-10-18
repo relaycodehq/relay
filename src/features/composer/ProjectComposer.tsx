@@ -405,118 +405,129 @@ export function ProjectComposer({
           sending.send(runningAction === "steer");
         }}
       >
-        {attachment?.view}
-        <ComposerAttachmentStrip
-          draft={draft}
-          onOpenPaste={setViewingPaste}
-          onRemovePaste={(index) => promptInput.current?.removePaste(index)}
-        />
-        {draft.error && (
-          <p className="composer-image-error" role="alert">
-            {draft.error}
-          </p>
-        )}
-        <ComposerPromptInput
-          inputRef={input}
-          handleRef={promptInput}
-          draftKey={keys.draft}
-          key={keys.draft}
-          aria-label="Message project"
-          aria-expanded={menu.visible || undefined}
-          aria-controls={menu.visible ? menu.id : undefined}
-          aria-activedescendant={menu.visible ? menu.activeId : undefined}
-          aria-autocomplete={menu.visible ? "list" : undefined}
-          onBlur={() => {
-            commands.dismiss();
-            mentions.dismiss();
-            memes.dismiss();
-          }}
-          value={draft.text}
-          onChange={(value) => {
-            draft.set(value);
-            recall.edited(value);
-          }}
-          onCursor={(at) => {
-            commands.setCursor(at);
-            mentions.setCursor(at);
-            recall.moved(at);
-          }}
-          onOpenPaste={setViewingPaste}
-          onPasteRefused={draft.pasteRefused}
-          images={draft.chips}
-          onOpenImage={(n) =>
-            draft.sketch(draft.images.find((image) => image.n === n)?.id)
-          }
-          placeholder={
-            to === "message"
-              ? "Leave a note or message your colleague…"
-              : (placeholder ??
-                "Ask about the code, plan a change, or build something…")
-          }
-          onKeyDownCapture={(e) => {
-            // A recalled message takes ↑/↓ even from a menu it opened.
-            if (recall.keyDown(e, draft.text)) return;
-            if (
-              memes.onKeyDown(e) ||
-              mentions.onKeyDown(e) ||
-              commands.onKeyDown(e)
-            )
-              return;
-            if (e.nativeEvent.isComposing) return;
-            if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
-              const at = promptInput.current?.caret();
-              if (at?.start === 0 && at.end === 0 && onEditQueued()) {
+        <div className="composer-body">
+          {attachment?.view}
+          <ComposerAttachmentStrip
+            draft={draft}
+            onOpenPaste={setViewingPaste}
+            onRemovePaste={(index) => promptInput.current?.removePaste(index)}
+          />
+          {draft.error && (
+            <p className="composer-image-error" role="alert">
+              {draft.error}
+            </p>
+          )}
+          <ComposerPromptInput
+            inputRef={input}
+            handleRef={promptInput}
+            draftKey={keys.draft}
+            key={keys.draft}
+            aria-label="Message project"
+            aria-expanded={menu.visible || undefined}
+            aria-controls={menu.visible ? menu.id : undefined}
+            aria-activedescendant={menu.visible ? menu.activeId : undefined}
+            aria-autocomplete={menu.visible ? "list" : undefined}
+            onBlur={() => {
+              commands.dismiss();
+              mentions.dismiss();
+              memes.dismiss();
+            }}
+            value={draft.text}
+            onChange={(value) => {
+              draft.set(value);
+              recall.edited(value);
+            }}
+            onCursor={(at) => {
+              commands.setCursor(at);
+              mentions.setCursor(at);
+              recall.moved(at);
+            }}
+            onOpenPaste={setViewingPaste}
+            onPasteRefused={draft.pasteRefused}
+            images={draft.chips}
+            onOpenImage={(n) =>
+              draft.sketch(draft.images.find((image) => image.n === n)?.id)
+            }
+            placeholder={
+              to === "message"
+                ? "Leave a note or message your colleague…"
+                : (placeholder ??
+                  "Ask about the code, plan a change, or build something…")
+            }
+            onKeyDownCapture={(e) => {
+              // A recalled message takes ↑/↓ even from a menu it opened.
+              if (recall.keyDown(e, draft.text)) return;
+              if (
+                memes.onKeyDown(e) ||
+                mentions.onKeyDown(e) ||
+                commands.onKeyDown(e)
+              )
+                return;
+              if (e.nativeEvent.isComposing) return;
+              if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
+                const at = promptInput.current?.caret();
+                if (at?.start === 0 && at.end === 0 && onEditQueued()) {
+                  e.preventDefault();
+                  noteUsed("shortcut:edit-queued");
+                  return;
+                }
+              }
+              // With ⌘/Ctrl+Enter sending, ⌥ plus it is also Send-then-new-thread's
+              // default; the button by Send is the one on screen, so it wins.
+              if (cold && !running && altSends(e, sendKey)) {
                 e.preventDefault();
-                noteUsed("shortcut:edit-queued");
+                sending.send(false, undefined, undefined, true);
                 return;
               }
-            }
-            // With ⌘/Ctrl+Enter sending, ⌥ plus it is also Send-then-new-thread's
-            // default; the button by Send is the one on screen, so it wins.
-            if (cold && !running && altSends(e, sendKey)) {
-              e.preventDefault();
-              sending.send(false, undefined, undefined, true);
-              return;
-            }
-            if (!e.repeat && matches("send-new-thread", e)) {
-              e.preventDefault();
-              noteUsed("shortcut:send-new-thread");
-              void sending.send(runningAction === "steer", undefined, () => {
-                // Not if the thread was left while it sent.
-                if (mounted.current) onNextThread?.();
-              });
-              return;
-            }
-            const step = effortStep(e);
-            if (step) {
-              e.preventDefault();
-              noteUsed(`shortcut:effort-${step < 0 ? "down" : "up"}`);
-              runs.stepEffort(to, step);
-              return;
-            }
-            const quickDir = quick.presets.length ? quickStep(e) : 0;
-            if (quickDir) {
-              e.preventDefault();
-              noteUsed(`shortcut:quick-${quickDir < 0 ? "prev" : "next"}`);
-              quick.step(quickDir);
-              return;
-            }
-            const action = sendAction(e, sendKey, runningAction);
-            if (action) {
-              e.preventDefault();
-              sending.send(action === "steer");
-            }
-          }}
-          onPasteCapture={draft.paste}
-          onDrop={draft.drop}
-          onDragOver={(event) => {
-            if (
-              event.dataTransfer.types.includes("Files") ||
-              carriesImage(event.dataTransfer)
-            )
-              event.preventDefault();
-          }}
-        />
+              if (!e.repeat && matches("send-new-thread", e)) {
+                e.preventDefault();
+                noteUsed("shortcut:send-new-thread");
+                void sending.send(runningAction === "steer", undefined, () => {
+                  // Not if the thread was left while it sent.
+                  if (mounted.current) onNextThread?.();
+                });
+                return;
+              }
+              const step = effortStep(e);
+              if (step) {
+                e.preventDefault();
+                noteUsed(`shortcut:effort-${step < 0 ? "down" : "up"}`);
+                runs.stepEffort(to, step);
+                return;
+              }
+              const quickDir = quick.presets.length ? quickStep(e) : 0;
+              if (quickDir) {
+                e.preventDefault();
+                noteUsed(`shortcut:quick-${quickDir < 0 ? "prev" : "next"}`);
+                quick.step(quickDir);
+                return;
+              }
+              const action = sendAction(e, sendKey, runningAction);
+              if (action) {
+                e.preventDefault();
+                sending.send(action === "steer");
+              }
+            }}
+            onPasteCapture={draft.paste}
+            onDrop={draft.drop}
+            onDragOver={(event) => {
+              if (
+                event.dataTransfer.types.includes("Files") ||
+                carriesImage(event.dataTransfer)
+              )
+                event.preventDefault();
+            }}
+          />
+          <button
+            type="button"
+            className="composer-attach"
+            aria-label="Attach files"
+            title="Attach screenshots or files"
+            onClick={() => filePick.current?.click()}
+          >
+            <Paperclip size={15} />
+          </button>
+        </div>
         <div className="composer-tools" ref={tools}>
           <input
             ref={filePick}
@@ -572,17 +583,6 @@ export function ProjectComposer({
                   interactionMode={composer.interactionMode}
                   onInteractionMode={composer.setInteractionMode}
                 />
-              ),
-              attach: (
-                <button
-                  type="button"
-                  className="composer-control"
-                  aria-label="Attach files"
-                  title="Attach screenshots or files"
-                  onClick={() => filePick.current?.click()}
-                >
-                  <Paperclip size={15} />
-                </button>
               ),
               usage: reportsUsage(to) ? (
                 <UsageRing provider={to} account={accounts.of(to)} />

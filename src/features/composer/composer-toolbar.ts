@@ -8,7 +8,6 @@ export const toolbarItems = [
   "context",
   "access",
   "mode",
-  "attach",
   "usage",
   "mic",
 ] as const;
@@ -30,7 +29,6 @@ export const defaultToolbar: ToolbarLayout = {
     "context",
     "access",
     "mode",
-    "attach",
     "gap",
     "usage",
     "mic",
@@ -46,7 +44,6 @@ export const toolbarNames: Record<ToolbarItem, string> = {
   context: "Context meter",
   access: "Access",
   mode: "Plan mode",
-  attach: "Attach",
   usage: "Usage limits",
   mic: "Dictation",
 };

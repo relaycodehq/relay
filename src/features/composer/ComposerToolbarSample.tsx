@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Mic, Paperclip, UserRound, Zap } from "lucide-react";
+import { ChevronDown, Mic, UserRound, Zap } from "lucide-react";
 import {
   agentInfo,
   reportsUsage,
@@ -126,11 +126,6 @@ export function useSampleControls(sample?: SampleModel): ToolbarControls {
         <UserRound size={13} />
         Work
         <ChevronDown size={12} />
-      </button>
-    ),
-    attach: (
-      <button type="button" className="composer-control">
-        <Paperclip size={15} />
       </button>
     ),
     usage: reportsUsage(agent) && (

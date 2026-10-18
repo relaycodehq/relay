@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowUp, MoveHorizontal, RotateCcw } from "lucide-react";
+import { ArrowUp, MoveHorizontal, Paperclip, RotateCcw } from "lucide-react";
 import {
   canHide,
   defaultToolbar,
@@ -109,6 +109,10 @@ export function ComposerToolbarSettings() {
         <p className="toolbar-edit-prompt">
           Ask about the code, plan a change, or build something…
         </p>
+        {/* Fixed in its corner, so nothing to drag. */}
+        <span className="composer-attach" aria-hidden>
+          <Paperclip size={15} />
+        </span>
         <div
           ref={tools}
           className="composer-tools"

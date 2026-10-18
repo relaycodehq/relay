@@ -365,6 +365,11 @@
   overflow: hidden;
   padding-top: 12px;
 }
+/* Folded, the corner is "+N lines"'s. */
+.thread-bottom-composer.collapsed:not(:focus-within) .composer-attach {
+  opacity: 0;
+  pointer-events: none;
+}
 /* Keep the first line whole: hide the next one peeking in under it, and fade
    the line out before "+N lines" instead of chopping it. The cut follows the
    box's bottom edge, so the text folds away with it rather than ahead of it. */
