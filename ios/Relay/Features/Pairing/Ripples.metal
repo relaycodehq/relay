@@ -109,6 +109,14 @@ static int2 nearestDot(float2 xz) {
     return int2(int(c), r >= 0.0 ? int(r) : AWAY - 1 - int(r));
 }
 
+/// More of its hue where specks add up as light, so where they bunch they stay the accent a while
+/// before every channel tops out in white.
+static float3 richer(float3 c, float glow) {
+    float grey = dot(c, float3(0.299, 0.587, 0.114));
+    return max(mix(c, grey + (c - grey) * 1.5, glow), 0.0);
+}
+
+/// As RippleRenderer's swell.
 static float swellAt(float2 xz, float time) {
     return 0.11 * sin(xz.x * 0.55 + time * 0.6) * cos(xz.y * 0.42 - time * 0.45)
          + 0.05 * sin(xz.y * 0.9 + xz.x * 0.2 + time * 0.8);
@@ -188,7 +196,7 @@ vertex DotOut dotVertex(
                      : u.unit * (0.5 + 0.5 * grain) * clamp(7.0 / max(clip.w, 0.01), 0.7, 1.8);
     size *= 1.0 + 1.5 * h;
     // All in the accent, some specks paler toward white.
-    float3 tint = mix(u.hot, float3(1.0), 0.55 * pow(rand(iid, 25u), 3.0));
+    float3 tint = richer(mix(u.hot, float3(1.0), 0.2 * pow(rand(iid, 25u), 3.0)), u.glow);
     // Brighter on the swell's crests, so it shows as bands of light, and each speck twinkles.
     float crest = smoothstep(-0.12, 0.16, swell);
     float twinkle = 0.55 + 0.45 * sin(u.time * (1.0 + 2.5 * rand(iid, 26u)) + 6.283 * rand(iid, 27u));
@@ -298,16 +306,17 @@ struct Beacon {
     float alpha;
     /// How far it has flared, 0..1, as a call lands or the computer answers.
     float bloom;
+    /// Its height on the field, which the calls aim at.
+    float y;
 };
 
-/// The computer: a ball of specks floating on the field, thick and white at its heart, turning
+/// The computer: a ball of specks floating on the field, thick and pale at its heart, turning
 /// slowly, riding the swell and the rings under it, and flaring out as a call lands.
 vertex DotOut beaconVertex(
     uint iid [[vertex_id]], constant FieldUniforms &u [[buffer(0)]],
     constant float4 *waves [[buffer(1)]], constant Beacon &b [[buffer(2)]]
 ) {
-    float2 rings = ringsAt(COMPUTER, u.time, waves);
-    float3 mid = float3(COMPUTER.x, 0.32 + swellAt(COMPUTER, u.time) + 0.5 * rings.x + 0.08 * rings.y, COMPUTER.y);
+    float3 mid = float3(COMPUTER.x, b.y, COMPUTER.y);
     // A direction on the sphere, at a depth weighted toward the middle.
     float z = rand(iid, 30u) * 2.0 - 1.0;
     float a = rand(iid, 31u) * 6.283 + u.time * (0.25 + 0.35 * rand(iid, 32u));
@@ -317,8 +326,8 @@ vertex DotOut beaconVertex(
     float3 pos = mid + dir * radius * depth + 0.02 * float3(sin(u.time * 1.3 + z * 9.0), cos(u.time * 1.1 + a), 0.0);
     float4 clip = u.viewProjection * float4(pos, 1.0);
     float twinkle = 0.55 + 0.45 * sin(u.time * (1.0 + 2.5 * rand(iid, 34u)) + 6.283 * rand(iid, 35u));
-    float3 tint = mix(u.hot, float3(1.0), 0.4 * (1.0 - depth));
-    float bright = b.alpha * twinkle * (0.5 + 0.5 * rand(iid, 36u)) * (0.6 + 0.6 * b.bloom) * (0.5 + 0.2 * u.glow);
+    float3 tint = richer(mix(u.hot, float3(1.0), 0.15 * (1.0 - depth)), u.glow);
+    float bright = b.alpha * twinkle * (0.5 + 0.5 * rand(iid, 36u)) * (0.6 + 0.3 * b.bloom) * (0.5 + 0.2 * u.glow);
     float size = u.unit * (0.5 + 0.6 * rand(iid, 37u)) * (1.0 + 0.6 * b.bloom);
     DotOut out;
     out.position = clip;

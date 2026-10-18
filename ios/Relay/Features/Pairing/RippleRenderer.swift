@@ -76,6 +76,7 @@ private struct CameraUniforms {
 private struct Beacon {
     var alpha: Float
     var bloom: Float
+    var y: Float
 }
 
 /// Laid out as Ripples.metal's Glow.
@@ -224,7 +225,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         let answer = Float(exp(-(time - answeredAt) * 1.1))
         let flash = phase >= Self.flight ? Float(exp(-(phase - Self.flight) * 2.5)) : 0
         let bloom = max(flash, answer)
-        var lights = Beacon(alpha: s.beacon, bloom: bloom)
+        let beaconY = beaconHeight(Float(time))
+        var lights = Beacon(alpha: s.beacon, bloom: bloom, y: beaconY)
         for o in Self.others { world([o.x, 0.05, o.y], 0.55, 0.22 * field) }
 
         var packets = [SIMD4<Float>](repeating: .zero, count: 2)
@@ -232,7 +234,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             let t = (phase - start) / Self.flight
             guard phase >= 0, t > 0, t < 1.12 else { return }
             if t < 1 {
-                let p = arc(Float(t * t * (3 - 2 * t)), back: back)
+                let p = arc(Float(t * t * (3 - 2 * t)), back: back, to: beaconY)
                 packets[back ? 1 : 0] = [p.x, p.z, p.y, Float(sin(.pi * min(1, t * 1.1))) * field]
             }
             for k in 0..<26 {
@@ -240,7 +242,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
                 guard at > 0, at < 1 else { continue }
                 let eased = Float(at * at * (3 - 2 * at))
                 let fall = 1 - Float(k) / 26
-                world(arc(eased, back: back), k == 0 ? 0.5 : 0.2 * fall, (k == 0 ? 1 : 0.55 * fall) * field)
+                world(arc(eased, back: back, to: beaconY), k == 0 ? 0.5 : 0.2 * fall, (k == 0 ? 1 : 0.55 * fall) * field)
             }
         }
         packet(0, back: false)
@@ -366,15 +368,34 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     }
 
     /// Where a packet is `s` of the way along its arc; the two directions bow to opposite sides.
-    private func arc(_ s: Float, back: Bool) -> SIMD3<Float> {
+    /// Its computer end steers to the computer's height `to`, wherever the field has carried it.
+    private func arc(_ s: Float, back: Bool, to: Float) -> SIMD3<Float> {
         let u = back ? 1 - s : s
         let side: Float = back ? -1 : 1
         let phone = Self.phone, computer = Self.computer
         return turn([
             phone.x + 1.6 * side * (1 - u) + 1.3 * side * sin(.pi * u),
-            0.1 + 1.7 * sin(.pi * u),
+            0.1 + 1.7 * sin(.pi * u) + (to - 0.1) * u * u * (3 - 2 * u),
             phone.y - 1.5 + (computer.z - phone.y + 1.5) * u,
         ])
+    }
+
+    /// How high the computer floats: on the swell, lifted by the rings under it, as Ripples.metal's
+    /// swellAt and ringsAt have the field at its foot.
+    private func beaconHeight(_ time: Float) -> Float {
+        let x = Self.computer.x, z = Self.computer.z
+        let swell = 0.11 * sin(x * 0.55 + time * 0.6) * cos(z * 0.42 - time * 0.45)
+            + 0.05 * sin(z * 0.9 + x * 0.2 + time * 0.8)
+        var lift: Float = 0, wash: Float = 0
+        for p in pulses {
+            let age = time - p.z
+            guard age >= 0, p.w > 0 else { continue }
+            let ring = simd_distance(SIMD2(x, z), SIMD2(p.x, p.y)) - age * 3.4
+            let fade = p.w * exp(-age * 0.28)
+            lift += fade * exp(-ring * ring / (0.12 + age * 0.06))
+            if ring <= 0 { wash += fade * exp(ring / 1.6) * exp(-age * 0.9) * 0.5 }
+        }
+        return 0.32 + swell + 0.5 * lift + 0.08 * wash
     }
 
     /// A point on your side of the field carried round the computer as far as the view has turned.
