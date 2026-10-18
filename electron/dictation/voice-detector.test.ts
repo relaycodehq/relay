@@ -28,13 +28,34 @@ const rms = (w: Float32Array) =>
 
 it("lifts a whisper to where the detector hears it, but not the hush between words", () => {
   const gain = new LevelGain();
-  // A whisper at -64 dBFS comes up to about -30.
-  let out: Float32Array = tone(10 ** (-64 / 20));
-  for (let i = 0; i < 30; i++) out = gain.apply(tone(10 ** (-64 / 20)));
+  // Words and pauses: a whisper at -64 dBFS comes up to about -30.
+  const word = 10 ** (-64 / 20),
+    pause = 10 ** (-80 / 20);
+  let out: Float32Array = tone(word);
+  for (let i = 0; i < 40; i++) {
+    const loud = i % 8 < 5;
+    const next = gain.apply(tone(loud ? word : pause));
+    if (loud) out = next;
+  }
   expect(20 * Math.log10(rms(out))).toBeCloseTo(-30, 0);
   // Silence after it gets the whisper's gain, not one of its own.
   const hush = gain.apply(tone(10 ** (-90 / 20)));
   expect(20 * Math.log10(rms(hush))).toBeLessThan(-50);
+});
+
+it("doesn't lift steady room noise into what the detector takes for a voice", () => {
+  const gain = new LevelGain();
+  let out: Float32Array = tone(10 ** (-60 / 20));
+  for (let i = 0; i < 200; i++) out = gain.apply(tone(10 ** (-60 / 20)));
+  expect(20 * Math.log10(rms(out))).toBeLessThanOrEqual(-39);
+});
+
+it("lifts a whisper that starts after a quiet room", () => {
+  const gain = new LevelGain();
+  for (let i = 0; i < 100; i++) gain.apply(tone(10 ** (-70 / 20)));
+  let out: Float32Array = tone(0);
+  for (let i = 0; i < 30; i++) out = gain.apply(tone(10 ** (-60 / 20)));
+  expect(20 * Math.log10(rms(out))).toBeGreaterThan(-35);
 });
 
 it("never turns loud speech down or touches it", () => {

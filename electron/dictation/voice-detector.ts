@@ -43,30 +43,54 @@ export class SpeechGate {
 
 const targetLevel = 10 ** (-30 / 20),
   maxGain = 100,
+  // All a level that never rises and falls like speech earns: room noise at
+  // -60 dBFS comes up to -40, short of what the detector takes for a voice.
+  steadyGain = 10,
+  // The loud end must clear the quiet end by this much (6 dB) to be speech.
+  speechContrast = 2,
   /** About 3 s of windows. */
-  levelHistory = 94;
+  levelHistory = 94,
+  /** The gain follows the levels every fourth window (~130 ms), not every one. */
+  steerEvery = 4;
 
 /**
  * Brings quiet input up for the voice detector alone. Silero misses a
  * whisper below about -60 dBFS, and phones apply no gain of their own;
  * Parakeet normalizes what it's given, so it gets the audio as it came.
  * Steered by the loudest stretch of the last few seconds, so the noise
- * between words isn't pumped up to speech; never turns anything down.
+ * between words isn't pumped up to speech; never turns anything down. Only
+ * levels that rise and fall like words get the full lift: with no speech in
+ * those seconds the loudest stretch is the room itself.
  */
 export class LevelGain {
-  private levels: number[] = [];
+  private levels = new Float32Array(levelHistory);
+  private count = 0;
+  private next = 0;
+  private sinceSteer = 0;
+  private gain = 1;
 
   apply(window: Float32Array) {
     let energy = 0;
     for (const v of window) energy += v * v;
-    this.levels.push(Math.sqrt(energy / window.length));
-    if (this.levels.length > levelHistory) this.levels.shift();
-    const sorted = [...this.levels].sort((a, b) => a - b);
-    const loud = sorted[Math.floor(sorted.length * 0.9)]!;
-    const gain = Math.min(maxGain, Math.max(1, targetLevel / (loud + 1e-6)));
+    this.levels[this.next] = Math.sqrt(energy / window.length);
+    this.next = (this.next + 1) % levelHistory;
+    this.count = Math.min(this.count + 1, levelHistory);
+    if (this.count === 1 || ++this.sinceSteer >= steerEvery) {
+      this.sinceSteer = 0;
+      this.gain = this.steer();
+    }
+    const gain = this.gain;
     return gain === 1
       ? window
       : window.map((v) => Math.max(-1, Math.min(1, v * gain)));
+  }
+
+  private steer() {
+    const sorted = this.levels.slice(0, this.count).sort();
+    const loud = sorted[Math.floor(sorted.length * 0.9)]!;
+    const quiet = sorted[Math.floor(sorted.length * 0.1)]!;
+    const limit = loud >= quiet * speechContrast ? maxGain : steadyGain;
+    return Math.min(limit, Math.max(1, targetLevel / (loud + 1e-6)));
   }
 }
 
