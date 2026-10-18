@@ -5,6 +5,16 @@ import SwiftUI
 /// the words is the scanner: it folds up into the viewfinder, locks onto the code, and the code
 /// bursts back into it; the computer's ring going out across it is the pairing going through.
 struct PairingView: View {
+    @Binding var incoming: IncomingPair?
+    @Binding var holding: Bool
+
+    /// In Relay's own colours: pairing another computer shouldn't wear the one already paired's.
+    var body: some View {
+        PairingScreen(incoming: $incoming, holding: $holding).defaultTheme()
+    }
+}
+
+private struct PairingScreen: View {
     @Environment(Connection.self) private var connection
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colors) private var colors
@@ -37,6 +47,7 @@ struct PairingView: View {
                 .ignoresSafeArea()
             hint
             close
+            welcome.shown(scan.face == .idle, away: -12)
             VStack(spacing: 0) {
                 Spacer()
                 ZStack(alignment: .top) {
@@ -101,6 +112,28 @@ struct PairingView: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+    }
+
+    /// Who's asking, above the field, before a scan starts.
+    private var welcome: some View {
+        VStack(spacing: 4) {
+            Image("RelayMark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+                .shadow(color: colors.accent.opacity(0.5), radius: 12)
+            Text("Relay")
+                .font(.system(size: 34, weight: .heavy))
+                .tracking(-0.6)
+            Text("Your agents, in your pocket")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // The mark level with the close button, the words clear of the field's far edge.
+        .padding(.top, 8)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
     }
 
     private var hint: some View {

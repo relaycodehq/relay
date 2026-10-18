@@ -138,6 +138,9 @@ extension View {
     /// Wears the desktop's theme in the mode it's in, its accent as the tint.
     func relayTheme() -> some View { modifier(RelayTheme()) }
 
+    /// Relay's own colours whatever the computer's theme, for pairing another one.
+    func defaultTheme() -> some View { modifier(DefaultTheme()) }
+
     /// A screen on the theme's background instead of the system's black or white.
     func relayBackground() -> some View { modifier(RelayBackground()) }
 }
@@ -183,6 +186,23 @@ private struct RelayTheme: ViewModifier {
             .onChange(of: connection.overview?.appearance) { _, next in
                 if let next { saved = try? JSONEncoder().encode(next) }
             }
+            // Another computer, or none: the last one's colours aren't its. Not on launch, when
+            // the saved computer comes back and its theme is the one to open in.
+            .onChange(of: connection.active) { was, _ in
+                if was != nil { saved = nil }
+            }
+    }
+}
+
+private struct DefaultTheme: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let colors: RelayColors = scheme == .dark ? .relayDark : .relayLight
+        content
+            .environment(\.colors, colors)
+            .foregroundStyle(colors.foreground, colors.muted, colors.faint)
+            .tint(colors.accent)
     }
 }
 

@@ -26,6 +26,10 @@ import dev.relay.android.features.settings.SettingsScreen
 import dev.relay.android.features.thread.SubagentRunScreen
 import dev.relay.android.features.thread.ThreadScreen
 import dev.relay.android.lib.navigation.Route
+import dev.relay.android.ui.theme.HextaDark
+import dev.relay.android.ui.theme.HextaLight
+import dev.relay.android.ui.theme.LocalRelayColors
+import dev.relay.android.ui.theme.RelayTheme
 
 /**
  * Route → screen. A feature plugs in by replacing its placeholder line with
@@ -39,7 +43,11 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Gallery> { GalleryScreen() }
     entry<Route.Licences> { LicencesScreen() }
 
-    entry<Route.Pair> { PairScreen(container.remote, it.link) }
+    // Relay's own colours, in the light or dark showing: pairing another computer shouldn't
+    // wear the one already paired's.
+    entry<Route.Pair> {
+        RelayTheme(if (LocalRelayColors.current.isDark) HextaDark else HextaLight) { PairScreen(container.remote, it.link) }
+    }
     entry<Route.NewThread> { route ->
         ProvideProjectIcons(container.home) {
             NewThreadScreen(route, container.remote) { project, size -> ProjectCardBadge(project.id, project.name, size = size) }
