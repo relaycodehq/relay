@@ -212,7 +212,9 @@ private struct RelayBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollContentBackground(.hidden)
-            .background(colors.background, ignoresSafeAreaEdges: .all)
+            // Under the keyboard too: swiping back with it up, the screen below still keeps out
+            // of its way, and showed black where it had been.
+            .background { colors.background.ignoresSafeArea() }
     }
 }
 
