@@ -61,6 +61,16 @@ private struct Dropped: OutboxLink {
     }
 }
 
+private struct Refusing: OutboxLink {
+    func send(chatId: String, _ send: ProjectChatSend) async throws { throw RemoteCallError.rejected("Not now.") }
+    func sendDraft(key: String, chatId: String, _ send: ProjectChatSend) async throws {
+        throw RemoteCallError.rejected("Not now.")
+    }
+    func chat(_ chatId: String, sendId: String) async throws -> RemoteChat {
+        throw RemoteCallError.rejected("Not now.")
+    }
+}
+
 private let id = "11111111-1111-4111-8111-111111111111"
 private let settings = ResumeSettings(
     provider: "codex", choice: ModelChoice(model: ""), runtimeMode: "full-access", interactionMode: "default")
@@ -127,6 +137,26 @@ struct OutboxTests {
         next.arrived(computer: "A", chatId: "c", held: [id], fetched: OutboxClock.stamp())
         #expect(next.items.isEmpty)
         #expect(Outbox(dir: dir).items.isEmpty)
+    }
+
+    @Test func aRefusedSendWaitsForYouAfterTheNextLaunchToo() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "outbox-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let first = Outbox(dir: dir)
+        first.deliver(Refusing(), computer: "A", chatId: "c", send)
+        await until { first.items.first?.refused == true }
+
+        let next = Outbox(dir: dir)
+        let kept = try #require(next.items.first)
+        #expect(kept.refused == true)
+        #expect(kept.error == "Not now.")
+        let desktop = Desktop()
+        next.resendFailed(desktop, computer: "A")
+        await until { false }
+        #expect(await !desktop.onComputer.contains(id))
+
+        next.retry(desktop, id)
+        #expect(Outbox(dir: dir).items.first?.refused == nil)
     }
 
     @Test func forgetsTheOnesTheThreadHoldsOrTookBeforeAFetch() {

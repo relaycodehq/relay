@@ -64,9 +64,12 @@ public final class Outbox {
         guard let dir, let file = shelved(o.id) else { return }
         var copy = o
         copy.sent = nil
-        copy.error = nil
-        copy.unsure = nil
-        copy.refused = nil
+        // A refusal stays refused across launches; only trying again lifts it.
+        if o.refused != true {
+            copy.error = nil
+            copy.unsure = nil
+            copy.refused = nil
+        }
         // A full disk costs the copy; the send itself still goes.
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? JSONEncoder().encode(copy).write(to: file, options: .atomic)
@@ -84,6 +87,7 @@ public final class Outbox {
         return files.filter { $0.pathExtension == "json" }
             .compactMap { file -> Outgoing? in
                 guard var o = try? JSONDecoder().decode(Outgoing.self, from: Data(contentsOf: file)) else { return nil }
+                if o.refused == true { return o }
                 o.error = "Relay closed before it went out"
                 o.unsure = true
                 return o
@@ -125,6 +129,7 @@ public final class Outbox {
                     $0.unsure = item.unsure == true || unanswered
                     $0.refused = refused ? true : nil
                 }
+                if refused, let kept = items.first(where: { $0.id == id }) { keep(kept) }
             }
             if let self, self.inFlight[id]?.token == token { self.inFlight[id] = nil }
         }
@@ -147,6 +152,7 @@ public final class Outbox {
         }
         item.error = nil
         item.refused = nil
+        keep(item)
         run(link, item)
     }
 

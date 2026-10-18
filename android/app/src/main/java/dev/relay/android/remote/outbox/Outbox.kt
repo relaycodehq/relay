@@ -63,7 +63,9 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
         // A full disk costs the copy; the send itself still goes.
         runCatching {
             file.parentFile?.mkdirs()
-            file.writeText(json.encodeToString(Outgoing.serializer(), o.copy(sent = null, error = null, unsure = null, refused = null)))
+            // A refusal stays refused across launches; only trying again lifts it.
+            val copy = if (o.refused == true) o.copy(sent = null) else o.copy(sent = null, error = null, unsure = null, refused = null)
+            file.writeText(json.encodeToString(Outgoing.serializer(), copy))
         }
     }
 
@@ -76,7 +78,7 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
         val files = dir?.listFiles { f -> f.name.endsWith(".json") } ?: return emptyList()
         return files.mapNotNull { f ->
             runCatching { json.decodeFromString(Outgoing.serializer(), f.readText()) }.getOrNull()
-                ?.copy(error = "Relay closed before it went out", unsure = true)
+                ?.let { if (it.refused == true) it else it.copy(error = "Relay closed before it went out", unsure = true) }
         }.sortedBy { it.created }
     }
 
@@ -102,6 +104,7 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
                         refused = if (e is Rejected) true else null,
                     )
                 }
+                if (e is Rejected) _items.value.find { it.send.id == id }?.let { keep(it) }
             }
         }
         inFlight[id] = sending
@@ -119,8 +122,10 @@ class Outbox(private val dir: File?, private val scope: CoroutineScope, private 
     fun retry(link: OutboxLink, id: String) {
         val item = _items.value.find { it.send.id == id } ?: return
         if (id in takingBack) return
+        val again = item.copy(error = null, refused = null)
         update(id) { it.copy(error = null, refused = null) }
-        run(link, item.copy(error = null, refused = null))
+        keep(again)
+        run(link, again)
     }
 
     /** Back online: the ones the lost link stopped go out again by themselves; a refused one would only be refused again. */

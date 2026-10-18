@@ -1,5 +1,6 @@
 package dev.relay.android.remote.outbox
 
+import dev.relay.android.remote.client.Rejected
 import dev.relay.android.remote.client.Unanswered
 import dev.relay.android.remote.model.ChatScope
 import dev.relay.android.remote.model.ModelChoice
@@ -13,8 +14,11 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 // Mirrors mobile/src/remote/outbox.test.ts.
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,6 +46,33 @@ class OutboxTest {
         override suspend fun send(chatId: String, send: ProjectChatSend) = throw Unanswered("Connection lost.")
         override suspend fun sendDraft(key: String, chatId: String, send: ProjectChatSend) = throw Unanswered("Connection lost.")
         override suspend fun chat(chatId: String, sendId: String) = throw Unanswered("Connection lost.")
+    }
+
+    @get:Rule val folder = TemporaryFolder()
+
+    private val refusing = object : OutboxLink {
+        override suspend fun send(chatId: String, send: ProjectChatSend) = throw Rejected("Not now.")
+        override suspend fun sendDraft(key: String, chatId: String, send: ProjectChatSend) = throw Rejected("Not now.")
+        override suspend fun chat(chatId: String, sendId: String) = throw Rejected("Not now.")
+    }
+
+    @Test fun `a refused send waits for you after the next launch too`() = runTest {
+        val dir = folder.newFolder("outbox")
+        val first = Outbox(dir, backgroundScope)
+        first.deliver(refusing, "A", "c", send)
+        runCurrent()
+
+        val next = Outbox(dir, backgroundScope)
+        val kept = next.items.value.single()
+        assertEquals(true, kept.refused)
+        assertEquals("Not now.", kept.error)
+        next.resendFailed(desktop, "A")
+        runCurrent()
+        assertFalse(id in onComputer)
+
+        hold = CompletableDeferred()
+        next.retry(desktop, id)
+        assertNull(Outbox(dir, backgroundScope).items.value.single().refused)
     }
 
     @Test fun `doesn't resend an unanswered send Edit is asking about`() = runTest {
