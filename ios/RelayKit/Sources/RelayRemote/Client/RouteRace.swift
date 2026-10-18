@@ -38,7 +38,10 @@ extension RemoteClient {
     var racing: Bool { !raceDials.isEmpty }
 
     func cancelRaces() {
-        for dial in raceDials.values { cancel(dial) }
+        for dial in raceDials.values {
+            cancel(dial)
+            settle(dial.race)
+        }
         raceDials = [:]
     }
 
@@ -60,13 +63,16 @@ extension RemoteClient {
         raceDials.removeValue(forKey: ObjectIdentifier(dial))
     }
 
+    /// Ends the race; its dials hold it, so it lets go of them too.
     private func settle(_ race: Race) {
         race.timer?.cancel()
+        race.timer = nil
         for dial in race.mine.values {
             cancel(dial)
             raceDials.removeValue(forKey: ObjectIdentifier(dial))
         }
         race.mine = [:]
+        race.signing = nil
     }
 
     private func dialNext(_ race: Race) {
