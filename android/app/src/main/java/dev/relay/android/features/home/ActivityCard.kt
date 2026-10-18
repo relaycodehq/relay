@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -100,7 +101,7 @@ fun ActivityCard(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { StateGlyph(shown, unread, draft != null) }
+        ProjectMark(projectId, projectName, chat.provider, fill)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(chat.title, style = RelayTheme.type.base.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.heightIn(min = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -133,12 +134,24 @@ fun ActivityCard(
         }
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             CardState(shown, unread, now)
-            if (chat.provider != null) ProviderIcon(chat.provider, c.faint, size = 12.dp)
+            Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { StateGlyph(shown, unread, draft != null) }
         }
     }
 }
 
-/** The row's leading mark: working, needs you, unread, or nothing new. */
+/** The project's icon with the thread's agent in its corner, cut out by a ring of the card's own fill. */
+@Composable
+private fun ProjectMark(projectId: String, projectName: String, provider: String?, fill: Color) {
+    Box {
+        ProjectCardBadge(projectId, projectName, size = 26.dp)
+        if (provider != null) Box(
+            Modifier.align(Alignment.BottomEnd).offset(5.dp, 5.dp).size(14.dp).background(fill, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { ProviderIcon(provider, RelayTheme.colors.faint, size = 10.dp) }
+    }
+}
+
+/** Beside the time: working, needs you, a draft or unread; nothing once it's all seen. */
 @Composable
 private fun StateGlyph(chat: RemoteChatSummary, unread: Boolean, draft: Boolean) {
     val c = RelayTheme.colors
@@ -147,7 +160,6 @@ private fun StateGlyph(chat: RemoteChatSummary, unread: Boolean, draft: Boolean)
         chat.running == true || agentsSince(chat.pending) != null -> Spinner(size = 13.dp, color = c.foreground)
         draft -> Icon(TablerIcons.Outline.Pencil, null, tint = c.waiting, size = 14.dp)
         unread -> Dot(c.accent, 8.dp)
-        else -> Dot(c.faint, 6.dp)
     }
 }
 

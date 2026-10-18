@@ -40,7 +40,16 @@ struct ActivityCard: View {
                 .frame(minHeight: 44)
             } else {
                 HStack(spacing: 12) {
-                    StateGlyph(chat: shown, unread: unread, draft: draft != nil).frame(width: 16, height: 16)
+                    ProjectCardBadge(projectId: chat.projectId, name: projectName, size: 26)
+                        .overlay(alignment: .bottomTrailing) {
+                            if let provider = chat.provider {
+                                // Cut out of the icon by a ring of the row's own background.
+                                ProviderMark(provider: provider, size: 10)
+                                    .frame(width: 14, height: 14)
+                                    .background(colors.background, in: .circle)
+                                    .offset(x: 5, y: 5)
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(chat.title)
                             .font(.body.weight(.medium))
@@ -54,9 +63,7 @@ struct ActivityCard: View {
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 4) {
                         CardState(chat: shown, unread: unread, now: now)
-                        if let provider = chat.provider {
-                            ProviderMark(provider: provider, size: 12).foregroundStyle(colors.faint)
-                        }
+                        StateGlyph(chat: shown, unread: unread, draft: draft != nil).frame(width: 16, height: 16)
                     }
                 }
                 .padding(.vertical, 9)
@@ -102,7 +109,7 @@ private func stateLine(_ chat: RemoteChatSummary, now: Int64) -> String? {
     return nil
 }
 
-/// The row's leading mark: working, needs you, unread, or nothing new.
+/// Beside the time: working, needs you, a draft or unread; nothing once it's all seen.
 private struct StateGlyph: View {
     let chat: RemoteChatSummary
     let unread: Bool
@@ -119,8 +126,6 @@ private struct StateGlyph: View {
                 .accessibilityLabel("Draft")
         } else if unread {
             Circle().fill(colors.accent).frame(width: 8, height: 8).accessibilityLabel("Unread")
-        } else {
-            Circle().fill(colors.faint).frame(width: 6, height: 6).accessibilityHidden(true)
         }
     }
 }
