@@ -50,6 +50,12 @@ export function queueMark({
   return createHash("sha1").update(waiting).digest("base64url").slice(0, 10);
 }
 
+/** A question the agent asked in the thread is still open. */
+export const asksYou = (messages: ProjectChat["messages"]) =>
+  messages.some((m) =>
+    m.questions?.some((group) => !group.answers && !group.dismissed),
+  );
+
 /** What the sidebar lists of a thread: everything but its conversation and the state behind it. */
 export function chatSummary({
   messages,
@@ -93,9 +99,7 @@ export function chatSummary({
   const next = nextSend(scheduled);
   const mark = queueMark({ queue, queuePaused, scheduled });
   const notesAt = notesMark(notes);
-  const open = messages.some((m) =>
-    m.questions?.some((group) => !group.answers && !group.dismissed),
-  );
+  const open = asksYou(messages);
   const review = reviewFolder({ deepReview });
   return {
     ...summary,

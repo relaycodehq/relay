@@ -42,6 +42,7 @@ function setup() {
     }),
     queued: () => queued,
     thread: () => chat(waiting ? { waiting } : {}),
+    waiting: () => waiting,
   });
   const told: NewsItem[] = [];
   news.onNews((item) => told.push(item));

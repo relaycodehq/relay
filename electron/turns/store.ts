@@ -7,6 +7,8 @@ import type { Turn, TurnEvent } from "../../shared/turns";
 export interface Owner {
   id: string;
   pid: number;
+  /** When its computer started, so a pid reused after a restart isn't taken for it. */
+  boot?: number;
 }
 export type OwnedTurn = Turn & { owner: Owner };
 
@@ -63,7 +65,8 @@ class SqliteTurnStore implements TurnStore {
         id TEXT PRIMARY KEY,
         owner TEXT NOT NULL,
         pid INTEGER NOT NULL,
-        data TEXT NOT NULL
+        data TEXT NOT NULL,
+        boot INTEGER
       );
       CREATE TABLE IF NOT EXISTS events (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,16 +76,21 @@ class SqliteTurnStore implements TurnStore {
         data TEXT NOT NULL
       );
     `);
+    const columns = db.prepare("PRAGMA table_info(turns)").all() as {
+      name: string;
+    }[];
+    if (!columns.some((c) => c.name === "boot"))
+      db.exec("ALTER TABLE turns ADD COLUMN boot INTEGER");
     this.statements = {
       turn: db.prepare(`
-        INSERT INTO turns (id, owner, pid, data) VALUES (?, ?, ?, ?)
+        INSERT INTO turns (id, owner, pid, boot, data) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET data = excluded.data`),
       ended: db.prepare("DELETE FROM turns WHERE id = ?"),
       event: db.prepare(
         "INSERT INTO events (at, type, turn_id, data) VALUES (?, ?, ?, ?)",
       ),
       prune: db.prepare("DELETE FROM events WHERE seq <= ?"),
-      open: db.prepare("SELECT owner, pid, data FROM turns"),
+      open: db.prepare("SELECT owner, pid, boot, data FROM turns"),
     };
   }
   write(type: TurnEvent["type"], turn: Turn, owner: Owner) {
@@ -91,7 +99,7 @@ class SqliteTurnStore implements TurnStore {
     this.db.exec("BEGIN");
     try {
       if (turn.phase === "ended") s.ended.run(turn.id);
-      else s.turn.run(turn.id, owner.id, owner.pid, data);
+      else s.turn.run(turn.id, owner.id, owner.pid, owner.boot ?? null, data);
       const { lastInsertRowid } = s.event.run(Date.now(), type, turn.id, data);
       const seq = Number(lastInsertRowid);
       if (++this.writes % PRUNE_EVERY === 0) s.prune.run(seq - KEEP_EVENTS);
@@ -107,11 +115,12 @@ class SqliteTurnStore implements TurnStore {
       this.statements.open.all() as {
         owner: string;
         pid: number;
+        boot: number | null;
         data: string;
       }[]
-    ).map(({ owner, pid, data }) => ({
+    ).map(({ owner, pid, boot, data }) => ({
       ...(JSON.parse(data) as Turn),
-      owner: { id: owner, pid },
+      owner: { id: owner, pid, ...(boot === null ? {} : { boot }) },
     }));
   }
   close() {

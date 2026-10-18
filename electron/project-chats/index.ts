@@ -59,7 +59,7 @@ import { IdleCompactions } from "./idle-compact";
 import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
-import { ChatStorage, chatSummary } from "./storage";
+import { asksYou, ChatStorage, chatSummary } from "./storage";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
 import { TerminalContinue } from "./terminal-continue";
@@ -212,6 +212,12 @@ export class ProjectChats {
     );
     this.files = new TurnFiles(core, this.worktrees);
     this.threads = new ThreadList(core);
+    // As the thread's list entry reads it; one handed away waits there, which tells it.
+    const waits = (id: string, chat: ProjectChat) =>
+      this.active.ledger
+        .inThread(id)
+        .some((t) => t.blocked && working(t.phase)) ||
+      (asksYou(chat.messages) && !chat.sentTo);
     this.news = new TurnNews(this.active.ledger, {
       summary: (id) => this.summaryOf(id),
       answer: (chatId, answerId) =>
@@ -220,18 +226,9 @@ export class ProjectChats {
         const chat = this.storage.cached(chatId);
         return !!chat?.queue?.length && !chat.queuePaused;
       },
-      thread: (id, chat = this.storage.cached(id)) => {
-        if (!chat) return;
-        const summary = chatSummary(chat);
-        // As the thread's list entry reads it; one handed away waits there, which tells it.
-        const blocked = this.active.ledger
-          .inThread(id)
-          .some((t) => t.blocked && working(t.phase));
-        return {
-          ...summary,
-          waiting: blocked || (!!summary.asking && !summary.sentTo),
-        };
-      },
+      thread: (id, chat = this.storage.cached(id)) =>
+        chat && { ...chatSummary(chat), waiting: waits(id, chat) },
+      waiting: (id, chat = this.storage.cached(id)) => chat && waits(id, chat),
     });
     this.storage.onSaved((chat) => this.news.saved(chat));
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);

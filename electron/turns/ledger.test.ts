@@ -1,9 +1,10 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, uptime } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { TurnEvent } from "../../shared/turns";
 import { openTurnLedger, TurnLedger } from "./ledger";
+import { openTurnStore } from "./store";
 
 let dir: string;
 let ledgers: TurnLedger[];
@@ -79,6 +80,43 @@ it("recovers the turns a Relay that quit left open, not a running one's", () => 
   // Recovered once.
   next.recover();
   expect(events).toHaveLength(1);
+});
+
+it("recovers a turn from before a restart whose pid something else has now", () => {
+  const store = openTurnStore(join(dir, "relay.db"));
+  const turn = (id: string) =>
+    ({ id, ...answer, phase: "running", startedAt: 1 }) as const;
+  // The pid of the process that ran these tests: alive, and not a Relay.
+  const pid = process.ppid;
+  store.write("opened", turn("before"), { id: "old", pid, boot: 0 });
+  store.write("opened", turn("now"), {
+    id: "live",
+    pid,
+    boot: Date.now() - uptime() * 1000,
+  });
+  store.close();
+  const events = heard(open());
+  ledgers[0].recover();
+  expect(events.map((e) => [e.turn.id, e.turn.endedAs])).toEqual([
+    ["before", "interrupted"],
+  ]);
+});
+
+it("opens a database from before turns knew their computer's start", () => {
+  const warn = vi.spyOn(console, "warn");
+  const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+  const db = new DatabaseSync(join(dir, "relay.db"));
+  db.exec(
+    "CREATE TABLE turns (id TEXT PRIMARY KEY, owner TEXT NOT NULL, pid INTEGER NOT NULL, data TEXT NOT NULL)",
+  );
+  db.close();
+  const before = open();
+  const left = before.start(answer);
+  before.dispose();
+  const events = heard(open());
+  ledgers[1].recover();
+  expect(events.map((e) => e.turn.id)).toEqual([left.id]);
+  expect(warn).not.toHaveBeenCalled();
 });
 
 it("ends the turns no one holds any more as lost, and says which threads changed", () => {

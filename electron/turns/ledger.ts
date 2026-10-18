@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { uptime } from "node:os";
 import type {
   Turn,
   TurnEnd,
@@ -18,8 +19,15 @@ import {
 /** Ledgers open in this process; a turn whose owner is one of them isn't left over. */
 const liveOwners = new Set<string>();
 
-function ownerAlive({ id, pid }: Owner) {
+/** When this computer started; clock corrections move it a little. */
+const bootedAt = () => Math.round(Date.now() - uptime() * 1000);
+const SAME_BOOT_MS = 5 * 60_000;
+
+function ownerAlive({ id, pid, boot }: Owner) {
   if (pid === process.pid) return liveOwners.has(id);
+  // From before the computer restarted: whatever has its pid now isn't that Relay.
+  if (boot !== undefined && Math.abs(boot - bootedAt()) > SAME_BOOT_MS)
+    return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -54,7 +62,11 @@ export function openTurnLedger(path: string) {
  * changes nothing.
  */
 export class TurnLedger {
-  private owner: Owner = { id: randomUUID(), pid: process.pid };
+  private owner: Owner = {
+    id: randomUUID(),
+    pid: process.pid,
+    boot: bootedAt(),
+  };
   private open = new Map<string, Turn>();
   /** Turns a Relay that's gone left open; recovered once reattaching is done. */
   private leftOver: OwnedTurn[];

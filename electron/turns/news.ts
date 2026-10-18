@@ -30,6 +30,8 @@ export interface NewsThreads {
    * project's list; `chat` is the copy just saved.
    */
   thread(chatId: string, chat?: ProjectChat): ChatSummary | undefined;
+  /** Whether that thread waits on you, without the rest; undefined for one not in memory. */
+  waiting(chatId: string, chat?: ProjectChat): boolean | undefined;
 }
 
 /**
@@ -116,10 +118,14 @@ export class TurnNews {
 
   /** Tells of the thread when it started waiting on you since news last looked. */
   private looked(threadId: string, saved?: ProjectChat) {
+    // Asked on every save of a streaming answer: the whole summary only when it may be news.
+    const waiting = this.threads.waiting(threadId, saved);
+    if (waiting === undefined) return;
+    const waited = this.waited.get(threadId);
+    this.waited.set(threadId, waiting);
+    if (waited !== false || !waiting) return;
     const chat = this.threads.thread(threadId, saved);
-    if (!chat) return;
-    const news = waitingNews(this.waited.get(threadId), chat);
-    this.waited.set(threadId, !!chat.waiting);
+    const news = chat && waitingNews(waited, chat);
     if (news) this.tell(news, chat.projectId);
   }
 
