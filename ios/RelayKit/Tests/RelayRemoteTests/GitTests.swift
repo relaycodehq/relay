@@ -123,6 +123,18 @@ struct GitTests {
         #expect(newPullRequestUrl(remote: "https://github.com/a/b", branch: "") == nil)
     }
 
+    @Test func azurePullRequestBranchStaysOneQueryValue() throws {
+        for host in ["dev.azure.com/acme/web/_git/app", "acme.visualstudio.com/web/_git/app"] {
+            for branch in ["fix&targetRef=main", "feature/a+b", "fix#123", "fix%20cache"] {
+                let url = try #require(newPullRequestUrl(remote: "https://\(host)", branch: branch))
+                let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+                #expect(components.queryItems == [URLQueryItem(name: "sourceRef", value: branch)])
+                #expect(!url.absoluteString.contains("+"))
+                #expect(components.fragment == nil)
+            }
+        }
+    }
+
     @Test func historyLineNamesTheRefs() {
         let c = CommitSummary(
             sha: "abcdef1234", parents: [], author: "Ada", time: 1_000, refs: [CommitRef(name: "main", kind: "head")],

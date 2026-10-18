@@ -196,7 +196,8 @@ public func newPullRequestUrl(remote: String, branch: String) -> URL? {
     let encoded = branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? branch
     let base = "https://\(host)/\(path)"
     if host == "dev.azure.com" || host.hasSuffix(".visualstudio.com") {
-        let ref = branch.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? branch
+        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        guard let ref = branch.addingPercentEncoding(withAllowedCharacters: unreserved) else { return nil }
         return URL(string: "\(base)/pullrequestcreate?sourceRef=\(ref)")
     }
     if host == "github.com" { return URL(string: "\(base)/pull/new/\(encoded)") }
