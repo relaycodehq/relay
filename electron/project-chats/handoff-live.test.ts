@@ -16,6 +16,7 @@ it("keeps the reconnect snapshot when an older live push arrives afterward", asy
       id: "handoff",
       computerId: "computer",
       computer: "Other computer",
+      at: 1,
       state: "away",
       live: true,
       kept: 0,
