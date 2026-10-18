@@ -15,7 +15,8 @@ export const bundles = [
       target: "node22",
       format: "cjs",
       outfile: "dist-electron/main.cjs",
-      external: ["electron"],
+      // Read from beside the bundle; the package path is only the unbundled fallback.
+      external: ["electron", "@resvg/resvg-wasm/index_bg.wasm"],
       // jsonc-parser publishes a UMD main; its ESM build can be bundled completely.
       mainFields: ["module", "main"],
     },

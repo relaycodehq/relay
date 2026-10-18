@@ -86,7 +86,11 @@ export async function buildHeadless(given) {
     mainFields: ["module", "main"],
     // Native modules: terminals aren't reached headless, and the speech
     // engines are downloaded when set up (see speech-runtime.json below).
-    external: ["node-pty", "onnxruntime-node"],
+    external: [
+      "node-pty",
+      "onnxruntime-node",
+      "@resvg/resvg-wasm/index_bg.wasm",
+    ],
   });
   // The speech workers, with Electron's parentPort made of Node's IPC.
   for (const name of ["dictation", "read-aloud"])
