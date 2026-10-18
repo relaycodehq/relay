@@ -27,6 +27,7 @@ const texts = {
   "org.bouncycastle": { title: "Bouncy Castle", file: "bouncy-castle.txt" },
   "org.commonmark": { title: "commonmark-java", file: "commonmark-java.txt" },
   "org.nibor.autolink": { title: "autolink-java", file: "autolink-java.txt" },
+  "io.nayuki": { title: "QR Code generator library", file: "qrcodegen.txt" },
   "androidx.datastore:datastore-preferences-external-protobuf": {
     title: "Protocol Buffers, as bundled by AndroidX DataStore",
     file: "protobuf.txt",

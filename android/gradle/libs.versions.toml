@@ -13,6 +13,7 @@ datastore = "1.2.1"
 coil = "3.6.3"
 camerax = "1.6.2"
 mlkitBarcode = "17.3.0"
+qrcodegen = "1.8.0"
 webkit = "1.17.1"
 okhttp = "5.5.0"
 bouncycastle = "1.86"
@@ -45,8 +46,8 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
-camerax-compose = { module = "androidx.camera:camera-compose", version.ref = "camerax" }
 mlkit-barcode = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
+qrcodegen = { module = "io.nayuki:qrcodegen", version.ref = "qrcodegen" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }

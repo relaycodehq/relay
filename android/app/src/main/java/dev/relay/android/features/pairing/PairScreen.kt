@@ -4,37 +4,33 @@ import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.Role
-import dev.relay.android.ui.ButtonSize
-import dev.relay.android.ui.Icon
-import dev.relay.android.ui.pressable
-import dev.relay.android.ui.ring
-import io.github.lyxnx.compose.ui.tablericons.outline.DeviceDesktop
-import io.github.lyxnx.compose.ui.tablericons.outline.Qrcode
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,40 +40,51 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import dev.relay.android.R
 import dev.relay.android.lib.navigation.LocalNavigator
-import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.PairingLink
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.parsePairingUrl
 import dev.relay.android.ui.Button
+import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.ButtonVariant
-import dev.relay.android.ui.Screen
-import dev.relay.android.ui.Spinner
+import dev.relay.android.ui.Icon
+import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.Text
-import dev.relay.android.ui.theme.Radii
+import dev.relay.android.ui.pressable
+import dev.relay.android.ui.rememberReducedMotion
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Camera
 import io.github.lyxnx.compose.ui.tablericons.outline.Clipboard
 import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** shared/remote.ts's tailscaleAndroid. */
 private const val TAILSCALE_PLAY = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"
 private const val NOT_A_CODE = "That isn't a Relay pairing code."
+private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the pairing link instead."
 
 /**
- * mobile/src/app/pair.tsx: pairs from the QR code in Relay's Settings → Phone,
- * a pasted link, or a relay-remote:// deep link (`link`). On the same Wi-Fi
- * the phone needs nothing else; Tailscale, for reaching the computer from
- * elsewhere, comes last and optional.
+ * First run, or another computer: scan the code Relay shows on the computer, as the iPhone's
+ * PairingView. The field behind the words is the scanner: it folds up into the viewfinder, locks
+ * onto the code, and the code bursts back into it; the computer's ring going out across it is the
+ * pairing going through. A relay-remote:// link (`link`) asks before pairing.
  */
 @Composable
 fun PairScreen(remote: Remote, link: String?) {
@@ -86,217 +93,203 @@ fun PairScreen(remote: Remote, link: String?) {
     val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val computers by remote.computers.collectAsState()
-    val linked = remember(link) { link?.let(::parsePairingUrl) }
-    var busy by remember { mutableStateOf<String?>(null) }
+    val firstRun = remember { computers.isEmpty() }
+    var linked by remember(link) { mutableStateOf(link?.let(::parsePairingUrl)) }
+    val scan = remember { PairingScan() }
+    val face by scan.face.collectAsState()
+    val covers by scan.cameraCovers.collectAsState()
+    val reduceMotion = rememberReducedMotion()
+    var pairing by remember { mutableStateOf(false) }
+    /** The computer being paired with, or last paired with. */
+    var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var scanned by remember { mutableStateOf(false) }
-    var rescan by remember { mutableStateOf(0) }
-    var camera by remember { mutableStateOf(cameraAllowed(context)) }
-    var cameraRefused by remember { mutableStateOf(false) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        camera = granted
-        cameraRefused = !granted
-    }
+    /** The camera read a code that isn't Relay's. */
+    var notOurs by remember { mutableStateOf(0) }
 
     fun pair(target: PairingLink) {
-        busy = "Pairing with ${target.name}…"
+        pairing = true
+        name = target.name
         error = null
+        linked = null
+        scan.pairingWithoutScan()
         scope.launch {
             try {
                 remote.pair(target)
-                // A deep link opens pairing on top of home; go back to it, not over it.
-                nav.home()
+                scan.paired()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: e.toString()
-                scanned = false
-                busy = null
+                error = (e.message ?: e.toString()) +
+                    " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here."
+                scan.failed()
+            } finally {
+                pairing = false
             }
         }
     }
 
-    fun read(text: String) {
-        val parsed = parsePairingUrl(text)
-        if (parsed != null) pair(parsed) else error = NOT_A_CODE
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) scan.start() else error = NO_CAMERA
     }
-
-    // A code that isn't Relay's: look again in a moment.
-    LaunchedEffect(rescan) {
-        if (rescan == 0) return@LaunchedEffect
-        delay(1500)
-        scanned = false
+    DisposableEffect(scan) {
+        val main = Handler(Looper.getMainLooper())
+        // Called on the field's thread under the scan's lock: answer at once, act on the main thread.
+        scan.onRead = { text ->
+            val parsed = parsePairingUrl(text)
+            main.post { if (parsed != null) pair(parsed) else notOurs++ }
+            parsed != null
+        }
+        onDispose { scan.onRead = { false } }
     }
+    LaunchedEffect(reduceMotion) { scan.reduceMotion = reduceMotion }
+    LaunchedEffect(notOurs) {
+        if (notOurs == 0) return@LaunchedEffect
+        delay(2500)
+        notOurs = 0
+    }
+    BackHandler(face == PairingScan.Face.Scan) { scan.close() }
 
     val c = RelayTheme.colors
-    val hint = RelayTheme.type.sm.copy(lineHeight = 20.sp)
-    val firstRun = computers.isEmpty()
-    val pending = busy
-    // The first computer: nothing behind this screen but leaving the app, so no bar and no arrow.
-    Screen("Pair another computer", onBack = nav.backAction, topBar = !firstRun) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Column(
-                Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(horizontal = 24.dp)
-                    .padding(top = if (firstRun) 40.dp else 12.dp, bottom = 24.dp),
-            ) {
-                Text(
-                    when {
-                        linked != null -> "Pair with ${linked.name}?"
-                        firstRun -> "Pair with your computer"
-                        else -> "Scan its pairing code"
-                    },
-                    style = RelayTheme.type.xxl,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (linked != null) "On the same Wi-Fi this phone connects to it directly."
-                    else "Relay on your computer shows a code. Scan it and this phone drives its agents.",
-                    style = hint,
-                    color = c.mutedForeground,
-                )
-                Spacer(Modifier.height(28.dp))
-                Viewfinder(
-                    onClick = if (!camera && pending == null && linked == null) ({ ask.launch(Manifest.permission.CAMERA) }) else null,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 340.dp).fillMaxWidth(),
-                ) {
-                    when {
-                        pending != null -> Centered {
-                            Spinner(size = 20.dp, color = c.mutedForeground)
-                            Text(pending, style = hint, color = c.mutedForeground)
-                        }
-                        linked != null -> Centered {
-                            Icon(TablerIcons.Outline.DeviceDesktop, null, tint = c.mutedForeground, size = 36.dp)
-                            Text(linked.name, style = RelayTheme.type.label)
-                        }
-                        camera -> QrScanner(
-                            onCode = { data ->
-                                if (!scanned) {
-                                    scanned = true
-                                    val parsed = parsePairingUrl(data)
-                                    if (parsed != null) pair(parsed)
-                                    else {
-                                        error = NOT_A_CODE
-                                        rescan++
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        else -> Centered {
-                            Icon(TablerIcons.Outline.Qrcode, null, tint = c.mutedForeground, size = 36.dp)
-                            Text("Tap to scan", style = RelayTheme.type.label)
-                            Text("Relay asks for the camera once", style = RelayTheme.type.xs, color = c.mutedForeground)
-                        }
-                    }
-                }
-                val problem = error ?: if (cameraRefused && !camera && pending == null && linked == null)
-                    "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the link instead." else null
-                if (problem != null) {
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        problem + if (error == null || problem.startsWith("That isn't")) ""
-                        else " Check that this phone is on the same Wi-Fi, or that Tailscale is on and signed in here.",
-                        style = hint,
-                        color = if (error != null) c.destructive else c.mutedForeground,
-                    )
-                }
-                if (linked == null) {
-                    Spacer(Modifier.height(28.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Step(1, "Open Relay on your computer")
-                        Step(2, "Settings → Phone → Show pairing code")
-                        Step(3, "Point this phone at the code")
-                    }
-                }
+    Box(Modifier.fillMaxSize()) {
+        ScanStage(scan, cameraFailed = { error = it }, modifier = Modifier.fillMaxSize())
+
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val hint = when (face) {
+                PairingScan.Face.Scan -> if (notOurs > 0) NOT_A_CODE else "Point at the code on your computer"
+                else -> "Pairing with $name…"
             }
+            val shown = face == PairingScan.Face.Pairing || (face == PairingScan.Face.Scan && covers)
+            Text(
+                hint,
+                style = RelayTheme.type.sm.copy(
+                    textAlign = TextAlign.Center,
+                    shadow = if (covers) Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 12f) else null,
+                ),
+                color = if (covers) Color.White else c.mutedForeground,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                    .offset(y = maxHeight * 0.623f - 10.dp)
+                    .graphicsLayer { alpha = if (shown) 1f else 0f },
+            )
         }
-        Column(
-            Modifier.align(Alignment.CenterHorizontally).widthIn(max = 440.dp).fillMaxWidth()
-                .padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            when {
-                linked != null -> Button("Pair", { pair(linked) }, Modifier.fillMaxWidth(), size = ButtonSize.Lg, loading = pending != null)
-                pending == null -> Button(
-                    "Paste pairing link",
-                    { read(clipboardText(context)) },
-                    Modifier.fillMaxWidth(),
-                    variant = ButtonVariant.Outline,
-                    size = ButtonSize.Lg,
-                    leadingIcon = TablerIcons.Outline.Clipboard,
-                )
-            }
-            Row(
-                Modifier.pressable({ uri.openUri(TAILSCALE_PLAY) }, role = Role.Button).padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+
+        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            Welcome(face == PairingScan.Face.Idle)
+            val closeShown = face == PairingScan.Face.Scan || (face == PairingScan.Face.Idle && !firstRun)
+            if (closeShown) IconButton(
+                TablerIcons.Outline.X,
+                if (face == PairingScan.Face.Scan) "Close camera" else "Close",
+                { if (face == PairingScan.Face.Scan) scan.close() else nav.pop() },
+                Modifier.padding(start = 16.dp, top = 8.dp),
+                variant = ButtonVariant.Secondary,
+                tint = if (covers) Color.White else null,
+            )
+
+            Column(
+                Modifier.align(Alignment.BottomCenter).widthIn(max = 440.dp).fillMaxWidth()
+                    .padding(horizontal = 24.dp).padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Away from home? ", style = RelayTheme.type.xs, color = c.mutedForeground)
-                Text("Get Tailscale", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium))
-                Icon(TablerIcons.Outline.ExternalLink, null, tint = c.mutedForeground, size = 12.dp)
+                Box(contentAlignment = Alignment.TopCenter) {
+                    val target = linked
+                    Shown(face == PairingScan.Face.Idle, away = 18.dp) {
+                        if (target != null) Copy("Pair with ${target.name}?", "On the same Wi-Fi this phone connects to it directly.", error)
+                        else Copy("Pair with your computer", "On your computer, open Relay, go to Settings → Phone and scan the code shown there.", error)
+                    }
+                    Shown(face == PairingScan.Face.Paired, away = (-12).dp) {
+                        Copy("Paired with $name", "Its threads show up here as soon as they start.", null)
+                    }
+                }
+                Spacer(Modifier.height(40.dp))
+                Box(contentAlignment = Alignment.BottomCenter) {
+                    Shown(face == PairingScan.Face.Idle, away = 46.dp) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val target = linked
+                            if (target != null) {
+                                Button("Pair", { pair(target) }, Modifier.fillMaxWidth(), size = ButtonSize.Lg, loading = pairing)
+                            } else {
+                                Button(
+                                    "Scan code",
+                                    {
+                                        error = null
+                                        if (cameraAllowed(context)) scan.start() else ask.launch(Manifest.permission.CAMERA)
+                                    },
+                                    Modifier.fillMaxWidth(),
+                                    size = ButtonSize.Lg,
+                                    leadingIcon = TablerIcons.Outline.Camera,
+                                    enabled = !pairing,
+                                )
+                                Button(
+                                    "Paste a pairing link",
+                                    {
+                                        val parsed = parsePairingUrl(clipboardText(context))
+                                        if (parsed != null) pair(parsed) else error = NOT_A_CODE
+                                    },
+                                    Modifier.fillMaxWidth(),
+                                    variant = ButtonVariant.Outline,
+                                    size = ButtonSize.Lg,
+                                    leadingIcon = TablerIcons.Outline.Clipboard,
+                                    enabled = !pairing,
+                                )
+                            }
+                            // Reaching the computer from outside its network takes Tailscale on both.
+                            Row(
+                                Modifier.pressable({ uri.openUri(TAILSCALE_PLAY) }, role = Role.Button).padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text("Away from home? ", style = RelayTheme.type.xs, color = c.mutedForeground)
+                                Text("Get Tailscale", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium))
+                                Icon(TablerIcons.Outline.ExternalLink, null, tint = c.mutedForeground, size = 12.dp)
+                            }
+                        }
+                    }
+                    Shown(face == PairingScan.Face.Paired, away = 46.dp) {
+                        Button("Continue", { nav.home() }, Modifier.fillMaxWidth(), size = ButtonSize.Lg)
+                    }
+                }
             }
         }
     }
 }
 
-/** A square card with scanner corner marks; the camera, or what stands in for it, goes inside. */
+/** Who's asking, above the field, before a scan starts. */
 @Composable
-private fun Viewfinder(onClick: (() -> Unit)?, modifier: Modifier, content: @Composable () -> Unit) {
-    val c = RelayTheme.colors
-    val mark = c.foreground.copy(alpha = 0.55f)
+private fun Welcome(on: Boolean) {
+    Shown(on, away = (-12).dp, Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Image(painterResource(R.drawable.splash_mark), null, Modifier.size(56.dp))
+            Text("Relay", style = RelayTheme.type.xxl.copy(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.6).sp))
+            Text("Your agents, in your pocket", style = RelayTheme.type.sm, color = RelayTheme.colors.mutedForeground)
+        }
+    }
+}
+
+@Composable
+private fun Copy(title: String, text: String, error: String?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = RelayTheme.type.xxl.copy(textAlign = TextAlign.Center))
+        Text(text, style = RelayTheme.type.sm.copy(lineHeight = 20.sp, textAlign = TextAlign.Center), color = RelayTheme.colors.mutedForeground)
+        if (error != null) Text(
+            error,
+            style = RelayTheme.type.xs.copy(textAlign = TextAlign.Center),
+            color = RelayTheme.colors.destructive,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/** In place, or faded and slid `away` down (up when negative) and out of reach when not `on`. */
+@Composable
+private fun Shown(on: Boolean, away: Dp, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val k by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow), label = "shown")
+    if (k == 0f && !on) return
     Box(
-        modifier
-            .aspectRatio(1f)
-            .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
-            .clip(Radii.xxlShape)
-            .background(c.card)
-            .ring(shape = Radii.xxlShape)
-            .drawWithContent {
-                drawContent()
-                val inset = 20.dp.toPx()
-                val arm = 26.dp.toPx()
-                val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-                for (x in listOf(0, 1)) for (y in listOf(0, 1)) {
-                    val cx = if (x == 0) inset else size.width - inset
-                    val cy = if (y == 0) inset else size.height - inset
-                    val dx = if (x == 0) arm else -arm
-                    val dy = if (y == 0) arm else -arm
-                    drawPath(
-                        Path().apply {
-                            moveTo(cx, cy + dy)
-                            lineTo(cx, cy)
-                            lineTo(cx + dx, cy)
-                        },
-                        mark,
-                        style = stroke,
-                    )
-                }
-            },
+        modifier.graphicsLayer {
+            alpha = k
+            translationY = (1 - k) * away.toPx()
+        },
         contentAlignment = Alignment.Center,
     ) { content() }
-}
-
-@Composable
-private fun Centered(content: @Composable ColumnScope.() -> Unit) = Column(
-    Modifier.padding(32.dp),
-    horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(8.dp),
-    content = content,
-)
-
-@Composable
-private fun Step(n: Int, text: String) {
-    val c = RelayTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(c.muted), contentAlignment = Alignment.Center) {
-            Text("$n", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground)
-        }
-        Text(text, style = RelayTheme.type.sm)
-    }
 }
 
 private fun cameraAllowed(context: Context) =

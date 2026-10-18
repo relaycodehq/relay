@@ -1,5 +1,6 @@
 package dev.relay.android.app
 
+import androidx.compose.ui.graphics.Color
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import dev.relay.android.app.gallery.GalleryScreen
@@ -27,8 +28,6 @@ import dev.relay.android.features.thread.SubagentRunScreen
 import dev.relay.android.features.thread.ThreadScreen
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.ui.theme.HextaDark
-import dev.relay.android.ui.theme.HextaLight
-import dev.relay.android.ui.theme.LocalRelayColors
 import dev.relay.android.ui.theme.RelayTheme
 
 /**
@@ -43,10 +42,10 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Gallery> { GalleryScreen() }
     entry<Route.Licences> { LicencesScreen() }
 
-    // Relay's own colours, in the light or dark showing: pairing another computer shouldn't
-    // wear the one already paired's.
+    // Relay's own colours, dark on black whatever the theme: pairing another computer shouldn't
+    // wear the one already paired's, and the field glows best on black.
     entry<Route.Pair> {
-        RelayTheme(if (LocalRelayColors.current.isDark) HextaDark else HextaLight) { PairScreen(container.remote, it.link) }
+        RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, it.link) }
     }
     entry<Route.NewThread> { route ->
         ProvideProjectIcons(container.home) {

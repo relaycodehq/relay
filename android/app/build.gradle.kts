@@ -35,7 +35,7 @@ android {
     defaultConfig {
         // Its own id, so it installs beside the Expo app (dev.relay.remote) and keeps its pairing.
         applicationId = "dev.relay.android"
-        minSdk = 29
+        minSdk = 33
         targetSdk = 36
         // The release's own version on the mini; versionCode grows as major*1e6+minor*1e3+patch.
         versionCode = System.getenv("RELAY_VERSION_CODE")?.toInt() ?: 1
@@ -96,8 +96,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
-    implementation(libs.camerax.compose)
     implementation(libs.mlkit.barcode)
+    implementation(libs.qrcodegen)
     implementation(libs.androidx.webkit)
     implementation(libs.okhttp)
     implementation(libs.bouncycastle)

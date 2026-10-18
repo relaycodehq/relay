@@ -83,10 +83,14 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
     val appearance = overview?.appearance
     val colors = remember(prefs.themeMode, systemDark, appearance) { resolveColors(prefs.themeMode, appearance?.toDesktop(), systemDark) }
     RelayTheme(colors) {
-        SystemBars(dark = colors.isDark)
-        if (crash != null) return@RelayTheme CrashScreen(crash, onCrashSeen)
+        if (crash != null) {
+            SystemBars(dark = colors.isDark)
+            return@RelayTheme CrashScreen(crash, onCrashSeen)
+        }
         val backStack = rememberNavBackStack(Route.Home)
         val top = backStack.lastOrNull() as? Route
+        // Pairing is always dark, whatever the theme.
+        SystemBars(dark = colors.isDark || top is Route.Pair)
         // Panes only once there's a computer to list; pairing is one whole screen.
         val panes = rememberIsWide() && ready && paired && top !is Route.Pair
         val isWide by rememberUpdatedState(panes)

@@ -287,6 +287,8 @@ packages. Its APK contains:
   Castle Licence, an MIT-style licence:
   https://www.bouncycastle.org/about/license/
 - KaTeX 0.19.0 and its fonts (MIT), in `android/app/src/main/assets/katex`.
+- Project Nayuki's QR Code generator library 1.8.0 (`io.nayuki:qrcodegen`,
+  MIT), which redraws a scanned pairing code's modules for the pairing screen.
 - Inter and JetBrains Mono (SIL Open Font License 1.1); their licence texts
   ship in the APK as `res/raw/license_inter.txt` and
   `res/raw/license_jetbrains_mono.txt`.
