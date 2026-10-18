@@ -195,6 +195,20 @@
   border-radius: 9px;
   background: var(--toolbar);
 }
+/* Over glass the strip is outlined like Commit & push, not a solid slab, and
+   the active toggle is a tint so the frost shows through it too. */
+:root[data-glass] .header-strip {
+  background: transparent;
+}
+:root[data-glass] .header-strip .pane-toggle.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+:root[data-glass] .header-strip .pane-toggle.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+:root[data-glass] .header-strip .pane-toggle .unseen-dot {
+  box-shadow: none;
+}
 .header-strip > .pane-toggles {
   gap: 6px;
   padding: 0;
