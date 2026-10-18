@@ -229,6 +229,16 @@ private struct PairingScreen: View {
             }
             .buttonStyle(.glass)
             .controlSize(.large)
+            // Reaching the computer from outside its network takes Tailscale on both.
+            Link(destination: URL(string: "https://apps.apple.com/app/tailscale/id1470499037")!) {
+                HStack(spacing: 4) {
+                    Text("Away from home?").foregroundStyle(.secondary)
+                    Text("Get Tailscale").fontWeight(.medium).foregroundStyle(.primary)
+                    Image(systemName: "arrow.up.right").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                .font(.footnote)
+                .padding(.vertical, 4)
+            }
         }
         .disabled(pairing || asking)
     }
