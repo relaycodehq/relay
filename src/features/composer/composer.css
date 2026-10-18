@@ -287,27 +287,31 @@
     transform: scale(0.8);
   }
 }
-/* Beside Send while the cache is cold: the other choice, compacting or not. */
-.composer-tools .composer-send-other {
+/* Beside Send while the cache is cold: whether Send compacts first. */
+.composer-tools .composer-compact-first {
   flex: none;
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.composer-tools .composer-send-other:not(:disabled):hover {
-  background: var(--hover);
-}
-.composer-tools .composer-send-other:disabled {
+  gap: 6px;
+  margin: 0;
+  padding: 4px 6px;
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composer-tools .composer-compact-first:hover,
+.composer-tools .composer-compact-first:has(:checked) {
+  color: var(--text);
+}
+.composer-tools .composer-compact-first input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .composer-tools .send-message:hover {
   background: color-mix(in srgb, var(--send) 88%, #fff);

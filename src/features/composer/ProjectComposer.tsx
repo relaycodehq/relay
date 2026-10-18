@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { Minimize2, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import {
   agentMentionPattern,
   reportsUsage,
@@ -240,8 +240,15 @@ export function ProjectComposer({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const quick = useQuickSwitchHud(runs, to);
-  // The button by Send does the opposite of Settings, so it waits to know them.
+  // The box by Send starts as Settings say, so it waits to know them.
   const sendCompacts = useAutoCompactSaved()?.cold;
+  // Ticked or unticked for the draft being written; sending it lets go.
+  const [compactPick, setCompactPick] = useState<{
+    draft: string;
+    compact: boolean;
+  }>();
+  const compactFirst =
+    compactPick?.draft === keys.draft ? compactPick.compact : sendCompacts;
   // A command means what it says, after an @mention too; the server sends it as is.
   const cold =
     sendCompacts !== undefined &&
@@ -293,7 +300,7 @@ export function ProjectComposer({
     : mentions.visible
       ? mentions
       : commands;
-  const sending = useComposerSend({
+  const composerSend = useComposerSend({
     draft,
     state: composer,
     runs,
@@ -322,6 +329,25 @@ export function ProjectComposer({
       return accepted;
     },
   });
+  // Every send carries the box's pick on a cold cache, ⌥ the opposite of it.
+  const sending = {
+    ...composerSend,
+    send(steer = false, sendAt?: number, after?: () => void, flip = false) {
+      const pick =
+        cold && !running && compactFirst !== undefined
+          ? compactFirst !== flip
+          : undefined;
+      return composerSend.send(
+        steer,
+        sendAt,
+        () => {
+          setCompactPick(undefined);
+          after?.();
+        },
+        pick === sendCompacts ? undefined : pick,
+      );
+    },
+  };
   return (
     <div className="thread-compose-wrap">
       {planner && (
@@ -449,7 +475,7 @@ export function ProjectComposer({
             // default; the button by Send is the one on screen, so it wins.
             if (cold && !running && altSends(e, sendKey)) {
               e.preventDefault();
-              sending.send(false, undefined, undefined, !sendCompacts);
+              sending.send(false, undefined, undefined, true);
               return;
             }
             if (!e.repeat && matches("send-new-thread", e)) {
@@ -582,33 +608,22 @@ export function ProjectComposer({
                   />
                 )}
                 {cold && !running && (
-                  <button
-                    type="button"
-                    className="composer-send-other"
-                    disabled={sending.disabled}
-                    title={`${
-                      sendCompacts
-                        ? "Send without compacting"
-                        : `Compact ${formatTokens(cold.tokens)} tokens, then send`
-                    } · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)}`}
-                    onClick={() =>
-                      void sending.send(
-                        false,
-                        undefined,
-                        undefined,
-                        !sendCompacts,
-                      )
-                    }
+                  <label
+                    className="composer-compact-first"
+                    title={`Compact ${formatTokens(cold.tokens)} tokens before this message, as the cache went cold · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)} sends the other way`}
                   >
-                    {sendCompacts ? (
-                      "Don't compact"
-                    ) : (
-                      <>
-                        <Minimize2 size={14} aria-hidden />
-                        Compact first
-                      </>
-                    )}
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={!!compactFirst}
+                      onChange={(e) =>
+                        setCompactPick({
+                          draft: keys.draft,
+                          compact: e.target.checked,
+                        })
+                      }
+                    />
+                    Compact {formatTokens(cold.tokens)} first
+                  </label>
                 )}
                 {(!running ||
                   !onStop ||
@@ -617,7 +632,7 @@ export function ProjectComposer({
                   <SendButton
                     disabled={sending.disabled}
                     compactsFirst={
-                      !!cold && !running && sendCompacts
+                      !!cold && !running && compactFirst
                         ? cold.tokens
                         : undefined
                     }
