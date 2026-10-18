@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import "./answer-video.css";
+import "./answer-media.css";
 
 /** Automatic reloads before offering a manual retry. */
 const RELOADS = 2;
@@ -35,7 +35,7 @@ export function AnswerVideo({
   // Missing files stay out of the answer, but a player that loaded keeps its place.
   if (broken && !size) return null;
   return (
-    <span className="answer-video-frame">
+    <span className="answer-media-frame">
       <video
         // A new element asks main for the file again; a failed one stays failed.
         key={Math.min(failures, RELOADS)}
@@ -70,7 +70,7 @@ export function AnswerVideo({
         }}
       />
       {broken && (
-        <span className="answer-video-error" role="status">
+        <span className="answer-media-error" role="status">
           <span>This video stopped loading.</span>
           <button type="button" onClick={() => setFailures(0)}>
             Retry video

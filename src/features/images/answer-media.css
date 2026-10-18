@@ -1,4 +1,4 @@
-.answer-video-frame {
+.answer-media-frame {
   position: relative;
   display: block;
   width: fit-content;
@@ -6,11 +6,17 @@
   margin: 6px 0;
 }
 
-.answer-video-frame > .answer-video {
+.answer-media-frame > .answer-video,
+.answer-image-frame .answer-image img {
   margin: 0;
 }
 
-.answer-video-error {
+.answer-image-frame[data-empty] {
+  width: 240px;
+  min-height: 110px;
+}
+
+.answer-media-error {
   position: absolute;
   inset: 0;
   display: flex;

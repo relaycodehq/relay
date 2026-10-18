@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
-test("an answer shows the local images it embeds and drops the ones that don't load", async () => {
+test("an answer shows its embedded images and lets failed images be retried", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-images-"))),
     data = join(root, "data"),
     bin = join(root, "bin");
@@ -73,13 +73,75 @@ test("an answer shows the local images it embeds and drops the ones that don't l
     expect(
       await image.evaluate((img: HTMLImageElement) => img.naturalWidth),
     ).toBeGreaterThan(100);
-    // The missing and non-image files leave nothing, not even a placeholder.
+    const proportions = await image.evaluate((img: HTMLImageElement) => {
+      const bounds = img.getBoundingClientRect();
+      return {
+        drawn: bounds.width / bounds.height,
+        original: img.naturalWidth / img.naturalHeight,
+      };
+    });
+    expect(proportions.drawn).toBeCloseTo(proportions.original, 2);
+    // Failures get a retry control instead of silently disappearing.
     await expect(answer.locator("img")).toHaveCount(1);
+    await expect(
+      answer.getByRole("button", { name: "Retry image" }),
+    ).toHaveCount(2);
     await expect(answer).not.toContainText("[Image");
     await expect(answer.getByRole("link", { name: "logo" })).toBeVisible();
     // Shown in the text, so not again in the strip below it.
     await expect(answer.locator(".message-images")).toHaveCount(0);
     await page.screenshot({ path: join(tmpdir(), "relay-answer-images.png") });
+
+    const frame = answer.getByRole("group", {
+      name: "the welcome screen",
+      exact: true,
+    });
+    const layout = (element: HTMLElement) => ({
+      width: element.clientWidth,
+      height: element.clientHeight,
+      top: element.offsetTop,
+    });
+    const before = await frame.evaluate(layout);
+    // A real decoder failure keeps the image's dimensions and can be retried
+    // in place, without changing threads or opening the full-screen viewer.
+    await image.evaluate((img: HTMLImageElement) => {
+      img.src = "data:image/png;base64,AA==";
+    });
+    const retry = frame.getByRole("button", { name: "Retry image" });
+    await expect(retry).toBeVisible();
+    expect(await frame.evaluate(layout)).toEqual(before);
+    await page.screenshot({
+      path: join(tmpdir(), "relay-answer-image-error.png"),
+    });
+    await retry.click();
+    await expect(retry).toHaveCount(0);
+    await expect
+      .poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth))
+      .toBeGreaterThan(100);
+
+    // A missing file that becomes available can also recover without a remount.
+    const missing = answer.getByRole("group", {
+      name: "missing.png",
+      exact: true,
+    });
+    await missing.scrollIntoViewIfNeeded();
+    const missingBounds = await missing.evaluate(layout);
+    await missing.getByRole("button", { name: "Retry image" }).click();
+    await expect(missing).toBeVisible();
+    expect(await missing.evaluate(layout)).toEqual(missingBounds);
+    await expect(
+      missing.getByRole("button", { name: "Retry image" }),
+    ).toBeEnabled();
+    await writeFile(join(root, "missing.png"), await readFile(shot));
+    await missing.getByRole("button", { name: "Retry image" }).click();
+    await expect(missing.getByRole("img")).toHaveJSProperty("complete", true);
+    await expect
+      .poll(() =>
+        missing
+          .getByRole("img")
+          .evaluate((img: HTMLImageElement) => img.naturalWidth),
+      )
+      .toBeGreaterThan(100);
 
     // Dragged into the composer, it attaches like a pasted screenshot.
     await image.dragTo(page.getByLabel("Message project"));
