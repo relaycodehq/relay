@@ -1,4 +1,4 @@
-import { app, dialog, net, powerMonitor } from "electron";
+import { app, dialog, net, powerMonitor, systemPreferences } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
@@ -120,6 +120,13 @@ if (
   const store = linuxPasswordStore(process.env);
   if (store) app.commandLine.appendSwitch("password-store", store);
 }
+// AppKit binds ⌃⌘←/→ to the writing-direction commands and, depending on
+// input-source state, beeps at them before the page sees the key, so the
+// quick switch beeped while working. Allowed, they reach the page instead.
+if (process.platform === "darwin")
+  systemPreferences.registerDefaults({
+    NSAllowsBaseWritingDirectionKeyBindings: true,
+  });
 // Started this early, the login shell has usually answered before the first
 // CLI lookup waits for it.
 void pathReady();
