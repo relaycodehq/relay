@@ -86,6 +86,8 @@ public final class DraftStore {
     @ObservationIgnored private var pushing: Set<String> = []
     @ObservationIgnored private var pushTimers: [String: () -> Void] = [:]
     @ObservationIgnored private var saveTimers: [String: () -> Void] = [:]
+    @ObservationIgnored private var typedTimer: (() -> Void)?
+    @ObservationIgnored private var files: [String: URL] = [:]
     @ObservationIgnored private var running: [UUID: Task<Void, Never>] = [:]
 
     /// The pause after typing before an edit goes.
@@ -109,6 +111,21 @@ public final class DraftStore {
         if let key { notifyKey(computer, key) }
         persist(computer)
     }
+
+    /// Typing into a composer: lists hear of it once the typing pauses, not with every letter,
+    /// which ran the thread list under the open thread again on each one. The composer has the
+    /// text already, and reading any draft gives the latest at once.
+    private func typed(_ computer: String) {
+        persist(computer)
+        typedTimer?()
+        typedTimer = timers.after(Self.listPause) { [weak self] in
+            self?.typedTimer = nil
+            self?.version += 1
+        }
+    }
+
+    /// The pause in typing before lists show a draft's new text.
+    public static let listPause: Int64 = 300
 
     /// Counts the times the draft changed under its composer; watch it to take the new text.
     public func changes(_ computer: String, _ key: String) -> Int { keyChanges[id(computer, key)] ?? 0 }
@@ -136,9 +153,13 @@ public final class DraftStore {
         var device: String?
     }
 
+    /// Named once per computer: every letter typed saves, and spelling the name out took longer.
     private func file(_ computer: String) -> URL? {
-        dir?.appendingPathComponent(
+        if let known = files[computer] { return known }
+        let file = dir?.appendingPathComponent(
             computer.utf8.reduce(into: "") { $0 += String(format: "%02x", $1) } + ".json")
+        files[computer] = file
+        return file
     }
 
     /// Reads the computer's drafts kept here, once.
@@ -238,6 +259,10 @@ public final class DraftStore {
 
     /// An edit here: kept at once, sent a pause later. Ignored while a send holds the composer.
     public func edit(_ computer: String, _ key: String, _ change: (DraftBody) -> DraftBody) {
+        edit(computer, key, typing: false, change)
+    }
+
+    private func edit(_ computer: String, _ key: String, typing: Bool, _ change: (DraftBody) -> DraftBody) {
         guard !held.contains(id(computer, key)) else { return }
         let copy = copies[computer]?[key]
         // One on its way out shows as empty; only something new typed replaces it.
@@ -251,12 +276,14 @@ public final class DraftStore {
         next.leaving = nil
         next.sent = nil
         copies[computer, default: [:]][key] = next
-        changed(computer)
+        // A draft's first letter lists it at once; the ones after only change its text.
+        if typing && copy != nil { typed(computer) } else { changed(computer) }
         schedule(computer, key)
     }
 
-    public func editText(_ computer: String, _ key: String, _ text: String) {
-        edit(computer, key) { var body = $0; body.text = text; return body }
+    /// `typing` for a letter typed into the composer, which lists show once the typing pauses.
+    public func editText(_ computer: String, _ key: String, _ text: String, typing: Bool = false) {
+        edit(computer, key, typing: typing) { var body = $0; body.text = text; return body }
     }
 
     private func schedule(_ computer: String, _ key: String) {

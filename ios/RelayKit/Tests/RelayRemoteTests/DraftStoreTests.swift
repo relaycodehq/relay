@@ -30,6 +30,10 @@ private final class FakeClock {
     }
 }
 
+private final class Heard: @unchecked Sendable {
+    var count = 0
+}
+
 /// A computer that merges as shared/drafts' applyDraftWrite does.
 @MainActor
 private final class Computer: DraftLink, @unchecked Sendable {
@@ -114,6 +118,18 @@ struct DraftStoreTests {
         let drafts = DraftStore(dir: nil, timers: clock.timers)
         drafts.device(pc, "me")
         return drafts
+    }
+
+    @Test func listsHearOfTypingOnceItPausesNotWithEveryLetter() async {
+        let drafts = store()
+        drafts.editText(pc, chat, "H", typing: true)
+        let heard = Heard()
+        withObservationTracking { _ = drafts.listed(pc) } onChange: { heard.count += 1 }
+        for text in ["He", "Hel", "Hell", "Hello"] { drafts.editText(pc, chat, text, typing: true) }
+        #expect(heard.count == 0)
+        #expect(drafts.listed(pc)[chat]?.text == "Hello")
+        await clock.advance(DraftStore.listPause)
+        #expect(heard.count == 1)
     }
 
     @Test func keepsWhatsTypedOfflineAndSendsItOnceTheComputerIsBack() async {

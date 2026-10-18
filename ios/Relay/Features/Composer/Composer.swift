@@ -45,7 +45,7 @@ struct Composer: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colors) private var colors
     @Environment(ReadAloud.self) private var reader
-    @State private var draft = ""
+    @State private var field = ComposerText()
     @State private var photos: [PickedPhoto] = []
     @State private var picked: [PhotosPickerItem] = []
     @State private var loadingPhotos = 0
@@ -53,7 +53,10 @@ struct Composer: View {
     @State private var error: String?
     @State private var dictation = DictationSession()
     /// Where dictated words go while typing (Android's DictationInput).
-    @State private var cursor: SwiftUI.TextSelection?
+    private var cursor: SwiftUI.TextSelection? {
+        get { field.cursor }
+        nonmutating set { field.cursor = newValue }
+    }
     @State private var picking = false
     @State private var library = false
     @State private var camera = false
@@ -80,14 +83,15 @@ struct Composer: View {
     private var draftID: String? { draftAt.map { "\($0.computer)\n\($0.key)" } }
 
     private var running: Bool { chatId.map { connection.running($0, rootId: rootId) } ?? false }
-    private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var empty: Bool { text.isEmpty && photos.isEmpty && computerShots.isEmpty }
-
-    /// Screenshots the computer's composer has in this draft; they go with it from there.
-    private var computerShots: [Int] {
-        guard let at = draftAt, (connection.overview?.bridge ?? 1) >= Bridge.drafts else { return [] }
-        return connection.drafts.shared(at.computer, at.key)?.extras?.screenshots ?? []
+    /// What's typed. The body reads only `field`'s summaries of it, never this.
+    private var draft: String {
+        get { field.text }
+        nonmutating set { field.text = newValue }
     }
+    private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var empty: Bool { field.blank && photos.isEmpty && computerShots.isEmpty }
+
+    private var computerShots: [Int] { connection.computerShots(draftAt) }
 
     /// The send as it'd go now, for telling a retry of the one that failed from a new one.
     private func attempt(steer: Bool, sendAt: Int64?) -> Attempt {
@@ -131,17 +135,18 @@ struct Composer: View {
                 if let at = draftAt {
                     DraftNotes(computer: at.computer, key: at.key)
                 }
-                if !photos.isEmpty || loadingPhotos > 0 || !computerShots.isEmpty {
-                    PhotoStrip(photos: photos, loading: loadingPhotos, computerShots: computerShots) { id in
-                        photos.removeAll { $0.id == id }
-                    }
-                    .padding(.top, 4)
+                ComposerPhotos(photos: photos, loading: loadingPhotos, draftAt: draftAt) { id in
+                    photos.removeAll { $0.id == id }
                 }
-                TextField(running ? "Queue a message" : placeholder, text: $draft, selection: $cursor, axis: .vertical)
-                    .lineLimit(1...8)
-                    .focused(focused)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 6)
+                ComposerField(
+                    field: field, prompt: running ? "Queue a message" : placeholder, focused: focused
+                ) { now in
+                    if let at = draftAt, draftLoaded == draftID {
+                        connection.drafts.editText(at.computer, at.key, now, typing: true)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 6)
                 controls
             }
             .padding(.horizontal, 12)
@@ -164,17 +169,20 @@ struct Composer: View {
             CameraPicker { add($0, name: "photo-\(photos.count + loadingPhotos + 1).jpg") }
                 .ignoresSafeArea()
         }
-        .alert(switchTitle, isPresented: Binding(get: { switching != nil }, set: { if !$0 { switching = nil } })) {
-            Button("Switch to \(agentName(incoming))") {
+        // Named only while it's up: the names read what's typed, and SwiftUI builds an alert's
+        // buttons with every update, so naming them always ran the composer again on each letter.
+        .alert(
+            switchNames?.title ?? "", isPresented: Binding(get: { switching != nil }, set: { if !$0 { switching = nil } }),
+            presenting: switchNames
+        ) { names in
+            Button("Switch to \(names.next)") {
                 if let pending = switching { submit(steer: pending.steer, sendAt: pending.sendAt, confirmed: true) }
             }
-            Button("Keep \(agentName(holder ?? ""))", role: .cancel) {}
-        } message: {
-            let from = agentName(holder ?? "")
-            let next = agentName(incoming)
+            Button("Keep \(names.from)", role: .cancel) {}
+        } message: { names in
             Text(
-                "\(from) has been working in this thread. \(next) cannot see its session, tool results, or the files it read.\n\n"
-                    + "\(from) will write a handoff note first. \(next) continues from that note and the recent messages, so expect some context to be lost."
+                "\(names.from) has been working in this thread. \(names.next) cannot see its session, tool results, or the files it read.\n\n"
+                    + "\(names.from) will write a handoff note first. \(names.next) continues from that note and the recent messages, so expect some context to be lost."
             )
         }
         // Background only: the microphone prompt, Control Center or a call banner leave it
@@ -193,9 +201,6 @@ struct Composer: View {
         }
         .onChange(of: photos.map(\.id)) {
             if let id = photosLoaded { UnsentPhotos.keep(photos, for: id) }
-        }
-        .onChange(of: draft) { _, now in
-            if let at = draftAt, draftLoaded == draftID { connection.drafts.editText(at.computer, at.key, now) }
         }
         // Changed on the computer or another phone: the field takes it.
         .onChange(of: draftAt.map { connection.drafts.changes($0.computer, $0.key) }) {
@@ -286,7 +291,7 @@ struct Composer: View {
             .accessibilityLabel("Attach a photo")
             model
             Spacer(minLength: 0)
-            if draft.isEmpty && dictation.phase == .idle {
+            if field.isEmpty && dictation.phase == .idle {
                 Button {
                     draft = "/"
                     focused.wrappedValue = true
@@ -417,7 +422,12 @@ struct Composer: View {
     /// Who the draft goes to: the picked agent, or the one it @mentions.
     private var incoming: String { settings.map { sendRecipient(text, picked: $0.provider) } ?? "" }
 
-    private var switchTitle: String { "Switch to \(agentName(incoming))?" }
+    /// The agents a "Switch to …?" names, while one is asked.
+    private var switchNames: SwitchNames? {
+        guard switching != nil else { return nil }
+        let next = agentName(incoming)
+        return SwitchNames(title: "Switch to \(next)?", from: agentName(holder ?? ""), next: next)
+    }
 
     private func submit(steer: Bool = false, sendAt: Int64? = nil, confirmed: Bool = false) {
         if !confirmed, startsWithCommand(text), !command(text) { return }
@@ -478,16 +488,13 @@ struct Composer: View {
     }
 
     private var menuItems: [CommandMenuItem]? {
-        guard menuDismissed != draft, let provider = settings?.provider else { return nil }
-        return commandItems(draft, provider: provider, commands: agentCommands, hidden: [])
+        guard let typed = field.menuText, menuDismissed != typed, let provider = settings?.provider else { return nil }
+        return commandItems(typed, provider: provider, commands: agentCommands, hidden: [])
     }
 
     /// Which agent's commands the menu wants, while one may open.
     private var commandsWanted: String? {
-        guard let projectId, let provider = settings?.provider,
-            draft.range(of: "^\\s*[/$]", options: .regularExpression) != nil
-                || draft.range(of: "\\s\\$\\S*$", options: .regularExpression) != nil
-        else { return nil }
+        guard let projectId, let provider = settings?.provider, field.wantsCommands else { return nil }
         return "\(projectId):\(provider)"
     }
 
@@ -682,6 +689,39 @@ struct Composer: View {
 
 /// The desktop's .composer-stop red, the same in light and dark.
 private let stopRed = Color(red: 0xED / 255, green: 0x39 / 255, blue: 0x49 / 255)
+
+/// The photos going with the message, then the screenshots the computer's composer holds in
+/// this draft. A view of its own: the computer's copy of the draft changes as typing syncs, and
+/// read in the composer it ran the whole composer again each time.
+private struct ComposerPhotos: View {
+    let photos: [PickedPhoto]
+    let loading: Int
+    let draftAt: (computer: String, key: String)?
+    let remove: (PickedPhoto.ID) -> Void
+    @Environment(Connection.self) private var connection
+
+    var body: some View {
+        let shots = connection.computerShots(draftAt)
+        if !photos.isEmpty || loading > 0 || !shots.isEmpty {
+            PhotoStrip(photos: photos, loading: loading, computerShots: shots, remove: remove)
+                .padding(.top, 4)
+        }
+    }
+}
+
+extension Connection {
+    /// Screenshots the computer's composer has in this draft; they go with it from there.
+    fileprivate func computerShots(_ at: (computer: String, key: String)?) -> [Int] {
+        guard let at, (overview?.bridge ?? 1) >= Bridge.drafts else { return [] }
+        return drafts.shared(at.computer, at.key)?.extras?.screenshots ?? []
+    }
+}
+
+private struct SwitchNames {
+    let title: String
+    let from: String
+    let next: String
+}
 
 /// A send as it went: where, what, on which settings, and its id.
 private struct Attempt {
