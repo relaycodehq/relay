@@ -434,8 +434,8 @@ export function loadAppearance(): Appearance {
     mode,
     light: parseChoice("light", saved.light),
     dark: parseChoice("dark", saved.dark),
-    glass: saved.glass === true,
-    glassChat: saved.glassChat === true,
+    glass: saved.glass !== false,
+    glassChat: saved.glassChat !== false,
     glassFrost: parseFrost(saved.glassFrost, GLASS_FROST),
     glassChatFrost: parseFrost(saved.glassChatFrost, GLASS_CHAT_FROST),
   };

@@ -43,7 +43,7 @@ export function desktopHandlers(ctx: ApiContext) {
           app.dock?.setIcon(icon);
         // Remembered, so the next windows, and the next launch, start clear.
         window.clear = appearance.glass;
-        if ((store.get().glass === true) !== appearance.glass)
+        if ((store.get().glass !== false) !== appearance.glass)
           void store
             .update((s) => {
               s.glass = appearance.glass;

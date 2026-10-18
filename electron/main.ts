@@ -679,7 +679,7 @@ app
               console.warn("Could not save the window's place:", e),
             ),
       });
-    window.clear = loaded.get().glass === true;
+    window.clear = loaded.get().glass !== false;
     window.create();
     window.win?.webContents.once("did-finish-load", windowLoaded);
     window.threads.restore({
