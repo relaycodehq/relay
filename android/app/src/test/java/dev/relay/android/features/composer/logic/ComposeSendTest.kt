@@ -54,6 +54,14 @@ class ComposeSendTest {
         assertNull(sent.contextWindow)
     }
 
+    @Test fun `a failed send taken back to edit brings back who it was for`() {
+        val other = sentWith(buildSend(claude, "@codex look"))!!
+        assertEquals("codex", other.provider)
+        assertEquals(byDefault, other.choice)
+        assertEquals("opus", sentWith(buildSend(claude, "look"))!!.choice.model)
+        assertNull(sentWith(buildSend(claude.copy(to = "message"), "remember this")))
+    }
+
     @Test fun `goes ahead with a plan on the planner's own model`() {
         val (send, next) = planGoAhead(claude.copy(interactionMode = "plan"), "claude")
         assertEquals("@claude Implement the plan from your previous response.", send.body)

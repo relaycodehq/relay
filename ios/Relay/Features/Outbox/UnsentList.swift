@@ -11,7 +11,7 @@ struct UnsentList: View {
     let chatId: String
     var rootId: String?
     /// Into the composer; answers how to undo that.
-    let restore: (_ text: String, _ images: [PastedImage]) throws -> () -> Void
+    let restore: (_ text: String, _ images: [PastedImage], _ settings: ResumeSettings?) throws -> () -> Void
     @Environment(Connection.self) private var connection
     @Environment(\.colors) private var colors
     @State private var busy: Set<String> = []
@@ -103,7 +103,8 @@ struct UnsentList: View {
                 return
             }
         }
-        _ = try restore((o.send.side == true ? "/btw " : "") + withoutAgentMention(o.send.body), o.send.images ?? [])
+        _ = try restore(
+            (o.send.side == true ? "/btw " : "") + withoutAgentMention(o.send.body), o.send.images ?? [], o.send.sentWith)
         connection.outbox.drop(o.id)
     }
 

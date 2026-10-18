@@ -143,7 +143,7 @@ struct ThreadView: View {
                         if let planner = plan {
                             ImplementPlan(chatId: chatId, rootId: rootId, planner: planner, settings: settings)
                         }
-                        UnsentList(chatId: chatId, rootId: rootId, restore: { [composer] in try composer.restore($0, $1) })
+                        UnsentList(chatId: chatId, rootId: rootId, restore: restoreUnsent)
                         Composer(
                             chatId: chatId, rootId: rootId, projectId: projectId,
                             draftKey: rootId.map { "\(chatId):\($0)" } ?? chatId, settings: settings, placeholder: rootId == nil ? "Message" : "Reply",
@@ -218,6 +218,13 @@ struct ThreadView: View {
         case "openpr": try await openPullRequest(thread, connection)
         default: throw PairingError("Open that one on your computer for now.")
         }
+    }
+
+    /// A failed send back in the composer, with the agent it was for back in the picker.
+    private func restoreUnsent(_ text: String, _ images: [PastedImage], _ settings: ResumeSettings?) throws -> () -> Void {
+        let undo = try composer.restore(text, images)
+        if let settings { picked = settings }
+        return undo
     }
 
     private func takeBack(_ item: RemoteQueued) async throws {

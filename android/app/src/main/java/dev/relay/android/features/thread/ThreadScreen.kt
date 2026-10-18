@@ -40,6 +40,7 @@ import dev.relay.android.features.composer.ComposerState
 import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Returned
 import dev.relay.android.features.composer.logic.remotePlanGoAhead
+import dev.relay.android.features.composer.logic.sentWith
 import dev.relay.android.remote.drafts.Sends
 import dev.relay.android.remote.model.PastedImage
 import dev.relay.android.remote.model.RemoteJson
@@ -352,6 +353,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
                     } else {
                         composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty()))
                         outbox.drop(o.send.id)
+                        sentWith(o.send)?.let { composer.setSettings(it) }
                     }
                 },
                 onUseProjectFolder = if (bridge >= Bridge.WORKSPACE) { o ->

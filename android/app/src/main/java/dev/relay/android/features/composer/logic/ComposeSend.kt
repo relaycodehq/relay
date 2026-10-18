@@ -17,6 +17,12 @@ fun draftRecipient(text: String, picked: String) = agentMention(text)?.provider 
 /** Who a sent message went to; "message" is a note no agent answers. */
 fun recipient(send: ProjectChatSend) = send.to ?: agentMention(send.body)?.provider ?: "message"
 
+/** The agent and model it went with, back in the picker when it's taken back to edit (the text loses its mention); null for a note. */
+fun sentWith(send: ProjectChatSend): ResumeSettings? =
+    recipient(send).takeIf { it != "message" }?.let {
+        ResumeSettings(it, send.choice, send.contextWindow, send.runtimeMode, send.interactionMode)
+    }
+
 /** What a composer sends with, once the agent's model is picked. */
 data class SendSettings(
     val to: String,

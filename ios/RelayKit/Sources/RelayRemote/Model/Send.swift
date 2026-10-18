@@ -53,6 +53,18 @@ public struct ProjectChatSend: Codable, Sendable, Equatable {
     }
 }
 
+public extension ProjectChatSend {
+    /// The agent and model it went with, back in the picker when it's taken back to edit
+    /// (the text loses its mention); nil for a note.
+    var sentWith: ResumeSettings? {
+        let to = to ?? agentMention(body) ?? "message"
+        guard to != "message" else { return nil }
+        return ResumeSettings(
+            provider: to, choice: choice, contextWindow: contextWindow, runtimeMode: runtimeMode,
+            interactionMode: interactionMode)
+    }
+}
+
 /// `pastedImageSchema`: a photo sent along with a message.
 public struct PastedImage: Codable, Sendable, Equatable, Hashable {
     public var name: String

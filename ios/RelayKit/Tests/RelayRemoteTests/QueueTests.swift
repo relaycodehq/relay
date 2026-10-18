@@ -31,6 +31,18 @@ private let settings = #"{"provider":"claude","choice":{"model":"opus"},"runtime
     #expect(back.settings == nil)
 }
 
+@Test func aFailedSendTakenBackToEditBringsBackWhoItWasFor() throws {
+    let picked = ResumeSettings(
+        provider: "claude", choice: ModelChoice(model: "opus"), runtimeMode: "full-access", interactionMode: "default")
+    let other = try #require(ProjectChatSend(body: "@codex look", settings: picked).sentWith)
+    #expect(other.provider == "codex")
+    #expect(other.choice.model == "")
+    #expect(ProjectChatSend(body: "look", settings: picked).sentWith?.choice.model == "opus")
+    var note = ProjectChatSend(body: "remember this", settings: picked)
+    note.to = "message"
+    #expect(note.sentWith == nil)
+}
+
 @Test func saysWhereAQueuedMessageStands() throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Europe/Prague")!
