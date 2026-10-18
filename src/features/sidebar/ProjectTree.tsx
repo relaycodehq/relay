@@ -330,17 +330,6 @@ function ProjectSection({
               onClick={() => folds.setOpen(p.id, !isOpen)}
             >
               <span>{p.name}</span>
-              {busy && !isOpen && (
-                <span className="sb-status running" title="Working">
-                  <Spinner size={11} steady />
-                </span>
-              )}
-              <ChevronRight
-                size={11}
-                className="sb-project-chevron"
-                data-open={isOpen || undefined}
-                aria-hidden
-              />
             </button>
             <div className="sb-row-actions">
               <Menu.Root>
@@ -365,6 +354,25 @@ function ProjectSection({
                 <Plus size={14} />
               </IconButton>
             </div>
+            {/* After the actions, so the spinner and chevron stay the row's last
+                items. The name button above is the accessible toggle. */}
+            <button
+              className="sb-project-chevron-button"
+              tabIndex={-1}
+              aria-hidden
+              onClick={() => folds.setOpen(p.id, !isOpen)}
+            >
+              {busy && !isOpen && (
+                <span className="sb-status running" title="Working">
+                  <Spinner size={11} steady />
+                </span>
+              )}
+              <ChevronRight
+                size={11}
+                className="sb-project-chevron"
+                data-open={isOpen || undefined}
+              />
+            </button>
           </ContextMenu.Trigger>
           <ProjectMenu
             project={p}

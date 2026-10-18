@@ -349,6 +349,12 @@
 .sb-project-row:has(.sb-row-actions [data-popup-open]) {
   background: var(--hover);
 }
+/* The row carries the hover tint; the global button:hover would stack a second one. */
+.sb .sb-project-expand:hover,
+.sb .sb-project-chevron-button:hover,
+.sb .sb-project-name:hover {
+  background: transparent;
+}
 .sb .sb-project-expand {
   display: grid;
   place-items: center;
@@ -395,14 +401,22 @@
     transform 0.15s,
     opacity 0.12s;
 }
-/* At the row's end, so collapsed projects' chevrons line up whatever their names. */
-.sb .sb-project-name > span:first-child + * {
-  margin-left: auto;
+.sb .sb-project-chevron-button {
+  display: grid;
+  place-items: center;
+  grid-auto-flow: column;
+  gap: 6px;
+  flex: none;
+  min-width: 20px;
+  height: 32px;
+}
+.sb .sb-project-chevron-button > .sb-project-chevron {
+  margin-left: 0;
 }
 .sb .sb-project-chevron:hover {
   color: var(--text);
 }
-.sb .sb-project-name:hover > .sb-project-chevron,
+.sb .sb-project-row:hover .sb-project-chevron,
 .sb .sb-section-toggle:hover > .sb-project-chevron,
 .sb .sb-project-chevron:not([data-open]) {
   opacity: 1;
