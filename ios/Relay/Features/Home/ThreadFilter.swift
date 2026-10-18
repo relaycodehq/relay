@@ -8,6 +8,11 @@ struct ThreadFilter: Codable, Equatable {
 
     var count: Int { projects.count + agents.count }
 
+    /// As kept in AppStorage; nothing kept, or what can't be read, filters nothing.
+    static func decoded(_ data: Data) -> ThreadFilter {
+        (try? JSONDecoder().decode(ThreadFilter.self, from: data)) ?? ThreadFilter()
+    }
+
     func keeps(_ chat: RemoteChatSummary) -> Bool {
         (projects.isEmpty || projects.contains(chat.projectId))
             && (agents.isEmpty || agents.contains(chat.provider ?? ""))
@@ -56,7 +61,7 @@ struct FilterMenu: View {
             if agents.count > 1 {
                 Section("Agents") {
                     ForEach(agents, id: \.self) { agent in
-                        row(agentName(agent), ticked(\.agents, [agent])) {
+                        row(agentName(agent), ticked(\.agents, [agent]), mark: "agent \(agent) \(colors.foreground)") {
                             ProviderMark(provider: agent, size: 18).foregroundStyle(colors.foreground)
                         }
                     }
@@ -64,7 +69,10 @@ struct FilterMenu: View {
             }
             Section("Projects") {
                 ForEach(projects) { project in
-                    row(project.scratch == true ? "Scratchpad" : project.name, ticked(\.projects, project.scratch == true ? scratch : [project.id])) {
+                    row(
+                        project.scratch == true ? "Scratchpad" : project.name,
+                        ticked(\.projects, project.scratch == true ? scratch : [project.id]), mark: projectMark(project)
+                    ) {
                         ProjectIcon(project: project, size: 18).environment(connection).environment(icons).environment(\.colors, colors)
                     }
                 }
@@ -84,21 +92,38 @@ struct FilterMenu: View {
 
     /// A row that ticks on and off, its tick after the name: a menu's own checkmark takes a column
     /// before every row once one is on, which shoved the whole list over at the first tick.
-    private func row(_ name: String, _ on: Binding<Bool>, @ViewBuilder mark: () -> some View) -> some View {
+    private func row(_ name: String, _ on: Binding<Bool>, mark key: String, @ViewBuilder mark: () -> some View) -> some View {
         Button { on.wrappedValue.toggle() } label: {
             Label {
                 Text(on.wrappedValue ? "\(name)  ✓" : name)
-            } icon: { icon(mark()) }
+            } icon: { icon(key, mark) }
         }
         .accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
         // Several can be ticked in one go, as on the desktop.
         .menuActionDismissBehavior(.disabled)
     }
 
-    /// A menu row shows only an Image, so a mark drawn as a view is rendered into one.
-    private func icon(_ view: some View) -> Image {
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = scale
-        return renderer.uiImage.map { Image(uiImage: $0).renderingMode(.original) } ?? Image(systemName: "circle")
+    /// What a project's mark is drawn from: its icon file, or the folder or Scratchpad symbol.
+    private func projectMark(_ project: RemoteProject) -> String {
+        let file = project.scratch == true ? "scratch" : projectIconPath(icons.index, computer: connection.active, projectId: project.id) ?? "folder"
+        return "project \(file) \(colors.muted)"
     }
+
+    /// A menu row shows only an Image, so a mark drawn as a view is rendered into one, once per
+    /// look: the menu is built again with every change to the threads, and a push or pop of the
+    /// tab, and drawing every project's mark each time took ~30ms.
+    private func icon(_ key: String, _ view: () -> some View) -> Image {
+        let key = "\(key) \(scale)"
+        if let drawn = MenuMarks.drawn[key] { return drawn }
+        let renderer = ImageRenderer(content: view())
+        renderer.scale = scale
+        guard let image = renderer.uiImage.map({ Image(uiImage: $0).renderingMode(.original) }) else { return Image(systemName: "circle") }
+        if MenuMarks.drawn.count > 300 { MenuMarks.drawn.removeAll() }
+        MenuMarks.drawn[key] = image
+        return image
+    }
+}
+
+private enum MenuMarks {
+    static var drawn: [String: Image] = [:]
 }

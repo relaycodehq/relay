@@ -77,18 +77,15 @@ struct RootView: View {
             })
     }
 
-    /// The thread on screen, which needs no telling about.
-    private var openThread: String? {
-        switch stacks[tab]?.routes.last {
-        case .thread(let id)?, .replies(let id, _)?: id
-        default: nil
+    /// The thread on screen, which needs no telling about. Read by the notices alone: read here,
+    /// every push and pop ran this view again, and every tab under it.
+    private var openThread: () -> String? {
+        { [stacks, tab] in
+            switch stacks[tab]?.routes.last {
+            case .thread(let id)?, .replies(let id, _)?: id
+            default: nil
+            }
         }
-    }
-
-    private var filter: Binding<ThreadFilter> {
-        Binding(
-            get: { (try? JSONDecoder().decode(ThreadFilter.self, from: filterData)) ?? ThreadFilter() },
-            set: { filterData = (try? JSONEncoder().encode($0)) ?? Data() })
     }
 
     var body: some View {
@@ -97,7 +94,7 @@ struct RootView: View {
             // bar's search field only then. Each stack drops the tab bar as it pushes.
             TabView(selection: picked) {
                 Tab(value: HomeTab.threads) {
-                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(filter: filter) }
+                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome() }
                 } label: {
                     Label { Text("Threads") } icon: { TabIcon.threads.image(picked: tab == .threads, accent: colors.accent, ink: colors.foreground) }
                 }
@@ -121,11 +118,11 @@ struct RootView: View {
             .onChange(of: tab) { from, to in switched = TabSwitch(from: from, to: to) }
             .environment(\.tabSwitch, switched)
             .hotReloads()
-            .environment(\.threadFilter, filter.wrappedValue)
+            .environment(\.threadFilter, ThreadFilter.decoded(filterData))
             .overlay(alignment: .top) {
                 NeedsYou(stack: stacks[tab]!, atList: tab == .threads) { stacks[tab]?.routes.append(.thread($0)) }
             }
-            .threadNotices(openId: openThread, hidden: tab == .threads && stacks[.threads]!.routes.isEmpty) {
+            .threadNotices(openId: openThread, hidden: { [stacks, tab] in tab == .threads && stacks[.threads]!.routes.isEmpty }) {
                 stacks[tab]?.routes.append(.thread($0))
             }
             // Whatever was open belongs to the computer being left.
@@ -155,15 +152,23 @@ struct RootView: View {
 /// The Threads tab's root, holding what's searched: held above the tabs, every letter typed
 /// redrew them all.
 private struct ThreadsHome: View {
-    @Binding var filter: ThreadFilter
+    /// Its own rather than a binding from above, which is new each time and ran this again with
+    /// every push onto the tab.
+    @AppStorage("relay.thread-filter") private var filterData = Data()
     @State private var query = ""
     @State private var searching = false
     @Environment(Connection.self) private var connection
 
+    private var filter: Binding<ThreadFilter> {
+        Binding(
+            get: { ThreadFilter.decoded(filterData) },
+            set: { filterData = (try? JSONEncoder().encode($0)) ?? Data() })
+    }
+
     var body: some View {
         HomeView(query: query).tabChrome(.threads) {
             ToolbarItem(placement: .primaryAction) {
-                FilterMenu(filter: $filter).badge(connection.current(filter).count)
+                FilterMenu(filter: filter).badge(connection.current(filter.wrappedValue).count)
             }
         }
         // The system's own search: a button in the bar that opens into its field.

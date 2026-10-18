@@ -21,9 +21,12 @@ public struct SiteAddress: Sendable, Hashable {
 public enum LocalUrls {
     /// An `http://localhost…` link, 127.0.0.1, [::1] and 0.0.0.0 alike; https can't pass a dev certificate.
     public static func link(_ href: String) -> SiteAddress? {
+        let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Every code span in an answer is asked, and the regex is slow: most fail here first.
+        guard href.prefix(7).lowercased() == "http://" else { return nil }
         let local = #/http://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::(\d{1,5}))?([/?#]\S*)?/#
             .ignoresCase().asciiOnlyCharacterClasses()
-        guard let m = try? local.wholeMatch(in: href.trimmingCharacters(in: .whitespacesAndNewlines)),
+        guard let m = try? local.wholeMatch(in: href),
             let port = Int(m.output.2 ?? "80"), (1...65535).contains(port)
         else { return nil }
         let rest = String(m.output.3 ?? "")

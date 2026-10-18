@@ -121,13 +121,23 @@ private struct TextViewRepresentable: UIViewRepresentable {
     }
 
     /// As wide as the text needs up to what's offered, as tall as it wraps to.
+    /// Kept per width until the text changes: the thread's layout asks again on every pass, and
+    /// measuring every paragraph each time was much of opening a long thread.
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? .greatestFiniteMagnitude
+        let coordinator = context.coordinator
+        if coordinator.measured !== text, coordinator.measured?.isEqual(to: text) != true {
+            coordinator.measured = text
+            coordinator.sizes = [:]
+        }
+        if let known = coordinator.sizes[width] { return known }
         let fits = text.boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
         // A point to spare, so a measured width never wraps its last word.
-        return CGSize(width: min(width, ceil(fits.width) + 1), height: ceil(fits.height))
+        let size = CGSize(width: min(width, ceil(fits.width) + 1), height: ceil(fits.height))
+        coordinator.sizes[width] = size
+        return size
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -135,6 +145,8 @@ private struct TextViewRepresentable: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var openURL: OpenURLAction?
         var openPath: OpenPath?
+        var measured: NSAttributedString?
+        var sizes: [CGFloat: CGSize] = [:]
 
         func textViewDidChangeSelection(_ view: UITextView) {
             if view.selectedRange.length > 0 { TextSelection.began(in: view) }

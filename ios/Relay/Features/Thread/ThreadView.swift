@@ -53,6 +53,10 @@ struct ThreadView: View {
     @State private var leavingUnread = false
     @State private var notes = ThreadNotesEntry()
     @State private var viewing: Viewing?
+    /// Off while the screen is being pushed: UIKit lays out what it pushes before the slide
+    /// starts, and a long thread's messages held it back ~300ms. Made a moment later, they fill
+    /// in while the slide plays.
+    @State private var entered = false
     @Namespace private var pictures
 
     /// A thread with nothing sent yet goes with what a new thread would.
@@ -65,7 +69,9 @@ struct ThreadView: View {
     var body: some View {
         Group {
             let shown = self.shown
-            if thread != nil || !shown.isEmpty {
+            if !entered {
+                Color.clear
+            } else if thread != nil || !shown.isEmpty {
                 let counts = rootId == nil ? replyCounts(thread?.messages ?? []) : [:]
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
@@ -190,6 +196,10 @@ struct ThreadView: View {
             guard let until, until > nowMs() else { return }
             try? await Task.sleep(for: .milliseconds(until + 1 - nowMs()))
             if !Task.isCancelled { connection.markSeen(chatId, updated: updated, snoozedUntil: until) }
+        }
+        .task {
+            await Task.yield()
+            entered = true
         }
         // A queued reply taken back on the main screen arrives here, once the composer is up.
         .task(id: thread != nil) {

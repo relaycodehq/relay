@@ -42,17 +42,19 @@ struct RouteStack<Root: View>: View {
     @Environment(Connection.self) private var connection
     @State private var name = NameSpot()
 
+    // Nothing here reads the routes themselves: a push would run this again, and the root's
+    // screen with it, under the screen being pushed.
     var body: some View {
         NavigationStack(path: $stack.routes) {
             root { stack.routes.append($0) }
-                .background(TabBarDrop(depth: stack.routes.count))
+                .background(StackDrop(stack: stack))
                 .navigationDestination(for: Route.self) { destination($0).overTabBar().connectionLine() }
         }
         .environment(name)
         // The bar takes no touches below itself, where the tab title's computer name hangs, so
         // one menu sits over the title and the name both, growing from the title either way.
         .overlay(alignment: .topLeading) {
-            if stack.routes.isEmpty { NameMenu(name: name) }
+            NameMenu(name: name, stack: stack)
         }
         .environment(\.navigate) { stack.routes.append($0) }
         // A link to the computer's own localhost opens in Relay's browser, through the tunnel.
@@ -93,9 +95,10 @@ struct RouteStack<Root: View>: View {
 /// body, each move rebuilt the tab's whole screen, the thread list's sorting and all.
 private struct NameMenu: View {
     let name: NameSpot
+    let stack: StackPath
 
     var body: some View {
-        if let title = name.title, let at = name.frame.map({ $0.union(title) }) {
+        if stack.routes.isEmpty, let title = name.title, let at = name.frame.map({ $0.union(title) }) {
             GeometryReader { space in
                 let origin = space.frame(in: .global).origin
                 ComputerMenu { Color.clear.frame(width: at.width + 16, height: at.height + 14).contentShape(.rect) }
@@ -104,4 +107,11 @@ private struct NameMenu: View {
             .accessibilityHidden(true)
         }
     }
+}
+
+/// The tab bar dropping as the stack pushes, following its depth on its own.
+private struct StackDrop: View {
+    let stack: StackPath
+
+    var body: some View { TabBarDrop(depth: stack.routes.count) }
 }

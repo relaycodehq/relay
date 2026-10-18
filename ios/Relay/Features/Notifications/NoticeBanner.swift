@@ -8,20 +8,25 @@ extension View {
     /// Another thread's news over the top of the screen, gone after a while (Android's NeedsYou,
     /// for finished and failed answers too). Hidden where the list says so already, and never
     /// about the thread on screen.
-    func threadNotices(openId: String?, hidden: Bool, open: @escaping (String) -> Void) -> some View {
+    /// `openId` and `hidden` are read here rather than by the caller, so the stacks they follow
+    /// run only this again as they push.
+    func threadNotices(
+        openId: @escaping () -> String?, hidden: @escaping () -> Bool, open: @escaping (String) -> Void
+    ) -> some View {
         modifier(NoticeHost(openId: openId, hidden: hidden, open: open))
     }
 }
 
 private struct NoticeHost: ViewModifier {
-    let openId: String?
-    let hidden: Bool
+    let openId: () -> String?
+    let hidden: () -> Bool
     let open: (String) -> Void
     @Environment(Connection.self) private var connection
 
     func body(content: Content) -> some View {
         let notices = connection.notices
         let notice = notices.queue.first
+        let hidden = self.hidden(), openId = self.openId()
         content
             .overlay(alignment: .top) {
                 if let notice, !hidden, notice.news.chatId != openId {

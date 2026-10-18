@@ -10,7 +10,7 @@ struct MarkdownView: View {
     var secondary = false
 
     init(_ text: String, small: Bool = false) {
-        blocks = markdownBlocks(text)
+        blocks = ParsedMarkdown.blocks(text)
         self.small = small
         secondary = small
     }
@@ -29,6 +29,21 @@ struct MarkdownView: View {
         }
         .font(small ? .subheadline : .body)
         .foregroundStyle(secondary ? .secondary : .primary)
+    }
+}
+
+/// Answers parsed once rather than each time their message is drawn: a thread's messages are
+/// made again on every change to it, and parsing them was a good part of opening one.
+private enum ParsedMarkdown {
+    private static var parsed: [String: [MdBlock]] = [:]
+
+    static func blocks(_ text: String) -> [MdBlock] {
+        if let known = parsed[text] { return known }
+        let blocks = markdownBlocks(text)
+        // Streamed answers leave a copy per update behind; a thread's worth is plenty to keep.
+        if parsed.count > 400 { parsed.removeAll(keepingCapacity: true) }
+        parsed[text] = blocks
+        return blocks
     }
 }
 
