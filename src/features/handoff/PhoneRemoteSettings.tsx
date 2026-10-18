@@ -35,8 +35,10 @@ export function PhoneRemoteSettings() {
     // Notices Tailscale coming up and phones coming and going while Settings is open.
     refetchInterval: 3000,
   });
-  // `before`: phones paired when the code was made; one more ends the code's view.
-  const [pairing, setPairing] = useState<PhonePairing & { before: number }>();
+  // `before`: phones paired when the code was made. A new one used the code up.
+  const [pairing, setPairing] = useState<
+    PhonePairing & { before: ReadonlySet<string> }
+  >();
   const [busy, setBusy] = useState(false);
   // The switch flips at once; the state catches up when the server has.
   const [switching, setSwitching] = useState<boolean>();
@@ -50,8 +52,12 @@ export function PhoneRemoteSettings() {
   // Computers that paired to hand threads over have their own list, under Computers.
   const phones = data?.devices.filter((d) => d.kind !== "computer") ?? [];
   const paired = phones.length;
-  const showing =
-    pairing && pairing.expiresAt > now && paired <= pairing.before;
+  // Gone for good, not hidden, so removing a phone can't bring a used code back.
+  const used = pairing && phones.some((d) => !pairing.before.has(d.id));
+  useEffect(() => {
+    if (used) setPairing(undefined);
+  }, [used]);
+  const showing = pairing && !used && pairing.expiresAt > now;
   useEffect(() => setAnother(false), [paired]);
   const run = (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -169,7 +175,7 @@ export function PhoneRemoteSettings() {
                     run(async () =>
                       setPairing({
                         ...(await api.phonePairing()),
-                        before: paired,
+                        before: new Set(phones.map((d) => d.id)),
                       }),
                     )
                   }
