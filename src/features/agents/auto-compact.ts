@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defaultAutoCompact } from "../../../shared/context-usage";
 import type { PromptCache } from "../../../shared/projects";
 
@@ -11,7 +11,25 @@ export const autoCompactQuery = {
 
 /** When Relay compacts big conversations unasked; the defaults until known. */
 export const useAutoCompact = () =>
-  useQuery(autoCompactQuery).data ?? defaultAutoCompact;
+  useAutoCompactSaved() ?? defaultAutoCompact;
+
+/**
+ * As saved, undefined until known; kept current when another window saves
+ * it, since a window doesn't refetch when it's focused.
+ */
+export function useAutoCompactSaved() {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      window.relay.onAutoCompact((value) => {
+        // A change still saving here is newer than an earlier one told back.
+        if (!qc.isMutating({ mutationKey: autoCompactQuery.queryKey }))
+          qc.setQueryData(autoCompactQuery.queryKey, value);
+      }),
+    [qc],
+  );
+  return useQuery(autoCompactQuery).data;
+}
 
 /** Whether the prompt cache has expired, looked at again the moment it does. */
 export function useCacheExpired(cache: PromptCache | undefined) {

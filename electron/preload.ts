@@ -456,6 +456,7 @@ contextBridge.exposeInMainWorld("relay", {
   onBugReport: on("relay:bug-report"),
   onWorkingTree: on("relay:working-tree"),
   onElsewhere: on("relay:elsewhere"),
+  onAutoCompact: on("relay:auto-compact"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

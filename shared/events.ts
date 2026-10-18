@@ -49,4 +49,6 @@ export interface RelayEvents {
   "relay:working-tree": string;
   /** What this thread and those it started changed in other repositories may read differently. */
   "relay:elsewhere": string;
+  /** When Relay compacts unasked, saved in any window. */
+  "relay:auto-compact": import("./context-usage").AutoCompact;
 }

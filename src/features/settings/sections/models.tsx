@@ -3,6 +3,7 @@ import {
   isCliProvider,
   type AgentProvider,
 } from "../../../../shared/agents";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isUpdating } from "../../../../shared/agent-updates";
 import { accountProviders } from "../../../../shared/agent-accounts";
 import type { AISettings } from "../../../../shared/settings";
@@ -10,7 +11,10 @@ import {
   defaultAutoCompact,
   type AutoCompact,
 } from "../../../../shared/context-usage";
-import { autoCompactQuery } from "../../agents/auto-compact";
+import {
+  autoCompactQuery,
+  useAutoCompactSaved,
+} from "../../agents/auto-compact";
 import type { SettingEntry } from "../settings-search";
 import { useSaveAISettings } from "../../agents/useAISettings";
 import { AgentCards } from "../../updates/AgentCards";
@@ -293,12 +297,22 @@ function AgentSelect({ ai }: { ai: AISave }) {
 }
 
 function AutoCompactSwitch({ which }: { which: keyof AutoCompact }) {
-  const auto = useSavedSetting(
-    autoCompactQuery,
-    (value) => api.saveAutoCompact(value),
-    autoCompactQuery.queryKey,
-  );
-  const value = auto.value ?? defaultAutoCompact;
+  const qc = useQueryClient();
+  const saved = useAutoCompactSaved();
+  const { queryKey } = autoCompactQuery;
+  // The two switches save one object: each change goes over what the other
+  // just set, shown at once, and only the last answer back is kept.
+  const save = useMutation({
+    mutationKey: queryKey,
+    mutationFn: (value: AutoCompact) => api.saveAutoCompact(value),
+    onMutate: (value) => qc.setQueryData(queryKey, value),
+    onSuccess: (value) => {
+      if (qc.isMutating({ mutationKey: queryKey }) <= 1)
+        qc.setQueryData(queryKey, value);
+    },
+    onError: () => void qc.invalidateQueries({ queryKey }),
+  });
+  const value = saved ?? defaultAutoCompact;
   return (
     <>
       <Switch
@@ -308,10 +322,15 @@ function AutoCompactSwitch({ which }: { which: keyof AutoCompact }) {
             : "Send compacts a cold thread first"
         }
         checked={value[which]}
-        disabled={!auto.loaded || auto.saving}
-        onChange={(on) => auto.set({ ...value, [which]: on })}
+        disabled={saved === undefined}
+        onChange={(on) =>
+          save.mutate({
+            ...(qc.getQueryData<AutoCompact>(queryKey) ?? value),
+            [which]: on,
+          })
+        }
       />
-      {auto.error && <ErrorBox error={auto.error} />}
+      {save.error && <ErrorBox error={save.error} />}
     </>
   );
 }

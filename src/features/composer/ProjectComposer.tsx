@@ -26,7 +26,7 @@ import {
   useSendKey,
 } from "../../lib/send-key";
 import { mac } from "../../lib/mod-key";
-import { useAutoCompact } from "../agents/auto-compact";
+import { useAutoCompactSaved } from "../agents/auto-compact";
 import { formatTokens } from "../../../shared/tokens";
 import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
@@ -236,10 +236,13 @@ export function ProjectComposer({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const quick = useQuickSwitchHud(runs, to);
-  const autoCompact = useAutoCompact();
+  // The button by Send does the opposite of Settings, so it waits to know them.
+  const sendCompacts = useAutoCompactSaved()?.cold;
   // A command means what it says; the server sends it as is.
   const cold =
-    conversation.cold?.provider === to && !/^\s*\//.test(draft.text)
+    sendCompacts !== undefined &&
+    conversation.cold?.provider === to &&
+    !/^\s*\//.test(draft.text)
       ? conversation.cold
       : undefined;
   const settingCommands = useSettingCommands({
@@ -463,7 +466,7 @@ export function ProjectComposer({
             }
             if (cold && !running && altSends(e, sendKey)) {
               e.preventDefault();
-              sending.send(false, undefined, undefined, !autoCompact.cold);
+              sending.send(false, undefined, undefined, !sendCompacts);
               return;
             }
             const action = sendAction(e, sendKey, runningAction);
@@ -578,7 +581,7 @@ export function ProjectComposer({
                     className="composer-send-other"
                     disabled={sending.disabled}
                     title={`${
-                      autoCompact.cold
+                      sendCompacts
                         ? "Send without compacting"
                         : `Compact ${formatTokens(cold.tokens)} tokens, then send`
                     } · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)}`}
@@ -587,11 +590,11 @@ export function ProjectComposer({
                         false,
                         undefined,
                         undefined,
-                        !autoCompact.cold,
+                        !sendCompacts,
                       )
                     }
                   >
-                    {autoCompact.cold ? (
+                    {sendCompacts ? (
                       "Don't compact"
                     ) : (
                       <>
@@ -608,7 +611,7 @@ export function ProjectComposer({
                   <SendButton
                     disabled={sending.disabled}
                     compactsFirst={
-                      !!cold && !running && autoCompact.cold
+                      !!cold && !running && sendCompacts
                         ? cold.tokens
                         : undefined
                     }

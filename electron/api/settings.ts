@@ -248,7 +248,10 @@ export function settingsHandlers(ctx: ApiContext) {
         });
         // Threads that went idle while it was off plan theirs now.
         if (value.idle) ctx.projectChats.armIdleCompactions();
-        return store.get().autoCompact ?? defaultAutoCompact;
+        const saved = store.get().autoCompact ?? defaultAutoCompact;
+        // A thread's own window offers the opposite of it beside Send.
+        ctx.window.send("relay:auto-compact", saved);
+        return saved;
       },
     ),
     checkAgentVersions: () => agentUpdates.check(true),

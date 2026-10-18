@@ -660,6 +660,7 @@ export interface Api
   /** When Relay compacts big conversations unasked; see AutoCompact. */
   autoCompact(): Promise<AutoCompact>;
   saveAutoCompact(value: AutoCompact): Promise<AutoCompact>;
+  onAutoCompact(callback: (value: AutoCompact) => void): () => void;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
   /**
