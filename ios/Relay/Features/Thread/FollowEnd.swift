@@ -26,7 +26,7 @@ private struct FollowEnd: ViewModifier {
     let live: Bool
     /// The newest message's id.
     let last: String?
-    /// The newest message is one you sent.
+    /// The newest message is one sent from this phone.
     let mine: Bool
     let jump: MessageJump?
     @State private var position = ScrollPosition(edge: .bottom)
@@ -51,7 +51,8 @@ private struct FollowEnd: ViewModifier {
             }
             .onChange(of: last) {
                 if mine { following = true }
-                if following { position.scrollTo(edge: .bottom) }
+                // Not mid-flick: where the flick stops decides whether it follows.
+                if following && (mine || !touching) { position.scrollTo(edge: .bottom) }
             }
             .task(id: jump) {
                 guard let jump else { return }

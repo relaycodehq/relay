@@ -35,7 +35,8 @@ RELAY_PAIR_URL_FILE=/tmp/pair.txt swift test --filter LiveBridgeTests
 
 `--seed` gives that stand-in desktop sample threads that answer what the
 phone sends; the Simulator shares this computer's network, so
-`xcrun simctl openurl <sim> "$(cat /tmp/pair.txt)"` pairs it. Use a
+`xcrun simctl openurl <sim> "$(cat /tmp/pair.txt)"` pairs it. Writing a thread's
+title into `/tmp/pair.txt.send` sends into it as if typed on the desktop. Use a
 simulator of your own (`xcrun simctl create`), headless; Maestro drives it.
 Maestro's iOS driver listens on localhost:22087 for every simulator, so with
 several running its taps land on whichever holds the port: drive parallel

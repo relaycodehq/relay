@@ -11,7 +11,7 @@
 // streamed answer back, and dictation hears the same sentence whatever is said.
 // Either way the first project runs a stand-in dev server on a free 127.0.0.1
 // port, which Sites lists as "Dev server" and the phone's tunnel opens.
-import { watchFile } from "node:fs";
+import { readFileSync, watchFile } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
@@ -974,6 +974,13 @@ function sent(chatId: string, send: any) {
 }
 // Touching <pairing file>.ask does the same from outside, whatever the phone has open.
 if (seeded) watchFile(`${out}.ask`, { interval: 300 }, (now) => now.mtimeMs && askElsewhere(""));
+// Writing a thread's title into <pairing file>.send sends into it as if typed on the desktop.
+if (seeded) watchFile(`${out}.send`, { interval: 300 }, (now) => {
+  if (!now.mtimeMs) return;
+  const title = readFileSync(`${out}.send`, "utf8").trim();
+  const t = [...threads.values()].find((c) => c.summary.title === title);
+  if (t) answer(t.summary.id, { id: id(), body: "Sent from the desktop while the phone has this open." });
+});
 /** The first thread other than `chatId` that isn't waiting starts waiting on a question. */
 function askElsewhere(chatId: string) {
   const t = [...threads.values()].find((c) => c.summary.id !== chatId && !c.summary.waiting && !c.summary.running && !c.summary.snoozedUntil);

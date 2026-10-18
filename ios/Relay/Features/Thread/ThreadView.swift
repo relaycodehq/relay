@@ -37,6 +37,12 @@ struct ThreadView: View {
     /// Replies live in their side conversations. This phone's sends the thread doesn't hold yet
     /// come last, shown at once, before the thread itself has loaded.
     private var shown: [ChatMessage] { connection.conversation(chatId, rootId: rootId) + connection.outgoing(chatId, rootId: rootId) }
+    /// Sent from this phone, which it shows before the computer has it; one typed on the
+    /// computer or another phone mustn't pull the thread to its end under the reader.
+    private func sentHere(_ message: ChatMessage?) -> Bool {
+        guard let message, message.role == "user" else { return false }
+        return connection.outgoing(chatId, rootId: rootId).contains { $0.id == message.id }
+    }
     /// A note's message to scroll to.
     @State private var jump: MessageJump?
     /// A model picked here; until then the thread's own.
@@ -85,7 +91,7 @@ struct ThreadView: View {
                     .padding(.bottom, 60)
                 }
                 // Built only once the thread is here, so it opens at the end.
-                .followingEnd(live: live, last: shown.last?.id, mine: shown.last?.role == "user", jump: jump)
+                .followingEnd(live: live, last: shown.last?.id, mine: sentHere(shown.last), jump: jump)
                 .environment(\.renderCompose, { [composer] in composer.compose($0, $1) })
                 .environment(\.quoteMessage, { [composer] in composer.quote($0) })
                 .environment(\.openImage, OpenImage(space: pictures) { source, among in
