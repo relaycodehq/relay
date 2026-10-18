@@ -371,6 +371,8 @@ export class RemoteBridge {
           projectChatSendSchema.parse(args[1]).id,
           () => this.host.dispatch(method, args),
         );
+      // A phone inspects this computer's agent tools; a third argument would pass it on to another.
+      if (method === "agentTools") args = args.slice(0, 2);
       let value = await this.host.dispatch(method, args);
       if (method === "projectChatAgent" && value)
         value = forPhoneRun(value as SubagentDetail);

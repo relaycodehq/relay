@@ -222,6 +222,8 @@ export const workspaceMovesBridge = 22;
  * phones still read news off the thread lists.
  */
 export const newsBridge = 24;
+/** From here a paired computer lists its agents' skills and MCP servers (`agentTools`). */
+export const agentToolsBridge = 24;
 
 /** A thread's image, as the phone asks for it with `image`. */
 export type RemoteImageSource =

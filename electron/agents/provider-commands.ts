@@ -40,11 +40,17 @@ export const codexSkills = memoByKey((root) => discover(root));
 function discover(root: string): Promise<CodexSkill[]> {
   return withAppServer(root, "loading skills", async (wire) => {
     const response = await wire.request("skills/list", { cwds: [root] });
-    return readCodexSkills(response, root);
+    return readCodexSkills(response, root) ?? [];
   });
 }
-/** All discovered skills, including disabled ones; the composer filters them later. */
-export function readCodexSkills(response: unknown, root: string): CodexSkill[] {
+/**
+ * All discovered skills, including disabled ones; the composer filters them
+ * later. Undefined when Codex reported nothing for `root`.
+ */
+export function readCodexSkills(
+  response: unknown,
+  root: string,
+): CodexSkill[] | undefined {
   const entries = z
     .object({
       data: z
@@ -54,9 +60,11 @@ export function readCodexSkills(response: unknown, root: string): CodexSkill[] {
         .max(100),
     })
     .parse(response).data;
-  const found = entries.find((e) => e.cwd === root);
-  if (!found) throw new Error("Codex did not report skills for this checkout.");
-  return found.skills.flatMap((value) => {
+  // Asked for one folder, Codex may spell it differently (a symlink resolved, a drive letter's case).
+  const found =
+    entries.find((e) => e.cwd === root) ??
+    (entries.length === 1 ? entries[0] : undefined);
+  return found?.skills.flatMap((value) => {
     const parsed = skillSchema.safeParse(value);
     return parsed.success ? [parsed.data] : [];
   });

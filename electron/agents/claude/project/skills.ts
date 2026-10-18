@@ -6,12 +6,24 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { parse, type ParseError } from "jsonc-parser";
 import {
   skillFrontmatter,
   textField,
   yamlBoolean,
 } from "../../skill-frontmatter";
 import type { AgentSkill } from "../../skill-presentation";
+
+/** Where an administrator's Claude Code policy files live, if this platform has one. */
+export function claudeManagedDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  if (platform === "darwin") return "/Library/Application Support/ClaudeCode";
+  if (platform !== "win32") return "/etc/claude-code";
+  const data = env.PROGRAMDATA?.trim();
+  return data ? join(data, "ClaudeCode") : undefined;
+}
 
 /**
  * The settings files Claude Code merges `skillOverrides` from, weakest first:
@@ -26,14 +38,8 @@ export function skillOverrideFiles(
   env: NodeJS.ProcessEnv = process.env,
 ) {
   const root = cwd ? repositoryRoot(cwd) : undefined;
-  const managed =
-    platform === "darwin"
-      ? "/Library/Application Support/ClaudeCode/managed-settings.json"
-      : platform === "win32"
-        ? env.PROGRAMDATA?.trim()
-          ? join(env.PROGRAMDATA.trim(), "ClaudeCode", "managed-settings.json")
-          : undefined
-        : "/etc/claude-code/managed-settings.json";
+  const managedDir = claudeManagedDir(platform, env);
+  const managed = managedDir && join(managedDir, "managed-settings.json");
   return [
     join(configDir, "settings.json"),
     ...(cwd
@@ -57,24 +63,6 @@ function repositoryRoot(cwd: string) {
   }
 }
 
-/** JSON with comments and trailing commas, as Claude Code reads its settings. */
-function lenientJson(text: string): unknown {
-  const strings = /("(?:[^"\\]|\\.)*")/.source;
-  const stripped = text
-    .replace(new RegExp(`${strings}|\\/\\/[^\\n]*`, "g"), (m, s?: string) =>
-      s ? m : "",
-    )
-    .replace(
-      new RegExp(`${strings}|\\/\\*[\\s\\S]*?\\*\\/`, "g"),
-      (m, s?: string) => (s ? m : ""),
-    )
-    .replace(
-      new RegExp(`${strings}|,(\\s*[}\\]])`, "g"),
-      (m, s?: string, bracket?: string) => (s ? m : (bracket ?? "")),
-    );
-  return JSON.parse(stripped);
-}
-
 type Override = { enabled: boolean; userInvocationOnly: boolean };
 const overrideValues: Record<string, Override> = {
   on: { enabled: true, userInvocationOnly: false },
@@ -92,13 +80,11 @@ export async function readSkillOverrides(files: readonly string[]) {
   for (const file of files) {
     const text = await readFile(file, "utf8").catch(() => undefined);
     if (text === undefined) continue;
-    let map: unknown;
-    try {
-      map = (lenientJson(text) as { skillOverrides?: unknown } | null)
-        ?.skillOverrides;
-    } catch {
-      continue;
-    }
+    // JSON with comments and trailing commas, as Claude Code reads its settings.
+    const errors: ParseError[] = [];
+    const parsed: unknown = parse(text, errors, { allowTrailingComma: true });
+    if (errors.length) continue;
+    const map = (parsed as { skillOverrides?: unknown } | null)?.skillOverrides;
     if (typeof map !== "object" || map === null || Array.isArray(map)) continue;
     const entries = Object.entries(map);
     if (

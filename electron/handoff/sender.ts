@@ -355,46 +355,72 @@ export class Handoffs {
   startTargets(projectId: string): Promise<HandoffTarget[]> {
     return this.targetsIn(projectId, startHandoffBridge);
   }
+  /**
+   * One paired computer, and its copy of the project; for no project, only
+   * whether it's reachable. Either way it must speak `bridge`.
+   */
+  async targetOn(
+    computerId: string,
+    projectId: string | null,
+    bridge: number,
+  ): Promise<HandoffTarget> {
+    const computer = this.computers.list().find((c) => c.id === computerId);
+    if (!computer) throw new Error("This computer is no longer paired.");
+    return this.targetFor(
+      computer,
+      projectId ? await this.repositoriesOf(projectId) : null,
+      bridge,
+    );
+  }
   private async targetsIn(
     projectId: string,
     bridge: number,
   ): Promise<HandoffTarget[]> {
-    const repositories = await this.projects
+    const repositories = await this.repositoriesOf(projectId);
+    return Promise.all(
+      this.computers.list().map((c) => this.targetFor(c, repositories, bridge)),
+    );
+  }
+  private repositoriesOf(projectId: string) {
+    return this.projects
       .root(projectId)
       .then(repositoryNames)
       .catch((): string[] => []);
-    return Promise.all(
-      this.computers.list().map(async (c): Promise<HandoffTarget> => {
-        const base = { id: c.id, name: c.name };
-        if (c.status !== "online")
-          return {
+  }
+  private async targetFor(
+    c: ReturnType<Computers["list"]>[number],
+    repositories: string[] | null,
+    bridge: number,
+  ): Promise<HandoffTarget> {
+    const base = { id: c.id, name: c.name };
+    if (c.status !== "online")
+      return {
+        ...base,
+        online: false,
+        problem: c.status === "denied" ? "Pair again" : "Offline",
+      };
+    if (repositories && !repositories.length)
+      return { ...base, online: true, problem: "No Git remote to match" };
+    try {
+      const client = await this.computers.connected(c.id);
+      const info = await this.info(c.id, client);
+      if (outdated(info) || (info?.bridge ?? 0) < bridge)
+        return { ...base, online: true, problem: "Needs a Relay update" };
+      if (!repositories) return { ...base, online: true };
+      const projects = await client.call("computerProjects");
+      const match = projects.find((p) =>
+        p.repositories.some((r) => repositories.includes(r)),
+      );
+      return match
+        ? {
             ...base,
-            online: false,
-            problem: c.status === "denied" ? "Pair again" : "Offline",
-          };
-        if (!repositories.length)
-          return { ...base, online: true, problem: "No Git remote to match" };
-        try {
-          const client = await this.computers.connected(c.id);
-          const info = await this.info(c.id, client);
-          if (outdated(info) || (info?.bridge ?? 0) < bridge)
-            return { ...base, online: true, problem: "Needs a Relay update" };
-          const projects = await client.call("computerProjects");
-          const match = projects.find((p) =>
-            p.repositories.some((r) => repositories.includes(r)),
-          );
-          return match
-            ? {
-                ...base,
-                online: true,
-                project: { id: match.id, name: match.name },
-              }
-            : { ...base, online: true, problem: `Not cloned on ${c.name}` };
-        } catch (e) {
-          return { ...base, online: false, problem: message(e) };
-        }
-      }),
-    );
+            online: true,
+            project: { id: match.id, name: match.name },
+          }
+        : { ...base, online: true, problem: `Not cloned on ${c.name}` };
+    } catch (e) {
+      return { ...base, online: false, problem: message(e) };
+    }
   }
   /**
    * Asks each online computer about the threads it has from here, unless

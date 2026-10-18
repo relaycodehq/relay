@@ -1381,7 +1381,9 @@ it("carries agent tool inspection through the desktop bridge without adding a fo
   expect(await paired.client.desktop("agentTools", projectId, "codex")).toEqual(
     inventory,
   );
+  await paired.client.desktop("agentTools", projectId, "codex", randomUUID());
   expect(dispatched).toEqual([
+    { method: "agentTools", args: [projectId, "codex"] },
     { method: "agentTools", args: [projectId, "codex"] },
   ]);
 });

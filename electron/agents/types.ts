@@ -197,6 +197,12 @@ export interface AgentRuntime {
   /** Its own slash commands and skills in `root`, for the composer's menu. */
   commands(root: string): Promise<ProviderCommand[]>;
   /**
+   * The commands it has already listed in `root`, without starting it; undefined
+   * when it hasn't yet. Settings → Agent tools reads this, so opening it never
+   * launches an agent or the MCP servers it starts.
+   */
+  knownCommands?(root: string): Promise<ProviderCommand[] | undefined>;
+  /**
    * Answers a `/btw` side question from the main session's context, without
    * tools and without it entering the session. Without this, a side question
    * runs as a read-only fork of the main session.

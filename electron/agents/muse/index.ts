@@ -1,5 +1,5 @@
 import type { AgentRuntime } from "../types";
-import { closeCatalog, forgetMuseModels, museCommands, museDefaults, museModels } from "./catalog";
+import { closeCatalog, forgetMuseModels, knownMuseCommands, museCommands, museDefaults, museModels } from "./catalog";
 import { runMuse } from "./run";
 import { closeMuseSession, detachMuse, disposeMuse, reattachMuse } from "./sessions";
 import { museSubagentBooks } from "./subagents";
@@ -17,6 +17,7 @@ export const museRuntime: AgentRuntime = {
   models: museModels,
   defaults: () => museDefaults(),
   commands: museCommands,
+  knownCommands: knownMuseCommands,
   reloadModels: async () => {
     // Muse reads its catalog at start: a new catalog process asks afresh.
     forgetMuseModels();

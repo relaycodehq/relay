@@ -146,3 +146,10 @@ export function museCommands(root: string): Promise<ProviderCommand[]> {
   skills.set(root, { at: Date.now(), list });
   return list;
 }
+
+/** The skills Muse last listed in `root`, without opening a session. */
+export async function knownMuseCommands(
+  root: string,
+): Promise<ProviderCommand[] | undefined> {
+  return skills.get(root)?.list.catch(() => undefined);
+}

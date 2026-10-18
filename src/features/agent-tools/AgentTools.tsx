@@ -24,6 +24,7 @@ import { ErrorBox, Spinner } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { useRunnableAgents } from "../agents/registry-agents";
 import { useAgentAccounts } from "../accounts/agent-accounts";
+import { newThreadAgentQuery } from "../composer/useNewThreadAgent";
 import { filterAgentTools } from "./filter";
 import "./agent-tools.css";
 
@@ -80,7 +81,14 @@ export function AgentTools({
 }) {
   const runnable = useRunnableAgents();
   const accounts = useAgentAccounts();
-  const [agent, setAgent] = useState<AgentProvider>("codex");
+  const lastAgent = useQuery(newThreadAgentQuery);
+  const [picked, setAgent] = useState<AgentProvider>();
+  // Opens on the agent new threads start with, not on one that may not be installed.
+  const agent =
+    picked ??
+    (lastAgent.data && runnable.includes(lastAgent.data)
+      ? lastAgent.data
+      : runnable[0]);
   const [computer, setComputer] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>();
   const [tab, setTab] = useState<Tab>("skills");
@@ -102,15 +110,17 @@ export function AgentTools({
   const projectId = offeredProjects.some((p) => p.id === requestedProject)
     ? requestedProject
     : "";
-  const account =
-    !computer && (agent === "codex" || agent === "claude")
-      ? accounts?.inUse[agent]
-      : undefined;
+  const signsIn = !computer && (agent === "codex" || agent === "claude");
+  const account = signsIn ? accounts?.inUse[agent] : undefined;
   const inventory = useQuery({
     queryKey: ["agent-tools", computer, projectId, agent, account],
     queryFn: () =>
       api.agentTools(projectId || null, agent, computer || undefined),
-    enabled: projects.isSuccess,
+    // Waits for what picks the agent and its account, so the first answer isn't thrown away.
+    enabled:
+      projects.isSuccess &&
+      !lastAgent.isPending &&
+      (!signsIn || accounts !== undefined),
     staleTime: 0,
     retry: false,
   });

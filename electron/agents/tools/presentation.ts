@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import type { AgentTool, AgentToolSource } from "../../../shared/agent-tools";
-import type { AgentSkill } from "../skill-presentation";
+import { pluginSkill, type AgentSkill } from "../skill-presentation";
 
 export const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -38,15 +38,19 @@ export function sourceOf(scope: string | undefined): AgentToolSource {
       return "other";
   }
 }
+// Only this page lists Claude's plugin skills; the composer reads Claude's skill folders alone.
+const claudePlugin = (path: string) =>
+  /\/\.claude\/plugins\//.test(path.replaceAll("\\", "/"));
+
 export function skillItem(skill: AgentSkill): AgentTool {
-  const plugin = /\/(?:\.codex|\.claude|\.agents)\/plugins\//.test(
-    skill.path.replaceAll("\\", "/"),
-  );
   return {
     id: skill.path,
     name: skill.name,
     description: skill.shortDescription || skill.description || "Agent skill",
-    source: plugin ? "plugins" : sourceOf(skill.scope),
+    source:
+      pluginSkill(skill) || claudePlugin(skill.path)
+        ? "plugins"
+        : sourceOf(skill.scope),
     state: skill.enabled ? "enabled" : "disabled",
     path: skill.path,
     detail: !skill.enabled

@@ -67,6 +67,12 @@ export function acpCatalog(profile: AcpProfile) {
       ]);
       return [...heard, ...skillCommands(skills)];
     },
+    knownCommands: async (root: string) => {
+      const heard = heardCommands(profile.provider);
+      if (!heard) return undefined;
+      const skills = (await profile.skills?.(root).catch(() => [])) ?? [];
+      return [...heard, ...skillCommands(skills)];
+    },
     forget: fresh.forget,
   };
 }

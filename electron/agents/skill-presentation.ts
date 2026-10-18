@@ -38,10 +38,12 @@ const sourceOfScope = new Map(
   ),
 );
 
+/** Whether a skill came with a plugin, by where Codex or a shared `.agents` keeps them. */
+export const pluginSkill = (skill: Pick<AgentSkill, "path">) =>
+  /\/\.(?:codex|agents)\/plugins\//.test(skill.path.replaceAll("\\", "/"));
+
 function skillSource(skill: AgentSkill): Source {
-  const path = skill.path.replaceAll("\\", "/");
-  if (["/.codex/plugins/", "/.agents/plugins/"].some((d) => path.includes(d)))
-    return "app";
+  if (pluginSkill(skill)) return "app";
   const scope = skill.scope?.trim().toLowerCase() ?? "";
   return sourceOfScope.get(scope) ?? "other";
 }

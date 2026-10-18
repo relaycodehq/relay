@@ -72,6 +72,22 @@ it("resolves local over project over personal, retaining disabled servers and hi
   expect(JSON.stringify(found)).not.toContain("SECRET");
 });
 
+it("keeps a server disabled in one settings file when another lists others", async () => {
+  await json(join(repo, ".mcp.json"), {
+    mcpServers: {
+      first: { url: "https://first.example" },
+      second: { url: "https://second.example" },
+    },
+  });
+  await json(files().settingsFiles[0], { disabledMcpjsonServers: ["first"] });
+  await json(files().settingsFiles[2], { disabledMcpjsonServers: ["second"] });
+  const found = await inspectClaude(repo, files());
+  expect(found.servers.items.map((s) => [s.name, s.state])).toEqual([
+    ["first", "disabled"],
+    ["second", "disabled"],
+  ]);
+});
+
 it("reads external changes on refresh and includes disabled and plugin skills", async () => {
   const plugin = join(root, "plugin");
   await mkdir(join(plugin, "skills/create"), { recursive: true });

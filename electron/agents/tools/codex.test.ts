@@ -23,12 +23,27 @@ it("retains disabled skills in the inventory while excluding them from composer 
       ],
     },
     "/repo",
-  );
+  )!;
   expect(skills.map((s) => s.name)).toEqual(["on", "off"]);
   expect(skillCommands(skills.map(codexSkill)).map((s) => s.name)).toEqual([
     "on",
   ]);
-  expect(() => readCodexSkills({ data: [] }, "/repo")).toThrow("this checkout");
+  expect(readCodexSkills({ data: [] }, "/repo")).toBeUndefined();
+});
+
+it("takes Codex's only entry when it spells the asked-for checkout differently", () => {
+  const skills = readCodexSkills(
+    {
+      data: [
+        {
+          cwd: "/private/var/repo",
+          skills: [{ name: "on", path: "/repo/on/SKILL.md", enabled: true }],
+        },
+      ],
+    },
+    "/var/repo",
+  );
+  expect(skills?.map((s) => s.name)).toEqual(["on"]);
 });
 
 it("uses native sources and sends only sanitized configuration across the bridge", () => {

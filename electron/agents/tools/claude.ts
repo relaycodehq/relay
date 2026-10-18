@@ -4,6 +4,7 @@ import type { AgentTool, AgentToolListing } from "../../../shared/agent-tools";
 import { accountFor, accountHome } from "../accounts";
 import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
 import {
+  claudeManagedDir,
   discoverClaudeSkills,
   readSkillOverrides,
   skillOverrideFiles,
@@ -22,14 +23,7 @@ export function claudeFiles(
   account = accountFor("claude"),
 ): ClaudeFiles {
   const configDir = resolve(cwd, accountHome("claude", account));
-  const managed =
-    process.platform === "darwin"
-      ? "/Library/Application Support/ClaudeCode"
-      : process.platform === "win32"
-        ? process.env.PROGRAMDATA
-          ? join(process.env.PROGRAMDATA, "ClaudeCode")
-          : undefined
-        : "/etc/claude-code";
+  const managed = claudeManagedDir();
   return {
     configDir,
     userFile:
@@ -62,7 +56,8 @@ export async function inspectClaude(cwd: string, files = claudeFiles(cwd)) {
   const settingsIncomplete =
     settings.status === "rejected" ||
     settings.value.some((result) => result.status === "rejected");
-  const merged = Object.assign({}, ...settingsList) as Record<string, unknown>;
+  // Claude concatenates list settings across files; a later scalar wins.
+  const listed = (key: string) => settingsList.flatMap((s) => strings(s[key]));
   const skills: AgentToolListing =
     skillList.status === "fulfilled"
       ? { items: skillList.value.map(skillItem) }
@@ -83,12 +78,14 @@ export async function inspectClaude(cwd: string, files = claudeFiles(cwd)) {
   }
   const userData: Record<string, unknown> =
     user.status === "fulfilled" ? user.value : {};
-  const local = record(record(userData.projects)[cwd]);
+  const local = projectEntry(record(userData.projects), cwd);
   const disabled = new Set(strings(local.disabledMcpServers));
   const rejectedProject = new Set([
-    ...strings(merged.disabledMcpjsonServers),
+    ...listed("disabledMcpjsonServers"),
     ...strings(local.disabledMcpjsonServers),
   ]);
+  // Unapproved .mcp.json servers still load: Relay's sessions are non-interactive with project
+  // settings on, where Claude approves them itself. Only a rejection keeps one out.
   const found = new Map<string, AgentTool>();
   const add = (
     values: unknown,
@@ -225,4 +222,19 @@ export async function inspectClaude(cwd: string, files = claudeFiles(cwd)) {
     for (const item of skills.items) item.state = "unknown";
   }
   return { skills, servers };
+}
+
+/**
+ * Claude's own entry for the checkout. It keys projects by path, with forward
+ * slashes on Windows, so the same folder may be spelled another way here.
+ */
+function projectEntry(projects: Record<string, unknown>, cwd: string) {
+  if (Object.hasOwn(projects, cwd)) return record(projects[cwd]);
+  const key = (path: string) => {
+    const slashed = path.replaceAll("\\", "/").replace(/\/+$/, "");
+    return process.platform === "win32" ? slashed.toLowerCase() : slashed;
+  };
+  const wanted = key(cwd);
+  const found = Object.keys(projects).find((k) => key(k) === wanted);
+  return record(found ? projects[found] : undefined);
 }

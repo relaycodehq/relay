@@ -61,6 +61,7 @@ function profileRuntime(profile: AcpProfile): AgentRuntime {
     reloadModels: async () => catalog.forget(),
     defaults: catalog.defaults,
     commands: catalog.commands,
+    knownCommands: catalog.knownCommands,
     dispose: async () => disposeAcp(profile),
     detach: () => detachAcp(profile),
     reattach: (owns) => reattachAcp(profile, owns),

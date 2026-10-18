@@ -47,9 +47,12 @@ export async function inspectCodex(
       const [skills, servers] = await Promise.allSettled([
         wire
           .request("skills/list", { cwds: [cwd], forceReload: true })
-          .then((value) => ({
-            items: readCodexSkills(value, cwd).map(codexSkill).map(skillItem),
-          })),
+          .then((value) => {
+            const found = readCodexSkills(value, cwd);
+            if (!found)
+              throw new Error("Codex did not report skills for this checkout.");
+            return { items: found.map(codexSkill).map(skillItem) };
+          }),
         wire
           .request("config/read", { cwd, includeLayers: false })
           .then(codexServers),

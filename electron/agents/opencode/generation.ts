@@ -54,6 +54,7 @@ export function byGeneration(v1: AgentRuntime, v2: AgentRuntime): AgentRuntime {
       (await pick()).reloadModels?.(beforeRestart),
     defaults: async (root) => (await pick()).defaults(root),
     commands: async (root) => (await pick()).commands(root),
+    knownCommands: async (root) => (await pick()).knownCommands?.(root),
     dispose: async () => {
       await Promise.all([v1.dispose?.(), v2.dispose?.()]);
     },

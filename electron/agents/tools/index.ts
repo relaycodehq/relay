@@ -9,11 +9,15 @@ import { inspectCodex } from "./codex";
 import { inspectClaude, claudeFiles } from "./claude";
 import { skillItem, sourceOf } from "./presentation";
 
-/** Every call reads afresh. This page describes new sessions, never rewrites configuration. */
+/**
+ * Every call reads afresh. This page describes new sessions, never rewrites
+ * configuration. `known` is what an agent Relay can only ask by starting it
+ * has listed already, undefined before it has.
+ */
 export async function inspectAgentTools(
   provider: AgentProvider,
   root: string | undefined,
-  commands: () => Promise<ProviderCommand[]>,
+  known: () => Promise<ProviderCommand[] | undefined>,
 ): Promise<AgentTools> {
   const cwd = root ?? homedir();
   const account =
@@ -58,21 +62,26 @@ export async function inspectAgentTools(
           note: "Read from this agent's skill folders. Session policies may further restrict availability.",
         };
       } else {
-        const list = await commands();
-        skills = {
-          items: list
-            .filter((c) => c.skill || provider === "muse")
-            .map((c) => ({
-              id: c.name,
-              name: c.displayName || c.name,
-              description: c.description,
-              source: sourceOf(c.source),
-              state: "enabled",
-              detail:
-                "Offered by the agent's skill catalog. The agent did not report a file path.",
-            })),
-          note: "Only skills offered by the agent are listed. Disabled skills and exact paths are not reported by this agent.",
-        };
+        const list = await known();
+        skills = !list
+          ? {
+              items: [],
+              note: "This agent lists its skills only once it runs, and opening this page doesn't start it. Start a thread with it, then refresh.",
+            }
+          : {
+              items: list
+                .filter((c) => c.skill || provider === "muse")
+                .map((c) => ({
+                  id: c.name,
+                  name: c.displayName || c.name,
+                  description: c.description,
+                  source: sourceOf(c.source),
+                  state: "enabled",
+                  detail:
+                    "Offered by the agent's skill catalog. The agent did not report a file path.",
+                })),
+              note: "Only skills offered by the agent are listed. Disabled skills and exact paths are not reported by this agent.",
+            };
       }
     } catch {
       skills = {
