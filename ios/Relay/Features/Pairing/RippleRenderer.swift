@@ -221,7 +221,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             let c = vp * SIMD4(p, 1)
             if c.w > 0.1 { put(c, min(500 * unit, size * px / c.w), alpha) }
         }
-        let field = 1 - s.rest
+        // The calls and the other computers go with the computer as a scan opens.
+        let field = (1 - s.rest) * s.beacon
         let answer = Float(exp(-(time - answeredAt) * 1.1))
         let flash = phase >= Self.flight ? Float(exp(-(phase - Self.flight) * 2.5)) : 0
         let bloom = max(flash, answer)
