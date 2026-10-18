@@ -1,0 +1,17 @@
+# Hot reload in the Simulator (ios/AGENTS.md), included by project.yml when RELAY_HOT_RELOAD is
+# set, as scripts/sim.sh does. Not for device or release builds: linked, the package's code ships.
+packages:
+  InjectionLite:
+    url: https://github.com/johnno1962/InjectionLite
+    from: 3.0.2
+
+targets:
+  Relay:
+    dependencies:
+      - package: InjectionLite
+    settings:
+      configs:
+        # InjectionLite recompiles a saved file from the build log's commands and swaps it in.
+        Debug:
+          OTHER_LDFLAGS: [-Xlinker, -interposable]
+          EMIT_FRONTEND_COMMAND_LINES: YES

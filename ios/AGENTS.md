@@ -59,8 +59,11 @@ placed by eye took five builds that one logged number would have saved.
   further output` on builds that worked.** Trust the exit status; don't
   build twice to make the line go away.
 - **Hot reload instead of a rebuild** for a change inside function bodies
-  (layout, text, colours, a view's `body`). InjectionLite is linked into
-  Debug builds: run a build made with `sim.sh` (it needs Xcode's own
+  (layout, text, colours, a view's `body`). InjectionLite is linked only
+  when the project is generated with `RELAY_HOT_RELOAD=YES`, as `sim.sh`
+  does (`hot-reload.yml`); a linked package ships in every configuration,
+  so `device.sh` and release builds leave it out. In Xcode by hand,
+  generate with that set first. Run a build made with `sim.sh` (it needs Xcode's own
   DerivedData, not `-derivedDataPath`, to find the build log), then save a
   `.swift` file; the console (`xcrun simctl launch --console-pty …`) says
   `Compiled in 1151ms` / `Hot reload complete`, and `hotReloads()` on the

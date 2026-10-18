@@ -22,8 +22,9 @@ done
 
 cd $ios
 if (( build )); then
-  # The project is made from project.yml and lists every file, so a new file needs it made again.
-  xcodegen generate --use-cache >/dev/null
+  # The project is made from project.yml and lists every file, so a new file needs it made again;
+  # no --use-cache, which misses a device build having left hot reload out (it takes 50ms).
+  RELAY_HOT_RELOAD=YES xcodegen generate >/dev/null
   log=$(mktemp)
   if ! xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Debug \
       -destination "id=$sim" build -quiet >$log 2>&1; then
