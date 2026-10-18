@@ -91,6 +91,19 @@ struct FileLinksTests {
         #expect(projectFileLink("src/a.ts", root: "") == nil)
     }
 
+    @Test func windowsProjectLinksStayInsideTheirCheckout() {
+        for root in ["C:/work/relay", "C:\\work\\relay\\", "c:/WORK/relay/"] {
+            for value in ["C:/work/relay/src/app.ts:42", "C:\\work\\relay\\src\\app.ts:42", "file:///C:/work/relay/src/app.ts#L42"] {
+                #expect(projectFileLink(value, root: root) == ProjectFileLink("src/app.ts", line: 42, directory: false))
+            }
+            for outside in ["D:/work/relay/src/app.ts", "C:/work/relay-other/src/app.ts", "C:/elsewhere/app.ts"] {
+                #expect(projectFileLink(outside, root: root) == nil)
+            }
+        }
+        #expect(projectFileLink("C:/work/relay/src/app.ts", root: self.root) == nil)
+        #expect(projectFileLink("src/app.ts", root: "C:\\work\\relay") == ProjectFileLink("src/app.ts", directory: false))
+    }
+
     @Test func matchesChanges() {
         let paths = ["license-report.ts", "src/api/license-report.ts", "src/shared/license-report.ts", "src/app/main.ts"]
         func link(_ path: String) -> ProjectFileLink { ProjectFileLink(path, directory: false) }

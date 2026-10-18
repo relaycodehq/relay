@@ -226,11 +226,14 @@ public func projectFileLink(_ value: String, root: String, inline: Bool = false)
     guard let target = candidate.flatMap(resolveFileLink) ?? directoryCandidate.map({ LinkPosition($0) }),
         !root.isEmpty
     else { return nil }
-    let normalizedRoot = String(root.reversed().drop { $0 == "/" }.reversed())
+    let normalizedRoot = root.replacingOccurrences(of: "\\", with: "/")
     var path = target.path.replacingOccurrences(of: "\\", with: "/")
-    if path.hasPrefix("/") {
-        guard path.hasPrefix(normalizedRoot + "/") else { return nil }
-        path = String(path.dropFirst(normalizedRoot.count + 1))
+    let windows = windowsAbsolute.found(in: path)
+    if path.hasPrefix("/") || windows {
+        // A Windows drive path is absolute too; the bridge always takes a relative path.
+        let base = String(normalizedRoot.reversed().drop { $0 == "/" }.reversed()) + "/"
+        guard windows ? path.lowercased().hasPrefix(base.lowercased()) : path.hasPrefix(base) else { return nil }
+        path = String(path.dropFirst(base.count))
     } else if path.hasPrefix("~/") {
         return nil
     }
