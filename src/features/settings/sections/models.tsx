@@ -63,7 +63,7 @@ function MoreAgents() {
   );
 }
 
-/** Settings → AI models: Agents, Used by Relay and Quick switch. */
+/** Settings → AI & agents: Agents, Used by Relay and Quick switch. */
 export function useModelEntries(
   setError: (error: unknown) => void,
 ): SettingEntry[] {

@@ -22,7 +22,7 @@ async function probe(profile: AcpProfile, cwd: string) {
   if ((await profile.account?.())?.signedIn === false)
     throw signedOutError(
       profile.provider,
-      `${profile.name} is signed out. Sign in under Settings → AI models → Agents.`,
+      `${profile.name} is signed out. Sign in under Settings → AI & agents → Agents.`,
     );
   const agent = await acquireAcpAgent(profile, undefined, cwd);
   try {

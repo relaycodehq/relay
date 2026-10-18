@@ -92,7 +92,7 @@ const amp: AcpProfile = {
     const cli = await findExecutable("amp");
     const bridge = await findExecutable("amp-acp").catch(() => {
       throw new Error(
-        "Amp runs in Relay through amp-acp. Install it in Settings → AI models → Agents, then send again.",
+        "Amp runs in Relay through amp-acp. Install it in Settings → AI & agents → Agents, then send again.",
       );
     });
     return { command: bridge, args: [], env: { AMP_CLI_PATH: cli } };
@@ -106,7 +106,7 @@ const amp: AcpProfile = {
       value: runtime === "full-access" && !readOnly ? "bypass" : "default",
     },
   ],
-  install: "Install Amp in Settings → AI models → Agents, or from ampcode.com.",
+  install: "Install Amp in Settings → AI & agents → Agents, or from ampcode.com.",
   // The bridge reports a failed turn as the answer's text.
   failure: (answer) => /^Error: (.+)/s.exec(answer.trim())?.[1],
 };
@@ -197,7 +197,7 @@ const opencode: AcpProfile = {
   ],
   compact: "/compact",
   models: openCode2Models,
-  install: "Install OpenCode from opencode.ai, or in Settings → AI models → Agents.",
+  install: "Install OpenCode from opencode.ai, or in Settings → AI & agents → Agents.",
 };
 
 export const acpProfiles: Record<"amp" | "antigravity" | "opencode", AcpProfile> = {

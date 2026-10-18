@@ -2,7 +2,12 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import type { Account } from "../../../shared/types";
 import type { SettingsCategory } from "../../lib/settings-page";
-import { matches, searchWords, sections } from "./settings-search";
+import {
+  matches,
+  searchWords,
+  sections,
+  type SettingEntry,
+} from "./settings-search";
 import { useLeaveOnEscape } from "./useLeaveOnEscape";
 import { ErrorBox } from "../../ui/ui";
 import { categoryOf, fullLabel } from "./sections/categories";
@@ -23,6 +28,7 @@ import { soundEntries } from "./sections/sounds";
 import { useShortcutEntries } from "./sections/shortcuts";
 import { useAboutEntries } from "./sections/about";
 import { reportEntries } from "./sections/report";
+import { AgentTools } from "../agent-tools/AgentTools";
 import "./settings.css";
 
 export type { SettingsCategory };
@@ -80,10 +86,18 @@ export function Settings({
     readAloud = useReadAloudEntries(),
     shortcuts = useShortcutEntries(),
     about = useAboutEntries();
-  const entries = [
+  const entries: SettingEntry[] = [
     ...appearance,
     ...projectEntries(project),
     ...models,
+    {
+      id: "agent-tools-inventory",
+      category: "agent-tools",
+      title: "Skills and MCP servers",
+      keywords:
+        "tools skills mcp servers configuration disabled enabled plugins personal repository computer agent codex claude",
+      card: () => <AgentTools initialProjectId={projectId} />,
+    },
     ...integrationEntries({ account, onConnect, onDisconnect }),
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),

@@ -230,7 +230,7 @@ async function locate(name: string) {
   if (!found.length)
     throw new NotInstalledError(
       isAgent(name) && ownAgents
-        ? `${name} was not found. Install it in Settings → AI models → Agents, or put it on PATH.`
+        ? `${name} was not found. Install it in Settings → AI & agents → Agents, or put it on PATH.`
         : `${name} was not found. Install it and make sure it is on PATH.`,
     );
   return answering(name, found);

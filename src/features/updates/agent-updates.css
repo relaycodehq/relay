@@ -1,4 +1,4 @@
-/* Settings → AI models → Agents: a card per agent, its accounts below the head. */
+/* Settings → AI & agents → Agents: a card per agent, its accounts below the head. */
 .agent-cards {
   display: grid;
   gap: 12px;

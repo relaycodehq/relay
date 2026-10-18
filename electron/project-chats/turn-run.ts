@@ -464,7 +464,7 @@ export class TurnRunner {
           hasAccounts(provider)
         ) {
           // The terminal's login would sign in the usual account, not this one.
-          failed.error = `${accountLabel(provider, account)} is signed out. Sign it in again in Settings → AI models → Accounts, then resume the answer.`;
+          failed.error = `${accountLabel(provider, account)} is signed out. Sign it in again in Settings → AI & agents → Agents, then resume the answer.`;
           await agentRuntime(provider).closeSession(sessionKey);
         } else if (isAgentError(e, "signedOut")) {
           failed.signIn = e.provider;

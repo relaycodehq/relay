@@ -59,7 +59,7 @@ function untilText(until: number) {
 }
 
 /**
- * Settings → AI models → Agents: a card per agent with its version, its
+ * Settings → AI & agents → Agents: a card per agent with its version, its
  * update and how Relay finds it; `accounts` fills in who it signs in as.
  */
 export function AgentCards({

@@ -13,13 +13,14 @@ import {
   Sparkles,
   Volume2,
   Zap,
+  Wrench,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
 
 /** A heading in the nav over the categories that share it. */
 export type CategoryGroup = { label: string; icon: typeof Palette };
 
-const aiModels: CategoryGroup = { label: "AI models", icon: Sparkles };
+const aiAgents: CategoryGroup = { label: "AI & agents", icon: Sparkles };
 
 export const categories: {
   id: SettingsCategory;
@@ -47,7 +48,7 @@ export const categories: {
     description:
       "The agents Relay runs, the accounts they sign in with, and where new threads start.",
     icon: Bot,
-    group: aiModels,
+    group: aiAgents,
   },
   {
     id: "relay-models",
@@ -55,7 +56,7 @@ export const categories: {
     description:
       "Models Relay calls itself, outside your threads: review, commits, and the side check that reads along.",
     icon: Sparkles,
-    group: aiModels,
+    group: aiAgents,
   },
   {
     id: "quick-switch",
@@ -63,7 +64,14 @@ export const categories: {
     description:
       "Presets of agent, model and effort you step through in the composer.",
     icon: Zap,
-    group: aiModels,
+    group: aiAgents,
+  },
+  {
+    id: "agent-tools",
+    label: "Agent tools",
+    description: "See the skills and MCP servers available to each agent.",
+    icon: Wrench,
+    group: aiAgents,
   },
   {
     id: "integrations",

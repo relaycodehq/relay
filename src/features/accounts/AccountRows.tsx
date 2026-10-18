@@ -23,7 +23,7 @@ const usagePage: Record<AccountProvider, string> = {
 };
 
 /**
- * An agent's accounts as lines of its card in Settings → AI models → Agents:
+ * An agent's accounts as lines of its card in Settings → AI & agents → Agents:
  * the one new threads start on is picked by clicking its line.
  */
 export function AccountRows({
