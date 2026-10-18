@@ -81,6 +81,8 @@ nonisolated(unsafe) private var frames = UnsafeMutablePointer<UnsafeMutableRawPo
 private func prepareHandler(path: String, names: [Int32: String]) {
     crashPath = strdup(path)
     signalLines.initialize(repeating: nil, count: Int(NSIG))
+    // A global is made the first time it's touched, which mustn't be in the handler.
+    frames.initialize(repeating: nil, count: 64)
     for (signal, name) in names { signalLines[Int(signal)] = strdup("signal SIG\(name)\n") }
 }
 
