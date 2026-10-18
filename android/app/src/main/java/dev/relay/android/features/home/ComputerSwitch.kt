@@ -79,9 +79,10 @@ internal class ComputerLines(
         else "${lastReached(c)}. Pairing again needs a new code from Relay there."
 }
 
-/** The computer's name atop the lists; tapping it opens the computers sheet. */
+/** A tab's [title] with the computer's name under it; tapping either opens the computers sheet. */
 @Composable
 fun ComputerSwitch(
+    title: String,
     remote: Remote,
     seen: ComputerSeen,
     modifier: Modifier = Modifier,
@@ -92,19 +93,18 @@ fun ComputerSwitch(
     var open by remember { mutableStateOf(false) }
     // Outlives the sheet, so a switch picked as it closes isn't cancelled with it.
     val scope = rememberCoroutineScope()
-    Row(
-        modifier.semantics { contentDescription = "$name. Switch computer" }.pressable(onClick = { open = true }, scale = false)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            name,
-            Modifier.weight(1f, fill = false),
-            style = RelayTheme.type.base.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-        )
-        Icon(TablerIcons.Outline.ChevronDown, null, tint = c.mutedForeground, size = 15.dp)
+    Column(modifier.semantics { contentDescription = "$title, $name. Switch computer" }.pressable(onClick = { open = true }, scale = false)) {
+        Text(title, style = tabTitleStyle(), maxLines = 1)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                name,
+                Modifier.weight(1f, fill = false),
+                style = RelayTheme.type.base.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                color = c.mutedForeground,
+                maxLines = 1,
+            )
+            Icon(TablerIcons.Outline.ChevronDown, null, tint = c.mutedForeground, size = 14.dp)
+        }
     }
     if (open) ComputerSheet(remote, seen, scope, extraRows) { open = false }
 }

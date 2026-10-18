@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.notifications.NotificationSwitchRow
 import dev.relay.android.features.notifications.ThreadNotifications
@@ -49,51 +50,66 @@ fun SettingsScreen(
     scope: CoroutineScope,
 ) {
     val nav = LocalNavigator.current
+    Screen("Settings", onBack = nav.backAction) {
+        SettingsList(remote, updates, notifications, themeMode, setTheme, scope)
+    }
+}
+
+/** Settings' rows, for a page of their own or the phone's Settings tab, which keeps [bottom] free for its dock. */
+@Composable
+fun SettingsList(
+    remote: Remote,
+    updates: Updates,
+    notifications: ThreadNotifications,
+    themeMode: ThemeMode,
+    setTheme: (ThemeMode) -> Unit,
+    scope: CoroutineScope,
+    bottom: Dp = 24.dp,
+) {
+    val nav = LocalNavigator.current
     val name = computerName(remote)
     val overview by remote.overview.collectAsState()
-    Screen("Settings", onBack = nav.backAction) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = ListInset).padding(bottom = 24.dp)) {
-            SectionHeader("Theme")
-            ListGroup {
-                val known = overview?.appearance != null
-                themeChoices(name, known).forEach { (mode, label, hint) ->
-                    ChoiceRow(label, hint, themeMode == mode) { setTheme(mode) }
-                }
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = ListInset).padding(bottom = bottom)) {
+        SectionHeader("Theme")
+        ListGroup {
+            val known = overview?.appearance != null
+            themeChoices(name, known).forEach { (mode, label, hint) ->
+                ChoiceRow(label, hint, themeMode == mode) { setTheme(mode) }
             }
+        }
 
-            SectionHeader("Notifications")
-            ListGroup { NotificationSwitchRow(notifications, name) }
+        SectionHeader("Notifications")
+        ListGroup { NotificationSwitchRow(notifications, name) }
 
-            SectionHeader("App")
-            ListGroup {
-                ListRow(
-                    "Relay ${updates.installed}",
-                    subtitle = "As installed; new versions come from GitHub.",
-                    leadingIcon = TablerIcons.Outline.DeviceMobile,
-                    subtitleLines = 3,
-                )
-                LatestAppRows(updates)
-                ListRow(
-                    "Open-source licences",
-                    leadingIcon = TablerIcons.Outline.License,
-                    chevron = true,
-                    onClick = { nav.push(Route.Licences) },
-                )
-            }
+        SectionHeader("App")
+        ListGroup {
+            ListRow(
+                "Relay ${updates.installed}",
+                subtitle = "As installed; new versions come from GitHub.",
+                leadingIcon = TablerIcons.Outline.DeviceMobile,
+                subtitleLines = 3,
+            )
+            LatestAppRows(updates)
+            ListRow(
+                "Open-source licences",
+                leadingIcon = TablerIcons.Outline.License,
+                chevron = true,
+                onClick = { nav.push(Route.Licences) },
+            )
+        }
 
-            ComputersSection(remote, updates, name, scope)
-            RouteSection(remote, name)
+        ComputersSection(remote, updates, name, scope)
+        RouteSection(remote, name)
 
-            SectionHeader("Developer")
-            ListGroup {
-                ListRow(
-                    "Component gallery",
-                    subtitle = "Every building block, light and dark",
-                    leadingIcon = TablerIcons.Outline.Components,
-                    chevron = true,
-                    onClick = { nav.push(Route.Gallery) },
-                )
-            }
+        SectionHeader("Developer")
+        ListGroup {
+            ListRow(
+                "Component gallery",
+                subtitle = "Every building block, light and dark",
+                leadingIcon = TablerIcons.Outline.Components,
+                chevron = true,
+                onClick = { nav.push(Route.Gallery) },
+            )
         }
     }
 }

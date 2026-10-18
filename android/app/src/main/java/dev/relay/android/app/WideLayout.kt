@@ -1,5 +1,6 @@
 package dev.relay.android.app
 
+import dev.relay.android.features.settings.SettingsList
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -64,6 +65,9 @@ fun AppHome(container: AppContainer, pane: Boolean, selected: String?) {
         container.remote, container.home, container.computerSeen, pane = pane, selected = selected,
         banners = { UpdateBanners(container.updates, container.remote, Modifier.padding(horizontal = 16.dp)) },
         computerRows = { close -> ComputerUpdateRow(container.updates, container.remote, close) },
+        settings = { bottom ->
+            SettingsList(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope, bottom)
+        },
     )
 }
 

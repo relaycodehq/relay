@@ -1,12 +1,11 @@
 package dev.relay.android.features.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,12 +24,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
@@ -39,23 +34,13 @@ import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.credentials.ComputerSeen
 import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.ui.Button
-import dev.relay.android.ui.Divider
-import dev.relay.android.ui.Icon
-import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.LocalToasts
 import dev.relay.android.ui.Screen
-import dev.relay.android.ui.SearchField
 import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.Tone
-import dev.relay.android.ui.pressable
 import dev.relay.android.ui.rememberInFront
 import dev.relay.android.ui.theme.RelayTheme
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Inbox
-import io.github.lyxnx.compose.ui.tablericons.outline.LayoutGrid
-import io.github.lyxnx.compose.ui.tablericons.outline.Plus
-import io.github.lyxnx.compose.ui.tablericons.outline.Settings2
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -64,9 +49,7 @@ import dev.relay.android.ui.SectionHeader
 import dev.relay.android.ui.listPadding
 import dev.relay.android.ui.ribbon.RibbonRefreshBox
 
-private val LIST_BOTTOM = 16.dp
-
-private enum class Tab { Activity, Projects }
+internal enum class HomeTab { Activity, Projects, Settings }
 
 /**
  * Activity and Projects (mobile/src/screens/Browser.tsx + app/index.tsx): the phone's home
@@ -85,32 +68,60 @@ fun HomeScreen(
     banners: @Composable ColumnScope.() -> Unit = {},
     /** Extra rows for the computers sheet, from features that own them; `close` puts the sheet away. */
     computerRows: @Composable (close: () -> Unit) -> Unit = {},
+    /** The Settings tab's page, leaving [bottom] free under it; a wide window opens Settings in its pane instead. */
+    settings: @Composable (bottom: Dp) -> Unit = {},
 ) {
     val navigator = LocalNavigator.current
     val active by remote.active.collectAsState()
     val iconIndex by home.icons.index.collectAsState()
     fun open(route: Route) = if (pane) navigator.openInPane(route) else navigator.push(route)
+    var tab by rememberSaveable { mutableStateOf(HomeTab.Activity) }
+    // A wide window keeps Settings in its pane, so unfolding on the tab goes back to the threads.
+    val shown = if (pane && tab == HomeTab.Settings) HomeTab.Activity else tab
+    // Back from another tab returns to the threads before it leaves the app, as Android's tabs do.
+    BackHandler(enabled = shown != HomeTab.Activity) { tab = HomeTab.Activity }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val overview by remote.overview.collectAsState()
+    val filter by home.filter.filter.collectAsState()
 
     CompositionLocalProvider(LocalProjectIconPath provides { id -> projectIconPath(iconIndex, active, id) }) {
         Screen("", modifier, topBar = false) {
-            Row(
-                Modifier.fillMaxWidth().height(52.dp).padding(start = 16.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ComputerSwitch(remote, computerSeen, Modifier.weight(1f), computerRows)
-                IconButton(TablerIcons.Outline.Plus, "New thread", { open(Route.NewThread()) })
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Column(Modifier.fillMaxSize()) {
+                    HomeHeader(
+                        shown, remote, computerSeen, overview, filter, home.filter::set,
+                        HomeSearch(searching, query, { searching = it; if (!it) query = "" }, { query = it }),
+                        computerRows,
+                    )
+                    if (shown == HomeTab.Settings) settings(DOCK_ROOM)
+                    else {
+                        if (!searching) {
+                            ConnectionLine(remote)
+                            banners()
+                        }
+                        Browser(remote, home, selected, shown, query, ::open)
+                    }
+                }
+                // Away while searching, or it rides up on the keyboard over the results.
+                if (!searching) HomeDock(
+                    shown,
+                    {
+                        searching = false
+                        query = ""
+                        if (it == HomeTab.Settings && pane) open(Route.Settings) else tab = it
+                    },
+                    onNew = { open(Route.NewThread()) },
+                    Modifier.align(Alignment.BottomCenter),
+                )
             }
-            ConnectionLine(remote)
-            banners()
-            Browser(remote, home, selected, ::open)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: String?, open: (Route) -> Unit) {
+private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: String?, tab: HomeTab, query: String, open: (Route) -> Unit) {
     val c = RelayTheme.colors
     val navigator = LocalNavigator.current
     val toasts = LocalToasts.current
@@ -121,8 +132,6 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
     val folds by home.folds.folds.collectAsState()
     val filter by home.filter.filter.collectAsState()
     val inFront by rememberInFront()
-    var tab by rememberSaveable { mutableStateOf(Tab.Activity) }
-    var query by rememberSaveable { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
 
     if (status.state == LinkState.Denied) {
@@ -185,18 +194,10 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
 
     Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.padding(start = 16.dp, end = if (tab == Tab.Activity) 8.dp else 16.dp, top = 4.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SearchField(query, { query = it }, Modifier.weight(1f), placeholder = "Search")
-                if (tab == Tab.Activity) FilterButton(o, filter, home.filter::set)
-            }
             val needle = query.trim().lowercase()
             if (needle.isNotEmpty()) {
                 val results = o.chats.filter { "${it.title} ${names[it.projectId] ?: ""}".lowercase().contains(needle) }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(bottom = LIST_BOTTOM)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(bottom = DOCK_ROOM)) {
                     item(key = "head") { SectionHeader("Results", count = results.size) }
                     items(results, key = { it.id }) { chat ->
                         ThreadRow(chat, threadDraft(drafts, chat.id), { openChat(chat) }, project = names[chat.projectId], selected = chat.id == selected)
@@ -213,7 +214,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
             } else {
                 RibbonRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
                     when (tab) {
-                        Tab.Activity -> ActivityList(
+                        HomeTab.Activity -> ActivityList(
                             chats = o.chats.filter(shown::keeps),
                             projects = o.projects,
                             drafts = drafts.filterKeys(shown::keepsDraft),
@@ -226,48 +227,19 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                             onOpen = openChat,
                             onOpenDraft = { d, project -> open(Route.NewThread(projectId = project, draftKey = d.key)) },
                             onTriage = triage,
-                            bottom = LIST_BOTTOM,
+                            bottom = DOCK_ROOM,
                         )
-                        Tab.Projects -> ProjectsList(
+                        HomeTab.Projects -> ProjectsList(
                             o, drafts, selected,
                             onOpenChat = openChat,
                             onOpenProject = { open(Route.Project(it.id)) },
                             onNewScratch = { open(Route.NewThread(scratch = true)) },
-                            bottom = LIST_BOTTOM,
+                            bottom = DOCK_ROOM,
                         )
+                        HomeTab.Settings -> {}
                     }
                 }
             }
         }
-    }
-    TabBar(tab, { tab = it }, onSettings = { open(Route.Settings) })
-}
-
-/** Threads and Projects switch in place; Settings opens over them. */
-@Composable
-private fun TabBar(tab: Tab, onTab: (Tab) -> Unit, onSettings: () -> Unit) {
-    val c = RelayTheme.colors
-    Column(Modifier.fillMaxWidth()) {
-        Divider()
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TabItem(TablerIcons.Outline.Inbox, "Threads", tab == Tab.Activity) { onTab(Tab.Activity) }
-            TabItem(TablerIcons.Outline.LayoutGrid, "Projects", tab == Tab.Projects) { onTab(Tab.Projects) }
-            TabItem(TablerIcons.Outline.Settings2, "Settings", false, onSettings)
-        }
-    }
-}
-
-@Composable
-private fun RowScope.TabItem(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
-    val c = RelayTheme.colors
-    val tint = if (on) c.foreground else c.mutedForeground
-    Column(
-        Modifier.weight(1f).fillMaxHeight().pressable(onClick = onClick, role = Role.Tab, scale = false)
-            .semantics { selected = on },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-    ) {
-        Icon(icon, null, tint = tint, size = 20.dp)
-        Text(label, style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = tint)
     }
 }
