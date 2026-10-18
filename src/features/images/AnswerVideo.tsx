@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+
+/** Loads again this many times after a failure before the player is given up on. */
+const RELOADS = 2;
 
 /** A video an answer embeds, playable where the text puts it; nothing at all if it won't load. */
 export function AnswerVideo({
@@ -18,19 +21,40 @@ export function AnswerVideo({
     queryKey: ["answer-video", chatId, messageId, path],
     queryFn: () => api.projectChatVideo(chatId, messageId, path),
     staleTime: Infinity,
-    retry: false,
+    // Main may not have the saved answer yet when the turn has just ended.
+    retry: 2,
+    retryDelay: 500,
   });
-  const [broken, setBroken] = useState(false);
-  if (!src || broken) return null;
+  const [failures, setFailures] = useState(0);
+  // Where a failed player was, for the one that replaces it to carry on from.
+  const resume = useRef<{ at: number; playing: boolean }>(undefined);
+  if (!src || failures > RELOADS) return null;
   return (
     <video
+      // A new element asks main for the file again; a failed one stays failed.
+      key={failures}
       className="answer-video"
       src={src}
       controls
       preload="metadata"
       aria-label={alt || path.split("/").pop()}
       title={path}
-      onError={() => setBroken(true)}
+      onLoadedMetadata={(e) => {
+        const was = resume.current;
+        resume.current = undefined;
+        if (!was) return;
+        e.currentTarget.currentTime = was.at;
+        if (was.playing) e.currentTarget.play().catch(() => {});
+      }}
+      onError={(e) => {
+        const video = e.currentTarget;
+        // Reaches main.log, so a video that keeps vanishing says why.
+        console.error(
+          `Answer video failed (code ${video.error?.code}: ${video.error?.message}) at ${video.currentTime.toFixed(1)}s, attempt ${failures + 1}: ${path}`,
+        );
+        resume.current = { at: video.currentTime, playing: !video.paused };
+        setFailures(failures + 1);
+      }}
     />
   );
 }

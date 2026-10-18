@@ -67,8 +67,12 @@ export function serveMedia() {
         ? byToken.get(url.pathname.split("/")[1] ?? "")
         : undefined;
     const info = full ? await stat(full).catch(() => null) : null;
-    if (!full || !info?.isFile())
+    if (!full || !info?.isFile()) {
+      console.warn(
+        `relay-media: no file for ${url.pathname} (${full ?? "unknown token"})`,
+      );
       return new Response("Not found", { status: 404 });
+    }
     const headers = {
       "content-type":
         videoMime(full) ?? picture(full) ?? "application/octet-stream",
@@ -76,14 +80,20 @@ export function serveMedia() {
       "cache-control": "no-store",
     };
     const range = byteRange(request.headers.get("range"), info.size);
-    if (!range)
+    if (!range) {
+      console.warn(
+        `relay-media: range ${request.headers.get("range")} outside ${info.size} bytes of ${full}`,
+      );
       return new Response(null, {
         status: 416,
         headers: { ...headers, "content-range": `bytes */${info.size}` },
       });
-    const body = Readable.toWeb(
-      createReadStream(full, { start: range.start, end: range.end }),
+    }
+    const file = createReadStream(full, { start: range.start, end: range.end });
+    file.on("error", (error) =>
+      console.warn(`relay-media: reading ${full} failed:`, error),
     );
+    const body = Readable.toWeb(file);
     return new Response(body as ReadableStream, {
       status: range.partial ? 206 : 200,
       headers: {
