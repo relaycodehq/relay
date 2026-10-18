@@ -804,6 +804,8 @@ export interface Api
     id: string,
     result: import("./drafts").HeldSendResult,
   ): Promise<void>;
+  /** Saves a paste too big for a message as the draft's nth paste file; its path. */
+  savePaste(text: string, n: number): Promise<string>;
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */

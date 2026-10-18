@@ -4,6 +4,7 @@ import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 import { ANSWER_IMAGE_PROMPT } from "../../../../shared/answer-images";
 import { renderPrompt } from "../../../../shared/html-render";
 import { withWorktreeEnv } from "../../worktree-env";
+import { pastesRoot } from "../../../drafts";
 import { chromeArgs } from "./sdk";
 
 /** Relay's own tools reach Claude as `mcp__relay__…`. */
@@ -45,14 +46,19 @@ const rulePath = (path: string) =>
 
 /**
  * Linked folders. A writable one joins the working directories, so it is
- * edited under the same mode as the project; a read-only one is only read
- * without asking, and edits there still ask.
+ * edited under the same mode as the project; a read-only one, like the
+ * other `readable` folders, is only read without asking, and edits there
+ * still ask.
  */
 export function linkedFolders(
   links: AgentOptions["links"] = [],
+  readable: string[] = [],
 ): Partial<Options> {
   const writes = links.filter((l) => l.access === "write");
-  const reads = links.filter((l) => l.access === "read");
+  const reads = [
+    ...links.filter((l) => l.access === "read").map((l) => l.path),
+    ...readable,
+  ];
   return {
     ...(writes.length
       ? { additionalDirectories: writes.map((l) => l.path) }
@@ -61,7 +67,7 @@ export function linkedFolders(
       ? {
           settings: {
             permissions: {
-              allow: reads.map((l) => `Read(${rulePath(l.path)}/**)`),
+              allow: reads.map((path) => `Read(${rulePath(path)}/**)`),
             },
           },
         }
@@ -93,6 +99,7 @@ export function sessionConfig(
   skipsPermissions: boolean,
   env: Record<string, string>,
 ): Options {
+  const pastes = pastesRoot();
   return {
     cwd: options.cwd,
     pathToClaudeCodeExecutable: executable,
@@ -114,7 +121,8 @@ export function sessionConfig(
           }
         : {}),
     settingSources: ["user", "project", "local"],
-    ...linkedFolders(options.links),
+    // Pastes too big for a message wait in Relay's data folder for it to read.
+    ...linkedFolders(options.links, pastes ? [pastes] : []),
     // Allow rules in those settings skip canUseTool; this list they can't.
     ...(options.readOnly
       ? { disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit"] }

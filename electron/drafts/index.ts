@@ -12,6 +12,7 @@ import {
 import { DraftStore } from "./store";
 
 export { DraftStore };
+export { pastesRoot, savePaste, setPastesRoot, sweepPastes } from "./pastes";
 
 /** How long a phone's send waits on the desktop's page; the phone gives a send two minutes. */
 const heldSendMs = 110_000;

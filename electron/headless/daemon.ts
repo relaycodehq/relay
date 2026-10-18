@@ -67,7 +67,7 @@ import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { ReadAloud } from "../read-aloud";
 import { setOnnxRuntimeDir } from "../util/onnxruntime";
 import { PhoneRemote } from "../remote/phone-remote";
-import { DraftStore, Drafts } from "../drafts";
+import { DraftStore, Drafts, setPastesRoot, sweepPastes } from "../drafts";
 import { applyLinkedTools, teaTokenFor } from "../source-control";
 import {
   agentProjects,
@@ -149,6 +149,10 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   setOwnAgentsDir(join(home, "agent-clis"));
   setProfilesRoot(join(home, "agent-accounts"));
   setOpenCodeEnvRoot(join(home, "opencode"));
+  setPastesRoot(join(home, "pastes"));
+  void sweepPastes().catch((e) =>
+    console.warn("Could not sweep old pastes:", e),
+  );
   configureCursor({
     worker: join(__dirname, "cursor-worker.mjs"),
     root: join(home, "cursor-sdk"),

@@ -376,6 +376,7 @@ const methods = [
   "sharedDraftOther",
   "waitingDraftSends",
   "finishDraftSend",
+  "savePaste",
   "openBugReport",
   "saveBugReport",
   "writeBugReport",

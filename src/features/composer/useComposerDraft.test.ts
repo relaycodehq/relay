@@ -10,8 +10,18 @@ import type { DraftImage } from "../images/draft-images";
 import type { DraftEditor } from "./useComposerDraft";
 
 vi.mock("react", () => harnessReact);
+const savePaste = vi.hoisted(() =>
+  vi.fn(async (_text: string, n: number) =>
+    n > 1
+      ? `/data/pastes/x/pasted-text-${n}.txt`
+      : "/data/pastes/x/pasted-text.txt",
+  ),
+);
 vi.mock("../../lib/api", () => ({
-  api: { pathForFile: (file: { path?: string }) => file.path ?? "" },
+  api: {
+    pathForFile: (file: { path?: string }) => file.path ?? "",
+    savePaste,
+  },
 }));
 vi.mock("../images/image-pills", () => ({ useImagePills: () => true }));
 const saved = new Map<string, DraftImage[]>();
@@ -72,6 +82,7 @@ beforeEach(() => {
   store.clear();
   saved.clear();
   savedListeners.clear();
+  savePaste.mockClear();
   preparing = 0;
   finishScreenshot = undefined;
   vi.stubGlobal("localStorage", {
@@ -439,4 +450,80 @@ it("pastes the words that came with a file that isn't on disk, and mentions one 
   draft().paste(saved as never);
   expect(saved.preventDefault).toHaveBeenCalled();
   expect(insertFiles).toHaveBeenCalledWith(["/docs/notes.pdf"], undefined);
+});
+
+const plainPaste = (text: string) => ({
+  clipboardData: {
+    getData: (type: string) => (type === "text/plain" ? text : ""),
+    files: [],
+    items: [],
+  },
+  preventDefault: vi.fn(),
+  stopPropagation: vi.fn(),
+});
+
+it("sends a paste of 32KB or more as a file named in the message, numbered after the draft's", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  writeDraft(KEY, "First `/data/pastes/a/pasted-text.txt`");
+  const insertPaste = vi.fn(() => true);
+  const insertFiles = vi.fn();
+  const editor = {
+    current: { insertPaste, insertFiles, adoptPills } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  const huge = "log line\n".repeat(4000);
+  const event = plainPaste(huge);
+  draft().paste(event as never);
+  await settle();
+  expect(event.preventDefault).toHaveBeenCalled();
+  expect(insertPaste).not.toHaveBeenCalled();
+  expect(savePaste).toHaveBeenCalledWith(huge.trimEnd(), 2);
+  expect(insertFiles).toHaveBeenCalledWith([
+    "/data/pastes/x/pasted-text-2.txt",
+  ]);
+  expect(draft().error).toBeUndefined();
+});
+
+it("sends a long paste the message can't hold as a file instead of refusing it", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const insertPaste = vi.fn(() => false);
+  const insertFiles = vi.fn();
+  const editor = {
+    current: { insertPaste, insertFiles, adoptPills } as unknown as DraftEditor,
+  };
+  const draft = mount(() => useComposerDraft(KEY, editor));
+  await settle();
+  const long = "line\n".repeat(300).trimEnd();
+  draft().paste(plainPaste(long) as never);
+  await settle();
+  expect(insertPaste).toHaveBeenCalledWith(long);
+  expect(savePaste).toHaveBeenCalledWith(long, 1);
+  expect(insertFiles).toHaveBeenCalledWith(["/data/pastes/x/pasted-text.txt"]);
+  expect(draft().error).toBeUndefined();
+});
+
+it("names the saved paste in the draft it was pasted in, once another thread shows", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { readDraft, writeDraft } = await import("./drafts");
+  writeDraft(KEY, "Look");
+  let finish!: (path: string) => void;
+  savePaste.mockImplementationOnce(
+    () => new Promise<string>((resolve) => (finish = resolve)),
+  );
+  const insertFiles = vi.fn();
+  const editor = {
+    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+  };
+  let key = KEY;
+  const draft = mount(() => useComposerDraft(key, editor));
+  await settle();
+  draft().pasteRefused("x".repeat(40_000));
+  key = "chat-draft:t2";
+  rerender();
+  finish("/data/pastes/y/pasted-text.txt");
+  await settle();
+  expect(insertFiles).not.toHaveBeenCalled();
+  expect(readDraft(KEY)).toBe("Look `/data/pastes/y/pasted-text.txt`");
 });

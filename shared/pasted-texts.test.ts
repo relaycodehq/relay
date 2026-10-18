@@ -7,6 +7,8 @@ import {
   pastesAfter,
   replacePastedTexts,
   type PastedText,
+  isFilePaste,
+  nextPasteFile,
 } from "./pasted-texts";
 import { codeReferenceMessage, parseCodeReferences } from "./code-references";
 
@@ -89,6 +91,24 @@ describe("pasted texts", () => {
     expect(isLongPaste(log)).toBe(false);
     expect(isLongPaste("x".repeat(20_000))).toBe(true);
     expect(isLongPaste("line\n".repeat(200))).toBe(true);
+  });
+  it("sends pastes of 32KB or more as files, counting bytes", () => {
+    expect(isFilePaste("x".repeat(32 * 1024 - 1))).toBe(false);
+    expect(isFilePaste("x".repeat(32 * 1024))).toBe(true);
+    // 11k characters, but 3 bytes each.
+    expect(isFilePaste("日".repeat(11_000))).toBe(true);
+    expect(isFilePaste("😅".repeat(8192))).toBe(true);
+    expect(isFilePaste("😅".repeat(8191))).toBe(false);
+  });
+  it("numbers paste files after those the draft names", () => {
+    expect(nextPasteFile("look at this")).toBe(1);
+    expect(nextPasteFile("`/data/pastes/a/pasted-text.txt`")).toBe(2);
+    expect(
+      nextPasteFile(
+        "`C:\\Relay\\pastes\\b\\pasted-text-3.txt` and `/p/a/pasted-text.txt`",
+      ),
+    ).toBe(4);
+    expect(nextPasteFile("`/home/me/my-pasted-text.txt`")).toBe(1);
   });
   it("cleans line endings and surrounding blank lines, keeping indentation", () => {
     expect(cleanPaste("\r\n\n    indented\r\n  next\r\n\r\n")).toBe(

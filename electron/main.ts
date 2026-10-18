@@ -71,7 +71,7 @@ import { projectForFolder } from "./app/open-folder";
 import { pullRequestHosts } from "./pull-requests/setup";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { PhoneRemote } from "./remote/phone-remote";
-import { DraftStore, Drafts } from "./drafts";
+import { DraftStore, Drafts, setPastesRoot, sweepPastes } from "./drafts";
 import { DraftPages } from "./drafts/pages";
 import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
@@ -366,6 +366,10 @@ app
     setOwnAgentsDir(join(app.getPath("userData"), "agent-clis"));
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
     setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
+    setPastesRoot(join(app.getPath("userData"), "pastes"));
+    void sweepPastes().catch((e) =>
+      console.warn("Could not sweep old pastes:", e),
+    );
     // Before anything starts an agent: runs ask it which account they use.
     const agentAccounts = new AgentAccounts(loaded, (state) =>
       window.send("relay:agent-accounts", state),

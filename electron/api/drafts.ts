@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { draftKeySchema, draftWriteSchema } from "../../shared/drafts";
+import { savePaste } from "../drafts";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const heldResultSchema = z.union([
@@ -21,6 +22,16 @@ export function draftHandlers(ctx: ApiContext) {
     waitingDraftSends: () => drafts.waitingSends(),
     finishDraftSend: takes([z.uuid(), heldResultSchema], (id, result) =>
       drafts.finishSend(id, result),
+    ),
+    savePaste: takes(
+      [
+        z
+          .string()
+          .min(1)
+          .max(50 * 1024 * 1024),
+        z.number().int().min(1).max(999),
+      ],
+      (text, n) => savePaste(text, n),
     ),
   } satisfies Handlers;
 }

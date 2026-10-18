@@ -16,7 +16,7 @@ export interface PromptEvents {
   /** Opens screenshot n, from its pill. */
   onOpenImage?: (n: number) => void;
   /** A paste the message can't hold was turned away. */
-  onPasteRefused?: () => void;
+  onPasteRefused?: (text: string) => void;
 }
 
 /**
@@ -54,7 +54,7 @@ export function usePromptEditor(
         if (plain === undefined) return false;
         // An empty clipboard changes nothing either, but isn't too long.
         if (!pasteText(view, pills, plain) && plain)
-          callbacks.current.onPasteRefused?.();
+          callbacks.current.onPasteRefused?.(plain);
         return true;
       },
       clipboardTextSerializer: (slice) => serialize(slice.content),

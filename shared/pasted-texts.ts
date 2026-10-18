@@ -30,6 +30,36 @@ export const pastedLines = (text: string) => text.split("\n").length;
 export const isLongPaste = (text: string) =>
   text.length >= 20_000 || pastedLines(text) >= 200;
 
+/**
+ * A paste this big goes to the agent as a file it reads, rather than in the
+ * message. Counted in bytes like T3 Code does: characters understate what
+ * emoji- or CJK-heavy text costs.
+ */
+export const PASTE_FILE_BYTES = 32 * 1024;
+
+export function isFilePaste(text: string) {
+  if (text.length >= PASTE_FILE_BYTES) return true;
+  if (text.length * 4 < PASTE_FILE_BYTES) return false;
+  let bytes = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0)!;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes >= PASTE_FILE_BYTES;
+}
+
+/** The file the message's nth spilled paste is saved as. */
+export const pasteFileName = (n: number) =>
+  n > 1 ? `pasted-text-${n}.txt` : "pasted-text.txt";
+
+/** The number for the next paste file in `draft`, after those it names. */
+export function nextPasteFile(draft: string) {
+  const taken = [...draft.matchAll(/[\\/]pasted-text(?:-(\d+))?\.txt`/g)].map(
+    (m) => Number(m[1] ?? 1),
+  );
+  return Math.max(0, ...taken) + 1;
+}
+
 /** Serialises a pill: the fenced paste on its own lines, where the pill sits. */
 export function pasteMarkdown({ n, text }: PastedText) {
   const fence = "`".repeat(

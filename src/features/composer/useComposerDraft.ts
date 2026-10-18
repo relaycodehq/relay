@@ -10,9 +10,12 @@ import {
 import { agentMentionPattern } from "../../../shared/agents";
 import {
   cleanPaste,
+  isFilePaste,
   isLongPaste,
+  nextPasteFile,
   pastedTexts,
 } from "../../../shared/pasted-texts";
+import { fileMarkdown } from "./prompt-text";
 import { api } from "../../lib/api";
 import {
   isScreenshot,
@@ -279,6 +282,31 @@ export function useComposerDraft(
       if (!editor.current.insertPaste(words)) setError(PASTE_TOO_LONG);
     } else if (!editor.current.pasteText(words)) setError(PASTE_TOO_LONG);
   }
+  /**
+   * A paste too big for the message, or big enough to cost the agent's
+   * context for nothing, is saved as a file and goes in as its path, which
+   * the agent reads as much of as it needs.
+   */
+  async function spillPaste(pasted: string) {
+    setError(undefined);
+    try {
+      const path = await api.savePaste(pasted, nextPasteFile(readDraft(key)));
+      if (shownKey.current === key && editor.current)
+        editor.current.insertFiles([path]);
+      else {
+        const chips = draftChips(key).files;
+        chips.save([...new Set([...chips.load(), path])]);
+        const now = readDraft(key);
+        writeDraft(key, `${now}${now ? " " : ""}${fileMarkdown(path)}`);
+      }
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? `Could not save the paste: ${error.message}`
+          : "Could not save the paste.",
+      );
+    }
+  }
   /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
   function addFiles(files: File[], point?: Point) {
     const others = files.filter((file) => !isScreenshot(file));
@@ -338,7 +366,11 @@ export function useComposerDraft(
     /** What went wrong bringing something in, or sending it. */
     error,
     setError,
-    pasteRefused: () => setError(PASTE_TOO_LONG),
+    /** Pasted text the message can't hold goes in as a file. */
+    pasteRefused: (text: string) => {
+      const pasted = cleanPaste(text);
+      if (pasted) void spillPaste(pasted);
+    },
     /** A screenshot is being prepared; the message waits for it. */
     preparing,
     /** The screenshot being drawn on. */
@@ -423,14 +455,16 @@ export function useComposerDraft(
         addFiles(files);
         return;
       }
-      // A long paste becomes a pill at the caret instead of flooding the draft.
+      // A long paste becomes a pill at the caret instead of flooding the
+      // draft, and a huge one, or one the message can't hold, a file.
       const pasted = cleanPaste(plain);
-      if (!isLongPaste(pasted) || pastedTexts(pasted).length) return;
+      if (pastedTexts(pasted).length) return;
+      const huge = isFilePaste(pasted);
+      if (!huge && !isLongPaste(pasted)) return;
       event.preventDefault();
       event.stopPropagation();
-      setError(
-        editor.current?.insertPaste(pasted) ? undefined : PASTE_TOO_LONG,
-      );
+      if (!huge && editor.current?.insertPaste(pasted)) setError(undefined);
+      else void spillPaste(pasted);
     },
     drop(event: DragEvent) {
       const image = droppedImage(event.dataTransfer);
