@@ -130,3 +130,29 @@ it("rejects paths escaping the paste folder, invalid uploads and chunks arriving
     client.call("uploadPaste", id, 1, 200 * 1024 * 1024, "ZA=="),
   ).rejects.toThrow("too large");
 });
+
+it("retries a failed paste upload before sending its rewritten reference", async () => {
+  const { client, call } = peer();
+  const path = await savePaste("important log", 1);
+  const messages = [{ body: `Read \`${path}\`` }];
+  call.mockRejectedValueOnce(new Error("link lost"));
+  await expect(sendPastes(messages, client, true)).rejects.toThrow("link lost");
+  const carried = await sendPastes(messages, client, true);
+  const remotePath = carried[0]!.body.match(/`([^`]+)`/)![1]!;
+  expect(await readFile(remotePath, "utf8")).toBe("important log");
+});
+
+it("refuses an interrupted download and retries it instead of caching a broken reference", async () => {
+  const { client, call } = peer();
+  const path = `/other/${randomUUID()}/pasted-text.txt`;
+  const messages = [{ body: `Read \`${path}\`` }];
+  call.mockResolvedValueOnce(Buffer.alloc(handoffChunk, 65).toString("base64"));
+  call.mockResolvedValueOnce(null);
+  await expect(receivePastes(messages, client, true)).rejects.toThrow(
+    "ended early",
+  );
+  call.mockResolvedValueOnce(Buffer.from("complete").toString("base64"));
+  const arrived = await receivePastes(messages, client, true);
+  const here = arrived[0]!.body.match(/`([^`]+)`/)![1]!;
+  expect(await readFile(here, "utf8")).toBe("complete");
+});

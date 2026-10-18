@@ -96,7 +96,10 @@ export function receivePastes<T extends { body: string }>(
         here: string;
       do {
         const data = await client.call("downloadPaste", path, offset);
-        if (data === null) return null;
+        if (data === null) {
+          if (offset) throw new Error("The paste download ended early.");
+          return null;
+        }
         const bytes = Buffer.from(data, "base64");
         if (
           bytes.length > handoffChunk ||

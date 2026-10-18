@@ -933,7 +933,7 @@ it("tells once here that a live handoff's thread needs you, as the other compute
 });
 
 /** A new thread started on the mini, its first answer written there and mirrored here. */
-async function startedThread() {
+async function startedThread(withPaste = false) {
   const paired = await pairedComputers();
   const { laptop, mini, sender, computerId } = paired;
   const thread = await laptop.chats.create(
@@ -941,7 +941,13 @@ async function startedThread() {
     { kind: "project" },
     "worktree",
   );
-  const first = input("@codex Add a changelog");
+  setPastesRoot(join(laptop.dir, "pastes"));
+  const paste = withPaste
+    ? await savePaste("initial log\n".repeat(4000), 1)
+    : undefined;
+  const first = input(
+    `@codex Add a changelog${paste ? ` using \`${paste}\`` : ""}`,
+  );
   await laptop.chats.firstMessageOnly(thread.id, first);
   const kept = await laptop.chats.get(thread.id);
   expect(kept.messages.map((m) => m.id)).toEqual([first.id]);
@@ -964,11 +970,11 @@ async function startedThread() {
       (await laptop.chats.get(thread.id)).messages.map((m) => m.id),
     ).toEqual(there.messages.map((m) => m.id)),
   );
-  return { ...paired, thread, first, there };
+  return { ...paired, thread, first, there, paste };
 }
 
 it("starts a new thread on the other computer with its first message, answered only there", async () => {
-  const { first, there } = await startedThread();
+  const { first, there, paste, mini } = await startedThread(true);
   // Its own words as the first turn, not a note to carry on from.
   const prompt = (await prompts()).at(-1)!;
   expect(prompt).toContain("Add a changelog");
@@ -976,6 +982,12 @@ it("starts a new thread on the other computer with its first message, answered o
   expect(there.messages[0]).toMatchObject({ id: first.id, role: "user" });
   expect(there.messages[0]!.handedOver).toBeUndefined();
   expect(there.messages.at(-1)).toMatchObject({ role: "assistant" });
+  const remotePaste = there.messages[0]!.body.match(/`([^`]+)`/)![1]!;
+  expect(remotePaste.startsWith(join(mini.dir, "pastes"))).toBe(true);
+  expect(await readFile(remotePaste, "utf8")).toBe(
+    await readFile(paste!, "utf8"),
+  );
+  expect(prompt).toContain(remotePaste);
 });
 
 it("keeps a started thread's first message when it's taken back without the other computer", async () => {
