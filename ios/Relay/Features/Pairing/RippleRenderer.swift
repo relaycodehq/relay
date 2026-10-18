@@ -51,6 +51,7 @@ private struct FieldUniforms {
     var front: Float
     var entering: Float
     var develop: Float
+    var turn: Float
 }
 
 /// Laid out as Ripples.metal's CameraUniforms.
@@ -97,6 +98,10 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
     /// The last frame's camera and clock, which a touch's ring starts from.
     /// How far the view has turned round the computer, radians.
     private var yaw: Float = 0
+    /// The turn the field's dots were given their places in the viewfinder at, kept from the start
+    /// of a scan through its burst so none swaps place mid-flight.
+    private var scanYaw: Float = 0
+    private var lastGather: Float = 0
     private var shown: (viewProjection: simd_float4x4, eye: SIMD3<Float>, time: Double)?
 
     var palette: RipplePalette
@@ -187,6 +192,8 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
         shown = (vp, eye, time)
         let px = screen.y / (2 * tan(Self.fov * .pi / 360))
         let s = f.scene
+        if s.gather > 0, lastGather == 0 { scanYaw = yaw }
+        lastGather = s.gather
         let scanHot = simd_mix(palette.hot, palette.overCamera, SIMD3(repeating: s.covers))
         let phase = time >= cycle0 ? (time - cycle0).truncatingRemainder(dividingBy: Self.cycle) : -1
 
@@ -238,7 +245,7 @@ final class RippleRenderer: NSObject, MTKViewDelegate {
             scan: scanHot, screen: screen, time: Float(time), px: px, unit: unit, baseAlpha: palette.baseAlpha,
             gather: s.gather, clear: s.clear, rest: s.rest, lock: s.lock, charge: s.charge, burst: s.burst,
             modules: Int32(moduleBytes.isEmpty ? 0 : f.modules), front: s.front, entering: s.entering ? 1 : 0,
-            develop: s.develop)
+            develop: s.develop, turn: scanYaw)
         var waves = [SIMD4<Float>](repeating: .zero, count: Self.slots)
         for (i, p) in pulses.enumerated() { waves[i] = p }
         waves += packets

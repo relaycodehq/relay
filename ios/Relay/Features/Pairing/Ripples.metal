@@ -2,7 +2,7 @@
 using namespace metal;
 
 // The pairing screen's field: rows of dots on a gently swelling floor, rings going out from the
-// phone and the computer. Scanning, the near middle of it lands in the viewfinder and takes the
+// phone and the computer. Scanning, the whole of it folds into the viewfinder and takes the
 // camera's light, the picture develops out across the screen in dots, the dots lock onto the code,
 // and the code bursts back out into the whole field.
 
@@ -16,9 +16,13 @@ constant float2 COMPUTER = float2(0.0, -13.0);
 constant float STEP = 0.36;
 /// Ring slots, room for a finger's too, then the two packets.
 constant int SLOTS = 24;
-/// The near middle of the field: a dot for each place in the viewfinder.
+/// Places a side of the viewfinder's grid.
 constant int GRID = 50;
-constant int G0 = (COLS - GRID) / 2;
+/// The stretch of the field, as you face it, that folds into the viewfinder; the dots outside it
+/// land on its edges. Its places are wider than the dots are apart, so each has a dot of its own,
+/// and its corners stay on the field however far the view has turned.
+constant float2 SCAN_LO = float2(-12.5, -22.0);
+constant float2 SCAN_HI = float2(12.5, 3.0);
 /// How far the viewfinder's corner marks run along its edges, in dots.
 constant int BRACKET = 11;
 /// Points a cell of the camera's dots: the landed grid's own pitch, two to a module of the code.
@@ -57,6 +61,8 @@ struct FieldUniforms {
     float entering;
     /// How far the viewfinder's landed dots have taken the camera's light, 0..1.
     float develop;
+    /// How far the view had turned round the computer when the scan began, radians.
+    float turn;
 };
 
 struct DotOut {
@@ -80,6 +86,24 @@ static float2 onCode(float3x3 h, float2 m) {
 }
 
 static float ease(float x) { return x * x * (3.0 - 2.0 * x); }
+
+/// A point of the field as you face it once the view has turned `turn` round the computer, and back.
+static float2 facing(float2 xz, float turn) {
+    float2 d = xz - COMPUTER;
+    return COMPUTER + float2(d.x * cos(turn) - d.y * sin(turn), d.x * sin(turn) + d.y * cos(turn));
+}
+
+static float2 unfacing(float2 v, float turn) {
+    float2 d = v - COMPUTER;
+    return COMPUTER + float2(d.x * cos(turn) + d.y * sin(turn), -d.x * sin(turn) + d.y * cos(turn));
+}
+
+/// The dot (column, instance row) nearest a point of the field.
+static int2 nearestDot(float2 xz) {
+    float r = round((5.5 - xz.y) / (STEP * 0.866));
+    float c = round(xz.x / STEP + float(COLS - 1) * 0.5 - fmod(abs(r), 2.0) * 0.5);
+    return int2(int(c), r >= 0.0 ? int(r) : AWAY - 1 - int(r));
+}
 
 /// How far a viewfinder dot has got from the field to its place, near rows first.
 static float landing(float gather, uint iid, float gy) {
@@ -139,61 +163,58 @@ vertex DotOut dotVertex(
     float4 home = col;
     float homeSize = size;
 
-    int gx = ci - G0;
-    bool chosen = gx >= 0 && gx < GRID && ri < GRID;
-    float2 g = (float2(float(gx), r) + 0.5) / float(GRID);
-    // The module each chosen dot lands on, (0,0) top left; dots sharing one sit on its middle.
+    // Every dot folds into the viewfinder, onto the place of the grid it was over as the field faced
+    // you when the scan began, the near rows at the bottom. One dot a place stays; the rest melt into it.
+    float2 span = SCAN_HI - SCAN_LO;
+    float2 b = (facing(xz, u.turn) - SCAN_LO) / span;
+    int2 place = clamp(int2(floor(float2(b.x, 1.0 - b.y) * float(GRID))), 0, GRID - 1);
+    float2 g = (float2(place) + 0.5) / float(GRID);
+    bool keeps = all(nearestDot(unfacing(SCAN_LO + float2(g.x, 1.0 - g.y) * span, u.turn)) == int2(ci, ri));
+    // The module each dot lands on, (0,0) top left; dots sharing one sit on its middle.
     float2 m = float2(g.x, 1.0 - g.y);
     int n = max(u.modules, 1);
     int2 cell = clamp(int2(m * float(n)), 0, n - 1);
-    bool dark = chosen && u.modules > 0 && modules[cell.y * n + cell.x] != 0;
+    bool dark = u.modules > 0 && modules[cell.y * n + cell.x] != 0;
     float2 mid = onCode(u.code, float2(0.5));
     float modulePx = length((onCode(u.code, float2(1.0, 0.0)) - onCode(u.code, float2(0.0))) * u.screen * 0.5) / float(n);
     float fade = 1.0;
     float soft = 0.0;
     float4 at = clip;
-    if (chosen) {
-        float p = landing(u.gather, iid, g.y);
-        int ex = min(gx, GRID - 1 - gx), ey = min(ri, GRID - 1 - ri);
-        bool bracket = min(ex, ey) == 0 && max(ex, ey) < BRACKET;
-        float cleared = clamp(u.clear * 1.6 - length(g - 0.5) * 0.85, 0.0, 1.0);
-        float2 win = u.window.xy + (g * 2.0 - 1.0) * u.window.zw;
-        float4 onWin = float4(u.scan, 1.0) * (bracket ? 1.0 : 0.4 * (1.0 - cleared));
-        float l = ease(clamp(u.lock * 1.8 - (m.x + m.y) * 0.4, 0.0, 1.0));
+    float p = landing(u.gather, iid, g.y);
+    int ex = min(place.x, GRID - 1 - place.x), ey = min(place.y, GRID - 1 - place.y);
+    bool bracket = min(ex, ey) == 0 && max(ex, ey) < BRACKET;
+    float cleared = clamp(u.clear * 1.6 - length(g - 0.5) * 0.85, 0.0, 1.0);
+    float2 win = u.window.xy + (g * 2.0 - 1.0) * u.window.zw;
+    float4 onWin = float4(u.scan, 1.0) * (bracket ? 1.0 : 0.4 * (1.0 - cleared));
+    float l = ease(clamp(u.lock * 1.8 - (m.x + m.y) * 0.4, 0.0, 1.0));
 
-        float2 from = clip.w > 0.2 ? clip.xy / clip.w : float2(sign(clip.x) * 0.3, -1.3);
-        float2 xy = mix(from, win, p);
-        xy = mix(mix(xy, onCode(u.code, (float2(cell) + 0.5) / float(n)), l), mid, 0.06 * u.charge);
-        col = mix(col, onWin, p);
-        // White-hot as each dot lands, so the read sweeps across the code; white again as it draws in to burst.
-        float white = max(0.6 * sin(M_PI_F * l), 0.55 * u.charge);
-        col = mix(col, dark ? mix(float4(u.scan, 1.0), float4(1.0), white) : float4(0.0), l);
-        float winPx = u.window.z * u.screen.x / float(GRID) * (bracket ? 0.75 : 0.55);
-        size = mix(size, winPx, p) * (1.0 + 1.6 * sin(M_PI_F * p));
-        size = mix(size, modulePx * 0.95, l) * (1.0 - 0.15 * u.charge);
-        // Landed, it holds until the camera's dot in its cell takes over from it.
-        if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.2, 0.9, developed(u.develop, (g - 0.5) * 250.0));
-        if (p + l > 0.0) at = float4(xy, 0.0, 1.0);
-        fade = 1.0 - p;
-    } else if (u.entering > 0.5) {
-        // The halftone's front reaches each dot of the field: it catches the light, then goes.
-        float2 pt = clip.w > 0.2 ? (clip.xy / clip.w - u.window.xy) * u.screen / (2.0 * u.unit) : float2(0.0, -2000.0);
-        float behind = u.front - frontDistance(pt);
-        float glint = exp(-(behind + 6.0) * (behind + 6.0) / 300.0);
-        col = mix(col, float4(u.scan, 1.0) * fog, 0.85 * glint);
-        size *= 1.0 + 0.7 * glint;
-        col *= 1.0 - smoothstep(0.0, 26.0, behind);
-    } else {
-        col *= 1.0 - u.rest;
-    }
+    float2 from = clip.w > 0.2 ? clip.xy / clip.w : float2(sign(clip.x) * 0.3, -1.3);
+    float2 xy = mix(from, win, p);
+    xy = mix(mix(xy, onCode(u.code, (float2(cell) + 0.5) / float(n)), l), mid, 0.06 * u.charge);
+    // Those that melt are only as bright on the way as they were in the field, so the far ones,
+    // thousands packed into the horizon, don't light it up as one bar.
+    col = mix(col, keeps ? onWin : onWin * fog, p);
+    // White-hot as each dot lands, so the read sweeps across the code; white again as it draws in to burst.
+    float white = max(0.6 * sin(M_PI_F * l), 0.55 * u.charge);
+    col = mix(col, dark ? mix(float4(u.scan, 1.0), float4(1.0), white) : float4(0.0), l);
+    float winPx = u.window.z * u.screen.x / float(GRID) * (bracket ? 0.75 : 0.55);
+    size = mix(size, winPx, p) * (1.0 + 1.6 * sin(M_PI_F * p));
+    size = mix(size, modulePx * 0.95, l) * (1.0 - 0.15 * u.charge);
+    // Landed, it holds until the camera's dot in its cell takes over from it.
+    if (u.entering > 0.5 && l == 0.0 && !bracket) col *= 1.0 - smoothstep(0.2, 0.9, developed(u.develop, (g - 0.5) * 250.0));
+    if (!keeps) col *= 1.0 - smoothstep(0.45, 1.0, p);
+    if (p + l > 0.0) at = float4(xy, 0.0, 1.0);
+    fade = 1.0 - p;
 
     // The code bursts and every dot of the field comes out of it: those on its dark modules from
     // where they sit, the rest out of nothing inside it. Each flies out, bows toward you, and drops
     // back into its place.
     if (u.burst >= 0.0) {
-        float2 s0 = dark ? (float2(cell) + 0.5) / float(n) : float2(rand(iid, 2u), rand(iid, 3u));
+        // Only the dots left on the code come out of it; those that melted into them come out of nothing.
+        bool inCode = dark && keeps;
+        float2 s0 = inCode ? (float2(cell) + 0.5) / float(n) : float2(rand(iid, 2u), rand(iid, 3u));
         float2 hs = u.screen * 0.5;
-        float2 S = mix(onCode(u.code, s0), mid, dark ? 0.06 : 0.0) * hs;
+        float2 S = mix(onCode(u.code, s0), mid, inCode ? 0.06 : 0.0) * hs;
         float2 E = (clip.w > 0.2 ? clip.xy / clip.w : float2(sign(clip.x) * 2.0, -2.0)) * hs;
         float2 away = S - mid * hs;
         away = length(away) > 1.0 ? normalize(away) : float2(cos(float(iid)), sin(float(iid)));
@@ -211,16 +232,16 @@ vertex DotOut dotVertex(
 
         // Hot out of the code, cooling to where it lands, where it glints once and settles.
         float4 landed = mix(home, float4(u.hot, 1.0) * fog, 0.75);
-        float4 start = dark ? mix(float4(u.scan, 1.0), float4(1.0), 0.55) : float4(u.scan, 1.0);
+        float4 start = inCode ? mix(float4(u.scan, 1.0), float4(1.0), 0.55) : float4(u.scan, 1.0);
         float after = u.burst - delay - dur;
         col = after > 0.0 ? mix(home, landed, exp(-after * 3.0)) : mix(start, landed, smoothstep(0.25, 1.0, t));
-        col *= dark ? 1.0 : smoothstep(0.0, 0.1, t);
+        col *= inCode ? 1.0 : smoothstep(0.0, 0.1, t);
         // A few come right at you, big and out of focus.
         float toward = pow(rand(iid, 9u), 5.0) * 3.5 * sin(M_PI_F * t);
         soft = clamp(toward / 2.0, 0.0, 1.0);
         col *= 1.0 - 0.55 * soft;
         float glint = after > 0.0 ? exp(-after * 3.0) : 1.0;
-        size = mix(modulePx * (dark ? 0.85 : 0.6), homeSize * (1.0 + 0.5 * glint), q) * (1.0 + toward);
+        size = mix(modulePx * (inCode ? 0.85 : 0.6), homeSize * (1.0 + 0.5 * glint), q) * (1.0 + toward);
         fade = smoothstep(0.6, 1.0, t);
     }
 
