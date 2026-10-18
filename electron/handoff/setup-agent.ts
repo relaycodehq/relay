@@ -232,7 +232,7 @@ export function setupPrompt(p: {
   const host = remote?.host ?? "the host";
   const full = remote?.full ?? "owner/name";
   const github = host === "github.com";
-  const githubSignIn = ` For GitHub, \`gh auth login --hostname github.com --git-protocol https --web\` prints a one-time code and waits; send them the code and https://github.com/login/device, and wait for it. gh keeps several accounts but makes the new one active, so switch back to the one that was active with \`gh auth switch\`, then give the new account to this clone alone. Clone with \`git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!f() { test "$1" = get && echo username=<account> && echo "password=$(gh auth token --user <account>)"; }; f' clone …\`, and set the same two helper lines in the clone's own config (\`git config credential.https://github.com.helper ''\`, then \`git config --add …\`), so only that folder uses it and no token is written anywhere. Ask the user only when it's unclear which of their accounts to use.`;
+  const githubSignIn = ` For GitHub, \`gh auth login --hostname github.com --git-protocol https --web\` prints a one-time code and waits; send them the code and https://github.com/login/device, and wait for it.`;
   return `Relay is handing a thread from ${p.from} to this computer, but its project isn't here yet, and Relay's own clone of ${p.url} failed. Git said:
 
 \`\`\`
@@ -243,7 +243,7 @@ Get it cloned into exactly \`${p.dest}\`. Relay adds it as a project by itself o
 
 This computer: ${platformName()}. On PATH: ${p.tools.on.join(", ") || "none of git, gh, glab, ssh"}${p.tools.missing.length ? `; not found: ${p.tools.missing.join(", ")}` : ""}. SSH public keys in ~/.ssh: ${p.keys.join(", ") || "none"}.
 
-First try what already works here: when an SSH key here is accepted (\`ssh -o BatchMode=yes -T git@${host}\`), clone over SSH (\`git@${host}:${full}.git\`). Sign in only when nothing here gets through, and never sign out of, replace or switch away from an account already signed in here: other things on this computer use it.
+First try what already works here: when an SSH key here is accepted (\`ssh -o BatchMode=yes -T git@${host}\`), clone over SSH (\`git@${host}:${full}.git\`). When nothing here gets through, don't decide how to sign in. Tell the user what's wrong and what's signed in here now, then ask: may you sign in to their account here, which makes it the one this computer uses (say so when that replaces or switches away from an account already signed in), or will they sort it out on this computer themselves? Do only what they allow, and nothing clever around accounts beyond it.
 
 The user isn't at this computer. They read this conversation on ${p.from} and answer from there, so:
 - Run nothing that waits for typed input. When signing in needs the user, start it in the background so it keeps waiting, then tell them exactly what to open and what to paste, the code or key in a code block of its own.${github ? githubSignIn : ""}
