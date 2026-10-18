@@ -176,10 +176,8 @@ vertex DotOut dotVertex(
     float size = big ? min(u.px * 0.045 / max(clip.w, 0.01), 30.0 * u.unit)
                      : u.unit * (0.5 + 0.5 * grain) * clamp(7.0 / max(clip.w, 0.01), 0.7, 1.8);
     size *= 1.0 + 1.5 * h;
-    // Our accent, with teal, magenta and white specks through it.
-    float hue = rand(iid, 25u);
-    float3 tint = hue < 0.4 ? u.hot : hue < 0.7 ? float3(0.25, 0.9, 0.78)
-                : hue < 0.9 ? float3(0.95, 0.3, 0.72) : float3(1.0);
+    // All in the accent, some specks paler toward white.
+    float3 tint = mix(u.hot, float3(1.0), 0.55 * pow(rand(iid, 25u), 3.0));
     // Brighter on the swell's crests, so it shows as bands of light, and each speck twinkles.
     float crest = smoothstep(-0.12, 0.16, swell);
     float twinkle = 0.55 + 0.45 * sin(u.time * (1.0 + 2.5 * rand(iid, 26u)) + 6.283 * rand(iid, 27u));
