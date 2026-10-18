@@ -1,7 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join, relative } from "node:path";
 import { pasteFileName } from "../../shared/pasted-texts";
+
+/** A paste untouched this long, and named by no saved thread or draft, goes. */
+const keepMs = 30 * 24 * 60 * 60 * 1000;
 
 let root: string | undefined;
 /** Where pastes too big for a message are kept: Relay's own data folder, set as the app starts. */
@@ -21,7 +33,15 @@ export async function readPaste(
   at = root,
 ) {
   if (!at || !pasteRelative.test(relative(at, path))) return null;
-  if (!pasteRelative.test(relative(await realpath(at), await realpath(path))))
+  let real: string;
+  try {
+    real = await realpath(path);
+  } catch (e) {
+    // Deleted, or never copied here: the message keeps naming it as it was.
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw e;
+  }
+  if (!pasteRelative.test(relative(await realpath(at), real)))
     throw new Error("The paste points outside Relay's paste folder.");
   const handle = await open(path, "r");
   try {
@@ -80,4 +100,50 @@ export async function savePaste(text: string, n: number) {
   const path = join(dir, pasteFileName(n));
   await writeFile(path, text, { mode: 0o600 });
   return path;
+}
+
+const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === "ENOENT";
+
+/** The files in `places` that can name a paste: each file itself, or the `.json` files directly in a folder. */
+async function savedFiles(places: string[]) {
+  const files: string[] = [];
+  for (const place of places) {
+    const names = await readdir(place).catch((e) => {
+      if (missing(e)) return null;
+      if ((e as NodeJS.ErrnoException).code === "ENOTDIR") return undefined;
+      throw e;
+    });
+    if (names === undefined) files.push(place);
+    else
+      for (const name of names ?? [])
+        if (name.endsWith(".json")) files.push(join(place, name));
+  }
+  return files;
+}
+
+/**
+ * Drops pastes nobody touched in a month that no saved thread, draft or
+ * queued send still names; a thread resumed later would point at a file that's
+ * gone. Any file it can't read stops the sweep rather than risk a paste in use.
+ */
+export async function sweepPastes(places: string[], now = Date.now()) {
+  if (!root) return;
+  const names = await readdir(root).catch((e) => {
+    if (missing(e)) return [];
+    throw e;
+  });
+  const old = new Set<string>();
+  for (const name of names)
+    if (now - (await stat(join(root, name))).mtimeMs > keepMs) old.add(name);
+  if (!old.size) return;
+  for (const file of await savedFiles(places)) {
+    const text = await readFile(file, "utf8").catch((e) => {
+      if (missing(e)) return "";
+      throw e;
+    });
+    for (const name of old) if (text.includes(name)) old.delete(name);
+    if (!old.size) return;
+  }
+  for (const name of old)
+    await rm(join(root, name), { recursive: true, force: true });
 }

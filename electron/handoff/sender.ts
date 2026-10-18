@@ -368,10 +368,15 @@ export class Handoffs {
     const prior = this.mirrors.get(chat.id) ?? Promise.resolve();
     const copying = prior
       .then(async () => {
-        const client = await this.computers.connected(computerId);
-        const [message] = await this.receivePastes(computerId, client, [
-          parsed.data as ChatMessage,
-        ]);
+        const live = parsed.data as ChatMessage;
+        // A paste that won't copy leaves the message naming it as it was; the message itself is kept.
+        const [message] = await this.computers
+          .connected(computerId)
+          .then((client) => this.receivePastes(computerId, client, [live]))
+          .catch((e) => {
+            console.warn("A live handoff's paste wasn't copied:", e);
+            return [live];
+          });
         await this.chats.mirrorHandoff(chat.id, handoffId, message!);
       })
       .catch((e) => console.warn("A live handoff's message wasn't kept:", e))
@@ -695,13 +700,15 @@ export class Handoffs {
     client: RemoteClient,
     send: ProjectChatSend,
   ) {
-    const info = await this.info(computerId, client).catch(() => null);
     const [carried] = await sendPastes(
       [send],
       client,
-      (info?.bridge ?? 0) >= pastesBridge,
+      async () =>
+        ((await this.info(computerId, client))?.bridge ?? 0) >= pastesBridge,
     );
-    if (!send.skills || (info?.bridge ?? 0) >= skillsBridge) return carried!;
+    if (!send.skills) return carried!;
+    const info = await this.info(computerId, client).catch(() => null);
+    if ((info?.bridge ?? 0) >= skillsBridge) return carried!;
     const { skills: _, ...older } = carried!;
     return older;
   }

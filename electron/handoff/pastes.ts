@@ -39,7 +39,8 @@ async function rewrite<T extends { body: string }>(
 export function sendPastes<T extends { body: string }>(
   messages: T[],
   client: RemoteClient,
-  supported: boolean,
+  /** Asked only once a paste needs copying, so a message without one never waits on it. */
+  supported: boolean | (() => Promise<boolean>),
 ) {
   let paths = sent.get(client);
   if (!paths) sent.set(client, (paths = new Map()));
@@ -49,7 +50,7 @@ export function sendPastes<T extends { body: string }>(
     const copying = (async () => {
       let data = await readPaste(path, 0, handoffChunk);
       if (data === null) return null;
-      if (!supported)
+      if (!(typeof supported === "boolean" ? supported : await supported()))
         throw new Error(
           "Update Relay on the other computer before sending pasted files.",
         );
