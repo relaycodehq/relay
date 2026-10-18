@@ -161,3 +161,12 @@ describe("RichText typed", () => {
     expect(out).toContain("  const x = 1;");
   });
 });
+
+describe("RichText lists", () => {
+  it("renders tight, loose and nested lists without key warnings", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    render("- one\n- two\n  - nested\n\n1. first\n\n2. second\n");
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+});

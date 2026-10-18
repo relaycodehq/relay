@@ -144,7 +144,7 @@ function MarkdownItem({ node: _node, marker, children, ...props }: ItemProps) {
   if (!marker || props.className?.includes("task-list-item"))
     return <li {...props}>{children}</li>;
   const text = (
-    <span className="markdown-item-marker" aria-hidden="true">
+    <span key="marker" className="markdown-item-marker" aria-hidden="true">
       <span>
         {BULLETS.includes(marker) ? (
           <span className="markdown-item-bullet" data-bullet={marker}>
