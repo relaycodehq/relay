@@ -2,7 +2,7 @@ package dev.relay.android.features.thread
 
 // The desktop's TurnPreview (src/features/browser/TurnPreview.tsx): the page a
 // turn's agent left the thread's preview on, under its answer, as a small
-// browser strip over the frame it kept. Only the address opens anything; the frame is a picture. The
+// browser strip over the frame it kept, either of which opens the page. The
 // phone can't reach the computer's own addresses, so a local page is only text.
 
 import androidx.compose.foundation.Image
@@ -104,12 +104,12 @@ fun TurnPreviewCard(chatId: String, messageId: String, preview: TurnPreview) {
                 Icon(TablerIcons.Outline.ExternalLink, if (local) "Open here through your computer" else "Open in your browser", size = 14.dp, tint = c.mutedForeground)
             }
         }
-        if (preview.shot == true) Frame(chatId, messageId, preview.title.ifEmpty { short }, edge)
+        if (preview.shot == true) Frame(chatId, messageId, preview.title.ifEmpty { short }, edge, open.takeIf { link })
     }
 }
 
 @Composable
-private fun Frame(chatId: String, messageId: String, name: String, edge: Color) {
+private fun Frame(chatId: String, messageId: String, name: String, edge: Color, open: (() -> Unit)?) {
     val remote = LocalThreadRemote.current ?: return
     val c = RelayTheme.colors
     val source = remember(chatId, messageId) { ImageSource.Preview(chatId, messageId) }
@@ -119,6 +119,7 @@ private fun Frame(chatId: String, messageId: String, name: String, edge: Color) 
     val bitmap = loaded.bitmap
     Box(
         Modifier.fillMaxWidth().height(FRAME_HEIGHT)
+            .then(if (open != null) Modifier.pressable(open, scale = false) else Modifier)
             // The sides fade out with the frame, so its lower edge never shows.
             .drawWithContent {
                 drawContent()

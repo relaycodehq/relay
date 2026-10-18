@@ -2,7 +2,7 @@ import RelayRemote
 import SwiftUI
 
 /// The page a turn left open in the computer's preview: its address, and the last frame of
-/// it the turn kept, fading out at the bottom. From `Bridge.preview`.
+/// it the turn kept, fading out at the bottom; a tap anywhere on it opens the page. From `Bridge.preview`.
 struct TurnPreviewCard: View {
     let chatId: String
     let messageId: String
@@ -38,14 +38,15 @@ struct TurnPreviewCard: View {
                 .padding(.horizontal, 12)
                 .frame(height: 34)
                 .background(colors.fill)
-                .contentShape(.rect)
-                .onTapGesture { if opens, let url = URL(string: preview.url) { openURL(url) } }
-                .accessibilityAddTraits(opens ? .isLink : [])
                 if preview.shot == true {
                     Frame(source: .preview(chatId: chatId, messageId: messageId), name: preview.title.isEmpty ? short : preview.title)
                 }
             }
             .clipShape(.rect(cornerRadius: 10))
+            // The frame opens the page too, not just its address.
+            .contentShape(.rect)
+            .onTapGesture { if opens, let url = URL(string: preview.url) { openURL(url) } }
+            .accessibilityAddTraits(opens ? .isLink : [])
             .overlay {
                 // The frame's sides fade out with it, so its lower edge never shows.
                 RoundedRectangle(cornerRadius: 10)
