@@ -650,7 +650,7 @@ const host = {
     if (method === "providerUsage") return usageOf(args[0]);
     if (method === "agentModels") return catalogs[args[0]] ?? [];
     if (method === "agentDefaults") return agentDefaults[args[1]] ?? null;
-    if (method === "aiSettings") return { threadProvider: "claude", questionsProvider: "claude" };
+    if (method === "aiSettings") return { threadProvider: "claude", questionsProvider: "claude", ...agentPrefs };
     if (method === "newThreadAgent") return newThreadAgent;
     if (method === "newThreadModels") return newThreadModels;
     if (method === "saveNewThreadAgent") newThreadAgent = args[0];
@@ -1100,9 +1100,12 @@ function answer(chatId: string, send: any, silent = false) {
 // turn phone access off and on, keeping the pairing; "pair" writes a fresh pairing link; "wait", "run", "finish" and "fail" move the
 // thread whose title contains "chat" ("finish" with "body", "fail" with "error"); "refuse" turns
 // sends away as a gone worktree would, until "accept" or the phone picks the project folder.
+// "agents" with "order" and "off" sets the agents' order and switches aiSettings reports.
 // "send" with "body" starts a streamed answer; "steer": true interrupts the current one.
 const controlAt = process.argv.indexOf("--control");
 let refusing = false;
+/** Settings → Agents' order and switches, as aiSettings reports them; "agents" with "order" and "off" sets them. */
+let agentPrefs: { agentOrder?: string[]; agentsOff?: string[] } = {};
 if (controlAt > 0) {
   const controlFile = process.argv[controlAt + 1];
   await writeFile(controlFile, "{}");
@@ -1121,6 +1124,7 @@ if (controlAt > 0) {
     if (order.do === "pair") await writeFile(out, (await remote.pairing()).url);
     if (order.do === "refuse") refusing = true;
     if (order.do === "accept") refusing = false;
+    if (order.do === "agents") agentPrefs = { agentOrder: order.order ?? [], agentsOff: order.off ?? [] };
     if (!t || !c) return;
     if (order.do === "send") {
       sent(c.id, { id: id(), body: order.body ?? "busy", delivery: order.steer ? "steer" : "queue" });

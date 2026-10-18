@@ -50,11 +50,18 @@ suspend fun RemoteClient.aiSettings(): NewThreadAI = desktop("aiSettings").to()
 /** Each computer's AI settings as last read, so a composer lists its agents in order at once. */
 object AgentPrefs {
     private val known = ConcurrentHashMap<String, NewThreadAI>()
+    /** Bumped per ask, so an older answer arriving late can't undo a newer one. */
+    private val asks = ConcurrentHashMap<String, Int>()
 
     fun known(computer: String?): NewThreadAI? = computer?.let { known[it] }
 
-    suspend fun load(client: RemoteClient, computer: String): NewThreadAI? =
-        runCatching { client.aiSettings() }.getOrNull()?.also { known[computer] = it } ?: known[computer]
+    /** Asks again; a failed ask keeps what's known. */
+    suspend fun load(client: RemoteClient, computer: String): NewThreadAI? {
+        val ask = asks.merge(computer, 1, Int::plus)!!
+        val read = runCatching { client.aiSettings() }.getOrNull()
+        if (read != null && asks[computer] == ask) known[computer] = read
+        return known[computer]
+    }
 }
 
 suspend fun RemoteClient.newThreadModels(): NewThreadModels = desktop("newThreadModels").to()

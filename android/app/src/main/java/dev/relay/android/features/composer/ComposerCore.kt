@@ -244,11 +244,13 @@ internal fun ComposerCore(
     LaunchedEffect(client, computer, provider, online, connection) { runCatching { loadCatalogs(listOf(provider)) } }
     // The agents in Settings' order, without the ones switched off but this composer's own.
     var ai by remember(computer) { mutableStateOf(AgentPrefs.known(computer)) }
-    LaunchedEffect(client, computer, online, connection) {
-        val cl = client ?: return@LaunchedEffect
-        val pc = computer ?: return@LaunchedEffect
-        ai = AgentPrefs.load(cl, pc)
+    suspend fun readAgentPrefs() {
+        ai = AgentPrefs.load(client ?: return, computer ?: return)
     }
+    LaunchedEffect(client, computer, online, connection) { readAgentPrefs() }
+    // Settings → Agents may have changed since the composer asked.
+    val modelSheet = sheet == Sheet.Model
+    LaunchedEffect(modelSheet) { if (modelSheet) readAgentPrefs() }
     val offered = offeredAgents(ai?.agentOrder.orEmpty(), ai?.agentsOff.orEmpty(), provider)
     val modelLabel = if (settings.choice.model.isNotEmpty()) modelName(provider, catalogs[provider], settings.choice.model) else "Default"
 

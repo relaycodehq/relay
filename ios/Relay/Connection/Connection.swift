@@ -43,9 +43,12 @@ final class Connection {
     /// The agents listed and the new thread asked on this connection, past the saved copies.
     private var listedModels: Set<String> = []
     private var askedNewThread = false
-    /// The agents as Settings → Agents orders and switches them; asked once per connection.
+    /// The agents as Settings → Agents orders and switches them; asked once per
+    /// connection, and again each time the model sheet opens.
     private(set) var agentPrefs: NewThreadAI?
     private var askedAgentPrefs = false
+    /// Bumped per ask, so an older answer arriving late can't undo a newer one.
+    @ObservationIgnored private var agentPrefsAsk = 0
     @ObservationIgnored private let saves = ComposerSaves()
     /// Which threads moved since this phone last looked, kept past a restart.
     private(set) var seen = Connection.loadSeen()
@@ -627,12 +630,15 @@ final class Connection {
         return try await client.agentDefaults(projectId: projectId, provider: provider)
     }
 
-    func loadAgentPrefs() async {
-        guard !askedAgentPrefs, let client, status.state == .online else { return }
+    /// `fresh` asks even when this connection already has them; a failed ask keeps what's known.
+    func loadAgentPrefs(fresh: Bool = false) async {
+        guard fresh || !askedAgentPrefs, let client, status.state == .online else { return }
         askedAgentPrefs = true
+        agentPrefsAsk += 1
+        let ask = agentPrefsAsk
         let prefs = try? await client.aiSettings()
-        guard self.client === client else { return }
-        if let prefs { agentPrefs = prefs } else { askedAgentPrefs = false }
+        guard self.client === client, ask == agentPrefsAsk else { return }
+        if let prefs { agentPrefs = prefs } else if agentPrefs == nil { askedAgentPrefs = false }
     }
 
     /// The agents a picker offers, keeping `keep` (the composer's own) even when it's off.

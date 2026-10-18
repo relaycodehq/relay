@@ -102,6 +102,8 @@ struct ModelSheet: View {
         .presentationBackground(colors.background)
         .task(id: provider) { await load() }
         .task(id: provider) { await connection.loadUsage(provider) }
+        // Settings → Agents may have changed since the composer asked.
+        .task { await connection.loadAgentPrefs(fresh: true) }
     }
 
     @ViewBuilder private var models: some View {
