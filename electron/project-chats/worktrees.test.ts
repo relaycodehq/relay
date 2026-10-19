@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ProjectChat } from "../../shared/projects";
@@ -78,4 +78,52 @@ it("doesn't wait when the user named the branch", async () => {
   chat.title = "Repair login redirect";
   expect(await worktrees.named(chat)).toBe(path);
   expect(git(path, "branch", "--show-current")).toBe("team/login");
+});
+
+it("waits for a carried-on branch that's checked out elsewhere rather than swapping it", async () => {
+  git(root, "branch", "old-work");
+  const chat = thread({ startFrom: { on: "old-work" } });
+  const path = await worktrees.root(chat, "carry on");
+  expect(chat.worktree).toMatchObject({ branch: "old-work", existing: true });
+  git(root, "worktree", "remove", "--force", path);
+  git(root, "switch", "-q", "old-work");
+
+  await expect(worktrees.root(chat, "again")).rejects.toThrow(
+    /Couldn't open old-work in a worktree again: old-work is checked out in /,
+  );
+  expect(chat.worktree?.branch).toBe("old-work");
+
+  git(root, "switch", "-q", "main");
+  expect(await worktrees.root(chat, "again")).toBe(path);
+  expect(git(path, "branch", "--show-current")).toBe("old-work");
+});
+
+it("gives a carried-on branch deleted meanwhile a branch of its own", async () => {
+  git(root, "branch", "relay/old-work");
+  const chat = thread({ startFrom: { on: "relay/old-work" } });
+  const path = await worktrees.root(chat, "carry on");
+  git(root, "worktree", "remove", "--force", path);
+  git(root, "branch", "-D", "relay/old-work");
+
+  await worktrees.root(chat, "again");
+  // Named after the thread, not remade under the lost branch's name.
+  expect(chat.worktree?.branch).toMatch(/^relay\//);
+  expect(chat.worktree?.branch).not.toBe("relay/old-work");
+  expect(chat.worktree?.existing).toBeUndefined();
+  expect(chat.worktree?.named).toBeUndefined();
+});
+
+it("opens a carried-on branch beside its old folder once another took it", async () => {
+  git(root, "branch", "old-work");
+  const chat = thread({ startFrom: { on: "old-work" } });
+  const path = await worktrees.root(chat, "carry on");
+  // Cleaned up when it settled, and the folder handed to another thread.
+  git(root, "worktree", "remove", "--force", path);
+  chat.worktree = { ...chat.worktree, removedAt: 1 };
+  await mkdir(path);
+
+  const again = await worktrees.root(chat, "again");
+  expect(again).not.toBe(path);
+  expect(git(again, "branch", "--show-current")).toBe("old-work");
+  expect(chat.worktree).toMatchObject({ path: again, existing: true });
 });

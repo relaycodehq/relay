@@ -78,7 +78,8 @@ beforeEach(async () => {
   };
   save.mockReset();
   core = {
-    projects: { root: vi.fn(async () => root) },
+    // A project on this computer: its checkout is here.
+    projects: { root: vi.fn(async () => root), get: () => ({}) },
     storage: { load: vi.fn(async () => chat), save },
     store: { get: () => ({ chats: [chat] }) },
     active: {

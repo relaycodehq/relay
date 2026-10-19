@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { git } from "./git";
+import { git, worktreeList } from "./git";
 import { gitOperation, serializeRepo } from "./working-tree";
-import { localTwin } from "../../shared/branches";
+import { localTwin, remoteOfBranch } from "../../shared/branches";
 import type {
   BranchAction,
   BranchCount,
@@ -56,7 +56,7 @@ async function unrelatedRemotes(
   return new Set(unrelated.filter((r) => r !== null));
 }
 export async function branches(root: string): Promise<BranchList> {
-  const [current, head, refs, bases] = await Promise.all([
+  const [current, head, refs, bases, remotes, gone] = await Promise.all([
     git(root, ["branch", "--show-current"]),
     // A repository with no commits yet has no HEAD to resolve.
     git(root, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => ""),
@@ -68,6 +68,11 @@ export async function branches(root: string): Promise<BranchList> {
       "refs/remotes/",
     ]),
     baseCandidates(root),
+    git(root, ["remote"]).then((out) => out.split("\n").filter(Boolean)),
+    // A folder deleted by hand leaves Git's record of it, holding nothing.
+    worktreeList(root).then(
+      (list) => new Set(list.filter((w) => w.prunable).map((w) => w.path)),
+    ),
   ]);
   const rows = refs
     .trimEnd()
@@ -91,12 +96,14 @@ export async function branches(root: string): Promise<BranchList> {
         if (symbolic) return [];
         const remote = ref.startsWith("refs/remotes/");
         const name = ref.slice(remote ? 13 : 11);
+        const on = remote ? remoteOfBranch(name, remotes) : undefined;
         return [
           {
             ref,
             name,
             remote,
-            worktree: !!worktree,
+            ...(on ? { local: name.slice(on.length + 1) } : {}),
+            worktree: !!worktree && !gone.has(worktree),
             current: !remote && name === current.trim(),
             unrelated:
               remote && [...elsewhere].some((r) => name.startsWith(`${r}/`)),
@@ -261,8 +268,11 @@ export async function changeBranch(root: string, action: BranchAction) {
       if (branch.current) return state;
       if (branch.worktree)
         throw new Error("This branch is checked out in another worktree.");
+      // Git still counts a deleted worktree folder's record as holding its branch.
+      await git(root, ["worktree", "prune"]).catch(() => {});
       if (branch.remote) {
-        const local = branch.name.slice(branch.name.indexOf("/") + 1);
+        const local =
+          branch.local ?? branch.name.slice(branch.name.indexOf("/") + 1);
         await git(root, ["switch", "--track", "-c", local, branch.ref]);
       } else await git(root, ["switch", "--no-guess", "--", branch.name]);
     }

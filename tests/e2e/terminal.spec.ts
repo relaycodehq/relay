@@ -136,7 +136,9 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await page.keyboard.press(`${mod}+N`);
     await expect(drawer).toBeHidden();
     await page.getByRole("button", { name: /Current checkout/ }).click();
-    await page.getByRole("menuitem", { name: "New worktree" }).click();
+    await page
+      .getByRole("menuitem", { name: "New worktree", exact: true })
+      .click();
     await expect(button).toBeDisabled();
     await page.getByLabel("Message project").fill("fixture edit files");
     await page
@@ -231,6 +233,78 @@ test("terminal resizing starts at its visible height in a shorter window", async
       .poll(async () => (await drawer.boundingBox())!.height)
       .toBe(260);
   } finally {
+    await app.close();
+  }
+});
+
+test("selecting in the terminal copies, and right-click pastes", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-terminal-clipboard-")),
+  );
+  const repo = join(root, "project");
+  await mkdir(repo);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: {
+      ...env,
+      RELAY_TEST_DATA: join(root, "data"),
+      RELAY_TEST_HEADED: "0",
+      RELAY_TEST_NATIVE_STORAGE: "0",
+    },
+  });
+  // The system clipboard is shared with whoever runs the test.
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
+  const clipboardText = () =>
+    app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, repo) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [repo],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const drawer = page.getByRole("region", { name: "Terminal" });
+    const screen = drawer.locator(".xterm-rows");
+    await expect(drawer).toBeVisible();
+    await page.keyboard.type("echo copy-me-$((40+2))");
+    await page.keyboard.press("Enter");
+    const line = screen.locator("> div", { hasText: /^copy-me-42\s*$/ });
+    await expect(line).toBeVisible();
+
+    const box = (await line.boundingBox())!;
+    await page.mouse.dblclick(box.x + 4, box.y + box.height / 2);
+    await expect.poll(clipboardText).toBe("copy-me-42");
+
+    // With a selection, right-click copies it and lets it go.
+    await app.evaluate(({ clipboard }) => clipboard.writeText("stale"));
+    await page.mouse.click(box.x + 4, box.y + box.height / 2, {
+      button: "right",
+    });
+    await expect.poll(clipboardText).toBe("copy-me-42");
+    await expect(drawer.locator(".xterm-selection div")).toHaveCount(0);
+
+    // Without one, it pastes at the prompt.
+    await app.evaluate(({ clipboard }) =>
+      clipboard.writeText("echo pasted-$((6*7))"),
+    );
+    await page.mouse.click(box.x + 4, box.y + box.height / 2, {
+      button: "right",
+    });
+    await page.keyboard.press("Enter");
+    await expect(screen).toContainText("pasted-42");
+  } finally {
+    await app.evaluate(
+      ({ clipboard }, text) => clipboard.writeText(text),
+      saved,
+    );
     await app.close();
   }
 });

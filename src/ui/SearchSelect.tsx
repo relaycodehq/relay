@@ -1,7 +1,13 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Popover } from "@base-ui/react/popover";
 import { Check, ChevronDown, ChevronUp, Search } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import "./search-select.css";
 
 export interface SearchOption {
@@ -41,6 +47,8 @@ export function SearchSelect({
   className = "",
   foldNoun = "more",
   checkStart,
+  open: shown,
+  anchor,
 }: {
   label: string;
   /** The picked option, checked in the list; none for a menu of actions. */
@@ -68,8 +76,20 @@ export function SearchSelect({
   foldNoun?: string;
   /** The check goes in a column before the labels instead of at the row's end. */
   checkStart?: boolean;
+  /** Opened by something else, e.g. a menu item; `onOpenChange` hears when it closes. */
+  open?: boolean;
+  /** With `open`: where the list shows, in place of a trigger of its own. */
+  anchor?: RefObject<Element | null>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOpen] = useState(false);
+  // Every change below tells `onOpenChange`, which is how an owner of `open` hears it.
+  const open = shown ?? own;
+  useEffect(() => {
+    if (shown) {
+      setSearch("");
+      setUnfolded(undefined);
+    }
+  }, [shown]);
   const [search, setSearch] = useState("");
   const [unfolded, setUnfolded] = useState<boolean>();
   const input = useRef<HTMLInputElement>(null);
@@ -135,22 +155,25 @@ export function SearchSelect({
         }
       }}
     >
-      <Popover.Trigger
-        type="button"
-        aria-label={trigger ? triggerLabel : label}
-        title={trigger ? undefined : selectedLabel}
-        className={triggerClassName}
-        disabled={disabled}
-      >
-        {trigger ?? (
-          <>
-            <span>{selectedLabel}</span>
-            <ChevronDown size={12} />
-          </>
-        )}
-      </Popover.Trigger>
+      {!anchor && (
+        <Popover.Trigger
+          type="button"
+          aria-label={trigger ? triggerLabel : label}
+          title={trigger ? undefined : selectedLabel}
+          className={triggerClassName}
+          disabled={disabled}
+        >
+          {trigger ?? (
+            <>
+              <span>{selectedLabel}</span>
+              <ChevronDown size={12} />
+            </>
+          )}
+        </Popover.Trigger>
+      )}
       <Popover.Portal>
         <Popover.Positioner
+          anchor={anchor}
           className="composer-popup-positioner"
           align="start"
           sideOffset={6}

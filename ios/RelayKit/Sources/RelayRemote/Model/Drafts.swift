@@ -47,10 +47,13 @@ public struct DraftExtras: Codable, Sendable, Equatable {
     public var scope: String?
     /// A new thread's own branch name.
     public var branch: Bool?
+    /// A branch a new thread's worktree carries on or starts off.
+    public var start: Bool?
 
     public init(
         screenshots: [Int]? = nil, codeRefs: Int? = nil, selection: Bool? = nil, workItem: Bool? = nil,
-        links: Int? = nil, scope: String? = nil, branch: Bool? = nil
+        links: Int? = nil, scope: String? = nil, branch: Bool? = nil,
+        start: Bool? = nil
     ) {
         self.screenshots = screenshots
         self.codeRefs = codeRefs
@@ -59,6 +62,7 @@ public struct DraftExtras: Codable, Sendable, Equatable {
         self.links = links
         self.scope = scope
         self.branch = branch
+        self.start = start
     }
 
     /// Anything at all: a draft holding only these still counts.
@@ -225,6 +229,7 @@ public func extrasSummary(_ extras: DraftExtras?) -> String {
         extras.scope == "pr" ? "a pull request" : nil,
         extras.scope == "review" ? "a review" : nil,
         extras.branch == true ? "a branch name" : nil,
+        extras.start == true ? "a branch to start from" : nil,
     ].compactMap { $0 }
     guard parts.count > 1 else { return parts.first ?? "" }
     return parts.dropLast().joined(separator: ", ") + " and " + parts.last!

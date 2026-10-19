@@ -22,6 +22,11 @@
   background: transparent;
   backdrop-filter: blur(6px);
 }
+/* No blur over frosted glass: it doubles the see-through chat. */
+:root[data-glass] .image-viewer::backdrop {
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  backdrop-filter: none;
+}
 
 .image-viewer-bar {
   display: flex;

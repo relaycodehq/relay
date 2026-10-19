@@ -16,6 +16,7 @@ import {
   linkedFoldersSchema,
   projectChatSendSchema,
   resumeSettingsSchema,
+  worktreeStartSchema,
 } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
 import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
@@ -48,8 +49,9 @@ export function chatHandlers(ctx: ApiContext) {
         optional(chatWorkspaceSchema),
         optional(branchSchema),
         optional(linkedFoldersSchema),
+        optional(worktreeStartSchema),
       ],
-      async (id, scope, workspace, branch, links) => {
+      async (id, scope, workspace, branch, links, start) => {
         links = await checkNewLinks(
           links,
           undefined,
@@ -62,6 +64,7 @@ export function chatHandlers(ctx: ApiContext) {
           undefined,
           branch,
           links,
+          start,
         );
       },
     ),

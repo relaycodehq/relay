@@ -18,7 +18,7 @@ import type {
 } from "../../shared/projects";
 import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
-import { resultText, type ToolResult } from "../relay-mcp";
+import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -614,6 +614,82 @@ test("reading on from `next` returns an answer that was still streaming, finishe
   expect(parse(await read({ after: "a1" })).messages).toEqual([]);
   // An id from elsewhere doesn't pass for the start of the thread.
   expect(await read({ after: "gone" })).toMatchObject({ isError: true });
+});
+
+test("a long answer reads from its start, and on in pieces to the end", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  const body = `Headline. ${"x".repeat(MESSAGE_CHARS * 2)} The end.`;
+  chats.get(child.id)!.messages.push({
+    id: "a1",
+    role: "assistant",
+    body,
+    status: "complete",
+    created: 4,
+    provider: "codex",
+    version: 1,
+  });
+  const read = async (args: object = {}) =>
+    parse(
+      await call(threads, lead.id, "read_thread", { id: child.id, ...args }),
+    );
+  let piece = (await read()).messages.at(-1);
+  expect(piece.body.startsWith("Headline.")).toBe(true);
+  let text = piece.body;
+  while (piece.nextOffset) {
+    piece = await read({ message: "a1", offset: piece.nextOffset });
+    text += piece.body;
+  }
+  expect(text).toBe(body);
+});
+
+test("a read starts at the newest page that fits, pages back with `before` and on with `after`", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  const answers = Array.from({ length: 6 }, (_, i) => ({
+    id: `a${i}`,
+    role: "assistant" as const,
+    body: "x".repeat(MESSAGE_CHARS),
+    status: "complete" as const,
+    created: 4 + i,
+    provider: "codex" as const,
+    version: 1,
+  }));
+  chats.get(child.id)!.messages.push(...answers);
+  const read = async (args: object = {}) =>
+    parse(
+      await call(threads, lead.id, "read_thread", { id: child.id, ...args }),
+    );
+  const ids = (page: { messages: { id: string }[] }) =>
+    page.messages.map((m) => m.id);
+  let page = await read();
+  expect(ids(page).at(-1)).toBe("a5");
+  let back = ids(page);
+  while (page.earlier) {
+    page = await read({ before: page.earlier });
+    back = [...ids(page), ...back];
+  }
+  expect(back.filter((id) => id.startsWith("a"))).toEqual(
+    answers.map((a) => a.id),
+  );
+  page = await read({ after: back[0] });
+  let on = ids(page);
+  while (page.more) {
+    page = await read({ after: page.next });
+    on = [...on, ...ids(page)];
+  }
+  expect(on).toEqual(back.slice(1));
+  expect(ids(await read({ limit: 1 }))).toEqual(["a5"]);
 });
 
 test("a message to a started thread asks first too, unless the lead has full access; stopping never asks", async () => {

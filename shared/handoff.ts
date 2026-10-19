@@ -292,6 +292,8 @@ export interface ChatCameFrom {
    * (`ChatSentTo.home`): it works in this project's folder and never goes back.
    */
   home?: true;
+  /** A setup's thread: its agent stops once the computer it came from lets it go. */
+  setup?: true;
 }
 
 /**

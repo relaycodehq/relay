@@ -3,8 +3,10 @@ import {
   type LinkedFolder,
   chatScopeSchema,
   chatWorkspaceSchema,
+  worktreeStartSchema,
   type ChatScope,
   type ChatWorkspace,
+  type WorktreeStart,
 } from "../../shared/projects";
 import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
 import type { WorkItem } from "../../shared/devops";
@@ -76,6 +78,8 @@ export interface ThreadDraft {
   workspace?: ChatWorkspace;
   /** The branch typed for an unsent thread's worktree, in place of Relay's pick. */
   branch?: string;
+  /** Where an unsent thread's worktree starts, when not off the checkout's commit. */
+  start?: WorktreeStart;
   links?: LinkedFolder[];
   review?: ReviewDraft;
 }
@@ -107,6 +111,7 @@ export const isThreadDraftEmpty = (draft: ThreadDraft) =>
   !draft.scope &&
   draft.workspace === undefined &&
   !draft.branch &&
+  !draft.start &&
   !draft.links?.length &&
   !draft.review;
 
@@ -202,6 +207,7 @@ export function parseThreadDraft(saved: unknown): ThreadDraft {
     scope: readScope(saved.scope),
     workspace: readWorkspace(saved.workspace),
     branch: readRoot(saved.branch),
+    start: worktreeStartSchema.safeParse(saved.start).data,
     links: linkedFoldersSchema.safeParse(saved.links).data,
     review: readReview(saved.review),
   };
@@ -231,6 +237,7 @@ export function serializeThreadDraft(draft: ThreadDraft): string {
     ...(draft.scope ? { scope: draft.scope } : {}),
     ...(draft.workspace !== undefined ? { workspace: draft.workspace } : {}),
     ...(draft.branch ? { branch: draft.branch } : {}),
+    ...(draft.start ? { start: draft.start } : {}),
     ...(draft.links?.length ? { links: draft.links } : {}),
     ...(draft.review ? { review: draft.review } : {}),
   });
@@ -419,6 +426,7 @@ export function mergeLegacy(
     scope: legacy.scope ?? record.scope,
     workspace: legacy.workspace ?? record.workspace,
     branch: record.branch,
+    start: record.start,
     links: record.links,
     review: record.review,
   };

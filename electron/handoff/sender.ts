@@ -48,7 +48,7 @@ import {
   type HomeThread,
   type RemoteEvent,
 } from "../../shared/remote";
-import type { RemoteClient } from "../../shared/remote-client";
+import { Unanswered, type RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
 import { parseWorkspaceId } from "../../shared/workspaces";
 import { git } from "../git/git";
@@ -131,9 +131,15 @@ export class Handoffs {
   >();
   /** Each computer's version and update, as it last said; `null` for one too old to say. */
   private infos = new Map<string, { at: number; info: ComputerInfo | null }>();
+  /**
+   * Setups being asked for, by computer and project, so threads failing
+   * together share one, with the threads waiting to join it.
+   */
+  private startingSetups = new Map<
+    string,
+    { job: Promise<string>; waiting: Set<string> }
+  >();
   /** Clones of this computer's projects on paired ones, by computer and project id; a failed one keeps its error. */
-  /** Setups being asked for, by computer and project, so threads failing together share one. */
-  private startingSetups = new Map<string, Promise<string>>();
   private clones = new Map<
     string,
     {
@@ -866,6 +872,8 @@ export class Handoffs {
     const sentTo = this.summary(chatId).sentTo;
     if (sentTo?.state !== "sending" || this.jobs.has(chatId)) return;
     await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
+    // Back in its setup, it catches up on what the agent wrote meanwhile.
+    if (sentTo.setup) return this.followSetups(sentTo.computerId, chatId);
     this.run(chatId, () => this.send(chatId, sentTo.id, sentTo.computerId));
   }
   /**
@@ -940,6 +948,12 @@ export class Handoffs {
       );
     if (sentTo.setup)
       await this.dropSetup(chatId, sentTo.computerId, sentTo.setup);
+    // Taken back mid-clone: the clone's job lets go of any setup it starts.
+    else if (sentTo.state === "sending")
+      await this.chats.updateSetup(chatId, {
+        state: "dropped",
+        ended: Date.now(),
+      });
     if (!(await this.chats.abandonHandoff(chatId, sentTo.id))) return;
     console.info(
       `Handoff ${named(sentTo.id, sentTo.computer)}: taken back without it.`,
@@ -1025,7 +1039,11 @@ export class Handoffs {
         );
       // Until the project is there, the thread stays as it is here, its
       // agent stopped: what the user says now goes to the setup's agent.
-      await this.chats.haltForHandoff(chatId);
+      // A later look at that setup has nothing to stop, and checked in the
+      // same tick as the stop, a thread started here instead keeps its turn.
+      if (!this.onHandoff(chatId, id)) return;
+      if (!this.summary(chatId).sentTo?.setup)
+        await this.chats.haltForHandoff(chatId);
       if (!this.onHandoff(chatId, id)) return;
       const ready = await this.readied(
         chatId,
@@ -1114,6 +1132,12 @@ export class Handoffs {
         `Handoff ${named(id, this.nameOf(computerId))} didn't go out:`,
         message(e),
       );
+      // A look at a setup that didn't get through keeps the thread in it:
+      // the computer coming back looks again.
+      const lost =
+        e instanceof Unanswered ||
+        this.computers.status(computerId) !== "online";
+      if (lost && this.summary(chatId).sentTo?.setup) return;
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
     }
   }
@@ -1253,6 +1277,7 @@ export class Handoffs {
     let failed: string;
     try {
       const made = await this.cloneOn(computerId, projectId);
+      if (!this.onHandoff(chatId, id)) return false;
       await this.chats.updateSetup(chatId, {
         state: "done",
         ended: Date.now(),
@@ -1261,7 +1286,21 @@ export class Handoffs {
       });
       return true;
     } catch (e) {
+      // Lost on the way, it says nothing of what git could do there: the
+      // handoff fails, to be tried again, rather than paying an agent.
+      if (
+        e instanceof Unanswered ||
+        this.computers.status(computerId) !== "online"
+      )
+        throw e;
       failed = message(e);
+    }
+    if (!this.onHandoff(chatId, id)) return false;
+    // Another thread's setup may have started while this clone failed.
+    const started = this.setupOf(computerId, projectId, chatId);
+    if (started) {
+      await this.joinSetup(chatId, id, computerId, started, failed);
+      return false;
     }
     const url = await cloneUrl(await this.projects.root(projectId));
     const input = (await this.chats.get(chatId)).lastInput;
@@ -1275,7 +1314,7 @@ export class Handoffs {
     let starting = this.startingSetups.get(key);
     if (!starting) {
       const setup = randomUUID();
-      starting = client
+      const job = client
         .call("setupProject", setup, {
           url,
           repositories,
@@ -1290,15 +1329,33 @@ export class Handoffs {
               : {}),
           },
         })
-        .then(() => setup)
-        .finally(() => this.startingSetups.delete(key));
+        .then(() => setup);
+      starting = { job, waiting: new Set() };
       this.startingSetups.set(key, starting);
       console.info(
         `Handoff ${named(id, name)}: its clone failed, an agent there sets it up.`,
       );
     }
-    await this.joinSetup(chatId, id, computerId, await starting, failed);
-    return false;
+    // Kept until every thread waiting has joined, so none starts a second one.
+    starting.waiting.add(chatId);
+    try {
+      const setup = await starting.job;
+      if (this.onHandoff(chatId, id))
+        await this.joinSetup(chatId, id, computerId, setup, failed);
+      // Taken back meanwhile: the agent goes, unless another thread follows it.
+      else if (
+        starting.waiting.size === 1 &&
+        !this.setupsOn(computerId).some((c) => c.sentTo!.setup === setup)
+      ) {
+        await this.saveAbandoned(computerId, setup);
+        void this.notifyAbandoned(computerId);
+      }
+      return false;
+    } finally {
+      starting.waiting.delete(chatId);
+      if (!starting.waiting.size && this.startingSetups.get(key) === starting)
+        this.startingSetups.delete(key);
+    }
   }
   /** The setup under way on the computer for the project, for another thread waiting on it. */
   private setupOf(computerId: string, projectId: string, besides: string) {

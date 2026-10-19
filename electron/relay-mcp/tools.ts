@@ -18,6 +18,8 @@ import {
 
 /** How many threads one thread may have working at once. */
 export const STARTED_LIMIT = 6;
+/** How much of one message read_thread returns; `offset` reads on. */
+export const MESSAGE_CHARS = 20_000;
 /** The most threads find_threads returns. */
 const FIND_LIMIT = 50;
 /** The longest wait_for_threads holds its call. */
@@ -140,6 +142,26 @@ export const relayToolSchemas = {
         .describe(
           "Only messages after this message id, the `next` of an earlier read.",
         ),
+      before: z
+        .string()
+        .optional()
+        .describe(
+          "Only messages before this message id, the `earlier` of a read.",
+        ),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe("At most this many messages. Default 50."),
+      message: z
+        .string()
+        .optional()
+        .describe(
+          "Read on in one long message: its id, with `offset` its `nextOffset`.",
+        ),
+      offset: z.number().int().min(0).optional(),
     })
     .strict(),
   send_to_thread: z
@@ -406,7 +428,7 @@ const descriptions: Record<RelayToolName, string> = {
   find_threads:
     "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, which thread started it, and `on` the computer it runs on when that's another one. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread:
-    "Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
+    `Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its latest messages in order, as many as fit. When older ones didn't, it says \`earlier\`: pass that as \`before\` to page back. Pass \`after\` to get only what's new, oldest first; a page that stops early says \`more\`, so read on from its \`next\`. A message longer than ${MESSAGE_CHARS} characters comes with its start and a \`nextOffset\`; read the rest with \`message\` (its id) and \`offset\` until there's no \`nextOffset\`.`,
   send_to_thread: `Send a message to a thread, as its user would. It answers in its own turn.\n\n${DRIVE_NOTE}`,
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",

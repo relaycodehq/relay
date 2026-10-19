@@ -1523,21 +1523,50 @@ it("starts a thread here instead when its setup there is given up on", async () 
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const { projectId, reachable } = await lackedProject(laptop);
   await reachable(false);
+  // The setup's agent is still at it when it's given up on.
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "60000");
   const id = await startOnMini(laptop, sender, computerId, projectId);
   await vi.waitFor(async () =>
     expect((await laptop.chats.get(id)).setup?.state).toBe("agent"),
   );
   const setupId = (await laptop.chats.get(id)).sentTo!.setup!;
+  const setupChat = () => mini.chats.get(mini.chats.handedOver(setupId)!.id);
+  await vi.waitFor(async () =>
+    expect((await setupChat()).messages.at(-1)?.status).toBe("streaming"),
+  );
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "300");
 
   await sender.startHere(id);
   const chat = await laptop.chats.get(id);
   expect(chat.sentTo).toBeUndefined();
   expect(chat.setup?.state).toBe("dropped");
-  // The agent there is let go, and the first message is answered here.
-  await vi.waitFor(() =>
-    expect(mini.chats.handedOver(setupId)?.cameFrom?.abandonedAt).toBeTruthy(),
-  );
+  // The agent there is let go and stops, and the first message is answered here.
+  await vi.waitFor(async () => {
+    expect(mini.chats.handedOver(setupId)?.cameFrom?.abandonedAt).toBeTruthy();
+    expect((await setupChat()).messages.at(-1)?.status).toBe("cancelled");
+  });
   await finished(laptop.chats, id, 2);
+});
+
+it("starts no setup for a thread taken back while its clone was under way", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { projectId } = await lackedProject(laptop);
+  let fail!: (e: Error) => void;
+  vi.spyOn(sender as never as { cloneOn: () => unknown }, "cloneOn")
+    .mockImplementation(() => new Promise((_, reject) => (fail = reject)));
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(id)).setup?.state).toBe("cloning"),
+  );
+
+  await sender.abandon(id);
+  expect((await laptop.chats.get(id)).setup?.state).toBe("dropped");
+  fail(new Error("fatal: could not read Username"));
+  await sender.finished(id);
+  const chat = await laptop.chats.get(id);
+  expect(chat.sentTo).toBeUndefined();
+  expect(chat.setup?.state).toBe("dropped");
+  expect((mini.store.get().chats ?? []).some((c) => c.cameFrom)).toBe(false);
 });
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {

@@ -170,7 +170,7 @@ export class TurnSends {
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = project.computer
         ? ""
-        : await this.worktrees.root(chat, input.body);
+        : await this.worktrees.root(chat, input.body, active.abort.signal);
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;

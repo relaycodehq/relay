@@ -237,3 +237,12 @@ it("counts a screenshot as the desktop's part of a draft", async () => {
   await pause();
   expect(main.get(chat)).toMatchObject({ text: "", extras: { screenshots: [0] } });
 });
+
+it("counts a new thread's picked worktree start as the desktop's part", async () => {
+  await start();
+  const { threadStorage } = await import("../../lib/thread-storage");
+  threadStorage("new:p1").start.save({ on: "feature" });
+  drafts.writeDraft("chat-draft:new:p1", "Carry it on");
+  await pause();
+  expect(main.get("new:p1")).toMatchObject({ extras: { start: true } });
+});

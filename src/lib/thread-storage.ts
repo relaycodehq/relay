@@ -3,6 +3,7 @@ import type {
   ChatScope,
   ChatWorkspace,
   LinkedFolder,
+  WorktreeStart,
 } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import type { WorkItem } from "../../shared/devops";
@@ -306,6 +307,11 @@ export function threadStorage(id: string) {
     branch: {
       load: (): string => read().branch ?? "",
       save: (branch: string) => edit({ branch: branch || undefined }),
+    },
+    /** Where an unsent thread's worktree starts; none is off the checkout's commit. */
+    start: {
+      load: (): WorktreeStart | undefined => read().start,
+      save: (start: WorktreeStart | undefined) => edit({ start }),
     },
     /** An unsent deep review's setup, what it was pointed at and its focus note. */
     review: {

@@ -13,7 +13,11 @@ import { repositoryRoot } from "./projects";
 
 /** `~/work` → `/Users/you/work`. */
 export const expandHome = (path: string) =>
-  path === "~" || path.startsWith("~/") ? homedir() + path.slice(1) : path;
+  path === "~" ||
+  path.startsWith("~/") ||
+  (process.platform === "win32" && path.startsWith("~\\"))
+    ? homedir() + path.slice(1)
+    : path;
 
 const isRepository = (dir: string) =>
   lstat(join(dir, ".git")).then(

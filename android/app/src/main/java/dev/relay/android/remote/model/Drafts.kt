@@ -29,6 +29,7 @@ data class DraftExtras(
     val links: Int? = null,
     val scope: String? = null,
     val branch: Boolean? = null,
+    val start: Boolean? = null,
 )
 
 @Serializable data class DraftOther(val text: String, val by: String, val at: Long)

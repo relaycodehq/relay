@@ -5,8 +5,11 @@ import type {
   LinkedFolder,
   ProjectChat,
   StartedBy,
+  WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
+import { threadOnBranch } from "../../shared/projects";
+import { worktreeStartProblem } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
@@ -21,6 +24,7 @@ export class ThreadCreate {
     startedBy?: StartedBy,
     branch?: string,
     links?: LinkedFolder[],
+    start?: WorktreeStart,
   ) {
     const project = this.core.projects.get(projectId);
     if (project.computer) {
@@ -38,18 +42,50 @@ export class ThreadCreate {
       throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")
       throw new Error("Only repository threads can work in a worktree.");
-    const named = workspace === "worktree" ? branch : undefined;
+    // A carried-on branch keeps its own name.
+    const named =
+      workspace === "worktree" && !(start && "on" in start)
+        ? branch
+        : undefined;
+    const startFrom = workspace === "worktree" ? start : undefined;
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
+    // So is a branch to start from that isn't there or is held elsewhere;
+    // one that goes by the first message falls back the same way.
+    const startProblem =
+      startFrom &&
+      (await worktreeStartProblem(
+        await this.core.projects.root(projectId),
+        startFrom,
+        (branch) => {
+          const other = threadOnBranch(
+            (this.core.store.get().chats ?? []).filter(
+              (c) => c.projectId === projectId,
+            ),
+            branch,
+          );
+          return other
+            ? `${branch} is kept for the thread “${other.title}”; carry it on there.`
+            : undefined;
+        },
+      ));
+    if (startProblem) throw new Error(startProblem);
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
       scope,
       // The worktree itself is made with the first message, named after it
       // unless the user named its branch.
-      ...(workspace === "worktree" ? { worktree: named ? { named } : {} } : {}),
+      ...(workspace === "worktree"
+        ? {
+            worktree: {
+              ...(named ? { named } : {}),
+              ...(startFrom ? { startFrom } : {}),
+            },
+          }
+        : {}),
       title:
         scope.kind === "pr"
           ? `PR #${scope.ref.number}`

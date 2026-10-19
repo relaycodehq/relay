@@ -20,6 +20,7 @@ import {
 } from "./draft-attachments";
 import {
   draftWorktreeBranch,
+  draftWorktreeStart,
   forgetNewThread,
   loadDraftLinks,
   loadDraftScope,
@@ -88,6 +89,7 @@ async function sendHeld({ key, chatId, send }: HeldSend): Promise<HeldSendResult
       scope.kind === "project" ? loadDraftWorkspace(key, project) : undefined,
       scope.kind === "project" ? draftWorktreeBranch(key, project) : undefined,
       loadDraftLinks(key),
+      scope.kind === "project" ? draftWorktreeStart(key, project) : undefined,
     );
     target = made.id;
   }

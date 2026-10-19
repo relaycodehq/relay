@@ -1589,6 +1589,12 @@ body.resizing-table-column {
   background: #22232b45;
   backdrop-filter: blur(3px);
 }
+/* Over frosted glass a backdrop blur lays the blurred see-through chat over
+   the sharp one, so the window goes double; a plain scrim instead. */
+:root[data-glass] .modal::backdrop {
+  background: color-mix(in srgb, var(--background) 55%, transparent);
+  backdrop-filter: none;
+}
 .modal-heading {
   display: flex;
   align-items: center;
