@@ -4,6 +4,7 @@ import { SquareTerminal } from "lucide-react";
 import type { ComputerRoute, ComputersOverview } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
+import { SshHostInput } from "./SshHostInput";
 
 const routeKey = (route: ComputerRoute) =>
   route.kind === "ssh" ? `ssh:${route.host}` : `wsl:${route.distro}`;
@@ -50,7 +51,10 @@ export function ConnectOverPipe({
       setBusy(undefined);
     }
   }
-  const ssh = { kind: "ssh", host: host.trim() } as const;
+  // What's typed as a command works too: `ssh box` is box.
+  const sshTo = (typed: string) =>
+    ({ kind: "ssh", host: typed.trim().replace(/^ssh\s+/, "") }) as const;
+  const ssh = sshTo(host);
   return (
     <div className="settings-card cm-card cm-pipe">
       <div className="cm-pipe-head">Without Tailscale</div>
@@ -66,15 +70,16 @@ export function ConnectOverPipe({
               jump hosts. Relay needs to be installed there.
             </small>
             <div className="cm-paste">
-              <input
-                aria-label="SSH host"
-                placeholder="user@host, or a Host from ~/.ssh/config"
-                spellCheck={false}
+              <SshHostInput
                 value={host}
-                onChange={(e) => setHost(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && ssh.host) void connect(ssh);
+                onChange={(value) => {
+                  setHost(value);
+                  setError(undefined);
                 }}
+                onConnect={(typed) => {
+                  if (!busy && sshTo(typed).host) void connect(sshTo(typed));
+                }}
+                paired={(name) => !!connected({ kind: "ssh", host: name })}
               />
               <button
                 className={ssh.host ? "primary" : undefined}

@@ -436,6 +436,12 @@ export const maxHandoffThread = 64 * 1024 * 1024;
  * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
  * into a WSL distribution, running `relay pipe` there.
  */
+/** A `Host` in an SSH config, with where it goes when the config says. */
+export interface SshHost {
+  host: string;
+  hostName?: string;
+  user?: string;
+}
 export type ComputerRoute =
   { kind: "ssh"; host: string } | { kind: "wsl"; distro: string };
 export const computerRouteSchema = z.discriminatedUnion("kind", [
@@ -542,6 +548,8 @@ export interface ComputersApi {
   connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
   /** The WSL distributions on this computer; none off Windows. */
   wslDistros(): Promise<string[]>;
+  /** The hosts this computer's ~/.ssh/config names, to suggest for Over SSH. */
+  sshHosts(): Promise<SshHost[]>;
   /** Starts a WSL distribution WSL stopped again, and connects to it. */
   wakeComputer(id: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;

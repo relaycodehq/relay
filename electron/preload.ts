@@ -364,6 +364,7 @@ const methods = [
   "addRemoteProject",
   "connectComputer",
   "wslDistros",
+  "sshHosts",
   "wakeComputer",
   "retryHandoff",
   "handoffView",
