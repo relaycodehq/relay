@@ -1421,6 +1421,35 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   );
 });
 
+it("stops a thread's running turn here as soon as it waits on a setup there", async () => {
+  const { laptop, sender, computerId } = await pairedComputers();
+  const { projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  const thread = await laptop.chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  // A turn that would outlast the test, still running as the thread goes.
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "60000");
+  await laptop.chats.send(thread.id, input("@codex Now the release notes"));
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).messages.at(-1)).toMatchObject({
+      role: "assistant",
+      status: "streaming",
+    }),
+  );
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).setup?.state).toBe("agent"),
+  );
+  const chat = await laptop.chats.get(thread.id);
+  // Stopped here; what still runs is the setup's agent there.
+  expect(chat.messages.at(-1)).toMatchObject({ status: "cancelled" });
+});
+
 it("tells a Relay too old to set a project up apart from a failed clone, and ends that setup", async () => {
   const { laptop, sender, computerId } = await pairedComputers();
   const { projectId, reachable } = await lackedProject(laptop);
