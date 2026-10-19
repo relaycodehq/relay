@@ -325,13 +325,13 @@ export class ComputerHandoff {
       };
     });
   }
-  /** The thread's agent stops for a handoff still readying the computer it goes to. */
+  /**
+   * The thread's running turn stops for a handoff still readying the
+   * computer it goes to. Its queued and scheduled messages stay until it
+   * leaves; `mark` lets none in, and nothing queues here while it's on its way.
+   */
   halt(id: string) {
-    return this.core.control(id, async () => {
-      const chat = await this.core.storage.load(id);
-      await this.stop(id, chat);
-      await this.core.storage.save(chat);
-    });
+    return this.core.active.halt(id);
   }
   private async stop(id: string, chat: ProjectChat) {
     await this.core.active.halt(id);
