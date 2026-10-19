@@ -245,10 +245,15 @@ it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one
     },
   );
   await expect(answer).rejects.toThrow();
-  expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
-    threadId: "thread",
-    turnId: "inner",
-  });
+  // The answer ends at Stop, before the fake has written the interrupt down.
+  await vi.waitFor(
+    async () =>
+      expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
+        threadId: "thread",
+        turnId: "inner",
+      }),
+    { timeout: 10_000 },
+  );
 });
 
 it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {
