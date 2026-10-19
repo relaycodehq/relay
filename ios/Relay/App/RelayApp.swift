@@ -58,6 +58,7 @@ struct RootView: View {
     @State private var switched: TabSwitch?
     @Environment(\.colors) private var colors
     /// Each tab's own: a push redraws that tab's stack, not the root and every tab under it.
+    @State private var threadSearch = ThreadSearchState()
     @State private var stacks = Dictionary(uniqueKeysWithValues: HomeTab.allCases.map { ($0, StackPath()) })
     @AppStorage("relay.thread-filter") private var filterData = Data()
 
@@ -94,7 +95,8 @@ struct RootView: View {
             // bar's search field only then. Each stack drops the tab bar as it pushes.
             TabView(selection: picked) {
                 Tab(value: HomeTab.threads) {
-                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome() }
+                    RouteStack(stack: stacks[.threads]!) { _ in ThreadsHome(search: threadSearch) }
+                        .threadSearchCover(threadSearch, stack: stacks[.threads]!)
                 } label: {
                     Label { Text("Threads") } icon: { TabIcon.threads.image(picked: tab == .threads, accent: colors.accent, ink: colors.foreground) }
                 }
@@ -157,14 +159,13 @@ struct RootView: View {
     }
 }
 
-/// The Threads tab's root, holding what's searched: held above the tabs, every letter typed
-/// redrew them all.
+/// The Threads tab's root. What's searched is an observed object, not state above the tabs:
+/// there every letter typed redrew them all.
 private struct ThreadsHome: View {
+    @Bindable var search: ThreadSearchState
     /// Its own rather than a binding from above, which is new each time and ran this again with
     /// every push onto the tab.
     @AppStorage("relay.thread-filter") private var filterData = Data()
-    @State private var query = ""
-    @State private var searching = false
     @Environment(Connection.self) private var connection
 
     private var filter: Binding<ThreadFilter> {
@@ -174,18 +175,17 @@ private struct ThreadsHome: View {
     }
 
     var body: some View {
-        HomeView(query: query).tabChrome(.threads) {
+        HomeView(query: search.query).tabChrome(.threads) {
             ToolbarItem(placement: .primaryAction) {
                 FilterMenu(filter: filter).badge(connection.current(filter.wrappedValue).count)
             }
+            if !ThreadSearchState.minimizes {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Search", systemImage: "magnifyingglass") { search.open = true }
+                }
+            }
         }
-        // The system's own search: a button in the bar that opens into its field.
-        .searchable(text: $query, isPresented: $searching, prompt: "Threads and projects")
-        .searchToolbarBehavior(.minimize)
-        .onSearchClosed {
-            searching = false
-            query = ""
-        }
+        .threadSearch(search)
     }
 }
 
