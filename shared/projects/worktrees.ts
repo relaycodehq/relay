@@ -32,11 +32,18 @@ export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 /**
  * The thread whose worktree is on `branch`, open or removed with the branch
  * kept for its next message, which another thread carrying it on would take.
+ * An archived one lets it go: unarchived, it gets a `relay/…` branch of its
+ * own, or waits for the branch if it was carrying it on too.
  */
-export const threadOnBranch = <T extends { worktree?: ChatWorktree }>(
+export const threadOnBranch = <
+  T extends { worktree?: ChatWorktree; archivedAt?: number },
+>(
   chats: readonly T[],
   branch: string,
-) => chats.find((c) => !!c.worktree?.path && c.worktree.branch === branch);
+) =>
+  chats.find(
+    (c) => !c.archivedAt && !!c.worktree?.path && c.worktree.branch === branch,
+  );
 
 /** A thread that works in its own git worktree, leaving the checkout alone. */
 export interface ChatWorktree {

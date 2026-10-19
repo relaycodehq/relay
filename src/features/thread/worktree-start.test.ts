@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import type { BranchList, BranchRef } from "../../../shared/branches";
+import { threadOnBranch } from "../../../shared/projects";
 import { carriedBranch, carryOnNames } from "./worktree-start";
 
 const ref = (name: string, more: Partial<BranchRef> = {}): BranchRef => ({
@@ -44,4 +45,17 @@ it("carries a remote branch on under its local name", () => {
     ),
   ).toBe("feature");
   expect(carriedBranch({ off: "main" }, list)).toBeUndefined();
+});
+
+it("holds back a branch another thread keeps, unless that thread is archived", () => {
+  const kept = { worktree: { path: "/wt/old", branch: "main" } };
+  const held = (threads: object[]) => (b: string) =>
+    !!threadOnBranch(threads, b);
+  expect(carryOnNames(list, held([kept]))).toEqual([
+    "origin/relay/setup-phase",
+  ]);
+  expect(carryOnNames(list, held([{ ...kept, archivedAt: 1 }]))).toEqual([
+    "main",
+    "origin/relay/setup-phase",
+  ]);
 });
