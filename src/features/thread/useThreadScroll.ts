@@ -218,17 +218,26 @@ export function useThreadScroll({
     // around it only take their real heights a frame after it's placed.
     // At fractional zoom the column's height wobbles by a fraction of a pixel
     // as the reader scrolls; re-pinning on that holds them at the bottom.
-    let height = 0;
-    const observer = new ResizeObserver(([entry]) => {
+    const heights = new Map<Element, number>();
+    const observer = new ResizeObserver((entries) => {
       const el = scroll.current;
-      const next = entry!.borderBoxSize[0]!.blockSize;
-      if (!el || Math.abs(next - height) < 1) return;
-      height = next;
+      if (!el) return;
+      let changed = false;
+      for (const entry of entries) {
+        const next = entry.borderBoxSize[0]!.blockSize;
+        if (Math.abs(next - (heights.get(entry.target) ?? 0)) < 1) continue;
+        heights.set(entry.target, next);
+        changed = true;
+      }
+      if (!changed) return;
       if (follow.current) el.scrollTop = el.scrollHeight;
       else if (returning.current && scrollToPlace(el, returning.current))
         placed.current = el.scrollTop;
     });
     observer.observe(content);
+    // Resizing the terminal or window changes the view without changing the
+    // messages. Keep following now, before another answer snaps it back.
+    if (scroll.current) observer.observe(scroll.current);
     return () => observer.disconnect();
   }, [isEmpty]);
   function onScroll() {
