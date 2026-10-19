@@ -544,6 +544,9 @@ export class ProjectChats {
   runHandoffHere(id: string, handoffId: string) {
     return this.handoffs.takeBack(id, handoffId);
   }
+  haltForHandoff(id: string) {
+    return this.handoffs.halt(id);
+  }
   leave(id: string, computer: string, since = 0) {
     return this.handoffs.leave(id, computer, since);
   }

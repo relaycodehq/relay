@@ -325,6 +325,14 @@ export class ComputerHandoff {
       };
     });
   }
+  /** The thread's agent stops for a handoff still readying the computer it goes to. */
+  halt(id: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      await this.stop(id, chat);
+      await this.core.storage.save(chat);
+    });
+  }
   private async stop(id: string, chat: ProjectChat) {
     await this.core.active.halt(id);
     if (chat.queue?.length || chat.scheduled?.length) {

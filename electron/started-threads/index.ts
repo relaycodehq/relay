@@ -29,6 +29,7 @@ import {
 import { sentAgent } from "../../shared/recipient";
 import {
   handoffBlocked,
+  inSetup,
   type HandoffChatMethod,
   type HandoffTarget,
 } from "../../shared/handoff";
@@ -686,7 +687,9 @@ export class StartedThreads {
       !(await this.drive(lead, `Stop “${chat.title}”${where}?`, "", signal))
     )
       return this.refused("stop it");
-    if (this.handoffs?.forwards("cancelProjectChat", [id])) {
+    // One waiting on a setup there has its agent stopped already; the
+    // setup's own agent is the user's to stop.
+    if (!inSetup(chat) && this.handoffs?.forwards("cancelProjectChat", [id])) {
       await this.handoffs.forward("cancelProjectChat", [id]);
       return toolText(`Stopped on ${chat.sentTo!.computer}.`);
     }
@@ -1336,6 +1339,12 @@ export class StartedThreads {
       ...(steer ? { delivery: "steer" as const } : {}),
       fromThread: from,
     };
+    // A send to one waiting on a setup would reach the setup's agent instead.
+    if (inSetup(chat))
+      return toolText(
+        `“${chat.title}” is on its way to ${chat.sentTo!.computer}, which is still being set up for it. Try again once it's there.`,
+        true,
+      );
     if (this.handoffs?.forwards("sendProjectChat", [id, send])) {
       const computer = chat.sentTo!.computer;
       await this.handoffs.forward("sendProjectChat", [id, send]);

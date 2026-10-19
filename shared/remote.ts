@@ -171,7 +171,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 26;
+export const remoteBridgeVersion = 27;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -270,11 +270,13 @@ export const skillsBridge = 21;
  * (shared/remote-tunnel) and list what listens there (`sites`).
  */
 export const tunnelBridge = 23;
-/**
- * From here a paired computer clones a project it lacks (`cloneProject`) and,
- * when that fails, has an agent here set it up (`setupProject`).
- */
+/** From here a paired computer clones a project it lacks (`cloneProject`). */
 export const cloneBridge = 25;
+/**
+ * From here, when that clone fails, an agent on the paired computer sets the
+ * project up (`setupProject`, `setupProgress`); before, it ran `runCommand`.
+ */
+export const setupBridge = 27;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -597,7 +599,7 @@ export interface RemoteApi {
    * repository cloned and added where the clone failed; the same id again
    * changes nothing. The thread follows like a live handoff's, by this id
    * (`handoffChat`, `handoffCall`, `handedBack`, `handoffAbandoned`). From
-   * `cloneBridge`.
+   * `setupBridge`.
    */
   setupProject(id: string, request: SetupRequest): Promise<void>;
   /**

@@ -22,6 +22,7 @@ import {
   type HandoffTarget,
   type HandoffThread,
   type HandoffHereOnlyMethod,
+  type HandoffChatMethod,
   type HandoffMethod,
   type HandoffView,
   type HeldSend,
@@ -34,6 +35,7 @@ import {
 } from "../../shared/projects";
 import {
   cloneBridge,
+  setupBridge,
   folderHandoffBridge,
   handoffBridge,
   startHandoffBridge,
@@ -65,6 +67,20 @@ import {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const chatMethods = new Set<string>(handoffChatMethods);
+/**
+ * The calls a thread waiting on a setup makes to the setup's agent: talking
+ * to it, answering it, stopping it. The rest are about the thread's own
+ * messages, still here.
+ */
+const setupMethods = new Set<string>([
+  "sendProjectChat",
+  "projectChatQueueAction",
+  "respondProjectChat",
+  "answerProjectChatQuestion",
+  "setProjectChatQuestionDismissed",
+  "cancelProjectChat",
+  "stopProjectChatPending",
+] satisfies HandoffChatMethod[]);
 /** Calls that run there only once the other computer speaks `folderHandoffBridge`. */
 const folderMethods = new Set<string>([
   ...handoffFolderMethods,
@@ -171,7 +187,7 @@ export class Handoffs {
     )
       return false;
     const chat = this.liveAwayIn(args[0]);
-    return !!chat && (liveAway(chat) || chatMethods.has(method));
+    return !!chat && (liveAway(chat) || setupMethods.has(method));
   }
   /**
    * Runs the call on the computer the thread is live on. A send waits here
@@ -991,7 +1007,10 @@ export class Handoffs {
         throw new Error(
           `This project has no Git remote, so ${name} can't find its copy.`,
         );
-      // Until the project is there, the thread stays as it is here.
+      // Until the project is there, the thread stays as it is here, its
+      // agent stopped: what the user says now goes to the setup's agent.
+      await this.chats.haltForHandoff(chatId);
+      if (!this.onHandoff(chatId, id)) return;
       const ready = await this.readied(
         chatId,
         id,
@@ -1121,6 +1140,37 @@ export class Handoffs {
     if (bridge < cloneBridge) return true;
     const name = this.nameOf(computerId);
     await this.chats.beginSetup(chatId, name, this.projects.get(projectId).name);
+    try {
+      return await this.setUp(
+        chatId,
+        id,
+        computerId,
+        client,
+        bridge,
+        repositories,
+      );
+    } catch (e) {
+      // A setup that never got its agent ends here, not left cloning.
+      if (!this.summary(chatId).sentTo?.setup)
+        await this.chats.updateSetup(chatId, {
+          state: "dropped",
+          ended: Date.now(),
+          error: message(e),
+        });
+      throw e;
+    }
+  }
+  /** Clones the project there, or failing that, starts or joins the agent setting it up. */
+  private async setUp(
+    chatId: string,
+    id: string,
+    computerId: string,
+    client: RemoteClient,
+    bridge: number,
+    repositories: string[],
+  ) {
+    const { projectId } = this.summary(chatId);
+    const name = this.nameOf(computerId);
     const under = this.setupOf(computerId, projectId, chatId);
     if (under) {
       await this.joinSetup(chatId, id, computerId, under);
@@ -1141,14 +1191,11 @@ export class Handoffs {
     }
     const url = await cloneUrl(await this.projects.root(projectId));
     const input = (await this.chats.get(chatId)).lastInput;
-    if (!url || !input) {
-      await this.chats.updateSetup(chatId, {
-        state: "dropped",
-        ended: Date.now(),
-        error: failed,
-      });
-      throw new Error(failed);
-    }
+    if (!url || !input) throw new Error(failed);
+    if (bridge < setupBridge)
+      throw new Error(
+        `${failed} ${name} runs an older Relay, which can't set the project up itself: update it from Settings → Computers, or clone the project there, then try again.`,
+      );
     // Another thread's clone failing alongside this one starts the one setup.
     const key = `${computerId}/${projectId}`;
     let starting = this.startingSetups.get(key);

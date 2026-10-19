@@ -27,7 +27,7 @@ type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { awaitsReturn } from "../project-chats/handoff";
-import { handoffBridge } from "../../shared/remote";
+import { handoffBridge, setupBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import { workspaceId } from "../../shared/workspaces";
 import type { UpdateState } from "../../shared/updates";
@@ -1379,9 +1379,12 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   expect(chat.messages).toHaveLength(1);
   expect(chat.setup!.error).toBeTruthy();
 
-  // The composer answers that agent; the thread's own folder stays here.
+  // The composer answers that agent; the thread's own folder and messages stay here.
   const answer = input("@codex Done, I signed in");
   expect(sender.forwards("sendProjectChat", [id, answer])).toBe(true);
+  expect(sender.forwards("cancelProjectChat", [id])).toBe(true);
+  expect(sender.forwards("projectChatContext", [id])).toBe(false);
+  expect(sender.forwards("compactProjectChat", [id])).toBe(false);
   expect(
     sender.forwards("projectWorkingTree", [workspaceId(projectId, id)]),
   ).toBe(false);
@@ -1406,8 +1409,34 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   )!;
   expect(mini.chats.list(there.id).filter((c) => c.cameFrom)).toHaveLength(1);
   await vi.waitFor(() =>
-    expect(mini.chats.handedOver(setup.cameFrom!.id)?.cameFrom?.returnedAt).toBeTruthy(),
+    expect(
+      mini.chats.handedOver(setup.cameFrom!.id)?.cameFrom?.returnedAt,
+    ).toBeTruthy(),
   );
+});
+
+it("tells a Relay too old to set a project up apart from a failed clone, and ends that setup", async () => {
+  const { laptop, sender, computerId } = await pairedComputers();
+  const { projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  vi.spyOn(
+    sender as never as { info: () => unknown },
+    "info",
+  ).mockResolvedValue({
+    version: "0.17.0",
+    bridge: setupBridge - 1,
+    update: { status: "idle", current: "0.17.0" },
+  });
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(id)).sentTo?.error).toMatch(
+      /runs an older Relay, which can't set the project up itself/,
+    ),
+  );
+  const chat = await laptop.chats.get(id);
+  expect(chat.sentTo!.setup).toBeUndefined();
+  expect(chat.setup).toMatchObject({ state: "dropped" });
+  expect(chat.setup!.error).toMatch(/older Relay/);
 });
 
 it("has threads waiting on the same project there share one setup, and lets one go without the other", async () => {
