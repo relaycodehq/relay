@@ -22,6 +22,10 @@ TS disagree, the TS wins (`../shared/remote*.ts`, `../electron/remote`).
 cd ios/RelayKit && swift test                 # bridge tests, ~1s
 cd ios && xcodegen && xcodebuild -project Relay.xcodeproj -scheme Relay \
   -destination 'generic/platform=iOS Simulator' build
+# Native app tests, including image/Sites ownership regressions, are in RelayTests
+# and are included in the Relay scheme. Use a simulator of your own:
+cd ios && xcodegen && xcodebuild -project Relay.xcodeproj -scheme Relay \
+  -destination 'platform=iOS Simulator,id=<sim>' test
 ```
 
 `swift test` checks the Swift bridge against vectors the desktop's TS made
