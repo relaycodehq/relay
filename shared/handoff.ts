@@ -267,6 +267,8 @@ export interface ChatCameFrom {
   backNote?: string;
   /** The computer it came from took the thread back without this one; its work here stays here. */
   abandonedAt?: number;
+  /** A setup's thread: its agent stops once the computer it came from lets it go. */
+  setup?: true;
 }
 
 /**

@@ -56,6 +56,8 @@ const isRepository = (dir: string) =>
 
 export class SetupAgents {
   private starting = new Map<string, Promise<void>>();
+  /** One look at a time, so threads asking together don't add the clone twice. */
+  private looking: Promise<unknown> = Promise.resolve();
   constructor(private host: SetupHost) {}
 
   /** Starts the setup's thread here, once however often it's asked. */
@@ -118,7 +120,14 @@ export class SetupAgents {
    * one in `folder`, or in the folder clones go to, is added as a project
    * first; the agent leaves that to Relay.
    */
-  async progress(
+  progress(repositories: string[], folder?: string) {
+    const look = () => this.look(repositories, folder);
+    const next = this.looking.then(look, look);
+    this.looking = next.catch(() => undefined);
+    return next;
+  }
+
+  private async look(
     repositories: string[],
     folder?: string,
   ): Promise<{ done: false } | { done: true; project: ComputerProject }> {
@@ -162,19 +171,21 @@ const here = (provider: AgentProvider) =>
 
 /**
  * The agent that sets it up: the thread's own when it's installed here,
- * else Claude or Codex on their default model.
+ * else Claude or Codex on their default model. Never in plan mode, which
+ * would only plan the clone.
  */
 async function setupAgent(
   settings: HandoffSettings,
 ): Promise<HandoffSettings | undefined> {
-  if (await here(settings.provider)) return settings;
+  if (await here(settings.provider))
+    return { ...settings, interactionMode: "default" };
   for (const provider of ["claude", "codex"] as const)
     if (provider !== settings.provider && (await here(provider)))
       return {
         provider,
         choice: { model: "", fast: false, reasoningEffort: "" },
         runtimeMode: settings.runtimeMode,
-        interactionMode: settings.interactionMode,
+        interactionMode: "default",
       };
 }
 

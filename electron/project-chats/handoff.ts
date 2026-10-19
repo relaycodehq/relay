@@ -472,7 +472,7 @@ export class ComputerHandoff {
       created: Date.now(),
       updated: Date.now(),
       messages: [],
-      cameFrom: { ...cameFrom, carried: 0, tip: "" },
+      cameFrom: { ...cameFrom, carried: 0, tip: "", setup: true },
       carriedIds: {},
     };
     await this.core.storage.add(chat);
@@ -602,6 +602,15 @@ export class ComputerHandoff {
     const chat = await this.core.storage.load(id);
     const came = chat.cameFrom;
     if (!came || came.returnedAt || came.abandonedAt) return;
+    // A setup nobody follows any more has no one to clone or sign in for.
+    if (came.setup)
+      return this.core.control(id, async () => {
+        const chat = await this.core.storage.load(id);
+        await this.stop(id, chat);
+        this.core.sessions.close(id);
+        chat.cameFrom!.abandonedAt = Date.now();
+        await this.core.storage.save(chat);
+      });
     came.abandonedAt = Date.now();
     await this.core.storage.save(chat);
   }

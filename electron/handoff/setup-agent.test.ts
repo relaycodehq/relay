@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
+import type { HandoffSettings } from "../../shared/handoff";
 import type { ProjectChatSend } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { SetupAgents } from "./setup-agent";
@@ -24,7 +25,10 @@ const settings = {
 };
 
 /** Starts a setup on a computer with only `installed` agents; what its thread was sent. */
-async function started(installed: string[]) {
+async function started(
+  installed: string[],
+  thread: Partial<HandoffSettings> = {},
+) {
   vi.mocked(findExecutable).mockImplementation(async (name) => {
     if (!installed.includes(name)) throw new Error("not installed");
     return `/bin/${name}`;
@@ -46,7 +50,7 @@ async function started(installed: string[]) {
       url: "https://github.com/me/app.git",
       repositories: ["me/app"],
       error: "fatal: nope",
-      settings,
+      settings: { ...settings, ...thread },
     },
     { id: "laptop", name: "Laptop" },
   );
@@ -64,6 +68,18 @@ it("sets up with the thread's own agent when it's installed there, else one that
     choice: { model: "", reasoningEffort: "" },
   });
   await expect(started(["git"])).rejects.toThrow(/No agent is installed/);
+});
+
+it("sets up out of plan mode, which would only plan the clone", async () => {
+  const plan = { interactionMode: "plan" as const };
+  expect((await started(["codex"], plan))[0]).toMatchObject({
+    provider: "codex",
+    interactionMode: "default",
+  });
+  expect((await started(["claude"], plan))[0]).toMatchObject({
+    provider: "claude",
+    interactionMode: "default",
+  });
 });
 
 it("takes a clone in the default folder as done only once it's through", async () => {
@@ -105,6 +121,49 @@ it("takes a clone in the default folder as done only once it's through", async (
     await rm(join(repo, ".git", "index.lock"));
     expect(await agents.progress(["me/app"])).toMatchObject({ done: true });
     expect(added).toEqual([repo]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("adds a clone once when threads sharing its setup look at the same time", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-setup-progress-"));
+  try {
+    const repo = join(dir, "app");
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: repo });
+    git("remote", "add", "origin", "https://github.com/me/app.git");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "First",
+    );
+    const added: { id: string; name: string; repositories: string[] }[] = [];
+    const agents = new SetupAgents({
+      handedOver: () => undefined,
+      adoptSetup: async () => {},
+      scratch: async () => ({ id: "scratch" }),
+      defaultFolder: async () => dir,
+      addAt: async (path) => {
+        await new Promise((r) => setTimeout(r, 20));
+        added.push({ id: "p", name: "app", repositories: ["me/app"] });
+        return { id: "p", name: "app", path } as never;
+      },
+      projects: async () => added,
+    });
+    const [a, b] = await Promise.all([
+      agents.progress(["me/app"]),
+      agents.progress(["me/app"]),
+    ]);
+    expect(a).toMatchObject({ done: true });
+    expect(b).toMatchObject({ done: true, project: { id: "p" } });
+    expect(added).toHaveLength(1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

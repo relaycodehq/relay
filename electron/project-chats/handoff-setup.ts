@@ -36,6 +36,13 @@ export class SetupMirror {
   async update(id: string, change: Partial<Omit<ThreadSetup, "messages">>) {
     const chat = await this.core.storage.load(id);
     if (!chat.setup) return;
+    // Only one under way can be dropped; one that ended stays as it ended.
+    if (
+      change.state === "dropped" &&
+      chat.setup.state !== "cloning" &&
+      chat.setup.state !== "agent"
+    )
+      return;
     chat.setup = { ...chat.setup, ...change };
     await this.saveNow(id);
   }
