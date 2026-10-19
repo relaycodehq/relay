@@ -588,6 +588,37 @@ test("folding the composer away and back doesn't move the thread", async () => {
       (document.activeElement as HTMLElement | null)?.blur(),
     );
     const dock = page.locator(".thread-bottom-composer");
+    // Window and terminal resizing change the view, not the message column.
+    // Stay pinned throughout, without folding the composer as if we scrolled.
+    const fromBottom = () =>
+      page
+        .locator(".project-messages")
+        .evaluate(
+          (view) => view.scrollHeight - view.scrollTop - view.clientHeight,
+        );
+    for (const height of [700, 550, 900]) {
+      await page.setViewportSize({ width: 1200, height });
+      await expect.poll(fromBottom).toBeLessThan(2);
+      await expect(dock).not.toHaveClass(/collapsed/);
+    }
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    const divider = page.getByRole("separator", { name: "Resize terminal" });
+    const dividerBox = (await divider.boundingBox())!;
+    const dividerX = dividerBox.x + dividerBox.width / 2,
+      dividerY = dividerBox.y + dividerBox.height / 2;
+    await page.mouse.move(dividerX, dividerY);
+    await page.mouse.down();
+    for (const delta of [-60, -180, -300, -180, 0, 80]) {
+      await page.mouse.move(dividerX, dividerY + delta);
+      await expect.poll(fromBottom).toBeLessThan(2);
+      await expect(dock).not.toHaveClass(/collapsed/);
+    }
+    await page.mouse.up();
+    await page
+      .getByRole("button", { name: "Hide terminal", exact: true })
+      .click();
+    await expect.poll(fromBottom).toBeLessThan(2);
+
     // The room kept under the messages for the composer, every frame.
     await page.evaluate(() => {
       const view = document.querySelector(".project-messages")!;
