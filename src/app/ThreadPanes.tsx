@@ -323,7 +323,13 @@ export function ThreadPanel({
           <X size={15} />
         </IconButton>
       </header>
-      {!front && <SurfacePicker plain={project.plain} onPick={panel.show} />}
+      {!front && (
+        <SurfacePicker
+          plain={project.plain}
+          elsewhere={!!project.computer}
+          onPick={panel.show}
+        />
+      )}
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
           {/* An unsaved edit stays on screen, to copy out before it goes. */}

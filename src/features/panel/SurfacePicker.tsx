@@ -37,10 +37,13 @@ interface Item {
 /** What an empty panel offers; each has a one-letter key while it shows. */
 export function SurfacePicker({
   plain,
+  elsewhere,
   onPick,
 }: {
   /** A folder without Git has no history. */
   plain?: boolean;
+  /** Its folder is on another computer, whose terminal, browser and devices this one can't reach yet. */
+  elsewhere?: boolean;
   onPick: (surface: Surface) => void;
 }) {
   const items: Item[] = [
@@ -57,18 +60,21 @@ export function SurfacePicker({
       label: "Terminal",
       icon: <SquareTerminal size={14} />,
       letter: "T",
+      disabled: elsewhere,
     },
     {
       id: "browser",
       label: "Browser",
       icon: <Globe size={14} />,
       letter: "B",
+      disabled: elsewhere,
     },
     {
       id: "device",
       label: "Device",
       icon: <Smartphone size={14} />,
       letter: "D",
+      disabled: elsewhere,
     },
     {
       id: "pull",

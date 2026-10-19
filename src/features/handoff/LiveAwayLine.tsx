@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MonitorOff, MonitorUp } from "lucide-react";
+import { MonitorOff, MonitorUp, Server, ServerOff } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { chatKey, fetchChat } from "../../lib/chat-events";
@@ -44,6 +44,20 @@ export function LiveAwayLine({
         void qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
       });
   };
+  // A thread of a project that lives there: it only ever runs there.
+  if (chat.sentTo!.home)
+    return (
+      <div className={`handoff-live ${online ? "" : "offline"}`} role="status">
+        {online ? <Server size={12} /> : <ServerOff size={12} />}
+        <span>
+          {online
+            ? `On ${computer}`
+            : `${computer} is offline · ${
+                waiting ? "sends when it's back" : "reconnecting"
+              }`}
+        </span>
+      </div>
+    );
   return (
     <div className={`handoff-live ${online ? "" : "offline"}`} role="status">
       {online ? <MonitorUp size={12} /> : <MonitorOff size={12} />}

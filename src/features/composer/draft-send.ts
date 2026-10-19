@@ -100,14 +100,16 @@ export async function sendDraft(
   if (takesOver(recipient, holder) && !agentSwitchNoticeHidden()) return null;
   // A message to the thread alone needs words.
   if (recipient === "message" && !text) return null;
+  // A project on another computer runs that computer's agents.
+  const home = project.computer;
   const selected = supportedChoice(
     settings.models.codex?.choice ?? codexQuestionChoice(ai),
-    await codexModels(qc),
+    await codexModels(qc, home?.id),
   );
   const pick = isPickAgent(recipient)
     ? livePick(
         settings.models[recipient],
-        await qc.query(agentModelsQuery(recipient)).catch(() => []),
+        await qc.query(agentModelsQuery(recipient, home?.id)).catch(() => []),
       )
     : { model: "", reasoningEffort: "" as const };
   const choice = messageChoice(recipient, settings.models, selected, pick);
@@ -146,10 +148,10 @@ export async function sendDraft(
   started.set(id, target);
   const attachments = loadDraftAttachments(id);
   const messageId = crypto.randomUUID();
-  await api.sendProjectChat(target.id, {
-    ...withAttachments(value, attachments),
-    id: messageId,
-  });
+  const input = { ...withAttachments(value, attachments), id: messageId };
+  // Its first message starts it there; later ones follow it there.
+  if (home && !chat) await api.startProjectChatOn(target.id, input, home.id);
+  else await api.sendProjectChat(target.id, input);
   // A background send has no mounted composer to acknowledge its own input.
   if (recipient !== "message" && !value.delivery)
     saveComposerSettings(id, {

@@ -26,6 +26,7 @@ import type { NewsItem } from "../../shared/thread-news";
 type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
+import { RemoteProjects } from "./remote-projects";
 import { awaitsReturn } from "../project-chats/handoff";
 import { handoffBridge, setupBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
@@ -1857,4 +1858,97 @@ it("leaves nothing owed on the other computer when the thread is taken back mid-
   expect(after.sentTo).toBeUndefined();
   expect(after.abandonedHandoffs).toHaveLength(1);
   expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
+});
+
+it("adds a folder on the other computer as a project that lives there, and starts its threads there in that folder", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const notes = join(mini.dir, "notes");
+  await mkdir(notes);
+  await writeFile(join(notes, "todo.md"), "- tidy\n");
+
+  // Its folders, the one already a project there marked.
+  const listed = await remote.folders(computerId, mini.dir);
+  expect(listed.dir).toBe(mini.dir);
+  expect(listed.folders).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: "app",
+        repository: true,
+        project: { id: mini.projectId, name: "App" },
+      }),
+      expect.objectContaining({ name: "notes", repository: false }),
+    ]),
+  );
+
+  const project = await remote.add(computerId, notes);
+  const [added] = (await mini.projects.list(null)).filter(
+    (p) => p.path === notes,
+  );
+  expect(project).toMatchObject({
+    name: "Notes",
+    plain: true,
+    computer: { id: computerId, projectId: added!.id, plain: true },
+  });
+  // Added again, it's the same project; nothing here reads its folder.
+  expect((await remote.add(computerId, notes)).id).toBe(project.id);
+  await expect(laptop.projects.inspect(project.id)).rejects.toThrow(
+    "isn't on this one",
+  );
+
+  // Its threads work in the folder there; none gets a worktree.
+  const thread = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "worktree",
+  );
+  expect(thread.worktree).toBeUndefined();
+  const first = input("@codex Tidy the notes");
+  await laptop.chats.firstMessageOnly(thread.id, first);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+      live: true,
+      home: true,
+      folder: true,
+      kept: 0,
+    }),
+  );
+  const [there] = mini.chats.list(added!.id);
+  expect(there).toMatchObject({ cameFrom: { home: true } });
+  expect(there!.worktree).toBeUndefined();
+  await finished(mini.chats, there!.id, 2);
+  expect((await prompts()).at(-1)).toContain("Tidy the notes");
+  // What it answers there mirrors here, the first message included.
+  await vi.waitFor(async () =>
+    expect(
+      (await laptop.chats.get(thread.id)).messages.map((m) => m.role),
+    ).toEqual(["user", "assistant"]),
+  );
+  // It never comes back: there's no folder here for it.
+  await expect(sender.bringBack(thread.id)).rejects.toThrow("runs there only");
+  await expect(sender.abandon(thread.id)).rejects.toThrow("runs there only");
+
+  // Calls about the project itself run on its folder there.
+  const unwatch = vi.fn(() => "unwatched");
+  expect(remote.forwards("projectWorkingTree", [project.id])).toBe(true);
+  expect(
+    await remote.forward("projectWorkingTree", [project.id], unwatch),
+  ).toEqual({ ran: "projectWorkingTree", on: added!.id });
+  expect(remote.forwards("projectWorkingTree", [laptop.projectId])).toBe(
+    false,
+  );
+  // A thread's own folder calls go with the thread.
+  expect(
+    remote.forwards("projectWorkingTree", [workspaceId(project.id, thread.id)]),
+  ).toBe(false);
+  // Watching it here stops the window's last watch, as nothing here can watch it.
+  expect(await remote.forward("watchWorkingTree", [project.id], unwatch)).toBe(
+    "unwatched",
+  );
+  await expect(
+    remote.forward("revealProjectPath", [project.id, ""], unwatch),
+  ).rejects.toThrow("isn't on this one");
 });

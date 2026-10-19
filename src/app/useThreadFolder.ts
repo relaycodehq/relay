@@ -32,9 +32,13 @@ export function useThreadFolder({
   const worktree = threadWorktree(inWorktree);
   // Its agent worktree was deleted: Git there only fails until the composer's row picks where it goes on.
   const deleted = agentWorktreeUnavailable(chat);
-  // Live on another computer, the panes show its worktree there.
-  const away =
-    chat?.sentTo?.folder && liveAway(chat) ? chat.sentTo.computer : undefined;
+  // Live on another computer, the panes show its worktree there; a project
+  // that lives on one shows its folder there.
+  const away = project?.computer
+    ? project.computer.name
+    : chat?.sentTo?.folder && liveAway(chat)
+      ? chat.sentTo.computer
+      : undefined;
   const where = project
     ? workspaceId(
         project.id,
@@ -94,7 +98,9 @@ export function useThreadFolder({
     detail: away
       ? {
           text: `on ${away}`,
-          title: `${worktree?.branch ?? "Detached HEAD"} · in its worktree on ${away}`,
+          title: project?.computer
+            ? `${project.path} on ${away}`
+            : `${worktree?.branch ?? "Detached HEAD"} · in its worktree on ${away}`,
         }
       : worktree && !deleted
         ? {

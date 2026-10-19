@@ -497,9 +497,13 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<import("./projects").ChatSummary>;
-  /** An agent's models; Codex's and Claude's carry their own extra fields. */
+  /**
+   * An agent's models; Codex's and Claude's carry their own extra fields.
+   * With `computerId`, as that paired computer's copy lists them.
+   */
   agentModels<P extends import("./agents").AgentProvider>(
     provider: P,
+    computerId?: string,
   ): Promise<
     P extends "codex"
       ? CodexModel[]

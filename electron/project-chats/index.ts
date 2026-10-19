@@ -13,6 +13,7 @@ import type {
   ThreadSetup,
   HandoffThread,
 } from "../../shared/handoff";
+import type { HomeThread } from "../../shared/remote";
 import type {
   ChatMessage,
   ChatScope,
@@ -562,6 +563,14 @@ export class ProjectChats {
   ) {
     return this.handoffs.adopt(projectId, thread, cameFrom, worktree, renamed);
   }
+  /** On the computer a project lives on: a thread another computer starts in it. */
+  adoptHome(
+    projectId: string,
+    thread: HomeThread,
+    cameFrom: Omit<ChatCameFrom, "carried" | "tip" | "home">,
+  ) {
+    return this.handoffs.adoptHome(projectId, thread, cameFrom);
+  }
   adoptSetup(
     projectId: string,
     title: string,
@@ -825,9 +834,10 @@ export class ProjectChats {
   firstMessageOnly(id: string, input: ProjectChatSend) {
     return this.control(id, async () => {
       const chat = await this.storage.load(id);
+      const remote = !!this.core.projects.get(chat.projectId).computer;
       if (
         chat.messages.length ||
-        !chat.worktree ||
+        (!chat.worktree && !remote) ||
         chat.scope.kind !== "project"
       )
         throw new Error(

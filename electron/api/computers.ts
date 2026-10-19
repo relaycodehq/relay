@@ -23,6 +23,14 @@ export function computerHandlers(ctx: ApiContext) {
     handOffThread: takes([idSchema, idSchema], (chatId, computerId) =>
       handoffs().sender.handOff(chatId, computerId),
     ),
+    computerFolders: takes(
+      [idSchema, z.string().trim().min(1).max(4096)],
+      (computerId, dir) => handoffs().remote.folders(computerId, dir),
+    ),
+    addRemoteProject: takes(
+      [idSchema, z.string().trim().min(1).max(4096)],
+      (computerId, path) => handoffs().remote.add(computerId, path),
+    ),
     startTargets: takes([idSchema], (projectId) =>
       handoffs().sender.startTargets(projectId),
     ),

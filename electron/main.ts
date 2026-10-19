@@ -76,6 +76,7 @@ import { DraftPages } from "./drafts/pages";
 import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
+import { RemoteProjects } from "./handoff/remote-projects";
 import { Handoffs } from "./handoff/sender";
 import { pathReady } from "./platform/shell-path";
 import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
@@ -143,7 +144,9 @@ let drafts: { store: DraftStore; service: Drafts } | undefined;
 /** Thread sounds while the window is closed; headless Relay wires none. */
 let menubarSounds: MenubarSounds | undefined;
 /** Handing threads to other computers running Relay. */
-let handoffs: { computers: Computers; sender: Handoffs } | undefined;
+let handoffs:
+  | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+  | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
 /** Which working trees the windows show; unset until Relay has started. */
@@ -579,6 +582,7 @@ app
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {
       computers,
+      remote: new RemoteProjects(computers, projects),
       sender: new Handoffs(
         loaded,
         computers,

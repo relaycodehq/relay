@@ -77,6 +77,11 @@ export interface ChatSentTo {
    * handoff goes on. See `ThreadSetup`.
    */
   setup?: string;
+  /**
+   * Its project lives on that computer (`Project.computer`): the thread was
+   * started there, in the project's folder, and never comes back here.
+   */
+  home?: true;
 }
 
 /**
@@ -207,6 +212,21 @@ export const handoffFolderMethods = [
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
 /**
+ * Calls about a project that lives on another computer (`Project.computer`),
+ * its id first, that run on that computer (`projectCall`): its checkout's
+ * folder calls, and its branches, commands, agents' defaults and icon.
+ */
+export const remoteProjectMethods = [
+  ...handoffFolderMethods,
+  "projectBranches",
+  "projectBranchCounts",
+  "projectChangeBranch",
+  "projectCommands",
+  "agentDefaults",
+  "projectIcon",
+] as const satisfies readonly ApiMethod[];
+export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];
+/**
  * Calls on a live handoff's worktree, the thread's id first, that run there
  * from `folderHandoffBridge` too; so do the files its agents changed in
  * other repositories, which are on that computer's disk.
@@ -267,6 +287,11 @@ export interface ChatCameFrom {
   backNote?: string;
   /** The computer it came from took the thread back without this one; its work here stays here. */
   abandonedAt?: number;
+  /**
+   * Started here, in a project the other computer shows as its own
+   * (`ChatSentTo.home`): it works in this project's folder and never goes back.
+   */
+  home?: true;
 }
 
 /**
@@ -484,6 +509,16 @@ export interface ComputersApi {
   pairComputer(link: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;
   handoffTargets(chatId: string): Promise<HandoffTarget[]>;
+  /** The folders in `dir` on a paired computer, `~` its home folder. */
+  computerFolders(
+    computerId: string,
+    dir: string,
+  ): Promise<import("./remote").ComputerFolders>;
+  /** Adds a folder on a paired computer as a project that lives there. */
+  addRemoteProject(
+    computerId: string,
+    path: string,
+  ): Promise<import("./projects").Project>;
   /** The paired computers a new thread in the project can start on, or why each can't. */
   startTargets(projectId: string): Promise<HandoffTarget[]>;
   /**

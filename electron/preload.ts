@@ -358,6 +358,8 @@ const methods = [
   "setupFolder",
   "startThreadHere",
   "startProjectChatOn",
+  "computerFolders",
+  "addRemoteProject",
   "retryHandoff",
   "handoffView",
   "handoffViews",

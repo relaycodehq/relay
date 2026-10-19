@@ -6,6 +6,7 @@ import {
   type HandoffRemoteStatus,
   type HandoffThread,
 } from "../../shared/handoff";
+import type { HomeThread } from "../../shared/remote";
 import type {
   AgentProvider,
   ChatMessage,
@@ -27,6 +28,8 @@ import { chatSummary } from "./storage";
 
 /** Where a thread stands between computers, or nothing when it's simply here. */
 function elsewhere(chat: ChatSummary) {
+  if (chat.sentTo?.home)
+    return `This thread runs on ${chat.sentTo.computer}, where its project is.`;
   if (chat.sentTo)
     return `This thread is on ${chat.sentTo.computer}. Bring it back to continue here.`;
   if (chat.cameFrom?.returnedAt)
@@ -154,7 +157,11 @@ export class ComputerHandoff {
         throw new Error("A deep review can't move to another computer.");
       if (!chat.messages.length)
         throw new Error("Send a first message before handing the thread off.");
-      if (!chat.worktree || !(await worktreeExists(chat.worktree)))
+      // A thread of a project on that computer works in its folder there.
+      if (
+        !sentTo.home &&
+        (!chat.worktree || !(await worktreeExists(chat.worktree)))
+      )
         throw new Error(
           "Only a thread in its own worktree can move to another computer; the checkout's changes aren't this thread's alone.",
         );
@@ -414,9 +421,10 @@ export class ComputerHandoff {
    */
   private async adoptStart(
     projectId: string,
-    thread: HandoffThread,
+    thread: HomeThread,
     cameFrom: Omit<ChatCameFrom, "carried">,
-    worktree: ChatWorktree,
+    /** Without one it works in the project's checkout. */
+    worktree?: ChatWorktree,
   ) {
     const first = thread.messages.find((m) => m.role === "user" && !m.parentId);
     if (!first) throw new Error("The thread came without its first message.");
@@ -428,8 +436,8 @@ export class ComputerHandoff {
       renamed: true,
       created: Date.now(),
       updated: Date.now(),
-      ...(worktree.branch ? { branch: worktree.branch } : {}),
-      worktree,
+      ...(worktree?.branch ? { branch: worktree.branch } : {}),
+      ...(worktree ? { worktree } : {}),
       messages: [],
       cameFrom: { ...cameFrom, carried: 0 },
       carriedIds: {},
@@ -451,6 +459,21 @@ export class ComputerHandoff {
         ),
       );
     return chatSummary(chat);
+  }
+  /**
+   * A thread another computer starts in this project's own folder, for a
+   * project it shows as its own: it never goes back, and works in the checkout.
+   */
+  adoptHome(
+    projectId: string,
+    thread: HomeThread,
+    cameFrom: Omit<ChatCameFrom, "carried" | "tip" | "home">,
+  ) {
+    return this.adoptStart(projectId, thread, {
+      ...cameFrom,
+      tip: "",
+      home: true,
+    });
   }
   /**
    * A Scratchpad thread whose agent sets up a project another computer is
@@ -489,6 +512,10 @@ export class ComputerHandoff {
     const came = summary?.cameFrom;
     if (!came || came.deviceId !== deviceId)
       throw new Error("This thread didn't come from that computer.");
+    if (came.home)
+      throw new Error(
+        "This thread's project lives on this computer, so it stays here.",
+      );
     if (came.abandonedAt)
       throw new Error(
         `${came.computer} took this thread back without this computer, so it can't be handed back. Its work stays here.`,

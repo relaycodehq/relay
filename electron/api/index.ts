@@ -73,6 +73,10 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     const sender = ctx.handoffs()?.sender;
     if (sender?.forwards(method, args))
       return sender.forward(method, args, () => handler(args));
+    // So does the folder of a project that lives on one.
+    const remote = ctx.handoffs()?.remote;
+    if (remote?.forwards(method, args))
+      return remote.forward(method, args, () => handler([null]));
     return handler(args);
   };
 }

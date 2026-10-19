@@ -16,6 +16,7 @@ import {
   FolderPlus,
   Link2,
   Lock,
+  Monitor,
   Search,
 } from "lucide-react";
 import {
@@ -45,11 +46,13 @@ import {
 import { LinkStep } from "./LinkStep";
 import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
+import { usePairedComputers } from "../handoff/usePairedComputers";
+import type { PairedComputer } from "../../../shared/handoff";
 import "../../ui/palette.css";
 import "./add-project.css";
 import { fileManager } from "../../lib/mod-key";
 
-type Page = "root" | "folder" | "github" | "url" | "new";
+type Page = "root" | "folder" | "github" | "url" | "new" | "computer";
 
 interface Item {
   key: string;
@@ -69,6 +72,7 @@ const placeholder: Record<Page, string> = {
   github: "Search your repositories…",
   url: "https://github.com/owner/repo, git@host:owner/repo, or owner/repo",
   new: "Name the project",
+  computer: "~/",
 };
 const title: Partial<Record<Page, string>> = {
   folder: "Open a folder",
@@ -103,6 +107,12 @@ export function AddProjectPalette({
   const [chosenInto, setCloneInto] = useState<string>();
   const [spec, setSpec] = useState<Partial<Spec>>({});
   const cloneInto = chosenInto ?? adding.start?.cloneFolder ?? "~";
+  // A folder on a paired computer, added there as a project that lives there.
+  const paired = usePairedComputers();
+  const [computer, setComputer] = useState<PairedComputer>();
+  const [addingThere, setAddingThere] = useState(false);
+  const [thereError, setThereError] = useState<unknown>();
+  const busy = adding.busy || addingThere;
   const fullSpec: Spec = {
     location: cloneInto,
     git: true,
@@ -131,22 +141,50 @@ export function AddProjectPalette({
   const login =
     github.data && "login" in github.data ? github.data.login : undefined;
 
+  const browsing = page === "folder" || page === "computer";
   const cut = query.lastIndexOf("/");
-  const dir =
-    page === "folder" ? (cut < 0 ? "~/" : query.slice(0, cut + 1)) : "";
-  const leaf = page === "folder" ? query.slice(cut + 1).toLowerCase() : "";
+  const dir = browsing ? (cut < 0 ? "~/" : query.slice(0, cut + 1)) : "";
+  const leaf = browsing ? query.slice(cut + 1).toLowerCase() : "";
   const listing = useQuery({
     queryKey: ["folder-listing", dir],
     queryFn: () => api.listFolders(dir).catch(() => [] as FolderEntry[]),
     enabled: page === "folder",
     staleTime: 10_000,
   });
+  const there = useQuery({
+    queryKey: ["computer-folders", computer?.id, dir],
+    queryFn: () => api.computerFolders(computer!.id, dir),
+    enabled: page === "computer" && !!computer,
+    staleTime: 10_000,
+    retry: false,
+  });
+  /** A path there as it's typed, from that computer's home folder. */
+  const fromHomeThere = (path: string) => {
+    const home = there.data?.home;
+    if (!home) return path;
+    if (path === home) return "~";
+    return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+  };
 
   function go(next: Page, text = "") {
     setPage(next);
     setQuery(text);
     setActive(0);
     adding.clear();
+    setThereError(undefined);
+  }
+  function openComputer(c: PairedComputer) {
+    setComputer(c);
+    go("computer", "~/");
+  }
+  function addThere(path: string) {
+    if (!computer) return;
+    setAddingThere(true);
+    setThereError(undefined);
+    api
+      .addRemoteProject(computer.id, path)
+      .then(onDone, setThereError)
+      .finally(() => setAddingThere(false));
   }
   const known = (p: Project) => projects.some((x) => x.id === p.id);
   /** Brand new: offer the repos beside it first, when there are any. */
@@ -217,6 +255,20 @@ export function AddProjectPalette({
             (s) => !q || `${s.label} ${s.detail}`.toLowerCase().includes(q),
           )
           .map((s) => ({ ...s, section: "Add a project" })),
+        ...(paired.data ?? [])
+          .filter((c) => !q || c.name.toLowerCase().includes(q))
+          .map((c) => ({
+            key: `computer:${c.id}`,
+            icon: <Monitor size={15} />,
+            label: c.name,
+            detail:
+              c.status === "online"
+                ? "Open a folder there; its threads run there"
+                : "Offline",
+            right: "›",
+            section: "On another computer",
+            run: () => c.status === "online" && openComputer(c),
+          })),
         ...(adding.start?.recent ?? [])
           .filter((f) => !q || f.path.toLowerCase().includes(q))
           .map((f) => ({
@@ -280,6 +332,43 @@ export function AddProjectPalette({
             : f.repository
               ? void adding.pick(f.path).then(finish)
               : enter(f),
+      });
+      if (items.length > 80) break;
+    }
+  } else if (page === "computer" && computer) {
+    if (!leaf && dir !== "~/")
+      items.push({
+        key: `this:${dir}`,
+        icon: <FolderOpen size={15} />,
+        label: "This folder",
+        detail: dir,
+        detailIsPath: true,
+        run: () => addThere(dir),
+      });
+    for (const f of there.data?.folders ?? []) {
+      if (!f.name.toLowerCase().startsWith(leaf)) continue;
+      const known = projects.find(
+        (p) =>
+          p.computer?.id === computer.id &&
+          p.computer.projectId === f.project?.id,
+      );
+      items.push({
+        key: f.path,
+        icon: f.repository ? <FolderGit2 size={15} /> : <Folder size={15} />,
+        label: f.name,
+        right: known
+          ? `In Relay as ${known.name}`
+          : f.project
+            ? `A project there`
+            : f.repository
+              ? "git"
+              : "›",
+        run: () =>
+          known
+            ? onDone(known)
+            : f.repository || f.project
+              ? addThere(f.path)
+              : (setQuery(`${fromHomeThere(f.path)}/`), setActive(0)),
       });
       if (items.length > 80) break;
     }
@@ -351,7 +440,7 @@ export function AddProjectPalette({
     if (name) void adding.create({ ...fullSpec, name }).then(finish);
   };
   function onKeyDown(e: KeyboardEvent) {
-    if (adding.busy) return;
+    if (busy) return;
     if (e.key === "Escape") {
       e.preventDefault();
       if (page === "root") onClose();
@@ -376,16 +465,26 @@ export function AddProjectPalette({
       if (page === "new") create();
       else if (page === "folder" && /^[~/]/.test(query) && !items.length)
         void adding.pick(query).then(finish);
+      else if (page === "computer" && /^[~/]/.test(query) && !items.length)
+        addThere(query);
       else items[Math.min(active, items.length - 1)]?.run();
     } else if (e.key === "Tab" && page === "folder") {
       e.preventDefault();
       const f = listing.data?.find((x) => x.path === items[active]?.key);
       if (f) enter(f);
+    } else if (e.key === "Tab" && page === "computer") {
+      e.preventDefault();
+      const f = there.data?.folders.find((x) => x.path === items[active]?.key);
+      if (f) {
+        setQuery(`${fromHomeThere(f.path)}/`);
+        setActive(0);
+      }
     }
   }
 
   const githubProblem =
     github.data && "problem" in github.data ? github.data.problem : undefined;
+  const heading = page === "computer" ? computer?.name : title[page];
   let section: string | undefined;
   return (
     <dialog
@@ -406,7 +505,7 @@ export function AddProjectPalette({
         />
       ) : (
         <>
-          {title[page] && (
+          {heading && (
             <div className="add-palette-crumb">
               <button
                 type="button"
@@ -416,11 +515,11 @@ export function AddProjectPalette({
                 <ArrowLeft size={13} />
                 Add a project
               </button>
-              <span>/ {title[page]}</span>
+              <span>/ {heading}</span>
             </div>
           )}
           <div className="headline-project-search palette-search">
-            {page === "folder" ? (
+            {browsing ? (
               <FolderOpen size={15} />
             ) : page === "new" ? (
               <FolderPlus size={15} />
@@ -429,10 +528,10 @@ export function AddProjectPalette({
             )}
             <input
               ref={input}
-              aria-label={title[page] ?? "Add a project"}
+              aria-label={heading ?? "Add a project"}
               placeholder={placeholder[page]}
               value={query}
-              disabled={adding.busy}
+              disabled={busy}
               spellCheck={false}
               autoComplete="off"
               onChange={(e) => {
@@ -488,6 +587,12 @@ export function AddProjectPalette({
                 />
               )}
               {!!adding.error && <ErrorBox error={adding.error} />}
+              {!!thereError && <ErrorBox error={thereError} />}
+              {addingThere && (
+                <p className="headline-project-empty">
+                  Adding it on {computer?.name}…
+                </p>
+              )}
               {items.map((item, i) => {
                 const head =
                   item.section !== section ? item.section : undefined;
@@ -504,7 +609,7 @@ export function AddProjectPalette({
                       aria-selected={i === active}
                       className="headline-project-row palette-row"
                       data-highlighted={i === active ? "" : undefined}
-                      disabled={adding.busy}
+                      disabled={busy}
                       onMouseMove={() => setActive(i)}
                       onClick={item.run}
                     >
@@ -531,7 +636,13 @@ export function AddProjectPalette({
                 <p className="headline-project-empty">
                   {page === "url"
                     ? "Paste a clone URL from any host, or owner/repo for GitHub."
-                    : page === "folder"
+                    : page === "computer"
+                      ? there.isLoading
+                        ? `Looking on ${computer?.name}…`
+                        : there.error
+                          ? (there.error as Error).message
+                          : "No folder by that name. ↵ adds the path as typed."
+                      : page === "folder"
                       ? listing.isLoading
                         ? "Looking…"
                         : "No folder by that name. ↵ adds the path as typed."
@@ -559,12 +670,16 @@ export function AddProjectPalette({
               </span>
             ) : page === "folder" ? (
               <span>Tab goes into a folder · ↵ adds it</span>
+            ) : page === "computer" ? (
+              <span>
+                Folders on {computer?.name} · Tab goes into a folder · ↵ adds it
+              </span>
             ) : page === "new" ? (
               <span>↵ creates it</span>
             ) : (
               <span>Paste a URL, owner/repo or a path</span>
             )}
-            {!adding.busy && (
+            {!busy && (
               <span>{page === "root" ? "esc to close" : "esc to go back"}</span>
             )}
           </div>

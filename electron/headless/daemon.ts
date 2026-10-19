@@ -48,6 +48,7 @@ import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
 import { Computers } from "../handoff/computers";
 import { HandoffReceiver } from "../handoff/receiver";
+import { RemoteProjects } from "../handoff/remote-projects";
 import { Handoffs } from "../handoff/sender";
 import { setComputerName, computerName } from "../platform/computer-name";
 import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
@@ -132,7 +133,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const drafts = new Drafts(draftStore, {
     changed: (change) => phoneRemote?.draftChanged(change),
   });
-  let handoffs: { computers: Computers; sender: Handoffs } | undefined;
+  let handoffs:
+    | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+    | undefined;
   let agentHosts: AgentHosts | undefined;
   // The host runs from a plain file beside this one.
   const hostScript = join(__dirname, "agent-host.mjs");
@@ -331,6 +334,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const computers = new Computers(store, seal, unseal);
   handoffs = {
     computers,
+    remote: new RemoteProjects(computers, projects),
     sender: new Handoffs(
       store,
       computers,

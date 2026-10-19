@@ -68,6 +68,8 @@ export class ThreadWorktrees {
   /** Reconcile on reads too: old chats can have missed the event that made or moved their worktree. */
   async refreshAgentWorktrees(chat: ProjectChat, force = false) {
     if (chat.worktree || chat.scope.kind !== "project") return;
+    // Its checkout is on the computer the project lives on.
+    if (this.core.projects.get(chat.projectId).computer) return;
     const prior = this.refreshed.get(chat.id);
     if (prior && !force && Date.now() - prior.at < 5000) return prior.pending;
     if (prior) await prior.pending;

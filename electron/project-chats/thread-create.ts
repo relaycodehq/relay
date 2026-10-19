@@ -22,7 +22,18 @@ export class ThreadCreate {
     branch?: string,
     links?: LinkedFolder[],
   ) {
-    const { plain } = await this.core.projects.inspect(projectId);
+    const project = this.core.projects.get(projectId);
+    if (project.computer) {
+      if (scope.kind !== "project")
+        throw new Error(
+          `PRs and deep reviews of ${project.name} run on ${project.computer.name}; open them there.`,
+        );
+      // It works in the project's folder there; worktrees there come later.
+      workspace = "checkout";
+    }
+    const { plain } = project.computer
+      ? { plain: !!project.computer.plain }
+      : await this.core.projects.inspect(projectId);
     if (plain && (workspace === "worktree" || scope.kind !== "project"))
       throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")

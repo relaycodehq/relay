@@ -22,6 +22,10 @@ export function awayPlaceholder(chat: ChatSummary) {
   const { sentTo, cameFrom } = chat;
   if (inSetup(chat))
     return `Answer the setup on ${sentTo!.computer}…`;
+  if (sentTo?.state === "sending" && sentTo.home)
+    return sentTo.error
+      ? `It didn't start on ${sentTo.computer}. Try again.`
+      : `Starting it on ${sentTo.computer}…`;
   if (sentTo?.state === "sending")
     return sentTo.error
       ? "The handoff didn't finish. Try again, or keep the thread here."
@@ -65,7 +69,9 @@ function handoffLine(view: HandoffView): {
       title:
         sentTo.state === "returning"
           ? `Couldn't bring it back from ${where}`
-          : `Couldn't hand off to ${where}`,
+          : sentTo.home
+            ? `Couldn't start it on ${where}`
+            : `Couldn't hand off to ${where}`,
       detail: sentTo.error,
       failed: true,
     };
@@ -77,6 +83,11 @@ function handoffLine(view: HandoffView): {
           ? ""
           : ` ${Math.round(view.cloning.progress * 100)}%`
       }`,
+    };
+  if (sentTo.state === "sending" && sentTo.home)
+    return {
+      title: `Starting it on ${where}`,
+      detail: "in the project's folder there…",
     };
   if (sentTo.state === "sending")
     return {
@@ -155,7 +166,9 @@ export function HandoffStrip({
   };
   const { sentTo } = data;
   // Mid-way back, the job there ends itself or fails, and then it can be taken back.
-  const canAbandon = sentTo.state !== "returning" || !!sentTo.error;
+  // A thread of a project there has nowhere here to come back to.
+  const canAbandon =
+    !sentTo.home && (sentTo.state !== "returning" || !!sentTo.error);
   return (
     <>
       <div
@@ -215,18 +228,20 @@ export function HandoffStrip({
           )}
           {sentTo.state === "sending" && sentTo.error && (
             <>
-              <button
-                type="button"
-                disabled={busy || !data.online}
-                title={
-                  data.online
-                    ? "Only works if the handoff never arrived"
-                    : `${sentTo.computer} has to be reachable to tell whether it got the thread`
-                }
-                onClick={() => act(() => api.keepThreadHere(chat.id))}
-              >
-                Keep it here
-              </button>
+              {!sentTo.home && (
+                <button
+                  type="button"
+                  disabled={busy || !data.online}
+                  title={
+                    data.online
+                      ? "Only works if the handoff never arrived"
+                      : `${sentTo.computer} has to be reachable to tell whether it got the thread`
+                  }
+                  onClick={() => act(() => api.keepThreadHere(chat.id))}
+                >
+                  Keep it here
+                </button>
+              )}
               <button
                 type="button"
                 className="primary-action"
@@ -237,8 +252,9 @@ export function HandoffStrip({
               </button>
             </>
           )}
-          {(sentTo.state === "away" ||
-            (sentTo.state === "returning" && sentTo.error)) && (
+          {!sentTo.home &&
+            (sentTo.state === "away" ||
+              (sentTo.state === "returning" && sentTo.error)) && (
             <button
               type="button"
               className={

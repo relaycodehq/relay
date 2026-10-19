@@ -9,6 +9,7 @@ export interface Project {
   /** Sidebar-only folder path; never a filesystem location. */
   folder?: string;
   id: string;
+  /** Its folder; for a project on another computer, the folder there. */
   path: string;
   name: string;
   /** Original automatic name; null for a name typed by hand, absent in older saves. */
@@ -22,7 +23,27 @@ export interface Project {
   settings?: ProjectSettings;
   /** When it was removed from Relay; hidden until its folder is added again, threads and all. */
   removed?: number;
+  /**
+   * Its folder is on a paired computer, not this one: its threads, Git and
+   * files run there, and nothing here reads `path`.
+   */
+  computer?: ProjectComputer;
 }
+
+/** Where a project on another computer lives. */
+export interface ProjectComputer {
+  /** The paired computer (Settings → Computers). */
+  id: string;
+  /** Its name when the project was added; the paired computer's own name wins. */
+  name: string;
+  /** The project as that computer knows it. */
+  projectId: string;
+  /** The folder there has no Git repository. */
+  plain?: true;
+}
+/** What reading the folder of a project on another computer says here. */
+export const onComputerMessage = (p: Pick<Project, "name" | "computer">) =>
+  `${p.name} is on ${p.computer?.name ?? "another computer"}; its folder isn't on this one.`;
 const FOLDER_GONE = "This project’s folder is gone: ";
 /** What reading a project's folder says once the folder was moved or deleted. */
 export const folderGoneMessage = (path: string) => `${FOLDER_GONE}${path}`;

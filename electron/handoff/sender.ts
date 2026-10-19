@@ -28,6 +28,7 @@ import {
   type HeldSend,
 } from "../../shared/handoff";
 import {
+  onComputerMessage,
   projectChatSendSchema,
   type ProjectChatSend,
   type ChatMessage,
@@ -42,8 +43,10 @@ import {
   liveHandoffBridge,
   skillsBridge,
   pastesBridge,
+  remoteProjectsBridge,
   type ComputerProject,
   type HandoffPart,
+  type HomeThread,
   type RemoteEvent,
 } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
@@ -94,6 +97,9 @@ const named = (id: string, computer: string) =>
   `${id.slice(0, 8)} with ${computer}`;
 const seconds = (since: number) =>
   `${((Date.now() - since) / 1000).toFixed(1)}s`;
+/** Why a thread of a project on another computer can't run here instead. */
+const stays = (computer: string) =>
+  `This thread's project is on ${computer}, so it runs there only.`;
 /** What a Relay from before bridge 10 answers a call it doesn't know. */
 const unknownCall = "Phones can't do that.";
 /** A call a Relay doesn't know: from before bridge 10, or before the call was added. */
@@ -305,6 +311,7 @@ export class Handoffs {
       return this.sendHere(chatId, await this.chats.takeHandoffSends(chatId));
     if (!sentTo.live || sentTo.state !== "away")
       throw new Error("This thread isn't live on another computer.");
+    if (sentTo.home) throw new Error(stays(sentTo.computer));
     if (this.computers.status(sentTo.computerId) === "online")
       throw new Error(
         `${sentTo.computer} is back. Bring the thread back instead, with what it did there.`,
@@ -834,7 +841,11 @@ export class Handoffs {
     const chat = this.summary(chatId);
     if (chat.sentTo)
       throw new Error(`This thread is on ${chat.sentTo.computer} already.`);
-    const blocked = handoffBlocked(chat);
+    // A thread of a project on another computer starts there, in its folder.
+    const home = this.projects.get(chat.projectId).computer;
+    if (home && home.id !== computerId)
+      throw new Error(onComputerMessage(this.projects.get(chat.projectId)));
+    const blocked = home ? undefined : handoffBlocked(chat);
     if (blocked) throw new Error(blocked);
     const computer = this.computers.get(computerId);
     const id = randomUUID();
@@ -843,6 +854,7 @@ export class Handoffs {
       computerId,
       computer: computer.name,
       at: Date.now(),
+      ...(home ? { home: true as const } : {}),
     });
     this.run(chatId, () => this.send(chatId, id, computerId));
   }
@@ -865,6 +877,7 @@ export class Handoffs {
   async bringBack(chatId: string, park = false) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) throw new Error("This thread is already here.");
+    if (sentTo.home) throw new Error(stays(sentTo.computer));
     if (sentTo.state === "sending")
       throw new Error(
         "The handoff hasn't finished. Try it again, or keep the thread here.",
@@ -887,6 +900,7 @@ export class Handoffs {
   async keepHere(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) return;
+    if (sentTo.home) throw new Error(stays(sentTo.computer));
     if (sentTo.setup && sentTo.state === "sending")
       return this.startHere(chatId);
     if (sentTo.state !== "sending" || this.jobs.has(chatId))
@@ -920,6 +934,7 @@ export class Handoffs {
   async abandon(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) return;
+    if (sentTo.home) throw new Error(stays(sentTo.computer));
     if (sentTo.state === "returning" && this.jobs.has(chatId))
       throw new Error(
         `It's being brought back from ${sentTo.computer} right now. If that fails, you can take it back without ${sentTo.computer}.`,
@@ -989,6 +1004,8 @@ export class Handoffs {
   }
   /** Stop, note and commit here, then the thread and its code across. */
   private async send(chatId: string, id: string, computerId: string) {
+    if (this.summary(chatId).sentTo?.home)
+      return this.sendHome(chatId, id, computerId);
     const folder = join(this.dir, id);
     const started = Date.now();
     try {
@@ -1101,6 +1118,69 @@ export class Handoffs {
     } catch (e) {
       console.warn(
         `Handoff ${named(id, this.nameOf(computerId))} didn't go out:`,
+        message(e),
+      );
+      await this.chats.updateSentTo(chatId, id, { error: message(e) });
+    }
+  }
+  /**
+   * A thread of a project that lives on the computer: nothing here to stop,
+   * note or commit, so its first message just starts it in the project's
+   * folder there, and it's followed live from then on.
+   */
+  private async sendHome(chatId: string, id: string, computerId: string) {
+    const started = Date.now();
+    try {
+      if (!this.onHandoff(chatId, id)) return;
+      const { name } = this.computers.get(computerId);
+      const client = await this.computers.connected(computerId);
+      const info = await this.info(computerId, client, true);
+      if (!info || info.bridge < remoteProjectsBridge)
+        throw new Error(
+          `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
+        );
+      const chat = await this.chats.get(chatId);
+      const project = this.projects.get(chat.projectId).computer;
+      if (!project) throw new Error("This project isn't on another computer.");
+      const input = chat.lastInput;
+      if (!input) throw new Error("Send a first message to start the thread.");
+      const thread: HomeThread = {
+        from: computerName(),
+        title: chat.title,
+        scope: chat.scope,
+        settings: {
+          provider: sentAgent(input),
+          choice: input.choice,
+          runtimeMode: input.runtimeMode,
+          interactionMode: input.interactionMode,
+          ...(input.contextWindow
+            ? { contextWindow: input.contextWindow }
+            : {}),
+        },
+        messages: await sendPastes(
+          portableMessages(chat.messages),
+          client,
+          true,
+        ),
+      };
+      await client.call("startInProject", id, project.projectId, thread);
+      if (!this.onHandoff(chatId, id)) return;
+      await this.chats.updateSentTo(chatId, id, {
+        state: "away",
+        error: undefined,
+        live: true,
+        // Its first message comes back from there as its own.
+        kept: 0,
+        start: true,
+        folder: true,
+      });
+      console.info(
+        `Thread ${named(id, name)}: started there in ${seconds(started)}.`,
+      );
+      void this.follow(computerId, chatId);
+    } catch (e) {
+      console.warn(
+        `Thread ${named(id, this.nameOf(computerId))} didn't start there:`,
         message(e),
       );
       await this.chats.updateSentTo(chatId, id, { error: message(e) });

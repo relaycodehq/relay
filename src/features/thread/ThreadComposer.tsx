@@ -313,6 +313,7 @@ export function ThreadComposer({
     <ProjectComposer
       ref={ref}
       projectId={project.id}
+      computerId={project.computer?.id}
       files={worktree.where}
       keys={{
         draft: draftKey,
@@ -372,7 +373,10 @@ export function ThreadComposer({
               }}
             />
           )}
-          {scope.kind !== "project" || project.plain ? undefined : !chat ? (
+          {scope.kind !== "project" ||
+          project.plain ||
+          // A project on another computer works in its folder there.
+          project.computer ? undefined : !chat ? (
             <NewWorkspacePicker
               project={project}
               worktree={worktree}
@@ -400,12 +404,14 @@ export function ThreadComposer({
             disabled={waiting || held}
             onStartThread={onStartThread}
           />
-          <LinksControl
-            links={links}
-            empty={!chat}
-            onProjectSettings={onProjectSettings}
-            onError={setError}
-          />
+          {!project.computer && (
+            <LinksControl
+              links={links}
+              empty={!chat}
+              onProjectSettings={onProjectSettings}
+              onError={setError}
+            />
+          )}
         </>
       }
       below={

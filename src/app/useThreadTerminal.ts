@@ -26,7 +26,9 @@ export function useThreadTerminal({
 >) {
   const key = project ? terminalKey(project.id, chat?.id ?? null) : "";
   const open = useTerminalOpen(key);
-  const blocked = terminalBlocked(chat, scope, draftWorkspace);
+  const blocked = project?.computer
+    ? `${project.name}'s terminal is on ${project.computer.name}; it isn't reachable from here yet.`
+    : terminalBlocked(chat, scope, draftWorkspace);
   function toggle() {
     if (!project || inbox || blocked) return;
     if (!open)

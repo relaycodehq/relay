@@ -24,6 +24,7 @@ import type { PullRequestCreation } from "../pull-requests/pull-request-create";
 import type { PhoneRemote } from "../remote/phone-remote";
 import type { Computers } from "../handoff/computers";
 import type { Handoffs } from "../handoff/sender";
+import type { RemoteProjects } from "../handoff/remote-projects";
 import type { Store } from "../app/store";
 import type { TriageService } from "../triage/service";
 import type { Updater } from "../app/updater";
@@ -48,7 +49,9 @@ export interface Services {
   triage: TriageService;
   phoneRemote(): PhoneRemote | undefined;
   /** Computers this one hands threads to; unset until Relay has started. */
-  handoffs(): { computers: Computers; sender: Handoffs } | undefined;
+  handoffs():
+    | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+    | undefined;
   login: GiteaLogin;
   /** GitHub, Gitea and Azure DevOps, picked by a repository's server. */
   hosts: PullHosts;

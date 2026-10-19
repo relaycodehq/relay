@@ -230,8 +230,15 @@ export function projectHandlers(ctx: ApiContext) {
       async (id, provider) =>
         agentRuntime(provider).commands(await projects.root(id)),
     ),
-    agentModels: takes([agentProviderSchema], (provider) =>
-      agentRuntime(provider).models(),
+    agentModels: takes(
+      [agentProviderSchema, idSchema.nullish().transform((v) => v ?? undefined)],
+      (provider, computerId) => {
+        // A project on a paired computer runs that computer's own copy.
+        if (!computerId) return agentRuntime(provider).models();
+        const handoffs = ctx.handoffs();
+        if (!handoffs) throw new Error("Relay is still starting.");
+        return handoffs.remote.agentModels(computerId, provider);
+      },
     ),
     reloadAgentModels: takes(
       [agentProviderSchema, z.boolean()],

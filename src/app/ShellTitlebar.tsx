@@ -28,6 +28,10 @@ import { DevSwitchMark } from "../features/sidebar/DevSwitchMenu";
 import { RelayMark } from "../ui/RelayMark";
 import { PaneToggles } from "../ui/WorkspacePanes";
 import "./titlebar.css";
+import {
+  projectComputer,
+  usePairedComputers,
+} from "../features/handoff/usePairedComputers";
 
 /** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
 export function TitlebarBrand({
@@ -95,9 +99,11 @@ export function ProjectTitle({
   review?: { title: string; open: () => void };
   onError: (error: unknown) => void;
 }) {
+  const computers = usePairedComputers(!!project?.computer);
+  const where = projectComputer(project, computers.data);
   return (
     <div className="project-window-title">
-      {project?.plain ? (
+      {project?.plain || where ? (
         <span className="ci-plain">
           <ProjectBadge project={project} />
         </span>
@@ -111,6 +117,12 @@ export function ProjectTitle({
       <span className="project-window-name">
         {project?.name ?? "Workspace"}
       </span>
+      {where && (
+        <span className="project-window-where">
+          on {where.name}
+          {where.online ? "" : " · offline"}
+        </span>
+      )}
       <span className="breadcrumb-slash">/</span>
       {review && (
         <>

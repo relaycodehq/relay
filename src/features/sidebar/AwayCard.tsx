@@ -3,7 +3,13 @@
 // A thread popped out into its own window says so on the same line.
 import type { ReactElement } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import { AppWindow, MonitorOff, MonitorUp } from "lucide-react";
+import {
+  AppWindow,
+  MonitorOff,
+  MonitorUp,
+  Server,
+  ServerOff,
+} from "lucide-react";
 import type { HandoffView } from "../../../shared/handoff";
 import { canPeek, RemotePeek } from "../handoff/RemotePeek";
 import { useHasOwnWindow } from "../thread-windows/thread-windows";
@@ -23,10 +29,12 @@ export function AwayWhere({
         Own window
       </span>
     ) : null;
-  const { computer } = view.sentTo;
+  const { computer, home } = view.sentTo;
+  // A thread of a project that lives there, rather than one sent there.
+  const [On, Off] = home ? [Server, ServerOff] : [MonitorUp, MonitorOff];
   return view.online ? (
     <span className="sb-card-where" title={`On ${computer}`}>
-      <MonitorUp size={11} />
+      <On size={11} />
       {computer}
     </span>
   ) : (
@@ -34,7 +42,7 @@ export function AwayWhere({
       className="sb-card-where offline"
       title={`Can't reach ${computer} right now`}
     >
-      <MonitorOff size={11} />
+      <Off size={11} />
       {computer}
     </span>
   );

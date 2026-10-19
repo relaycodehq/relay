@@ -1,9 +1,19 @@
-import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import {
   handoffFolderMethods,
   handoffMethods,
+  remoteProjectMethods,
   handoffChunk,
   handoffMessagesSchema,
   maxHandoffBundle,
@@ -20,9 +30,12 @@ import {
   type ChatMessage,
 } from "../../shared/projects";
 import {
+  computerCallMethods,
   remoteBridgeVersion,
+  type ComputerFolders,
   type ComputerMethod,
   type ComputerProject,
+  type HomeThread,
   type SetupRequest,
 } from "../../shared/remote";
 import type { ApiMethod } from "../../shared/types";
@@ -45,6 +58,8 @@ import { LiveFeed, type FeedLink } from "./live-feed";
 import { CloneRequests, type CloneHost } from "./remote-setup";
 import { SetupAgents } from "./setup-agent";
 import { readPaste, writePasteChunk } from "../drafts";
+import { expandHome, listFolders } from "../projects/folder-inspect";
+import { fromHome } from "./setup-agent";
 
 const folderMethods = new Set<string>(handoffFolderMethods);
 const partSchema = z.enum(["thread", "bundle"]);
@@ -94,6 +109,16 @@ const threadSchema = z
     start: z.literal(true).optional(),
   })
   .strict();
+const homeThreadSchema = threadSchema
+  .pick({
+    from: true,
+    title: true,
+    scope: true,
+    settings: true,
+    messages: true,
+  })
+  .strict();
+const folderSchema = z.string().trim().min(1).max(4096);
 
 export interface ReceiverHost {
   projects(): Promise<import("../../shared/projects").Project[]>;
@@ -135,6 +160,8 @@ export class HandoffReceiver {
     string,
     Promise<{ chatId: string; project: string }>
   >();
+  /** Threads being started in a project here, by id, so a repeat waits for the first. */
+  private starting = new Map<string, Promise<{ chatId: string }>>();
   private feed: LiveFeed;
   private clones?: CloneRequests;
   private setups?: SetupAgents;
@@ -337,7 +364,93 @@ export class HandoffReceiver {
         await rm(join(this.host.dir, id), { recursive: true, force: true });
         return;
       }
+      case "computerFolders":
+        return this.folders(folderSchema.parse(args[0]));
+      case "computerAddProject": {
+        if (!this.host.adding)
+          throw new Error("This Relay can't add projects.");
+        const path = folderSchema.parse(args[0]);
+        return this.describe(await this.host.adding.addAt(path));
+      }
+      case "startInProject": {
+        const id = idSchema.parse(args[0]);
+        let job = this.starting.get(id);
+        if (!job) {
+          job = this.startIn(
+            id,
+            idSchema.parse(args[1]),
+            homeThreadSchema.parse(args[2]) as HomeThread,
+            device,
+          ).finally(() => this.starting.delete(id));
+          this.starting.set(id, job);
+        }
+        return job;
+      }
+      case "computerCall": {
+        const method = z.enum(computerCallMethods).parse(args[0]);
+        const rest = z.array(z.unknown()).max(9).parse(args[1]);
+        if (!this.host.dispatch) throw new Error("This Relay can't do that.");
+        return this.host.dispatch(method, rest);
+      }
+      case "projectCall": {
+        const project = await this.own(idSchema.parse(args[0]));
+        const method = z.enum(remoteProjectMethods).parse(args[1]);
+        const rest = z.array(z.unknown()).max(9).parse(args[2]).slice(1);
+        if (!this.host.dispatch) throw new Error("This Relay can't do that.");
+        return this.host.dispatch(method, [project.id, ...rest]);
+      }
     }
+  }
+  /** A project of this computer's own, not one another computer hosts or a Scratchpad's. */
+  private async own(projectId: string) {
+    const project = (await this.host.projects()).find(
+      (p) => p.id === projectId && !p.scratch && !p.computer,
+    );
+    if (!project) throw new Error("This computer has no such project.");
+    return project;
+  }
+  /** The folders in `dir`, the ones that are projects here already marked. */
+  private async folders(dir: string): Promise<ComputerFolders> {
+    const resolved = await realpath(expandHome(dir));
+    const projects = (await this.host.projects()).filter(
+      (p) => !p.scratch && !p.computer,
+    );
+    const folders = await listFolders(resolved);
+    return {
+      home: homedir(),
+      dir: resolved,
+      folders: folders.map((f) => {
+        const project = projects.find((p) => p.path === f.path);
+        return project
+          ? { ...f, project: { id: project.id, name: project.name } }
+          : f;
+      }),
+    };
+  }
+  /**
+   * A thread another computer starts in a project of this one that it shows
+   * as its own: its first message runs here as the thread's first turn, in
+   * the project's checkout, and that computer follows it live by `id`.
+   */
+  private async startIn(
+    id: string,
+    projectId: string,
+    thread: HomeThread,
+    device: { id: string; name: string },
+  ) {
+    const known = this.host.chats.handedOver(id);
+    if (known) return { chatId: known.id };
+    const project = await this.own(projectId);
+    const chat = await this.host.chats.adoptHome(project.id, thread, {
+      id,
+      computer: thread.from,
+      deviceId: device.id,
+      at: Date.now(),
+    });
+    console.info(
+      `Thread ${id.slice(0, 8)} from ${device.name}: started in ${project.name}.`,
+    );
+    return { chatId: chat.id };
   }
   /**
    * Checks for Relay's latest release and, when there is one, downloads it
@@ -377,7 +490,7 @@ export class HandoffReceiver {
   }
   private async projects(): Promise<ComputerProject[]> {
     const projects = (await this.host.projects()).filter(
-      (p) => !p.plain && !p.scratch,
+      (p) => !p.plain && !p.scratch && !p.computer,
     );
     return Promise.all(
       projects.map(async (p) => ({
@@ -389,6 +502,22 @@ export class HandoffReceiver {
           .catch(() => []),
       })),
     );
+  }
+  private async describe(
+    project: import("../../shared/projects").Project,
+  ): Promise<ComputerProject> {
+    return {
+      id: project.id,
+      name: project.name,
+      repositories: project.plain
+        ? []
+        : await this.host
+            .root(project.id)
+            .then(repositoryNames)
+            .catch(() => []),
+      folder: fromHome(project.path),
+      ...(project.plain ? { plain: true as const } : {}),
+    };
   }
   private async upload(
     id: string,

@@ -6,6 +6,7 @@ import type {
   ResumeSettings,
 } from "../../../shared/projects";
 import {
+  onComputerMessage,
   replyRoot,
   sentBy,
   sentSettingsOf,
@@ -159,10 +160,17 @@ export class TurnSends {
     try {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
+      // A project on another computer only keeps the message here, for that
+      // computer to answer; its folder isn't on this one.
+      const project = this.core.projects.get(chat.projectId);
+      if (project.computer && answer)
+        throw new Error(onComputerMessage(project));
       await this.worktrees.refreshAgentWorktrees(chat);
-      if (!chat.worktree && !threadWorktree(chat))
+      if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
-      const root = await this.worktrees.root(chat, input.body);
+      const root = project.computer
+        ? ""
+        : await this.worktrees.root(chat, input.body);
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;
@@ -237,10 +245,11 @@ export class TurnSends {
       // A fix request marks its findings as being fixed.
       startFixing(chat.findings, input);
       chat.updated = Date.now();
-      ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
-        root,
-        chat,
-      ));
+      if (!project.computer)
+        ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
+          root,
+          chat,
+        ));
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       if (!answer) chat.lastInput = { ...input, images: undefined };

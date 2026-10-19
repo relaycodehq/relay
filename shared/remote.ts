@@ -8,6 +8,8 @@ import type {
   HandoffLive,
   HandoffRemoteStatus,
   HandoffSettings,
+  HandoffThread,
+  RemoteProjectMethod,
 } from "./handoff";
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
@@ -25,6 +27,7 @@ import type {
   ChatMessage,
   ChatPending,
   ChatScope,
+  FolderEntry,
   KnownMessages,
   LimitResume,
   ProjectChatPatch,
@@ -171,7 +174,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 27;
+export const remoteBridgeVersion = 28;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -277,6 +280,13 @@ export const cloneBridge = 25;
  * project up (`setupProject`, `setupProgress`); before, it ran `runCommand`.
  */
 export const setupBridge = 27;
+/**
+ * From here a paired computer hosts projects another computer shows as its
+ * own (`Project.computer`): it lists its folders, adds one, starts threads in
+ * it and runs its folder's calls (`computerFolders`, `computerAddProject`,
+ * `startInProject`, `projectCall`, `computerCall`).
+ */
+export const remoteProjectsBridge = 28;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -659,8 +669,54 @@ export interface RemoteApi {
     method: HandoffMethod,
     args: unknown[],
   ): Promise<unknown>;
+  /** The folders in `dir` here (`~` is the home folder), for adding one as a project. From `remoteProjectsBridge`. */
+  computerFolders(dir: string): Promise<ComputerFolders>;
+  /** Adds the folder here as a project, or finds the project it already is. */
+  computerAddProject(path: string): Promise<ComputerProject>;
+  /**
+   * Starts a thread in the project's own folder here: its first message is
+   * its first turn, and the thread follows like a live handoff's, by this id.
+   * The same id again changes nothing.
+   */
+  startInProject(
+    id: string,
+    projectId: string,
+    thread: HomeThread,
+  ): Promise<{ chatId: string }>;
+  /** Runs one of `computerCallMethods` here, as this computer answers it for itself. */
+  computerCall(method: ComputerCallMethod, args: unknown[]): Promise<unknown>;
+  /** Runs one of `remoteProjectMethods` on the project here, its id in place of the first argument. */
+  projectCall(
+    projectId: string,
+    method: RemoteProjectMethod,
+    args: unknown[],
+  ): Promise<unknown>;
 }
 export type HandoffPart = "thread" | "bundle";
+/**
+ * Calls about a paired computer itself, not one of its projects, that a
+ * project living there needs from it (`computerCall`): its agents' models.
+ */
+export const computerCallMethods = [
+  "agentModels",
+] as const satisfies readonly ApiMethod[];
+export type ComputerCallMethod = (typeof computerCallMethods)[number];
+/** A folder here as `computerFolders` lists it; `project` when it's one already. */
+export interface ComputerFolder extends FolderEntry {
+  project?: { id: string; name: string };
+}
+export interface ComputerFolders {
+  /** This computer's home folder, which `~` stands for. */
+  home: string;
+  /** `dir` as it resolved here. */
+  dir: string;
+  folders: ComputerFolder[];
+}
+/** What starts a thread in a project another computer shows as its own. */
+export type HomeThread = Pick<
+  HandoffThread,
+  "from" | "title" | "scope" | "settings" | "messages"
+>;
 /** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
 export interface ComputerProject {
   id: string;
@@ -668,6 +724,8 @@ export interface ComputerProject {
   repositories: string[];
   /** Its folder, from the home folder as `~`; with a project just made there. */
   folder?: string;
+  /** Its folder has no Git repository; from `remoteProjectsBridge`. */
+  plain?: true;
 }
 /** A clone `cloneProject` started: still going, or the project it made. */
 export type CloneProgress =
@@ -720,6 +778,11 @@ export const remoteMethods = [
   "updateNow",
   "handoffChat",
   "handoffCall",
+  "computerFolders",
+  "computerAddProject",
+  "startInProject",
+  "computerCall",
+  "projectCall",
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
@@ -740,6 +803,11 @@ export const computerMethods = [
   "updateNow",
   "handoffChat",
   "handoffCall",
+  "computerFolders",
+  "computerAddProject",
+  "startInProject",
+  "computerCall",
+  "projectCall",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
 /** The bridge from which phones may call `updateMethods` too. */
