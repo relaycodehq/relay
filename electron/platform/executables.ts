@@ -294,6 +294,7 @@ const outputLimit = 10_000;
  * Runs a path from `findExecutable` and collects what it says; cancellation
  * rejects after exit. With `ownTree` (on by default for a signal) the process
  * gets its own group, so a timeout or cancel stops its children too.
+ * `onOutput` hears the end of what it printed so far, as it prints.
  */
 export const runExecutable = (
   file: string,
@@ -301,6 +302,7 @@ export const runExecutable = (
   timeout: number,
   signal?: AbortSignal,
   ownTree = !!signal,
+  onOutput?: (output: string) => void,
 ): Promise<Exec> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("Cancelled."));
@@ -333,6 +335,7 @@ export const runExecutable = (
       const text = chunk.toString();
       if (isStdout && stdout.length < 1_000_000) stdout += text;
       output = (output + text).slice(-outputLimit);
+      onOutput?.(output);
     };
     child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
     child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));

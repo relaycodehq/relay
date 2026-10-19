@@ -16,6 +16,7 @@ import {
 import { api } from "../../lib/api";
 import { openSettings } from "../../lib/settings-page";
 import { prefillSignIn } from "../terminal/thread-terminals";
+import { InstallLog } from "./InstallLog";
 import { useAgentVersions } from "../updates/agent-updates";
 
 /**
@@ -111,6 +112,10 @@ function ComputerAgentMissing({
     agent?.update?.status === "failed" && !agent.path
       ? agent.update.message
       : undefined;
+  const log =
+    (installing || failed) && agent?.update && "output" in agent.update
+      ? agent.update.output
+      : undefined;
   const cli = agentInfo(provider)?.cli ?? provider;
   const reason = versions.isError
     ? `Couldn't ask ${computer.name} which agents it has.`
@@ -162,6 +167,7 @@ function ComputerAgentMissing({
         <CircleAlert size={14} aria-hidden />
       )}
       <span>{reason}</span>
+      {log && <InstallLog output={log} />}
       {installable && (
         <button type="button" onClick={() => void install(agent)}>
           Install

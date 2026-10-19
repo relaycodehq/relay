@@ -205,6 +205,9 @@ export function ownInstall(
       prefix,
       "--no-audit",
       "--no-fund",
+      // Each download and the install scripts' own output, for the install's log.
+      "--loglevel=http",
+      "--foreground-scripts",
       "--ignore-scripts=false",
       `--allow-scripts=${npm}`,
       `${npm}@${spec}`,
@@ -324,7 +327,12 @@ export interface AgentUpdatesIo {
   linked?(provider: AgentProvider): string | undefined;
   realpath(path: string): Promise<string>;
   exists(path: string): Promise<boolean>;
-  exec(file: string, args: string[], timeout: number): Promise<Exec>;
+  exec(
+    file: string,
+    args: string[],
+    timeout: number,
+    onOutput?: (output: string) => void,
+  ): Promise<Exec>;
   fetch(url: string, init?: RequestInit): Promise<Response>;
   /** Claude's update channel, `latest` or `stable`. */
   claudeChannel(): Promise<string>;
@@ -353,7 +361,8 @@ export const machineIo: AgentUpdatesIo = {
       () => true,
       () => false,
     ),
-  exec: runExecutable,
+  exec: (file, args, timeout, onOutput) =>
+    runExecutable(file, args, timeout, undefined, false, onOutput),
   fetch: (url, init) => fetch(url, init),
   account: acpAccount,
   ownAgents: ownAgentsDir,
@@ -859,7 +868,20 @@ export class AgentUpdates {
               );
             })
           : install.program;
-      const result = await this.io.exec(program, install.args, updateTimeout);
+      // What it prints shows while it runs, a few times a second at most.
+      let shown = 0;
+      const result = await this.io.exec(
+        program,
+        install.args,
+        updateTimeout,
+        (output) => {
+          const agent = this.agent(provider);
+          if (Date.now() - shown < 250 || agent.update?.status !== "running")
+            return;
+          shown = Date.now();
+          this.put({ ...agent, update: { status: "running", output } });
+        },
+      );
       const output = result.output.trim() || undefined;
       if (result.timedOut)
         return fail("The update took too long and was stopped.", output);

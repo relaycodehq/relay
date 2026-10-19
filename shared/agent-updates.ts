@@ -13,7 +13,8 @@ export type AgentInstaller =
 type AgentUpdateRun =
   /** Waiting for another agent's update to finish. */
   | { status: "queued" }
-  | { status: "running" }
+  /** `output`: the end of what the install has printed so far. */
+  | { status: "running"; output?: string }
   /** `installed` when there was nothing to update: Relay put it there. */
   | { status: "updated"; version: string; at: number; installed?: boolean }
   | { status: "failed"; message: string; output?: string; at: number };
