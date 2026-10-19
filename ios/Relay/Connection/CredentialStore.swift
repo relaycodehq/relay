@@ -5,8 +5,10 @@ import Security
 /// Paired computers in the Keychain, one item each (keyed by the desktop's
 /// public key), plus which one is active. Only this device can read them.
 struct CredentialStore {
-    private let service = "dev.relay.computers"
+    private let service: String
     private let indexAccount = "index"
+
+    init(service: String = "dev.relay.computers") { self.service = service }
 
     struct Index: Codable {
         /// Pairing order, oldest first.

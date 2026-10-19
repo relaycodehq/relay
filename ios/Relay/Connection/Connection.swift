@@ -77,7 +77,16 @@ final class Connection {
     /// Projects threads point at that the overview doesn't list yet, and the refetch for them.
     private var missing = MissingProjects()
     private var missingRefetch: Task<Void, Never>?
-    private let store = CredentialStore()
+    private let store: CredentialStore
+    @ObservationIgnored private let makeClient: (RemoteStart) -> RemoteClient
+
+    init(
+        store: CredentialStore = CredentialStore(),
+        makeClient: @escaping (RemoteStart) -> RemoteClient = { RemoteClient($0) }
+    ) {
+        self.store = store
+        self.makeClient = makeClient
+    }
 
     var computer: RemoteCredentials? { computers.first { $0.key == active } }
     var paired: Bool { computer != nil }
@@ -104,7 +113,7 @@ final class Connection {
     /// computer before stays active then.
     func pair(_ link: PairingLink) async throws {
         let before = active
-        let pairing = RemoteClient(.pair(link, device: UIDevice.current.name))
+        let pairing = makeClient(.pair(link, device: UIDevice.current.name))
         let result = try await withThrowingTaskGroup(of: RemoteCredentials?.self) { group in
             group.addTask {
                 var credentials: RemoteCredentials?
@@ -195,7 +204,7 @@ final class Connection {
 
     private func connect(_ start: RemoteStart) {
         disconnect()
-        let next = RemoteClient(start)
+        let next = makeClient(start)
         client = next
         if let key = computer?.key {
             catalogs = saves.models(key)
