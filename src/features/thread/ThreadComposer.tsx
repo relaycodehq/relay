@@ -39,7 +39,7 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
-import { LiveAwayLine } from "../handoff/LiveAwayLine";
+import { HomeComputerLine, LiveAwayLine } from "../handoff/LiveAwayLine";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { WorktreeBranchField } from "./WorktreeBranchField";
@@ -419,6 +419,8 @@ export function ThreadComposer({
           <LiveAwayLine chat={chat} onError={setError} />
         ) : chat && inSetup(chat) ? (
           <SetupLine chat={chat} onError={setError} />
+        ) : !chat && project.computer ? (
+          <HomeComputerLine project={project} />
         ) : undefined
       }
       notice={({ sendGoal }) =>

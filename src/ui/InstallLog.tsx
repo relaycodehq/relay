@@ -19,6 +19,7 @@ export function InstallLog({ output }: { output: string }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
+          className="install-log-positioner"
           side="top"
           align="end"
           sideOffset={8}

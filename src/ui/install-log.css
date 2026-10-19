@@ -1,4 +1,8 @@
-/* What an install printed, on hover over its Log. */
+/* What an install printed, on hover over its Log. Above the composer's own
+   controls, which stack over the page. */
+.install-log-positioner {
+  z-index: 150;
+}
 .install-log {
   width: 560px;
   max-width: calc(100vw - 24px);

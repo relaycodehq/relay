@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CircleAlert, Download } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -38,7 +38,7 @@ export function AgentMissingNotice({
   chatId?: string;
 }) {
   return computer ? (
-    <ComputerAgentMissing
+    <PairedComputerAgentMissing
       provider={provider}
       computer={computer}
       projectId={projectId}
@@ -63,6 +63,36 @@ function LocalAgentMissing({
       <span>{reason}</span>
       <button type="button" onClick={() => openSettings("agents")}>
         Set up in Settings
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A project left on a computer that isn't paired anymore, as after its Relay
+ * was reinstalled and paired again under a new identity: nothing there to ask.
+ */
+function PairedComputerAgentMissing(
+  props: Parameters<typeof ComputerAgentMissing>[0],
+) {
+  // The same list handoff keeps; asked here, as composer can't import handoff.
+  const paired = useQuery({
+    queryKey: ["paired-computers"],
+    queryFn: () => api.pairedComputers(),
+    staleTime: 10_000,
+  });
+  if (!paired.data) return null;
+  if (paired.data.some((c) => c.id === props.computer.id))
+    return <ComputerAgentMissing {...props} />;
+  return (
+    <div className="agent-missing-notice" role="status">
+      <CircleAlert size={14} aria-hidden />
+      <span>
+        {props.computer.name} isn't paired anymore, so this project can't run
+        there. Pair it again, or add the project from where it is now.
+      </span>
+      <button type="button" onClick={() => openSettings("computers")}>
+        Computers
       </button>
     </div>
   );
@@ -208,6 +238,7 @@ function ComputerSignedOut({
   projectId: string;
   chatId?: string;
 }) {
+  const qc = useQueryClient();
   const key = `${computer.id}:${provider}`;
   const watching = () =>
     Date.now() - (signInsStarted.get(key) ?? 0) < signInWatch;
@@ -220,6 +251,17 @@ function ComputerSignedOut({
     refetchInterval: (query) =>
       query.state.data === false && watching() ? 3000 : false,
   });
+  // Signed out, an agent there lists no models; once signed in, every agent
+  // there whose list failed asks again, so the picker names its models.
+  useEffect(() => {
+    if (signedIn.data !== true) return;
+    void qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === "agent-models" &&
+        q.queryKey[2] === computer.id &&
+        q.state.status === "error",
+    });
+  }, [signedIn.data, qc, computer.id]);
   const [, setStarted] = useState(0);
   // Its own clicks only: the checks in the background don't show.
   const [checking, setChecking] = useState(false);
