@@ -15,12 +15,11 @@ const run = promisify(execFile);
 /** Where the installer links `relay`; a login shell's PATH may not have it. */
 const remoteRelay = '"$HOME/.local/bin/relay"';
 
-/** The command that runs `relay <args>` on the computer the route reaches. */
-export function routeCommand(
+/** The command that runs the shell line `line` on the computer the route reaches. */
+export function routeShell(
   route: ComputerRoute,
-  args: string[],
+  line: string,
 ): [string, string[]] {
-  const command = `exec ${remoteRelay} ${args.join(" ")}`;
   if (route.kind === "ssh")
     return [
       "ssh",
@@ -32,11 +31,18 @@ export function routeCommand(
         "-o",
         "ServerAliveInterval=15",
         route.host,
-        command,
+        line,
       ],
     ];
-  return ["wsl.exe", ["-d", route.distro, "--exec", "sh", "-c", command]];
+  return ["wsl.exe", ["-d", route.distro, "--exec", "sh", "-c", line]];
 }
+
+/** The command that runs `relay <args>` on the computer the route reaches. */
+export const routeCommand = (
+  route: ComputerRoute,
+  args: string[],
+): [string, string[]] =>
+  routeShell(route, `exec ${remoteRelay} ${args.join(" ")}`);
 
 /** How the route reads in words: `ssh box`, `WSL Ubuntu`. */
 export const routeName = (route: ComputerRoute) =>
@@ -49,6 +55,9 @@ const lastLine = (text: string) =>
 function failure(route: ComputerRoute, stderr: string, code: number | null) {
   if (/relay: (not found|No such file)|No such file or directory/.test(stderr))
     return `Relay isn't installed ${route.kind === "ssh" ? `on ${route.host}` : `in ${route.distro}`}. Install it there with curl -fsSL https://relaycode.io/install.sh | sh, then try again.`;
+  // A Relay from before `relay pipe`.
+  if (/Unknown command .pipe.|Unknown option --pipe/.test(stderr))
+    return `The Relay ${route.kind === "ssh" ? `on ${route.host}` : `in ${route.distro}`} is too old to connect this way. Update it there with relay update, then try again.`;
   if (route.kind === "ssh") {
     // Nobody sees ssh's prompts here, so what it would have asked fails instead.
     if (/Host key verification failed/.test(stderr))

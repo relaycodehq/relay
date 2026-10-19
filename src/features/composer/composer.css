@@ -404,36 +404,6 @@
   padding: 3px 9px;
   font-size: 12px;
 }
-/* What the install there printed, on hover over the notice's Log. */
-.install-log {
-  width: 560px;
-  max-width: calc(100vw - 24px);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 16px 40px -16px #0009;
-  outline: none;
-  overflow: hidden;
-  transform-origin: var(--transform-origin);
-  transition:
-    opacity 0.12s,
-    transform 0.12s;
-}
-.install-log[data-starting-style],
-.install-log[data-ending-style] {
-  opacity: 0;
-  transform: translateY(4px) scale(0.98);
-}
-.install-log pre {
-  max-height: 260px;
-  margin: 0;
-  padding: 10px 12px;
-  overflow: auto;
-  font: 11px/1.5 var(--font-mono);
-  color: var(--muted);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
 /* Being installed there: nothing's wrong, it's on its way. */
 .agent-missing-notice.busy {
   border-color: var(--border);

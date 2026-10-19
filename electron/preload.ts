@@ -365,6 +365,8 @@ const methods = [
   "connectComputer",
   "wslDistros",
   "sshHosts",
+  "installRelayOver",
+  "relayInstallOutput",
   "wakeComputer",
   "retryHandoff",
   "handoffView",

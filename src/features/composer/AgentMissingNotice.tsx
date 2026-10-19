@@ -16,7 +16,7 @@ import {
 import { api } from "../../lib/api";
 import { openSettings } from "../../lib/settings-page";
 import { prefillSignIn } from "../terminal/thread-terminals";
-import { InstallLog } from "./InstallLog";
+import { InstallLog } from "../../ui/InstallLog";
 import { useAgentVersions } from "../updates/agent-updates";
 
 /**

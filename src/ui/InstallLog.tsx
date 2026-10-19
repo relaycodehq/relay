@@ -1,4 +1,5 @@
 import { Popover } from "@base-ui/react/popover";
+import "./install-log.css";
 
 /** Colours and cursor moves left in a CLI's output; progress lines keep their last state. */
 const plain = (output: string) =>

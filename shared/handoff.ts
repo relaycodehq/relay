@@ -548,6 +548,10 @@ export interface ComputersApi {
   connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
   /** The WSL distributions on this computer; none off Windows. */
   wslDistros(): Promise<string[]>;
+  /** Installs Relay where the route goes, over it; resolves once it's in. */
+  installRelayOver(route: ComputerRoute): Promise<void>;
+  /** What that install has printed so far, the end of it. */
+  relayInstallOutput(route: ComputerRoute): Promise<string>;
   /** The hosts this computer's ~/.ssh/config names, to suggest for Over SSH. */
   sshHosts(): Promise<SshHost[]>;
   /** Starts a WSL distribution WSL stopped again, and connects to it. */

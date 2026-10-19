@@ -3,6 +3,7 @@ import { idSchema } from "../../shared/validation";
 import { computerRouteSchema } from "../../shared/handoff";
 import { wslDistros } from "../handoff/pipe-route";
 import { sshHosts } from "../handoff/ssh-hosts";
+import { installOutput, installRelayOver } from "../handoff/install-over";
 import { projectChatSendSchema } from "../../shared/projects";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -24,6 +25,12 @@ export function computerHandlers(ctx: ApiContext) {
     ),
     wslDistros: () => wslDistros(),
     sshHosts: () => sshHosts(),
+    installRelayOver: takes([computerRouteSchema], (route) =>
+      installRelayOver(route),
+    ),
+    relayInstallOutput: takes([computerRouteSchema], (route) =>
+      installOutput(route),
+    ),
     wakeComputer: takes([idSchema], (id) => handoffs().computers.wake(id)),
     forgetComputer: takes([idSchema], (id) => handoffs().computers.forget(id)),
     handoffTargets: takes([idSchema], (chatId) =>
