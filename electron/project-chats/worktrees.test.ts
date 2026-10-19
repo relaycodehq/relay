@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ProjectChat } from "../../shared/projects";
@@ -109,4 +109,19 @@ it("gives a carried-on branch deleted meanwhile a branch of its own", async () =
   expect(chat.worktree?.branch).toMatch(/^relay\//);
   expect(chat.worktree?.existing).toBeUndefined();
   expect(chat.worktree?.named).toBeUndefined();
+});
+
+it("opens a carried-on branch beside its old folder once another took it", async () => {
+  git(root, "branch", "old-work");
+  const chat = thread({ startFrom: { on: "old-work" } });
+  const path = await worktrees.root(chat, "carry on");
+  // Cleaned up when it settled, and the folder handed to another thread.
+  git(root, "worktree", "remove", "--force", path);
+  chat.worktree = { ...chat.worktree, removedAt: 1 };
+  await mkdir(path);
+
+  const again = await worktrees.root(chat, "again");
+  expect(again).not.toBe(path);
+  expect(git(again, "branch", "--show-current")).toBe("old-work");
+  expect(chat.worktree).toMatchObject({ path: again, existing: true });
 });

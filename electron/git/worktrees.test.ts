@@ -247,6 +247,25 @@ it("carries on a branch only the remote has, on a local branch tracking it", asy
   ).toBe("origin/relay/remote-only");
 });
 
+it("won't carry on a remote branch through a local twin that's behind it", async () => {
+  await remoteAhead("release");
+  git(root, "branch", "release", "origin/release");
+  // Caught up with what was fetched; the first message's fetch finds more.
+  expect(
+    await worktreeStartProblem(root, { on: "origin/release" }),
+  ).toBeUndefined();
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "origin/release" },
+  });
+  expect(worktree.branch).toBe("relay/carry-on");
+  expect(worktree.wanted?.problem).toBe(
+    "release here is behind origin/release; carry on release or bring it up to date first.",
+  );
+  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
+    worktree.wanted?.problem,
+  );
+});
+
 it("says before the thread starts when its branch can't be used", async () => {
   expect(await worktreeStartProblem(root, { on: "main" })).toMatch(
     /^main is checked out in /,
@@ -275,6 +294,18 @@ it("goes off the checkout, and says why, when the picked branch went before the 
   expect(gone.wanted).toEqual({
     branch: "gone",
     problem: "There's no branch gone to start from anymore.",
+    off: true,
+  });
+
+  git(root, "branch", "team/login");
+  const both = await createWorktree(root, dir, "Both gone", {
+    named: "team/login",
+    startFrom: { off: "gone" },
+  });
+  expect(both.wanted).toEqual({
+    branch: "gone",
+    problem:
+      "There's no branch gone to start from anymore. And not on team/login: team/login already exists.",
     off: true,
   });
 });

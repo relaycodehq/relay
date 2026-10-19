@@ -123,9 +123,13 @@ export function NewWorkspacePicker({
               Worktree on <MiddleTruncate text={carried} kind="branch" />
             </span>
           ) : (
-            <span>
+            <span className="workspace-where-label">
               {workspaces[worktree.workspace].label}
-              {off && <span className="workspace-where-off"> off {off}</span>}
+              {off && (
+                <span className="workspace-where-off">
+                  off <MiddleTruncate text={off} kind="branch" />
+                </span>
+              )}
             </span>
           )}
           <ChevronDown size={12} />
@@ -268,7 +272,7 @@ export function NewWorkspacePicker({
             : (off ?? checkoutBranch ?? undefined)
         }
         options={
-          branches.data
+          picking && branches.data
             ? branchOptions(
                 picking === "on"
                   ? carryOnNames(branches.data)

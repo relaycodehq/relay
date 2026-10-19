@@ -5,6 +5,7 @@ import type {
   ChatSummary,
   Project,
   LinkedFolder,
+  WorktreeStart,
 } from "../../../shared/projects";
 import {
   composerSettingsKey,
@@ -335,6 +336,11 @@ export function clearDraftWorkspace(id: string) {
   threadStorage(id).workspace.clear();
   threadStorage(id).branch.save("");
   threadStorage(id).start.save(undefined);
+}
+export function saveDraftStart(id: string, start: WorktreeStart | undefined) {
+  const was = isReviewDraft(id);
+  threadStorage(id).start.save(start);
+  changedRecord(id, was);
 }
 /** The branch typed for an unsent thread's worktree, when it will work in one. */
 export const draftWorktreeBranch = (

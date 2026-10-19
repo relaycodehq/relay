@@ -1,20 +1,22 @@
 import { z } from "zod";
+import { branchNameProblem } from "../branch-names";
 import type { AgentProvider } from "../agents";
 import type { ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
 /**
- * A branch as Git lists it, local or `origin/…`. No part starts with `-` or
- * `.`, so with its remote cut off it's never an option, and none of what
- * Git keeps out of ref names, `:` and `..` among it, so never a refspec.
+ * A branch as Git lists it, local or `origin/…`. No part starts with `-`, so
+ * with its remote cut off it's never an option, and Git's own rules keep out
+ * `:` and `..`, so it's never a refspec.
  */
 const refNameSchema = z
   .string()
   .trim()
-  .min(1)
   .max(250)
-  .regex(
-    /^(?!.*(?:^|\/)[-.])(?!.*\.\.)(?!.*@\{)(?!.*\/\/)(?!.*[/.]$)[^\s\x00-\x1f\x7f:~^?*[\\]+$/,
+  .refine(
+    (name) =>
+      !branchNameProblem(name) &&
+      !name.split("/").some((part) => part.startsWith("-")),
   );
 /**
  * Where a new thread's worktree starts, when not on a new branch off the

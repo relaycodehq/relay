@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ChatSummary,
@@ -16,7 +16,9 @@ import { api } from "../../lib/api";
 import {
   loadDraftWorkspace,
   projectWorkspace,
+  saveDraftStart,
   saveDraftWorkspace,
+  useDraftRecord,
 } from "../composer/drafts";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "../../lib/working-tree-key";
@@ -65,13 +67,18 @@ export function useThreadWorktree({
   useEffect(() => {
     if (!chat) threadStorage(id).branch.save(newBranch);
   }, [newBranch, !chat]);
-  // Where the new worktree starts; none is off the checkout's commit.
-  const [start, setStart] = useState<WorktreeStart | undefined>(() =>
-    chat ? undefined : threadStorage(id).start.load(),
+  // Where the new worktree starts; none is off the checkout's commit. Read
+  // from the draft, so dropping the scope there drops it here too.
+  const saved = useDraftRecord(id, (draft) =>
+    draft.start ? JSON.stringify(draft.start) : undefined,
   );
-  useEffect(() => {
-    if (!chat) threadStorage(id).start.save(start);
-  }, [JSON.stringify(start), !chat]);
+  const start = useMemo(
+    () => (saved ? (JSON.parse(saved) as WorktreeStart) : undefined),
+    [saved],
+  );
+  const setStart = (next: WorktreeStart | undefined) => {
+    if (!chat) saveDraftStart(id, next);
+  };
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree));
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;

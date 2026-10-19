@@ -166,6 +166,7 @@ function mainExtras(record: ThreadDraft, fresh: boolean): DraftExtras {
               ? record.scope.kind
               : undefined,
           branch: record.branch ? true : undefined,
+          start: record.start ? true : undefined,
         }
       : {}),
   };

@@ -265,7 +265,8 @@ export async function changeBranch(root: string, action: BranchAction) {
       if (branch.worktree)
         throw new Error("This branch is checked out in another worktree.");
       if (branch.remote) {
-        const local = branch.name.slice(branch.name.indexOf("/") + 1);
+        const local =
+          branch.local ?? branch.name.slice(branch.name.indexOf("/") + 1);
         await git(root, ["switch", "--track", "-c", local, branch.ref]);
       } else await git(root, ["switch", "--no-guess", "--", branch.name]);
     }

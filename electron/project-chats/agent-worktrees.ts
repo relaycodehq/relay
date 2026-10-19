@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { git } from "../git/git";
+import { worktreeList } from "../git/git";
 import type { AgentProvider } from "../../shared/agents";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
 import {
@@ -190,27 +190,13 @@ async function liveWorktrees(
   relayMade: ReadonlySet<string>,
 ): Promise<Live> {
   const live: Live = new Map();
-  const out = await git(root, ["worktree", "list", "--porcelain"]);
-  for (const block of out.split("\n\n")) {
-    const lines = block.split("\n");
-    const path = lines
-      .find((l) => l.startsWith("worktree "))
-      ?.slice("worktree ".length);
-    if (
-      !path ||
-      relayMade.has(path) ||
-      lines.some((l) => l.startsWith("prunable"))
-    )
-      continue;
-    const branch = lines
-      .find((l) => l.startsWith("branch "))
-      ?.slice("branch ".length)
-      .replace(/^refs\/heads\//, "");
+  const list = await worktreeList(root);
+  for (const { path, branch, prunable } of list) {
+    if (relayMade.has(path) || prunable) continue;
     live.set(path, branch ? { branch } : {});
   }
   // The first entry is the main checkout; `root` may be it or a worktree.
-  const main = out.match(/^worktree (.+)$/m)?.[1];
-  if (main) live.delete(main);
+  if (list[0]) live.delete(list[0].path);
   live.delete(root);
   // `worktree repair` keeps this identity even when the folder was renamed.
   await Promise.all(
