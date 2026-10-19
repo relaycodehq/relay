@@ -185,10 +185,17 @@ function ComputerAgentMissing({
 const mineIn = (versions: AgentVersions | undefined, provider: string) =>
   versions?.agents.find((a: AgentVersion) => a.provider === provider);
 
+/** When Sign in was last pressed, by computer and agent: it watches for the login a while. */
+const signInsStarted = new Map<string, number>();
+/** Long enough to finish a login in the browser; a check every few seconds till then. */
+const signInWatch = 5 * 60_000;
+
 /**
  * The agent is there but signed out. Its login is that computer's own: the
  * sign-in is typed into the thread's terminal there, for the user to run and
- * finish in their browser, and nothing crosses from this computer.
+ * finish in their browser, and nothing crosses from this computer. Once
+ * typed, it looks every few seconds for a while, so the notice goes when the
+ * login's done, also after leaving the page and coming back.
  */
 function ComputerSignedOut({
   provider,
@@ -201,17 +208,29 @@ function ComputerSignedOut({
   projectId: string;
   chatId?: string;
 }) {
+  const key = `${computer.id}:${provider}`;
+  const watching = () =>
+    Date.now() - (signInsStarted.get(key) ?? 0) < signInWatch;
   const signedIn = useQuery({
     queryKey: ["agent-signed-in", computer.id, provider],
     // A computer from before it could say answers with an error: no notice.
     queryFn: () => api.agentSignedIn(provider, computer.id),
     staleTime: 60_000,
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data === false && watching() ? 3000 : false,
   });
-  const [typed, setTyped] = useState(false);
+  const [, setStarted] = useState(0);
+  // Its own clicks only: the checks in the background don't show.
+  const [checking, setChecking] = useState(false);
   if (signedIn.data !== false) return null;
   async function signIn() {
-    setTyped(await prefillSignIn(projectId, chatId ?? null, provider));
+    // Signed in some other way meanwhile: nothing to type.
+    if ((await signedIn.refetch()).data !== false) return;
+    if (await prefillSignIn(projectId, chatId ?? null, provider)) {
+      signInsStarted.set(key, Date.now());
+      setStarted(Date.now());
+    }
   }
   return (
     <div className="agent-missing-notice" role="status">
@@ -219,17 +238,19 @@ function ComputerSignedOut({
       <span>
         {agentInfo(provider).cli} isn't signed in on {computer.name}.
       </span>
-      {typed ? (
+      <button type="button" onClick={() => void signIn()}>
+        Sign in
+      </button>
+      {watching() && (
         <button
           type="button"
-          disabled={signedIn.isFetching}
-          onClick={() => void signedIn.refetch()}
+          disabled={checking}
+          onClick={() => {
+            setChecking(true);
+            void signedIn.refetch().finally(() => setChecking(false));
+          }}
         >
-          {signedIn.isFetching ? "Checking…" : "Check again"}
-        </button>
-      ) : (
-        <button type="button" onClick={() => void signIn()}>
-          Sign in
+          {checking ? "Checking…" : "Check again"}
         </button>
       )}
     </div>

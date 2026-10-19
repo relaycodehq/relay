@@ -56,6 +56,9 @@ export class ThreadTerminal {
       cursorBlink: true,
       allowProposedApi: false,
       theme: currentTheme,
+      // Links a program marks itself (OSC 8, as Claude's sign-in prints): xterm
+      // would ask with confirm() and then window.open, which goes nowhere here.
+      linkHandler: { activate: (_event, uri) => void api.openExternal(uri) },
     });
     this.term.loadAddon(this.fit);
     this.term.loadAddon(
