@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Popover } from "@base-ui/react/popover";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import {
@@ -8,12 +7,10 @@ import {
   liveAway,
   type HandoffView,
 } from "../../../shared/handoff";
-import { liveLabel } from "../../../shared/activity-labels";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
 import { threadDraftKey } from "../../lib/thread-storage";
 import { AbandonDialog } from "./AbandonDialog";
-import { canPeek, remoteCall, RemotePeek } from "./RemotePeek";
 import "./waiting-strip.css";
 import "./handoff.css";
 
@@ -56,7 +53,7 @@ function handoffLine(view: HandoffView): {
   detail?: string;
   failed?: boolean;
 } {
-  const { sentTo, online, remote } = view;
+  const { sentTo, online } = view;
   const where = sentTo.computer;
   if (sentTo.conflicts?.length)
     return {
@@ -99,26 +96,10 @@ function handoffLine(view: HandoffView): {
       title: `Bringing it back from ${where}`,
       detail: "the agent there stops and writes a note first…",
     };
-  if (!online || !remote)
-    return { title: `On ${where}`, detail: "can't reach it right now" };
-  if (remote.waiting)
-    return { title: `On ${where}`, detail: "waiting for an answer there" };
-  if (remote.running) {
-    const call = remoteCall(view);
-    return {
-      title: `Working on ${where}`,
-      ...(call ? { detail: liveLabel(call) } : {}),
-    };
-  }
-  if (remote.failed)
-    return {
-      title: `Stopped on ${where}`,
-      detail: remote.failed.split("\n")[0],
-      failed: true,
-    };
+  // Left with a Relay from before live handoffs: it waits there to come back.
   return {
-    title: `${where} finished`,
-    ...(remote.latest ? { detail: remote.latest.split("\n")[0] } : {}),
+    title: `On ${where}`,
+    detail: online ? "bring it back to carry on" : "can't reach it right now",
   };
 }
 
@@ -178,44 +159,13 @@ export function HandoffStrip({
         <div className="waiting-strip-head">
           {line.failed ? (
             <CircleAlert size={15} />
-          ) : sentTo.state === "away" && !data.remote?.running ? (
-            <MonitorCheck size={15} />
           ) : (
             <MonitorUp size={15} />
           )}
-          {canPeek(data) ? (
-            <Popover.Root>
-              <Popover.Trigger
-                openOnHover
-                delay={150}
-                closeDelay={250}
-                className="waiting-strip-text handoff-strip-peek"
-              >
-                <b>{line.title}</b>
-                {line.detail && <span> · {line.detail}</span>}
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Positioner
-                  side="top"
-                  align="start"
-                  sideOffset={10}
-                  collisionPadding={12}
-                >
-                  <Popover.Popup
-                    className="subagents-card remote-peek-card"
-                    aria-label={`What ${sentTo.computer} is doing`}
-                  >
-                    <RemotePeek view={data} />
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
-          ) : (
-            <span className="waiting-strip-text" title={line.detail}>
-              <b>{line.title}</b>
-              {line.detail && <span> · {line.detail}</span>}
-            </span>
-          )}
+          <span className="waiting-strip-text" title={line.detail}>
+            <b>{line.title}</b>
+            {line.detail && <span> · {line.detail}</span>}
+          </span>
           {canAbandon && (
             <button
               type="button"

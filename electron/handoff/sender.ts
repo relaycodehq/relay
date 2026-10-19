@@ -38,7 +38,6 @@ import {
   cloneBridge,
   setupBridge,
   folderHandoffBridge,
-  handoffBridge,
   startHandoffBridge,
   liveHandoffBridge,
   skillsBridge,
@@ -516,7 +515,7 @@ export class Handoffs {
   }
   /** The paired computers, and whether each has this thread's repository. */
   targets(chatId: string): Promise<HandoffTarget[]> {
-    return this.targetsIn(this.summary(chatId).projectId, handoffBridge);
+    return this.targetsIn(this.summary(chatId).projectId, liveHandoffBridge);
   }
   /** The paired computers a new thread in the project can start on. */
   startTargets(projectId: string): Promise<HandoffTarget[]> {
@@ -1096,25 +1095,20 @@ export class Handoffs {
         if (message(e) !== needsFullBundle) throw e;
         await across(true);
       }
-      const live = info!.bridge >= liveHandoffBridge;
       await this.chats.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
-        ...(live
-          ? {
-              live: true,
-              // A start's first message comes back from there as its own.
-              kept: start ? 0 : chat.messages.length,
-              ...(start ? { start: true as const } : {}),
-              ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
-            }
-          : {}),
+        live: true,
+        // A start's first message comes back from there as its own.
+        kept: start ? 0 : chat.messages.length,
+        ...(start ? { start: true as const } : {}),
+        ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
       });
       await rm(folder, { recursive: true, force: true });
       console.info(
-        `Handoff ${named(id, name)}: sent in ${seconds(started)}${thread.git.bundle ? "" : ", no bundle needed"}${live ? ", live" : ""}.`,
+        `Handoff ${named(id, name)}: sent in ${seconds(started)}${thread.git.bundle ? "" : ", no bundle needed"}.`,
       );
-      if (live) void this.follow(computerId, chatId);
+      void this.follow(computerId, chatId);
     } catch (e) {
       console.warn(
         `Handoff ${named(id, this.nameOf(computerId))} didn't go out:`,
@@ -1569,9 +1563,9 @@ function readReturned(text: string, computer: string): ChatMessage[] {
   );
 }
 
-/** Too old to take threads from this computer: before bridge 10, or before the handoffs this one makes. */
+/** Too old to take threads from this computer: from before live handoffs, which it follows them by. */
 export const outdated = (info: ComputerInfo | null | undefined) =>
-  info === null || (!!info && info.bridge < handoffBridge);
+  info === null || (!!info && info.bridge < liveHandoffBridge);
 
 async function upload(
   client: RemoteClient,

@@ -251,8 +251,6 @@ export const awayBridge = 13;
  * them faster than the link carries them.
  */
 export const compactBridge = 14;
-/** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
-export const handoffBridge = 11;
 /**
  * From here a computer that took a thread keeps the one it came from up to
  * date (`handoff` events, `handoffChat`) and runs its calls (`handoffCall`),
