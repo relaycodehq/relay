@@ -313,7 +313,7 @@ export function ThreadComposer({
     <ProjectComposer
       ref={ref}
       projectId={project.id}
-      computerId={project.computer?.id}
+      computer={project.computer}
       files={worktree.where}
       keys={{
         draft: draftKey,

@@ -43,7 +43,13 @@ import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../app/release-notes";
 import { devSwitchState, devSwitchTo } from "../app/dev-switch";
 import { releaseGitea } from "./account";
-import { takes, type ApiContext, type Handlers } from "./context";
+import {
+  computerIdSchema,
+  remoteProjects,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
 const typedPathSchema = z.string().trim().min(1).max(4096).optional();
@@ -228,7 +234,11 @@ export function settingsHandlers(ctx: ApiContext) {
     devSwitch: takes([z.string().min(1).max(4096)], (path) =>
       devSwitchTo(path),
     ),
-    agentVersions: () => agentUpdates.current,
+    agentVersions: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "agentVersions")
+        : agentUpdates.current,
+    ),
     agentUpdateChecks: () => store.get().agentUpdateChecks ?? true,
     saveAgentUpdateChecks: takes([z.boolean()], async (enabled) => {
       await store.update((s) => {
@@ -254,7 +264,11 @@ export function settingsHandlers(ctx: ApiContext) {
         return saved;
       },
     ),
-    checkAgentVersions: () => agentUpdates.check(true),
+    checkAgentVersions: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "checkAgentVersions")
+        : agentUpdates.check(true),
+    ),
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),
     ),

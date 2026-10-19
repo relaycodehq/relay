@@ -46,13 +46,18 @@ interface Session {
  * exists), extra ones with a `~<slot>` suffix. Shells outlive the window's view of them: switching threads
  * or reloading the window leaves them running.
  */
-class ThreadTerminals {
+export class ThreadTerminals {
   private sessions = new Map<string, Session>();
   private attached = false;
   private send: (event: TerminalEvent) => void = () => {};
 
   connect(send: (event: TerminalEvent) => void) {
     this.send = send;
+  }
+
+  /** Output of a shell on another computer, for the window to draw as these. */
+  pass(event: TerminalEvent) {
+    this.send(event);
   }
 
   /**

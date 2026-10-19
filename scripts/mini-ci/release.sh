@@ -98,7 +98,7 @@ linux_pid=""
 cleanup() {
   if [[ -n "$linux_pid" ]] && kill -0 "$linux_pid" 2>/dev/null; then
     kill "$linux_pid" 2>/dev/null || true
-    docker rm -f relay-ci-linux >/dev/null 2>&1 || true
+    docker rm -f relay-ci-linux relay-ci-pty-arm64 >/dev/null 2>&1 || true
   fi
   ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
 }
@@ -143,9 +143,29 @@ build_linux() {
         node scripts/build-electron.mjs
         npx electron-builder --linux AppImage dir --x64 --publish never
         python3 scripts/package-omarchy.py
-        tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" >&3
+        # node-pty built from source here, for the headless Relay too.
+        mkdir -p node-pty-linux/linux-x64
+        cp node_modules/node-pty/build/Release/pty.node node-pty-linux/linux-x64/
+        tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" \
+          -C /work node-pty-linux >&3
       ' | tar -xf - -C "$out"
+  # The headless Relay's node-pty for arm64 Linux, natively on the mini's arm64.
+  # Bullseye's older glibc, so it loads on older distributions too.
+  mkdir -p "$out/node-pty-linux/linux-arm64"
+  docker run --rm -i --name relay-ci-pty-arm64 --platform linux/arm64 \
+    -v relay-ci-npm:/root/.npm -e PTY="$pty_version" \
+    -e npm_config_fund=false -e npm_config_audit=false \
+    node:22-bullseye bash -c '
+      set -euo pipefail
+      exec 3>&1 1>&2
+      mkdir /work && cd /work && npm init -y >/dev/null
+      npm install --no-save "node-pty@$PTY"
+      tar -C node_modules/node-pty/build/Release -cf - pty.node >&3
+    ' | tar -xf - -C "$out/node-pty-linux/linux-arm64"
 }
+pty_version="$(node -p 'require("./node_modules/node-pty/package.json").version')"
+# Moved out of what's published once the Linux build is done.
+pty_linux="$ROOT/node-pty-linux"
 linux_log="$ROOT/linux.log"
 step "Linux, in the background"
 build_linux >"$linux_log" 2>&1 &
@@ -157,11 +177,6 @@ npm run format:check || echo "Formatting check failed (not blocking)."
 npm run test:setup
 npx vitest run --maxWorkers=2
 python3 -m unittest discover -s tests/packaging
-
-step "Headless"
-# One archive for every platform.
-node scripts/package-headless.mjs "$version"
-cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
 
 step "Mac"
 npx electron-builder --mac --publish never
@@ -184,6 +199,12 @@ wait "$linux_pid" || linux_ok=0
 linux_pid=""
 cat "$linux_log" && rm -f "$linux_log"
 ((linux_ok)) || { echo "The Linux build failed." >&2; exit 1; }
+rm -rf "$pty_linux" && mv "$out/node-pty-linux" "$pty_linux"
+
+step "Headless"
+# One archive for every platform, with node-pty for each, Linux's from above.
+RELAY_PTY_LINUX="$pty_linux" node scripts/package-headless.mjs "$version"
+cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
 # Docker's VM would sit on 4 GB through the Android build.
 ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
 docker_was_running=1

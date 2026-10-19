@@ -3,27 +3,15 @@ import { agentProviderSchema } from "../../shared/agents";
 import { idSchema } from "../../shared/validation";
 import {
   draftTerminalKey,
-  TERMINAL_SLOT,
+  terminalKeySchema,
+  terminalSizeSchema,
   terminalSlotKey,
+  terminalSlotSchema,
 } from "../../shared/terminals";
 import { signInCommand } from "../agents/sign-in";
 import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
-
-const slotSchema = z.string().regex(TERMINAL_SLOT);
-const threadKeySchema = z.union([
-  idSchema,
-  z.templateLiteral(["draft:", idSchema]),
-]);
-const terminalKeySchema = z.union([
-  threadKeySchema,
-  z.templateLiteral([threadKeySchema, "~", slotSchema]),
-]);
-const terminalSizeSchema = z.object({
-  cols: z.number().int().min(2).max(1000),
-  rows: z.number().int().min(1).max(500),
-});
 
 /** A thread's shell, and the project's long-running tasks. */
 export function terminalHandlers(ctx: ApiContext) {
@@ -51,7 +39,7 @@ export function terminalHandlers(ctx: ApiContext) {
         idSchema.nullable(),
         terminalSizeSchema,
         z.boolean().optional(),
-        slotSchema.optional(),
+        terminalSlotSchema.optional(),
       ],
       async (projectId, chatId, size, fresh, slot) => {
         const cwd = chatId

@@ -104,11 +104,15 @@ export const notLookedFor = (agent: AgentVersion) =>
   );
 
 /** Why the agent can't run on this computer, once Relay has looked; else undefined. */
-export function cantRun(agent: AgentVersion): string | undefined {
+/** Why the agent can't run; `where` names the computer it was looked for on. */
+export function cantRun(
+  agent: AgentVersion,
+  where = "this computer",
+): string | undefined {
   if (notLookedFor(agent)) return undefined;
   const { cli } = agentInfo(agent.provider);
   if (isCliProvider(agent.provider) && !agent.path)
-    return `${cli} isn't installed on this computer.`;
+    return `${cli} isn't installed on ${where}.`;
   if (agent.missing?.length)
     return `${cli} runs in Relay through ${agent.missing.join(", ")}, which isn't installed.`;
   if (!isCliProvider(agent.provider) && !agent.current)

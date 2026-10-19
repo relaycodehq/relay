@@ -40,6 +40,7 @@ import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
 import type { RemoteSite } from "./remote-tunnel";
 import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
+import type { TerminalEvent, TerminalOpened } from "./terminals";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -284,7 +285,8 @@ export const setupBridge = 27;
  * From here a paired computer hosts projects another computer shows as its
  * own (`Project.computer`): it lists its folders, adds one, starts threads in
  * it and runs its folder's calls (`computerFolders`, `computerAddProject`,
- * `startInProject`, `projectCall`, `computerCall`).
+ * `startInProject`, `projectCall`, `computerCall`), and its shells
+ * (`projectTerminal`, `terminalCall`, `terminal` events).
  */
 export const remoteProjectsBridge = 28;
 
@@ -691,14 +693,40 @@ export interface RemoteApi {
     method: RemoteProjectMethod,
     args: unknown[],
   ): Promise<unknown>;
+  /**
+   * Opens the caller's shell `key` in the project's folder here, starting it
+   * if needed; its output comes back as `terminal` events.
+   */
+  projectTerminal(
+    projectId: string,
+    key: string,
+    size: { cols: number; rows: number },
+    fresh?: boolean,
+  ): Promise<TerminalOpened>;
+  /** One of `terminalOps` on a shell `projectTerminal` opened. */
+  terminalCall(op: TerminalOp, key: string, args: unknown[]): Promise<unknown>;
 }
+/** What a computer does with a shell it opened in a project there, as TerminalApi names it. */
+export const terminalOps = [
+  "write",
+  "resize",
+  "ack",
+  "close",
+  "prefill",
+  "prefillSignIn",
+  "adopt",
+] as const;
+export type TerminalOp = (typeof terminalOps)[number];
 export type HandoffPart = "thread" | "bundle";
 /**
  * Calls about a paired computer itself, not one of its projects, that a
- * project living there needs from it (`computerCall`): its agents' models.
+ * project living there needs from it (`computerCall`): its agents and their
+ * models.
  */
 export const computerCallMethods = [
   "agentModels",
+  "agentVersions",
+  "checkAgentVersions",
 ] as const satisfies readonly ApiMethod[];
 export type ComputerCallMethod = (typeof computerCallMethods)[number];
 /** A folder here as `computerFolders` lists it; `project` when it's one already. */
@@ -783,6 +811,8 @@ export const remoteMethods = [
   "startInProject",
   "computerCall",
   "projectCall",
+  "projectTerminal",
+  "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
@@ -808,6 +838,8 @@ export const computerMethods = [
   "startInProject",
   "computerCall",
   "projectCall",
+  "projectTerminal",
+  "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
 /** The bridge from which phones may call `updateMethods` too. */
@@ -870,7 +902,9 @@ export type RemoteEvent =
   /** A draft changed; only to phones from `draftsBridge`. */
   | { kind: "draft"; change: DraftChange }
   /** To the computer a live handoff came from: what runs and waits in its thread now. */
-  | { kind: "handoff"; id: string; live: HandoffLive };
+  | { kind: "handoff"; id: string; live: HandoffLive }
+  /** To the computer a shell here belongs to (`projectTerminal`): its output, or its exit. */
+  | { kind: "terminal"; event: TerminalEvent };
 
 /** What goes over the wire: events, or from `compactBridge` patches the client turns back into them. */
 export type WireEvent =

@@ -342,6 +342,7 @@ export class PhoneRemote {
     this.bridge.dispose();
     this.dictations?.dispose();
     this.readings?.dispose();
+    this.host.handoffs?.closeShells?.();
     await this.server.close();
   }
   /** Listens now, and keeps up as Tailscale or the local network goes off, comes back or moves. */

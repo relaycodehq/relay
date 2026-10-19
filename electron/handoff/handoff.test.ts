@@ -27,6 +27,8 @@ type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { RemoteProjects } from "./remote-projects";
+import { ThreadTerminals, threadTerminals } from "../terminal/thread-terminals";
+import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
 import { awaitsReturn } from "../project-chats/handoff";
 import { handoffBridge, setupBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
@@ -1937,9 +1939,7 @@ it("adds a folder on the other computer as a project that lives there, and start
   expect(
     await remote.forward("projectWorkingTree", [project.id], unwatch),
   ).toEqual({ ran: "projectWorkingTree", on: added!.id });
-  expect(remote.forwards("projectWorkingTree", [laptop.projectId])).toBe(
-    false,
-  );
+  expect(remote.forwards("projectWorkingTree", [laptop.projectId])).toBe(false);
   // A thread's own folder calls go with the thread.
   expect(
     remote.forwards("projectWorkingTree", [workspaceId(project.id, thread.id)]),
@@ -1952,3 +1952,94 @@ it("adds a folder on the other computer as a project that lives there, and start
     remote.forward("revealProjectPath", [project.id, ""], unwatch),
   ).rejects.toThrow("isn't on this one");
 });
+
+it("opens a remote project's shells on its computer, in its folder, and shows their output on the computer that opened them alone", async () => {
+  // No pty in tests: the shells themselves are ThreadTerminals', as here.
+  const sinks: ((event: TerminalEvent) => void)[] = [];
+  const spies = [
+    vi
+      .spyOn(ThreadTerminals.prototype, "connect")
+      .mockImplementation((send) => void sinks.push(send)),
+    vi
+      .spyOn(ThreadTerminals.prototype, "open")
+      .mockImplementation((_key, cwd) => ({ cwd, backlog: "" })),
+    vi.spyOn(ThreadTerminals.prototype, "write").mockImplementation(() => {}),
+    vi.spyOn(ThreadTerminals.prototype, "adopt").mockImplementation(() => {}),
+    vi.spyOn(ThreadTerminals.prototype, "close").mockImplementation(() => {}),
+  ] as const;
+  const [, open, write, adopt, close] = spies;
+  const passed = vi.spyOn(threadTerminals, "pass").mockImplementation(() => {});
+  cleanup.push(() => {
+    for (const spy of [...spies, passed]) spy.mockRestore();
+  });
+  const { laptop, mini, computers, computerId } = await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const folder = await mini.projects.root(mini.projectId);
+  const project = await remote.add(computerId, folder);
+  const draft = draftTerminalKey(project.id);
+  const size = { cols: 80, rows: 24 };
+
+  expect(remote.forwards("openTerminal", [project.id, null, size])).toBe(true);
+  expect(remote.forwards("openTerminal", [laptop.projectId, null, size])).toBe(
+    false,
+  );
+  expect(remote.forwards("writeTerminal", [draft, "pwd\r"])).toBe(false);
+  expect(
+    await remote.forward("openTerminal", [project.id, null, size], vi.fn()),
+  ).toEqual({ cwd: folder, backlog: "" });
+  // Kept there apart from that computer's own shells, by who opened it.
+  const there = open.mock.calls[0]![0];
+  const device = there.slice(0, -draft.length - 1);
+  expect(there).toBe(`${device}@${draft}`);
+  expect(open).toHaveBeenCalledWith(there, folder, 80, 24, false);
+
+  expect(remote.forwards("writeTerminal", [draft, "pwd\r"])).toBe(true);
+  await remote.forward("writeTerminal", [draft, "pwd\r"], vi.fn());
+  expect(write).toHaveBeenCalledWith(there, "pwd\r");
+  // Output for a shell this computer didn't open isn't shown; its own is.
+  sinks[0]!({ key: `${device}@draft:${randomUUID()}`, data: "not yours" });
+  sinks[0]!({ key: there, data: folder });
+  await vi.waitFor(() =>
+    expect(passed).toHaveBeenCalledWith({ key: draft, data: folder }),
+  );
+  expect(passed).toHaveBeenCalledTimes(1);
+
+  // The draft's shell goes along to the thread its first message started.
+  const chatId = randomUUID();
+  await remote.forward("adoptTerminal", [project.id, chatId], vi.fn());
+  expect(adopt).toHaveBeenCalledWith(there, `${device}@${chatId}`);
+  expect(remote.forwards("writeTerminal", [draft, "x"])).toBe(false);
+  await remote.forward(
+    "openTerminal",
+    [project.id, chatId, size, false, "b"],
+    vi.fn(),
+  );
+
+  // The computer drops; a shell closed meanwhile closes there once it's back.
+  computers.close();
+  await remote.forward("closeTerminal", [chatId], vi.fn());
+  expect(close).not.toHaveBeenCalled();
+  expect(remote.forwards("writeTerminal", [chatId, "x"])).toBe(false);
+  open.mockClear();
+  open.mockImplementation((_key, cwd) => ({ cwd, backlog: "missed\r\n" }));
+  await computers.start();
+  await vi.waitFor(
+    () => expect(close).toHaveBeenCalledWith(`${device}@${chatId}`),
+    { timeout: 30000 },
+  );
+  // The other one is attached again: its flow starts over, and what it
+  // printed while the computer was away replaces what the window shows.
+  await vi.waitFor(() =>
+    expect(passed).toHaveBeenCalledWith({
+      key: `${chatId}~b`,
+      data: "\x1bcmissed\r\n",
+    }),
+  );
+  expect(open).toHaveBeenCalledWith(
+    `${device}@${chatId}~b`,
+    folder,
+    80,
+    24,
+    false,
+  );
+}, 90000);

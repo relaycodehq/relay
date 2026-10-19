@@ -119,7 +119,7 @@ export interface ComposerConversation {
 export function ProjectComposer({
   ref,
   projectId,
-  computerId,
+  computer,
   files = projectId,
   keys,
   conversation,
@@ -141,7 +141,7 @@ export function ProjectComposer({
   ref?: Ref<ComposerHandle>;
   projectId: string;
   /** The paired computer the project lives on, whose agents its threads run. */
-  computerId?: string;
+  computer?: { id: string; name: string };
   /** Whose files `@` offers: the project, or the thread's own worktree. */
   files?: string;
   /**
@@ -196,7 +196,7 @@ export function ProjectComposer({
     agent,
     lastSent: conversation.lastSent,
   });
-  const catalogs = useModelCatalogs(projectId, computerId);
+  const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
   const recall = usePromptHistory(promptInput, sent);
@@ -386,7 +386,7 @@ export function ProjectComposer({
       {typeof notice === "function"
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
-      {!computerId && <AgentMissingNotice provider={to} />}
+      <AgentMissingNotice provider={to} computer={computer} />
       <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}

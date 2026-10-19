@@ -37,6 +37,7 @@ import {
   type ComputerProject,
   type HomeThread,
   type SetupRequest,
+  terminalOps,
 } from "../../shared/remote";
 import type { ApiMethod } from "../../shared/types";
 import type { NewsItem } from "../../shared/thread-news";
@@ -54,6 +55,7 @@ import {
   hasCommit,
   repositoryNames,
 } from "../git/bundles";
+import { ComputerShells } from "./computer-shells";
 import { LiveFeed, type FeedLink } from "./live-feed";
 import { CloneRequests, type CloneHost } from "./remote-setup";
 import { SetupAgents } from "./setup-agent";
@@ -163,6 +165,7 @@ export class HandoffReceiver {
   /** Threads being started in a project here, by id, so a repeat waits for the first. */
   private starting = new Map<string, Promise<{ chatId: string }>>();
   private feed: LiveFeed;
+  private shells = new ComputerShells();
   private clones?: CloneRequests;
   private setups?: SetupAgents;
   constructor(private host: ReceiverHost) {
@@ -189,6 +192,11 @@ export class HandoffReceiver {
   /** How the computers threads came from are reached; the phone remote's server. */
   connect(link: FeedLink) {
     this.feed.connect(link);
+    this.shells.connect(link);
+  }
+  /** Ends the shells other computers opened here; this Relay is quitting. */
+  closeShells() {
+    this.shells.closeAll();
   }
   /** A message written in a thread here. */
   chatEvent(event: { chatId: string; message: ChatMessage }) {
@@ -399,6 +407,18 @@ export class HandoffReceiver {
         if (!this.host.dispatch) throw new Error("This Relay can't do that.");
         return this.host.dispatch(method, [project.id, ...rest]);
       }
+      case "projectTerminal": {
+        const project = await this.own(idSchema.parse(args[0]));
+        const cwd = await this.host.root(project.id);
+        return this.shells.open(device.id, cwd, args.slice(1));
+      }
+      case "terminalCall":
+        return this.shells.call(
+          device.id,
+          z.enum(terminalOps).parse(args[0]),
+          z.string().parse(args[1]),
+          z.array(z.unknown()).max(4).parse(args[2]),
+        );
     }
   }
   /** A project of this computer's own, not one another computer hosts or a Scratchpad's. */

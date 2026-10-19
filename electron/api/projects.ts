@@ -45,7 +45,14 @@ import {
 } from "../projects/project-files";
 import { projectIcon } from "../projects/project-icon";
 import { branchPulls } from "../pull-requests/pull-request-create";
-import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
+import {
+  computerIdSchema,
+  pageSchema,
+  remoteProjects,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
@@ -231,14 +238,12 @@ export function projectHandlers(ctx: ApiContext) {
         agentRuntime(provider).commands(await projects.root(id)),
     ),
     agentModels: takes(
-      [agentProviderSchema, idSchema.nullish().transform((v) => v ?? undefined)],
-      (provider, computerId) => {
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) =>
         // A project on a paired computer runs that computer's own copy.
-        if (!computerId) return agentRuntime(provider).models();
-        const handoffs = ctx.handoffs();
-        if (!handoffs) throw new Error("Relay is still starting.");
-        return handoffs.remote.agentModels(computerId, provider);
-      },
+        computerId
+          ? remoteProjects(ctx).agentModels(computerId, provider)
+          : agentRuntime(provider).models(),
     ),
     reloadAgentModels: takes(
       [agentProviderSchema, z.boolean()],

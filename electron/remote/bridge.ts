@@ -105,6 +105,8 @@ export interface RemoteHost {
     chatEvent?(event: { chatId: string; message: ChatMessage }): void;
     chatsChanged?(projectId: string): void;
     news?(item: NewsItem): void;
+    /** Ends the shells paired computers opened here. */
+    closeShells?(): void;
   };
 }
 

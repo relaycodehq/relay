@@ -2,6 +2,7 @@ import { z } from "zod";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import type { ChatSummary } from "../../shared/projects";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
+import { idSchema } from "../../shared/validation";
 import type { Api, ApiMethod, Repo } from "../../shared/types";
 import type { AgentUpdates } from "../agents/agent-updates";
 import type { AppLinks } from "../app/links";
@@ -127,6 +128,17 @@ export function takes<const S extends readonly z.ZodType[], R>(
 }
 
 export const pageSchema = z.number().int().min(1).max(100000);
+/** The paired computer an agent call asks about, for a project living there; unset for this one. */
+export const computerIdSchema = idSchema
+  .nullish()
+  .transform((v) => v ?? undefined);
+
+/** Where calls about projects on paired computers go, once Relay has started. */
+export function remoteProjects(ctx: Pick<ApiContext, "handoffs">) {
+  const handoffs = ctx.handoffs();
+  if (!handoffs) throw new Error("Relay is still starting.");
+  return handoffs.remote;
+}
 
 /** The services, plus the lookups most handlers share. */
 export function apiContext(services: Services) {

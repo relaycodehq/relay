@@ -656,10 +656,13 @@ export interface Api
   stopReadAloud(id: number): Promise<void>;
   onReadAloudState(callback: (state: ReadAloudState) => void): () => void;
   onReadAloud(callback: (event: ReadAloudEvent) => void): () => void;
-  /** The agent CLIs as last checked, and whether newer ones are out. */
-  agentVersions(): Promise<AgentVersions>;
+  /**
+   * The agent CLIs as last checked, and whether newer ones are out; with
+   * `computerId`, that paired computer's.
+   */
+  agentVersions(computerId?: string): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
-  checkAgentVersions(): Promise<AgentVersions>;
+  checkAgentVersions(computerId?: string): Promise<AgentVersions>;
   /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
   agentUpdateChecks(): Promise<boolean>;
   saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;

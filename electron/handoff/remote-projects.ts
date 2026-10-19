@@ -1,7 +1,7 @@
 // Projects whose folder is on a paired computer (`Project.computer`): adding
 // one from that computer's folders, and the calls about the project itself,
-// rather than one of its threads, that run there. Its threads go there as
-// live handoffs do; see Handoffs.sendHome.
+// rather than one of its threads, that run there, its shells among them.
+// Its threads go there as live handoffs do; see Handoffs.sendHome.
 import {
   handoffHereOnlyMethods,
   remoteProjectMethods,
@@ -9,13 +9,28 @@ import {
 } from "../../shared/handoff";
 import type { AgentProvider } from "../../shared/agents";
 import { onComputerMessage, type Project } from "../../shared/projects";
-import type { ComputerFolders } from "../../shared/remote";
+import type {
+  ComputerCallMethod,
+  ComputerFolders,
+  TerminalOp,
+} from "../../shared/remote";
+import { draftTerminalKey, terminalSlotKey } from "../../shared/terminals";
 import type { Api } from "../../shared/types";
 import type { Projects } from "../projects/projects";
 import type { Computers } from "./computers";
+import { RemoteShells } from "./remote-shells";
 
 const projectMethods = new Set<string>(remoteProjectMethods);
 const hereOnlyMethods = new Set<string>(handoffHereOnlyMethods);
+/** The terminal calls about a shell already open, and what the computer it runs on calls them. */
+const shellOps = new Map<string, TerminalOp>([
+  ["writeTerminal", "write"],
+  ["resizeTerminal", "resize"],
+  ["ackTerminal", "ack"],
+  ["closeTerminal", "close"],
+  ["prefillTerminal", "prefill"],
+  ["prefillSignIn", "prefillSignIn"],
+]);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before `remoteProjectsBridge` answers a call it doesn't know. */
 const unknownCall = (e: unknown) =>
@@ -23,10 +38,13 @@ const unknownCall = (e: unknown) =>
   message(e) === "Computers can't do that.";
 
 export class RemoteProjects {
+  private shells: RemoteShells;
   constructor(
     private computers: Computers,
     private projects: Projects,
-  ) {}
+  ) {
+    this.shells = new RemoteShells(computers, (id, run) => this.call(id, run));
+  }
   /** The folders in `dir` on the computer, `~` its home folder. */
   folders(computerId: string, dir: string): Promise<ComputerFolders> {
     return this.call(computerId, (client) =>
@@ -51,17 +69,26 @@ export class RemoteProjects {
   }
   /** An agent's models as the computer's own copy of it lists them. */
   agentModels(computerId: string, provider: AgentProvider) {
-    return this.call(
-      computerId,
-      (client) =>
-        client.call("computerCall", "agentModels", [provider]) as Promise<
-          Awaited<ReturnType<Api["agentModels"]>>
-        >,
-    );
+    return this.ask(computerId, "agentModels", provider) as ReturnType<
+      Api["agentModels"]
+    >;
+  }
+  /** One of `computerCallMethods`, as the computer answers it for itself. */
+  ask<M extends ComputerCallMethod>(
+    computerId: string,
+    method: M,
+    ...args: Parameters<Api[M]>
+  ) {
+    return this.call(computerId, (client) =>
+      client.call("computerCall", method, args),
+    ) as ReturnType<Api[M]>;
   }
   /** Whether the call is about a project on another computer, by its id. */
   forwards(method: string, args: unknown[]) {
+    if (shellOps.has(method)) return this.shells.has(String(args[0]));
     if (
+      method !== "openTerminal" &&
+      method !== "adoptTerminal" &&
       !projectMethods.has(method) &&
       !hereOnlyMethods.has(method) &&
       method !== "watchWorkingTree"
@@ -75,9 +102,18 @@ export class RemoteProjects {
    * (`unwatch`), as the folder there isn't watched from here yet.
    */
   async forward(method: string, args: unknown[], unwatch: () => unknown) {
+    const op = shellOps.get(method);
+    if (op) return this.shells.run(op, String(args[0]), args.slice(1));
     const project = this.projectIn(args[0]);
     if (!project?.computer)
       throw new Error("This project is on this computer.");
+    if (method === "openTerminal") return this.openShell(project, args);
+    if (method === "adoptTerminal")
+      return this.shells.adopt(
+        project.computer.id,
+        draftTerminalKey(project.id),
+        String(args[1]),
+      );
     if (method === "watchWorkingTree") return unwatch();
     if (hereOnlyMethods.has(method))
       throw new Error(onComputerMessage(project));
@@ -89,6 +125,22 @@ export class RemoteProjects {
         method as RemoteProjectMethod,
         args,
       ),
+    );
+  }
+  /** Opens the thread's shell in the project's folder there, as `openTerminal` would here. */
+  private openShell(project: Project, args: unknown[]) {
+    const [, chatId, size, fresh, slot] = args;
+    const key = terminalSlotKey(
+      typeof chatId === "string" ? chatId : draftTerminalKey(project.id),
+      typeof slot === "string" ? slot : "",
+    );
+    const { id, projectId } = project.computer!;
+    return this.shells.open(
+      id,
+      projectId,
+      key,
+      size as { cols: number; rows: number },
+      fresh === true,
     );
   }
   /** The project a project id or its checkout's workspace id names, when it lives elsewhere. */

@@ -42,7 +42,7 @@ export function SurfacePicker({
 }: {
   /** A folder without Git has no history. */
   plain?: boolean;
-  /** Its folder is on another computer, whose terminal, browser and devices this one can't reach yet. */
+  /** Its folder is on another computer, whose browser and devices this one can't reach yet. */
   elsewhere?: boolean;
   onPick: (surface: Surface) => void;
 }) {
@@ -60,7 +60,6 @@ export function SurfacePicker({
       label: "Terminal",
       icon: <SquareTerminal size={14} />,
       letter: "T",
-      disabled: elsewhere,
     },
     {
       id: "browser",

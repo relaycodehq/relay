@@ -26,8 +26,9 @@ export function useThreadTerminal({
 >) {
   const key = project ? terminalKey(project.id, chat?.id ?? null) : "";
   const open = useTerminalOpen(key);
+  // A project on another computer opens its shells there, in its folder.
   const blocked = project?.computer
-    ? `${project.name}'s terminal is on ${project.computer.name}; it isn't reachable from here yet.`
+    ? undefined
     : terminalBlocked(chat, scope, draftWorkspace);
   function toggle() {
     if (!project || inbox || blocked) return;
