@@ -589,13 +589,16 @@ final class Connection {
 
     var canRender: Bool { (overview?.bridge ?? 1) >= Bridge.render }
 
-    /// A picture as a data URL, `max` pixels at most on its longer side; whole without one,
-    /// and from older computers.
-    func image(_ source: ImageSource, max: Int?) async throws -> String {
-        if case .attached(_, let imageId) = source, let outgoing = outbox.outgoingImage(imageId) { return outgoing }
+    /// Binds a picture read to this connection before its cache schedules the work. `max`
+    /// limits its longer side; older computers send it whole.
+    func imageRequest(_ source: ImageSource, max: Int?) throws -> @Sendable () async throws -> String {
+        if case .attached(_, let imageId) = source, let outgoing = outbox.outgoingImage(imageId) { return { outgoing } }
         guard let client else { throw PairingError("Not connected.") }
-        if let max, canShrinkImages { return try await client.image(source, max: max) }
-        return try await client.wholeImage(source)
+        let max = canShrinkImages ? max : nil
+        return {
+            if let max { return try await client.image(source, max: max) }
+            return try await client.wholeImage(source)
+        }
     }
 
     var canShrinkImages: Bool { (overview?.bridge ?? 1) >= Bridge.image }

@@ -43,26 +43,27 @@ enum Pictures {
         let key = key(connection, source, max: max)
         if let known = cached(key) { return known }
         let scope = scoped(source, connection.active)
-        let task =
-            loading[key]
-            ?? Task {
-                defer { loading[key] = nil }
-                // Only `image` hands a preview's frame out; asked for whole, at the most it shrinks to.
-                let url: String
-                if case .preview = source {
-                    url = try await connection.image(source, max: max ?? largest)
-                } else {
-                    url = try await connection.image(source, max: max)
-                }
-                guard let image = await Task.detached(operation: { decode(url) }).value else {
-                    throw PairingError("Not an image.")
-                }
-                let size = image.size
-                decoded.setObject(image, forKey: key as NSString, cost: Int(size.width * size.height * image.scale * image.scale * 4))
-                return image
-            }
-        loading[key] = task
         do {
+            let task: Task<UIImage, Error>
+            if let pending = loading[key] {
+                task = pending
+            } else {
+                // Only `image` hands a preview's frame out; asked for whole, at the most it shrinks to.
+                let pixels: Int?
+                if case .preview = source { pixels = max ?? largest } else { pixels = max }
+                let request = try connection.imageRequest(source, max: pixels)
+                task = Task {
+                    defer { loading[key] = nil }
+                    let url = try await request()
+                    guard let image = await Task.detached(operation: { decode(url) }).value else {
+                        throw PairingError("Not an image.")
+                    }
+                    let size = image.size
+                    decoded.setObject(image, forKey: key as NSString, cost: Int(size.width * size.height * image.scale * image.scale * 4))
+                    return image
+                }
+                loading[key] = task
+            }
             let image = try await task.value
             refused.remove(scope)
             return image
@@ -91,6 +92,7 @@ struct RemoteImage<Content: View>: View {
     @ViewBuilder let content: (LoadedImage) -> Content
     @Environment(Connection.self) private var connection
     @State private var loaded = LoadedImage()
+    @State private var loadedFor: String?
 
     var body: some View {
         let key = Pictures.key(connection, source, max: max)
@@ -98,16 +100,21 @@ struct RemoteImage<Content: View>: View {
         // Held by a view that's always there: content that draws nothing until it loads would never start the load.
         ZStack {
             Color.clear.frame(width: 0, height: 0)
-            content(Pictures.cached(key).map { LoadedImage(image: $0) } ?? loaded)
+            content(Pictures.cached(key).map { LoadedImage(image: $0) } ?? (loadedFor == key ? loaded : LoadedImage()))
         }
             .task(id: "\(key)|\(ready)") {
+                guard key == Pictures.key(connection, source, max: max) else { return }
                 guard Pictures.cached(key) == nil else { return }
                 loaded = LoadedImage()
+                loadedFor = key
                 guard ready else { return }
                 do {
-                    loaded = LoadedImage(image: try await Pictures.load(connection, source, max: max))
+                    let image = try await Pictures.load(connection, source, max: max)
+                    guard !Task.isCancelled, key == Pictures.key(connection, source, max: max) else { return }
+                    loaded = LoadedImage(image: image)
                 } catch is CancellationError {
                 } catch {
+                    guard !Task.isCancelled, key == Pictures.key(connection, source, max: max) else { return }
                     loaded = LoadedImage(failed: true)
                 }
             }
