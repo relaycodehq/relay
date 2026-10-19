@@ -281,7 +281,11 @@ export function ThreadComposer({
   const { selection, workItem, codeRefs } = attachments;
   // A side thread doesn't wait for the main answer, nor queue behind it, and
   // the thread's Stop is for its own turn, not a /btw answer beside it.
-  const waiting = root?.side ? false : mainRunning || reviewing;
+  // Waiting on a setup there, it talks to that setup's agent: its answer is
+  // what runs, and the agent it was sent to is the one the composer picks.
+  const setup = chat && inSetup(chat) ? history.data?.setup : undefined;
+  const setupRunning = !!setup?.messages.some((m) => m.status === "streaming");
+  const waiting = root?.side ? false : mainRunning || reviewing || setupRunning;
   const held =
     busy ||
     (!!chat && history.isPending) ||
@@ -328,7 +332,14 @@ export function ThreadComposer({
         running: waiting,
         busy: held,
         agent: chat && threadContextAgent(chat),
-        lastSent: lastComposerSettings(history.data, root?.id),
+        lastSent:
+          (setup &&
+            lastComposerSettings({
+              ...history.data!,
+              messages: setup.messages,
+              lastInput: undefined,
+            })) ??
+          lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
         chatId: chat?.id,
         accounts: chat?.accounts,

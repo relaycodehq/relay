@@ -1378,6 +1378,12 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   expect(chat.setup!.messages[0]!.body).toContain(join(mini.dir, "tool"));
   expect(chat.messages).toHaveLength(1);
   expect(chat.setup!.error).toBeTruthy();
+  // The sidebar reads the thread as that agent stands: here, waiting on the user.
+  laptop.chats.setHandoffLive(id, { blocked: true, waiting: true });
+  expect(laptop.chats.list(projectId).find((c) => c.id === id)).toMatchObject({
+    blocked: true,
+    waiting: true,
+  });
 
   // The composer answers that agent; the thread's own folder and messages stay here.
   const answer = input("@codex Done, I signed in");

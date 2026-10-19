@@ -9,6 +9,7 @@ import type {
   ProjectSettings,
 } from "../../shared/projects";
 import { DEFAULT_WORKTREE_CLEANUP_DAYS } from "../../shared/projects";
+import { inSetup } from "../../shared/handoff";
 import { working, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
 import type { CleanupCandidate } from "./worktree-cleanup";
@@ -16,7 +17,7 @@ import type { CleanupCandidate } from "./worktree-cleanup";
 /** Turns that make the thread read running; a side answer or a handoff note runs inside another. */
 const holdsThread = (t: Turn) => t.kind !== "aside" && t.kind !== "handoff";
 
-/** A thread on another computer through a live handoff, as running and waiting there. */
+/** A thread on another computer through a live handoff, or waiting on a setup there, as running and waiting there. */
 function awaySummary(
   c: ChatSummary,
   {
@@ -125,7 +126,8 @@ export class ThreadList {
       .map(inReviewFolder)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
-        if (c.sentTo?.live) {
+        // One waiting on a setup there reads as that setup's agent does.
+        if (c.sentTo?.live || inSetup(c)) {
           const away = this.core.away?.get(c.id);
           return away ? awaySummary(c, away) : c;
         }
