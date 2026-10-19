@@ -66,6 +66,10 @@
   animation: qr-enlarged-fade 320ms ease-out both;
   transition: opacity 380ms ease-in;
 }
+:root[data-glass] .qr-enlarged-backdrop {
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  backdrop-filter: none;
+}
 .qr-enlarged[data-phase="closing"] .qr-enlarged-backdrop {
   opacity: 0;
 }
