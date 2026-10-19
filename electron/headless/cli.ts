@@ -1116,7 +1116,15 @@ async function setup(home: string, flags: Flags) {
   );
 
   ui.print(section("This computer"));
-  ui.print(row("ok", "Node.js", dim(process.versions.node)));
+  ui.print(
+    process.getBuiltinModule("node:sqlite")
+      ? row("ok", "Node.js", dim(process.versions.node))
+      : row(
+          "warn",
+          "Node.js",
+          `${process.versions.node} has no node:sqlite, so a restart forgets running turns; 22.13 or newer has it`,
+        ),
+  );
   const git = gitVersion();
   ui.print(
     git
