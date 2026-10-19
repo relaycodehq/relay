@@ -513,10 +513,27 @@ function printReach(status: DaemonStatus) {
   const { remote } = status;
   if (remote.listening)
     console.log(
-      `Phones and computers reach it at ${bold(`${remote.hosts.join(", ")}:${remote.port}`)} over Tailscale.`,
+      `Phones and computers reach it at ${bold(`${remote.hosts.join(", ")}:${remote.port}`)} ${reachWay(status)}.`,
     );
+  else if (remote.bound) console.log(ok(`${pipeOnly(status)}.`));
   else console.log(warn(`Not reachable yet: ${reachProblem(status)}`));
 }
+
+/** How phones and computers get to the addresses it listens on. */
+function reachWay({ remote }: DaemonStatus) {
+  const tailnet = remote.hosts.filter((host) =>
+    remote.tailnet.addresses.includes(host),
+  ).length;
+  const name = remote.tailnet.name ? ` (${remote.tailnet.name})` : "";
+  if (!tailnet) return "on the local network";
+  return tailnet === remote.hosts.length
+    ? `over Tailscale${name}`
+    : `on the local network and over Tailscale${name}`;
+}
+
+/** Neither Tailscale nor the local network: only `relay pipe`, through ssh or wsl.exe, gets in. */
+const pipeOnly = (status: DaemonStatus) =>
+  `Computers reach it only through ssh, or wsl.exe from Windows (${reachProblem(status).replace(/\.$/, "")})`;
 
 function reachProblem({ remote }: DaemonStatus) {
   if (remote.error) return remote.error;
@@ -560,11 +577,11 @@ async function status(home: string, flags: Flags) {
       ? row(
           "ok",
           "Reach",
-          dim(
-            `${remote.hosts.join(", ")}:${remote.port} over Tailscale${remote.tailnet.name ? ` (${remote.tailnet.name})` : ""}`,
-          ),
+          dim(`${remote.hosts.join(", ")}:${remote.port} ${reachWay(status)}`),
         )
-      : row("warn", "Reach", `not reachable: ${reachProblem(status)}`),
+      : remote.bound
+        ? row("ok", "Reach", dim(pipeOnly(status)))
+        : row("warn", "Reach", `not reachable: ${reachProblem(status)}`),
   );
   ui.print(row("ok", "Data", dim(tilde(status.home))));
   ui.print(
