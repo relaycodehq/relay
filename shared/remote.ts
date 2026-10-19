@@ -989,6 +989,12 @@ export interface PhoneRemoteState {
   lan: boolean;
   /** Where phones reach this computer: local addresses first, then Tailscale's. */
   hosts: string[];
+  /**
+   * The address its bridge listens on, which `relay pipe` connects to: with
+   * no Tailscale, its loopback, which only a pipe reaches (`listening` stays
+   * false then).
+   */
+  bound?: string;
   devices: {
     id: string;
     name: string;

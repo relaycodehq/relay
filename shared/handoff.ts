@@ -431,6 +431,31 @@ export const maxHandoffBundle = 1024 * 1024 * 1024;
 export const maxHandoffThread = 64 * 1024 * 1024;
 
 /** A computer this one hands work to. */
+/**
+ * How a computer is reached that isn't over the network: a pipe its own
+ * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
+ * into a WSL distribution, running `relay pipe` there.
+ */
+export type ComputerRoute =
+  { kind: "ssh"; host: string } | { kind: "wsl"; distro: string };
+export const computerRouteSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("ssh"),
+    // A host or `user@host`, or an alias from ~/.ssh/config; never an option.
+    host: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_.@:[\]%-]{1,255}$/, "That isn't an SSH host.")
+      .refine((host) => !host.startsWith("-"), "That isn't an SSH host."),
+  }),
+  z.object({
+    kind: z.literal("wsl"),
+    distro: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]{1,64}$/, "That isn't a WSL distribution."),
+  }),
+]);
+
 export interface PairedComputer {
   id: string;
   name: string;
@@ -438,6 +463,12 @@ export interface PairedComputer {
   detail?: string;
   /** Where it's reached on the tailnet. */
   address?: string;
+  /** Reached through a pipe instead of the network. */
+  route?: ComputerRoute;
+  /** A WSL distribution nothing needed yet: it wakes on first use. */
+  asleep?: true;
+  /** A WSL distribution WSL stopped (`wsl --shutdown`): offline until `wakeComputer`. */
+  stopped?: true;
   /** Its Relay, as it last said; unknown while it's offline. */
   version?: string;
   /** Its bridge is older than this computer's: threads can't go there until it updates. */
@@ -507,6 +538,12 @@ export interface ComputersApi {
   computersOverview(): Promise<ComputersOverview>;
   /** Pairs with the link another computer shows under Settings → Computers. */
   pairComputer(link: string): Promise<PairedComputer[]>;
+  /** Pairs with the Relay a route reaches, over SSH or into WSL. */
+  connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
+  /** The WSL distributions on this computer; none off Windows. */
+  wslDistros(): Promise<string[]>;
+  /** Starts a WSL distribution WSL stopped again, and connects to it. */
+  wakeComputer(id: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;
   handoffTargets(chatId: string): Promise<HandoffTarget[]>;
   /** The folders in `dir` on a paired computer, `~` its home folder. */

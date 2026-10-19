@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/validation";
+import { computerRouteSchema } from "../../shared/handoff";
+import { wslDistros } from "../handoff/pipe-route";
 import { projectChatSendSchema } from "../../shared/projects";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -16,6 +18,11 @@ export function computerHandlers(ctx: ApiContext) {
     pairComputer: takes([z.string().max(2000)], (link) =>
       handoffs().computers.pair(link),
     ),
+    connectComputer: takes([computerRouteSchema], (route) =>
+      handoffs().computers.pairOver(route),
+    ),
+    wslDistros: () => wslDistros(),
+    wakeComputer: takes([idSchema], (id) => handoffs().computers.wake(id)),
     forgetComputer: takes([idSchema], (id) => handoffs().computers.forget(id)),
     handoffTargets: takes([idSchema], (chatId) =>
       handoffs().sender.targets(chatId),

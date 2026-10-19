@@ -37,6 +37,8 @@ export interface SavedComputer {
   deviceId: string;
   /** This computer's token there: sealed by the OS credential store, or `plain:` where there is none. */
   token: string;
+  /** Reached through a pipe instead of `hosts`. */
+  route?: import("../../shared/handoff").ComputerRoute;
   /** Hand-backs whose last word didn't reach it yet; said again when it's online. */
   unacknowledged?: string[];
   /** Handoffs taken back without it whose notice didn't reach it yet; said again when it's online. */

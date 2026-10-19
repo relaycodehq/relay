@@ -423,6 +423,16 @@ em.waiting {
   flex: 1;
   min-width: 0;
 }
+/* SSH and WSL, under the Tailscale steps. */
+.cm-pipe {
+  margin-top: 12px;
+}
+.cm-pipe-head {
+  padding: 12px 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
 .cm-paste {
   display: flex;
   gap: 8px;

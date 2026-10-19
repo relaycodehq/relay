@@ -18,6 +18,7 @@ export const relayCommands = [
   "restart",
   "status",
   "pair",
+  "pipe",
   "logs",
   "projects",
   "project",

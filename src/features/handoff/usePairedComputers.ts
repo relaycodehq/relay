@@ -24,6 +24,8 @@ export function projectComputer(
   return {
     id: home.id,
     name: paired?.name ?? home.name,
-    online: paired?.status === "online",
+    // Asleep isn't offline: the first thing that needs it wakes it.
+    online: paired?.status === "online" || !!paired?.asleep,
+    stopped: !!paired?.stopped,
   };
 }

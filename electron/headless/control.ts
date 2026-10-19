@@ -21,8 +21,11 @@ import type { PhonePairing, PhoneRemoteState } from "../../shared/remote";
 export interface ControlApi {
   status(): Promise<DaemonStatus>;
   update(check: boolean): Promise<UpdateState>;
-  /** Turns phone access on if needed, then opens a fresh pairing code. */
-  pair(): Promise<PhonePairing & { remote: PhoneRemoteState }>;
+  /**
+   * Turns phone access on if needed, then opens a fresh pairing code; `pipe`
+   * for a computer pairing over SSH or wsl.exe, which needs no network.
+   */
+  pair(pipe?: boolean): Promise<PhonePairing & { remote: PhoneRemoteState }>;
   remote(enabled: boolean): Promise<PhoneRemoteState>;
   removeDevice(id: string): Promise<PhoneRemoteState>;
   projects(): Promise<Project[]>;

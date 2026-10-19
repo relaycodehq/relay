@@ -438,7 +438,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       control?.close();
       try {
         await remote.close();
-        computers.close();
+        computers.close({ detach });
         if (detach) agentHosts?.detach();
         await chats.dispose({ detach });
         await Promise.all([
@@ -510,10 +510,10 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         update: updater.now,
       };
     },
-    async pair() {
+    async pair(pipe = false) {
       if (!remote.devices.settings.enabled || !(await remote.state()).listening)
         await remote.setEnabled(true);
-      const pairing = await remote.pairing();
+      const pairing = await remote.pairing({ pipe });
       return { ...pairing, remote: await remote.state() };
     },
     update: (check) => (check ? updater.check() : updater.install()),

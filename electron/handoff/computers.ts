@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PairedComputer } from "../../shared/handoff";
+import type { ComputerRoute, PairedComputer } from "../../shared/handoff";
 import {
   parsePairingUrl,
   type RemoteCredentials,
@@ -9,22 +9,30 @@ import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import type { SavedComputer } from "../app/store-types";
 import { computerName } from "../platform/computer-name";
+import { pairingLink, PipeShim, routeCommand, routeName } from "./pipe-route";
+import type { WslHolders } from "./wsl-holder";
 
 export type { SavedComputer };
 export { computerName };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+interface Entry {
+  client: RemoteClient;
+  detail?: string;
+  shim?: PipeShim;
+}
+
 /**
  * The computers this one hands threads to. Each keeps a bridge client
  * connected, reconnecting by itself across sleep and Tailscale coming and
- * going, the same client the phone app uses.
+ * going, the same client the phone app uses; one reached over SSH or into
+ * WSL connects through a pipe (`PipeShim`).
  */
 export class Computers {
-  private clients = new Map<
-    string,
-    { client: RemoteClient; detail?: string }
-  >();
+  private clients = new Map<string, Entry>();
+  /** WSL distributions WSL stopped, by computer id; see `stopped`. */
+  private stoppedIds = new Set<string>();
   private online = new Set<(id: string) => void>();
   private offline = new Set<(id: string) => void>();
   private events = new Set<(id: string, event: RemoteEvent) => void>();
@@ -32,31 +40,67 @@ export class Computers {
     private store: Store,
     private seal: (value: string) => Promise<string | null>,
     private unseal: (value: string) => Promise<string>,
-    private options: { timeoutMs?: number; WebSocket?: typeof WebSocket } = {},
-  ) {}
+    private options: {
+      timeoutMs?: number;
+      WebSocket?: typeof WebSocket;
+      /** What keeps a WSL distribution up while this Relay works in it. */
+      holders?: Pick<
+        WslHolders,
+        "hold" | "release" | "heldDistros" | "releaseAll" | "onStopped"
+      >;
+      /** What runs `relay` where a route goes; tests stand in for ssh and wsl.exe. */
+      routeCommand?: typeof routeCommand;
+    } = {},
+  ) {
+    options.holders?.onStopped((distro) => this.stopped(distro));
+  }
   private get saved() {
     return this.store.get().computers ?? [];
   }
+  /**
+   * Connects to every computer, but a WSL distribution only once something
+   * needs it, so it isn't woken for nothing; one still held from before a
+   * restart connects at once.
+   */
   async start() {
-    for (const computer of this.saved)
+    const held = (await this.options.holders?.heldDistros()) ?? new Set();
+    for (const computer of this.saved) {
+      if (computer.route?.kind === "wsl" && !held.has(computer.route.distro))
+        continue;
       await this.connect(computer).catch((e) =>
         console.warn(`Can't connect to ${computer.name}:`, e),
       );
+    }
   }
-  close() {
-    for (const { client } of this.clients.values()) client.close();
+  /** `detach`: Relay restarts, and WSL distributions stay held through it. */
+  close({ detach = false }: { detach?: boolean } = {}) {
+    for (const { client, shim } of this.clients.values()) {
+      client.close();
+      shim?.close();
+    }
     this.clients.clear();
+    if (!detach) this.options.holders?.releaseAll();
   }
   list(): PairedComputer[] {
     return this.saved.map((c) => {
       const entry = this.clients.get(c.id);
-      const address = entry?.client.route?.host ?? c.hosts[0];
+      const status = entry?.client.status ?? "offline";
+      const address = c.route
+        ? routeName(c.route)
+        : (entry?.client.route?.host ?? c.hosts[0]);
+      // Over a pipe, the command says best why it couldn't connect.
+      const detail = this.stoppedIds.has(c.id)
+        ? "WSL stopped it."
+        : (status !== "online" && entry?.shim?.failure) || entry?.detail;
       return {
         id: c.id,
         name: c.name,
-        status: entry?.client.status ?? "offline",
-        ...(entry?.detail ? { detail: entry.detail } : {}),
+        status,
+        ...(detail ? { detail } : {}),
         ...(address ? { address } : {}),
+        ...(c.route ? { route: c.route } : {}),
+        ...(this.asleep(c.id) ? { asleep: true as const } : {}),
+        ...(this.stoppedIds.has(c.id) ? { stopped: true as const } : {}),
       };
     });
   }
@@ -65,7 +109,9 @@ export class Computers {
     if (!computer) throw new Error("That computer isn't paired anymore.");
     return computer;
   }
+  /** A WSL distribution nothing has woken yet counts as online: `connected` wakes it. */
   status(id: string): RemoteStatus {
+    if (this.asleep(id)) return "online";
     return this.clients.get(id)?.client.status ?? "offline";
   }
   /** Called each time a computer comes online. */
@@ -90,6 +136,33 @@ export class Computers {
       throw new Error(
         "That isn't a Relay pairing link. Copy it from Settings → Computers on the other computer.",
       );
+    return this.pairWith(link);
+  }
+  /**
+   * Pairs with the Relay a route reaches, over SSH or into WSL: it asks
+   * there for a pairing code, and pairs through a pipe.
+   */
+  async pairOver(route: ComputerRoute) {
+    const link = parsePairingUrl(
+      await pairingLink(route, this.options.routeCommand),
+    );
+    if (!link)
+      throw new Error(`Relay over ${routeName(route)} gave no pairing code.`);
+    const shim = new PipeShim(route, this.options.routeCommand);
+    try {
+      const port = await shim.listen();
+      return await this.pairWith(
+        { ...link, hosts: ["127.0.0.1"], port },
+        route,
+      );
+    } finally {
+      shim.close();
+    }
+  }
+  private async pairWith(
+    link: NonNullable<ReturnType<typeof parsePairingUrl>>,
+    route?: ComputerRoute,
+  ) {
     const credentials = await new Promise<RemoteCredentials>(
       (resolve, reject) => {
         const client = new RemoteClient({
@@ -112,7 +185,9 @@ export class Computers {
           client.close();
           reject(
             new Error(
-              `Couldn't reach ${link.name}. Both computers need to be on the same network or Tailscale.`,
+              route
+                ? `Couldn't reach ${link.name} over ${routeName(route)}.`
+                : `Couldn't reach ${link.name}. Both computers need to be on the same network or Tailscale.`,
             ),
           );
         }, 30_000);
@@ -129,6 +204,7 @@ export class Computers {
       deviceId: credentials.deviceId,
       token:
         (await this.seal(credentials.token)) ?? `plain:${credentials.token}`,
+      ...(route ? { route } : {}),
     };
     await this.store.update((s) => {
       s.computers = [
@@ -142,14 +218,36 @@ export class Computers {
   }
   async forget(id: string) {
     this.drop(id);
+    this.stoppedIds.delete(id);
     await this.store.update((s) => {
       s.computers = (s.computers ?? []).filter((c) => c.id !== id);
     });
     return this.list();
   }
+  /**
+   * Whether the computer is a WSL distribution nothing has woken yet: it
+   * connects on its first call.
+   */
+  asleep(id: string) {
+    return (
+      !this.clients.has(id) &&
+      !this.stoppedIds.has(id) &&
+      this.saved.find((c) => c.id === id)?.route?.kind === "wsl"
+    );
+  }
+  /** Starts a distribution WSL stopped again: the user asked for it. */
+  async wake(id: string) {
+    this.stoppedIds.delete(id);
+    await this.connected(id);
+    return this.list();
+  }
   /** The computer's client once online, waiting a little for a reconnect. */
   async connected(id: string): Promise<RemoteClient> {
-    const { name } = this.get(id);
+    const computer = this.get(id);
+    const { name } = computer;
+    if (this.stoppedIds.has(id))
+      throw new Error(`WSL stopped ${name}. Reconnect to start it again.`);
+    if (this.asleep(id)) await this.connect(computer);
     const entry = this.clients.get(id);
     if (!entry) throw new Error(`${name} isn't connected.`);
     entry.client.wake();
@@ -179,20 +277,48 @@ export class Computers {
       else delete computer[kind];
     });
   }
+  /**
+   * WSL stopped the distribution, `wsl --shutdown` say. Reconnecting, or the
+   * next call from a window still showing one of its projects, would start
+   * it again at once: it stays stopped until the user wakes it.
+   */
+  private stopped(distro: string) {
+    for (const computer of this.saved)
+      if (
+        computer.route?.kind === "wsl" &&
+        computer.route.distro === distro &&
+        this.clients.has(computer.id)
+      ) {
+        this.stoppedIds.add(computer.id);
+        this.drop(computer.id);
+      }
+  }
   private drop(id: string) {
-    this.clients.get(id)?.client.close();
+    const entry = this.clients.get(id);
+    entry?.client.close();
+    entry?.shim?.close();
     this.clients.delete(id);
+    const route = this.saved.find((c) => c.id === id)?.route;
+    if (route?.kind === "wsl") this.options.holders?.release(route.distro);
   }
   private async connect(computer: SavedComputer) {
     const token = computer.token.startsWith("plain:")
       ? computer.token.slice(6)
       : await this.unseal(computer.token);
     let wasOnline = false;
-    const entry: { client: RemoteClient; detail?: string } = {
+    this.stoppedIds.delete(computer.id);
+    if (computer.route?.kind === "wsl")
+      await this.options.holders?.hold(computer.route.distro);
+    // Over a pipe, the client connects to it on this computer's loopback.
+    const shim =
+      computer.route && new PipeShim(computer.route, this.options.routeCommand);
+    const port = shim ? await shim.listen() : computer.port;
+    const entry: Entry = {
+      shim,
       client: new RemoteClient({
         start: {
-          hosts: computer.hosts,
-          port: computer.port,
+          hosts: shim ? ["127.0.0.1"] : computer.hosts,
+          port,
           key: computer.key,
           name: computer.name,
           deviceId: computer.deviceId,
@@ -212,12 +338,17 @@ export class Computers {
         onEvent: (event) => {
           for (const listener of this.events) listener(computer.id, event);
         },
-        // Where the other computer listens now, for the next connect.
+        // Where the other computer listens now, for the next connect; a
+        // pipe's end stays where it is.
         onCredentials: ({ hosts, name }) =>
           void this.store
             .update((s) => {
               const saved = s.computers?.find((c) => c.id === computer.id);
-              if (saved) Object.assign(saved, { hosts, name });
+              if (saved)
+                Object.assign(
+                  saved,
+                  computer.route ? { name } : { hosts, name },
+                );
             })
             .catch((e) =>
               console.warn(`Couldn't keep ${computer.name}'s addresses:`, e),

@@ -78,6 +78,7 @@ import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
 import { RemoteProjects } from "./handoff/remote-projects";
 import { Handoffs } from "./handoff/sender";
+import { WslHolders } from "./handoff/wsl-holder";
 import { pathReady } from "./platform/shell-path";
 import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
 import { applyLinkedTools, teaTokenFor } from "./source-control";
@@ -200,7 +201,9 @@ const quit = new Quit({
   shutDown: async () => {
     const closed = await Promise.allSettled([
       Promise.resolve().then(() => phoneRemote?.close()),
-      Promise.resolve().then(() => handoffs?.computers.close()),
+      Promise.resolve().then(() =>
+        handoffs?.computers.close({ detach: quit.detaching }),
+      ),
     ]);
     for (const result of closed)
       if (result.status === "rejected")
@@ -579,7 +582,9 @@ app
     // Not right at launch: the thread the window opens on first says it's shown.
     setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
     const handoffDir = join(app.getPath("userData"), "handoffs");
-    const computers = new Computers(loaded, seal, unseal);
+    const computers = new Computers(loaded, seal, unseal, {
+      holders: new WslHolders(),
+    });
     handoffs = {
       computers,
       remote: new RemoteProjects(computers, projects),

@@ -2,6 +2,7 @@
 // the background and shows the codes phones and other computers pair with.
 // The work itself happens on those; nothing here is a terminal UI for it.
 import { execFileSync, spawn } from "node:child_process";
+import { connect } from "node:net";
 import { existsSync, openSync, readSync, statSync, closeSync } from "node:fs";
 import { lstat, readFile, realpath, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -82,6 +83,8 @@ interface Flags {
   projects: string[];
   lines?: number;
   check: boolean;
+  /** `relay pair` for a computer pairing over SSH or wsl.exe. */
+  pipe: boolean;
 }
 
 class Usage extends Error {}
@@ -101,6 +104,7 @@ function parse(argv: string[]) {
     version: false,
     projects: [],
     check: false,
+    pipe: false,
   };
   const words: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -144,6 +148,9 @@ function parse(argv: string[]) {
         break;
       case "--json":
         flags.json = true;
+        break;
+      case "--pipe":
+        flags.pipe = true;
         break;
       case "--force":
         flags.force = true;
@@ -210,6 +217,8 @@ ${bold("Running")}
   relay logs [-f] [-n <lines>] Show the log; -f follows it
   relay update [--check]       Install the newest release; agents keep working through it
   relay run                    Run in the foreground (what the service runs)
+  relay pipe                   Carry another computer's connection over stdin and stdout
+                               (what \`ssh <host> relay pipe\` and wsl.exe run)
   relay uninstall [--purge]    Stop Relay and remove it; --purge deletes its data too
 
 ${bold("Settings")}
@@ -275,6 +284,8 @@ async function main(argv: string[]) {
       return status(home, flags);
     case "pair":
       return pair(home, flags);
+    case "pipe":
+      return pipe(home, flags);
     case "logs":
       return logs(home, flags);
     case "projects":
@@ -413,6 +424,40 @@ async function ensureRunning(home: string, flags: Flags, quiet = false) {
   if (!quiet && !flags.json)
     console.log(dim("Starting Relay in the background…"));
   return (await startDetached(home, script)).status;
+}
+
+/**
+ * Carries a paired computer's bridge over stdin and stdout, for a computer
+ * that reaches this one over SSH or wsl.exe instead of the network; Relay
+ * starts first if it isn't running. Nothing but its bytes goes to stdout.
+ */
+async function pipe(home: string, flags: Flags) {
+  let status = await ensureRunning(home, { ...flags, json: true }, true);
+  // Just started, it may not listen yet.
+  for (let i = 0; i < 100 && !status.remote.bound; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    status = (await running(home)) ?? status;
+  }
+  const { bound, port } = status.remote;
+  if (!bound)
+    throw new Error(
+      status.remote.enabled
+        ? `Relay isn't listening: ${status.remote.error ?? "it didn't start its bridge."}`
+        : "Phone and computer access is off here; relay pair turns it on.",
+    );
+  const socket = connect({
+    host: bound === "0.0.0.0" ? "127.0.0.1" : bound,
+    port,
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once("connect", resolve);
+    socket.once("error", reject);
+  });
+  process.stdin.pipe(socket);
+  socket.pipe(process.stdout);
+  process.stdin.once("end", () => socket.end());
+  await new Promise<void>((resolve) => socket.once("close", () => resolve()));
+  process.stdin.destroy();
 }
 
 async function start(home: string, flags: Flags) {
@@ -631,7 +676,7 @@ async function pair(
   const control = headlessPaths(home).control;
   let pairing;
   try {
-    pairing = await callControl(control, "pair");
+    pairing = await callControl(control, "pair", flags.pipe);
   } catch (e) {
     const fresh = await running(home);
     if (fresh && !fresh.remote.listening) {

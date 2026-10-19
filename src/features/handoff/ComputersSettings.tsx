@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
 import { AddComputer } from "./AddComputer";
+import { ConnectOverPipe } from "./ConnectOverPipe";
 import { ComputerCard } from "./ComputerCard";
 import { MapDiagram } from "./MapDiagram";
 import "./computers.css";
@@ -53,7 +54,10 @@ export function ComputersMap({
               onForgot={() => setPicked(undefined)}
             />
           ) : (
-            <AddComputer onPaired={setPicked} focusRequest={addFocus} />
+            <>
+              <AddComputer onPaired={setPicked} focusRequest={addFocus} />
+              <ConnectOverPipe onPaired={setPicked} />
+            </>
           )}
         </div>
       )}

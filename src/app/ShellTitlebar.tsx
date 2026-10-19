@@ -120,9 +120,10 @@ export function ProjectTitle({
       {where && (
         <span className="project-window-where">
           on {where.name}
-          {where.online ? "" : " · offline"}
+          {where.stopped ? " · WSL stopped" : where.online ? "" : " · offline"}
         </span>
       )}
+      {where?.stopped && <WakeComputer id={where.id} onError={onError} />}
       <span className="breadcrumb-slash">/</span>
       {review && (
         <>
@@ -143,6 +144,42 @@ export function ProjectTitle({
         <strong>{project?.scratch ? "New chat" : "New thread"}</strong>
       )}
     </div>
+  );
+}
+
+/** WSL stopped the distribution the project lives in; nothing starts it again but this. */
+function WakeComputer({
+  id,
+  onError,
+}: {
+  id: string;
+  onError: (error: unknown) => void;
+}) {
+  const qc = useQueryClient();
+  const [waking, setWaking] = useState(false);
+  async function wake() {
+    setWaking(true);
+    try {
+      qc.setQueryData(["paired-computers"], await api.wakeComputer(id));
+      // What failed while it was stopped asks again.
+      void qc.refetchQueries({
+        predicate: (query) => query.state.status === "error",
+      });
+    } catch (e) {
+      onError(e);
+    } finally {
+      setWaking(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      className="breadcrumb-link"
+      disabled={waking}
+      onClick={() => void wake()}
+    >
+      {waking ? "Starting…" : "Reconnect"}
+    </button>
   );
 }
 
