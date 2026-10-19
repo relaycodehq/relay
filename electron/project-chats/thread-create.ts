@@ -5,6 +5,7 @@ import type {
   LinkedFolder,
   ProjectChat,
   StartedBy,
+  WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
 import type { ChatCore } from "./core";
@@ -21,13 +22,17 @@ export class ThreadCreate {
     startedBy?: StartedBy,
     branch?: string,
     links?: LinkedFolder[],
+    start?: WorktreeStart,
   ) {
     const { plain } = await this.core.projects.inspect(projectId);
     if (plain && (workspace === "worktree" || scope.kind !== "project"))
       throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")
       throw new Error("Only repository threads can work in a worktree.");
-    const named = workspace === "worktree" ? branch : undefined;
+    // A carried-on branch keeps its own name.
+    const named =
+      workspace === "worktree" && !(start && "on" in start) ? branch : undefined;
+    const startFrom = workspace === "worktree" ? start : undefined;
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
@@ -38,7 +43,14 @@ export class ThreadCreate {
       scope,
       // The worktree itself is made with the first message, named after it
       // unless the user named its branch.
-      ...(workspace === "worktree" ? { worktree: named ? { named } : {} } : {}),
+      ...(workspace === "worktree"
+        ? {
+            worktree: {
+              ...(named ? { named } : {}),
+              ...(startFrom ? { startFrom } : {}),
+            },
+          }
+        : {}),
       title:
         scope.kind === "pr"
           ? `PR #${scope.ref.number}`

@@ -136,7 +136,9 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await page.keyboard.press(`${mod}+N`);
     await expect(drawer).toBeHidden();
     await page.getByRole("button", { name: /Current checkout/ }).click();
-    await page.getByRole("menuitem", { name: "New worktree" }).click();
+    await page
+      .getByRole("menuitem", { name: "New worktree", exact: true })
+      .click();
     await expect(button).toBeDisabled();
     await page.getByLabel("Message project").fill("fixture edit files");
     await page

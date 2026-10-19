@@ -58,14 +58,24 @@
   left: 6px;
   white-space: nowrap;
 }
-.thread-context-controls .worktree-branch-field ~ .composer-branch-trigger {
-  margin-left: 0;
+/* Where a new thread works, said as one phrase: "Worktree on relay/…". */
+.thread-context-controls .workspace-trigger.workspace-where {
+  flex: 0 1 auto;
+  min-width: 0;
 }
-.worktree-branch-from {
+.workspace-where-label {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.workspace-where-off {
+  opacity: 0.7;
+}
+.workspace-item-note {
+  margin-left: auto;
+  padding-left: 16px;
   color: var(--muted);
   font-size: 11px;
-  opacity: 0.7;
-  margin-left: 2px;
 }
 .workspace-trigger.static {
   cursor: default;

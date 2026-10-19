@@ -130,18 +130,15 @@ function ThreadBranch({
       onStartThread={onStartThread}
     />
   );
+  // Where it starts is the Workspace menu's to say; a carried-on branch keeps its name.
   if (newWorktree)
-    return (
-      <>
-        <WorktreeBranchField
-          projectId={project.id}
-          value={worktree.newBranch}
-          onChange={worktree.setNewBranch}
-          disabled={disabled}
-        />
-        <span className="worktree-branch-from">from</span>
-        {picker}
-      </>
+    return worktree.start && "on" in worktree.start ? null : (
+      <WorktreeBranchField
+        projectId={project.id}
+        value={worktree.newBranch}
+        onChange={worktree.setNewBranch}
+        disabled={disabled}
+      />
     );
   // The deleted worktree's row asks where to carry on; its branch name would be stale.
   if (worktree.unavailable) return null;
@@ -364,6 +361,7 @@ export function ThreadComposer({
             <NewWorkspacePicker
               project={project}
               worktree={worktree}
+              checkoutBranch={checkout.branch}
               disabled={busy}
               onStartThread={onStartThread}
             />

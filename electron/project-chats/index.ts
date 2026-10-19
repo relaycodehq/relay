@@ -25,6 +25,7 @@ import type {
   ProjectChatPatch,
   ProjectChatSend,
   ResumeSettings,
+  WorktreeStart,
 } from "../../shared/projects";
 import { PAGE_QUESTION_ID, replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
@@ -494,6 +495,7 @@ export class ProjectChats {
     startedBy?: StartedBy,
     branch?: string,
     links?: LinkedFolder[],
+    start?: WorktreeStart,
   ) {
     return this.creating.create(
       projectId,
@@ -502,6 +504,7 @@ export class ProjectChats {
       startedBy,
       branch,
       links,
+      start,
     );
   }
   /**

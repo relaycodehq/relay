@@ -5,6 +5,7 @@ import type {
   ChatWorkspace,
   Project,
   ProjectChat,
+  WorktreeStart,
 } from "../../../shared/projects";
 import {
   agentWorktreeKey,
@@ -64,6 +65,13 @@ export function useThreadWorktree({
   useEffect(() => {
     if (!chat) threadStorage(id).branch.save(newBranch);
   }, [newBranch, !chat]);
+  // Where the new worktree starts; none is off the checkout's commit.
+  const [start, setStart] = useState<WorktreeStart | undefined>(() =>
+    chat ? undefined : threadStorage(id).start.load(),
+  );
+  useEffect(() => {
+    if (!chat) threadStorage(id).start.save(start);
+  }, [JSON.stringify(start), !chat]);
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree));
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
@@ -148,6 +156,8 @@ export function useThreadWorktree({
     setStartOn,
     newBranch,
     setNewBranch,
+    start: chat ? undefined : start,
+    setStart,
     status,
     /** The workspace its file calls go to, `@` mentions among them. */
     where,

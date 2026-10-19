@@ -1,0 +1,38 @@
+import { expect, it } from "vitest";
+import type { BranchList, BranchRef } from "../../../shared/branches";
+import { carriedBranch, carryOnNames } from "./worktree-start";
+
+const ref = (name: string, more: Partial<BranchRef> = {}): BranchRef => ({
+  name,
+  ref: more.remote ? `refs/remotes/${name}` : `refs/heads/${name}`,
+  current: false,
+  remote: false,
+  worktree: false,
+  unrelated: false,
+  ...more,
+});
+const list: BranchList = {
+  current: "dev",
+  head: "0".repeat(40),
+  bases: ["main"],
+  branches: [
+    ref("dev", { current: true, worktree: true }),
+    ref("main"),
+    ref("relay/in-a-thread", { worktree: true }),
+    ref("origin/main", { remote: true }),
+    ref("origin/relay/setup-phase", { remote: true }),
+    ref("upstream/vendored", { remote: true, unrelated: true }),
+  ],
+};
+
+it("offers only branches Git would check out again, and remote ones not here yet", () => {
+  expect(carryOnNames(list)).toEqual(["main", "origin/relay/setup-phase"]);
+});
+
+it("carries a remote branch on under its local name", () => {
+  expect(carriedBranch({ on: "origin/relay/setup-phase" }, list)).toBe(
+    "relay/setup-phase",
+  );
+  expect(carriedBranch({ on: "main" }, list)).toBe("main");
+  expect(carriedBranch({ off: "main" }, list)).toBeUndefined();
+});

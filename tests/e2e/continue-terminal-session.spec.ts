@@ -201,7 +201,9 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     // A new thread with the worktree toggle on forks the live Codex session there.
     await newThread.click();
     await page.getByRole("button", { name: /Current checkout/ }).click();
-    await page.getByRole("menuitem", { name: "New worktree" }).click();
+    await page
+      .getByRole("menuitem", { name: "New worktree", exact: true })
+      .click();
     await expect(
       page.getByRole("button", { name: /New worktree/ }),
     ).toBeVisible();

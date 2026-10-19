@@ -54,6 +54,7 @@ import type {
 import type { AddingJob, AddingStart, GithubRepos, NewProject } from "./adding";
 import type { FolderEntry, FolderInfo, LinkSuggestion } from "./folders";
 import type { LinkedFolder } from "./links";
+import type { WorktreeStart } from "./worktrees";
 import type { Project, ProjectSettings } from "./project";
 import type { ResumeSettings, ProjectChatSend } from "./send";
 import type { KnownMessages, ProjectChatPatch } from "./sync";
@@ -151,6 +152,8 @@ export interface ProjectChatApi {
     branch?: string,
     /** Folders linked to it with `/add-dir` before it was made. */
     links?: LinkedFolder[],
+    /** Where its worktree starts, when not off the checkout's commit. */
+    start?: WorktreeStart,
   ): Promise<ChatSummary>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;

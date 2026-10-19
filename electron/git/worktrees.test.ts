@@ -141,6 +141,116 @@ it("removes the folder and branch but keeps a snapshot of what it held", async (
   );
 });
 
+/** A branch `name` one commit ahead of main, with the checkout back on main. */
+function branchAhead(name: string, file = "feature.ts") {
+  git(root, "switch", "-qc", name);
+  execFileSync("sh", ["-c", `echo feature > ${file}`], { cwd: root });
+  git(root, "add", file);
+  git(root, "commit", "-qm", "Feature");
+  git(root, "switch", "-q", "main");
+  return git(root, "rev-parse", name);
+}
+
+/** An `origin` with `name` on it a commit ahead of what was last fetched. */
+async function remoteAhead(name: string) {
+  const remote = join(root, "..", "remote.git");
+  execFileSync("git", ["init", "-q", "--bare", remote]);
+  git(root, "remote", "add", "origin", remote);
+  git(root, "push", "-q", "origin", `main:${name}`);
+  git(root, "fetch", "-q", "origin");
+  const other = join(root, "..", "other");
+  execFileSync("git", ["clone", "-q", "-b", name, remote, other]);
+  git(other, "config", "user.name", "Test");
+  git(other, "config", "user.email", "test@example.invalid");
+  await writeFile(join(other, "pushed.ts"), "pushed\n");
+  git(other, "add", ".");
+  git(other, "commit", "-qm", "Pushed elsewhere");
+  git(other, "push", "-q");
+  return git(other, "rev-parse", "HEAD");
+}
+
+it("starts a new branch off another branch, its changes counted against that one", async () => {
+  const tip = branchAhead("feature");
+  const worktree = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "feature" },
+  });
+  expect(worktree).toMatchObject({ head: tip, start: tip, from: "feature" });
+  expect(git(worktree.path, "rev-parse", "HEAD")).toBe(tip);
+  expect(git(root, "branch", "--show-current")).toBe("main");
+  await writeFile(join(worktree.path, "b.ts"), "changed\n");
+  expect(await paths(worktree)).toEqual(["b.ts"]);
+});
+
+it("fetches a remote branch before starting off it", async () => {
+  const pushed = await remoteAhead("release");
+  const worktree = await createWorktree(root, dir, "Hotfix", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(git(worktree.path, "rev-parse", "HEAD")).toBe(pushed);
+  // No local release to count against, so its changes count from where it started.
+  expect(worktree.from).toBeUndefined();
+  expect(worktree.branch).toBe("relay/hotfix");
+});
+
+it("carries on an existing branch, which removing the worktree leaves alone", async () => {
+  const tip = branchAhead("relay/setup-phase");
+  const chatId = randomUUID();
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "relay/setup-phase" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/setup-phase",
+    named: "relay/setup-phase",
+    existing: true,
+    head: tip,
+    from: "main",
+  });
+  expect(await paths(worktree)).toEqual(["feature.ts"]);
+  // Already named after the branch: the thread's title doesn't move it.
+  expect(await retitleWorktree(root, worktree, "Something else")).toBe(
+    undefined,
+  );
+
+  await removeWorktree(root, chatId, worktree);
+  expect(git(root, "rev-parse", "relay/setup-phase")).toBe(tip);
+});
+
+it("brings a carried-on branch back as it was, even with nothing over the checkout", async () => {
+  git(root, "branch", "old-work");
+  await writeFile(join(root, "b.ts"), "main moved on\n");
+  git(root, "commit", "-qam", "Main moves on");
+  const at = git(root, "rev-parse", "old-work");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "old-work" },
+  });
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+  expect(back?.path).toBe(worktree.path);
+  expect(git(root, "rev-parse", "old-work")).toBe(at);
+});
+
+it("carries on a branch only the remote has, on a local branch tracking it", async () => {
+  const pushed = await remoteAhead("relay/remote-only");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "origin/relay/remote-only" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/remote-only",
+    existing: true,
+    head: pushed,
+  });
+  expect(
+    git(root, "rev-parse", "--abbrev-ref", "relay/remote-only@{upstream}"),
+  ).toBe("origin/relay/remote-only");
+});
+
+it("says so when the branch to carry on is checked out somewhere already", async () => {
+  await expect(
+    createWorktree(root, dir, "Carry on", { startFrom: { on: "main" } }),
+  ).rejects.toThrow(/Couldn't open main in a worktree/);
+});
+
 it.each(["node_modules", "node_modules/", "/node_modules/"])(
   "links the project's node_modules, ignored as %s, into a new worktree",
   async (rule) => {

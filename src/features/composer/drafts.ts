@@ -334,6 +334,7 @@ export const saveDraftWorkspace = (
 export function clearDraftWorkspace(id: string) {
   threadStorage(id).workspace.clear();
   threadStorage(id).branch.save("");
+  threadStorage(id).start.save(undefined);
 }
 /** The branch typed for an unsent thread's worktree, when it will work in one. */
 export const draftWorktreeBranch = (
@@ -342,6 +343,14 @@ export const draftWorktreeBranch = (
 ) =>
   loadDraftWorkspace(id, project) === "worktree"
     ? threadStorage(id).branch.load().trim() || undefined
+    : undefined;
+/** Where an unsent thread's worktree starts, when it will work in one picked off something else. */
+export const draftWorktreeStart = (
+  id: string,
+  project: Pick<Project, "settings">,
+) =>
+  loadDraftWorkspace(id, project) === "worktree"
+    ? threadStorage(id).start.load()
     : undefined;
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */

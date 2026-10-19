@@ -357,6 +357,9 @@ export function ProjectChat({
           ? worktree.newBranch.trim() || undefined
           : undefined,
         links.draftLinks,
+        scope.kind === "project" && workspace === "worktree"
+          ? worktree.start
+          : undefined,
       ),
     async (created) => {
       await onCreated(created);
