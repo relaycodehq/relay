@@ -17,6 +17,10 @@ export type { RemoteSettings };
 const pairingMs = 10 * 60_000;
 const maxDevices = 10;
 const maxFailures = 5;
+/** A device unused this long is forgotten; its token then signs nothing in. */
+const idleMs = 90 * 24 * 60 * 60_000;
+/** How stale `lastSeen` may get while a device stays connected. */
+const seenEveryMs = 24 * 60 * 60_000;
 
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("base64url");
@@ -48,8 +52,12 @@ export class RemoteDevices {
     // the user explicitly chose Tailscale only; existing keys/devices stay put.
     return { ...saved, lan: saved?.lan ?? true };
   }
+  /** Paired devices, those idle for `idleMs` left out. */
   list() {
-    return this.settings.devices ?? [];
+    return (this.settings.devices ?? []).filter((d) => !this.idle(d));
+  }
+  private idle(device: RemoteDevice) {
+    return this.now() - (device.lastSeen ?? device.created) > idleMs;
   }
   async setAppearance(appearance: RemoteSettings["appearance"]) {
     await this.store.update((s) => {
@@ -121,7 +129,10 @@ export class RemoteDevices {
     await this.store.update((s) => {
       s.phoneRemote = {
         ...s.phoneRemote,
-        devices: [...(s.phoneRemote?.devices ?? []), device],
+        devices: [
+          ...(s.phoneRemote?.devices ?? []).filter((d) => !this.idle(d)),
+          device,
+        ],
       };
     });
     return { device, token };
@@ -141,6 +152,17 @@ export class RemoteDevices {
     }
     // A removal saved while this update waited its turn wins.
     return this.holding(deviceId, token);
+  }
+  /** A connected device is in use, however long it has been since it signed in. */
+  async seen(deviceId: string) {
+    const device = this.list().find((d) => d.id === deviceId);
+    if (!device || this.now() - (device.lastSeen ?? 0) < seenEveryMs) return;
+    await this.store
+      .update((s) => {
+        const saved = s.phoneRemote?.devices?.find((d) => d.id === deviceId);
+        if (saved) saved.lastSeen = this.now();
+      })
+      .catch((e) => console.warn("Phone remote: lastSeen wasn't saved:", e));
   }
   /** Whether the device is still paired; a removed one's sessions end. */
   paired(deviceId: string) {

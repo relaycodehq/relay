@@ -76,6 +76,27 @@ it("voids a code after it expires or after five wrong guesses", async () => {
   }
 });
 
+it("forgets a device unused for 90 days, but not one that stays connected", async () => {
+  const day = 24 * 60 * 60_000;
+  let now = 1_000_000;
+  const { dir, devices } = await setup(() => now);
+  try {
+    const idle = await devices.pair(devices.newPairing().code, "Old phone");
+    const linked = await devices.pair(devices.newPairing().code, "Mini");
+    for (let i = 0; i < 100; i++) {
+      now += day;
+      await devices.seen(linked.device.id);
+    }
+    expect(await devices.verify(idle.device.id, idle.token)).toBeUndefined();
+    expect(devices.list().map((d) => d.name)).toEqual(["Mini"]);
+    expect((await devices.verify(linked.device.id, linked.token))?.id).toBe(
+      linked.device.id,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("keeps the same sealed key across restarts, so paired phones still trust it", async () => {
   const { dir, devices, reopen, saved } = await setup();
   try {
