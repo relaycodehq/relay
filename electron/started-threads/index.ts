@@ -55,6 +55,7 @@ import {
 import {
   relayToolSchemas,
   toolText,
+  MESSAGE_CHARS,
   STARTED_LIMIT,
   startedTools,
   type RelayToolArgs,
@@ -73,7 +74,8 @@ const settled = new Set<StartedStatus>([
   "idle",
 ]);
 
-const ANSWER_TAIL = 4000;
+/** Where a read stops adding messages, under what the agent's harness cuts from a tool's result. */
+const PAGE_CHARS = 80_000;
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 const POLL_MS = 1000;
@@ -180,8 +182,15 @@ function away({ sentTo }: Pick<ChatSummary, "sentTo">) {
 const head = (text: string, limit = 600) =>
   text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
 
-const tail = (text: string, limit = ANSWER_TAIL) =>
+const tail = (text: string, limit: number) =>
   text.length > limit ? `…${sliceWhole(text, -limit)}` : text;
+
+/** A message's text from `offset`, and where to read on when there's more. */
+function bodyFrom(body: string, offset = 0) {
+  const part = sliceWhole(body, offset, offset + MESSAGE_CHARS);
+  const end = offset + part.length;
+  return end < body.length ? { body: part, nextOffset: end } : { body: part };
+}
 
 const json = (value: unknown) => toolText(JSON.stringify(value, null, 1));
 
@@ -1183,18 +1192,51 @@ export class StartedThreads {
 
   private async read(
     _lead: ProjectChat,
-    { id, after }: RelayToolArgs<"read_thread">,
+    { id, after, before, message, offset, limit = 50 }: RelayToolArgs<"read_thread">,
   ) {
     const chat = await this.chats.get(id).catch(() => {
       throw new Error("There's no such thread; see find_threads.");
     });
     const main = chat.messages.filter((m) => !m.parentId);
-    const at = after ? main.findIndex((m) => m.id === after) : -1;
-    if (after && at < 0)
-      throw new Error(
-        "That `after` isn't a message in this thread; read it again without `after`.",
-      );
-    const shown = main.slice(at + 1);
+    const said = (m: ProjectChat["messages"][number], from?: number) => ({
+      id: m.id,
+      from: m.role === "user" ? (m.author ?? "user") : agentName(m.provider),
+      ...(m.status === "complete" ? {} : { status: m.status }),
+      ...bodyFrom(m.body, from),
+      ...(m.error ? { error: m.error } : {}),
+      ...(m.changes?.length ? { changed: m.changes.map((c) => c.path) } : {}),
+    });
+    if (message) {
+      const m = main.find((m) => m.id === message);
+      if (!m) throw new Error("There's no such message in this thread.");
+      return json(said(m, offset));
+    }
+    const where = (key: "after" | "before", value?: string) => {
+      if (!value) return undefined;
+      const at = main.findIndex((m) => m.id === value);
+      if (at < 0)
+        throw new Error(
+          `That \`${key}\` isn't a message in this thread; read it again without it.`,
+        );
+      return at;
+    };
+    const from = (where("after", after) ?? -1) + 1;
+    const to = where("before", before) ?? main.length;
+    const range = main.slice(from, to);
+    // On from `after` the page fills oldest first; otherwise newest first,
+    // since what a reader comes for is usually the latest answer.
+    const forward = after !== undefined;
+    const shown: typeof main = [];
+    let chars = 0;
+    for (const m of forward ? range : [...range].reverse()) {
+      const size = Math.min(m.body.length, MESSAGE_CHARS);
+      if (shown.length === limit || (shown.length && chars + size > PAGE_CHARS))
+        break;
+      shown.push(m);
+      chars += size;
+    }
+    if (!forward) shown.reverse();
+    const cut = shown.length < range.length;
     // `next` stops before an answer still streaming, so the next read
     // returns it again, finished.
     const unfinished = shown.findIndex((m) => m.status === "streaming");
@@ -1202,21 +1244,15 @@ export class StartedThreads {
       (unfinished < 0 ? shown.at(-1) : shown[unfinished - 1])?.id ??
       after ??
       null;
-    const messages = shown.map((m) => ({
-      id: m.id,
-      from: m.role === "user" ? (m.author ?? "user") : agentName(m.provider),
-      ...(m.status === "complete" ? {} : { status: m.status }),
-      body: tail(m.body),
-      ...(m.error ? { error: m.error } : {}),
-      ...(m.changes?.length ? { changed: m.changes.map((c) => c.path) } : {}),
-    }));
     // The notes come first: what the user keeps at hand there.
-    const notes = after ? [] : (chat.notes ?? []).map(noteForAgent);
+    const notes = after || before ? [] : (chat.notes ?? []).map(noteForAgent);
     return json({
       ...away(chat),
       ...(notes.length ? { notes } : {}),
-      messages,
+      messages: shown.map((m) => said(m)),
       next,
+      ...(cut && forward ? { more: true } : {}),
+      ...(cut && !forward ? { earlier: shown[0]!.id } : {}),
     });
   }
 

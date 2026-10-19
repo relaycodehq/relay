@@ -18,6 +18,7 @@ export {
   STARTED_PATH,
   toolText,
   resultText,
+  MESSAGE_CHARS,
   STARTED_LIMIT,
   startedTools,
   WAIT_LIMIT_SECONDS,
