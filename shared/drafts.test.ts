@@ -249,4 +249,7 @@ it("names what stays on the computer", () => {
   expect(
     extrasSummary({ screenshots: [1, 2], codeRefs: 1, selection: true }),
   ).toBe("2 screenshots, a code reference and a selected line");
+  expect(extrasSummary({ branch: true, start: true })).toBe(
+    "a branch name and a branch to start from",
+  );
 });
