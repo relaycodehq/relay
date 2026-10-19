@@ -609,9 +609,12 @@ final class Connection {
 
     /// What runs on the computer's localhost.
     func sites() async throws -> [RemoteSite] {
-        guard let client else { throw PairingError("Not connected.") }
+        guard let client, let computer = active else { throw PairingError("Not connected.") }
         let list = try await client.sites()
-        if let active { tunnelPorts.sawSites(list.map(\.port), on: active) }
+        try Task.checkCancellation()
+        // A queued answer can outlive both a computer switch and replacement of its client.
+        guard self.client === client, active == computer else { throw CancellationError() }
+        tunnelPorts.sawSites(list.map(\.port), on: computer)
         return list
     }
 
