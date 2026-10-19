@@ -19,6 +19,7 @@ final class ChangesModel {
     let asks = Asks()
 
     @ObservationIgnored private var connection: Connection?
+    @ObservationIgnored private var computer: String?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var asked = false
     /// Bumped by every tree shown, so a look that set out before a commit can't put its older tree back.
@@ -27,10 +28,14 @@ final class ChangesModel {
 
     init(where: String) { self.where = `where` }
 
-    func bind(_ connection: Connection) { self.connection = connection }
+    func bind(_ connection: Connection) {
+        self.connection = connection
+        computer = connection.active
+    }
 
     private func client() throws -> RemoteClient {
         guard let connection else { throw PairingError("Not connected to your computer.") }
+        guard connection.active == computer else { throw PairingError("The computer changed. Open Changes again.") }
         return try connection.liveClient()
     }
 
@@ -104,8 +109,10 @@ final class ChangesModel {
         Task {
             defer { busy = nil }
             let next: WorkingTree
+            let client: RemoteClient
             do {
-                next = try await client().gitAction(self.where, .commit(revision: tree.revision, message: text, paths: paths))
+                client = try self.client()
+                next = try await client.gitAction(self.where, .commit(revision: tree.revision, message: text, paths: paths))
             } catch {
                 asks.failure(error, "Couldn't commit")
                 await load()
@@ -119,7 +126,7 @@ final class ChangesModel {
             guard push else { return }
             busy = .push
             do {
-                show(try await client().gitAction(self.where, .push(revision: next.revision)))
+                show(try await client.gitAction(self.where, .push(revision: next.revision)))
             } catch {
                 asks.alert(
                     "Committed, but the push failed",

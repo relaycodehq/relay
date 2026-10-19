@@ -96,6 +96,7 @@ nonisolated final class ReadDesktop: SocketFactory, @unchecked Sendable {
     private struct State {
         var calls: [Call] = []
         var sites: [(Socket, JSON)] = []
+        var desktop: [(Socket, JSON)] = []
     }
 
     let credentials: RemoteCredentials
@@ -121,13 +122,20 @@ nonisolated final class ReadDesktop: SocketFactory, @unchecked Sendable {
 
     var calls: [Call] { state.withLock { $0.calls } }
     var pendingSites: Int { state.withLock { $0.sites.count } }
+    var pendingDesktop: Int { state.withLock { $0.desktop.count } }
+    var desktopCalls: [Call] { calls.filter { $0.method == "desktop" } }
     var imageCalls: [Call] {
         calls.filter { $0.method == "image" || ($0.method == "desktop" && $0.args.first?.string == "projectChatImage") }
     }
 
     func client() -> RemoteClient { RemoteClient(.saved(credentials), sockets: self) }
 
-    func discardPendingCalls() { state.withLock { $0.sites = [] } }
+    func discardPendingCalls() {
+        state.withLock {
+            $0.sites = []
+            $0.desktop = []
+        }
+    }
 
     func open(url: URL, queue: DispatchQueue, handler: @escaping @Sendable (SocketEvent) -> Void) -> any RemoteSocket {
         let socket = Socket(desktop: self, queue: queue, handler: handler)
@@ -147,6 +155,13 @@ nonisolated final class ReadDesktop: SocketFactory, @unchecked Sendable {
         socket.queue.sync {}
     }
 
+    /// As with Sites, finish on the socket queue before the app can consume the result.
+    func answerDesktop(_ value: JSON) throws {
+        let (socket, id) = try #require(state.withLock { $0.desktop.isEmpty ? nil : $0.desktop.removeFirst() })
+        socket.queue.sync { socket.reply(id, value) }
+        socket.queue.sync {}
+    }
+
     private func called(_ frame: JSON, socket: Socket) {
         guard let method = frame["method"]?.string, let id = frame["id"] else { return }
         let args = frame["args"]?.array ?? []
@@ -157,6 +172,7 @@ nonisolated final class ReadDesktop: SocketFactory, @unchecked Sendable {
             socket.reply(id, ["name": .string(credentials.name), "bridge": .number(Double(bridge)), "projects": [], "chats": []])
         case "image": socket.reply(id, .string(image))
         case "desktop" where args.first?.string == "projectChatImage": socket.reply(id, .string(image))
+        case "desktop": state.withLock { $0.desktop.append((socket, id)) }
         default: socket.reply(id, .null)
         }
     }
