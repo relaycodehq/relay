@@ -1,7 +1,9 @@
 import { useRef, useState, type RefObject } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Combobox } from "@base-ui/react/combobox";
-import { Check, Search } from "lucide-react";
+import { Check, Monitor, Search, Server, ServerOff } from "lucide-react";
+import type { PairedComputer } from "../../../shared/handoff";
+import { api } from "../../lib/api";
 import { ProjectBadge } from "./ProjectBadge";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { ChatSummary, Project } from "../../../shared/projects";
@@ -54,8 +56,17 @@ export function ProjectSearch({
   const [search, setSearch] = useState("");
   const highlighted = useRef<string | null>(null);
   const query = search.trim().toLocaleLowerCase();
+  // The same list handoff keeps; asked here, as projects doesn't import handoff.
+  const paired = useQuery({
+    queryKey: ["paired-computers"],
+    queryFn: () => api.pairedComputers(),
+    staleTime: 10_000,
+    enabled: projects.some((p) => p.computer),
+  });
   const matches = useOpenOrder(projects, current).filter((item) =>
-    `${item.name} ${item.path}`.toLocaleLowerCase().includes(query),
+    `${item.name} ${item.path} ${item.computer?.name ?? ""}`
+      .toLocaleLowerCase()
+      .includes(query),
   );
 
   return (
@@ -118,8 +129,8 @@ export function ProjectSearch({
               <Combobox.Item
                 key={item.id}
                 value={item.id}
-                aria-label={`${item.name} · ${item.path}`}
-                className="headline-project-row"
+                aria-label={`${item.name} · ${item.computer ? `on ${item.computer.name}, ` : ""}${item.path}`}
+                className={`headline-project-row ${item.computer && hostState(item.computer.id, paired.data) === "gone" ? "gone" : ""}`}
                 onClick={() => {
                   // Picking the selected value fires no change.
                   if (item.id === current) onSelect(item);
@@ -128,12 +139,24 @@ export function ProjectSearch({
                 <ProjectBadge project={item} />
                 <span className="headline-project-row-label">
                   <strong>{item.name}</strong>
-                  <MiddleTruncate
-                    className="headline-project-path"
-                    text={item.path}
-                    kind="path"
-                  />
+                  {item.computer ? (
+                    <ProjectAddress
+                      project={item}
+                      computer={item.computer}
+                      paired={paired.data}
+                    />
+                  ) : (
+                    <MiddleTruncate
+                      className="headline-project-path"
+                      text={item.path}
+                      kind="path"
+                    />
+                  )}
                 </span>
+                {item.computer &&
+                  hostState(item.computer.id, paired.data) === "gone" && (
+                    <span className="headline-project-note">not paired</span>
+                  )}
                 {item.id === current && <Check size={14} aria-hidden />}
               </Combobox.Item>
             ))}
@@ -143,5 +166,64 @@ export function ProjectSearch({
         )}
       </div>
     </Combobox.Root>
+  );
+}
+
+type HostState = "on" | "connecting" | "offline" | "gone";
+
+/** How the computer a project lives on is doing; "on" until the list says. */
+function hostState(
+  id: string,
+  paired: readonly PairedComputer[] | undefined,
+): HostState {
+  if (!paired) return "on";
+  const c = paired.find((x) => x.id === id);
+  if (!c) return "gone";
+  if (c.status === "online" || c.asleep) return "on";
+  return c.status === "connecting" ? "connecting" : "offline";
+}
+
+/** The useful part of a tailnet name: `box.tail0a1b2c.ts.net` is box. */
+const shortHost = (name: string) => name.replace(/\.[a-z0-9-]+\.ts\.net$/i, "");
+
+const hostWord: Record<HostState, string> = {
+  on: "connected",
+  connecting: "connecting",
+  offline: "offline",
+  gone: "not paired anymore",
+};
+
+/**
+ * Where a project on another computer lives, as ssh writes it: `host:path`.
+ * A path there reads like one here; the host says which computer it's on.
+ */
+function ProjectAddress({
+  project,
+  computer,
+  paired,
+}: {
+  project: Project;
+  computer: NonNullable<Project["computer"]>;
+  paired: readonly PairedComputer[] | undefined;
+}) {
+  const state = hostState(computer.id, paired);
+  const wsl = paired?.find((c) => c.id === computer.id)?.route?.kind === "wsl";
+  const Icon = state === "gone" ? ServerOff : wsl ? Monitor : Server;
+  return (
+    <span
+      className="headline-project-address"
+      title={`${computer.name}:${project.path} · ${hostWord[state]}`}
+    >
+      <span className={`headline-project-host ${state}`}>
+        <Icon size={11} aria-hidden />
+        <span>{shortHost(computer.name)}</span>
+      </span>
+      <span className="headline-project-colon">:</span>
+      <MiddleTruncate
+        className="headline-project-path"
+        text={project.path}
+        kind="path"
+      />
+    </span>
   );
 }
