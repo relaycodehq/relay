@@ -1,7 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import {
   toolbarRun,
-  useAccessNamed,
   type ToolbarItem,
   type ToolbarLayout,
   type ToolbarSlot,
@@ -13,8 +12,8 @@ export type ToolbarControls = Partial<
 >;
 
 /**
- * The composer's controls in the user's order, with dividers between the
- * labelled ones and a spacer at the gap. `wrap` lets Settings make each slot
+ * The composer's controls in the user's order, with dividers between them
+ * and a spacer at the gap. `wrap` lets Settings make each slot
  * draggable; the caller owns the `.composer-tools` row. What follows the gap,
  * and `end` after it, stay together on the right, also when the row wraps.
  */
@@ -29,12 +28,7 @@ export function ComposerToolbar({
   wrap?: (slot: ToolbarSlot, node: ReactNode) => ReactNode;
   end?: ReactNode;
 }) {
-  const accessNamed = useAccessNamed();
-  const run = toolbarRun(
-    layout,
-    (item) => !!controls[item],
-    accessNamed ? [] : ["access"],
-  );
+  const run = toolbarRun(layout, (item) => !!controls[item]);
   const nodes = run.map(({ slot, divider }) => {
     const node = slot === "gap" ? <span className="spacer" /> : controls[slot];
     return (

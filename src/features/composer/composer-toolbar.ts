@@ -53,7 +53,7 @@ export const toolbarNames: Record<ToolbarItem, string> = {
 export const canHide = (item: ToolbarItem) =>
   item !== "model" && item !== "mode";
 
-/** Labelled controls get a divider between them; bare icon buttons don't. */
+/** These controls get a divider between them; the mic doesn't. */
 const divided = new Set<ToolbarSlot>([
   "model",
   "account",
@@ -66,23 +66,19 @@ const divided = new Set<ToolbarSlot>([
 
 /**
  * The slots to draw, in order: shown items that `present` has a control for,
- * and the gap. `divider` marks a slot that follows a divider; `bare` items
- * show their icon alone, so they go without.
+ * and the gap. `divider` marks a slot that follows a divider.
  */
 export function toolbarRun(
   layout: ToolbarLayout,
   present: (item: ToolbarItem) => boolean,
-  bare: ToolbarItem[] = [],
 ) {
   const shown = layout.slots.filter(
     (slot) =>
       slot === "gap" || (!layout.hidden.includes(slot) && present(slot)),
   );
-  const labelled = (slot: ToolbarSlot) =>
-    divided.has(slot) && !(bare as ToolbarSlot[]).includes(slot);
   return shown.map((slot, i) => ({
     slot,
-    divider: i > 0 && labelled(shown[i - 1]) && labelled(slot),
+    divider: i > 0 && divided.has(shown[i - 1]) && divided.has(slot),
   }));
 }
 
