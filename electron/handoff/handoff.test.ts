@@ -4,6 +4,7 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -26,7 +27,7 @@ type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { awaitsReturn } from "../project-chats/handoff";
-import { handoffBridge } from "../../shared/remote";
+import { handoffBridge, setupBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import { workspaceId } from "../../shared/workspaces";
 import type { UpdateState } from "../../shared/updates";
@@ -172,6 +173,8 @@ async function pairedComputers() {
           if (method === "respondProjectChat")
             return mini.chats.respond(id, rest[0] as string, rest[1] as never);
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
+          if (method === "createScratch")
+            return mini.projects.scratch(join(mini.dir, "scratch"), () => false);
           if (method === "projectWorkingTree" || method === "threadElsewhere")
             return { ran: method, on: id };
           throw new Error(`Not in this test: ${method}`);
@@ -1273,9 +1276,12 @@ it("puts back what fails to go out here, with what came after it, and sends it o
   expect(chat.messages.at(-2)).toMatchObject({ id: next.id, body: next.body });
 });
 
-it("clones a project the other computer lacks, keeps a failed clone's error, and clones it once asked again", async () => {
-  const { laptop, mini, sender, computerId } = await pairedComputers();
-  // A remote by URL, as the other computer clones only those, served from disk.
+/**
+ * A project of the laptop's that the mini lacks, behind a URL as the mini
+ * clones only those, served from disk. `reachable` false takes its remote
+ * away, as a missing sign-in would.
+ */
+async function lackedProject(laptop: Awaited<ReturnType<typeof computer>>) {
   vi.stubEnv("GIT_CONFIG_COUNT", "1");
   vi.stubEnv("GIT_CONFIG_KEY_0", `url.${join(root, "remote")}/.insteadOf`);
   vi.stubEnv("GIT_CONFIG_VALUE_0", "https://git.example.test/");
@@ -1289,45 +1295,217 @@ it("clones a project the other computer lacks, keeps a failed clone's error, and
   git(tool, "add", "-A");
   git(tool, "commit", "-q", "-m", "First");
   git(tool, "push", "-q", "origin", "HEAD:main");
-  const projectId = (await laptop.projects.add(tool, null)).id;
+  const hidden = join(root, "hidden-tool.git");
+  return {
+    url,
+    projectId: (await laptop.projects.add(tool, null)).id,
+    reachable: async (on: boolean) =>
+      on
+        ? await rename(hidden, origin)
+        : await rename(origin, hidden),
+  };
+}
 
-  const [before] = await sender.startTargets(projectId);
-  expect(before).toMatchObject({
+/** A new thread in the project, started on the mini with its first message. */
+async function startOnMini(
+  laptop: Awaited<ReturnType<typeof computer>>,
+  sender: Handoffs,
+  computerId: string,
+  projectId: string,
+) {
+  const thread = await laptop.chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.firstMessageOnly(thread.id, input("@codex Add a changelog"));
+  await sender.handOff(thread.id, computerId);
+  return thread.id;
+}
+
+it("starts a thread on a computer that lacks its project by cloning it there first", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { projectId } = await lackedProject(laptop);
+  const [target] = await sender.startTargets(projectId);
+  expect(target).toMatchObject({
     clone: "me/tool",
     problem: expect.stringMatching(/^Not cloned on /),
   });
-  expect(before!.project).toBeUndefined();
+  expect(target!.project).toBeUndefined();
 
-  // A remote that isn't there.
-  git(
-    tool,
-    "remote",
-    "set-url",
-    "origin",
-    "https://git.example.test/me/gone.git",
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await sender.view(id))?.sentTo).toMatchObject({ state: "away" }),
   );
-  await expect(sender.cloneOn(computerId, projectId)).rejects.toThrow();
-  const [failed] = await sender.startTargets(projectId);
-  expect(failed!.cloneError).toBeTruthy();
-  expect(failed!.cloning).toBeUndefined();
-
-  git(tool, "remote", "set-url", "origin", url);
-  const made = await sender.cloneOn(computerId, projectId);
-  const there = (await mini.projects.list(null)).find((p) => p.id === made.id);
-  expect(there?.path).toBe(join(mini.dir, "tool"));
-  const [after] = await sender.startTargets(projectId);
-  expect(after).toMatchObject({ project: { id: made.id, name: made.name } });
-  expect(after!.cloneError).toBeUndefined();
+  const there = (await mini.projects.list(null)).find(
+    (p) => p.path === join(mini.dir, "tool"),
+  );
+  expect(there).toBeTruthy();
+  const chat = await laptop.chats.get(id);
+  // Folded to one line under the first message: no agent was needed.
+  expect(chat.setup).toMatchObject({
+    state: "done",
+    after: 1,
+    messages: [],
+    folder: expect.stringMatching(/tool$/),
+  });
+  const [arrived] = mini.chats.list(there!.id).filter((c) => c.cameFrom);
+  expect(arrived).toBeTruthy();
 });
 
-it("runs a command on the other computer for an agent setting it up", async () => {
-  const { sender, computerId } = await pairedComputers();
-  const run = await sender.runOn(computerId, "echo set-up-$((40 + 2))", 20_000);
-  expect(run).toMatchObject({ code: 0, timedOut: false });
-  expect(run.output).toContain("set-up-42");
-  await expect(
-    sender.runOn(computerId, "exit 3", 20_000),
-  ).resolves.toMatchObject({ code: 3 });
+it("has an agent there set up a project it couldn't clone, answered from the thread, then starts the thread in it", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { url, projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+
+  // The clone failed, so an agent on the mini works on it in a thread of its own.
+  await vi.waitFor(async () => {
+    const chat = await laptop.chats.get(id);
+    expect(chat.sentTo?.setup).toBeTruthy();
+    expect(chat.setup?.state).toBe("agent");
+    expect(chat.setup?.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      status: "complete",
+    });
+  });
+  let chat = await laptop.chats.get(id);
+  const setup = mini.chats.handedOver(chat.sentTo!.setup!)!;
+  expect(mini.projects.get(setup.projectId).scratch).toBe(true);
+  // What Relay asked comes first; it went to the agent there, not here.
+  expect(chat.setup!.messages[0]).toMatchObject({ role: "user" });
+  expect(chat.setup!.messages[0]!.body).toContain(url);
+  expect(chat.setup!.messages[0]!.body).toContain(join(mini.dir, "tool"));
+  expect(chat.messages).toHaveLength(1);
+  expect(chat.setup!.error).toBeTruthy();
+  // The sidebar reads the thread as that agent stands: here, waiting on the user.
+  laptop.chats.setHandoffLive(id, { blocked: true, waiting: true });
+  expect(laptop.chats.list(projectId).find((c) => c.id === id)).toMatchObject({
+    blocked: true,
+    waiting: true,
+  });
+
+  // The composer answers that agent; the thread's own folder and messages stay here.
+  const answer = input("@codex Done, I signed in");
+  expect(sender.forwards("sendProjectChat", [id, answer])).toBe(true);
+  expect(sender.forwards("cancelProjectChat", [id])).toBe(true);
+  expect(sender.forwards("projectChatContext", [id])).toBe(false);
+  expect(sender.forwards("compactProjectChat", [id])).toBe(false);
+  expect(
+    sender.forwards("projectWorkingTree", [workspaceId(projectId, id)]),
+  ).toBe(false);
+  // A folder holding no clone of it is turned down.
+  expect(await sender.setupFolder(id, join(root, "nowhere"))).toBe(false);
+
+  // Signed in there, the agent clones it where it was told to.
+  await reachable(true);
+  git(mini.dir, "clone", "-q", url, join(mini.dir, "tool"));
+  await sender.forward("sendProjectChat", [id, answer]);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(id))?.sentTo).toMatchObject({ state: "away" }),
+    { timeout: 10_000 },
+  );
+  chat = await laptop.chats.get(id);
+  expect(chat.sentTo!.setup).toBeUndefined();
+  expect(chat.setup).toMatchObject({ state: "done", after: 1 });
+  expect(chat.setup!.messages.map((m) => m.body)).toContain(answer.body);
+  const there = (await mini.projects.list(null)).find(
+    (p) => p.path === join(mini.dir, "tool"),
+  )!;
+  expect(mini.chats.list(there.id).filter((c) => c.cameFrom)).toHaveLength(1);
+  await vi.waitFor(() =>
+    expect(
+      mini.chats.handedOver(setup.cameFrom!.id)?.cameFrom?.returnedAt,
+    ).toBeTruthy(),
+  );
+});
+
+it("tells a Relay too old to set a project up apart from a failed clone, and ends that setup", async () => {
+  const { laptop, sender, computerId } = await pairedComputers();
+  const { projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  vi.spyOn(
+    sender as never as { info: () => unknown },
+    "info",
+  ).mockResolvedValue({
+    version: "0.17.0",
+    bridge: setupBridge - 1,
+    update: { status: "idle", current: "0.17.0" },
+  });
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(id)).sentTo?.error).toMatch(
+      /runs an older Relay, which can't set the project up itself/,
+    ),
+  );
+  const chat = await laptop.chats.get(id);
+  expect(chat.sentTo!.setup).toBeUndefined();
+  expect(chat.setup).toMatchObject({ state: "dropped" });
+  expect(chat.setup!.error).toMatch(/older Relay/);
+});
+
+it("has threads waiting on the same project there share one setup, and lets one go without the other", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { url, projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  const first = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(first)).setup?.state).toBe("agent"),
+  );
+  const setup = (await laptop.chats.get(first)).sentTo!.setup!;
+  const second = await startOnMini(laptop, sender, computerId, projectId);
+  const third = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () => {
+    for (const id of [second, third]) {
+      const chat = await laptop.chats.get(id);
+      expect(chat.sentTo?.setup).toBe(setup);
+      expect(chat.setup?.messages[0]?.role).toBe("user");
+    }
+  });
+  const setups = (await mini.projects.list(null))
+    .filter((p) => p.scratch)
+    .flatMap((p) => mini.chats.list(p.id).filter((c) => c.cameFrom));
+  expect(setups).toHaveLength(1);
+
+  // One gives up; the setup goes on for the others.
+  await sender.abandon(third);
+  expect((await laptop.chats.get(third)).sentTo).toBeUndefined();
+  expect(mini.chats.handedOver(setup)?.cameFrom?.abandonedAt).toBeUndefined();
+
+  await reachable(true);
+  git(mini.dir, "clone", "-q", url, join(mini.dir, "tool"));
+  await sender.forward("sendProjectChat", [first, input("@codex Done")]);
+  await vi.waitFor(
+    async () => {
+      for (const id of [first, second])
+        expect((await sender.view(id))?.sentTo).toMatchObject({
+          state: "away",
+        });
+    },
+    { timeout: 20_000 },
+  );
+});
+
+it("starts a thread here instead when its setup there is given up on", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const { projectId, reachable } = await lackedProject(laptop);
+  await reachable(false);
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(id)).setup?.state).toBe("agent"),
+  );
+  const setupId = (await laptop.chats.get(id)).sentTo!.setup!;
+
+  await sender.startHere(id);
+  const chat = await laptop.chats.get(id);
+  expect(chat.sentTo).toBeUndefined();
+  expect(chat.setup?.state).toBe("dropped");
+  // The agent there is let go, and the first message is answered here.
+  await vi.waitFor(() =>
+    expect(mini.chats.handedOver(setupId)?.cameFrom?.abandonedAt).toBeTruthy(),
+  );
+  await finished(laptop.chats, id, 2);
 });
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {

@@ -1,18 +1,13 @@
-// What a paired computer asks of this one to set a project up before a
-// thread can come over: clone it, or run a command for the agent fixing
-// what stopped the clone.
+// A paired computer's clone of a project this one has, before a thread of
+// it can go over: the URL it clones from, and the clone there.
 import {
   parseRemote,
   type AddingJob,
   type Project,
 } from "../../shared/projects";
-import type {
-  CloneProgress,
-  CommandRun,
-  ComputerProject,
-} from "../../shared/remote";
+import type { CloneProgress, ComputerProject } from "../../shared/remote";
 import { git } from "../git/git";
-import { runExecutable } from "../platform/executables";
+import { fromHome } from "./setup-agent";
 
 /**
  * What another computer clones the repository at `root` from: origin, else
@@ -115,34 +110,7 @@ export class CloneRequests {
       id: project.id,
       name: project.name,
       repositories: await this.host.repositories(project).catch(() => []),
+      folder: fromHome(project.path),
     };
   }
-}
-
-/** Runs `command` in the user's login shell, so their PATH and tools are there, from their home folder. */
-export async function runCommand(
-  command: string,
-  timeoutMs: number,
-  from: string,
-): Promise<CommandRun> {
-  const [shell, args] =
-    process.platform === "win32"
-      ? ["powershell.exe", ["-NoProfile", "-NonInteractive", "-Command"]]
-      : [
-          process.env.SHELL ||
-            (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash"),
-          ["-lc"],
-        ];
-  // The command itself stays out of the log: it may carry a token.
-  console.info(`${from} runs a command here.`);
-  const home = process.platform === "win32" ? "Set-Location ~; " : "cd ~; ";
-  // Owning the tree makes a timeout stop the command's children too.
-  const run = await runExecutable(
-    shell,
-    [...args, home + command],
-    timeoutMs,
-    undefined,
-    true,
-  );
-  return { code: run.code, output: run.output, timedOut: run.timedOut };
 }

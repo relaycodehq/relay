@@ -8,7 +8,7 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../handoff/HandoffStrip";
-import { liveAway } from "../../../shared/handoff";
+import { inSetup, liveAway } from "../../../shared/handoff";
 import type { ThreadGoal } from "../../../shared/goal";
 import { GoalStrip } from "./GoalStrip";
 import {
@@ -95,7 +95,7 @@ function PressingStrip({
       void qc.invalidateQueries({ queryKey: ["project-chats"] });
     }
   };
-  if (chat.sentTo && !liveAway(chat))
+  if (chat.sentTo && !liveAway(chat) && !inSetup(chat))
     return <HandoffStrip chat={chat} onError={onError} />;
   if (chat.cameFrom?.returnedAt)
     return <ReturnedStrip computer={chat.cameFrom.computer} />;

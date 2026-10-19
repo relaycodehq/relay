@@ -10,6 +10,7 @@ import type {
   ChatSentTo,
   HandoffLive,
   HeldSend,
+  ThreadSetup,
   HandoffThread,
 } from "../../shared/handoff";
 import type {
@@ -53,6 +54,7 @@ import type { ChatCore } from "./core";
 import { Councils } from "./councils";
 import { assertHere, ComputerHandoff } from "./handoff";
 import { LiveHandoff } from "./handoff-live";
+import { SetupMirror } from "./handoff-setup";
 import { ChatQueue } from "./queue";
 import { LimitResumes } from "./limit-resume";
 import { IdleCompactions } from "./idle-compact";
@@ -102,6 +104,7 @@ export class ProjectChats {
   private files: TurnFiles;
   private handoffs: ComputerHandoff;
   private liveHandoff: LiveHandoff;
+  private setupMirror: SetupMirror;
   private runner: TurnRunner;
   private asides: SideQuestions;
   private queue: ChatQueue;
@@ -255,6 +258,7 @@ export class ProjectChats {
     this.liveHandoff = new LiveHandoff(core, (projectId) =>
       this.threads.list(projectId),
     );
+    this.setupMirror = new SetupMirror(core);
     this.runner = new TurnRunner(core, this.titles, {
       unprompted: (chat, root, provider, parentId) =>
         this.recovery.unprompted(chat, root, provider, parentId),
@@ -540,6 +544,9 @@ export class ProjectChats {
   runHandoffHere(id: string, handoffId: string) {
     return this.handoffs.takeBack(id, handoffId);
   }
+  haltForHandoff(id: string) {
+    return this.handoffs.halt(id);
+  }
   leave(id: string, computer: string, since = 0) {
     return this.handoffs.leave(id, computer, since);
   }
@@ -554,6 +561,14 @@ export class ProjectChats {
     renamed?: string,
   ) {
     return this.handoffs.adopt(projectId, thread, cameFrom, worktree, renamed);
+  }
+  adoptSetup(
+    projectId: string,
+    title: string,
+    cameFrom: Omit<ChatCameFrom, "carried" | "tip">,
+    input: ProjectChatSend,
+  ) {
+    return this.handoffs.adoptSetup(projectId, title, cameFrom, input);
   }
   handBack(id: string, deviceId: string) {
     return this.handoffs.handBack(id, deviceId);
@@ -608,6 +623,22 @@ export class ProjectChats {
   setHandoffLive(id: string, live: HandoffLive | undefined) {
     this.liveHandoff.setLive(id, live);
   }
+  /** On the computer a thread is handed from, the computer it goes to readied for it: see SetupMirror. */
+  beginSetup(id: string, computer: string, project: string) {
+    return this.setupMirror.begin(id, computer, project);
+  }
+  updateSetup(id: string, change: Partial<Omit<ThreadSetup, "messages">>) {
+    return this.setupMirror.update(id, change);
+  }
+  setupHeld(id: string) {
+    return this.setupMirror.held(id);
+  }
+  mirrorSetup(id: string, message: ChatMessage) {
+    return this.setupMirror.mirror(id, message);
+  }
+  setupSynced(id: string, messages: (ChatMessage | string)[]) {
+    return this.setupMirror.synced(id, messages);
+  }
   handoffOutbox(id: string) {
     return this.liveHandoff.outbox(id);
   }
@@ -628,7 +659,8 @@ export class ProjectChats {
    * handoff, what its computer last said, over what's saved here.
    */
   private waitingIn(chat: ProjectChat) {
-    if (!chat.sentTo?.live) return { requests: this.active.requests(chat.id) };
+    if (!chat.sentTo?.live && !chat.sentTo?.setup)
+      return { requests: this.active.requests(chat.id) };
     const {
       requests = [],
       queue,
@@ -806,6 +838,18 @@ export class ProjectChats {
       await this.turns.sendNow(id, input, false, false);
       // Named after the message: the title's rename waits for a turn here.
       this.worktrees.unnamed.delete(id);
+    });
+  }
+  /** The first message a thread kept for another computer to answer (firstMessageOnly), answered here after all. */
+  answerHere(id: string) {
+    return this.control(id, async () => {
+      const chat = await this.storage.load(id);
+      const input = chat.lastInput;
+      const [first, ...rest] = chat.messages;
+      if (!input || first?.id !== input.id || rest.length) return;
+      chat.messages = [];
+      await this.storage.save(chat);
+      await this.sendHeld(id, input);
     });
   }
   /** Your own message, from the composer or a phone: it unsettles a thread settled while it ran. */
@@ -1176,6 +1220,7 @@ export class ProjectChats {
     clearInterval(this.leakCheck);
     this.news.dispose();
     this.liveHandoff.dispose();
+    this.setupMirror.dispose();
     this.sessions.stopListening();
     await this.sessions.keepAllSubagents();
     if (detach) {

@@ -23,7 +23,8 @@ import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { useCacheExpired } from "../agents/auto-compact";
 import { compactsCold } from "../../../shared/context-usage";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
-import { liveAway } from "../../../shared/handoff";
+import { SetupLine } from "../handoff/SetupLine";
+import { inSetup, liveAway } from "../../../shared/handoff";
 import {
   ProjectComposer,
   type ComposerHandle,
@@ -280,12 +281,16 @@ export function ThreadComposer({
   const { selection, workItem, codeRefs } = attachments;
   // A side thread doesn't wait for the main answer, nor queue behind it, and
   // the thread's Stop is for its own turn, not a /btw answer beside it.
-  const waiting = root?.side ? false : mainRunning || reviewing;
+  // Waiting on a setup there, it talks to that setup's agent: its answer is
+  // what runs, and the agent it was sent to is the one the composer picks.
+  const setup = chat && inSetup(chat) ? history.data?.setup : undefined;
+  const setupRunning = !!setup?.messages.some((m) => m.status === "streaming");
+  const waiting = root?.side ? false : mainRunning || reviewing || setupRunning;
   const held =
     busy ||
     (!!chat && history.isPending) ||
     worktree.unavailable ||
-    (!!chat?.sentTo && !liveAway(chat)) ||
+    (!!chat?.sentTo && !liveAway(chat) && !inSetup(chat)) ||
     !!chat?.cameFrom?.returnedAt;
   // Read on ↑ only, so streaming answers don't rebuild it.
   const shownNow = useRef(shown);
@@ -327,7 +332,14 @@ export function ThreadComposer({
         running: waiting,
         busy: held,
         agent: chat && threadContextAgent(chat),
-        lastSent: lastComposerSettings(history.data, root?.id),
+        lastSent:
+          (setup &&
+            lastComposerSettings({
+              ...history.data!,
+              messages: setup.messages,
+              lastInput: undefined,
+            })) ??
+          lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
@@ -365,7 +377,6 @@ export function ThreadComposer({
               project={project}
               worktree={worktree}
               disabled={busy}
-              onStartThread={onStartThread}
             />
           ) : (
             <WorkspaceControl
@@ -398,8 +409,11 @@ export function ThreadComposer({
         </>
       }
       below={
-        chat &&
-        liveAway(chat) && <LiveAwayLine chat={chat} onError={setError} />
+        chat && liveAway(chat) ? (
+          <LiveAwayLine chat={chat} onError={setError} />
+        ) : chat && inSetup(chat) ? (
+          <SetupLine chat={chat} onError={setError} />
+        ) : undefined
       }
       notice={({ sendGoal }) =>
         chat ? (

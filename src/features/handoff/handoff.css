@@ -33,21 +33,6 @@
 .handoff-target-text small:empty {
   display: none;
 }
-/* A failed clone's error gets two lines, its whole text on hover. */
-.handoff-target-text small[title] {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-/* The agent offered after a failed clone sits under that computer's name. */
-.handoff-menu .composer-select-item.handoff-setup {
-  padding-left: 34px;
-}
-.handoff-setup > svg {
-  color: var(--muted);
-}
 .handoff-menu-note {
   margin: 4px 10px 6px;
   color: var(--muted);
@@ -158,6 +143,44 @@
 .handoff-live > button:hover:not(:disabled) {
   color: var(--text);
   text-decoration: underline;
+}
+/* A thread waiting on its setup there: what else it can do meanwhile. */
+.handoff-live .setup-actions {
+  display: flex;
+  flex: none;
+  gap: 14px;
+  margin-left: auto;
+  overflow: visible;
+}
+.handoff-live .setup-actions button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.handoff-live .setup-actions button:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+.handoff-live .setup-actions button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.setup-folder input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.setup-folder .setup-missing {
+  flex: none;
+  color: var(--danger);
 }
 /* A new thread starting on another computer: what stays behind here. */
 .start-on-note {

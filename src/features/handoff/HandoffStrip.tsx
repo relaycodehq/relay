@@ -3,7 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import { liveAway, type HandoffView } from "../../../shared/handoff";
+import {
+  inSetup,
+  liveAway,
+  type HandoffView,
+} from "../../../shared/handoff";
 import { liveLabel } from "../../../shared/activity-labels";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
@@ -16,6 +20,8 @@ import "./handoff.css";
 /** The composer's placeholder while the thread is elsewhere, or on its way. */
 export function awayPlaceholder(chat: ChatSummary) {
   const { sentTo, cameFrom } = chat;
+  if (inSetup(chat))
+    return `Answer the setup on ${sentTo!.computer}…`;
   if (sentTo?.state === "sending")
     return sentTo.error
       ? "The handoff didn't finish. Try again, or keep the thread here."
@@ -62,6 +68,15 @@ function handoffLine(view: HandoffView): {
           : `Couldn't hand off to ${where}`,
       detail: sentTo.error,
       failed: true,
+    };
+  if (sentTo.state === "sending" && view.cloning)
+    return {
+      title: `Handing off to ${where}`,
+      detail: `cloning the project there first · ${view.cloning.step}${
+        view.cloning.progress == null
+          ? ""
+          : ` ${Math.round(view.cloning.progress * 100)}%`
+      }`,
     };
   if (sentTo.state === "sending")
     return {
@@ -117,7 +132,9 @@ export function HandoffStrip({
   });
   const data = view.data;
   // The summary catches up once the handoff settles, or ends.
-  const phase = data ? `${data.sentTo.state}:${!!data.sentTo.error}` : "here";
+  const phase = data
+    ? `${data.sentTo.state}:${!!data.sentTo.error}:${!!data.sentTo.setup}`
+    : "here";
   const seen = useRef(phase);
   useEffect(() => {
     if (seen.current === phase) return;

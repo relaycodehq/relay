@@ -372,8 +372,10 @@ export class RemoteServer {
       }
       c.alive = false;
       c.socket.ping();
-      if (c.deviceId)
+      if (c.deviceId) {
         this.send(c, { t: "tick", hosts: this.options.hosts?.() });
+        void this.options.devices.seen(c.deviceId);
+      }
     }
   }
   /** The bytes it took on the wire. */

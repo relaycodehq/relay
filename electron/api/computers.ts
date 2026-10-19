@@ -26,8 +26,11 @@ export function computerHandlers(ctx: ApiContext) {
     startTargets: takes([idSchema], (projectId) =>
       handoffs().sender.startTargets(projectId),
     ),
-    cloneOnComputer: takes([idSchema, idSchema], (computerId, projectId) =>
-      handoffs().sender.cloneOn(computerId, projectId),
+    setupFolder: takes([idSchema, z.string().trim().min(1).max(4096)], (chatId, folder) =>
+      handoffs().sender.setupFolder(chatId, folder),
+    ),
+    startThreadHere: takes([idSchema], (chatId) =>
+      handoffs().sender.startHere(chatId),
     ),
     startProjectChatOn: takes(
       [idSchema, projectChatSendSchema, idSchema],
