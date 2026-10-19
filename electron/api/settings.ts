@@ -280,6 +280,16 @@ export function settingsHandlers(ctx: ApiContext) {
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),
     ),
+    installAgent: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) => {
+        if (computerId)
+          return remoteProjects(ctx).ask(computerId, "installAgent", provider);
+        // How it went lands in the agent's own `update`.
+        void agentUpdates.update(provider).catch(() => {});
+        return agentUpdates.current;
+      },
+    ),
     linkAgent: takes(
       [agentProviderSchema, typedPathSchema],
       async (agent, typed) => {

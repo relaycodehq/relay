@@ -681,6 +681,15 @@ export interface Api
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
   /**
+   * Starts installing a missing agent CLI (or updating one) without waiting
+   * for it, here or with `computerId` on that paired computer; `agentVersions`
+   * follows it.
+   */
+  installAgent(
+    provider: AgentProvider,
+    computerId?: string,
+  ): Promise<AgentVersions>;
+  /**
    * Links an agent's CLI if it says its version: the program at `path`, or
    * one chosen in a file dialog when it's left out. Null if cancelled.
    */

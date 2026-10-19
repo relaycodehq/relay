@@ -1,12 +1,18 @@
 import { useState } from "react";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Download } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cantRun,
+  isUpdating,
   notLookedFor,
   type AgentVersion,
+  type AgentVersions,
 } from "../../../shared/agent-updates";
-import { agentInfo, type AgentProvider } from "../../../shared/agents";
+import {
+  agentInfo,
+  isCliProvider,
+  type AgentProvider,
+} from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { openSettings } from "../../lib/settings-page";
 import { prefillSignIn } from "../terminal/thread-terminals";
@@ -61,7 +67,11 @@ function LocalAgentMissing({
   );
 }
 
-/** Its agents are installed and signed in there, in its terminal; this one can only look again. */
+/**
+ * Its agents are installed and signed in there. A missing CLI Relay there
+ * installs into its own folder on Install; anything else it can only look
+ * at again.
+ */
 function ComputerAgentMissing({
   provider,
   computer,
@@ -87,14 +97,31 @@ function ComputerAgentMissing({
     },
     staleTime: 60_000,
     retry: false,
+    // While it installs there, how it's going.
+    refetchInterval: (query) =>
+      mineIn(query.state.data, provider) &&
+      isUpdating(mineIn(query.state.data, provider)!)
+        ? 2000
+        : false,
   });
   const [checking, setChecking] = useState(false);
-  const agent = versions.data?.agents.find(
-    (a: AgentVersion) => a.provider === provider,
-  );
+  const agent = mineIn(versions.data, provider);
+  const installing = !!agent && isUpdating(agent);
+  const failed =
+    agent?.update?.status === "failed" && !agent.path
+      ? agent.update.message
+      : undefined;
+  const cli = agentInfo(provider)?.cli ?? provider;
   const reason = versions.isError
     ? `Couldn't ask ${computer.name} which agents it has.`
-    : agent && cantRun(agent, computer.name);
+    : installing
+      ? `Installing ${cli} on ${computer.name}…`
+      : failed
+        ? `Couldn't install ${cli} on ${computer.name}: ${failed}`
+        : agent && cantRun(agent, computer.name);
+  // A CLI that isn't there at all; one that is but won't run is the user's to fix.
+  const installable =
+    !!agent && isCliProvider(agent.provider) && !agent.path && !installing;
   if (!reason)
     return agent && provider !== "message" ? (
       <ComputerSignedOut
@@ -114,16 +141,43 @@ function ComputerAgentMissing({
       setChecking(false);
     }
   }
+  async function install(agent: AgentVersion) {
+    try {
+      qc.setQueryData(
+        queryKey,
+        await api.installAgent(agent.provider, computer.id),
+      );
+    } catch {
+      await versions.refetch();
+    }
+  }
   return (
-    <div className="agent-missing-notice" role="status">
-      <CircleAlert size={14} aria-hidden />
+    <div
+      className={`agent-missing-notice${installing ? " busy" : ""}`}
+      role="status"
+    >
+      {installing ? (
+        <Download size={14} aria-hidden />
+      ) : (
+        <CircleAlert size={14} aria-hidden />
+      )}
       <span>{reason}</span>
-      <button type="button" disabled={checking} onClick={checkAgain}>
-        {checking ? "Checking…" : "Check again"}
-      </button>
+      {installable && (
+        <button type="button" onClick={() => void install(agent)}>
+          Install
+        </button>
+      )}
+      {!installing && (
+        <button type="button" disabled={checking} onClick={checkAgain}>
+          {checking ? "Checking…" : "Check again"}
+        </button>
+      )}
     </div>
   );
 }
+
+const mineIn = (versions: AgentVersions | undefined, provider: string) =>
+  versions?.agents.find((a: AgentVersion) => a.provider === provider);
 
 /**
  * The agent is there but signed out. Its login is that computer's own: the

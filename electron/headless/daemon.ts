@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { AgentHosts } from "../agent-host/client";
 import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "../agents";
 import {
@@ -116,6 +116,12 @@ const fetcher = (url: string | URL | Request, init?: RequestInit) =>
 
 /** Starts everything and resolves once Relay is answering; exits the process when stopped. */
 export async function runDaemon({ home, port, name }: DaemonOptions) {
+  // The Node it runs on comes first on its PATH: the npm that installs agents
+  // into agent-clis, and the `#!/usr/bin/env node` CLIs that puts there, run
+  // on it too instead of an older one the system has (Ubuntu 22.04's is 12).
+  process.env.PATH = [dirname(process.execPath), process.env.PATH]
+    .filter(Boolean)
+    .join(delimiter);
   const paths = headlessPaths(home);
   const startedAt = Date.now();
   const releaseHome = await claimHome(paths.pid);
