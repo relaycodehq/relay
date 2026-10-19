@@ -187,9 +187,13 @@ export class AgentAccounts {
     const flow = await startSignIn(provider, accountEnv(provider, id));
     this.signIn = { ...flow, provider, id, label };
     this.signInError = null;
+    console.info(`[sign-in] ${provider} ${id}: started`);
     void flow.done
       .then(async () => {
         const { signedIn } = await readIdentity(provider, id);
+        console.info(
+          `[sign-in] ${provider} ${id}: the CLI finished${signedIn ? "" : ", but saved no account"}`,
+        );
         if (!signedIn) throw new Error("The sign-in didn't save an account.");
         if (fresh)
           await this.store.update((s) => {
@@ -199,6 +203,7 @@ export class AgentAccounts {
           });
       })
       .catch(async (e: Error) => {
+        console.warn(`[sign-in] ${provider} ${id}: ${e.message}`);
         this.signInError =
           e.message === "Sign-in cancelled." ? null : e.message;
         if (fresh) await removeProfile(provider, id).catch(() => {});

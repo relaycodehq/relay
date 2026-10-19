@@ -1,7 +1,8 @@
 import type { SDKControlGetUsageResponse } from "@anthropic-ai/claude-agent-sdk";
 import { withTimeout } from "../../../util/timeout";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
-import { signedInAs } from "../../accounts";
+import { accountHome, signedInAs } from "../../accounts";
+import { noteClaudeSignIn } from "../auth-trace";
 import { withProbe, type ClaudeStream } from "./sdk";
 import { sessions } from "./session";
 
@@ -20,6 +21,12 @@ export async function readClaudeUsage(
   if (live) {
     try {
       const usage = await usageFrom(live.stream, 5000);
+      noteClaudeSignIn(
+        account,
+        !!usage,
+        "usage, thread session",
+        accountHome("claude", account),
+      );
       // Sessions left running for hours stop reporting the plan's limits.
       if (!usage || usage.rate_limits_available) return usage;
     } catch {
@@ -28,9 +35,14 @@ export async function readClaudeUsage(
   }
   // This account's own, even one that's gone: never another's limits.
   const env = await signedInAs("claude", account);
-  return withProbe({ settingSources: ["user"], env }, (stream) =>
-    usageFrom(stream, 20000),
+  const usage = await withProbe(
+    { settingSources: ["user"], env },
+    (stream) => usageFrom(stream, 20000),
+    "usage",
+    account,
   );
+  noteClaudeSignIn(account, !!usage, "usage", accountHome("claude", account));
+  return usage;
 }
 async function usageFrom(stream: ClaudeStream, ms: number) {
   const ask = async () => {

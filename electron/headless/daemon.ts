@@ -7,7 +7,12 @@ import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
 import { join } from "node:path";
 import { AgentHosts } from "../agent-host/client";
-import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "../agents";
+import {
+  hostAgents,
+  loadRegistryAgents,
+  setOpenCodeEnvRoot,
+  watchSavedSignIns,
+} from "../agents";
 import {
   AgentAccounts,
   accountHomes,
@@ -164,7 +169,8 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   configureAntigravity({ root: join(home, "antigravity"), fetch: fetcher });
   const acpAgents = new AcpRegistry(join(home, "acp-agents"), fetcher);
   configureAcpRegistry(acpAgents);
-  const agentAccounts = new AgentAccounts(store, () => {});
+  const agentAccounts = new AgentAccounts(store, () => watchSavedSignIns());
+  watchSavedSignIns();
   applyLinkedTools(store);
   void gitExecutable().catch(() => {});
   const login = new GiteaLogin(teaTokenFor);

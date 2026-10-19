@@ -7,6 +7,7 @@ import { findExecutable } from "../../../platform/executables";
 import { claudeDefaultsFrom } from "../../../../shared/agent-defaults";
 import { AsyncQueue } from "../../../util/async-queue";
 import { runAccount } from "../../accounts";
+import { traceProbe } from "../auth-trace";
 import type { AgentOptions } from "../../types";
 
 export async function sdk(): Promise<
@@ -37,25 +38,33 @@ export async function readSettings(stream: ClaudeStream) {
 }
 // SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
 export const chromeArgs = { chrome: null };
-/** Runs `work` on a throwaway Claude session with no prompt and no MCP servers; closed after. */
+/**
+ * Runs `work` on a throwaway Claude session with no prompt and no MCP servers;
+ * closed after. `kind` and `account` name it in what `main.log` says about
+ * its sign-in.
+ */
 export async function withProbe<T>(
   options: Partial<Options>,
   work: (stream: ClaudeStream) => Promise<T>,
+  kind = "probe",
+  account?: string,
 ): Promise<T> {
-  const [{ query }, executable, account] = await Promise.all([
+  const [{ query }, executable, running] = await Promise.all([
     sdk(),
     findExecutable("claude"),
     // Models and defaults are the account in use's, unless told whose.
     options.env ? undefined : runAccount("claude"),
   ]);
   const input: ClaudeInput = new AsyncQueue();
+  const trace = traceProbe(kind, account ?? running?.id);
   const stream = query({
     prompt: input,
     options: {
       pathToClaudeCodeExecutable: executable,
       strictMcpConfig: true,
       mcpServers: {},
-      env: account?.env,
+      env: running?.env,
+      debugFile: trace.debugFile,
       ...options,
     },
   });
@@ -64,6 +73,7 @@ export async function withProbe<T>(
   } finally {
     input.close();
     stream.close();
+    trace.closed();
   }
 }
 /** A prompt's screenshots, as the image blocks of a user message. */
