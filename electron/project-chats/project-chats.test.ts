@@ -798,6 +798,11 @@ const answeredLongAgo = async (cacheAge: number) => {
   );
   return chat;
 };
+/** Settings → Compaction with both switches on; unset is both off. */
+const compactUnasked = () =>
+  store.update((s) => {
+    s.autoCompact = { idle: true, cold: true };
+  });
 const shape = async (id: string) =>
   (await chats.get(id)).messages.map((m) =>
     m.compaction
@@ -805,6 +810,7 @@ const shape = async (id: string) =>
       : `${m.role}:${m.body.slice(0, 12)}`,
   );
 it("compacts a big conversation whose cache went cold before the next message", async () => {
+  await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);
   await chats.send(chat.id, input("@codex Go on"));
   await vi.waitFor(
@@ -846,6 +852,12 @@ it("sends to a cold cache as Settings say, unless the message asks otherwise", a
       },
       { timeout: 10_000 },
     );
+  const unset = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(unset.id, input("@codex Go on"));
+  await answers(unset.id);
+  expect(await shape(unset.id)).not.toContain("compaction (cold)");
+
+  await compactUnasked();
   const asIs = await answeredLongAgo(2 * 60 * 60_000);
   await chats.send(asIs.id, { ...input("@codex Go on"), compact: false });
   await answers(asIs.id);
@@ -871,6 +883,7 @@ it("sends to a cold cache as Settings say, unless the message asks otherwise", a
   ]);
 });
 it("compacts a big unread conversation just before its cache goes cold, without bumping the thread", async () => {
+  await compactUnasked();
   const chat = await answeredLongAgo(57 * 60_000);
   const before = await chats.get(chat.id);
   chats.armWakeups();
@@ -904,6 +917,7 @@ const turnsAsking = async (body: string) =>
 it("sends the message anyway when compacting the cold conversation fails", async () => {
   vi.stubEnv("RELAY_FIXTURE_COMPACT_FAILS", "1");
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);
   await chats.send(chat.id, input("@codex Go on"));
   await vi.waitFor(
@@ -932,6 +946,7 @@ it("sends the message anyway when compacting the cold conversation fails", async
   ).toBe(true);
 });
 it("holds the message back when the cold conversation's compaction is stopped", async () => {
+  await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);
   // The send returns once the compaction has started, with the message queued behind it.
   await chats.send(chat.id, input("@codex Go on"));

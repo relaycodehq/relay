@@ -30,7 +30,7 @@ interface State {
   keepAwake?: boolean;
   /** Look for newer agent releases every few hours and offer them under the sidebar; unset is on. */
   agentUpdateChecks?: boolean;
-  /** When big conversations compact unasked; unset is both on. */
+  /** When big conversations compact unasked; unset is both off. */
   autoCompact?: import("../../shared/context-usage").AutoCompact;
   /** Sounds for threads that finish, need you or fail; unset plays nothing. */
   sounds?: import("../../shared/sounds").SoundSettings;
