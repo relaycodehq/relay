@@ -24,10 +24,13 @@ export function useChatThread(
     // Events for a thread that isn't open are ignored, so a cached copy can
     // still say "streaming" after the answer ended; the patch is cheap.
     refetchOnMount: "always",
+    // A setup's approvals come with the thread, not with its messages' events.
     refetchInterval: (query) =>
       query.state.data?.queue?.length ||
       (chat?.sentTo && query.state.data?.outbox?.length) ||
-      query.state.data?.messages.some((m) => m.status === "streaming")
+      query.state.data?.messages.some((m) => m.status === "streaming") ||
+      (query.state.data?.setup?.state === "agent" &&
+        query.state.data.setup.messages.some((m) => m.status === "streaming"))
         ? 1000
         : false,
   });

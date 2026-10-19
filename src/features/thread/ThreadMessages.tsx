@@ -245,7 +245,12 @@ export function ThreadMessages({
       void qc.invalidateQueries({ queryKey: chatKey(chat.id), exact: true });
   }, [setupMark]);
   const setup = root ? undefined : history.data?.setup;
-  const setupAfter = setup && history.data!.messages[setup.after - 1]?.id;
+  // Under the main conversation's last message before it; a side reply isn't on screen.
+  const setupAfter =
+    setup &&
+    history
+      .data!.messages.slice(0, setup.after)
+      .findLast((m) => listed.some((l) => l.id === m.id))?.id;
   /** Queued and scheduled messages wait in the conversation they were sent in, main or side. */
   const inView = (waiting: { input: { parentId?: string | null } }) =>
     (waiting.input.parentId ?? null) === (root?.id ?? null);
