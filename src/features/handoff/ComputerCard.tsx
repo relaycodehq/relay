@@ -153,7 +153,7 @@ export function ComputerCard({
           </>
         ) : (
           <button
-            className="cm-text-button quiet"
+            className="cm-text-button quiet forget"
             onClick={() => setConfirming(true)}
           >
             Forget this computer

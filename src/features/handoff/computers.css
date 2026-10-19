@@ -144,6 +144,42 @@ button.cm-node {
   height: 6px;
   margin-right: 5px;
 }
+/* Many computers: a slim row each, name, threads, dot. */
+.cm-slim {
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.cm-slim > svg {
+  flex: none;
+  color: var(--muted);
+}
+.cm-slim b {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-slim small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-slim .cm-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+}
+.cm-map.dense .cm-node.add {
+  border-radius: 8px;
+  font-size: 12.5px;
+}
 /* This computer is where the wires start: its tile wears the accent. */
 .cm-node.self .cm-tile {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
@@ -346,6 +382,14 @@ em.waiting {
 .cm-text-button.quiet {
   padding: 4px 6px;
 }
+/* Forgetting unpairs it: red before it asks, bold once it does. */
+.cm-text-button.forget,
+.cm-text-button.forget:hover:not(:disabled) {
+  color: var(--danger);
+}
+.cm-text-button.forget:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
 .cm-nothing {
   display: flex;
   align-items: center;
@@ -372,149 +416,248 @@ em.waiting {
   padding-left: 6px;
 }
 
-/* Adding one: the steps, then the paste box. */
-.cm-steps {
-  margin: 0;
-  padding: 6px 0;
-  list-style: none;
+/* Adding one: say where, then the checkup under it. */
+.cm-add {
+  padding: 14px 16px 16px;
 }
-.cm-steps li {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 10px 16px;
-}
-.cm-steps li > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cm-steps b {
-  font-weight: 500;
-}
-.cm-steps small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.cm-steps em {
-  font-style: normal;
-  color: var(--text);
-}
-.cm-step-mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  box-sizing: border-box;
-  border: 1.5px solid color-mix(in srgb, var(--border) 60%, var(--muted));
-  border-radius: 50%;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-.cm-steps li.done .cm-step-mark {
-  border-color: var(--cm-on);
-  background: var(--cm-on);
-  color: #fff;
-}
-.cm-grow {
-  flex: 1;
-  min-width: 0;
-}
-/* SSH and WSL, under the Tailscale steps. */
-.cm-pipe {
-  margin-top: 12px;
-}
-.cm-pipe-head {
-  padding: 12px 16px 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-}
-.cm-paste {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-.cm-paste input {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-}
-/* No Relay where it went: offered to install, then how that's going. */
-.cm-install {
+.cm-add-ask {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 16px 14px;
-  padding: 8px 10px 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--toolbar);
-  font-size: 12.5px;
 }
-.cm-install > svg {
-  flex: none;
-  color: var(--muted);
+.cm-add-ask label {
+  font-size: 13px;
+  font-weight: 500;
 }
-.cm-install > span {
+.cm-add-ask input {
   flex: 1;
   min-width: 0;
+  font: 12px var(--font-mono);
 }
-.cm-install button {
+.cm-add-ask button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cm-add-error {
+  margin: 8px 0 0 38px;
+  color: var(--danger);
+  font-size: 12px;
+}
+.cm-add-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.cm-add-hints button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  font: 11.5px var(--font-mono);
+}
+.cm-add-hints button:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+.cm-add-hints .cm-add-more {
+  color: var(--accent);
+  font-family: inherit;
+}
+.cm-add-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.cm-add-note em {
+  font-style: normal;
+  color: var(--text);
+}
+.cm-add-end {
+  display: flex;
+  gap: 8px;
+  padding-left: 35px;
+}
+/* The checkup: a line a step, joined down the left. */
+.cm-check-lines {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.cm-check-lines li {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 0 0 16px;
+  font-size: 12.5px;
+}
+.cm-check-lines li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  bottom: 2px;
+  left: 11px;
+  width: 1px;
+  background: var(--border);
+}
+.cm-check-lines li.todo {
+  color: var(--muted);
+}
+.cm-check-lines li > div {
+  min-width: 0;
+  padding-top: 3px;
+  overflow-wrap: anywhere;
+}
+.cm-check-mark {
+  display: grid;
   flex: none;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted);
+}
+.cm-check-lines li.ok .cm-check-mark {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--cm-on) 16%, transparent);
+  color: var(--cm-on);
+}
+.cm-check-lines li.fix .cm-check-mark {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+.cm-check-fix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  color: var(--muted);
+}
+.cm-check-fix button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 10px;
   font-size: 12px;
 }
-/* The hosts from ~/.ssh/config, under the field as it's typed in. */
-.cm-ssh-hosts {
-  width: var(--anchor-width);
-  max-height: min(var(--available-height), 260px);
-  padding: 4px;
-  overflow-y: auto;
+.cm-check-fix code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-background);
+  font: 11.5px var(--font-mono);
+}
+/* Everything it could add, by where it came from. */
+.cm-host-list {
+  position: relative;
+  margin-top: 12px;
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 12px 30px -14px #0009;
-  outline: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--toolbar) 60%, transparent);
 }
-.cm-ssh-hosts:has([role="listbox"]:empty) {
-  display: none;
+.cm-host-scroll {
+  max-height: 300px;
+  padding: 4px 6px 6px;
+  overflow-y: auto;
 }
-.cm-ssh-hosts [role="option"] {
+.cm-host-scroll section + section {
+  margin-top: 4px;
+}
+/* Lined up with the rows' icons under it. */
+.cm-host-label {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 5px;
-  cursor: default;
-  font-size: 12px;
-}
-.cm-ssh-hosts [role="option"][data-highlighted] {
-  background: var(--hover);
-}
-.cm-ssh-hosts b {
-  font-family: var(--font-mono);
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  line-height: 30px;
+  color: var(--muted);
+  font-size: 11px;
   font-weight: 500;
 }
-.cm-ssh-hosts small {
+.cm-host-label span {
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+.cm-host-close {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+}
+.cm-host-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.cm-host-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 2px 6px;
+}
+.cm-host-grid button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+}
+.cm-host-grid button > svg {
+  flex: none;
+  color: var(--muted);
+}
+.cm-host-grid b {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  font: 500 12px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-host-grid small {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-family: var(--font-mono);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cm-ssh-hosts em {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 11px;
-  font-style: normal;
+.cm-host-grid button[aria-selected="true"] {
+  background: var(--hover);
 }
-
+.cm-host-grid button[aria-selected="true"] > svg {
+  color: var(--text);
+}
+.cm-host-none,
+.cm-host-hidden {
+  margin: 6px 10px 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.cm-host-none code {
+  font: 11.5px var(--font-mono);
+}
 /* Taking threads over. */
 .cm-row {
   display: flex;

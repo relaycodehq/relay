@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/validation";
 import { computerRouteSchema } from "../../shared/handoff";
-import { wslDistros } from "../handoff/pipe-route";
+import { checkRoute, wslDistros } from "../handoff/pipe-route";
 import { sshHosts } from "../handoff/ssh-hosts";
 import { installOutput, installRelayOver } from "../handoff/install-over";
 import { projectChatSendSchema } from "../../shared/projects";
@@ -20,6 +20,7 @@ export function computerHandlers(ctx: ApiContext) {
     pairComputer: takes([z.string().max(2000)], (link) =>
       handoffs().computers.pair(link),
     ),
+    checkComputer: takes([computerRouteSchema], (route) => checkRoute(route)),
     connectComputer: takes([computerRouteSchema], (route) =>
       handoffs().computers.pairOver(route),
     ),

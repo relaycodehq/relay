@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
 import { AddComputer } from "./AddComputer";
-import { ConnectOverPipe } from "./ConnectOverPipe";
 import { ComputerCard } from "./ComputerCard";
 import { MapDiagram } from "./MapDiagram";
 import "./computers.css";
@@ -24,7 +23,7 @@ export function ComputersMap({
     refetchInterval: 3000,
   });
   const [picked, setPicked] = useState<string>();
-  // Bumped by the Add box, so it lands in the link field even when it shows.
+  // Bumped by the Add box, so it lands in the field even when it shows.
   const [addFocus, setAddFocus] = useState(0);
   const data = overview.data;
   const computers = data?.computers ?? [];
@@ -46,19 +45,21 @@ export function ComputersMap({
       )}
       {data && (
         <div className="cm-detail">
-          {current ? (
+          {current && (
             <ComputerCard
               key={current.id}
               computer={current}
               onOpenChat={onOpenChat}
               onForgot={() => setPicked(undefined)}
             />
-          ) : (
-            <>
-              <AddComputer onPaired={setPicked} focusRequest={addFocus} />
-              <ConnectOverPipe onPaired={setPicked} />
-            </>
           )}
+          {/* Kept while another computer shows, so a checkup or install carries on. */}
+          <div hidden={!!current}>
+            <AddComputer
+              focusRequest={addFocus}
+              onStart={() => setPicked("add")}
+            />
+          </div>
         </div>
       )}
       {!!overview.error && <ErrorBox error={overview.error} />}

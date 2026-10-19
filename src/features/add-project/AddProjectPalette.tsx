@@ -83,10 +83,13 @@ const title: Partial<Record<Page, string>> = {
 
 export function AddProjectPalette({
   projects,
+  computerId,
   onClose,
   onDone,
 }: {
   projects: readonly Project[];
+  /** Opens on the folders of this paired computer. */
+  computerId?: string;
   onClose: () => void;
   /** Added, or picked from the ones there already: start a thread in it. */
   onDone: (project: Project) => void;
@@ -177,6 +180,14 @@ export function AddProjectPalette({
     setComputer(c);
     go("computer", "~/");
   }
+  // Asked for a computer, as when it was just paired: its folders once it's known.
+  const askedFor = useRef(computerId);
+  useEffect(() => {
+    const c = paired.data?.find((p) => p.id === askedFor.current);
+    if (!c) return;
+    askedFor.current = undefined;
+    openComputer(c);
+  });
   function addThere(path: string) {
     if (!computer) return;
     setAddingThere(true);

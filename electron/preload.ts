@@ -362,6 +362,7 @@ const methods = [
   "startProjectChatOn",
   "computerFolders",
   "addRemoteProject",
+  "checkComputer",
   "connectComputer",
   "wslDistros",
   "sshHosts",

@@ -1,131 +1,204 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Check, ClipboardPaste } from "lucide-react";
-import type { ComputersOverview } from "../../../shared/handoff";
-import { tailscaleDownload } from "../../../shared/remote";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { api } from "../../lib/api";
-import { ErrorBox } from "../../ui/ui";
-import { usePhoneRemote } from "./usePhoneRemote";
+import { requestAddProject } from "../../lib/add-project-request";
+import { fromTyped, suggestions, type Target } from "./add-targets";
+import { CheckupLines } from "./CheckupLines";
+import { HostList, RouteIcon } from "./HostList";
+import { busy, useCheckup } from "./useCheckup";
+import { usePairedComputers } from "./usePairedComputers";
 
-/** Pairing from this side: Tailscale, the link on the other computer, then paste. */
+/** How many fit on the hint row before the rest go behind "more". */
+const hintCount = 6;
+
+/**
+ * Adding a computer: say where, a host this computer can ssh into, a WSL
+ * distribution or a pairing link, and a checkup reaches it, installs Relay
+ * there when it's missing, and pairs. Its agents sign in there, from the
+ * first project on it.
+ */
 export function AddComputer({
-  onPaired,
   focusRequest = 0,
+  onStart,
 }: {
-  onPaired: (id: string) => void;
-  /** Focuses the link field each time it grows. */
   focusRequest?: number;
+  /** A checkup started: the map keeps Add picked, so its end stays in view. */
+  onStart?: () => void;
 }) {
-  const qc = useQueryClient();
   const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (focusRequest) field.current?.focus();
   }, [focusRequest]);
-  const tailnet = usePhoneRemote().data?.tailnet;
+  const distros = useQuery({
+    queryKey: ["wsl-distros"],
+    queryFn: () => api.wslDistros(),
+    staleTime: 60_000,
+  });
+  const hosts = useQuery({
+    queryKey: ["ssh-hosts"],
+    queryFn: () => api.sshHosts(),
+    staleTime: 60_000,
+  });
+  const paired = usePairedComputers();
+  const { offered, hidden } = suggestions(
+    distros.data ?? [],
+    hosts.data ?? [],
+    paired.data ?? [],
+  );
+  const { checkup, check, install, again, reset } = useCheckup();
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>();
-  const pair = async (link: string) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const before = new Set(
-        qc
-          .getQueryData<ComputersOverview>(["computers-overview"])
-          ?.computers.map((c) => c.id),
-      );
-      const list = await api.pairComputer(link);
-      setText("");
-      await qc.invalidateQueries({ queryKey: ["computers-overview"] });
-      void qc.invalidateQueries({ queryKey: ["paired-computers"] });
-      const added = list.find((c) => !before.has(c.id)) ?? list.at(-1);
-      if (added) onPaired(added.id);
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const pasteAndPair = async () => {
-    const clip = (await api.readClipboard()).trim();
-    setText(clip);
-    if (clip) await pair(clip);
-  };
-  const connected = tailnet?.status === "connected";
+  const [typedError, setTypedError] = useState<string>();
+  const [listOpen, setListOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const typed = text
+    .trim()
+    .replace(/^ssh\s+/, "")
+    .toLowerCase();
+  const matching = typed
+    ? offered.filter((t) =>
+        `${t.name} ${t.detail}`.toLowerCase().includes(typed),
+      )
+    : offered;
+  const working = busy(checkup?.phase);
+
+  function start(target: Target) {
+    setText(target.kind === "route" ? target.name : target.link);
+    setListOpen(false);
+    setActive(-1);
+    setTypedError(undefined);
+    onStart?.();
+    void check(target);
+  }
+  function submit() {
+    if (working) return;
+    const picked = listOpen ? matching[active] : undefined;
+    if (picked) return start(picked);
+    const target = fromTyped(text, distros.data ?? []);
+    if (!target) return;
+    if ("error" in target) return setTypedError(target.error);
+    start(target);
+  }
+  function another() {
+    reset();
+    setText("");
+    field.current?.focus();
+  }
+
   return (
-    <div className="settings-card cm-card">
-      <ol className="cm-steps">
-        <li className={connected ? "done" : undefined}>
-          <span className="cm-step-mark">
-            {connected ? <Check size={12} strokeWidth={3} /> : 1}
-          </span>
-          <div className="cm-grow">
-            <b>Tailscale on both computers</b>
-            <small>
-              {!tailnet
-                ? "Checking…"
-                : connected
-                  ? `This one is on your tailnet${tailnet.name ? ` as ${tailnet.name}` : ""}.`
-                  : tailnet.status === "stopped"
-                    ? "Installed here, but not connected. Open Tailscale and sign in."
-                    : "Computers reach each other over Tailscale, a private network between your own devices."}
-            </small>
-          </div>
-          {tailnet?.status === "missing" && (
-            <button onClick={() => void api.openExternal(tailscaleDownload)}>
-              Get Tailscale
-            </button>
-          )}
-        </li>
-        <li>
-          <span className="cm-step-mark">2</span>
-          <div>
-            <b>On the computer that stays on</b>
-            <small>
-              Open Settings → Computers there, turn on{" "}
-              <em>Accept threads from other computers</em> and copy its link.
-            </small>
-          </div>
-        </li>
-        <li>
-          <span className="cm-step-mark">3</span>
-          <div className="cm-grow">
-            <b>Paste the link here</b>
-            <small>
-              It works once, and pins that computer's key so this one only ever
-              talks to it.
-            </small>
-            <div className="cm-paste">
-              <input
-                ref={field}
-                aria-label="Pairing link"
-                placeholder="relay-remote://pair?…"
-                spellCheck={false}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && text.trim()) void pair(text);
-                }}
-              />
-              <button
-                className={text.trim() ? "primary" : undefined}
-                disabled={busy}
-                onClick={() =>
-                  void (text.trim() ? pair(text) : pasteAndPair()).catch(
-                    setError,
-                  )
-                }
-              >
-                {!text.trim() && !busy && (
-                  <ClipboardPaste size={14} aria-hidden />
-                )}
-                {busy ? "Pairing…" : text.trim() ? "Pair" : "Paste & pair"}
+    <div className="settings-card cm-card cm-add">
+      <form
+        className="cm-add-ask"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <label htmlFor="cm-add-field">Add</label>
+        <input
+          id="cm-add-field"
+          ref={field}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder={
+            distros.data?.length
+              ? "An ssh host, a WSL distribution, or a pairing link"
+              : "A host you ssh into, user@host, or a pairing link"
+          }
+          value={text}
+          aria-invalid={!!typedError}
+          onChange={(e) => {
+            setText(e.target.value);
+            setTypedError(undefined);
+            setActive(-1);
+            setListOpen(!!e.target.value.trim());
+            if (checkup && !working) reset();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && listOpen) {
+              e.preventDefault();
+              setListOpen(false);
+            } else if (e.key === "ArrowDown" && !checkup) {
+              e.preventDefault();
+              setListOpen(true);
+              setActive((a) => Math.min(a + 1, matching.length - 1));
+            } else if (e.key === "ArrowUp" && listOpen) {
+              e.preventDefault();
+              setActive((a) => Math.max(a - 1, -1));
+            }
+          }}
+        />
+        <button
+          type="submit"
+          className="primary"
+          disabled={!text.trim() || working}
+        >
+          Check <ArrowRight size={13} aria-hidden />
+        </button>
+      </form>
+      {typedError && (
+        <p className="cm-add-error" role="alert">
+          {typedError}
+        </p>
+      )}
+      {checkup ? (
+        <>
+          <CheckupLines checkup={checkup} onInstall={install} onAgain={again} />
+          {checkup.phase === "done" && (
+            <div className="cm-add-end">
+              {checkup.paired && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => requestAddProject(checkup.paired!.id)}
+                >
+                  Add a project on {checkup.paired.name}
+                </button>
+              )}
+              <button type="button" onClick={another}>
+                Add another
               </button>
             </div>
-          </div>
-        </li>
-      </ol>
-      {!!error && <ErrorBox error={error} />}
+          )}
+        </>
+      ) : listOpen ? (
+        <HostList
+          list={matching}
+          hidden={hidden}
+          typed={text.trim()}
+          active={active}
+          onActive={setActive}
+          onPick={start}
+          onClose={() => setListOpen(false)}
+        />
+      ) : (
+        <>
+          {!!offered.length && (
+            <div className="cm-add-hints">
+              {offered.slice(0, hintCount).map((t) => (
+                <button key={t.name} type="button" onClick={() => start(t)}>
+                  <RouteIcon route={t.route} /> {t.name}
+                </button>
+              ))}
+              {offered.length > hintCount && (
+                <button
+                  type="button"
+                  className="cm-add-more"
+                  onClick={() => setListOpen(true)}
+                >
+                  {offered.length - hintCount} more{" "}
+                  <ChevronDown size={12} aria-hidden />
+                </button>
+              )}
+            </div>
+          )}
+          <p className="cm-add-note">
+            Over Tailscale instead? On the other computer, turn on{" "}
+            <em>Accept threads from other computers</em> in Settings → Computers
+            and paste its link here.
+          </p>
+        </>
+      )}
     </div>
   );
 }

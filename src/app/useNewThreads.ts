@@ -48,9 +48,12 @@ export function useNewThreads(
   const [picking, setPicking] = useState(false);
   /** The add-project palette shows. */
   const [adding, setAdding] = useState(false);
-  function addProject() {
+  /** The paired computer the palette opens on, when asked for one. */
+  const [addingOn, setAddingOn] = useState<string>();
+  function addProject(computerId?: string) {
     if (lock.blocked()) return;
     setPicking(false);
+    setAddingOn(computerId);
     setAdding(true);
   }
   /** The palette added a project, or picked one there already: a new thread in it. */
@@ -153,6 +156,7 @@ export function useNewThreads(
     picking,
     setPicking,
     adding,
+    addingOn,
     setAdding,
     addProject,
     added,

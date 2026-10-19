@@ -8,7 +8,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createServer, type AddressInfo, type Server } from "node:net";
 import { promisify } from "node:util";
-import type { ComputerRoute } from "../../shared/handoff";
+import type { ComputerRoute, RouteCheck } from "../../shared/handoff";
 
 const run = promisify(execFile);
 
@@ -142,6 +142,53 @@ export async function pairingLink(
     if (stderr !== undefined && typeof code !== "string")
       throw new Error(failure(route, stderr, code ?? null));
     throw e;
+  }
+}
+
+// The installer's link first, as a login shell's PATH may not have it. The
+// line itself says what it found, so a failing exit is always the route's.
+const versionLine = [
+  `r=${remoteRelay}`,
+  'if [ ! -x "$r" ]; then r=$(command -v relay) || { echo relay-missing; exit 0; }; fi',
+  'if out=$("$r" --version 2>&1); then echo "relay $out"',
+  'else echo "relay-broken $(printf "%s\\n" "$out" | tail -n 1)"; fi',
+].join("; ");
+
+/**
+ * Reaches the computer the route goes to and asks its Relay for its version,
+ * so a checkup can say what's missing before pairing tries.
+ */
+export async function checkRoute(
+  route: ComputerRoute,
+  shell = routeShell,
+): Promise<RouteCheck> {
+  const [file, args] = shell(route, versionLine);
+  const started = Date.now();
+  try {
+    const { stdout } = await run(file, args, {
+      timeout: 30_000,
+      windowsHide: true,
+    });
+    const ms = Date.now() - started;
+    // A shell startup file may print before it; the answer is the last line.
+    const said = lastLine(stdout) ?? "";
+    if (said === "relay-missing") return { ms, relay: null };
+    const broken = /^relay-broken ?(.*)$/.exec(said);
+    if (broken)
+      return { ms, relay: "", broken: broken[1] || "It doesn't start." };
+    return { ms, relay: said.replace(/^relay v?/, "") };
+  } catch (e) {
+    const { stderr, code, killed } = e as {
+      stderr?: string;
+      code?: number | string;
+      killed?: boolean;
+    };
+    if (code === "ENOENT") throw new Error(missing(route));
+    if (killed)
+      throw new Error(`${routeName(route)} didn't answer within 30s.`);
+    throw new Error(
+      failure(route, stderr ?? "", typeof code === "number" ? code : null),
+    );
   }
 }
 

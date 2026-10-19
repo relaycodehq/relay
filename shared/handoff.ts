@@ -442,6 +442,14 @@ export interface SshHost {
   hostName?: string;
   user?: string;
 }
+/** What reaching a computer over its route found: how fast, and which Relay is there. */
+export interface RouteCheck {
+  ms: number;
+  /** Its version; null when there's no Relay there. */
+  relay: string | null;
+  /** Why the Relay there doesn't start, as with a Node.js too old for it. */
+  broken?: string;
+}
 export type ComputerRoute =
   { kind: "ssh"; host: string } | { kind: "wsl"; distro: string };
 export const computerRouteSchema = z.discriminatedUnion("kind", [
@@ -544,6 +552,8 @@ export interface ComputersApi {
   computersOverview(): Promise<ComputersOverview>;
   /** Pairs with the link another computer shows under Settings → Computers. */
   pairComputer(link: string): Promise<PairedComputer[]>;
+  /** Reaches the computer a route goes to and says which Relay is there. */
+  checkComputer(route: ComputerRoute): Promise<RouteCheck>;
   /** Pairs with the Relay a route reaches, over SSH or into WSL. */
   connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
   /** The WSL distributions on this computer; none off Windows. */

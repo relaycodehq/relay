@@ -3,7 +3,9 @@ export const mapW = 600,
   selfW = 168,
   nodeW = 214,
   nodeH = 62,
-  addH = 42;
+  addH = 42,
+  /** A computer's slim row once there are many. */
+  rowH = 34;
 const gap = 12,
   pad = 22;
 
