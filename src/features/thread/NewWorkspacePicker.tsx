@@ -9,7 +9,11 @@ import {
   GitBranch,
   GitBranchPlus,
 } from "lucide-react";
-import type { ChatWorkspace, Project } from "../../../shared/projects";
+import {
+  threadOnBranch,
+  type ChatWorkspace,
+  type Project,
+} from "../../../shared/projects";
 import type { HandoffTarget } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
@@ -67,6 +71,12 @@ export function NewWorkspacePicker({
     queryKey: ["project-branches", project.id],
     queryFn: () => api.projectBranches(project.id),
     enabled: !!picking || !!start,
+  });
+  // Branches kept for other threads' worktrees aren't free to carry on.
+  const chats = useQuery({
+    queryKey: ["project-chats", project.id],
+    queryFn: () => api.projectChats(project.id),
+    enabled: picking === "on",
   });
   const counts = useQuery({
     queryKey: ["project-branch-counts", project.id],
@@ -275,7 +285,10 @@ export function NewWorkspacePicker({
           picking && branches.data
             ? branchOptions(
                 picking === "on"
-                  ? carryOnNames(branches.data)
+                  ? carryOnNames(
+                      branches.data,
+                      (b) => !!threadOnBranch(chats.data ?? [], b),
+                    )
                   : branchOffNames(branches.data),
                 branches.data,
                 counts.data,

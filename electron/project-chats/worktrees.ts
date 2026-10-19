@@ -51,6 +51,25 @@ export interface WorktreeRequest {
 }
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
+/**
+ * What a worktree gone with its branch is made again from. One that carried
+ * on a branch gets a `relay/…` one of its own, named after the thread, not
+ * after the folder the lost branch named; one made off a branch goes off it
+ * again.
+ */
+function regrown(worktree: ChatWorktree): ChatWorktree {
+  if (worktree.existing)
+    return {
+      ...worktree,
+      path: undefined,
+      named: undefined,
+      existing: undefined,
+    };
+  if (worktree.startedOff)
+    return { ...worktree, startFrom: { off: worktree.startedOff } };
+  return worktree;
+}
+
 export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
   private refreshed = new Map<string, { at: number; pending: Promise<void> }>();
@@ -107,7 +126,11 @@ export class ThreadWorktrees {
   }
 
   /** Where a thread's agent works: its worktree, made with its first message, the reviewed code's for a review, or the checkout. */
-  async root(chat: ProjectChat, prompt?: string): Promise<string> {
+  async root(
+    chat: ProjectChat,
+    prompt?: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
     const review = await this.councils.root(chat);
     if (review) return review;
     const root = await this.core.projects.root(chat.projectId);
@@ -129,10 +152,8 @@ export class ThreadWorktrees {
         root,
         this.folder,
         promptTitle(prompt ?? chat.title),
-        // Gone, so a branch of its own instead, which the move note names.
-        worktree.existing
-          ? { ...worktree, named: undefined, existing: undefined }
-          : worktree,
+        regrown(worktree),
+        signal,
       ));
     // Only a branch Relay picked waits for the title; the user's keeps its name.
     if (first && !chat.worktree.named) this.unnamed.add(chat.id);

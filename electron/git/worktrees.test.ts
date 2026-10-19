@@ -278,6 +278,49 @@ it("says before the thread starts when its branch can't be used", async () => {
   expect(await worktreeStartProblem(root, { off: "feature" })).toBeUndefined();
 });
 
+it("refuses a remote branch whose local name clashes, and one another thread keeps", async () => {
+  await remoteAhead("release");
+  git(root, "branch", "release/1.0");
+  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
+    "There's a branch called release/1.0, so release can't be made.",
+  );
+  branchAhead("feature");
+  expect(
+    await worktreeStartProblem(root, { on: "feature" }, (branch) =>
+      branch === "feature" ? "kept" : undefined,
+    ),
+  ).toBe("kept");
+});
+
+it("leaves a cleaned-up thread's folder to it when carrying on a branch of that name", async () => {
+  const first = await made();
+  await removeWorktree(root, randomUUID(), first, { keepBranch: true });
+  branchAhead("split-the-store");
+  const carried = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "split-the-store" },
+  });
+  expect(carried.path).toBe(`${first.path}-2`);
+
+  const back = await reattachWorktree(root, { ...first, removedAt: 1 });
+  expect(back?.path).toBe(first.path);
+});
+
+it("brings a thread made off another branch back on it, not on the checkout's commit", async () => {
+  git(root, "branch", "older");
+  const at = git(root, "rev-parse", "older");
+  await writeFile(join(root, "b.ts"), "main moved on\n");
+  git(root, "commit", "-qam", "Main moves on");
+  const worktree = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "older" },
+  });
+  expect(worktree.startedOff).toBe("older");
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+  expect(back).toMatchObject({ head: at, from: "older" });
+  expect(git(back!.path!, "rev-parse", "HEAD")).toBe(at);
+});
+
 it("goes off the checkout, and says why, when the picked branch went before the first message", async () => {
   const held = await createWorktree(root, dir, "Carry on", {
     startFrom: { on: "main" },

@@ -8,6 +8,7 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
+import { threadOnBranch } from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
@@ -47,6 +48,17 @@ export class ThreadCreate {
       (await worktreeStartProblem(
         await this.core.projects.root(projectId),
         startFrom,
+        (branch) => {
+          const other = threadOnBranch(
+            (this.core.store.get().chats ?? []).filter(
+              (c) => c.projectId === projectId,
+            ),
+            branch,
+          );
+          return other
+            ? `${branch} is kept for the thread “${other.title}”; carry it on there.`
+            : undefined;
+        },
       ));
     if (startProblem) throw new Error(startProblem);
     const chat: ProjectChat = {

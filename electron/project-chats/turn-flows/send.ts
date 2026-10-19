@@ -162,7 +162,11 @@ export class TurnSends {
       await this.worktrees.refreshAgentWorktrees(chat);
       if (!chat.worktree && !threadWorktree(chat))
         this.core.projects.assertCheckoutAvailable(chat.projectId);
-      const root = await this.worktrees.root(chat, input.body);
+      const root = await this.worktrees.root(
+        chat,
+        input.body,
+        active.abort.signal,
+      );
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;

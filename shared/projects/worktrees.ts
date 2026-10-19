@@ -29,6 +29,15 @@ export const worktreeStartSchema = z.union([
 ]);
 export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 
+/**
+ * The thread whose worktree is on `branch`, open or removed with the branch
+ * kept for its next message, which another thread carrying it on would take.
+ */
+export const threadOnBranch = <T extends { worktree?: ChatWorktree }>(
+  chats: readonly T[],
+  branch: string,
+) => chats.find((c) => !!c.worktree?.path && c.worktree.branch === branch);
+
 /** A thread that works in its own git worktree, leaving the checkout alone. */
 export interface ChatWorktree {
   /** Unset until the first message makes the worktree. */
@@ -48,6 +57,11 @@ export interface ChatWorktree {
   wanted?: { branch: string; problem: string; off?: true };
   /** Where the first message makes it, picked for the new thread; gone once it's made. */
   startFrom?: WorktreeStart;
+  /**
+   * The branch it was made off in place of the checkout's. Made again, it
+   * stays off it rather than moving up to the checkout's commit.
+   */
+  startedOff?: string;
   /**
    * It carries on a branch that was there before the thread. Relay never
    * renames, resets or deletes it, and it keeps its name in `named`.

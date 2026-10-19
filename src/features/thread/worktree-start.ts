@@ -7,15 +7,19 @@ export const branchOffNames = (list: BranchList) =>
 
 /**
  * The branches a new worktree can carry on: local ones no folder has checked
- * out, Git allowing a branch in one place only, and remote ones with no
- * local branch yet, which get one tracking them.
+ * out, Git allowing a branch in one place only, nor another thread keeps for
+ * its worktree, and remote ones with no local branch yet, which get one
+ * tracking them.
  */
-export const carryOnNames = (list: BranchList) =>
+export const carryOnNames = (
+  list: BranchList,
+  held: (branch: string) => boolean = () => false,
+) =>
   list.branches
     .filter((b) =>
       b.remote
         ? !b.unrelated && !localTwin(list.branches, b)
-        : !b.worktree && !b.current,
+        : !b.worktree && !b.current && !held(b.name),
     )
     .map((b) => b.name);
 

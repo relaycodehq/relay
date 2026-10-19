@@ -99,14 +99,16 @@ it("waits for a carried-on branch that's checked out elsewhere rather than swapp
 });
 
 it("gives a carried-on branch deleted meanwhile a branch of its own", async () => {
-  git(root, "branch", "old-work");
-  const chat = thread({ startFrom: { on: "old-work" } });
+  git(root, "branch", "relay/old-work");
+  const chat = thread({ startFrom: { on: "relay/old-work" } });
   const path = await worktrees.root(chat, "carry on");
   git(root, "worktree", "remove", "--force", path);
-  git(root, "branch", "-D", "old-work");
+  git(root, "branch", "-D", "relay/old-work");
 
   await worktrees.root(chat, "again");
+  // Named after the thread, not remade under the lost branch's name.
   expect(chat.worktree?.branch).toMatch(/^relay\//);
+  expect(chat.worktree?.branch).not.toBe("relay/old-work");
   expect(chat.worktree?.existing).toBeUndefined();
   expect(chat.worktree?.named).toBeUndefined();
 });

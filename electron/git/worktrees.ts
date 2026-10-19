@@ -40,7 +40,10 @@ const git = (root: string, args: string[], timeout = 30000) =>
 export type MadeWorktree = Required<
   Pick<ChatWorktree, "path" | "branch" | "head" | "start" | "base" | "setup">
 > &
-  Pick<ChatWorktree, "from" | "named" | "wanted" | "included" | "existing">;
+  Pick<
+    ChatWorktree,
+    "from" | "named" | "wanted" | "included" | "existing" | "startedOff"
+  >;
 
 /** What a worktree held when it was removed, in case it's wanted back. */
 const keptRef = (chatId: string) => `refs/relay/worktrees/${chatId}/kept`;
@@ -70,11 +73,17 @@ const hasBranch = (root: string, branch: string) =>
     () => false,
   );
 
-async function freeName(root: string, dir: string, name: string) {
+/**
+ * A folder name in `dir` that's free, and whose `relay/…` branch is too,
+ * unless that's `own`: a thread cleaned up with its branch kept takes its
+ * folder back when it carries on.
+ */
+async function freeName(root: string, dir: string, name: string, own?: string) {
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? name : `${name}-${n}`;
+    const relay = `relay/${candidate}`;
     if (
-      !(await hasBranch(root, `relay/${candidate}`)) &&
+      (relay === own || !(await hasBranch(root, relay))) &&
       !(await exists(join(dir, candidate)))
     )
       return candidate;
@@ -174,7 +183,7 @@ async function placeFor(
       const leaf = previous.path
         ? basename(previous.path)
         : slug(named.replace(/^relay\//, ""));
-      return { leaf: await freeFolder(folder, leaf), branch: named };
+      return { leaf: await freeName(root, folder, leaf, named), branch: named };
     }
     // Taken since it was typed; the thread says so rather than not starting.
     if (!previous.path) wanted = { branch: named, problem };
@@ -202,6 +211,7 @@ export async function createWorktree(
   dir: string,
   name: string,
   previous?: ChatWorktree,
+  signal?: AbortSignal,
 ): Promise<MadeWorktree> {
   const folder = join(dir, slug(basename(root)));
   await mkdir(folder, { recursive: true });
@@ -217,7 +227,7 @@ export async function createWorktree(
     return undefined;
   };
   if (start && "on" in start) {
-    const carried = await carryOn(root, folder, start.on).catch(
+    const carried = await carryOn(root, folder, start.on, signal).catch(
       startFailed(start.on),
     );
     if (carried) return carried;
@@ -225,7 +235,9 @@ export async function createWorktree(
   const off =
     start &&
     "off" in start &&
-    (await branchOff(root, start.off).catch(startFailed(start.off, true)));
+    (await branchOff(root, start.off, signal).catch(
+      startFailed(start.off, true),
+    ));
   const head = off ? off.sha : await checkoutHead(root);
   const from = off ? off.from : await currentBranch(root);
   const add = async () => {
@@ -261,6 +273,7 @@ export async function createWorktree(
     start: head,
     base: head,
     ...(from ? { from } : {}),
+    ...(off && start && "off" in start ? { startedOff: start.off } : {}),
     ...(branch === previous?.named ? { named: branch } : {}),
     ...(wanted ? { wanted } : {}),
     ...(await bootstrap(root, root, path)),
@@ -284,17 +297,22 @@ async function remoteOf(root: string, name: string) {
   return remote && { remote, branch: name.slice(remote.length + 1) };
 }
 
-/** Brings a remote's branch up to date, as far as the network lets it; what's there already serves otherwise. */
+/**
+ * Brings a remote's branch up to date, as far as the network lets it; what's
+ * there already serves otherwise, also once `signal` stops the wait.
+ */
 async function fetchBranch(
   root: string,
   { remote, branch }: { remote: string; branch: string },
+  signal?: AbortSignal,
 ) {
   // The full ref, so the name is never an option or a refspec of its own.
-  await git(
+  await gitIn(
     root,
     ["fetch", "-q", "--no-tags", "--", remote, `refs/heads/${branch}`],
-    60000,
+    { timeout: 60000, signal },
   ).catch((error: unknown) => {
+    if (signal?.aborted) return;
     console.warn(`[worktrees] could not fetch ${remote}/${branch}:`, error);
   });
 }
@@ -328,39 +346,62 @@ const caughtUp = async (root: string, sha: string, branch: string) =>
 const behindProblem = (name: string, local: string) =>
   `${local} here is behind ${name}; carry on ${local} or bring it up to date first.`;
 
-/** Why a new thread's worktree can't start where it was picked to, if it can't. */
-export async function worktreeStartProblem(root: string, start: WorktreeStart) {
-  const name = "on" in start ? start.on : start.off;
+/**
+ * What a picked start `name` is: its commit, a remote one fetched first when
+ * `fetch` asks, and the local branch a worktree on it works on, whether that
+ * exists and, for a remote one, has everything the remote one has.
+ */
+async function resolveStart(
+  root: string,
+  name: string,
+  fetch?: { signal?: AbortSignal },
+) {
   const remote = await remoteOf(root, name);
-  const ref = remote ? `refs/remotes/${name}` : `refs/heads/${name}`;
-  const sha = await commitOf(root, ref);
-  if ("on" in start && remote && (await hasBranch(root, remote.branch))) {
-    if (sha && !(await caughtUp(root, sha, remote.branch)))
-      return behindProblem(name, remote.branch);
-    return carryOnProblem(root, remote.branch);
+  if (remote && fetch) await fetchBranch(root, remote, fetch.signal);
+  const sha = await commitOf(
+    root,
+    remote ? `refs/remotes/${name}` : `refs/heads/${name}`,
+  );
+  const branch = remote ? remote.branch : name;
+  const local = remote ? await hasBranch(root, branch) : !!sha;
+  const caught =
+    !!remote && local && !!sha && (await caughtUp(root, sha, branch));
+  return { sha, branch, remote, local, caught };
+}
+
+/**
+ * Why a new thread's worktree can't start where it was picked to, if it
+ * can't; `held` says why a local branch to carry on is another thread's.
+ */
+export async function worktreeStartProblem(
+  root: string,
+  start: WorktreeStart,
+  held: (branch: string) => string | undefined = () => undefined,
+) {
+  const name = "on" in start ? start.on : start.off;
+  const { sha, branch, remote, local, caught } = await resolveStart(root, name);
+  if ("off" in start) return sha ? undefined : `There's no branch ${name}.`;
+  if (local) {
+    if (remote && sha && !caught) return behindProblem(name, branch);
+    return (await carryOnProblem(root, branch)) ?? held(branch);
   }
   if (!sha) return `There's no branch ${name}.`;
-  return "on" in start && !remote ? carryOnProblem(root, name) : undefined;
+  // A remote one gets a local branch of its name, which a clash keeps out.
+  return newBranchProblem(root, branch);
 }
 
 /**
  * The commit a new branch off `name` starts at, a remote branch fetched
  * first, and the local branch its changes count against when there is one.
  */
-async function branchOff(root: string, name: string) {
-  const remote = await remoteOf(root, name);
-  if (remote) await fetchBranch(root, remote);
-  const sha = await commitOf(
-    root,
-    remote ? `refs/remotes/${name}` : `refs/heads/${name}`,
-  );
+async function branchOff(root: string, name: string, signal?: AbortSignal) {
+  const { sha, branch, remote, caught } = await resolveStart(root, name, {
+    signal,
+  });
   if (!sha) throw new Error(`There's no branch ${name} to start from anymore.`);
   if (!remote) return { sha, from: name };
   // A local branch behind the remote one would count its new commits as the thread's.
-  return {
-    sha,
-    from: (await caughtUp(root, sha, remote.branch)) ? remote.branch : undefined,
-  };
+  return { sha, from: caught ? branch : undefined };
 }
 
 /**
@@ -372,17 +413,33 @@ async function carryOn(
   root: string,
   folder: string,
   name: string,
+  signal?: AbortSignal,
 ): Promise<MadeWorktree> {
-  const remote = await remoteOf(root, name);
-  if (remote) await fetchBranch(root, remote);
-  const branch = remote ? remote.branch : name;
-  const local = await hasBranch(root, branch);
+  const { sha, branch, remote, local, caught } = await resolveStart(
+    root,
+    name,
+    { signal },
+  );
   // The remote one was picked; a local twin missing some of it isn't that.
-  const sha = remote && local && (await commitOf(root, `refs/remotes/${name}`));
-  if (sha && !(await caughtUp(root, sha, branch)))
+  if (remote && local && sha && !caught)
     throw new Error(behindProblem(name, branch));
-  const leaf = await freeFolder(folder, slug(branch.replace(/^relay\//, "")));
+  if (!local && !sha) throw new Error(`There's no branch ${name} anymore.`);
+  const leaf = await freeName(
+    root,
+    folder,
+    slug(branch.replace(/^relay\//, "")),
+    branch,
+  );
   const path = join(folder, leaf);
+  // A branch made here goes again with a worktree that didn't come of it.
+  const unmake = async () => {
+    await git(root, ["worktree", "remove", "--force", path]).catch(() => {});
+    if (local) return;
+    await git(root, ["worktree", "prune"]).catch(() => {});
+    // At the remote's commit it holds nothing of anyone's, made here or not.
+    if ((await commitOf(root, `refs/heads/${branch}`)) === sha)
+      await git(root, ["branch", "-D", branch]).catch(() => {});
+  };
   try {
     await git(
       root,
@@ -392,13 +449,13 @@ async function carryOn(
       120000,
     );
   } catch (error) {
+    await unmake();
     const why = error instanceof Error ? error.message : String(error);
     throw new Error(`Couldn't open ${branch} in a worktree: ${why}`);
   }
   // A half-made worktree would hold the branch and fail every retry.
   const ready = await bootstrap(root, root, path).catch(async (error) => {
-    await git(root, ["worktree", "remove", "--force", path]).catch(() => {});
-    if (!local) await git(root, ["branch", "-D", branch]).catch(() => {});
+    await unmake();
     throw error;
   });
   const tip = (await commitOf(root, `refs/heads/${branch}`))!;
@@ -853,8 +910,9 @@ export async function worktreeHoldsWork(path: string) {
  * Brings back a worktree removed with its branch kept, at its old folder:
  * the branch as it was when it holds commits the checkout lacks, so the
  * thread carries on where it stopped; otherwise the branch moves up to the
- * checkout's commit, like a fresh worktree. Undefined when it can't: the
- * branch is gone, its folder is taken, or it's checked out elsewhere. A
+ * checkout's commit, like a fresh worktree, unless it started off another
+ * branch. Undefined when it can't: the branch is gone, its folder is taken,
+ * or it's checked out elsewhere. A
  * branch the thread carried on takes a free folder beside its old one, and
  * one that can't be opened throws why, as it's never swapped for another.
  */
@@ -867,7 +925,10 @@ export async function reattachWorktree(
   if (!path || !branch || !relayBranch(previous)) return undefined;
   if (await exists(path)) {
     if (!existing) return undefined;
-    path = join(dirname(path), await freeFolder(dirname(path), basename(path)));
+    path = join(
+      dirname(path),
+      await freeName(root, dirname(path), basename(path), branch),
+    );
   }
   const kept = await git(root, [
     "rev-parse",
@@ -883,11 +944,11 @@ export async function reattachWorktree(
   const ahead = Number(
     await git(root, ["rev-list", "--count", `${head}..refs/heads/${branch}`]),
   );
+  // The checkout's commit isn't where one carried on or started off belongs.
+  const stays = ahead || existing || previous.startedOff;
   await git(root, ["worktree", "prune"]).catch(() => {});
   try {
-    // A branch the thread carried on is never moved, ahead or not.
-    if (ahead || existing)
-      await git(root, ["worktree", "add", "-q", path, branch], 120000);
+    if (stays) await git(root, ["worktree", "add", "-q", path, branch], 120000);
     // Everything on it is in the checkout's commit, so moving it loses nothing.
     else
       await git(
@@ -912,7 +973,7 @@ export async function reattachWorktree(
     portOffset: _offset,
     ...rest
   } = previous;
-  if (ahead || existing) return { ...rest, path, ...ready };
+  if (stays) return { ...rest, path, ...ready };
   const from = (await git(root, ["branch", "--show-current"])).trim();
   return {
     path,
