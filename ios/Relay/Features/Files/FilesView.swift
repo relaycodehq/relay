@@ -65,10 +65,8 @@ struct FilesView: View {
 
     private func load() async {
         do {
-            let list = try await connection.liveClient().projectFiles(where: place)
-            files = list
+            files = try await FileLists.load(connection, place)
             error = nil
-            FileLists.keep(list, connection.active, place)
         } catch is CancellationError {
         } catch {
             self.error = error.localizedDescription
@@ -78,11 +76,21 @@ struct FilesView: View {
 
 /// The last list each place gave, so a folder opened under another shows at once.
 @MainActor
-private enum FileLists {
+enum FileLists {
     private static var kept: [String: [String]] = [:]
 
     static func known(_ computer: String?, _ place: String) -> [String]? { kept["\(computer ?? ""):\(place)"] }
     static func keep(_ files: [String], _ computer: String?, _ place: String) { kept["\(computer ?? ""):\(place)"] = files }
+
+    static func load(_ connection: Connection, _ place: String) async throws -> [String] {
+        let client = try connection.liveClient()
+        let computer = connection.active
+        let files = try await client.projectFiles(where: place)
+        try Task.checkCancellation()
+        guard (try? connection.liveClient()) === client, connection.active == computer else { throw CancellationError() }
+        keep(files, computer, place)
+        return files
+    }
 }
 
 /// Why something didn't load, and a way to ask again.
