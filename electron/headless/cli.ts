@@ -53,6 +53,7 @@ import {
 } from "./service";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
+import { keepDistributionsUp, wslDistro } from "./wsl";
 
 const agentName = (provider: string) =>
   agentInfo(provider as AgentProvider)?.cli ?? provider;
@@ -1010,6 +1011,42 @@ if ($path) { [Environment]::SetEnvironmentVariable('Path', (($path -split ';') |
   }
 }
 
+/**
+ * In WSL, which stops the distribution 15 s after the last Windows program
+ * using it exits, and Relay with it. A Windows Relay that works in this
+ * distribution holds it awake; without one, `.wslconfig` can turn the timeout
+ * off, for every distribution, which is why it's off unless asked for.
+ */
+async function setUpWsl(ui: Screen, distro: string) {
+  if (
+    !(await ui.ask(
+      `Keep WSL running while Windows is on? Only needed when no Relay on Windows works in ${distro}: WSL stops it 15 seconds after its last window closes. This sets instanceIdleTimeout=-1 in .wslconfig, which keeps every WSL distribution running, and applies from WSL's next start.`,
+      false,
+    ))
+  )
+    return ui.print(
+      row("off", "WSL", "stops 15 s after its last window closes, unless a Relay on Windows holds it"),
+    );
+  try {
+    const file = await keepDistributionsUp();
+    ui.print(
+      row(
+        "ok",
+        "WSL",
+        dim(file ? `stays running from WSL's next start (${file})` : "stays running"),
+      ),
+    );
+  } catch (e) {
+    ui.print(
+      row(
+        "warn",
+        "WSL",
+        `couldn't reach Windows (${e instanceof Error ? e.message : String(e)}); set instanceIdleTimeout=-1 under [general] in %USERPROFILE%\\.wslconfig yourself`,
+      ),
+    );
+  }
+}
+
 async function setup(home: string, flags: Flags) {
   const ui = new Screen(process.stdout, process.stdin, !flags.yes);
   ui.print(
@@ -1070,6 +1107,8 @@ async function setup(home: string, flags: Flags) {
     ui.print(
       row("ok", "Background", dim("running; relay service install starts it with the computer")),
     );
+  const distro = wslDistro();
+  if (distro) await setUpWsl(ui, distro);
   // An installed release keeps itself current unless told not to.
   if (installRoot(__dirname)) {
     const autoUpdate = await ui.ask(

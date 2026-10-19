@@ -15,6 +15,7 @@ import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
 import { headlessPaths, privateDirectory } from "./paths";
 import { lockPath } from "./lock";
+import { recordedAlive, recordProcess } from "./process-identity";
 import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
 
@@ -218,7 +219,7 @@ export async function claimHome(pidFile: string) {
   try {
     if (await holding(pidFile))
       throw new AlreadyRunning("Relay is already running here.");
-    await writeFile(pidFile, `${process.pid}\n`, { mode: 0o600 });
+    await writeFile(pidFile, `${recordProcess()}\n`, { mode: 0o600 });
   } catch (e) {
     await release();
     throw e;
@@ -248,6 +249,8 @@ function alive(pid: number) {
 
 /** The live process a pid file names, if any. */
 async function holding(pidFile: string) {
-  const pid = Number((await readFile(pidFile, "utf8").catch(() => "")).trim());
-  return pid && alive(pid) ? pid : undefined;
+  const record = await readFile(pidFile, "utf8").catch(() => "");
+  return recordedAlive(record, alive)
+    ? Number(record.split(" ")[0])
+    : undefined;
 }
