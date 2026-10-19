@@ -13,6 +13,7 @@ const main = new Map<string, SharedDraft>();
 let rev = 0;
 const writes: DraftWrite[] = [];
 let hear: ((change: DraftChange) => void) | undefined;
+let readShared = async () => [...main.values()];
 function take(write: DraftWrite, by: DraftDevice) {
   const { draft, changed } = applyDraftWrite(main.get(write.key), write, by, () => ++rev);
   if (draft) main.set(write.key, draft);
@@ -50,7 +51,7 @@ vi.mock("../images/draft-images", () => ({
 }));
 vi.mock("../../lib/api", () => ({
   api: {
-    sharedDrafts: async () => [...main.values()],
+    sharedDrafts: () => readShared(),
     writeSharedDrafts: async (list: DraftWrite[]) =>
       list.map((write) => {
         writes.push(write);
@@ -80,6 +81,7 @@ beforeEach(async () => {
   writes.length = 0;
   rev = 0;
   hear = undefined;
+  readShared = async () => [...main.values()];
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => store.set(k, v),
@@ -105,6 +107,16 @@ async function start() {
 }
 const pause = () => vi.advanceTimersByTimeAsync(400);
 
+function delaySnapshot() {
+  let finish!: (drafts: SharedDraft[]) => void;
+  const pending = new Promise<SharedDraft[]>((resolve) => { finish = resolve; });
+  readShared = () => pending;
+  return async (list: SharedDraft[]) => {
+    finish(list);
+    await vi.advanceTimersByTimeAsync(0);
+  };
+}
+
 it("shares what's typed once the typing pauses", async () => {
   await start();
   drafts.writeDraft(key, "Fix");
@@ -113,6 +125,44 @@ it("shares what's typed once the typing pauses", async () => {
   await pause();
   expect(writes).toMatchObject([{ key: chat, text: "Fix the login", base: 0 }]);
   expect(main.get(chat)).toMatchObject({ origin: "desktop", rev: 1 });
+});
+
+it("keeps a draft synced while the initial snapshot was still arriving", async () => {
+  const finish = delaySnapshot();
+  await start();
+  drafts.writeDraft(key, "Words dictated while the draft list loads");
+  await pause();
+  expect(main.get(chat)?.text).toBe(
+    "Words dictated while the draft list loads",
+  );
+  await finish([]);
+  expect(drafts.readDraft(key)).toBe(
+    "Words dictated while the draft list loads",
+  );
+});
+
+it("keeps a newer live edit instead of the initial snapshot's older text", async () => {
+  take({ key: chat, text: "Old words", base: 0, at: 1 }, "phone:p1");
+  const snapshot = [...main.values()];
+  const finish = delaySnapshot();
+  await start();
+  phone({ key: chat, text: "The complete dictated message" });
+  await finish(snapshot);
+  expect(drafts.readDraft(key)).toBe("The complete dictated message");
+  await pause();
+  expect(writes).toEqual([]);
+});
+
+it("doesn't restore a draft sent while the initial snapshot was arriving", async () => {
+  take({ key: chat, text: "Already sent", base: 0, at: 1 }, "phone:p1");
+  const snapshot = [...main.values()];
+  const finish = delaySnapshot();
+  await start();
+  phone({ key: chat, text: "", sent: "Already sent" });
+  await finish(snapshot);
+  expect(drafts.readDraft(key)).toBe("");
+  await pause();
+  expect(writes).toEqual([]);
 });
 
 it("puts a phone's edit in the composer and doesn't send it back", async () => {

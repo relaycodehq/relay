@@ -106,6 +106,8 @@ const inFlight = new Set<string>();
 // Set while this window writes what came from elsewhere, so it isn't pushed back.
 let applying = false;
 let started = false;
+/** Live changes received while the initial draft snapshot is on its way. */
+let catchingUp: Set<string> | undefined;
 
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -271,6 +273,7 @@ const kept = (draft: SharedDraft) => ({
 });
 
 function remember(key: string, draft: SharedDraft | null) {
+  catchingUp?.add(key);
   if (draft) shared.set(key, draft);
   else shared.delete(key);
   tellShared();
@@ -370,31 +373,49 @@ export function startDraftSync({ takes }: { takes: boolean }) {
 
 /** Lines this window's drafts up with the computer's, as Relay starts. */
 async function catchUp(takes: boolean) {
-  const keys = await draftImageKeys().catch(() => []);
-  await Promise.all(keys.map((key) => readImages(key)));
-  const list = await api.sharedDrafts();
-  for (const draft of list) shared.set(draft.key, draft);
-  tellShared();
-  if (!takes) return;
-  const threads = new Set([
-    ...threadRecordIds(),
-    ...keys.filter((k) => k.startsWith(DRAFT_PREFIX)).map((k) => recordOf(sharedKey(k))),
-    ...Object.keys(meta()).map(recordOf),
-  ]);
-  const local = new Map<string, LocalDraft>();
-  for (const thread of threads)
-    for (const [key, draft] of localOf(thread)) local.set(key, draft);
-  // Gone from storage altogether, it still was synced.
-  for (const key of Object.keys(meta()))
-    if (!local.has(key)) local.set(key, { body: { text: "" }, ...syncState(key) });
-  const plan = reconcileDrafts(local, list);
-  for (const draft of plan.take) apply(draft.key, draft, false);
-  for (const key of plan.drop) apply(key, null, false);
-  const taken = new Set([...plan.take.map((d) => d.key), ...plan.drop]);
-  for (const [key, mine] of local)
-    if (!taken.has(key) && mine.synced !== undefined && mine.dirty === undefined)
-      pushed.set(key, { body: mine.body, ...(mine.extras ? { extras: mine.extras } : {}) });
-  for (const thread of new Set(plan.push.map(recordOf))) void flush(thread);
+  const changed = (catchingUp = new Set<string>());
+  try {
+    const keys = await draftImageKeys().catch(() => []);
+    await Promise.all(keys.map((key) => readImages(key)));
+    const list = await api.sharedDrafts();
+    // The snapshot can predate a write or live event received while awaiting it.
+    // Keep those changes, including removals, rather than restoring the old copy.
+    for (const draft of list)
+      if (!changed.has(draft.key)) shared.set(draft.key, draft);
+    tellShared();
+    if (!takes) return;
+    const threads = new Set([
+      ...threadRecordIds(),
+      ...keys
+        .filter((k) => k.startsWith(DRAFT_PREFIX))
+        .map((k) => recordOf(sharedKey(k))),
+      ...Object.keys(meta()).map(recordOf),
+    ]);
+    const local = new Map<string, LocalDraft>();
+    for (const thread of threads)
+      for (const [key, draft] of localOf(thread)) local.set(key, draft);
+    // Gone from storage altogether, it still was synced.
+    for (const key of Object.keys(meta()))
+      if (!local.has(key))
+        local.set(key, { body: { text: "" }, ...syncState(key) });
+    const plan = reconcileDrafts(local, [...shared.values()]);
+    for (const draft of plan.take) apply(draft.key, draft, false);
+    for (const key of plan.drop) apply(key, null, false);
+    const taken = new Set([...plan.take.map((d) => d.key), ...plan.drop]);
+    for (const [key, mine] of local)
+      if (
+        !taken.has(key) &&
+        mine.synced !== undefined &&
+        mine.dirty === undefined
+      )
+        pushed.set(key, {
+          body: mine.body,
+          ...(mine.extras ? { extras: mine.extras } : {}),
+        });
+    for (const thread of new Set(plan.push.map(recordOf))) void flush(thread);
+  } finally {
+    catchingUp = undefined;
+  }
 }
 
 const subscribe = (notify: () => void) => {
