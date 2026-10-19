@@ -89,8 +89,9 @@ export function TerminalDrawer({
         step={20}
         value={height}
         min={minHeight}
-        begin={() => {
-          const origin = height;
+        begin={(handle) => {
+          // The window can clamp a saved height; drag from what actually shows.
+          const origin = handle.parentElement!.getBoundingClientRect().height;
           return (delta) => resize(origin - delta);
         }}
         onReset={() => resize(defaultHeight)}

@@ -168,3 +168,69 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await app.close();
   }
 });
+
+test("terminal resizing starts at its visible height in a shorter window", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-terminal-resize-")),
+  );
+  const repo = join(root, "project");
+  await mkdir(repo);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: {
+      ...env,
+      RELAY_TEST_DATA: join(root, "data"),
+      RELAY_TEST_HEADED: "0",
+      RELAY_TEST_NATIVE_STORAGE: "0",
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, repo) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [repo],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    const button = page.getByRole("button", { name: "Terminal", exact: true });
+    const drawer = page.getByRole("region", { name: "Terminal" });
+    // A height saved in a taller window is clamped by the layout. The first
+    // drag must start at the visible divider, without a dead zone or jump.
+    await page.evaluate(() =>
+      localStorage.setItem("relay-terminal-height", "1400"),
+    );
+    await page.reload();
+    await button.click();
+    await expect(drawer).toBeVisible();
+    const divider = page.getByRole("separator", { name: "Resize terminal" });
+    const box = (await divider.boundingBox())!;
+    const x = box.x + box.width / 2,
+      y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (const delta of [10, 40, 80, 40, 10]) {
+      await page.mouse.move(x, y + delta);
+      await expect
+        .poll(async () => (await divider.boundingBox())!.y)
+        .toBeCloseTo(box.y + delta, 0);
+    }
+    await page.mouse.up();
+    // Keyboard resizing uses the same visible starting point.
+    await divider.press("ArrowDown");
+    await expect
+      .poll(async () => (await divider.boundingBox())!.y)
+      .toBeCloseTo(box.y + 30, 0);
+    await divider.dblclick();
+    await expect
+      .poll(async () => (await drawer.boundingBox())!.height)
+      .toBe(260);
+  } finally {
+    await app.close();
+  }
+});
