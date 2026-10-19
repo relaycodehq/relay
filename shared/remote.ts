@@ -727,6 +727,7 @@ export const computerCallMethods = [
   "agentModels",
   "agentVersions",
   "checkAgentVersions",
+  "agentSignedIn",
 ] as const satisfies readonly ApiMethod[];
 export type ComputerCallMethod = (typeof computerCallMethods)[number];
 /** A folder here as `computerFolders` lists it; `project` when it's one already. */

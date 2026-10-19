@@ -386,7 +386,12 @@ export function ProjectComposer({
       {typeof notice === "function"
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
-      <AgentMissingNotice provider={to} computer={computer} />
+      <AgentMissingNotice
+        provider={to}
+        computer={computer}
+        projectId={projectId}
+        chatId={conversation.chatId}
+      />
       <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}

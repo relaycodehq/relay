@@ -663,6 +663,14 @@ export interface Api
   agentVersions(computerId?: string): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
   checkAgentVersions(computerId?: string): Promise<AgentVersions>;
+  /**
+   * Whether the agent's CLI is signed in, here or with `computerId` on that
+   * paired computer; null when it can't tell (Claude and Codex only).
+   */
+  agentSignedIn(
+    provider: import("./agents").AgentProvider,
+    computerId?: string,
+  ): Promise<boolean | null>;
   /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
   agentUpdateChecks(): Promise<boolean>;
   saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;

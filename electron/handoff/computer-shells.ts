@@ -65,8 +65,12 @@ export class ComputerShells {
           z.string().min(1).max(16_384).parse(args[0]),
         );
       case "prefillSignIn": {
-        // The agent's own sign-in, as installed here: its login stays here.
-        const command = await signInCommand(agentProviderSchema.parse(args[0]));
+        // The agent's own sign-in, as installed here: its login stays here,
+        // finished in the browser of the computer that asked.
+        const command = await signInCommand(
+          agentProviderSchema.parse(args[0]),
+          { away: true },
+        );
         return !!command && this.shells.prefill(mine, command);
       }
       case "adopt":

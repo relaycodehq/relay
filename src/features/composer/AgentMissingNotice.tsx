@@ -6,9 +6,10 @@ import {
   notLookedFor,
   type AgentVersion,
 } from "../../../shared/agent-updates";
-import type { AgentProvider } from "../../../shared/agents";
+import { agentInfo, type AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { openSettings } from "../../lib/settings-page";
+import { prefillSignIn } from "../terminal/thread-terminals";
 import { useAgentVersions } from "../updates/agent-updates";
 
 /**
@@ -20,12 +21,22 @@ import { useAgentVersions } from "../updates/agent-updates";
 export function AgentMissingNotice({
   provider,
   computer,
+  projectId,
+  chatId,
 }: {
   provider: AgentProvider | "message";
   computer?: { id: string; name: string };
+  /** Where a sign-in on `computer` is typed: the thread's terminal, there. */
+  projectId: string;
+  chatId?: string;
 }) {
   return computer ? (
-    <ComputerAgentMissing provider={provider} computer={computer} />
+    <ComputerAgentMissing
+      provider={provider}
+      computer={computer}
+      projectId={projectId}
+      chatId={chatId}
+    />
   ) : (
     <LocalAgentMissing provider={provider} />
   );
@@ -54,9 +65,13 @@ function LocalAgentMissing({
 function ComputerAgentMissing({
   provider,
   computer,
+  projectId,
+  chatId,
 }: {
   provider: AgentProvider | "message";
   computer: { id: string; name: string };
+  projectId: string;
+  chatId?: string;
 }) {
   const qc = useQueryClient();
   const queryKey = ["agent-versions", computer.id];
@@ -80,7 +95,15 @@ function ComputerAgentMissing({
   const reason = versions.isError
     ? `Couldn't ask ${computer.name} which agents it has.`
     : agent && cantRun(agent, computer.name);
-  if (!reason) return null;
+  if (!reason)
+    return agent && provider !== "message" ? (
+      <ComputerSignedOut
+        provider={provider}
+        computer={computer}
+        projectId={projectId}
+        chatId={chatId}
+      />
+    ) : null;
   async function checkAgain() {
     setChecking(true);
     try {
@@ -98,6 +121,57 @@ function ComputerAgentMissing({
       <button type="button" disabled={checking} onClick={checkAgain}>
         {checking ? "Checking…" : "Check again"}
       </button>
+    </div>
+  );
+}
+
+/**
+ * The agent is there but signed out. Its login is that computer's own: the
+ * sign-in is typed into the thread's terminal there, for the user to run and
+ * finish in their browser, and nothing crosses from this computer.
+ */
+function ComputerSignedOut({
+  provider,
+  computer,
+  projectId,
+  chatId,
+}: {
+  provider: AgentProvider;
+  computer: { id: string; name: string };
+  projectId: string;
+  chatId?: string;
+}) {
+  const signedIn = useQuery({
+    queryKey: ["agent-signed-in", computer.id, provider],
+    // A computer from before it could say answers with an error: no notice.
+    queryFn: () => api.agentSignedIn(provider, computer.id),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const [typed, setTyped] = useState(false);
+  if (signedIn.data !== false) return null;
+  async function signIn() {
+    setTyped(await prefillSignIn(projectId, chatId ?? null, provider));
+  }
+  return (
+    <div className="agent-missing-notice" role="status">
+      <CircleAlert size={14} aria-hidden />
+      <span>
+        {agentInfo(provider).cli} isn't signed in on {computer.name}.
+      </span>
+      {typed ? (
+        <button
+          type="button"
+          disabled={signedIn.isFetching}
+          onClick={() => void signedIn.refetch()}
+        >
+          {signedIn.isFetching ? "Checking…" : "Check again"}
+        </button>
+      ) : (
+        <button type="button" onClick={() => void signIn()}>
+          Sign in
+        </button>
+      )}
     </div>
   );
 }

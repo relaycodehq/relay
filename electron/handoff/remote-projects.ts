@@ -159,7 +159,9 @@ export class RemoteProjects {
     run: (client: Awaited<ReturnType<Computers["connected"]>>) => Promise<T>,
   ): Promise<T> {
     const { name } = this.computers.get(computerId);
-    if (this.computers.status(computerId) !== "online")
+    // Connecting, as when Relay just started, it waits a little for it.
+    const status = this.computers.status(computerId);
+    if (status === "offline" || status === "denied")
       throw new Error(`${name} is offline.`);
     const client = await this.computers.connected(computerId);
     try {

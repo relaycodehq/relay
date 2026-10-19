@@ -22,6 +22,7 @@ import { watchScopes } from "../../shared/watch";
 import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
+import { agentSignedIn } from "../agents/sign-in";
 import { parseVersion } from "../../shared/agent-updates";
 import { agentRuntime, forgetRegistryRuntime } from "../agents";
 import { acpRegistry } from "../agents/acp";
@@ -268,6 +269,13 @@ export function settingsHandlers(ctx: ApiContext) {
       computerId
         ? remoteProjects(ctx).ask(computerId, "checkAgentVersions")
         : agentUpdates.check(true),
+    ),
+    agentSignedIn: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) =>
+        computerId
+          ? remoteProjects(ctx).ask(computerId, "agentSignedIn", provider)
+          : agentSignedIn(provider),
     ),
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),

@@ -321,6 +321,7 @@ const methods = [
   "signInAgent",
   "signOutAgent",
   "checkAgentVersions",
+  "agentSignedIn",
   "agentUpdateChecks",
   "saveAgentUpdateChecks",
   "autoCompact",
