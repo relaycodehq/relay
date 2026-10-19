@@ -30,6 +30,8 @@ import {
 import {
   onComputerMessage,
   projectChatSendSchema,
+  sharedWith,
+  threadsSharing,
   type ProjectChatSend,
   type ChatMessage,
   type ChatSummary,
@@ -520,8 +522,18 @@ export class Handoffs {
     return chat;
   }
   /** The paired computers, and whether each has this thread's repository. */
-  targets(chatId: string): Promise<HandoffTarget[]> {
-    return this.targetsIn(this.summary(chatId).projectId, liveHandoffBridge);
+  async targets(chatId: string): Promise<HandoffTarget[]> {
+    const chat = this.summary(chatId);
+    const targets = await this.targetsIn(chat.projectId, liveHandoffBridge);
+    // A worktree other threads work in stays here, wherever it could go.
+    return this.sharing(chat)
+      ? targets.map((t) => ({ ...t, problem: "Shared with another thread" }))
+      : targets;
+  }
+  /** Who else works in the thread's worktree, by title; undefined when nobody does. */
+  private sharing(chat: ChatSummary) {
+    const others = threadsSharing(this.store.get().chats ?? [], chat);
+    return others.length ? sharedWith(others) : undefined;
   }
   /** The paired computers a new thread in the project can start on. */
   startTargets(projectId: string): Promise<HandoffTarget[]> {
@@ -852,6 +864,11 @@ export class Handoffs {
       throw new Error(onComputerMessage(this.projects.get(chat.projectId)));
     const blocked = home ? undefined : handoffBlocked(chat);
     if (blocked) throw new Error(blocked);
+    const sharing = this.sharing(chat);
+    if (sharing)
+      throw new Error(
+        `${sharing} works in this worktree too; a shared worktree stays on this computer.`,
+      );
     const computer = this.computers.get(computerId);
     const id = randomUUID();
     await this.chats.markHandoff(chatId, {

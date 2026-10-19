@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { ProjectChat } from "../../shared/projects";
+import { existsSync } from "node:fs";
+import { joinedWorktree, type ProjectChat } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { ThreadWorktrees } from "./worktrees";
 
@@ -14,6 +15,8 @@ for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
 let temp: string;
 let root: string;
 let worktrees: ThreadWorktrees;
+/** The threads the store has, which sharing a worktree is checked against. */
+let chats: ProjectChat[];
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
 
@@ -44,10 +47,16 @@ beforeEach(async () => {
     "-m",
     "Initial",
   );
+  chats = [];
   const core = {
     projects: { root: vi.fn(async () => root) },
-    storage: { save: vi.fn() },
-    active: { has: () => true },
+    storage: {
+      save: vi.fn(),
+      load: vi.fn(async (id: string) => chats.find((c) => c.id === id)!),
+    },
+    active: { has: () => true, assertIdle: async () => {} },
+    store: { get: () => ({ chats }) },
+    control: (_id: string, run: () => unknown) => run(),
   } as unknown as ChatCore;
   worktrees = new ThreadWorktrees(core, join(temp, "worktrees"), {
     busy: () => false,
@@ -126,4 +135,45 @@ it("opens a carried-on branch beside its old folder once another took it", async
   expect(again).not.toBe(path);
   expect(git(again, "branch", "--show-current")).toBe("old-work");
   expect(chat.worktree).toMatchObject({ path: again, existing: true });
+});
+
+/** A second thread in `chat`'s worktree, as joining it from the Workspace menu makes one. */
+const joining = (chat: ProjectChat): ProjectChat => ({
+  ...thread(joinedWorktree(chat.worktree!)),
+  id: "other",
+  title: "write the tests",
+});
+
+it("keeps a shared worktree's folder and name when the first thread's title comes", async () => {
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  chats = [chat, joining(chat)];
+
+  chat.title = "Repair login redirect";
+  expect(await worktrees.named(chat)).toBe(path);
+  expect(existsSync(path)).toBe(true);
+  expect(git(path, "branch", "--show-current")).toBe(chat.worktree!.branch);
+});
+
+it("won't remove or clean up a worktree another thread works in, and archiving one leaves it", async () => {
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  const other = joining(chat);
+  chats = [chat, other];
+
+  await expect(worktrees.remove("chat")).rejects.toThrow(
+    "“write the tests” works in this worktree too",
+  );
+  expect(await worktrees.cleanUp("chat", async () => undefined)).toBe(
+    "another thread works in it",
+  );
+  // Nothing uncommitted: archived alone, its worktree would go.
+  await worktrees.dropLanded(chat, 5);
+  expect(existsSync(path)).toBe(true);
+  expect(chat.worktree!.removedAt).toBeUndefined();
+
+  // Once the other is archived, the folder is this thread's alone again.
+  other.archivedAt = 6;
+  await worktrees.dropLanded(chat, 7);
+  expect(chat.worktree!.removedAt).toBe(7);
 });

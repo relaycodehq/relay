@@ -21,11 +21,13 @@ const refNameSchema = z
 /**
  * Where a new thread's worktree starts, when not on a new branch off the
  * checkout's commit: a new branch `off` another branch, a remote one
- * fetched first, or `on` an existing branch, carried on in the worktree.
+ * fetched first, `on` an existing branch, carried on in the worktree, or in
+ * the worktree another `thread` works in, the two of them sharing its folder.
  */
 export const worktreeStartSchema = z.union([
   z.object({ off: refNameSchema }).strict(),
   z.object({ on: refNameSchema }).strict(),
+  z.object({ thread: z.uuid() }).strict(),
 ]);
 export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 
@@ -44,6 +46,72 @@ export const threadOnBranch = <
   chats.find(
     (c) => !c.archivedAt && !!c.worktree?.path && c.worktree.branch === branch,
   );
+
+type WithWorktree = {
+  id: string;
+  worktree?: ChatWorktree;
+  archivedAt?: number;
+};
+/** A worktree whose folder is there to work in, not removed or cleaned up. */
+const liveWorktree = (worktree: ChatWorktree | undefined) =>
+  !!worktree?.path && !worktree.removedAt && !worktree.cleanedUp;
+
+/**
+ * The other open threads working in `chat`'s worktree folder. While there
+ * are any, nothing removes, renames or hands off the folder from under them.
+ */
+export const threadsSharing = <T extends WithWorktree>(
+  chats: readonly T[],
+  chat: Pick<WithWorktree, "id" | "worktree">,
+) =>
+  liveWorktree(chat.worktree)
+    ? chats.filter(
+        (c) =>
+          c.id !== chat.id &&
+          !c.archivedAt &&
+          liveWorktree(c.worktree) &&
+          c.worktree!.path === chat.worktree!.path,
+      )
+    : [];
+
+/** The threads sharing a worktree, by title: “One”, or “One” and 2 others. */
+export function sharedWith(others: readonly { title: string }[]) {
+  const first = `“${others[0]!.title}”`;
+  return others.length === 1
+    ? first
+    : `${first} and ${others.length - 1} other${others.length === 2 ? "" : "s"}`;
+}
+
+/** Open threads with a worktree another thread can join, one per folder. */
+export const joinableWorktrees = <T extends WithWorktree>(
+  chats: readonly T[],
+) => {
+  const seen = new Set<string>();
+  return chats.filter((c) => {
+    if (c.archivedAt || !liveWorktree(c.worktree)) return false;
+    if (seen.has(c.worktree!.path!)) return false;
+    seen.add(c.worktree!.path!);
+    return true;
+  });
+};
+
+/**
+ * The worktree a thread joining `other`'s takes: the same folder, branch
+ * and point its changes count from, so both see the same Changes, and the
+ * same port offset. Setup already ran, or runs, for the folder.
+ */
+export function joinedWorktree(other: ChatWorktree): ChatWorktree {
+  const {
+    removedAt: _removed,
+    cleanedUp: _cleaned,
+    startFrom: _start,
+    wanted: _wanted,
+    setup: _setup,
+    included: _included,
+    ...shared
+  } = other;
+  return { ...shared, setup: "done" };
+}
 
 /** A thread that works in its own git worktree, leaving the checkout alone. */
 export interface ChatWorktree {

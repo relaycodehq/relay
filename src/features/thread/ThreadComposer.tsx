@@ -131,9 +131,11 @@ function ThreadBranch({
       onStartThread={onStartThread}
     />
   );
-  // Where it starts is the Workspace menu's to say; a carried-on branch keeps its name.
+  // Where it starts is the Workspace menu's to say; a carried-on branch keeps
+  // its name, and a joined worktree's is the other thread's.
   if (newWorktree)
-    return worktree.start && "on" in worktree.start ? null : (
+    return worktree.start &&
+      ("on" in worktree.start || "thread" in worktree.start) ? null : (
       <WorktreeBranchField
         projectId={project.id}
         value={worktree.newBranch}

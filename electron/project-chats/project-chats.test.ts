@@ -946,6 +946,82 @@ it("keeps a note closed with I know this as known in its thread, and its line in
   ]);
 });
 
+it("lets threads share one worktree: joined by thread or by its branch, both working in the same folder", async () => {
+  const repo = join(root, "repo");
+  execFileSync(
+    "git",
+    [
+      "-C",
+      repo,
+      "-c",
+      "user.name=T",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "First",
+    ],
+    { stdio: "pipe" },
+  );
+  const first = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(first.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(first.id)).messages.at(-1)?.status).toBe(
+      "complete",
+    ),
+  );
+  const made = (await chats.get(first.id)).worktree!;
+
+  const byThread = await chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+    undefined,
+    undefined,
+    undefined,
+    { thread: first.id },
+  );
+  const byBranch = await chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+    undefined,
+    undefined,
+    undefined,
+    { on: made.branch! },
+  );
+  for (const joined of [byThread, byBranch])
+    expect((await chats.get(joined.id)).worktree).toMatchObject({
+      path: made.path,
+      branch: made.branch,
+      head: made.head,
+      setup: "done",
+    });
+  await chats.send(byThread.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(byThread.id)).messages.at(-1)?.status).toBe(
+      "complete",
+    ),
+  );
+  // Its first message makes nothing new: it works in the same folder.
+  expect((await chats.get(byThread.id)).worktree?.path).toBe(made.path);
+  await expect(
+    chats.create(
+      projectId,
+      { kind: "project" },
+      "worktree",
+      undefined,
+      undefined,
+      undefined,
+      {
+        thread: "00000000-0000-4000-8000-000000000000",
+      },
+    ),
+  ).rejects.toThrow("That thread's worktree is gone");
+});
+
 it("starts a thread whose named branch got taken before its first message on relay/…, and keeps why", async () => {
   const repo = join(root, "repo");
   const git = (...args: string[]) =>

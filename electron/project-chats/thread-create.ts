@@ -8,7 +8,11 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
-import { threadOnBranch } from "../../shared/projects";
+import {
+  joinableWorktrees,
+  joinedWorktree,
+  threadOnBranch,
+} from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
@@ -48,6 +52,23 @@ export class ThreadCreate {
         ? branch
         : undefined;
     const startFrom = workspace === "worktree" ? start : undefined;
+    // In another thread's worktree, or on a branch one is on: the same
+    // folder, both threads working in it, as T3 shares one.
+    const projectChats = (this.core.store.get().chats ?? []).filter(
+      (c) => c.projectId === projectId,
+    );
+    const asked =
+      startFrom && "thread" in startFrom
+        ? projectChats.find((c) => c.id === startFrom.thread)
+        : startFrom && "on" in startFrom
+          ? threadOnBranch(projectChats, startFrom.on)
+          : undefined;
+    const joining = asked && joinableWorktrees([asked])[0];
+    if (startFrom && "thread" in startFrom && !joining)
+      throw new Error("That thread's worktree is gone; pick another.");
+    const joined =
+      joining &&
+      joinedWorktree((await this.core.storage.load(joining.id)).worktree!);
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
@@ -56,6 +77,7 @@ export class ThreadCreate {
     // one that goes by the first message falls back the same way.
     const startProblem =
       startFrom &&
+      !joined &&
       (await worktreeStartProblem(
         await this.core.projects.root(projectId),
         startFrom,
@@ -78,14 +100,16 @@ export class ThreadCreate {
       scope,
       // The worktree itself is made with the first message, named after it
       // unless the user named its branch.
-      ...(workspace === "worktree"
-        ? {
-            worktree: {
-              ...(named ? { named } : {}),
-              ...(startFrom ? { startFrom } : {}),
-            },
-          }
-        : {}),
+      ...(joined
+        ? { worktree: joined }
+        : workspace === "worktree"
+          ? {
+              worktree: {
+                ...(named ? { named } : {}),
+                ...(startFrom ? { startFrom } : {}),
+              },
+            }
+          : {}),
       title:
         scope.kind === "pr"
           ? `PR #${scope.ref.number}`

@@ -33,6 +33,8 @@ import {
   agentWorktreeUnavailableError,
   reviewFolder,
   selectedAgentWorktree,
+  sharedWith,
+  threadsSharing,
   threadWorktree,
 } from "../../shared/projects";
 import {
@@ -147,6 +149,7 @@ export class ThreadWorktrees {
     }
     if (await worktreeExists(worktree)) return worktree.path!;
     const first = !worktree.path;
+    const sharers = this.sharers(chat);
     const reattached = await reattachWorktree(root, worktree);
     chat.worktree =
       reattached ??
@@ -168,7 +171,21 @@ export class ThreadWorktrees {
         unasked: true,
       });
     await this.core.storage.save(chat);
+    // The threads sharing the folder work in it where it's made again.
+    for (const other of sharers)
+      await this.core.control(other.id, async () => {
+        const them = await this.core.storage.load(other.id);
+        if (!them.worktree) return;
+        them.worktree.path = chat.worktree!.path;
+        them.worktree.branch = chat.worktree!.branch;
+        await this.core.storage.save(them);
+      });
     return chat.worktree.path!;
+  }
+
+  /** The other open threads working in this thread's worktree folder. */
+  private sharers(chat: Pick<ProjectChat, "id" | "worktree">) {
+    return threadsSharing(this.core.store.get().chats ?? [], chat);
   }
 
   /**
@@ -226,6 +243,8 @@ export class ThreadWorktrees {
   async named(chat: ProjectChat) {
     const worktree = chat.worktree;
     if (!this.unnamed.delete(chat.id) || !worktree?.path) return worktree?.path;
+    // Another thread works there already: moving it would pull the folder from under it.
+    if (this.sharers(chat).length) return worktree.path;
     const root = await this.core.projects.root(chat.projectId);
     const moved = await retitleWorktree(root, worktree, chat.title).catch(
       (error: unknown) => {
@@ -344,6 +363,8 @@ export class ThreadWorktrees {
   async dropLanded(chat: ProjectChat, now: number) {
     if (!chat.worktree || !(await worktreeExists(chat.worktree))) return;
     if (awaitsReturn(chat)) return;
+    // Others still work in it: archiving this one leaves it to them.
+    if (this.sharers(chat).length) return;
     const status = await this.status(chat.id).catch(() => null);
     if (status && !status.files.length) {
       await this.setup.teardown(chat, chat.worktree);
@@ -372,6 +393,11 @@ export class ThreadWorktrees {
           `Hand this thread back first; ${chat.cameFrom!.computer} is waiting for it.`,
         );
       await this.core.active.assertIdle(id);
+      const others = this.sharers(chat);
+      if (others.length)
+        throw new Error(
+          `${sharedWith(others)} ${others.length === 1 ? "works" : "work"} in this worktree too, so it stays; archive the others first.`,
+        );
       await this.drop(chat, worktree);
     });
   }
@@ -387,6 +413,7 @@ export class ThreadWorktrees {
   ) {
     return this.core.control(id, async () => {
       const { chat, worktree } = await this.of(id);
+      if (this.sharers(chat).length) return "another thread works in it";
       const why = await kept(chat);
       if (why) return why;
       // Idle agent processes started in the folder; the next message resumes their sessions.

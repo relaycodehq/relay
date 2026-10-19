@@ -78,6 +78,17 @@ export class WorktreeSetup {
 
   /** The worktree's port offset, given one the first time it's asked for. */
   private portOffset(chat: ProjectChat, worktree: ChatWorktree) {
+    // A folder another thread works in already has its offset; it's one folder.
+    const sibling = (this.core.store.get().chats ?? []).find(
+      (c) =>
+        c.id !== chat.id &&
+        !!worktree.path &&
+        c.worktree?.path === worktree.path &&
+        !c.worktree.removedAt &&
+        c.worktree.portOffset !== undefined,
+    );
+    if (worktree.portOffset === undefined && sibling)
+      worktree.portOffset = sibling.worktree!.portOffset;
     if (worktree.portOffset === undefined) {
       const used = (this.core.store.get().chats ?? []).flatMap((c) =>
         c.id !== chat.id &&

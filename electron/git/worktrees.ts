@@ -378,6 +378,8 @@ export async function worktreeStartProblem(
   start: WorktreeStart,
   held: (branch: string) => string | undefined = () => undefined,
 ) {
+  // Joining another thread's worktree makes nothing new; the thread checks it.
+  if ("thread" in start) return undefined;
   const name = "on" in start ? start.on : start.off;
   const { sha, branch, remote, local, caught } = await resolveStart(root, name);
   if ("off" in start) return sha ? undefined : `There's no branch ${name}.`;

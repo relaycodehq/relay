@@ -5,10 +5,12 @@ import {
   ChevronDown,
   Folder,
   FolderGit2,
+  FolderSymlink,
   GitBranch,
   GitBranchPlus,
 } from "lucide-react";
 import {
+  joinableWorktrees,
   threadOnBranch,
   type ChatWorkspace,
   type Project,
@@ -53,7 +55,7 @@ export function NewWorkspacePicker({
 }) {
   const [open, setOpen] = useState(false);
   // The branch list a "…" item opens in the menu's place, never touching the checkout.
-  const [picking, setPicking] = useState<"on" | "off">();
+  const [picking, setPicking] = useState<"on" | "off" | "join">();
   const trigger = useRef<HTMLButtonElement>(null);
   const { start, setStart } = worktree;
   const branches = useQuery({
@@ -61,11 +63,13 @@ export function NewWorkspacePicker({
     queryFn: () => api.projectBranches(project.id),
     enabled: !!picking || !!start,
   });
-  // Branches kept for other threads' worktrees aren't free to carry on.
+  // Branches kept for other threads' worktrees aren't free to carry on, and
+  // those threads' worktrees are what another can join.
+  const joining = start && "thread" in start ? start.thread : undefined;
   const chats = useQuery({
     queryKey: ["project-chats", project.id],
     queryFn: () => api.projectChats(project.id),
-    enabled: picking === "on",
+    enabled: picking === "on" || picking === "join" || !!joining,
   });
   const counts = useQuery({
     queryKey: ["project-branch-counts", project.id],
@@ -88,10 +92,17 @@ export function NewWorkspacePicker({
   const inWorktree = worktree.workspace === "worktree" && !startOn;
   const carried = inWorktree ? carriedBranch(start, branches.data) : undefined;
   const off = inWorktree && start && "off" in start ? start.off : undefined;
+  const joined = inWorktree
+    ? chats.data?.find((c) => c.id === joining)
+    : undefined;
   // The list as it is now, though the trigger's label makes do with a cached one.
   const pickBranch = (kind: "on" | "off") => {
     setPicking(kind);
     void branches.refetch();
+  };
+  const pickThread = () => {
+    setPicking("join");
+    void chats.refetch();
   };
   const pickStart = (next: typeof start) => {
     setStartOn(undefined);
@@ -117,6 +128,10 @@ export function NewWorkspacePicker({
           ) : carried ? (
             <span className="workspace-where-label">
               Worktree on <MiddleTruncate text={carried} kind="branch" />
+            </span>
+          ) : joining ? (
+            <span className="workspace-where-label workspace-where-joined">
+              With {joined ? `“${joined.title}”` : "another thread"}
             </span>
           ) : (
             <span className="workspace-where-label">
@@ -185,6 +200,13 @@ export function NewWorkspacePicker({
                 <GitBranchPlus size={14} />
                 New worktree off…
               </Menu.Item>
+              <Menu.Item
+                className="composer-select-item workspace-item"
+                onClick={pickThread}
+              >
+                <FolderSymlink size={14} />
+                In another thread's worktree…
+              </Menu.Item>
               {!!computers.data?.length && (
                 <>
                   <Menu.Separator className="handoff-menu-separator" />
@@ -234,47 +256,70 @@ export function NewWorkspacePicker({
         onOpenChange={(next) => {
           if (!next) setPicking(undefined);
         }}
-        label={picking === "on" ? "Branch to carry on" : "Branch to start off"}
+        label={
+          picking === "join"
+            ? "Thread whose worktree to share"
+            : picking === "on"
+              ? "Branch to carry on"
+              : "Branch to start off"
+        }
         value={
-          picking === "on"
-            ? start && "on" in start
-              ? start.on
-              : undefined
-            : (off ?? checkoutBranch ?? undefined)
+          picking === "join"
+            ? joining
+            : picking === "on"
+              ? start && "on" in start
+                ? start.on
+                : undefined
+              : (off ?? checkoutBranch ?? undefined)
         }
         options={
-          picking && branches.data
-            ? branchOptions(
-                picking === "on"
-                  ? carryOnNames(
-                      branches.data,
-                      (b) => !!threadOnBranch(chats.data ?? [], b),
-                    )
-                  : branchOffNames(branches.data),
-                branches.data,
-                counts.data,
-                Date.now(),
-                // Picking origin/… fetches it first, which its local twin doesn't.
-                { keepRemotes: picking === "off" },
-              )
-            : []
+          picking === "join"
+            ? joinableWorktrees(chats.data ?? []).map((c) => ({
+                value: c.id,
+                label: c.title,
+                detail: c.worktree!.branch,
+                icon: <FolderGit2 size={14} />,
+              }))
+            : picking && branches.data
+              ? branchOptions(
+                  picking === "on"
+                    ? carryOnNames(
+                        branches.data,
+                        (b) => !!threadOnBranch(chats.data ?? [], b),
+                      )
+                    : branchOffNames(branches.data),
+                  branches.data,
+                  counts.data,
+                  Date.now(),
+                  // Picking origin/… fetches it first, which its local twin doesn't.
+                  { keepRemotes: picking === "off" },
+                )
+              : []
         }
         onChange={(name) =>
           pickStart(
-            picking === "on"
-              ? { on: name }
-              : name === checkoutBranch
-                ? undefined
-                : { off: name },
+            picking === "join"
+              ? { thread: name }
+              : picking === "on"
+                ? { on: name }
+                : name === checkoutBranch
+                  ? undefined
+                  : { off: name },
           )
         }
-        placeholder="Search branches…"
+        placeholder={
+          picking === "join" ? "Search threads…" : "Search branches…"
+        }
         empty={
-          branches.isError
-            ? "Couldn't list the branches."
-            : branches.isPending
-              ? "Loading branches…"
-              : "No branches to pick."
+          picking === "join"
+            ? chats.isPending
+              ? "Loading threads…"
+              : "No thread here works in a worktree yet."
+            : branches.isError
+              ? "Couldn't list the branches."
+              : branches.isPending
+                ? "Loading branches…"
+                : "No branches to pick."
         }
         {...branchSelect}
       />
