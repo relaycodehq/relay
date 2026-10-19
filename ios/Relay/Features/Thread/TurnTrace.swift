@@ -72,7 +72,7 @@ struct TurnTrace: View {
                 }
             }
             row(head, turn)
-        } else if activity.count == 1 || alone {
+        } else if activity.count == 1 || (alone && !turn.live) {
             ForEach(activity) { row($0, turn) }
         } else {
             Fold(label: summarizeActivity(activity)) {
