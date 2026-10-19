@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { AgentProvider } from "../../shared/agents";
 import type { ChatCameFrom, HandoffSettings } from "../../shared/handoff";
 import {
@@ -18,6 +18,7 @@ import {
 } from "../../shared/projects";
 import type { ComputerProject, SetupRequest } from "../../shared/remote";
 import { repositoryNames } from "../git/bundles";
+import { git } from "../git/git";
 import { findExecutable } from "../platform/executables";
 import { expandHome } from "../projects/folder-inspect";
 
@@ -133,7 +134,7 @@ export class SetupAgents {
       : await clonesIn(expandHome(await this.host.defaultFolder()), wanted);
     for (const path of candidates) {
       const names = await repositoryNames(path).catch((): string[] => []);
-      if (!has(names)) continue;
+      if (!has(names) || !(await cloned(path))) continue;
       const project = await this.host.addAt(path);
       return {
         done: true,
@@ -175,6 +176,20 @@ async function setupAgent(
         runtimeMode: settings.runtimeMode,
         interactionMode: settings.interactionMode,
       };
+}
+
+/**
+ * Whether the clone at `path` is through: a clone still fetching has no
+ * commit at HEAD yet, and one still checking out holds the index lock.
+ */
+async function cloned(path: string) {
+  const head = await git(path, ["rev-parse", "--verify", "-q", "HEAD"]).then(
+    () => true,
+    () => false,
+  );
+  if (!head) return false;
+  const lock = await git(path, ["rev-parse", "--git-path", "index.lock"]);
+  return !(await lstat(resolve(path, lock.trim())).catch(() => undefined));
 }
 
 /** Repositories in `dir` named like one of `wanted`'s, any case. */

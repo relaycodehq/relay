@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import type { ProjectChatSend } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
@@ -60,4 +64,48 @@ it("sets up with the thread's own agent when it's installed there, else one that
     choice: { model: "", reasoningEffort: "" },
   });
   await expect(started(["git"])).rejects.toThrow(/No agent is installed/);
+});
+
+it("takes a clone in the default folder as done only once it's through", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-setup-progress-"));
+  try {
+    const repo = join(dir, "app");
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: repo });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    git("remote", "add", "origin", "https://github.com/me/app.git");
+    const added: string[] = [];
+    const agents = new SetupAgents({
+      handedOver: () => undefined,
+      adoptSetup: async () => {},
+      scratch: async () => ({ id: "scratch" }),
+      defaultFolder: async () => dir,
+      addAt: async (path) => {
+        added.push(path);
+        return { id: "p", name: "app", path } as never;
+      },
+      projects: async () => [],
+    });
+    // Still fetching: the remote is set, but nothing is at HEAD yet.
+    expect(await agents.progress(["me/app"])).toEqual({ done: false });
+    await writeFile(join(repo, "README.md"), "# App\n");
+    git("add", "-A");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "-m",
+      "First",
+    );
+    // Still checking out.
+    await writeFile(join(repo, ".git", "index.lock"), "");
+    expect(await agents.progress(["me/app"])).toEqual({ done: false });
+    await rm(join(repo, ".git", "index.lock"));
+    expect(await agents.progress(["me/app"])).toMatchObject({ done: true });
+    expect(added).toEqual([repo]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
