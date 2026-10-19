@@ -30,6 +30,8 @@ export function branchOptions(
   list: BranchList | undefined,
   counts: BranchCounts | undefined,
   now = Date.now(),
+  // Where the remote one does something the local doesn't, like being fetched first.
+  { keepRemotes = false }: { keepRemotes?: boolean } = {},
 ): SearchOption[] {
   const byName = new Map(
     list?.branches.flatMap((b) => {
@@ -40,6 +42,7 @@ export function branchOptions(
   const isBase = (name: string) =>
     !!list?.bases.some((b) => name === b || name === `origin/${b}`);
   const twinOf = (name: string) => {
+    if (keepRemotes) return undefined;
     const b = byName.get(name);
     const twin =
       b && list && byName.get(localTwin(list.branches, b)?.name ?? "");

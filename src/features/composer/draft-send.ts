@@ -36,6 +36,7 @@ import {
   loadDraftLinks,
   loadDraftScope,
   draftWorktreeBranch,
+  draftWorktreeStart,
   loadDraftWorkspace,
   markDraftSent,
   readDraft,
@@ -142,6 +143,7 @@ export async function sendDraft(
       scope.kind === "project" ? loadDraftWorkspace(id, project) : undefined,
       scope.kind === "project" ? draftWorktreeBranch(id, project) : undefined,
       loadDraftLinks(id),
+      scope.kind === "project" ? draftWorktreeStart(id, project) : undefined,
     ));
   started.set(id, target);
   const attachments = loadDraftAttachments(id);

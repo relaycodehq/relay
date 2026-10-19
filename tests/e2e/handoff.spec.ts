@@ -114,7 +114,9 @@ test("a worktree thread goes to another computer from its header and comes back 
 
     // A worktree thread on the laptop; the fixture agent edits a file there.
     await laptop.page.getByRole("button", { name: /Current checkout/ }).click();
-    await laptop.page.getByRole("menuitem", { name: "New worktree" }).click();
+    await laptop.page
+      .getByRole("menuitem", { name: "New worktree", exact: true })
+      .click();
     await laptop.page.getByLabel("Message project").fill("fixture edit files");
     await laptop.page
       .getByRole("button", { name: "Send message", exact: true })

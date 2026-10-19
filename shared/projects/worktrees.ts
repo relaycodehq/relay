@@ -1,6 +1,49 @@
+import { z } from "zod";
+import { branchNameProblem } from "../branch-names";
 import type { AgentProvider } from "../agents";
 import type { ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
+
+/**
+ * A branch as Git lists it, local or `origin/…`. No part starts with `-`, so
+ * with its remote cut off it's never an option, and Git's own rules keep out
+ * `:` and `..`, so it's never a refspec.
+ */
+const refNameSchema = z
+  .string()
+  .trim()
+  .max(250)
+  .refine(
+    (name) =>
+      !branchNameProblem(name) &&
+      !name.split("/").some((part) => part.startsWith("-")),
+  );
+/**
+ * Where a new thread's worktree starts, when not on a new branch off the
+ * checkout's commit: a new branch `off` another branch, a remote one
+ * fetched first, or `on` an existing branch, carried on in the worktree.
+ */
+export const worktreeStartSchema = z.union([
+  z.object({ off: refNameSchema }).strict(),
+  z.object({ on: refNameSchema }).strict(),
+]);
+export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
+
+/**
+ * The thread whose worktree is on `branch`, open or removed with the branch
+ * kept for its next message, which another thread carrying it on would take.
+ * An archived one lets it go: unarchived, it gets a `relay/…` branch of its
+ * own, or waits for the branch if it was carrying it on too.
+ */
+export const threadOnBranch = <
+  T extends { worktree?: ChatWorktree; archivedAt?: number },
+>(
+  chats: readonly T[],
+  branch: string,
+) =>
+  chats.find(
+    (c) => !c.archivedAt && !!c.worktree?.path && c.worktree.branch === branch,
+  );
 
 /** A thread that works in its own git worktree, leaving the checkout alone. */
 export interface ChatWorktree {
@@ -14,13 +57,26 @@ export interface ChatWorktree {
    */
   named?: string;
   /**
-   * The branch the user named that couldn't be made by the time the first
-   * message sent, and why; the worktree went on a `relay/…` branch instead.
+   * The branch the user named, or picked to carry on or (`off`) start off,
+   * that couldn't be used by the time the first message sent, and why; the
+   * worktree went on a `relay/…` branch off the checkout's commit instead.
    */
-  wanted?: { branch: string; problem: string };
+  wanted?: { branch: string; problem: string; off?: true };
+  /** Where the first message makes it, picked for the new thread; gone once it's made. */
+  startFrom?: WorktreeStart;
+  /**
+   * The branch it was made off in place of the checkout's. Made again, it
+   * stays off it rather than moving up to the checkout's commit.
+   */
+  startedOff?: string;
+  /**
+   * It carries on a branch that was there before the thread. Relay never
+   * renames, resets or deletes it, and it keeps its name in `named`.
+   */
+  existing?: true;
   /** The checkout's branch it was made from; its changes are what that branch lacks. */
   from?: string;
-  /** The checkout's commit when the worktree was made. */
+  /** The commit the worktree was made at: the checkout's, or the branch's it started off or carried on. */
   head?: string;
   /** Where its branch starts: `head`, or for older worktrees a snapshot of the checkout's uncommitted edits. */
   start?: string;
@@ -157,6 +213,8 @@ export interface WorktreeStatus {
   removed: boolean;
   /** Removed after the thread settled, its branch kept; see `ChatWorktree.cleanedUp`. */
   cleanedUp?: true;
+  /** It carries on a branch that was there before it, which removing it keeps. */
+  existing?: true;
 }
 /** The branch a new thread's worktree would be made on, and why it can't, if it can't. */
 export interface WorktreeBranch {

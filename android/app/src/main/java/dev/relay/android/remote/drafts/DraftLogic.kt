@@ -100,6 +100,7 @@ fun extrasSummary(extras: DraftExtras?): String {
         "a pull request".takeIf { extras.scope == "pr" },
         "a review".takeIf { extras.scope == "review" },
         "a branch name".takeIf { extras.branch == true },
+        "a branch to start from".takeIf { extras.start == true },
     )
     return if (parts.size < 2) parts.firstOrNull() ?: ""
     else parts.dropLast(1).joinToString(", ") + " and " + parts.last()

@@ -45,6 +45,8 @@ export interface DraftExtras {
   scope?: "pr" | "review";
   /** A new thread's own branch name. */
   branch?: true;
+  /** A branch a new thread's worktree carries on or starts off. */
+  start?: true;
 }
 
 export interface SharedDraft extends DraftBody {
@@ -101,6 +103,7 @@ const extrasSchema = z
     links: z.number().int().min(1).max(1000).optional(),
     scope: z.enum(["pr", "review"]).optional(),
     branch: z.literal(true).optional(),
+    start: z.literal(true).optional(),
   })
   .strict();
 const bodyShape = {
@@ -328,6 +331,7 @@ export function extrasSummary(extras: DraftExtras | undefined): string {
     extras.scope === "pr" && "a pull request",
     extras.scope === "review" && "a review",
     extras.branch && "a branch name",
+    extras.start && "a branch to start from",
   ].filter((p): p is string => !!p);
   return parts.length < 2
     ? (parts[0] ?? "")

@@ -4,6 +4,8 @@ export interface BranchRef {
   ref: string;
   current: boolean;
   remote: boolean;
+  /** For a remote branch: the local one checking it out would make, its name without the remote's. */
+  local?: string;
   worktree: boolean;
   /** On a remote whose history shares nothing with HEAD, so no use as a base. */
   unrelated: boolean;
@@ -53,6 +55,11 @@ export type BranchAction = z.infer<typeof branchActionSchema>;
 /** The local branch checking out remote `b` would land on, if it exists. */
 export function localTwin(list: BranchRef[], b: BranchRef) {
   if (!b.remote) return undefined;
-  const name = b.name.slice(b.name.indexOf("/") + 1);
+  const name = b.local ?? b.name.slice(b.name.indexOf("/") + 1);
   return list.find((l) => !l.remote && l.name === name);
 }
+/** Which of `remotes` remote branch `name` (`origin/…`) is on; the longest, as remotes can hold a `/`. */
+export const remoteOfBranch = (name: string, remotes: string[]) =>
+  remotes
+    .filter((r) => name.startsWith(`${r}/`) && name.length > r.length + 1)
+    .sort((a, b) => b.length - a.length)[0];

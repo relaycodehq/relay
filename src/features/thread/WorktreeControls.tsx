@@ -113,6 +113,7 @@ export function WorktreeDialogs({
       <RemoveWorktreeDialog
         files={worktree.status?.files.length ?? 0}
         from={worktree.status?.from}
+        existing={!!worktree.status?.existing}
         onCancel={close}
         onRemove={() => {
           close();
@@ -420,9 +421,11 @@ export function WorktreeMenu({
         title={
           status?.cleanedUp
             ? `Removed a while after the thread settled. ${status.branch ?? "Its branch"} stays; the next message checks it out in a worktree again`
-            : status?.removed
-              ? "The next message makes a new worktree from the project folder"
-              : "Made with the first message"
+            : status?.removed && status.existing
+              ? `${status.branch ?? "Its branch"} stays; the next message checks it out in a worktree again`
+              : status?.removed
+                ? "The next message makes a new worktree from the project folder"
+                : "Made with the first message"
         }
       >
         <FolderGit2 size={13} />
@@ -569,24 +572,29 @@ export function landedNote(status: WorktreeStatus): MessageNote | undefined {
   };
 }
 
-/** The note when the branch named for the thread was taken by the time it sent. */
+/** The note when the branch named or picked for the thread couldn't be used by the time it sent. */
 export function renamedNote(worktree: ChatWorktree): MessageNote | undefined {
   const { wanted, branch } = worktree;
   if (!wanted || !branch) return undefined;
   return {
     key: "worktree-renamed",
-    text: `Its worktree is on ${branch}, not ${wanted.branch}: ${wanted.problem}`,
+    text: wanted.off
+      ? `Its worktree is on ${branch} off the project folder's commit, not off ${wanted.branch}: ${wanted.problem}`
+      : `Its worktree is on ${branch}, not ${wanted.branch}: ${wanted.problem}`,
   };
 }
 
 function RemoveWorktreeDialog({
   files,
   from,
+  existing,
   onCancel,
   onRemove,
 }: {
   files: number;
   from?: string;
+  /** It carries on a branch from before the thread, which stays. */
+  existing: boolean;
   onCancel: () => void;
   onRemove: () => void;
 }) {
@@ -594,8 +602,10 @@ function RemoveWorktreeDialog({
     <Modal title="Remove the worktree?" onClose={onCancel}>
       <p>
         {files} {files === 1 ? "file has" : "files have"} changes that aren’t in{" "}
-        {from ?? "the project folder’s branch"}. Relay keeps a snapshot, but the
-        worktree’s folder and branch go away.
+        {from ?? "the project folder’s branch"}.{" "}
+        {existing
+          ? "The branch stays with its commits, but what isn’t committed goes with the worktree’s folder, kept only in Relay’s snapshot."
+          : "Relay keeps a snapshot, but the worktree’s folder and branch go away."}
       </p>
       <div className="modal-actions">
         <button type="button" onClick={onCancel}>

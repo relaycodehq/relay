@@ -25,9 +25,11 @@ import {
   retitleWorktree,
   worktreeChanges,
   worktreeHoldsWork,
+  worktreeStartProblem,
   type MadeWorktree,
 } from "./worktrees";
 import { mergeBranch, mergePlan } from "./branch-merge";
+import { worktreeStartSchema } from "../../shared/projects";
 import type { ChatWorktree } from "../../shared/projects";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
@@ -139,6 +141,250 @@ it("removes the folder and branch but keeps a snapshot of what it held", async (
   expect(git(root, "show", `refs/relay/worktrees/${chatId}/kept:c.ts`)).toBe(
     "sea",
   );
+});
+
+/** A branch `name` one commit ahead of main, with the checkout back on main. */
+function branchAhead(name: string, file = "feature.ts") {
+  git(root, "switch", "-qc", name);
+  execFileSync("sh", ["-c", `echo feature > ${file}`], { cwd: root });
+  git(root, "add", file);
+  git(root, "commit", "-qm", "Feature");
+  git(root, "switch", "-q", "main");
+  return git(root, "rev-parse", name);
+}
+
+/** An `origin` with `name` on it a commit ahead of what was last fetched. */
+async function remoteAhead(name: string) {
+  const remote = join(root, "..", "remote.git");
+  execFileSync("git", ["init", "-q", "--bare", remote]);
+  git(root, "remote", "add", "origin", remote);
+  git(root, "push", "-q", "origin", `main:${name}`);
+  git(root, "fetch", "-q", "origin");
+  const other = join(root, "..", "other");
+  execFileSync("git", ["clone", "-q", "-b", name, remote, other]);
+  git(other, "config", "user.name", "Test");
+  git(other, "config", "user.email", "test@example.invalid");
+  await writeFile(join(other, "pushed.ts"), "pushed\n");
+  git(other, "add", ".");
+  git(other, "commit", "-qm", "Pushed elsewhere");
+  git(other, "push", "-q");
+  return git(other, "rev-parse", "HEAD");
+}
+
+it("starts a new branch off another branch, its changes counted against that one", async () => {
+  const tip = branchAhead("feature");
+  const worktree = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "feature" },
+  });
+  expect(worktree).toMatchObject({ head: tip, start: tip, from: "feature" });
+  expect(git(worktree.path, "rev-parse", "HEAD")).toBe(tip);
+  expect(git(root, "branch", "--show-current")).toBe("main");
+  await writeFile(join(worktree.path, "b.ts"), "changed\n");
+  expect(await paths(worktree)).toEqual(["b.ts"]);
+});
+
+it("fetches a remote branch before starting off it", async () => {
+  const pushed = await remoteAhead("release");
+  const worktree = await createWorktree(root, dir, "Hotfix", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(git(worktree.path, "rev-parse", "HEAD")).toBe(pushed);
+  // No local release to count against, so its changes count from where it started.
+  expect(worktree.from).toBeUndefined();
+  expect(worktree.branch).toBe("relay/hotfix");
+});
+
+it("carries on an existing branch, which removing the worktree leaves alone", async () => {
+  const tip = branchAhead("relay/setup-phase");
+  const chatId = randomUUID();
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "relay/setup-phase" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/setup-phase",
+    named: "relay/setup-phase",
+    existing: true,
+    head: tip,
+    from: "main",
+  });
+  expect(await paths(worktree)).toEqual(["feature.ts"]);
+  // Already named after the branch: the thread's title doesn't move it.
+  expect(await retitleWorktree(root, worktree, "Something else")).toBe(
+    undefined,
+  );
+
+  await removeWorktree(root, chatId, worktree);
+  expect(git(root, "rev-parse", "relay/setup-phase")).toBe(tip);
+});
+
+it("brings a carried-on branch back as it was, even with nothing over the checkout", async () => {
+  git(root, "branch", "old-work");
+  await writeFile(join(root, "b.ts"), "main moved on\n");
+  git(root, "commit", "-qam", "Main moves on");
+  const at = git(root, "rev-parse", "old-work");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "old-work" },
+  });
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+  expect(back?.path).toBe(worktree.path);
+  expect(git(root, "rev-parse", "old-work")).toBe(at);
+});
+
+it("carries on a branch only the remote has, on a local branch tracking it", async () => {
+  const pushed = await remoteAhead("relay/remote-only");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "origin/relay/remote-only" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/remote-only",
+    existing: true,
+    head: pushed,
+  });
+  expect(
+    git(root, "rev-parse", "--abbrev-ref", "relay/remote-only@{upstream}"),
+  ).toBe("origin/relay/remote-only");
+});
+
+it("won't carry on a remote branch through a local twin that's behind it", async () => {
+  await remoteAhead("release");
+  git(root, "branch", "release", "origin/release");
+  // Caught up with what was fetched; the first message's fetch finds more.
+  expect(
+    await worktreeStartProblem(root, { on: "origin/release" }),
+  ).toBeUndefined();
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "origin/release" },
+  });
+  expect(worktree.branch).toBe("relay/carry-on");
+  expect(worktree.wanted?.problem).toBe(
+    "release here is behind origin/release; carry on release or bring it up to date first.",
+  );
+  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
+    worktree.wanted?.problem,
+  );
+});
+
+it("says before the thread starts when its branch can't be used", async () => {
+  expect(await worktreeStartProblem(root, { on: "main" })).toMatch(
+    /^main is checked out in /,
+  );
+  expect(await worktreeStartProblem(root, { off: "gone" })).toBe(
+    "There's no branch gone.",
+  );
+  branchAhead("feature");
+  expect(await worktreeStartProblem(root, { on: "feature" })).toBeUndefined();
+  expect(await worktreeStartProblem(root, { off: "feature" })).toBeUndefined();
+});
+
+it("refuses a remote branch whose local name clashes, and one another thread keeps", async () => {
+  await remoteAhead("release");
+  git(root, "branch", "release/1.0");
+  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
+    "There's a branch called release/1.0, so release can't be made.",
+  );
+  branchAhead("feature");
+  expect(
+    await worktreeStartProblem(root, { on: "feature" }, (branch) =>
+      branch === "feature" ? "kept" : undefined,
+    ),
+  ).toBe("kept");
+});
+
+it("leaves a cleaned-up thread's folder to it when carrying on a branch of that name", async () => {
+  const first = await made();
+  await removeWorktree(root, randomUUID(), first, { keepBranch: true });
+  branchAhead("split-the-store");
+  const carried = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "split-the-store" },
+  });
+  expect(carried.path).toBe(`${first.path}-2`);
+
+  const back = await reattachWorktree(root, { ...first, removedAt: 1 });
+  expect(back?.path).toBe(first.path);
+});
+
+it("brings a thread made off another branch back on it, not on the checkout's commit", async () => {
+  git(root, "branch", "older");
+  const at = git(root, "rev-parse", "older");
+  await writeFile(join(root, "b.ts"), "main moved on\n");
+  git(root, "commit", "-qam", "Main moves on");
+  const worktree = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "older" },
+  });
+  expect(worktree.startedOff).toBe("older");
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+  expect(back).toMatchObject({ head: at, from: "older" });
+  expect(git(back!.path!, "rev-parse", "HEAD")).toBe(at);
+});
+
+it("goes off the checkout, and says why, when the picked branch went before the first message", async () => {
+  const held = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "main" },
+  });
+  expect(held.branch).toBe("relay/carry-on");
+  expect(held.existing).toBeUndefined();
+  expect(held.wanted).toMatchObject({ branch: "main" });
+  expect(held.wanted?.problem).toMatch(/Couldn't open main in a worktree/);
+
+  const gone = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "gone" },
+  });
+  expect(gone.head).toBe(git(root, "rev-parse", "HEAD"));
+  expect(gone.wanted).toEqual({
+    branch: "gone",
+    problem: "There's no branch gone to start from anymore.",
+    off: true,
+  });
+
+  git(root, "branch", "team/login");
+  const both = await createWorktree(root, dir, "Both gone", {
+    named: "team/login",
+    startFrom: { off: "gone" },
+  });
+  expect(both.wanted).toEqual({
+    branch: "gone",
+    problem:
+      "There's no branch gone to start from anymore. And not on team/login: team/login already exists.",
+    off: true,
+  });
+});
+
+it("counts a remote branch's changes against its local twin only when that has caught up", async () => {
+  await remoteAhead("release");
+  // Made before the fetch, so the commit pushed elsewhere isn't on it.
+  git(root, "branch", "release", "origin/release");
+  const behind = await createWorktree(root, dir, "Behind", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(behind.from).toBeUndefined();
+
+  git(root, "branch", "-f", "release", "origin/release");
+  const level = await createWorktree(root, dir, "Level", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(level.from).toBe("release");
+});
+
+it("takes branch names, never git options or refspecs", () => {
+  const takes = (name: string) =>
+    worktreeStartSchema.safeParse({ off: name }).success;
+  expect(takes("origin/relay/setup-phase")).toBe(true);
+  expect(takes("feature+x")).toBe(true);
+  for (const name of [
+    "-x",
+    "origin/--upload-pack=touch-pwned",
+    "origin/-x",
+    "origin/a:refs/heads/main",
+    "a..b",
+    "a/.hidden",
+    "a b",
+    "a@{1}",
+  ])
+    expect(takes(name), name).toBe(false);
 });
 
 it.each(["node_modules", "node_modules/", "/node_modules/"])(

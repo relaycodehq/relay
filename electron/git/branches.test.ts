@@ -80,6 +80,16 @@ it("rejects stale selections, invalid names, duplicates and another worktree", a
     /another worktree/,
   );
 });
+it("frees a branch whose worktree folder was deleted by hand", async () => {
+  const gone = await realpath(await mkdtemp(join(tmpdir(), "relay-gone-")));
+  git("worktree", "add", "-q", join(gone, "wt"), "feature");
+  await rm(gone, { recursive: true, force: true });
+  const listed = (await branches(root)).branches.find(
+    (b) => b.name === "feature",
+  );
+  expect(listed?.worktree).toBe(false);
+  expect((await run("switch", "refs/heads/feature")).current).toBe("feature");
+});
 it("creates a tracking branch for a remote ref and skips symbolic remote HEAD", async () => {
   git("remote", "add", "origin", "/unused");
   git("update-ref", "refs/remotes/origin/remote-feature", "HEAD");

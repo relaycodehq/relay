@@ -288,6 +288,23 @@ export async function checkedOutOr(
     return { branch: known.branch, commit: known.commit };
   }
 }
+/**
+ * The repository's worktrees, the main checkout first, with the branch each
+ * has checked out; a prunable one's folder is gone, only Git's record is left.
+ */
+export async function worktreeList(root: string) {
+  const out = await git(root, ["worktree", "list", "--porcelain"]);
+  return out.split("\n\n").flatMap((block) => {
+    const lines = block.split("\n");
+    const value = (key: string) =>
+      lines.find((l) => l.startsWith(key + " "))?.slice(key.length + 1);
+    const path = value("worktree");
+    if (!path) return [];
+    const branch = value("branch")?.replace(/^refs\/heads\//, "");
+    const prunable = lines.some((l) => /^prunable( |$)/.test(l));
+    return [{ path, ...(branch ? { branch } : {}), prunable }];
+  });
+}
 /** Git's output as bytes, up to `limit`; past it, the content isn't text Relay shows. */
 export async function gitBytes(
   root: string,

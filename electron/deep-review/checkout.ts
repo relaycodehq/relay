@@ -4,7 +4,7 @@
 // thread's checkout. The thread's Git and file panes follow it there.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { currentBranchOrNull, git } from "../git/git";
+import { currentBranchOrNull, git, worktreeList } from "../git/git";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
 
 /** The folder under Relay's worktrees that holds the ones made for reviews, one per review thread. */
@@ -23,32 +23,13 @@ const isLocalBranch = (root: string, branch: string) =>
     () => false,
   );
 
-/** Each worktree of the repository and the branch it has checked out, if any. */
-async function worktreesOf(root: string) {
-  const list = await git(root, ["worktree", "list", "--porcelain"]);
-  return list
-    .split("\n\n")
-    .map((block) => {
-      const line = (key: string) =>
-        block
-          .split("\n")
-          .find((l) => l.startsWith(key + " "))
-          ?.slice(key.length + 1);
-      return { path: line("worktree"), branch: line("branch") };
-    })
-    .filter((w): w is { path: string; branch: string | undefined } =>
-      Boolean(w.path),
-    );
-}
-
 const dirty = async (path: string) =>
   !!(await git(path, ["status", "--porcelain", "--untracked-files=normal"]));
 
 /** Where `branch` is checked out other than `here`, if anywhere. */
 async function checkedOutElsewhere(root: string, branch: string, here: string) {
-  return (await worktreesOf(root)).find(
-    (w) =>
-      w.branch === `refs/heads/${branch}` && resolve(w.path) !== resolve(here),
+  return (await worktreeList(root)).find(
+    (w) => w.branch === branch && resolve(w.path) !== resolve(here),
   )?.path;
 }
 
