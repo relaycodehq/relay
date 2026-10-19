@@ -203,6 +203,7 @@ export function ProjectChat({
         ? workspace
         : "checkout",
     branch: chat ? undefined : worktree.newBranch.trim() || undefined,
+    start: worktree.start,
     onContinued: async (created) => {
       if (chat) return onOpenThread(created);
       await onCreated(created);

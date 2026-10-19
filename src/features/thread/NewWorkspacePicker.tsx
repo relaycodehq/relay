@@ -67,7 +67,6 @@ export function NewWorkspacePicker({
     queryKey: ["project-branches", project.id],
     queryFn: () => api.projectBranches(project.id),
     enabled: !!picking || !!start,
-    staleTime: 0,
   });
   const counts = useQuery({
     queryKey: ["project-branch-counts", project.id],
@@ -93,6 +92,11 @@ export function NewWorkspacePicker({
   const inWorktree = worktree.workspace === "worktree" && !startOn;
   const carried = inWorktree ? carriedBranch(start, branches.data) : undefined;
   const off = inWorktree && start && "off" in start ? start.off : undefined;
+  // The list as it is now, though the trigger's label makes do with a cached one.
+  const pickBranch = (kind: "on" | "off") => {
+    setPicking(kind);
+    void branches.refetch();
+  };
   const pickStart = (next: typeof start) => {
     setStartOn(undefined);
     worktree.setWorkspace("worktree");
@@ -169,14 +173,14 @@ export function NewWorkspacePicker({
               <Menu.Separator className="handoff-menu-separator" />
               <Menu.Item
                 className="composer-select-item workspace-item"
-                onClick={() => setPicking("on")}
+                onClick={() => pickBranch("on")}
               >
                 <GitBranch size={14} />
                 Worktree on a branch…
               </Menu.Item>
               <Menu.Item
                 className="composer-select-item workspace-item"
-                onClick={() => setPicking("off")}
+                onClick={() => pickBranch("off")}
               >
                 <GitBranchPlus size={14} />
                 New worktree off…
@@ -271,6 +275,9 @@ export function NewWorkspacePicker({
                   : branchOffNames(branches.data),
                 branches.data,
                 counts.data,
+                Date.now(),
+                // Picking origin/… fetches it first, which its local twin doesn't.
+                { keepRemotes: picking === "off" },
               )
             : []
         }
@@ -285,7 +292,11 @@ export function NewWorkspacePicker({
         }
         placeholder="Search branches…"
         empty={
-          branches.isPending ? "Loading branches…" : "No branches to pick."
+          branches.isError
+            ? "Couldn't list the branches."
+            : branches.isPending
+              ? "Loading branches…"
+              : "No branches to pick."
         }
         {...branchSelect}
       />

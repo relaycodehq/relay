@@ -1,10 +1,6 @@
 import { localTwin, type BranchList } from "../../../shared/branches";
 import type { WorktreeStart } from "../../../shared/projects";
 
-/** A remote branch's name without its remote, as the local one tracking it would be called. */
-export const withoutRemote = (name: string) =>
-  name.slice(name.indexOf("/") + 1);
-
 /** The branches a new worktree can start off: every local one, and the remote ones that share history. */
 export const branchOffNames = (list: BranchList) =>
   list.branches.filter((b) => !b.unrelated).map((b) => b.name);
@@ -29,7 +25,5 @@ export const carriedBranch = (
   list?: BranchList,
 ) =>
   start && "on" in start
-    ? list?.branches.find((b) => b.name === start.on)?.remote
-      ? withoutRemote(start.on)
-      : start.on
+    ? (list?.branches.find((b) => b.name === start.on)?.local ?? start.on)
     : undefined;

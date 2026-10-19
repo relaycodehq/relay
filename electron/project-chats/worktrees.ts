@@ -8,8 +8,10 @@ import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
+  branchExists,
   branchKept,
   cantCarryOn,
+  carryOnProblem,
   copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
@@ -123,13 +125,29 @@ export class ThreadWorktrees {
     if (await worktreeExists(worktree)) return worktree.path!;
     const first = !worktree.path;
     const reattached = await reattachWorktree(root, worktree);
+    // A carried-on branch that's still there is the thread's to go on with,
+    // never swapped for a new one; it waits until it's free.
+    if (
+      !reattached &&
+      worktree.existing &&
+      worktree.branch &&
+      (await branchExists(root, worktree.branch))
+    ) {
+      const held = await carryOnProblem(root, worktree.branch);
+      throw new Error(
+        `Couldn't open ${worktree.branch} in a worktree again${held ? `: ${held}` : "."}`,
+      );
+    }
     chat.worktree =
       reattached ??
       (await createWorktree(
         root,
         this.folder,
         promptTitle(prompt ?? chat.title),
-        worktree,
+        // Gone, so a branch of its own instead, which the move note names.
+        worktree.existing
+          ? { ...worktree, named: undefined, existing: undefined }
+          : worktree,
       ));
     // Only a branch Relay picked waits for the title; the user's keeps its name.
     if (first && !chat.worktree.named) this.unnamed.add(chat.id);
@@ -310,6 +328,7 @@ export class ThreadWorktrees {
       ...(worktree.pr ? { pr: worktree.pr } : {}),
       removed: !!worktree.path && !exists,
       ...(worktree.cleanedUp && !exists ? { cleanedUp: true as const } : {}),
+      ...(worktree.existing ? { existing: true as const } : {}),
     };
   }
 

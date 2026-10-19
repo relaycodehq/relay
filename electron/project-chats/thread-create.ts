@@ -8,6 +8,7 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
+import { worktreeStartProblem } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
@@ -31,12 +32,23 @@ export class ThreadCreate {
       throw new Error("Only repository threads can work in a worktree.");
     // A carried-on branch keeps its own name.
     const named =
-      workspace === "worktree" && !(start && "on" in start) ? branch : undefined;
+      workspace === "worktree" && !(start && "on" in start)
+        ? branch
+        : undefined;
     const startFrom = workspace === "worktree" ? start : undefined;
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
+    // So is a branch to start from that isn't there or is held elsewhere;
+    // one that goes by the first message falls back the same way.
+    const startProblem =
+      startFrom &&
+      (await worktreeStartProblem(
+        await this.core.projects.root(projectId),
+        startFrom,
+      ));
+    if (startProblem) throw new Error(startProblem);
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,

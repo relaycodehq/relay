@@ -25,9 +25,11 @@ import {
   retitleWorktree,
   worktreeChanges,
   worktreeHoldsWork,
+  worktreeStartProblem,
   type MadeWorktree,
 } from "./worktrees";
 import { mergeBranch, mergePlan } from "./branch-merge";
+import { worktreeStartSchema } from "../../shared/projects";
 import type { ChatWorktree } from "../../shared/projects";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
@@ -245,10 +247,70 @@ it("carries on a branch only the remote has, on a local branch tracking it", asy
   ).toBe("origin/relay/remote-only");
 });
 
-it("says so when the branch to carry on is checked out somewhere already", async () => {
-  await expect(
-    createWorktree(root, dir, "Carry on", { startFrom: { on: "main" } }),
-  ).rejects.toThrow(/Couldn't open main in a worktree/);
+it("says before the thread starts when its branch can't be used", async () => {
+  expect(await worktreeStartProblem(root, { on: "main" })).toMatch(
+    /^main is checked out in /,
+  );
+  expect(await worktreeStartProblem(root, { off: "gone" })).toBe(
+    "There's no branch gone.",
+  );
+  branchAhead("feature");
+  expect(await worktreeStartProblem(root, { on: "feature" })).toBeUndefined();
+  expect(await worktreeStartProblem(root, { off: "feature" })).toBeUndefined();
+});
+
+it("goes off the checkout, and says why, when the picked branch went before the first message", async () => {
+  const held = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "main" },
+  });
+  expect(held.branch).toBe("relay/carry-on");
+  expect(held.existing).toBeUndefined();
+  expect(held.wanted).toMatchObject({ branch: "main" });
+  expect(held.wanted?.problem).toMatch(/Couldn't open main in a worktree/);
+
+  const gone = await createWorktree(root, dir, "Build on it", {
+    startFrom: { off: "gone" },
+  });
+  expect(gone.head).toBe(git(root, "rev-parse", "HEAD"));
+  expect(gone.wanted).toEqual({
+    branch: "gone",
+    problem: "There's no branch gone to start from anymore.",
+    off: true,
+  });
+});
+
+it("counts a remote branch's changes against its local twin only when that has caught up", async () => {
+  await remoteAhead("release");
+  // Made before the fetch, so the commit pushed elsewhere isn't on it.
+  git(root, "branch", "release", "origin/release");
+  const behind = await createWorktree(root, dir, "Behind", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(behind.from).toBeUndefined();
+
+  git(root, "branch", "-f", "release", "origin/release");
+  const level = await createWorktree(root, dir, "Level", {
+    startFrom: { off: "origin/release" },
+  });
+  expect(level.from).toBe("release");
+});
+
+it("takes branch names, never git options or refspecs", () => {
+  const takes = (name: string) =>
+    worktreeStartSchema.safeParse({ off: name }).success;
+  expect(takes("origin/relay/setup-phase")).toBe(true);
+  expect(takes("feature+x")).toBe(true);
+  for (const name of [
+    "-x",
+    "origin/--upload-pack=touch-pwned",
+    "origin/-x",
+    "origin/a:refs/heads/main",
+    "a..b",
+    "a/.hidden",
+    "a b",
+    "a@{1}",
+  ])
+    expect(takes(name), name).toBe(false);
 });
 
 it.each(["node_modules", "node_modules/", "/node_modules/"])(

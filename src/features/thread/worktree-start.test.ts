@@ -9,6 +9,7 @@ const ref = (name: string, more: Partial<BranchRef> = {}): BranchRef => ({
   remote: false,
   worktree: false,
   unrelated: false,
+  ...(more.remote ? { local: name.slice(name.indexOf("/") + 1) } : {}),
   ...more,
 });
 const list: BranchList = {
@@ -34,5 +35,13 @@ it("carries a remote branch on under its local name", () => {
     "relay/setup-phase",
   );
   expect(carriedBranch({ on: "main" }, list)).toBe("main");
+  // As Git names it, not cut at the first slash: the remote can hold one.
+  const fork = ref("my/fork/feature", { remote: true, local: "feature" });
+  expect(
+    carriedBranch(
+      { on: fork.name },
+      { ...list, branches: [...list.branches, fork] },
+    ),
+  ).toBe("feature");
   expect(carriedBranch({ off: "main" }, list)).toBeUndefined();
 });

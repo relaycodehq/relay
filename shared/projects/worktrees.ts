@@ -3,13 +3,19 @@ import type { AgentProvider } from "../agents";
 import type { ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
-/** A branch as Git lists it, local or `origin/…`; never an option. */
+/**
+ * A branch as Git lists it, local or `origin/…`. No part starts with `-` or
+ * `.`, so with its remote cut off it's never an option, and none of what
+ * Git keeps out of ref names, `:` and `..` among it, so never a refspec.
+ */
 const refNameSchema = z
   .string()
   .trim()
   .min(1)
   .max(250)
-  .regex(/^[^-\s][^\s]*$/);
+  .regex(
+    /^(?!.*(?:^|\/)[-.])(?!.*\.\.)(?!.*@\{)(?!.*\/\/)(?!.*[/.]$)[^\s\x00-\x1f\x7f:~^?*[\\]+$/,
+  );
 /**
  * Where a new thread's worktree starts, when not on a new branch off the
  * checkout's commit: a new branch `off` another branch, a remote one
@@ -33,10 +39,11 @@ export interface ChatWorktree {
    */
   named?: string;
   /**
-   * The branch the user named that couldn't be made by the time the first
-   * message sent, and why; the worktree went on a `relay/…` branch instead.
+   * The branch the user named, or picked to carry on or (`off`) start off,
+   * that couldn't be used by the time the first message sent, and why; the
+   * worktree went on a `relay/…` branch off the checkout's commit instead.
    */
-  wanted?: { branch: string; problem: string };
+  wanted?: { branch: string; problem: string; off?: true };
   /** Where the first message makes it, picked for the new thread; gone once it's made. */
   startFrom?: WorktreeStart;
   /**
@@ -183,6 +190,8 @@ export interface WorktreeStatus {
   removed: boolean;
   /** Removed after the thread settled, its branch kept; see `ChatWorktree.cleanedUp`. */
   cleanedUp?: true;
+  /** It carries on a branch that was there before it, which removing it keeps. */
+  existing?: true;
 }
 /** The branch a new thread's worktree would be made on, and why it can't, if it can't. */
 export interface WorktreeBranch {

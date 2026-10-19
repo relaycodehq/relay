@@ -5,6 +5,7 @@ import type {
   ChatSummary,
   LinkedFolder,
   Project,
+  WorktreeStart,
 } from "../../../shared/projects";
 import type { TerminalSession } from "../../../shared/terminal-sessions";
 import { api } from "../../lib/api";
@@ -17,6 +18,8 @@ const LOOKING = ":looking";
 const NONE = ":none";
 /** A listing older than this is looked up again when the menu asks. */
 const FRESH_MS = 15_000;
+const OFF_BRANCH =
+  "A terminal session goes on from the project folder, not another branch: pick New worktree or Current checkout first";
 
 /**
  * `/resume`: carries on a Claude Code or Codex session run in a terminal in
@@ -27,6 +30,7 @@ export function useResumeCommand({
   settingsKey,
   workspace,
   branch,
+  start,
   links,
   onContinued,
   onOpenThread,
@@ -37,6 +41,8 @@ export function useResumeCommand({
   settingsKey: string;
   workspace: "checkout" | "worktree";
   branch?: string;
+  /** A branch picked for the new worktree, which a session from the project folder can't go on. */
+  start?: WorktreeStart;
   links?: LinkedFolder[];
   /** A thread was made for the session. */
   onContinued: (chat: ChatSummary) => Promise<void>;
@@ -47,6 +53,8 @@ export function useResumeCommand({
   const qc = useQueryClient();
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const key = ["terminal-sessions", project.id];
+  // The session's files are the project folder's, so its worktree copies those.
+  const offBranch = workspace === "worktree" && !!start;
 
   function sessions(): TerminalSession[] | undefined {
     const state = qc.getQueryState<TerminalSession[]>(key);
@@ -86,6 +94,7 @@ export function useResumeCommand({
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "resume") return undefined;
       if (project.scratch) return "Scratchpad has no terminal sessions.";
+      if (offBranch) return `${OFF_BRANCH}.`;
       const typed = args.trim();
       if (typed === LOOKING) return "Still looking for sessions.";
       if (!typed || typed === NONE) return "Pick a session after /resume.";
@@ -103,8 +112,11 @@ export function useResumeCommand({
       const list = sessions();
       if (!list)
         return [{ value: LOOKING, label: "Looking for sessions…", source: "" }];
-      const where =
-        workspace === "worktree" ? "Continues in a new worktree · " : "";
+      const where = offBranch
+        ? `${OFF_BRANCH} · `
+        : workspace === "worktree"
+          ? "Continues in a new worktree · "
+          : "";
       const found = matchingSessions(list, query).map((s) => ({
         value: sessionKey(s),
         label: s.title,
