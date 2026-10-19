@@ -591,6 +591,15 @@
 .sb .sb-thread.sb-ghost {
   color: var(--muted);
 }
+.sb-show-more {
+  display: flex;
+}
+.sb .sb-show-more .sb-show-less {
+  flex: none;
+  width: auto;
+  margin-left: auto;
+  padding: 0 10px;
+}
 .sb-thread-project,
 .sb-thread-pr {
   flex: none;

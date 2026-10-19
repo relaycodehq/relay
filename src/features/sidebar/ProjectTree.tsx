@@ -268,7 +268,7 @@ function ProjectSection({
 }) {
   const chats = threads.filter((c) => c.projectId === p.id);
   const isOpen = folds.isOpen(p.id, p.id === current);
-  const more = folds.showsAll(p.id);
+  const pages = folds.pages(p.id);
   const busy = chats.some((c) => c.running || agentsSince(c.pending));
   return (
     <section
@@ -384,7 +384,7 @@ function ProjectSection({
       )}
       {isOpen && (
         <div className="sb-thread-list">
-          {firstThreads(chats, more).map((c) => (
+          {firstThreads(chats, pages).map((c) => (
             <ThreadRow key={c.id} chat={c} rows={rows} />
           ))}
           {!chats.length && (
@@ -394,8 +394,9 @@ function ProjectSection({
           )}
           <ShowMore
             total={chats.length}
-            more={more}
-            onToggle={() => folds.setShowsAll(p.id, !more)}
+            pages={pages}
+            onMore={() => folds.showMore(p.id)}
+            onLess={() => folds.showLess(p.id)}
           />
         </div>
       )}

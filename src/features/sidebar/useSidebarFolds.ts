@@ -11,7 +11,7 @@ export type SidebarFolds = ReturnType<typeof useSidebarFolds>;
 
 /**
  * What of the Projects view is open: its sections, groups and projects, kept
- * per device, and the lists showing all their threads, for this session.
+ * per device, and how many pages of threads each list shows, for this session.
  */
 export function useSidebarFolds() {
   const [expanded, setExpanded] = useStoredState(
@@ -30,18 +30,29 @@ export function useSidebarFolds() {
       projects: asObject(saved).projects === true,
     }),
   );
-  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
+  const [pages, setPages] = useState<Record<string, number>>({});
+  const firstPage = (key: string) =>
+    setPages((s) => {
+      const { [key]: _, ...rest } = s;
+      return rest;
+    });
   return {
     /** A project's or group's list is open; `fallback` until it's toggled here. */
     isOpen: (key: string, fallback: boolean) => expanded[key] ?? fallback,
-    setOpen: (key: string, open: boolean) =>
-      setExpanded((state) => ({ ...state, [key]: open })),
+    /** Opening or closing one starts its list over at its first page. */
+    setOpen: (key: string, open: boolean) => {
+      setExpanded((state) => ({ ...state, [key]: open }));
+      firstPage(key);
+    },
     folded,
-    fold: (section: keyof typeof folded) =>
-      setFolded((s) => ({ ...s, [section]: !s[section] })),
-    /** A project's, or the Scratchpad's, list shows past its first few threads. */
-    showsAll: (key: string) => showAll[key],
-    setShowsAll: (key: string, all: boolean) =>
-      setShowAll((s) => ({ ...s, [key]: all })),
+    fold: (section: keyof typeof folded) => {
+      setFolded((s) => ({ ...s, [section]: !s[section] }));
+      if (section === "scratchpad") firstPage("scratchpad");
+    },
+    /** How many pages of a project's, or the Scratchpad's, threads show. */
+    pages: (key: string) => pages[key] ?? 1,
+    showMore: (key: string) =>
+      setPages((s) => ({ ...s, [key]: (s[key] ?? 1) + 1 })),
+    showLess: firstPage,
   };
 }

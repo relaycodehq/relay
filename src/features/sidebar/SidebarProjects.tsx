@@ -57,7 +57,7 @@ export function Scratchpad({
   onNew: () => void;
 }) {
   const newKeys = useShortcutLabel("new-scratch");
-  const more = folds.showsAll("scratchpad");
+  const pages = folds.pages("scratchpad");
   return (
     <section className="sb-scratchpad">
       <div className="sb-section-heading">
@@ -79,7 +79,7 @@ export function Scratchpad({
               </button>
             </div>
           )}
-          {firstThreads(chats, more).map((c) => (
+          {firstThreads(chats, pages).map((c) => (
             <ThreadRow key={c.id} chat={c} rows={rows} />
           ))}
           {!chats.length && !draft && (
@@ -89,8 +89,9 @@ export function Scratchpad({
           )}
           <ShowMore
             total={chats.length}
-            more={more}
-            onToggle={() => folds.setShowsAll("scratchpad", !more)}
+            pages={pages}
+            onMore={() => folds.showMore("scratchpad")}
+            onLess={() => folds.showLess("scratchpad")}
           />
         </div>
       )}

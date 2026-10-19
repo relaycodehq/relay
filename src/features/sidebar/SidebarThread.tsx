@@ -53,29 +53,41 @@ export function ThreadTitle({
   );
 }
 
-/** A long thread list's first few, or all of them with `all`; pinned ones lead. */
-export function firstThreads(chats: ChatSummary[], all: boolean) {
+/** A long thread list's first `pages` pages; pinned ones lead. */
+export function firstThreads(chats: ChatSummary[], pages: number) {
   const listed = [...chats].sort((a, b) => +!!b.pinnedAt - +!!a.pinnedAt);
-  return all ? listed : listed.slice(0, THREADS_PER_PROJECT);
+  return listed.slice(0, pages * THREADS_PER_PROJECT);
 }
 
-/** The row that expands or collapses a long thread list. */
+/** The row under a long thread list: its next page, and back to the first. */
 export function ShowMore({
   total,
-  more,
-  onToggle,
+  pages,
+  onMore,
+  onLess,
 }: {
   total: number;
-  more: boolean;
-  onToggle: () => void;
+  pages: number;
+  onMore: () => void;
+  onLess: () => void;
 }) {
   if (total <= THREADS_PER_PROJECT) return null;
+  const left = total - pages * THREADS_PER_PROJECT;
   return (
-    <button className="sb-thread sb-ghost" onClick={onToggle}>
-      <span className="sb-thread-title">
-        {more ? "Show less" : `Show ${total - THREADS_PER_PROJECT} more`}
-      </span>
-    </button>
+    <div className="sb-show-more">
+      {left > 0 && (
+        <button className="sb-thread sb-ghost" onClick={onMore}>
+          <span className="sb-thread-title">
+            Show {Math.min(THREADS_PER_PROJECT, left)} more
+          </span>
+        </button>
+      )}
+      {pages > 1 && (
+        <button className="sb-thread sb-ghost sb-show-less" onClick={onLess}>
+          <span className="sb-thread-title">Show less</span>
+        </button>
+      )}
+    </div>
   );
 }
 
