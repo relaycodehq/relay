@@ -55,7 +55,32 @@ export class ThreadTerminal {
       scrollback: 5000,
       cursorBlink: true,
       allowProposedApi: false,
+      // On macOS it selects the word under the pointer, which would turn
+      // every right-click paste below into a copy.
+      rightClickSelectsWord: false,
       theme: currentTheme,
+    });
+    // Copy on select, once the mouse lets go rather than on every step of
+    // the drag.
+    this.element.addEventListener("mouseup", (e) => {
+      if (e.button === 0 && this.term.hasSelection())
+        void api.writeClipboard(this.term.getSelection()).catch(() => {});
+    });
+    // Right-click copies a selection, or pastes when there's none, the way
+    // Windows Terminal does. paste() keeps bracketed paste, so a clipboard of
+    // several lines doesn't run in the shell line by line.
+    this.element.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (this.term.hasSelection()) {
+        void api.writeClipboard(this.term.getSelection()).catch(() => {});
+        this.term.clearSelection();
+      } else {
+        void api
+          .readClipboard()
+          .then((text) => text && this.term.paste(text))
+          .catch(() => {});
+      }
+      this.term.focus();
     });
     this.term.loadAddon(this.fit);
     this.term.loadAddon(
