@@ -50,7 +50,7 @@ import { usePairedComputers } from "../handoff/usePairedComputers";
 import type { PairedComputer } from "../../../shared/handoff";
 import "../../ui/palette.css";
 import "./add-project.css";
-import { fileManager } from "../../lib/mod-key";
+import { fileManager, keys } from "../../lib/mod-key";
 
 type Page = "root" | "folder" | "github" | "url" | "new" | "computer";
 
@@ -64,7 +64,11 @@ interface Item {
   right?: ReactNode;
   section?: string;
   run: () => void;
+  /** A folder's own action, opening or adding it, where `run` goes into it. */
+  add?: () => void;
 }
+
+const addKeys = keys("⌘↵", "Ctrl+↵");
 
 const placeholder: Record<Page, string> = {
   root: "Open a folder, clone a repository, or start a new one…",
@@ -161,6 +165,13 @@ export function AddProjectPalette({
     staleTime: 10_000,
     retry: false,
   });
+  // The folders listed so far by the path typed to go into one, so the one
+  // gone into knows what it is: a repository, a project there.
+  const seenHere = useRef(new Map<string, FolderEntry>());
+  const seenThere = useRef(
+    new Map<string, NonNullable<typeof there.data>["folders"][number]>(),
+  );
+  const typedDir = dir.replace(/\/$/, "");
   /** A path there as it's typed, from that computer's home folder. */
   const fromHomeThere = (path: string) => {
     const home = there.data?.home;
@@ -316,16 +327,22 @@ export function AddProjectPalette({
       });
     }
   } else if (page === "folder") {
-    if (!leaf && dir.length > 1)
+    if (!leaf && dir.length > 1) {
+      const self = seenHere.current.get(typedDir);
+      const project = self && projects.find((p) => p.path === self.path);
       items.push({
         key: `this:${dir}`,
         icon: <FolderOpen size={15} />,
-        label: "This folder",
+        label: project ? `Open ${project.name}` : "Add this folder",
         detail: dir,
         detailIsPath: true,
-        run: () => void adding.pick(dir).then(finish),
+        right: project ? "In Relay" : self?.repository ? "git" : undefined,
+        run: () =>
+          project ? onDone(project) : void adding.pick(dir).then(finish),
       });
+    }
     for (const f of listing.data ?? []) {
+      seenHere.current.set(tildePath(f.path), f);
       if (!f.name.toLowerCase().startsWith(leaf)) continue;
       const project = projects.find((p) => p.path === f.path);
       items.push({
@@ -337,26 +354,45 @@ export function AddProjectPalette({
           : f.repository
             ? "git"
             : "›",
-        run: () =>
-          project
-            ? onDone(project)
-            : f.repository
-              ? void adding.pick(f.path).then(finish)
-              : enter(f),
+        // A click goes in; adding is the folder's own row there, or ⌘↵.
+        run: () => enter(f),
+        add: () =>
+          project ? onDone(project) : void adding.pick(f.path).then(finish),
       });
       if (items.length > 80) break;
     }
   } else if (page === "computer" && computer) {
-    if (!leaf && dir !== "~/")
+    if (!leaf && dir !== "~/") {
+      const self = seenThere.current.get(typedDir);
+      const known =
+        self?.project &&
+        projects.find(
+          (p) =>
+            p.computer?.id === computer.id &&
+            p.computer.projectId === self.project?.id,
+        );
       items.push({
         key: `this:${dir}`,
         icon: <FolderOpen size={15} />,
-        label: "This folder",
+        label: known
+          ? `Open ${known.name}`
+          : self?.project
+            ? `Add ${self.name}`
+            : "Add this folder",
         detail: dir,
         detailIsPath: true,
-        run: () => addThere(dir),
+        right: known
+          ? "In Relay"
+          : self?.project
+            ? "A project there"
+            : self?.repository
+              ? "git"
+              : undefined,
+        run: () => (known ? onDone(known) : addThere(self?.path ?? dir)),
       });
+    }
     for (const f of there.data?.folders ?? []) {
+      seenThere.current.set(fromHomeThere(f.path), f);
       if (!f.name.toLowerCase().startsWith(leaf)) continue;
       const known = projects.find(
         (p) =>
@@ -374,12 +410,11 @@ export function AddProjectPalette({
             : f.repository
               ? "git"
               : "›",
-        run: () =>
-          known
-            ? onDone(known)
-            : f.repository || f.project
-              ? addThere(f.path)
-              : (setQuery(`${fromHomeThere(f.path)}/`), setActive(0)),
+        run: () => {
+          setQuery(`${fromHomeThere(f.path)}/`);
+          setActive(0);
+        },
+        add: () => (known ? onDone(known) : addThere(f.path)),
       });
       if (items.length > 80) break;
     }
@@ -478,7 +513,11 @@ export function AddProjectPalette({
         void adding.pick(query).then(finish);
       else if (page === "computer" && /^[~/]/.test(query) && !items.length)
         addThere(query);
-      else items[Math.min(active, items.length - 1)]?.run();
+      else {
+        const item = items[Math.min(active, items.length - 1)];
+        if ((e.metaKey || e.ctrlKey) && item?.add) item.add();
+        else item?.run();
+      }
     } else if (e.key === "Tab" && page === "folder") {
       e.preventDefault();
       const f = listing.data?.find((x) => x.path === items[active]?.key);
@@ -680,10 +719,11 @@ export function AddProjectPalette({
                 </button>
               </span>
             ) : page === "folder" ? (
-              <span>Tab goes into a folder · ↵ adds it</span>
+              <span>↵ goes into a folder · {addKeys} adds it</span>
             ) : page === "computer" ? (
               <span>
-                Folders on {computer?.name} · Tab goes into a folder · ↵ adds it
+                Folders on {computer?.name} · ↵ goes into a folder ·{" "}
+                {addKeys} adds it
               </span>
             ) : page === "new" ? (
               <span>↵ creates it</span>
