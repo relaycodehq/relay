@@ -46,16 +46,6 @@ find_node() {
     fi
   done
 }
-node=$(find_node)
-if [ -z "$node" ]; then
-  if [ -n "${RELAY_NODE:-}" ]; then
-    fail "RELAY_NODE does not point to a working Node.js 22 or newer: $RELAY_NODE"
-  fi
-  if command -v node >/dev/null 2>&1; then
-    fail "Relay needs Node.js 22 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
-  fi
-  fail "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
-fi
 command -v tar >/dev/null 2>&1 || fail "Relay's installer needs tar."
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
@@ -75,6 +65,58 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
+# No Node.js 22 here, as on a server whose system one is older: Relay brings
+# its own into ~/.relay, where `relay` and its updates keep using it. No sudo.
+node_version=v22.23.2
+fetch_node() {
+  case "$(uname -s)" in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    *) return 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64 | amd64) arch=x64 ;;
+    aarch64 | arm64) arch=arm64 ;;
+    *) return 1 ;;
+  esac
+  # Node's own builds need glibc; on Alpine and other musl systems it's theirs to install.
+  if [ "$os" = linux ] && ldd --version 2>&1 | grep -qi musl; then return 1; fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    sum() { sha256sum "$1" | cut -d' ' -f1; }
+  elif command -v shasum >/dev/null 2>&1; then
+    sum() { shasum -a 256 "$1" | cut -d' ' -f1; }
+  else
+    return 1
+  fi
+  file="node-$node_version-$os-$arch.tar.gz"
+  base="https://nodejs.org/dist/$node_version"
+  say "No Node.js 22 here; downloading Node.js $node_version for Relay…"
+  fetch "$base/$file" "$tmp/$file" || return 1
+  fetch "$base/SHASUMS256.txt" "$tmp/SHASUMS256.txt" || return 1
+  want=$(grep " $file\$" "$tmp/SHASUMS256.txt" | cut -d' ' -f1)
+  [ -n "$want" ] && [ "$(sum "$tmp/$file")" = "$want" ] || {
+    say "The Node.js download does not match its checksum." >&2
+    return 1
+  }
+  tar -xzf "$tmp/$file" -C "$tmp"
+  (umask 077 && mkdir -p "$home")
+  rm -rf "$home/node-$node_version-$os-$arch"
+  mv "$tmp/node-$node_version-$os-$arch" "$home/"
+  node="$home/node-$node_version-$os-$arch/bin/node"
+}
+node=$(find_node)
+if [ -z "$node" ]; then
+  if [ -n "${RELAY_NODE:-}" ]; then
+    fail "RELAY_NODE does not point to a working Node.js 22 or newer: $RELAY_NODE"
+  fi
+  fetch_node || node=
+  if ! works "$node"; then
+    if command -v node >/dev/null 2>&1; then
+      fail "Relay needs Node.js 22 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
+    fi
+    fail "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
+  fi
+fi
 if [ -n "${RELAY_UPDATE_FEED:-}" ]; then
   feed=$RELAY_UPDATE_FEED
 elif [ -n "${RELAY_VERSION:-}" ]; then
