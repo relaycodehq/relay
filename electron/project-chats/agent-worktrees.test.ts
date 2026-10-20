@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm, rename, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,12 +7,14 @@ import {
   activeAfter,
   addsWorktree,
   followAgentWorkspace,
+  forgetAgentWorktrees,
   ownAgentWorktrees,
   watchAgentWorktrees,
   recoverAgentWorktrees,
   turnWorkspace,
 } from "./agent-worktrees";
 import { gitExecutable } from "../git/git";
+import * as gitApi from "../git/git";
 import type {
   AgentActivity,
   AgentWorktree,
@@ -91,6 +93,47 @@ it("credits each worktree only to the thread whose command made it", async () =>
 
   expect(phone.paths()).toEqual([phonePath]);
   expect(audit.paths()).toEqual([auditPath]);
+});
+
+it("shares concurrent repository discovery without sharing creation evidence or exclusions", async () => {
+  const a = join(temp, "a");
+  const b = join(temp, "b");
+  git("worktree", "add", "-q", "-b", "a", a);
+  git("worktree", "add", "-q", "-b", "b", b);
+  const history = (path: string) =>
+    ({
+      messages: [
+        {
+          created: 42,
+          trace: [
+            { kind: "activity", activity: ran(`git worktree add ${path}`) },
+          ],
+        },
+      ],
+    }) as unknown as ProjectChat;
+  const scans = vi.spyOn(gitApi, "worktreeList");
+  try {
+    const [first, second, excluded] = await Promise.all([
+      recoverAgentWorktrees(root, new Set(), history(a)),
+      recoverAgentWorktrees(root, new Set(), history(b)),
+      recoverAgentWorktrees(root, new Set([a]), history(a)),
+    ]);
+    expect(scans).toHaveBeenCalledTimes(1);
+    expect(first.map((w) => w.path)).toEqual([a]);
+    expect(second.map((w) => w.path)).toEqual([b]);
+    expect(excluded).toEqual([]);
+    // A normal read reuses discovery, while a known mutation discards it.
+    await recoverAgentWorktrees(root, new Set(), history(a), false);
+    expect(scans).toHaveBeenCalledTimes(1);
+    git("worktree", "remove", a);
+    forgetAgentWorktrees(root);
+    expect(
+      await recoverAgentWorktrees(root, new Set(), history(a), false),
+    ).toEqual([]);
+    expect(scans).toHaveBeenCalledTimes(2);
+  } finally {
+    scans.mockRestore();
+  }
 });
 
 it("shows a kept worktree's branch as it is now and drops removed ones", async () => {
@@ -344,7 +387,10 @@ it("goes back to the project folder when a later turn, or a check after a restar
   const made = join(temp, "relay-goal-e2e");
   git("worktree", "add", "-q", "--detach", made);
   await run(`W=${made}; git worktree add --detach "$W" HEAD`);
-  expect(thread.activeAgentWorktree).toMatchObject({ path: made, followed: true });
+  expect(thread.activeAgentWorktree).toMatchObject({
+    path: made,
+    followed: true,
+  });
   git("worktree", "remove", made);
   expect(activeAfter(thread, [])).toBeUndefined();
   await projectTurn(thread as never).run(`git worktree remove --force ${made}`);

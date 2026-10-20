@@ -119,7 +119,10 @@ export function activeAfter(
   worktrees: AgentWorktree[],
 ): ActiveAgentWorktree | undefined {
   const active = chat.activeAgentWorktree;
-  const selected = selectedAgentWorktree({ ...chat, agentWorktrees: worktrees });
+  const selected = selectedAgentWorktree({
+    ...chat,
+    agentWorktrees: worktrees,
+  });
   if (!selected) return active?.followed ? undefined : active;
   return {
     path: selected.path,
@@ -174,6 +177,16 @@ export function turnWorkspace(chat: ProjectChat, by?: AgentProvider) {
 
 type Live = Map<string, { branch?: string; gitdir?: string }>;
 
+const discoveries = new Map<
+  string,
+  { at: number; pending: boolean; result: Promise<Live> }
+>();
+
+/** Known worktree mutations must not leave a read using the previous snapshot. */
+export function forgetAgentWorktrees(root: string) {
+  discoveries.delete(root);
+}
+
 /**
  * The folders of threads' own worktrees. Relay made those, whatever an
  * agent's command says; any other folder, in Relay's worktrees folder too,
@@ -188,20 +201,52 @@ export const threadWorktreePaths = (
 async function liveWorktrees(
   root: string,
   relayMade: ReadonlySet<string>,
+  fresh: boolean,
 ): Promise<Live> {
-  const live: Live = new Map();
-  const list = await worktreeList(root);
-  // Git lists real paths; Relay's records may go through a symlink.
+  const previous = discoveries.get(root);
+  const discovery =
+    previous &&
+    (previous.pending || (!fresh && Date.now() - previous.at < 5000))
+      ? previous
+      : discoverWorktrees(root);
+  const live = new Map(await discovery.result);
+  // Ownership is not part of the repository snapshot: callers can have
+  // different sets of Relay-made folders and different creation evidence.
   const real = (path: string) => realpath(path).catch(() => path);
   const mine = new Set(await Promise.all([...relayMade].map(real)));
+  for (const path of live.keys())
+    if (relayMade.has(path) || mine.has(path)) live.delete(path);
+  live.delete(root);
+  live.delete(await real(root));
+  return live;
+}
+
+function discoverWorktrees(root: string) {
+  const entry = { at: Date.now(), pending: true, result: readWorktrees(root) };
+  if (discoveries.size >= 30)
+    discoveries.delete(discoveries.keys().next().value!);
+  discoveries.set(root, entry);
+  entry.result.then(
+    () => {
+      entry.pending = false;
+    },
+    () => {
+      if (discoveries.get(root) === entry) discoveries.delete(root);
+    },
+  );
+  return entry;
+}
+
+/** Git and filesystem discovery shared by every thread in this repository. */
+async function readWorktrees(root: string): Promise<Live> {
+  const live: Live = new Map();
+  const list = await worktreeList(root);
   for (const { path, branch, prunable } of list) {
-    if (relayMade.has(path) || mine.has(path) || prunable) continue;
+    if (prunable) continue;
     live.set(path, branch ? { branch } : {});
   }
   // The first entry is the main checkout; `root` may be it or a worktree.
   if (list[0]) live.delete(list[0].path);
-  live.delete(root);
-  live.delete(await real(root));
   // `worktree repair` keeps this identity even when the folder was renamed.
   await Promise.all(
     [...live].map(async ([path, value]) => {
@@ -242,6 +287,7 @@ export async function recoverAgentWorktrees(
   root: string,
   relayMade: ReadonlySet<string>,
   chat: ProjectChat,
+  fresh = true,
 ) {
   const commands = chat.messages.flatMap((m) =>
     (m.trace ?? []).flatMap((e) =>
@@ -255,7 +301,7 @@ export async function recoverAgentWorktrees(
   );
   if (!commands.length && !chat.agentWorktrees?.length) return [];
   return reconcile(
-    await liveWorktrees(root, relayMade),
+    await liveWorktrees(root, relayMade, fresh),
     chat.agentWorktrees ?? [],
     commands,
   );
@@ -272,12 +318,15 @@ export function watchAgentWorktrees(
   recorded: () => AgentWorktree[],
   onChange: (worktrees: AgentWorktree[]) => void | Promise<void>,
 ) {
-  const before = liveWorktrees(root, relayMade()).catch(() => null);
+  const before = liveWorktrees(root, relayMade(), true).catch(() => null);
   let queue = Promise.resolve();
   const check = async (command: string) => {
     const known = await before;
     if (!known) return;
-    const live = await liveWorktrees(root, relayMade());
+    // A scan already running before the command ended may describe its old
+    // state. The turn's baseline stays intact; only the current view expires.
+    forgetAgentWorktrees(root);
+    const live = await liveWorktrees(root, relayMade(), true);
     const next = reconcile(
       live,
       recorded(),

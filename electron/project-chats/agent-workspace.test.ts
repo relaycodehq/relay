@@ -8,6 +8,7 @@ import type { ChatCore } from "./core";
 import { ThreadWorktrees } from "./worktrees";
 import { TurnFiles } from "./turn-files";
 import { threadControl } from "./control";
+import * as gitApi from "../git/git";
 
 let temp: string,
   root: string,
@@ -107,6 +108,34 @@ it("uses the recovered folder for agents, workspace APIs and the terminal, and k
     { path: recovered, chatId: "chat" },
   ]);
   expect(save).toHaveBeenCalledTimes(1);
+});
+
+it("shares discovery for concurrent thread reads and refreshes after repository mutations", async () => {
+  const other = structuredClone(chat);
+  other.id = "other";
+  delete other.activeAgentWorktree;
+  other.messages = [];
+  other.agentWorktrees = [{ path: recovered, gitdir: "original", at: 1 }];
+  const scans = vi.spyOn(gitApi, "worktreeList");
+  try {
+    await Promise.all([
+      worktrees.refreshAgentWorktrees(chat),
+      worktrees.refreshAgentWorktrees(other),
+    ]);
+    expect(scans).toHaveBeenCalledTimes(1);
+    expect(chat.activeAgentWorktree?.path).toBe(recovered);
+    expect(other.activeAgentWorktree).toBeUndefined();
+    await worktrees.inRepo(root, async () => {
+      git("worktree", "remove", recovered);
+    });
+    await worktrees.refreshAgentWorktrees(chat);
+    expect(scans).toHaveBeenCalledTimes(2);
+    expect(chat.agentWorktrees).toBeUndefined();
+    // Explicitly selected identity remains unavailable rather than moving to checkout.
+    expect(chat.activeAgentWorktree?.gitdir).toBe("original");
+  } finally {
+    scans.mockRestore();
+  }
 });
 
 it("keeps PR metadata on the agent's worktree without making Relay own its cleanup", async () => {

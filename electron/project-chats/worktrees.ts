@@ -46,6 +46,7 @@ import {
 import {
   activeAfter,
   followAgentWorkspace,
+  forgetAgentWorktrees,
   recoverAgentWorktrees,
   threadWorktreePaths,
 } from "./agent-worktrees";
@@ -129,13 +130,15 @@ export class ThreadWorktrees {
       // Git can be unavailable while the conversation itself remains readable.
       const worktrees = await this.core.projects
         .root(chat.projectId)
-        .then((root) =>
-          recoverAgentWorktrees(
+        .then((root) => {
+          if (force) forgetAgentWorktrees(root);
+          return recoverAgentWorktrees(
             root,
             threadWorktreePaths(this.core.store.get().chats),
             chat,
-          ),
-        )
+            force,
+          );
+        })
         .catch((error) => {
           if (force) throw error;
           return undefined;
@@ -264,7 +267,16 @@ export class ThreadWorktrees {
    * branch, nor one take back a folder another is lending it or joining.
    */
   inRepo<T>(root: string, job: () => Promise<T>) {
-    return this.making(root, job);
+    return this.making(root, async () => {
+      forgetAgentWorktrees(root);
+      this.refreshed.clear();
+      try {
+        return await job();
+      } finally {
+        forgetAgentWorktrees(root);
+        this.refreshed.clear();
+      }
+    });
   }
 
   /**
@@ -1021,7 +1033,10 @@ export class ThreadWorktrees {
     const chat = await this.core.storage.load(id);
     const gone = chat.activeAgentWorktree;
     if (!gone?.branch || selectedAgentWorktree(chat)) return false;
-    return branchKept(await this.core.projects.root(chat.projectId), gone.branch);
+    return branchKept(
+      await this.core.projects.root(chat.projectId),
+      gone.branch,
+    );
   }
 
   /** Makes the deleted worktree a thread still has selected again, from its branch, and carries on there. */
